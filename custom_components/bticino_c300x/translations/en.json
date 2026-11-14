@@ -182,7 +182,10 @@
       "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
-      "required": "This field is required."
+      "required": "This field is required.",
+      "invalid_dashboard_entities": "Select only entities the display can show.",
+      "invalid_device_activation_mode": "Choose automatic or manual for the activation address mode.",
+      "invalid_action_map": "The action allowlist JSON is invalid."
     }
   },
   "options": {
@@ -266,7 +269,9 @@
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
       "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
-      "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99."
+      "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
+      "invalid_dashboard_entities": "Select only entities the display can show.",
+      "invalid_device_activation_mode": "Choose automatic or manual for the activation address mode."
     }
   },
   "entity": {

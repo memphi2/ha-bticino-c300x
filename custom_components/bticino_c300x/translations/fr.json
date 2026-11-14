@@ -182,7 +182,10 @@
       "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
       "invalid_device_activations": "Verifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent etre uniques; le mode lumiere escalier manuel reserve deja stair_light.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
-      "required": "Ce champ est obligatoire."
+      "required": "Ce champ est obligatoire.",
+      "invalid_dashboard_entities": "Selectionnez uniquement des entites que l'ecran peut afficher.",
+      "invalid_device_activation_mode": "Choisissez automatique ou manuel pour le mode d'adresse des activations.",
+      "invalid_action_map": "Le JSON de la liste autorisee d'actions est invalide."
     }
   },
   "options": {
@@ -266,7 +269,9 @@
       "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
       "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
       "invalid_device_activations": "Verifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent etre uniques; le mode lumiere escalier manuel reserve deja stair_light.",
-      "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99."
+      "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
+      "invalid_dashboard_entities": "Selectionnez uniquement des entites que l'ecran peut afficher.",
+      "invalid_device_activation_mode": "Choisissez automatique ou manuel pour le mode d'adresse des activations."
     }
   },
   "entity": {

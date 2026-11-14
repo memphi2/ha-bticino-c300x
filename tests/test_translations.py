@@ -288,3 +288,35 @@ def _translation_placeholders(
     for key, child in value.items():
         placeholders.update(_translation_placeholders(child, (*prefix, key)))
     return placeholders
+
+
+def test_every_error_the_shared_flow_helpers_report_has_a_message_in_each_flow() -> None:
+    """A form error without a translation shows its raw key to the user.
+
+    The helpers that setup, reconfigure and options share report errors by key.
+    The setup and reconfigure forms look the key up under ``config.error``, the
+    options forms under ``options.error``, so each key needs both.
+    """
+
+    emitted = set()
+    for name in (
+        "config_flow_input.py", "config_flow_activations.py", "config_flow_dashboard.py",
+        "config_flow_dashboard_pages.py", "config_flow_alarm.py", "config_flow_tiles.py",
+    ):
+        path = INTEGRATION / name
+        if not path.exists():
+            continue
+        emitted |= set(
+            re.findall(
+                r'(?:errors\[[^\]]+\]\s*=\s*|"base":\s*|errors\.setdefault\([^,]+,\s*)"([a-z_]+)"',
+                path.read_text(encoding="utf-8"),
+            )
+        )
+    # A key the setup flow alone reports is not shared.
+    emitted -= {"required"}
+    assert "invalid_action_map" in emitted
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for area in ("config", "options"):
+            missing = emitted - set(data[area]["error"])
+            assert not missing, (path.name, area, sorted(missing))

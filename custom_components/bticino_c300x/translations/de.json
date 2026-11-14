@@ -182,7 +182,10 @@
       "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
       "invalid_device_activations": "Pruefe Aktivierungs-ID, Name, Typ und Adresse. IDs muessen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
-      "required": "Dieses Feld ist erforderlich."
+      "required": "Dieses Feld ist erforderlich.",
+      "invalid_dashboard_entities": "Waehle nur Entitaeten, die das Display anzeigen kann.",
+      "invalid_device_activation_mode": "Waehle automatisch oder manuell fuer den Adressmodus der Aktivierungen.",
+      "invalid_action_map": "Das JSON der erlaubten Aktionen ist ungueltig."
     }
   },
   "options": {
@@ -266,7 +269,9 @@
       "invalid_weather_entity": "Waehle eine Wetter-Entitaet oder lasse das Feld leer.",
       "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
       "invalid_device_activations": "Pruefe Aktivierungs-ID, Name, Typ und Adresse. IDs muessen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
-      "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein."
+      "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
+      "invalid_dashboard_entities": "Waehle nur Entitaeten, die das Display anzeigen kann.",
+      "invalid_device_activation_mode": "Waehle automatisch oder manuell fuer den Adressmodus der Aktivierungen."
     }
   },
   "entity": {

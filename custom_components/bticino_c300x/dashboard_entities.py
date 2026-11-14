@@ -48,6 +48,23 @@ DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)
 ALARM_PAGE_ENTITY_DOMAINS = tuple(
     domain for domain in DASHBOARD_ENTITY_DOMAINS if domain != "media_player"
 )
+# What the alarm page offers to pick: only domains that a plain tap can act on
+# (a toggle or a press). A lock, a vacuum or a valve needs a command, a slider or
+# a list needs a direction, and a person or sensor only reads, so a tap on those
+# would fail with "read only". Entities saved earlier stay valid.
+ALARM_PAGE_ACTION_DOMAINS = (
+    "automation",
+    "button",
+    "fan",
+    "humidifier",
+    "input_boolean",
+    "input_button",
+    "light",
+    "scene",
+    "script",
+    "siren",
+    "switch",
+)
 # A tile is half or full in each direction. "auto" is never stored: an entity
 # without the key keeps the size its type has always had on the display.
 DASHBOARD_TILE_SIZE_AUTO = "auto"

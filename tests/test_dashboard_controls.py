@@ -1492,3 +1492,22 @@ def test_a_water_heater_is_a_tile_that_reads_the_water_temperature():
     assert item["glyph"] == "♨"
     assert item["details"]["type"] == "water_heater"
     assert (item["details"]["value"], item["details"]["unit"]) == ("48.6", "C")
+
+
+def test_alarm_page_picker_offers_only_domains_a_plain_tap_can_act_on() -> None:
+    from custom_components.bticino_c300x.dashboard_config import (
+        _DASHBOARD_BUTTON_ENTITY_DOMAINS,
+        _DASHBOARD_TOGGLE_ENTITY_DOMAINS,
+    )
+    from custom_components.bticino_c300x.dashboard_entities import (
+        ALARM_PAGE_ACTION_DOMAINS,
+        ALARM_PAGE_ENTITY_DOMAINS,
+    )
+
+    assert set(ALARM_PAGE_ACTION_DOMAINS) == (
+        _DASHBOARD_TOGGLE_ENTITY_DOMAINS | _DASHBOARD_BUTTON_ENTITY_DOMAINS
+    )
+    # Everything stored earlier stays valid, the picker only offers less.
+    assert set(ALARM_PAGE_ACTION_DOMAINS) <= set(ALARM_PAGE_ENTITY_DOMAINS)
+    for domain in ("lock", "vacuum", "valve", "water_heater", "person", "device_tracker"):
+        assert domain not in ALARM_PAGE_ACTION_DOMAINS

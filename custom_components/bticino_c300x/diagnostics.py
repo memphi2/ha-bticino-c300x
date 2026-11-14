@@ -931,8 +931,12 @@ def _safe_error_summary(value: Any) -> dict[str, str | None] | None:
     if not text:
         return None
     error_type, separator, message = text.partition(":")
+    if not re.fullmatch(r"[A-Za-z_][\w.]{0,79}", error_type):
+        # Free text from the agent, not "Type: message": nothing in it can be
+        # told apart from an address or a name, so all of it is redacted.
+        return {"type": None, "message": _redact_error_message(text)}
     return {
-        "type": error_type[:80],
+        "type": error_type,
         "message": _redact_error_message(message if separator else ""),
     }
 

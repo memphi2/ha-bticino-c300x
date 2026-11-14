@@ -148,6 +148,15 @@ p.dashboardOnline = true;
 assert.equal(p.optionLabel({command: "color"}, "red"), "Red");
 assert.equal(p.optionLabel({command: "fan_mode"}, "custom mode"), "custom mode");
 assert.equal(p.optionLabel({command: "preset_mode"}, "auto"), "auto", "custom preset names remain unchanged");
+for (const lang of ["en", "de", "fr", "it"]) {
+    const modeLabels = {};
+    for (const key of Object.keys(I18n.DETAIL_LABELS[lang])) {
+        if (key.indexOf("mode_") !== 0) continue;
+        const label = I18n.DETAIL_LABELS[lang][key];
+        assert.equal(modeLabels[label], undefined, lang + ": " + key + " and " + modeLabels[label] + " read the same, two buttons could not be told apart");
+        modeLabels[label] = key;
+    }
+}
 for (const lang of ["de", "fr", "it"]) {
     assert.deepEqual(Object.keys(I18n.DETAIL_LABELS[lang]).sort(), Object.keys(I18n.DETAIL_LABELS.en).sort());
     for (const key of Object.keys(I18n.DETAIL_LABELS.en)) assert.notEqual(I18n.text(lang, key), key);

@@ -103,6 +103,16 @@ async def async_suggest_callback_base_url(
     )
 
 
+def _valid_callback_hostname(hostname: str) -> bool:
+    """Return true for an IP literal or a name made of host name characters."""
+
+    try:
+        ipaddress.ip_address(hostname.split("%", 1)[0])
+    except ValueError:
+        return all(char.isascii() and (char.isalnum() or char in "-._") for char in hostname)
+    return True
+
+
 def normalize_callback_base_url(value: object) -> str:
     """Validate and normalize an HTTP(S) callback base URL.
 
@@ -119,6 +129,7 @@ def normalize_callback_base_url(value: object) -> str:
     if (
         parts.scheme.lower() not in {"http", "https"}
         or not parts.hostname
+        or not _valid_callback_hostname(parts.hostname)
         or parts.username
         or parts.password
         or parts.query

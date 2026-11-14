@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import socket
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -57,10 +58,30 @@ def callback_host_type(host: str | None) -> str | None:
     if clean_host in {"localhost", "localhost.localdomain"}:
         return HOST_TYPE_LOOPBACK
     try:
-        address = ipaddress.ip_address(clean_host)
+        address: ipaddress.IPv4Address | ipaddress.IPv6Address = ipaddress.ip_address(clean_host)
     except ValueError:
-        return HOST_TYPE_HOSTNAME
+        legacy = _legacy_ipv4_address(clean_host)
+        if legacy is None:
+            return HOST_TYPE_HOSTNAME
+        address = legacy
     return callback_address_type(address)
+
+
+def _legacy_ipv4_address(host: str) -> ipaddress.IPv4Address | None:
+    """Return the address behind a short IPv4 spelling such as 127.1 or 2130706433.
+
+    The resolver on the device accepts these, so they must be classified as
+    the address they are, not as a host name.
+    """
+
+    if not host or not all(part.isalnum() for part in host.split(".")):
+        return None
+    if not (host[0].isdigit() and (host.replace(".", "").isdecimal() or "0x" in host)):
+        return None
+    try:
+        return ipaddress.IPv4Address(socket.inet_aton(host))
+    except (OSError, ValueError):
+        return None
 
 
 def callback_address_type(
@@ -91,7 +112,8 @@ def clean_callback_host(host: str | None) -> str:
         value = urlsplit(value).hostname or value
     if value.startswith("[") and "]" in value:
         value = value[1 : value.index("]")]
-    return value.split("%", 1)[0].lower()
+    # "ha.local." is the same host as "ha.local".
+    return value.split("%", 1)[0].lower().rstrip(".")
 
 
 def callback_target_is_clean_local_http(

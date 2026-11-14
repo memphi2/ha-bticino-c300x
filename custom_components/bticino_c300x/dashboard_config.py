@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .action import (
@@ -121,10 +122,15 @@ def _dashboard_entity_ids(value: Any) -> tuple[str, ...]:
 
 
 def _dashboard_float(value: Any, fallback: float | None) -> float | None:
-    try:
-        return float(value)
-    except TypeError, ValueError:
+    """Return a finite float; NaN, inf and non-numbers give the fallback."""
+
+    if isinstance(value, bool):
         return fallback
+    try:
+        number = float(value)
+    except TypeError, ValueError, OverflowError:
+        return fallback
+    return number if math.isfinite(number) else fallback
 
 
 def _dashboard_first_attribute(attributes: dict[str, Any], *names: str) -> Any | None:

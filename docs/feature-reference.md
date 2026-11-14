@@ -464,7 +464,10 @@ the active Ring Call before recording. To record without ringing the doorbell,
 explicitly select `capture_mode: on_demand`. This starts an idle doorstation live
 view and records video with optional audio; it does not answer a Ring Call.
 
-Ring capture does not take over an already answered call. Unloading the
+Ring capture does not take over an already answered call. A capture with audio
+or an announcement is refused while a client watches the ring preview: an
+answered call cannot be shared, so the call is left ringing instead of being
+answered and dropped. A video-only capture shares the preview. Unloading the
 integration or observing a replacement call cancels the capture. Automatic
 hangup is skipped when the captured call cannot be identified reliably. The
 device API has no atomic call-specific hangup, so a call change between the last

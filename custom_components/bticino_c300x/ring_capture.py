@@ -405,6 +405,20 @@ def raise_if_ring_capture_blocked(status: Mapping[str, Any]) -> None:
     raise HomeAssistantError(f"C300X ring capture busy: {reason}")
 
 
+def raise_if_ring_answer_would_block_capture(status: Mapping[str, Any]) -> None:
+    """Reject a capture that has to answer the ring while a client watches it.
+
+    A capture may share an unanswered ring preview. Once the call is answered
+    it may not share the stream with another client, so the check after the
+    answer would fail: the visitor would be answered and hung up on, with no
+    clip. Say no before the call is touched.
+    """
+
+    snapshot = rtsp_resource_snapshot_from_status(status)
+    if max(snapshot.rtsp_clients or 0, snapshot.local_sessions) > 0:
+        raise HomeAssistantError("C300X ring capture busy: preview_client_blocks_answer")
+
+
 def ensure_on_demand_capture_runtime(entry: Any, runtime: Any) -> None:
     """Reject continuation after unload or replacement of our reservation."""
 

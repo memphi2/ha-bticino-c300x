@@ -1815,7 +1815,7 @@ def test_capture_doorbell_call_service_translates_status_failures(monkeypatch) -
     asyncio.run(_run())
 
 
-def test_capture_doorbell_call_service_allows_shared_ring_preview(
+def test_capture_doorbell_call_service_refuses_audio_while_preview_is_watched(
     monkeypatch,
 ) -> None:  # noqa: ANN001
     async def _run() -> None:
@@ -1850,12 +1850,16 @@ def test_capture_doorbell_call_service_allows_shared_ring_preview(
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
-        await handler(types.SimpleNamespace(data={}))
+        try:
+            await handler(types.SimpleNamespace(data={}))
+        except SERVICE_VALIDATION_ERROR as err:
+            assert getattr(err, "translation_key", None) == "ring_capture_busy"
+        else:
+            raise AssertionError("the ring was answered under a watching client")
 
-        assert len(calls) == 1
-        assert api.doorbell_video_status_calls == 4
-        assert api.answer_doorbell_call_calls == [True]
-        assert api.hangup_doorbell_call_calls == 1
+        assert calls == []
+        assert api.answer_doorbell_call_calls == []
+        assert api.hangup_doorbell_call_calls == 0
 
     asyncio.run(_run())
 

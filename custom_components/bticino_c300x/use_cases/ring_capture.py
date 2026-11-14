@@ -21,6 +21,7 @@ from ..ring_capture import (
     async_capture_doorbell_ring_call,
     ensure_on_demand_capture_runtime,
     raise_if_on_demand_capture_blocked,
+    raise_if_ring_answer_would_block_capture,
     raise_if_ring_capture_blocked,
 )
 from .common import (
@@ -106,6 +107,10 @@ class RingCaptureUseCase:
                     await self._async_ensure_not_busy(capture_mode)
                     ensure_on_demand_capture_runtime(self._entry, runtime)
                 elif include_audio or announcement_path is not None:
+                    try:
+                        raise_if_ring_answer_would_block_capture(status)
+                    except HomeAssistantError as err:
+                        raise service_validation_error("ring_capture_busy") from err
                     answered_call = await self._async_answer_ring(runtime)
                     self._ensure_ring_capture_runtime(runtime)
                     status = await self._async_wait_for_answered_ring(runtime)

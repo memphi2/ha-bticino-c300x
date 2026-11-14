@@ -2081,7 +2081,11 @@ static int handle_ui_events_next(
             return 1;
         }
     }
-    if (since < runtime->ui_events.revision) {
+    /* Not equal, instead of "older": the revision restarts at zero with the
+     * agent while the display keeps the number it last saw. A waiter stored
+     * with that larger number would sleep through every event until it
+     * expires, and those events would be lost for the display. */
+    if (since != runtime->ui_events.revision) {
         c300x_ui_events_send_changed(&runtime->ui_events, client_fd, 1, ui_event_send_json, NULL);
         return 1;
     }

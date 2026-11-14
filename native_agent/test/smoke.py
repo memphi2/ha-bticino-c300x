@@ -2314,6 +2314,11 @@ def assert_aborted_clients_do_not_leak_fds(
     api_port: int,
     ui_port: int,
 ) -> None:
+    # A display that kept a revision from before an agent restart must be
+    # told at once, not parked until the wait expires.
+    stale = ui_get(ui_port, f"/ui/events/next?since={ui_revision(ui_port) + 1000}", timeout=3)
+    assert_json_field(stale, "changed", True)
+    assert_json_field(stale, "revision", ui_revision(ui_port))
     baseline = process_fd_count(pid)
     if baseline is None:
         return
@@ -2330,7 +2335,7 @@ def assert_aborted_clients_do_not_leak_fds(
     ui_socket = socket.create_connection(("127.0.0.1", ui_port), timeout=3)
     try:
         ui_socket.sendall(
-            b"GET /ui/events/next?since=999999 HTTP/1.1\r\n"
+            b"GET /ui/events/next?since=" + str(ui_revision(ui_port)).encode() + b" HTTP/1.1\r\n"
             b"Host: 127.0.0.1\r\n"
             b"Connection: close\r\n"
             b"\r\n"

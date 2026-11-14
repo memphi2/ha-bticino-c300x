@@ -2357,10 +2357,10 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         CONF_DASHBOARD_PREVENT_RETURN: True,
     })
     _save_options_area(entry, result)
-    # The patch is on: pages and Alarmo can be set up, and there are no tiles yet.
+    # The patch is on: Alarmo and pages can be set up, and there are no tiles yet.
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
-        "dashboard", "dashboard_pages", "dashboard_alarm",
+        "dashboard_alarm", "dashboard", "dashboard_pages",
     ]
 
     # The weather is set with the status page.
@@ -2378,7 +2378,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _save_options_area(entry, result)
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
-        "dashboard", "dashboard_pages", "dashboard_alarm", "dashboard_entity_display",
+        "dashboard_alarm", "dashboard", "dashboard_pages", "dashboard_entity_display",
     ]
 
     flow, entity_options_form = _options_area(entry, "dashboard_entity_display")
@@ -2763,7 +2763,7 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
     menu = _options_menu_of(entry)
     assert menu == [
         "connection", "features", "device_activations",
-        "dashboard", "dashboard_pages", "dashboard_alarm", "dashboard_entity_display",
+        "dashboard_alarm", "dashboard", "dashboard_pages", "dashboard_entity_display",
     ]
     for step_id in menu:
         _flow, form = _options_area(entry, step_id)
@@ -2774,7 +2774,7 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
     entry.data[CONF_DASHBOARD_ENTITIES] = []
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
-        "dashboard", "dashboard_pages", "dashboard_alarm",
+        "dashboard_alarm", "dashboard", "dashboard_pages",
     ]
 
 

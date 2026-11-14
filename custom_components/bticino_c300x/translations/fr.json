@@ -472,18 +472,18 @@
           "connection": "Connexion au C300X",
           "features": "Vidéo et audio",
           "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
+          "dashboard_alarm": "Alarme (Alarmo)",
           "dashboard": "Écran et patch display",
           "dashboard_pages": "Pages de l'écran",
-          "dashboard_alarm": "Alarme (Alarmo)",
           "dashboard_entity_display": "Tuiles de l'écran"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo de la page Alarme et son action rapide.",
           "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
           "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
-          "dashboard_alarm": "Centrale d'alarme Alarmo de la page Alarme et son action rapide.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
         }
       },
@@ -559,6 +559,18 @@
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
+      "dashboard_alarm": {
+        "title": "Alarme (Alarmo)",
+        "description": "La page Alarme de l'écran s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Elle affiche et commande une centrale d'alarme Alarmo et peut proposer une action rapide à côté.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+        }
+      },
       "dashboard": {
         "title": "Écran et patch display",
         "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo et ce qui s'affiche où), **Alarme (Alarmo)** et **Tuiles de l'écran**.",
@@ -574,10 +586,6 @@
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
         }
-      },
-      "dashboard_entity_display": {
-        "title": "Tuiles de l'écran",
-        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
@@ -690,17 +698,9 @@
           }
         }
       },
-      "dashboard_alarm": {
-        "title": "Alarme (Alarmo)",
-        "description": "La page Alarme de l'écran s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Elle affiche et commande une centrale d'alarme Alarmo et peut proposer une action rapide à côté.",
-        "data": {
-          "alarm_entity_id": "Centrale d'alarme Alarmo",
-          "alarm_page_entity_id": "Action rapide"
-        },
-        "data_description": {
-          "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
-        }
+      "dashboard_entity_display": {
+        "title": "Tuiles de l'écran",
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       }
     },
     "error": {

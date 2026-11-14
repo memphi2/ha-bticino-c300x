@@ -472,18 +472,18 @@
           "connection": "Connessione al C300X",
           "features": "Video e audio",
           "device_activations": "Attivazioni: serrature, luci, luce scale",
+          "dashboard_alarm": "Allarme (Alarmo)",
           "dashboard": "Display e patch display",
           "dashboard_pages": "Pagine del display",
-          "dashboard_alarm": "Allarme (Alarmo)",
           "dashboard_entity_display": "Riquadri del display"
         },
         "menu_option_descriptions": {
           "connection": "Indirizzo, chiave di accesso e chiave di manutenzione del C300X, indirizzo di Home Assistant.",
           "features": "Immagine dal vivo, conversazione, volumi e accesso video e audio sul C300X.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
+          "dashboard_alarm": "Centrale di allarme Alarmo della pagina Allarme e la sua azione rapida.",
           "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, pulsanti della pagina iniziale, comportamento dopo un'azione e azioni consentite.",
           "dashboard_pages": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
-          "dashboard_alarm": "Centrale di allarme Alarmo della pagina Allarme e la sua azione rapida.",
           "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro."
         }
       },
@@ -559,6 +559,18 @@
           "device_activation_item_address": "Indirizzo nell'impianto a cui viene inviata l'attivazione (OpenWebNet \"where\"), al massimo 31 caratteri."
         }
       },
+      "dashboard_alarm": {
+        "title": "Allarme (Alarmo)",
+        "description": "La pagina Allarme del display si apre dal pulsante Allarme nella pagina iniziale del C300X. Mostra e comanda una centrale di allarme Alarmo e può offrire accanto un'azione rapida.",
+        "data": {
+          "alarm_entity_id": "Centrale di allarme Alarmo",
+          "alarm_page_entity_id": "Azione rapida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale di allarme che la pagina Allarme mostra e comanda. Lascia vuoto se non usi Alarmo: il pulsante Allarme non compare.",
+          "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
+        }
+      },
       "dashboard": {
         "title": "Display e patch display",
         "description": "Pagine Home Assistant sul display del C300X.\n\nPatch display sul dispositivo: {qml_patch_status}.\n\nAttivare o disattivare il patch display scrive file del display sul dispositivo e ne ricarica la schermata; può richiedere fino a circa 60 secondi. Lo stato cambia quando il dispositivo lo conferma.\n\nCon il patch display attivo, il menu delle impostazioni offre anche **Pagine del display** (meteo e cosa viene mostrato dove), **Allarme (Alarmo)** e **Riquadri del display**.",
@@ -574,10 +586,6 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
         }
-      },
-      "dashboard_entity_display": {
-        "title": "Riquadri del display",
-        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "dashboard_pages": {
         "title": "Pagine del display",
@@ -690,17 +698,9 @@
           }
         }
       },
-      "dashboard_alarm": {
-        "title": "Allarme (Alarmo)",
-        "description": "La pagina Allarme del display si apre dal pulsante Allarme nella pagina iniziale del C300X. Mostra e comanda una centrale di allarme Alarmo e può offrire accanto un'azione rapida.",
-        "data": {
-          "alarm_entity_id": "Centrale di allarme Alarmo",
-          "alarm_page_entity_id": "Azione rapida"
-        },
-        "data_description": {
-          "alarm_entity_id": "Centrale di allarme che la pagina Allarme mostra e comanda. Lascia vuoto se non usi Alarmo: il pulsante Allarme non compare.",
-          "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
-        }
+      "dashboard_entity_display": {
+        "title": "Riquadri del display",
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       }
     },
     "error": {

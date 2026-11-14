@@ -47,9 +47,9 @@ has a help text.
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
 | Media features | Doorstation media, Home Assistant media user, live audio gain, Ring Capture gain. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
 | Device activations | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
-| Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. |
-| Display pages and tiles | Weather, entities per page, size, name and secondary line of each tile. |
-| Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | Yes, only when the Display patch is applied/restored. | Yes, only when the Display patch is applied/restored. |
+| Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | No. Stored in Home Assistant; the display asks for it. |
+| Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. | Yes, only when the Display patch is applied/restored. |
+| Display pages and tiles | Weather, entities per page, size, name and secondary line of each tile. | No. Stored in Home Assistant; the display asks for them. |
 | Maintenance controls | SSH, noAuth, mDNS discovery, firewall patches, GUI reload, reboot, agent update/remove. | Yes, only when the corresponding entity, button or Repair is used. |
 
 ## Main User Features

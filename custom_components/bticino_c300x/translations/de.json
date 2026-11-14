@@ -472,18 +472,18 @@
           "connection": "Verbindung zum C300X",
           "features": "Video und Audio",
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
+          "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard": "Display und Display-Patch",
           "dashboard_pages": "Display-Seiten",
-          "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard_entity_display": "Display-Kacheln"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
+          "dashboard_alarm": "Alarmo-Alarmzentrale der Alarm-Seite und ihre Schnellaktion.",
           "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
           "dashboard_pages": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
-          "dashboard_alarm": "Alarmo-Alarmzentrale der Alarm-Seite und ihre Schnellaktion.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel."
         }
       },
@@ -559,6 +559,18 @@
           "device_activation_item_address": "Adresse in der Türanlage, an die die Aktivierung geht (OpenWebNet „where“), höchstens 31 Zeichen."
         }
       },
+      "dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "Die Alarm-Seite des Displays öffnet sich über den Button Alarm auf der Startseite des C300X. Sie zeigt und bedient eine Alarmo-Alarmzentrale und kann daneben eine Schnellaktion anbieten.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
+        }
+      },
       "dashboard": {
         "title": "Display und Display-Patch",
         "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Einstellungsmenü zusätzlich **Display-Seiten** (Wetter und was wo angezeigt wird), **Alarm (Alarmo)** und **Display-Kacheln**.",
@@ -574,10 +586,6 @@
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
         }
-      },
-      "dashboard_entity_display": {
-        "title": "Display-Kacheln",
-        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
@@ -690,17 +698,9 @@
           }
         }
       },
-      "dashboard_alarm": {
-        "title": "Alarm (Alarmo)",
-        "description": "Die Alarm-Seite des Displays öffnet sich über den Button Alarm auf der Startseite des C300X. Sie zeigt und bedient eine Alarmo-Alarmzentrale und kann daneben eine Schnellaktion anbieten.",
-        "data": {
-          "alarm_entity_id": "Alarmo-Alarmzentrale",
-          "alarm_page_entity_id": "Schnellaktion"
-        },
-        "data_description": {
-          "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
-          "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
-        }
+      "dashboard_entity_display": {
+        "title": "Display-Kacheln",
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       }
     },
     "error": {

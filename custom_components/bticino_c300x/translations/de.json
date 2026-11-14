@@ -483,7 +483,7 @@
       "required": "Dieses Feld ist erforderlich.",
       "invalid_dashboard_entities": "Eine Entität kann auf dem Display nicht angezeigt werden.",
       "invalid_device_activation_mode": "Waehle automatisch oder manuell fuer den Adressmodus der Aktivierungen.",
-      "invalid_action_map": "Das JSON der erlaubten Aktionen ist ungueltig.",
+      "invalid_action_map": "Die Action-Allowlist ist kein gültiges JSON.",
       "invalid_dashboard_entity_display_overrides": "Eine Display-Einstellung ist ungueltig. Pruefe die eigenen Namen und die Seitennamen (hoechstens 60 Zeichen).",
       "dashboard_page_name_reserved": "C300X ist der interne Name der Statusseite; wähle einen anderen Seitennamen.",
       "dashboard_page_name_duplicate": "Zwei Seiten haben denselben Namen; gib jeder Seite einen eigenen.",
@@ -751,7 +751,8 @@
       "dashboard_page_name_duplicate": "Zwei Seiten haben denselben Namen; gib jeder Seite einen eigenen.",
       "dashboard_entity_on_several_pages": "Eine Entität ist auf mehreren Seiten gewählt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
-      "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift."
+      "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
+      "required": "Dieses Feld ist erforderlich."
     }
   },
   "entity": {

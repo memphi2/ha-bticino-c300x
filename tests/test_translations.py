@@ -332,8 +332,6 @@ def test_every_error_the_shared_flow_helpers_report_has_a_message_in_each_flow()
                 path.read_text(encoding="utf-8"),
             )
         )
-    # A key the setup flow alone reports is not shared.
-    emitted -= {"required"}
     assert "invalid_action_map" in emitted
     # An error on a field the form does not have is not shown; it is a base error.
     assert "invalid_dashboard_entity_display_overrides" in emitted
@@ -447,3 +445,28 @@ def test_every_settings_field_has_a_help_text() -> None:
         for step_id, step in steps.items():
             data = step.get("data", {})
             assert set(data) <= set(step.get("data_description", {})), (path.name, step_id)
+
+
+def test_the_base_strings_and_the_english_translation_have_the_same_keys() -> None:
+    """The other languages are compared with en.json; en.json must match the base."""
+
+    def leaves(value: object, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
+        if not isinstance(value, dict):
+            return {prefix}
+        found: set[tuple[str, ...]] = set()
+        for key, child in value.items():
+            found |= leaves(child, (*prefix, key))
+        return found
+
+    base = leaves(_load_json(INTEGRATION / "strings.json"))
+    english = leaves(_load_json(TRANSLATIONS / "en.json"))
+
+    assert sorted(english - base) == []
+    assert sorted(base - english) == []
+
+
+def test_one_error_has_one_wording_in_setup_and_options() -> None:
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for key in ("invalid_alarm_entity", "invalid_action_map", "required"):
+            assert data["config"]["error"][key] == data["options"]["error"][key], (path.name, key)

@@ -483,7 +483,7 @@
       "required": "Ce champ est obligatoire.",
       "invalid_dashboard_entities": "Une entité ne peut pas être affichée sur l'écran.",
       "invalid_device_activation_mode": "Choisissez automatique ou manuel pour le mode d'adresse des activations.",
-      "invalid_action_map": "Le JSON de la liste autorisee d'actions est invalide.",
+      "invalid_action_map": "Le JSON de la liste autorisée d'actions est invalide.",
       "invalid_dashboard_entity_display_overrides": "Un reglage de l'ecran n'est pas valide. Verifiez les noms personnalises et les noms de page (60 caracteres au plus).",
       "dashboard_page_name_reserved": "C300X est le nom interne de la page d'état ; choisissez un autre nom de page.",
       "dashboard_page_name_duplicate": "Deux pages ont le même nom ; donnez à chaque page le sien.",
@@ -751,7 +751,8 @@
       "dashboard_page_name_duplicate": "Deux pages ont le même nom ; donnez à chaque page le sien.",
       "dashboard_entity_on_several_pages": "Une entité est choisie sur plusieurs pages ; gardez-la sur une seule page.",
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
-      "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page."
+      "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
+      "required": "Ce champ est obligatoire."
     }
   },
   "entity": {

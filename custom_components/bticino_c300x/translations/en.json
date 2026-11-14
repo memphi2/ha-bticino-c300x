@@ -751,7 +751,8 @@
       "dashboard_page_name_duplicate": "Two pages have the same name; give each page its own.",
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
-      "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading."
+      "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
+      "required": "This field is required."
     }
   },
   "entity": {

@@ -997,3 +997,30 @@ def test_section_titles_carry_the_page_names():
     sent = {"page_2": {"name": " Hall "}, "page_3": {"entities": ["light.a"]}}
     assert dashboard_pages_placeholders(settings, sent)["page_2_name"] == ": Hall"
     assert dashboard_pages_placeholders(settings, sent)["page_3_name"] == ""
+
+
+def test_saving_the_pages_keeps_the_name_of_the_alarmo_quick_entity():
+    """The Alarmo quick entity is on no page, and its tile name is still kept.
+
+    Saving the pages dropped the display settings of every entity that is on
+    no page, which also removed the name given to the quick entity.
+    """
+
+    settings = {
+        "alarm_page_entity_id": "button.stair_light",
+        "dashboard_entities": ["light.one", "light.gone"],
+        "dashboard_entity_display_overrides": {
+            "button.stair_light": {"name": "custom", "custom_name": "Stairs"},
+            "light.gone": {"name": "entity_id"},
+        },
+    }
+
+    result, errors = dashboard_pages_input(settings, {
+        "page_1": {"entities": ["light.one"]},
+    })
+
+    assert errors == {}
+    assert result["dashboard_entity_display_overrides"] == {
+        "button.stair_light": {"name": "custom", "custom_name": "Stairs"},
+        "light.one": {"page": "C300X"},
+    }

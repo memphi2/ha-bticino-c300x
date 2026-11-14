@@ -25,6 +25,7 @@ from .config_flow_forms import (
 )
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .const import (
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
@@ -244,6 +245,10 @@ def dashboard_pages_input(
     overrides = normalize_dashboard_entity_display_overrides(
         dashboard_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
     )
+    # The Alarmo quick entity is on no page; its tile settings are kept.
+    kept_entities = seen_entities | {
+        str(dashboard_input.get(CONF_ALARM_PAGE_ENTITY_ID) or "")
+    }
     ordered_entities: list[str] = []
     for _, _, name, page_entities in pages:
         for entity_id in page_entities:
@@ -261,7 +266,7 @@ def dashboard_pages_input(
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
             entity_id: options
             for entity_id, options in overrides.items()
-            if entity_id in seen_entities and options
+            if entity_id in kept_entities and options
         },
         CONF_DASHBOARD_PAGES: [
             {"name": name, "order": position}

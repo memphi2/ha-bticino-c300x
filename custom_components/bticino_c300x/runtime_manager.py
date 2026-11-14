@@ -437,12 +437,18 @@ class C300XRuntimeManager:
 def _entry_update_listener(
     entry: BticinoC300XConfigEntry,
 ) -> Callable[[HomeAssistant, BticinoC300XConfigEntry], Awaitable[None]]:
-    """Do not reload an active updater for its internal recovery marker."""
+    """Do not reload for the bookkeeping markers the integration writes itself.
+
+    The recovery markers of an active update, and the record that the media
+    user was set up, change no setting. Reloading for the last one ran the
+    setup a second time right after the first successful startup sync.
+    """
 
     def settings(current: BticinoC300XConfigEntry) -> tuple[dict[str, Any], dict[str, Any]]:
         data = dict(current.data)
         data.pop(CONF_AGENT_UPDATE_PAYLOAD_PENDING, None)
         data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
+        data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
         return data, dict(current.options)
 
     previous = settings(entry)

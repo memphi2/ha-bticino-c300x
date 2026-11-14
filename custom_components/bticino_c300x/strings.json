@@ -97,9 +97,21 @@
           "device_activation_item_address": "Address in the door system the activation is sent to (OpenWebNet \"where\"), up to 31 characters."
         }
       },
+      "user_dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+        }
+      },
       "user_dashboard": {
         "title": "C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page. Alarmo is set in the settings menu afterwards.",
+        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
@@ -190,9 +202,21 @@
           "device_activation_item_address": "Address in the door system the activation is sent to (OpenWebNet \"where\"), up to 31 characters."
         }
       },
+      "reconfigure_dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+        }
+      },
       "reconfigure_dashboard": {
         "title": "Reconfigure C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page. Alarmo is set in the settings menu afterwards.",
+        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
@@ -481,7 +505,7 @@
           "connection": "Address, access key and maintenance key of the C300X, address of Home Assistant.",
           "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
-          "dashboard_alarm": "Alarmo alarm panel of the Alarm page and its quick action.",
+          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
           "dashboard": "Home Assistant pages on the display on or off, home page buttons, behaviour after an action and allowed actions.",
           "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
           "dashboard_entity_display": "Size, name and secondary line of each tile."
@@ -561,19 +585,19 @@
       },
       "dashboard_alarm": {
         "title": "Alarm (Alarmo)",
-        "description": "The Alarm page of the display opens from the Alarm button on the home page of the C300X. It shows and operates an Alarmo alarm panel, and can offer one quick action beside it.",
+        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
         "data": {
           "alarm_entity_id": "Alarmo alarm panel",
           "alarm_page_entity_id": "Quick action"
         },
         "data_description": {
-          "alarm_entity_id": "Alarm panel the Alarm page shows and operates. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
-          "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
         }
       },
       "dashboard": {
         "title": "Display and Display patch",
-        "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the settings menu also offers **Display pages** (weather and what is shown where), **Alarm (Alarmo)** and **Display tiles**.",
+        "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the settings menu also offers **Display pages** (weather and what is shown where) and **Display tiles**.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",

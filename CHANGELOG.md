@@ -27,11 +27,11 @@
   real umlauts, French and Italian texts their accents.
 - The weather is set with the display pages, as the first field of the first
   section, above its entities. Alarmo and the quick action of the Alarm page
-  have an area of their own in the settings menu, **Alarm (Alarmo)**, right
-  below the activations. The display and Display patch form keeps the patch,
-  the home page buttons, the behaviour after an action and the allowed
-  actions. Saved values carry over. New entries set Alarmo there after the
-  setup.
+  have a step of their own, **Alarm (Alarmo)**, right after the activations in
+  the setup, the reconfigure and the settings menu. Alarmo is kept with the
+  Display patch off, since the alarm commands do not need it. The display and
+  Display patch form keeps the patch, the home page buttons, the behaviour
+  after an action and the allowed actions. Saved values carry over.
 - The status page, the first page, is left out when it has no weather and no
   tile, and its HA, alarm and time badges with it. Its section explains this.
 - A media player's submenu shows previous, play/pause and next side by side

@@ -37,7 +37,10 @@ The integration is local-first:
 ## Setup and Options
 
 **Configure** opens a menu of settings areas. Each area is a form of its own
-and saves when it is submitted; the other areas keep their settings. Display
+and saves when it is submitted; the other areas keep their settings. A new
+setup and a reconfigure walk through the same areas one after the other:
+connection, video and audio, activations, Alarm (Alarmo), display and Display
+patch and, with the patch on, the pages and the tiles. Display
 pages and display tiles are offered while the Display patch is on, the tiles
 only once there is an entity on a page or an Alarmo quick action. Every field
 has a help text.
@@ -89,8 +92,10 @@ Tap a mode to execute directly when no PIN is required; otherwise the keypad
 appears. Entry delay opens the disarm keypad when required. A pending command
 blocks repeated taps; unavailable data is not displayed as a ready alarm.
 
-Under **Configure > Alarm (Alarmo)**, the Alarmo alarm panel and the **Quick
-action**, the optional quick action or status entity, are set. Leave it empty to hide this area. To retain a stair-light
+The Alarmo alarm panel and the **Quick action**, the optional quick action or
+status entity, are set in the **Alarm (Alarmo)** step right after the
+activations, in the setup, the reconfigure and the settings menu. They are kept
+with the Display patch off, since the alarm commands do not need it. Leave it empty to hide this area. To retain a stair-light
 shortcut, select the integration's stair-light button explicitly. No stair-light
 action is inserted automatically. Buttons, switches, scenes and scripts can be
 operated directly; other supported selections remain read-only on this page.
@@ -235,8 +240,7 @@ detail views.
 ## Display Settings
 
 Switch the Display patch on under **Configure > Display and Display patch**;
-the settings menu then offers **Display pages**, **Alarm (Alarmo)** and
-**Display tiles**. Choose the weather, Alarmo and the entities with the normal
+the settings menu then offers **Display pages** and **Display tiles**. Choose the weather, Alarmo and the entities with the normal
 HA selectors;
 control types come from their actual capabilities, not a manually chosen
 widget.
@@ -283,7 +287,7 @@ entity id added. With more than two tiles the sections start collapsed.
 Missing or unavailable entities retain their configuration and show unavailable
 rather than changing the saved layout.
 
-The optional quick action of the Alarm page, set under **Alarm (Alarmo)**, gets a
+The optional quick action of the Alarm page, set in the **Alarm (Alarmo)** step, gets a
 section of its own at the end, titled **Alarm page › name**, with name and secondary line, even if it is not
 selected for an overview page; saving the pages keeps these settings. Selecting
 it does not add it to the overview. Leave the quick action empty to hide it; no

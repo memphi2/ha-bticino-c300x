@@ -44,8 +44,8 @@ from .config_flow_activations import (
 from .config_flow_activations import (
     activation_settings_step as _activation_settings_step,
 )
-from .config_flow_alarm import alarm_input as _alarm_input
-from .config_flow_alarm import alarm_schema as _alarm_schema
+from .config_flow_alarm import alarm_step as _alarm_step
+from .config_flow_alarm import alarm_values as _alarm_values
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -257,12 +257,14 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._setup_device_activations: list[dict[str, Any]] = []
         self._setup_activation_edit_id: str | None = None
         self._setup_dashboard_input: dict[str, Any] = {}
+        self._setup_alarm: dict[str, Any] = {}
         self._tile_form: _TileForm | None = None
         self._reconfigure_connection: dict[str, Any] = {}
         self._reconfigure_feature_data: dict[str, Any] = {}
         self._reconfigure_device_activations: list[dict[str, Any]] = []
         self._reconfigure_activation_edit_id: str | None = None
         self._reconfigure_dashboard_input: dict[str, Any] = {}
+        self._reconfigure_alarm: dict[str, Any] = {}
 
     async def async_step_user(
         self,
@@ -668,7 +670,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._setup_activation_edit_id = result.edit_id
         if result.next_step == _ACTIVATION_STEP_DONE:
             self._setup_feature_data[CONF_DEVICE_ACTIVATIONS] = list(result.items)
-            return await self.async_step_user_dashboard()
+            return await self.async_step_user_dashboard_alarm()
         if result.next_step == _ACTIVATION_STEP_ITEM:
             return _activation_item_form(
                 self.async_show_form,
@@ -714,6 +716,20 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=result.errors,
         )
 
+    async def async_step_user_dashboard_alarm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Collect Alarmo and the quick action of the display's Alarm page."""
+
+        if not self._setup_feature_data:
+            return await self.async_step_user_features()
+        saved, form = _alarm_step(self, "user_dashboard_alarm", self._setup_alarm, user_input)
+        if form is not None:
+            return form
+        self._setup_alarm = _alarm_values(saved or {})
+        return await self.async_step_user_dashboard()
+
     async def async_step_user_dashboard(
         self,
         user_input: dict[str, Any] | None = None,
@@ -724,7 +740,10 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_user_features()
         errors: dict[str, str] = {}
         if user_input is not None:
-            self._setup_dashboard_input = _dashboard_input_defaults(user_input)
+            self._setup_dashboard_input = {
+                **_dashboard_input_defaults(user_input),
+                **self._setup_alarm,
+            }
             if self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]:
                 return self._async_show_user_dashboard_pages_form(None, errors)
             return await self._async_create_setup_entry_from_dashboard(errors)
@@ -1045,7 +1064,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._reconfigure_activation_edit_id = result.edit_id
         if result.next_step == _ACTIVATION_STEP_DONE:
             self._reconfigure_feature_data[CONF_DEVICE_ACTIVATIONS] = list(result.items)
-            return await self.async_step_reconfigure_dashboard()
+            return await self.async_step_reconfigure_dashboard_alarm()
         if result.next_step == _ACTIVATION_STEP_ITEM:
             return _activation_item_form(
                 self.async_show_form,
@@ -1091,6 +1110,23 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=result.errors,
         )
 
+    async def async_step_reconfigure_dashboard_alarm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Reconfigure Alarmo and the quick action of the display's Alarm page."""
+
+        if not self._reconfigure_feature_data:
+            return await self.async_step_reconfigure_features()
+        current = self._reconfigure_alarm or _alarm_values(
+            _current_feature_options(self._get_reconfigure_entry())
+        )
+        saved, form = _alarm_step(self, "reconfigure_dashboard_alarm", current, user_input)
+        if form is not None:
+            return form
+        self._reconfigure_alarm = _alarm_values(saved or {})
+        return await self.async_step_reconfigure_dashboard()
+
     async def async_step_reconfigure_dashboard(
         self,
         user_input: dict[str, Any] | None = None,
@@ -1103,10 +1139,13 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_reconfigure_features()
         errors: dict[str, str] = {}
         if user_input is not None:
-            self._reconfigure_dashboard_input = _dashboard_input_defaults(
-                _dashboard_form_input(user_input),
-                feature_defaults,
-            )
+            self._reconfigure_dashboard_input = {
+                **_dashboard_input_defaults(
+                    _dashboard_form_input(user_input),
+                    feature_defaults,
+                ),
+                **self._reconfigure_alarm,
+            }
             if self._reconfigure_dashboard_input[CONF_DEVICE_UI_ENABLED]:
                 return self._async_show_reconfigure_dashboard_pages_form(None, errors)
             return await self._async_finish_reconfigure_from_dashboard(
@@ -1547,19 +1586,11 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         """Manage Alarmo and the quick action of the display's Alarm page."""
 
         feature_defaults = self._load_saved()
-        errors: dict[str, str] = {}
-        schema = _alarm_schema(self._dashboard_options)
-        if user_input is not None:
-            dashboard_input, errors = _alarm_input(self._dashboard_options, user_input)
-            if not errors:
-                self._dashboard_options = dashboard_input
-                return await self._async_save_options(feature_defaults)
-            schema = self.add_suggested_values_to_schema(schema, user_input)
-        return self.async_show_form(
-            step_id="dashboard_alarm",
-            data_schema=schema,
-            errors=errors,
-        )
+        saved, form = _alarm_step(self, "dashboard_alarm", self._dashboard_options, user_input)
+        if form is not None:
+            return form
+        self._dashboard_options = saved or {}
+        return await self._async_save_options(feature_defaults)
 
     async def async_step_dashboard_pages(
         self,

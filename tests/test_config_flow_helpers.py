@@ -994,9 +994,17 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             }
         )
     )
-    dashboard_form = asyncio.run(
+    alarm_form = asyncio.run(
         flow.async_step_user_device_activations(
             {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_user_dashboard_alarm(
+            {
+                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+                CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
+            }
         )
     )
     pages_form = asyncio.run(
@@ -1004,15 +1012,17 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             {
                 CONF_DEVICE_UI_ENABLED: True,
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True,
-                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
-                CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
-                CONF_WEATHER_ENTITY_ID: "weather.home",
             }
         )
     )
     entity_display_form = asyncio.run(
         flow.async_step_user_dashboard_pages(
-            {"page_1": {"entities": ["sensor.temperature"]}}
+            {
+                "page_1": {
+                    "weather_entity_id": "weather.home",
+                    "entities": ["sensor.temperature"],
+                }
+            }
         )
     )
     result = asyncio.run(
@@ -1030,6 +1040,8 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
     assert auth_form["step_id"] == "agent_auth"
     assert feature_form["step_id"] == "user_features"
     assert activation_form["step_id"] == "user_device_activations"
+    # Alarmo has a step of its own right after the activations.
+    assert alarm_form["step_id"] == "user_dashboard_alarm"
     assert dashboard_form["step_id"] == "user_dashboard"
     assert pages_form["step_id"] == "user_dashboard_pages"
     assert entity_display_form["step_id"] == "user_dashboard_entity_display"
@@ -1039,7 +1051,9 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
     assert result["data"][CONF_AGENT_TOKEN] == "agent-token"
     assert result["data"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
     assert result["data"][CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert result["data"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result["data"][CONF_ALARM_PAGE_ENTITY_ID] == "switch.stair_light"
+    assert result["data"][CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert result["options"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
         "sensor.temperature": {
             "name": "custom",
@@ -1520,7 +1534,7 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
     )
 
     assert activation_form["step_id"] == "user_device_activations"
-    assert feature_form["step_id"] == "user_dashboard"
+    assert feature_form["step_id"] == "user_dashboard_alarm"
     assert result["title"] == "Door Station"
     assert calls == [
         "unique:abcdef",
@@ -1721,7 +1735,7 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     )
 
     assert activation_form["step_id"] == "user_device_activations"
-    assert feature_form["step_id"] == "user_dashboard"
+    assert feature_form["step_id"] == "user_dashboard_alarm"
     assert result["title"] == "BTicino C300X"
     assert calls == [
         "agent_id:c300x.local:known-token",
@@ -2307,7 +2321,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     )
     # Without the Display patch there are no pages or tiles to set up.
     assert _options_menu_of(entry) == [
-        "connection", "features", "device_activations", "dashboard",
+        "connection", "features", "device_activations", "dashboard_alarm", "dashboard",
     ]
 
     _flow, result = _options_area(entry, "connection", {
@@ -2357,7 +2371,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         CONF_DASHBOARD_PREVENT_RETURN: True,
     })
     _save_options_area(entry, result)
-    # The patch is on: Alarmo and pages can be set up, and there are no tiles yet.
+    # The patch is on: pages can be set up, and there are no tiles yet.
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
         "dashboard_alarm", "dashboard", "dashboard_pages",
@@ -2557,9 +2571,17 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             }
         )
     )
-    dashboard_form = asyncio.run(
+    alarm_form = asyncio.run(
         flow.async_step_reconfigure_device_activations(
             {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_reconfigure_dashboard_alarm(
+            {
+                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+                CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
+            }
         )
     )
     pages_form = asyncio.run(
@@ -2567,9 +2589,6 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             {
                 CONF_DEVICE_UI_ENABLED: True,
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False,
-                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
-                CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
-                CONF_WEATHER_ENTITY_ID: "weather.home",
                 CONF_ACTIONS_JSON: "",
                 CONF_DASHBOARD_PREVENT_RETURN: True,
             }
@@ -2577,7 +2596,12 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     )
     entity_display_form = asyncio.run(
         flow.async_step_reconfigure_dashboard_pages(
-            {"page_1": {"entities": ["select.forwarding"]}}
+            {
+                "page_1": {
+                    "weather_entity_id": "weather.home",
+                    "entities": ["select.forwarding"],
+                }
+            }
         )
     )
     result = asyncio.run(
@@ -2596,6 +2620,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert activation_form["step_id"] == "reconfigure_device_activations"
     assert activation_item_form["step_id"] == "reconfigure_device_activation_item"
     assert activation_manage_form["step_id"] == "reconfigure_device_activations"
+    assert alarm_form["step_id"] == "reconfigure_dashboard_alarm"
     assert dashboard_form["step_id"] == "reconfigure_dashboard"
     assert pages_form["step_id"] == "reconfigure_dashboard_pages"
     assert entity_display_form["step_id"] == "reconfigure_dashboard_entity_display"
@@ -2615,7 +2640,9 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             "type": "lock",
         }
     ]
+    assert result["data_updates"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result["data_updates"][CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
+    assert result["data_updates"][CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
     assert result["data_updates"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
         "select.forwarding": {
@@ -2908,3 +2935,50 @@ class _FakeQmlPatchApi:
 
 def _schema_key_names(schema: vol.Schema) -> list[str]:
     return [getattr(key, "schema", key) for key in schema.schema]
+
+
+def test_alarmo_has_its_own_step_after_the_activations_and_is_kept_without_the_patch() -> None:
+    """New setup and reconfigure ask for Alarmo right after the activations.
+
+    The alarm commands do not need the Display patch, so Alarmo stays set when
+    the patch is off.
+    """
+
+    flow = BticinoC300XConfigFlow()
+    flow._setup_feature_data = {CONF_VIDEO_ENABLED: False}
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow.add_suggested_values_to_schema = lambda schema, _values: schema  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+    flow._async_create_setup_entry = lambda feature_data: asyncio.sleep(0, {"data": feature_data})  # type: ignore[method-assign]
+
+    form = asyncio.run(flow.async_step_user_dashboard_alarm())
+    assert form["step_id"] == "user_dashboard_alarm"
+    assert [str(key) for key in form["data_schema"].schema] == [
+        CONF_ALARM_ENTITY_ID, CONF_ALARM_PAGE_ENTITY_ID,
+    ]
+    # A wrong entity is reported on its field and the form stays.
+    wrong = asyncio.run(flow.async_step_user_dashboard_alarm({CONF_ALARM_ENTITY_ID: "light.hall"}))
+    assert wrong["step_id"] == "user_dashboard_alarm"
+    assert wrong["errors"] == {CONF_ALARM_ENTITY_ID: "invalid_alarm_entity"}
+
+    next_form = asyncio.run(flow.async_step_user_dashboard_alarm({
+        CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+        CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
+    }))
+    assert next_form["step_id"] == "user_dashboard"
+    result = asyncio.run(flow.async_step_user_dashboard({CONF_DEVICE_UI_ENABLED: False}))
+    assert result["data"][CONF_DEVICE_UI_ENABLED] is False
+    assert result["data"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert result["data"][CONF_ALARM_PAGE_ENTITY_ID] == "switch.stair_light"
+
+    data, errors = _feature_input({
+        CONF_DEVICE_UI_ENABLED: False,
+        CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+        CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
+        CONF_WEATHER_ENTITY_ID: "weather.home",
+    })
+    assert errors == {}
+    assert data[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert data[CONF_ALARM_PAGE_ENTITY_ID] == "switch.stair_light"
+    # The weather belongs to the display and goes with the patch.
+    assert data[CONF_WEATHER_ENTITY_ID] == ""

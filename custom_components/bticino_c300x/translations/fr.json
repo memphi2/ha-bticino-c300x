@@ -97,9 +97,21 @@
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
+      "user_dashboard_alarm": {
+        "title": "Alarme (Alarmo)",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+        }
+      },
       "user_dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page. Alarmo se règle ensuite dans le menu des réglages.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
@@ -190,9 +202,21 @@
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
+      "reconfigure_dashboard_alarm": {
+        "title": "Alarme (Alarmo)",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+        }
+      },
       "reconfigure_dashboard": {
         "title": "Reconfigurer le dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page. Alarmo se règle ensuite dans le menu des réglages.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
@@ -481,7 +505,7 @@
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
-          "dashboard_alarm": "Centrale d'alarme Alarmo de la page Alarme et son action rapide.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
           "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
           "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
@@ -561,19 +585,19 @@
       },
       "dashboard_alarm": {
         "title": "Alarme (Alarmo)",
-        "description": "La page Alarme de l'écran s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Elle affiche et commande une centrale d'alarme Alarmo et peut proposer une action rapide à côté.",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
         "data": {
           "alarm_entity_id": "Centrale d'alarme Alarmo",
           "alarm_page_entity_id": "Action rapide"
         },
         "data_description": {
-          "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "dashboard": {
         "title": "Écran et patch display",
-        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo et ce qui s'affiche où), **Alarme (Alarmo)** et **Tuiles de l'écran**.",
+        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",

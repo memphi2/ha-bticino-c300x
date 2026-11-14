@@ -18,6 +18,7 @@ from .api import (
 )
 from .capabilities import (
     capability_is_supported,
+    entry_device_ui_configured,
     entry_device_ui_enabled_or_patch_active,
     maintenance_action_is_advertised,
 )
@@ -554,6 +555,13 @@ def _async_remove_stale_gui_dependent_entities(
     # discarding whatever the user had renamed, hidden or moved.
     if entry_device_ui_enabled_or_patch_active(entry):
         return
+
+    if entry_device_ui_configured(entry) is None:
+        # Legacy entries depend on device state. Offline or unavailable status
+        # is not evidence that their existing registry entries are obsolete.
+        status = getattr(getattr(entry, "runtime_data", None), "qml_patch_status", None)
+        if not isinstance(status, dict) or status.get("patched") is not False:
+            return
 
     import homeassistant.helpers.entity_registry as er
 

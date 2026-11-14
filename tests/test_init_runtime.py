@@ -1459,7 +1459,8 @@ def test_display_bridge_notify_ignores_stale_runtime() -> None:
     assert old_runtime.display_bridge_alarm_notify_pending is False
 
 
-def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> None:  # noqa: ANN001
+@pytest.mark.parametrize("explicit_disabled", [True, False])
+def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch, explicit_disabled) -> None:  # noqa: ANN001
     import homeassistant.helpers.entity_registry as entity_registry
 
     class FakeRegistry:
@@ -1486,7 +1487,9 @@ def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> No
     hass = SimpleNamespace(
         states=SimpleNamespace(async_remove=lambda entity_id: state_removed.append(entity_id))
     )
-    entry = _entry(options={CONF_DEVICE_UI_ENABLED: False})
+    entry = _entry(options={CONF_DEVICE_UI_ENABLED: False} if explicit_disabled else {})
+    if not explicit_disabled:
+        entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": False})
 
     runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
@@ -1856,7 +1859,9 @@ def test_setup_reads_the_patch_status_before_cleaning_up_gui_buttons() -> None:
     )
 
 
-def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch) -> None:  # noqa: ANN001
+@pytest.mark.parametrize("status", [{"patched": True}, {}, {"patched": None}, None])
+@pytest.mark.parametrize("available", [False, True])
+def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch, status, available) -> None:  # noqa: ANN001
     """The button platform creates these under entry_device_ui_enabled_or_patch_
     active. Gating the cleanup on the strict predicate meant an entry predating
     the device-UI option but running an active patch had its buttons removed
@@ -1882,15 +1887,20 @@ def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch
 
     registry = FakeRegistry()
     monkeypatch.setattr(entity_registry, "async_get", lambda _hass: registry)
-    hass = SimpleNamespace(states=SimpleNamespace(async_remove=lambda _entity_id: None))
-    # No explicit device-UI setting, but the QML patch is active: exactly the
-    # entry shape the lenient predicate exists for.
+    state_removed: list[str] = []
+    hass = SimpleNamespace(states=SimpleNamespace(async_remove=state_removed.append))
+    # Legacy entries retain their registry metadata unless status confirms
+    # the patch is absent, including when an offline startup cannot read it.
     entry = _entry()
-    entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": True})
+    entry.runtime_data = SimpleNamespace(
+        qml_patch_status=status,
+        connection_state=SimpleNamespace(available=available),
+    )
 
     runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
     assert registry.removed == []
+    assert state_removed == []
 
 
 def test_changed_home_page_button_mode_reapplies_the_display_patch(

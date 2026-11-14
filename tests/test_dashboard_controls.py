@@ -1255,3 +1255,71 @@ def test_a_vacuum_is_a_tile_with_a_detail_page():
     assert item["details"]["type"] == "vacuum"
     assert item["details"]["activity"] == "cleaning"
     assert [control["command"] for control in item["controls"]][:2] == ["pause", "stop"]
+
+
+@pytest.mark.parametrize(
+    ("features", "commands"),
+    [
+        (1 | 2 | 4 | 8, ["open_valve", "stop_valve", "close_valve", "position"]),
+        (1 | 2, ["open_valve", "close_valve"]),
+        (4, ["position"]),
+        (0, []),
+    ],
+)
+def test_a_valve_offers_only_what_it_reports(features, commands):
+    controls = entity_controls(
+        "valve.water", state("open", supported_features=features, current_position=40)
+    )
+
+    assert [control["command"] for control in controls] == commands
+    position = [control for control in controls if control["command"] == "position"]
+    if position:
+        assert position[0]["value"] == 40
+        assert (position[0]["min"], position[0]["max"], position[0]["unit"]) == (0.0, 100.0, "%")
+
+
+@pytest.mark.parametrize("command", ["open_valve", "stop_valve", "close_valve"])
+def test_a_valve_sends_its_explicit_service(command):
+    hass = hass_for(state("open", supported_features=1 | 2 | 8))
+
+    asyncio.run(async_execute_control(hass, "valve.water", command, None))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "valve", command, {"entity_id": "valve.water"}, blocking=True,
+    )
+
+
+def test_a_valve_sets_a_position_in_range_only():
+    hass = hass_for(state("open", supported_features=4, current_position=40))
+
+    asyncio.run(async_execute_control(hass, "valve.water", "position", "75"))
+    hass.services.async_call.assert_awaited_once_with(
+        "valve", "set_valve_position", {"entity_id": "valve.water", "position": 75}, blocking=True,
+    )
+    hass.services.async_call.reset_mock()
+    for value in ("101", "-1", "nan", "7.5"):
+        with pytest.raises(ValueError):
+            asyncio.run(async_execute_control(hass, "valve.water", "position", value))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_valve_is_a_tile_that_reads_its_position_or_its_state():
+    def tile(position):
+        hass = hass_for(state("open", supported_features=1 | 2, current_position=position))
+        hass.config = SimpleNamespace(language="en")
+        entry = SimpleNamespace(
+            data={}, options={"device_ui_enabled": True, "dashboard_entities": ["valve.water"]}, entry_id="entry",
+        )
+        payload = asyncio.run(async_dashboard_payload(hass, entry))
+        return next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    with_position = tile(40)
+    assert with_position["kind"] == "entity"
+    assert with_position["glyph"] == "↕"
+    assert with_position["details"]["type"] == "valve"
+    assert (with_position["details"]["value"], with_position["details"]["unit"]) == ("40", "%")
+    assert with_position["details"]["activity"] == "open"
+    # Without a position the reading stays the state, never an unknown number.
+    without = tile(None)
+    assert without["details"]["value"] == "Open"
+    assert "position" not in without["details"]

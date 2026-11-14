@@ -657,6 +657,21 @@ assert.equal(Api.dashboardExpectation(vacuumItem, vacuumItem.controls[0], null).
 for (const lang of ["en", "de", "fr", "it"]) {
     for (const key of ["start", "pause", "stop", "return_to_base", "locate", "fan_speed"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
 }
+const valveItem = {entity_id: "valve.water", domain: "c300x", available: true, state: false,
+    details: {type: "valve", value: "40", unit: "%", position: 40, activity: "open"}, controls: [
+    {command: "close_valve", kind: "button"}, {command: "position", kind: "number", value: 40, min: 0, max: 100, step: 1, unit: "%"},
+    {command: "open_valve", kind: "button"}]};
+assert.deepEqual(Array.from(Api.dashboardActionControls(valveItem), c => c.command), ["open_valve", "close_valve"]);
+assert.deepEqual(Array.from(Api.dashboardListControls(valveItem, ""), c => c.command), ["position"]);
+assert.equal(p.detailState(valveItem), "Open", "a valve says what it is doing next to its position");
+const closeExpectation = Api.dashboardExpectation(valveItem, valveItem.controls[0], null);
+assert.equal(Api.dashboardExpectationMatches(valveItem, closeExpectation), false, "still open is no confirmation");
+const closedItem = JSON.parse(JSON.stringify(valveItem));
+closedItem.details.activity = "closed";
+assert.equal(Api.dashboardExpectationMatches(closedItem, closeExpectation), true);
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["open_valve", "stop_valve", "close_valve"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
 console.log("Media player controls passed");
 
 

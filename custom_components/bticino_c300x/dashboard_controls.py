@@ -17,6 +17,7 @@ from homeassistant.components.light.const import (
 from homeassistant.components.lock.const import LockEntityFeature
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.components.vacuum.const import VacuumEntityFeature
+from homeassistant.components.valve.const import ValveEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.util.percentage import (
     percentage_to_ranged_value,
@@ -383,6 +384,16 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append({"command": "unlock", "kind": "button"})
         if features & LockEntityFeature.OPEN:
             controls.append({"command": "open", "kind": "button"})
+    elif domain == "valve":
+        for valve_command, valve_feature in (
+            ("open_valve", ValveEntityFeature.OPEN),
+            ("stop_valve", ValveEntityFeature.STOP),
+            ("close_valve", ValveEntityFeature.CLOSE),
+        ):
+            if features & valve_feature:
+                controls.append({"command": valve_command, "kind": "button"})
+        if features & ValveEntityFeature.SET_POSITION:
+            controls.append(_number("position", attrs.get("current_position"), 0, 100, 1, "%"))
     elif domain == "vacuum":
         # Each button is offered where it makes sense in the current state.
         cleaning = state.state == "cleaning"
@@ -530,6 +541,10 @@ async def async_execute_control(
             data["shuffle"] = value
     elif domain == "lock":
         service = command
+    elif domain == "valve":
+        service = "set_valve_position" if command == "position" else command
+        if command == "position":
+            data["position"] = int(value)
     elif domain == "vacuum":
         service = "set_fan_speed" if command == "fan_speed" else command
         if command == "fan_speed":

@@ -34,6 +34,8 @@
   after an action and the allowed actions. Saved values carry over.
 - The status page, the first page, is left out when it has no weather and no
   tile, and its HA, alarm and time badges with it. Its section explains this.
+- Valves can be picked as tiles with a detail page: open, stop and close in one
+  row and a position slider where the valve has one.
 - Vacuums can be picked as tiles with a detail page: start, pause, stop, return
   to base and locate in one row, and the suction choice.
 - Locks can be picked as tiles. Their detail page has lock, unlock and, where

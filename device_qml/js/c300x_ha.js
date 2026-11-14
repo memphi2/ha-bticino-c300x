@@ -208,6 +208,11 @@ function dashboardExpectation(item, control, value) {
     if (control.command === "media_play_pause") {
         return {command: control.command, playing: control.playing !== true}
     }
+    if (item.details && item.details.type === "valve") {
+        if (control.command === "open_valve") return {command: control.command, activities: ["opening", "open"]}
+        if (control.command === "close_valve") return {command: control.command, activities: ["closing", "closed"]}
+        if (control.command === "stop_valve") return {command: control.command, activities: ["open", "closed"]}
+    }
     if (item.details && item.details.type === "vacuum") {
         if (control.command === "start") return {command: control.command, activities: ["cleaning"]}
         if (control.command === "pause") return {command: control.command, activities: ["paused"]}
@@ -1037,7 +1042,8 @@ function dashboardVisibleControls(item, section) {
 var ACTION_ROWS = {
     "media_player": ["media_previous_track", "media_play_pause", "media_next_track"],
     "lock": ["lock", "unlock", "open"],
-    "vacuum": ["start", "pause", "stop", "return_to_base", "locate"]
+    "vacuum": ["start", "pause", "stop", "return_to_base", "locate"],
+    "valve": ["open_valve", "stop_valve", "close_valve"]
 }
 
 function dashboardActionCommands(item) {

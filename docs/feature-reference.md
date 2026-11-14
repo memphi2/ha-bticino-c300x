@@ -214,6 +214,10 @@ these settings existed therefore looks the same until a size is chosen.
   stop, return to base and locate in one row, each only where the robot reports
   the feature and where it makes sense in its state, and the suction choice
   below. The display sends the explicit vacuum service of the button.
+- Valves are tiles that read their position, or their state when they report
+  none, and open a detail page with open, stop and close in one row and, for a
+  valve that can, a position slider. The display sends the explicit valve
+  service, and a position only from 0 to 100.
 - Automations and sirens are switch tiles. Persons and device trackers are
   read-only tiles that say home, away or the name of the zone.
 - Sensor and binary-sensor tiles use larger readings and read-only details.

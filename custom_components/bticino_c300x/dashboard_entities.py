@@ -39,6 +39,7 @@ DASHBOARD_ENTITY_DOMAINS = (
     "siren",
     "switch",
     "vacuum",
+    "valve",
 )
 DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)
 # The alarm page has room for one plain action tile, not for a player.

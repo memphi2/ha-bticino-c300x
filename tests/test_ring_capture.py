@@ -917,10 +917,13 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
         returncode = 0
 
         async def communicate(self) -> tuple[bytes, bytes]:
-            return b"", b""
+            return b'{"streams":[{"duration":"4"}]}', b""
 
     async def _create_subprocess_exec(*command: str, **_kwargs: Any) -> _Process:
         commands.append(list(command))
+        if command[-1].endswith(".jpg"):
+            Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(Path(command[-1]).write_bytes, b"jpeg")
         return _Process()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _create_subprocess_exec)
@@ -948,8 +951,9 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     assert command[command.index("-b:a") + 1] == "128k"
     assert str(tmp_path / "work" / "latest.raw.wav") in command
     assert commands[1][-1] == str(tmp_path / "work" / "latest.processed.wav")
-    assert len(commands) == 5
-    frame_commands = commands[2:]
+    assert len(commands) == 6
+    assert commands[2][0] == "ffprobe"
+    frame_commands = commands[3:]
     assert [cmd[-1] for cmd in frame_commands] == [
         str(tmp_path / "work" / "frame_01.jpg"),
         str(tmp_path / "work" / "frame_02.jpg"),
@@ -972,10 +976,13 @@ def test_capture_ffmpeg_audio_uses_configured_gain(
         returncode = 0
 
         async def communicate(self) -> tuple[bytes, bytes]:
-            return b"", b""
+            return b'{"streams":[{"duration":"4"}]}', b""
 
     async def _create_subprocess_exec(*command: str, **_kwargs: Any) -> _Process:
         commands.append(list(command))
+        if command[-1].endswith(".jpg"):
+            Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(Path(command[-1]).write_bytes, b"jpeg")
         return _Process()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _create_subprocess_exec)
@@ -1005,10 +1012,13 @@ def test_capture_ffmpeg_video_only_disables_audio(
         returncode = 0
 
         async def communicate(self) -> tuple[bytes, bytes]:
-            return b"", b""
+            return b'{"streams":[{"duration":"4"}]}', b""
 
     async def _create_subprocess_exec(*command: str, **_kwargs: Any) -> _Process:
         commands.append(list(command))
+        if command[-1].endswith(".jpg"):
+            Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(Path(command[-1]).write_bytes, b"jpeg")
         return _Process()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _create_subprocess_exec)
@@ -1024,8 +1034,8 @@ def test_capture_ffmpeg_video_only_disables_audio(
     )
 
     assert "-an" in commands[0]
-    assert len(commands) == 4
-    assert [cmd[-1] for cmd in commands[1:]] == [
+    assert len(commands) == 5
+    assert [cmd[-1] for cmd in commands[2:]] == [
         str(tmp_path / "work" / "frame_01.jpg"),
         str(tmp_path / "work" / "frame_02.jpg"),
         str(tmp_path / "work" / "frame_03.jpg"),

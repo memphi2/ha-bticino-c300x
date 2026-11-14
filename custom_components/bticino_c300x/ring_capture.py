@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
+import math
 import threading
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -849,14 +851,14 @@ async def _async_run_ffmpeg(
     )
 
 
-def _capture_frame_offsets(duration_seconds: int) -> tuple[float, float, float]:
+def _capture_frame_offsets(duration_seconds: float) -> tuple[float, float, float]:
     """Return stable still-frame offsets for the captured MP4."""
 
-    duration = max(0.1, float(duration_seconds))
+    duration = max(0.001, float(duration_seconds))
     first = (
         _CAPTURE_FRAME_START_SECONDS
         if duration > _CAPTURE_FRAME_START_SECONDS
-        else max(0.1, duration / 2)
+        else duration / 2
     )
     last = max(first, duration - _CAPTURE_FRAME_END_MARGIN_SECONDS)
     middle = first + ((last - first) / 2)
@@ -871,7 +873,18 @@ async def _async_extract_capture_frames(
 ) -> None:
     """Extract analysis still frames from a captured MP4."""
 
-    for index, offset in enumerate(_capture_frame_offsets(duration_seconds), start=1):
+    output = await _async_run_ffmpeg_command(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=duration", "-of", "json", str(source)],
+        command_timeout=10, error_prefix="C300X video duration probe failed", capture_stdout=True,
+    )
+    try:
+        actual_duration = float(json.loads(output)["streams"][0]["duration"])
+    except (ValueError, KeyError, IndexError, TypeError) as err:
+        raise HomeAssistantError("C300X capture has no usable video duration") from err
+    if not math.isfinite(actual_duration) or actual_duration <= 0:
+        raise HomeAssistantError("C300X capture has no usable video duration")
+    for index, offset in enumerate(_capture_frame_offsets(min(duration_seconds, actual_duration)), start=1):
         target = _capture_frame_path(output_dir, index)
         await _async_run_ffmpeg_command(
             [
@@ -893,6 +906,12 @@ async def _async_extract_capture_frames(
             command_timeout=10,
             error_prefix="C300X frame extraction failed",
         )
+        if not await asyncio.to_thread(_is_nonempty_file, target):
+            raise HomeAssistantError("C300X frame extraction produced no image")
+
+
+def _is_nonempty_file(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 0
 
 
 async def _async_extract_processed_audio_wav(source: Path, target: Path) -> None:
@@ -926,17 +945,18 @@ async def _async_run_ffmpeg_command(
     *,
     command_timeout: int,
     error_prefix: str,
-) -> None:
+    capture_stdout: bool = False,
+) -> bytes:
     try:
         process = await asyncio.create_subprocess_exec(
             *command,
-            stdout=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE if capture_stdout else asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError as err:
-        raise HomeAssistantError("ffmpeg is not installed on Home Assistant") from err
+        raise HomeAssistantError(f"{command[0]} is not installed on Home Assistant") from err
     try:
-        _, stderr = await asyncio.wait_for(
+        stdout, stderr = await asyncio.wait_for(
             process.communicate(), timeout=command_timeout
         )
     except (TimeoutError, asyncio.CancelledError) as err:
@@ -949,3 +969,4 @@ async def _async_run_ffmpeg_command(
     if process.returncode != 0:
         message = stderr.decode("utf-8", "replace").strip()
         raise HomeAssistantError(f"{error_prefix}{': ' + message if message else ''}")
+    return stdout or b""

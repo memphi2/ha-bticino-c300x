@@ -3,6 +3,8 @@
 import asyncio
 import json
 import os
+import shutil
+import subprocess
 import wave
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -13,6 +15,31 @@ from test_ring_capture import _FakeApi, _FakeEntry, _FakeHass, _FakeRuntimeData
 
 from custom_components.bticino_c300x import capture_artifacts as artifacts
 from custom_components.bticino_c300x import ring_ai, ring_capture
+
+
+def test_short_video_extracts_real_frames_and_removes_absent_aliases(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("FFmpeg tools not installed")
+    source = tmp_path / "short.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
+                    "color=c=red:s=64x64:r=10:d=1", "-c:v", "mpeg4", str(source)],
+                   check=True, timeout=10)
+    work = tmp_path / "new"
+    work.mkdir()
+    asyncio.run(ring_capture._async_extract_capture_frames(source, work, duration_seconds=5))
+    assert all((work / f"frame_{index:02}.jpg").stat().st_size > 0 for index in (1, 2, 3))
+    (tmp_path / "latest.raw.wav").write_bytes(b"old")
+    artifacts.publish_capture_aliases(tmp_path, work)
+    assert not (tmp_path / "latest.raw.wav").exists()
+    assert (tmp_path / "frame_01.jpg").resolve() == work / "frame_01.jpg"
+
+
+def test_frame_extraction_rejects_success_without_output(monkeypatch, tmp_path):
+    async def run(*args, **kwargs):
+        return b'{"streams":[{"duration":"1"}]}'
+    monkeypatch.setattr(ring_capture, "_async_run_ffmpeg_command", run)
+    with pytest.raises(artifacts.HomeAssistantError, match="no image"):
+        asyncio.run(ring_capture._async_extract_capture_frames(tmp_path / "clip.mp4", tmp_path, duration_seconds=5))
 
 
 def test_two_devices_capture_and_analyse_independent_files(monkeypatch, tmp_path):

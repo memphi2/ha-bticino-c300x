@@ -125,6 +125,11 @@ async def _async_capture_to_output(
 
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
+    # FFmpeg opens the clip only once its input works, so a run that fails
+    # earlier must leave the previous clip alone. What the file looked like
+    # before tells the cleanup whether this run touched it. Taken before the
+    # workspace exists, so a cancellation here leaves nothing behind.
+    output_before = await asyncio.to_thread(_output_signature, target)
     codec_pcmu = (
         await _async_talkback_codec_is_pcmu(entry, status)
         if not on_demand and (include_audio or announcement is not None)
@@ -147,10 +152,6 @@ async def _async_capture_to_output(
     # fails or is cancelled before that would otherwise sit until it expires and
     # count against the limit of workspaces.
     published = False
-    # FFmpeg opens the clip only once its input works, so a run that fails
-    # earlier must leave the previous clip alone. What the file looked like
-    # before tells the cleanup whether this run touched it.
-    output_before = await asyncio.to_thread(_output_signature, target)
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,

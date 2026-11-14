@@ -2,9 +2,11 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 import asyncio
+import contextlib
 import json
 import socket
 import sys
+import threading
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1562,6 +1564,49 @@ def test_a_failed_capture_keeps_the_previous_clip_it_never_touched(
         asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
 
     assert target.read_bytes() == b"previous clip"
+    assert _capture_workspaces(tmp_path) == []
+
+
+def test_a_capture_cancelled_before_it_starts_leaves_no_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The signature of the output is read in a thread; a cancellation (the
+    ring guard, an unload) during that hop must not orphan the workspace."""
+
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    async def _ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    _capture_fakes(monkeypatch, _ffmpeg)
+    started = threading.Event()
+    release = threading.Event()
+
+    def _slow_signature(_path: Path) -> None:
+        started.set()
+        release.wait(5)
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._output_signature", _slow_signature
+    )
+
+    async def _run() -> None:
+        task = asyncio.create_task(
+            async_capture_doorbell_ring_call(hass, entry, output_path=str(target))
+        )
+        await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        release.set()
+
+    asyncio.run(_run())
+
     assert _capture_workspaces(tmp_path) == []
 
 

@@ -7,7 +7,10 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from ..const import SIGNAL_VIDEO_MESSAGES_CHANGED
-from ..message_refresh import async_answering_machine_messages
+from ..message_refresh import (
+    async_answering_machine_messages,
+    schedule_answering_machine_messages_refresh,
+)
 from ..video_messages import latest_video_message_id, video_message_media_source_id
 from .common import (
     async_ensure_gui_function_patch,
@@ -59,6 +62,10 @@ class MessagesUseCase:
                 force_refresh=True,
             ),
             signal=SIGNAL_VIDEO_MESSAGES_CHANGED,
+            retry=lambda: schedule_answering_machine_messages_refresh(
+                self._hass,
+                self._entry,
+            ),
         )
 
     async def _latest_video_message_id(self, *, refresh_before_lookup: bool = False) -> str:

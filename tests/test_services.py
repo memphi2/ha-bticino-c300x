@@ -2788,6 +2788,37 @@ def test_common_refresh_after_message_mutation_survives_refresh_failures(
     assert [call[1:] for call in dispatcher_calls] == [("signal-name", "entry-id")]
 
 
+def test_common_refresh_after_message_mutation_retries_in_the_background_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(common_use_cases, "async_dispatcher_send", lambda *args: None)
+
+    async def _diagnostics(*_args: Any) -> None:
+        return None
+
+    monkeypatch.setattr(common_use_cases, "async_refresh_agent_diagnostics", _diagnostics)
+    retries: list[str] = []
+
+    async def _run(fail: bool) -> None:
+        async def _refresh() -> dict[str, Any]:
+            if fail:
+                raise RuntimeError("agent failed")
+            return {"ok": True}
+
+        await common_use_cases.async_refresh_after_message_mutation(
+            _FakeHass([]),  # type: ignore[arg-type]
+            _FakeEntry(_FakeRuntimeData()),
+            refresh=_refresh,
+            signal="signal-name",
+            retry=lambda: retries.append("retry"),
+        )
+
+    asyncio.run(_run(False))
+    assert retries == []
+    asyncio.run(_run(True))
+    assert retries == ["retry"]
+
+
 def test_common_play_media_calls_home_assistant_media_player() -> None:
     async def _run() -> None:
         hass = _FakeHass([])

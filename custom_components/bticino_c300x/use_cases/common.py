@@ -140,13 +140,15 @@ async def async_refresh_after_message_mutation(
     *,
     refresh: Callable[[], Awaitable[dict[str, Any]]],
     signal: str,
+    retry: Callable[[], None] | None = None,
 ) -> None:
     """Refresh a message-backed cache and notify HA listeners.
 
     The write this follows has already succeeded, so a failed refresh is
     logged and not reported: a caller that retried a "failed" create would
     add the memo twice, a retried delete would find nothing to delete.
-    Listeners are notified either way and reload the cache themselves.
+    The listeners only re-publish the cached data, so after a failed refresh
+    ``retry`` schedules the background refresh that fetches it again.
     """
 
     try:
@@ -155,6 +157,8 @@ async def async_refresh_after_message_mutation(
         _LOGGER.warning(
             "Refreshing the C300X message cache after a change failed: %s", err
         )
+        if retry is not None:
+            retry()
     async_dispatcher_send(hass, signal, entry.entry_id)
     await async_refresh_agent_diagnostics(hass, entry)
 

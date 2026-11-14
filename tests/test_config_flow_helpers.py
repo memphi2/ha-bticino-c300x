@@ -668,11 +668,7 @@ def test_dashboard_schema_serializes_gui_entity_selectors() -> None:
     schema = _setup_features_schema(
         True,
     )
-    dashboard_schema = _dashboard_schema(
-        "alarm_control_panel.home",
-        "weather.home",
-        default_device_ui_enabled=True,
-    )
+    dashboard_schema = _dashboard_schema(default_device_ui_enabled=True)
 
     result = schema({})
     dashboard_result = dashboard_schema({})
@@ -1026,7 +1022,7 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
                     "Name": "Outside",
                     "Secondary line": "none",
                 },
-                "Alarmo quick action \u203a Stair Light": {},
+                "Alarm page \u203a Stair Light": {},
             })
         )
     )
@@ -1755,20 +1751,18 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
     assert CONF_WEATHER_ENTITY_ID not in _schema_key_names(reconfigure_schema)
     assert CONF_DASHBOARD_ENTITIES not in _schema_key_names(reconfigure_schema)
 
-    dashboard_schema = _dashboard_schema(
-        "alarm_control_panel.home",
-        "weather.home",
-        default_device_ui_enabled=True,
-    )
+    dashboard_schema = _dashboard_schema(default_device_ui_enabled=True)
 
-    assert _schema_key_names(dashboard_schema)[:3] == [
+    assert _schema_key_names(dashboard_schema) == [
         CONF_DEVICE_UI_ENABLED,
-        CONF_DASHBOARD_PREVENT_RETURN,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+        CONF_DASHBOARD_PREVENT_RETURN,
+        CONF_ACTIONS_JSON,
     ]
-    assert CONF_ALARM_ENTITY_ID in _schema_key_names(dashboard_schema)
-    assert CONF_ALARM_PAGE_ENTITY_ID in _schema_key_names(dashboard_schema)
-    assert CONF_WEATHER_ENTITY_ID in _schema_key_names(dashboard_schema)
+    # Alarmo and the weather are set with the pages.
+    assert CONF_ALARM_ENTITY_ID not in _schema_key_names(dashboard_schema)
+    assert CONF_ALARM_PAGE_ENTITY_ID not in _schema_key_names(dashboard_schema)
+    assert CONF_WEATHER_ENTITY_ID not in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITIES not in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES not in _schema_key_names(
         dashboard_schema
@@ -1977,23 +1971,18 @@ def test_options_features_schema_excludes_dashboard_fields() -> None:
 
 def test_dashboard_schema_keeps_dashboard_fields_on_own_page() -> None:
     schema = _dashboard_schema(
-        "alarm_control_panel.home",
-        "weather.home",
         _actions_json({"standby": {"domain": "button", "service": "press"}}),
-        default_dashboard_entities=["sensor.temperature"],
         default_device_ui_enabled=True,
     )
 
     result = schema(
         {
-            CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
-            CONF_WEATHER_ENTITY_ID: "weather.home",
             CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
         }
     )
 
-    assert result[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
-    assert result[CONF_WEATHER_ENTITY_ID] == "weather.home"
+    assert CONF_ALARM_ENTITY_ID not in result
+    assert CONF_WEATHER_ENTITY_ID not in result
     assert CONF_DASHBOARD_ENTITIES not in result
     assert result[CONF_ACTIONS_JSON] == '{"standby":{"domain":"button","service":"press"}}'
     assert result[CONF_DEVICE_UI_ENABLED] is True
@@ -2001,29 +1990,19 @@ def test_dashboard_schema_keeps_dashboard_fields_on_own_page() -> None:
 
 
 def test_dashboard_schema_orders_checkbox_options_first() -> None:
-    schema = _dashboard_schema("", "")
+    schema = _dashboard_schema()
 
     keys = [getattr(key, "schema", key) for key in schema.schema]
 
     assert keys[:3] == [
         CONF_DEVICE_UI_ENABLED,
-        CONF_DASHBOARD_PREVENT_RETURN,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+        CONF_DASHBOARD_PREVENT_RETURN,
     ]
 
 
 def test_dashboard_schema_keeps_entity_display_controls_on_separate_page() -> None:
-    schema = _dashboard_schema(
-        "",
-        "",
-        default_dashboard_entities=["sensor.temperature"],
-        default_dashboard_entity_display_overrides={
-            "sensor.temperature": {
-                "name": "entity_id",
-                "secondary": "none",
-            }
-        },
-    )
+    schema = _dashboard_schema()
 
     result = schema({})
 
@@ -2158,7 +2137,7 @@ def test_reconfigure_preserves_existing_unique_id() -> None:
 
 
 def test_dashboard_schema_defaults_keep_page_open_disabled() -> None:
-    result = _dashboard_schema("", "")({})
+    result = _dashboard_schema()({})
 
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
 
@@ -2374,24 +2353,29 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
 
     _flow, result = _options_area(entry, "dashboard", {
         CONF_DEVICE_UI_ENABLED: True,
-        CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
-        CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
-        CONF_WEATHER_ENTITY_ID: "weather.home",
         CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
         CONF_DASHBOARD_PREVENT_RETURN: True,
     })
     _save_options_area(entry, result)
-    # The patch is on and the Alarmo quick entity has a name to set.
+    # The patch is on: pages can be set up, and there are no tiles yet.
+    assert _options_menu_of(entry) == [
+        "connection", "features", "device_activations", "dashboard", "dashboard_pages",
+    ]
+
+    # The weather, Alarmo and the quick action are set with the pages.
+    _flow, result = _options_area(entry, "dashboard_pages", {
+        "page_1": {"weather_entity_id": "weather.home"},
+        "page_2": {"name": "Doors", "position": 5, "entities": ["switch.entry"]},
+        "alarm": {
+            "alarm_entity_id": "alarm_control_panel.home",
+            "alarm_page_entity_id": "button.stair_light",
+        },
+    })
+    _save_options_area(entry, result)
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
         "dashboard", "dashboard_pages", "dashboard_entity_display",
     ]
-
-    _flow, result = _options_area(entry, "dashboard_pages", {
-        "page_1": {},
-        "page_2": {"name": "Doors", "position": 5, "entities": ["switch.entry"]},
-    })
-    _save_options_area(entry, result)
 
     flow, entity_options_form = _options_area(entry, "dashboard_entity_display")
     assert entity_options_form["step_id"] == "dashboard_entity_display"
@@ -2399,7 +2383,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         flow.async_step_dashboard_entity_display(
             entity_options_form["data_schema"]({
                 "Doors \u203a Entry": {"Name": "Entry", "Secondary line": "state"},
-                "Alarmo quick action \u203a Stair Light": {},
+                "Alarm page \u203a Stair Light": {},
             })
         )
     )
@@ -2599,7 +2583,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
                     "Name": "friendly_name",
                     "Secondary line": "last_changed",
                 },
-                "Alarmo quick action \u203a Stair Light": {},
+                "Alarm page \u203a Stair Light": {},
             })
         )
     )

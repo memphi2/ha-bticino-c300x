@@ -238,17 +238,20 @@ async def async_dashboard_payload(
         main_page["weather"] = weather
         main_page["items"].append({"_kind": "weather", "_order": 0})
 
+    notifications = notification_payload(entry)
+    shown = [
+        page
+        for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
+        if _dashboard_page_has_content(page)
+    ]
+    if not shown and notifications:
+        # The messages need a page to appear on, even an otherwise empty one.
+        shown = [main_page]
     return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,
-        "notifications": notification_payload(entry),
-        "data": {
-            "pages": [
-                _finalize_dashboard_page(page)
-                for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
-                if _dashboard_page_has_content(page)
-            ]
-        },
+        "notifications": notifications,
+        "data": {"pages": [_finalize_dashboard_page(page) for page in shown]},
     })
 
 
@@ -947,12 +950,10 @@ def _finalize_dashboard_items(items: Any) -> list[dict[str, Any]]:
 
 
 def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
-    return any(
-        bool(page.get(key))
-        for key in (
-            "badges",
-            "items",
-            "weather",
-            "flow",
-        )
-    )
+    """Return whether a page has something to show.
+
+    The status badges do not count: with no weather and no tile the page is
+    left out, and so are its badges.
+    """
+
+    return any(bool(page.get(key)) for key in ("items", "weather", "flow"))

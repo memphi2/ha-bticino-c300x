@@ -99,21 +99,15 @@
       },
       "user_dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran et leurs entités.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo, Alarmo et les entités de chaque page.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
-          "alarm_entity_id": "Centrale d'alarme Alarmo",
-          "alarm_page_entity_id": "Action rapide sur la page Alarme",
-          "weather_entity_id": "Météo",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages d'alarme, de météo, de pages et de tuiles.",
-          "alarm_entity_id": "Centrale d'alarme que la page Alarme de l'écran affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer.",
-          "weather_entity_id": "Entité météo pour la carte météo de la page d'état. Laissez vide pour ne pas afficher de carte météo.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
@@ -198,21 +192,15 @@
       },
       "reconfigure_dashboard": {
         "title": "Reconfigurer le dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran et leurs entités.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo, Alarmo et les entités de chaque page.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
-          "alarm_entity_id": "Centrale d'alarme Alarmo",
-          "alarm_page_entity_id": "Action rapide sur la page Alarme",
-          "weather_entity_id": "Météo",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages d'alarme, de météo, de pages et de tuiles.",
-          "alarm_entity_id": "Centrale d'alarme que la page Alarme de l'écran affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer.",
-          "weather_entity_id": "Entité météo pour la carte météo de la page d'état. Laissez vide pour ne pas afficher de carte météo.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
@@ -224,16 +212,18 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. La dernière section, **Page Alarme**, n'est pas une page à part : elle règle Alarmo et l'action rapide de la page Alarme.",
         "sections": {
           "page_1": {
-            "name": "Page d'état",
-            "description": "Affiche en haut les indicateurs HA, alarme et heure et la carte météo, puis les entités de cette page. Son titre sur l'écran est Home Assistant.",
+            "name": "Page 1 : Page d'état",
+            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
@@ -327,22 +317,36 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "alarm": {
+            "name": "Page Alarme",
+            "description": "La page Alarme s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Ce n'est pas l'une des pages ci-dessus et elle n'a pas de position.",
+            "data": {
+              "alarm_entity_id": "Centrale d'alarme Alarmo",
+              "alarm_page_entity_id": "Action rapide"
+            },
+            "data_description": {
+              "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
+              "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. La dernière section, **Page Alarme**, n'est pas une page à part : elle règle Alarmo et l'action rapide de la page Alarme.",
         "sections": {
           "page_1": {
-            "name": "Page d'état",
-            "description": "Affiche en haut les indicateurs HA, alarme et heure et la carte météo, puis les entités de cette page. Son titre sur l'écran est Home Assistant.",
+            "name": "Page 1 : Page d'état",
+            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
@@ -436,6 +440,18 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "alarm": {
+            "name": "Page Alarme",
+            "description": "La page Alarme s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Ce n'est pas l'une des pages ci-dessus et elle n'a pas de position.",
+            "data": {
+              "alarm_entity_id": "Centrale d'alarme Alarmo",
+              "alarm_page_entity_id": "Action rapide"
+            },
+            "data_description": {
+              "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
+              "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
             }
           }
         }
@@ -488,8 +504,8 @@
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
-          "dashboard": "Pages Home Assistant sur l'écran, quand les boutons d'accueil apparaissent, alarme, météo et actions.",
-          "dashboard_pages": "Quelles entités apparaissent sur l'écran, sur quelle page et dans quel ordre.",
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
+          "dashboard_pages": "Météo, Alarmo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
         }
       },
@@ -567,21 +583,15 @@
       },
       "dashboard": {
         "title": "Écran et patch display",
-        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** et **Tuiles de l'écran**.",
+        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo, Alarmo et ce qui s'affiche où) et **Tuiles de l'écran**.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
-          "alarm_entity_id": "Centrale d'alarme Alarmo",
-          "alarm_page_entity_id": "Action rapide sur la page Alarme",
-          "weather_entity_id": "Météo",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages d'alarme, de météo, de pages et de tuiles.",
-          "alarm_entity_id": "Centrale d'alarme que la page Alarme de l'écran affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer.",
-          "weather_entity_id": "Entité météo pour la carte météo de la page d'état. Laissez vide pour ne pas afficher de carte météo.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
@@ -593,16 +603,18 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. La dernière section, **Page Alarme**, n'est pas une page à part : elle règle Alarmo et l'action rapide de la page Alarme.",
         "sections": {
           "page_1": {
-            "name": "Page d'état",
-            "description": "Affiche en haut les indicateurs HA, alarme et heure et la carte météo, puis les entités de cette page. Son titre sur l'écran est Home Assistant.",
+            "name": "Page 1 : Page d'état",
+            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
@@ -696,6 +708,18 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "alarm": {
+            "name": "Page Alarme",
+            "description": "La page Alarme s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Ce n'est pas l'une des pages ci-dessus et elle n'a pas de position.",
+            "data": {
+              "alarm_entity_id": "Centrale d'alarme Alarmo",
+              "alarm_page_entity_id": "Action rapide"
+            },
+            "data_description": {
+              "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
+              "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
             }
           }
         }
@@ -1184,7 +1208,7 @@
         "name": "Nom",
         "secondary": "Ligne secondaire",
         "status_page": "Page d'état",
-        "alarm_action": "Action rapide Alarmo"
+        "alarm_page": "Page Alarme"
       }
     },
     "tile_size": {

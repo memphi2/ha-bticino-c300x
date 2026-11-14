@@ -62,7 +62,7 @@ TILE_LABELS: dict[str, str] = {
     "name": "Name",
     "secondary": "Secondary line",
     "status_page": "Status page",
-    "alarm_action": "Alarmo quick action",
+    "alarm_page": "Alarm page",
 }
 _SIZE_FIELDS = ("width", "height")
 # With more tiles than this the sections start collapsed, as a list to pick from.
@@ -181,7 +181,7 @@ def tile_form(
         ordered += [(page_name, entity_id) for entity_id in page["entities"]]
     placed = {entity_id for _, entity_id in ordered}
     ordered += [
-        (labels["alarm_action"], entity_id)
+        (labels["alarm_page"], entity_id)
         for entity_id in shown_entities
         if entity_id not in placed
     ]

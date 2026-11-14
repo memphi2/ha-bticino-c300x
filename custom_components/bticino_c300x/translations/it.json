@@ -99,21 +99,15 @@
       },
       "user_dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e può richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.\n\nCon il patch display applicato, il passo successivo imposta le pagine del display e le loro entità.",
+        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e può richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.\n\nQuando il patch display è applicato, il passo successivo imposta le pagine del display: il meteo, Alarmo e le entità di ogni pagina.",
         "data": {
           "device_ui_enabled": "Pagine Home Assistant sul display",
-          "alarm_entity_id": "Centrale di allarme Alarmo",
-          "alarm_page_entity_id": "Azione rapida nella pagina Allarme",
-          "weather_entity_id": "Meteo",
           "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
         "data_description": {
           "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di allarme, meteo, pagine e riquadri.",
-          "alarm_entity_id": "Centrale di allarme che la pagina Allarme del display mostra e comanda. Lascia vuoto se non usi Alarmo.",
-          "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla.",
-          "weather_entity_id": "Entità meteo per la scheda meteo nella pagina di stato. Lascia vuoto per non mostrare la scheda meteo.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
@@ -198,21 +192,15 @@
       },
       "reconfigure_dashboard": {
         "title": "Riconfigura dashboard display C300X",
-        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e può richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.\n\nCon il patch display applicato, il passo successivo imposta le pagine del display e le loro entità.",
+        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e può richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.\n\nQuando il patch display è applicato, il passo successivo imposta le pagine del display: il meteo, Alarmo e le entità di ogni pagina.",
         "data": {
           "device_ui_enabled": "Pagine Home Assistant sul display",
-          "alarm_entity_id": "Centrale di allarme Alarmo",
-          "alarm_page_entity_id": "Azione rapida nella pagina Allarme",
-          "weather_entity_id": "Meteo",
           "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
         "data_description": {
           "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di allarme, meteo, pagine e riquadri.",
-          "alarm_entity_id": "Centrale di allarme che la pagina Allarme del display mostra e comanda. Lascia vuoto se non usi Alarmo.",
-          "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla.",
-          "weather_entity_id": "Entità meteo per la scheda meteo nella pagina di stato. Lascia vuoto per non mostrare la scheda meteo.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
@@ -224,16 +212,18 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. L'ultima sezione, **Pagina Allarme**, non è una pagina a sé: imposta Alarmo e l'azione rapida della pagina Allarme.",
         "sections": {
           "page_1": {
-            "name": "Pagina di stato",
-            "description": "Mostra in alto gli indicatori HA, allarme e ora e la scheda meteo, poi le entità di questa pagina. Il suo titolo sul display è Home Assistant.",
+            "name": "Pagina 1: Pagina di stato",
+            "description": "La prima pagina dell'area Home Assistant. In alto c'è la sua scheda meteo, poi le sue entità; il meteo si imposta qui. Senza meteo e senza entità la pagina non viene mostrata sul display e gli indicatori HA, allarme e ora spariscono con lei. Il suo titolo sul display è Home Assistant.",
             "data": {
+              "weather_entity_id": "Meteo",
               "position": "Posizione",
               "entities": "Entità"
             },
             "data_description": {
+              "weather_entity_id": "Entità meteo per la scheda meteo in alto in questa pagina. Lascia vuoto per non mostrare la scheda meteo.",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
             }
@@ -327,22 +317,36 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "alarm": {
+            "name": "Pagina Allarme",
+            "description": "La pagina Allarme si apre dal pulsante Allarme nella pagina iniziale del C300X. Non è una delle pagine qui sopra e non ha posizione.",
+            "data": {
+              "alarm_entity_id": "Centrale di allarme Alarmo",
+              "alarm_page_entity_id": "Azione rapida"
+            },
+            "data_description": {
+              "alarm_entity_id": "Centrale di allarme che la pagina Allarme mostra e comanda. Lascia vuoto se non usi Alarmo.",
+              "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. L'ultima sezione, **Pagina Allarme**, non è una pagina a sé: imposta Alarmo e l'azione rapida della pagina Allarme.",
         "sections": {
           "page_1": {
-            "name": "Pagina di stato",
-            "description": "Mostra in alto gli indicatori HA, allarme e ora e la scheda meteo, poi le entità di questa pagina. Il suo titolo sul display è Home Assistant.",
+            "name": "Pagina 1: Pagina di stato",
+            "description": "La prima pagina dell'area Home Assistant. In alto c'è la sua scheda meteo, poi le sue entità; il meteo si imposta qui. Senza meteo e senza entità la pagina non viene mostrata sul display e gli indicatori HA, allarme e ora spariscono con lei. Il suo titolo sul display è Home Assistant.",
             "data": {
+              "weather_entity_id": "Meteo",
               "position": "Posizione",
               "entities": "Entità"
             },
             "data_description": {
+              "weather_entity_id": "Entità meteo per la scheda meteo in alto in questa pagina. Lascia vuoto per non mostrare la scheda meteo.",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
             }
@@ -436,6 +440,18 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "alarm": {
+            "name": "Pagina Allarme",
+            "description": "La pagina Allarme si apre dal pulsante Allarme nella pagina iniziale del C300X. Non è una delle pagine qui sopra e non ha posizione.",
+            "data": {
+              "alarm_entity_id": "Centrale di allarme Alarmo",
+              "alarm_page_entity_id": "Azione rapida"
+            },
+            "data_description": {
+              "alarm_entity_id": "Centrale di allarme che la pagina Allarme mostra e comanda. Lascia vuoto se non usi Alarmo.",
+              "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
             }
           }
         }
@@ -488,8 +504,8 @@
           "connection": "Indirizzo, chiave di accesso e chiave di manutenzione del C300X, indirizzo di Home Assistant.",
           "features": "Immagine dal vivo, conversazione, volumi e accesso video e audio sul C300X.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
-          "dashboard": "Pagine Home Assistant sul display, quando compaiono i pulsanti della pagina iniziale, allarme, meteo e azioni.",
-          "dashboard_pages": "Quali entità compaiono sul display, su quale pagina e in quale ordine.",
+          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, pulsanti della pagina iniziale, comportamento dopo un'azione e azioni consentite.",
+          "dashboard_pages": "Meteo, Alarmo, e quali entità compaiono su quale pagina e in quale ordine.",
           "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro."
         }
       },
@@ -567,21 +583,15 @@
       },
       "dashboard": {
         "title": "Display e patch display",
-        "description": "Pagine Home Assistant sul display del C300X.\n\nPatch display sul dispositivo: {qml_patch_status}.\n\nAttivare o disattivare il patch display scrive file del display sul dispositivo e ne ricarica la schermata; può richiedere fino a circa 60 secondi. Lo stato cambia quando il dispositivo lo conferma.\n\nCon il patch display attivo, il menu delle impostazioni offre anche **Pagine del display** e **Riquadri del display**.",
+        "description": "Pagine Home Assistant sul display del C300X.\n\nPatch display sul dispositivo: {qml_patch_status}.\n\nAttivare o disattivare il patch display scrive file del display sul dispositivo e ne ricarica la schermata; può richiedere fino a circa 60 secondi. Lo stato cambia quando il dispositivo lo conferma.\n\nCon il patch display attivo, il menu delle impostazioni offre anche **Pagine del display** (meteo, Alarmo e cosa viene mostrato dove) e **Riquadri del display**.",
         "data": {
           "device_ui_enabled": "Pagine Home Assistant sul display",
-          "alarm_entity_id": "Centrale di allarme Alarmo",
-          "alarm_page_entity_id": "Azione rapida nella pagina Allarme",
-          "weather_entity_id": "Meteo",
           "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
         "data_description": {
           "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di allarme, meteo, pagine e riquadri.",
-          "alarm_entity_id": "Centrale di allarme che la pagina Allarme del display mostra e comanda. Lascia vuoto se non usi Alarmo.",
-          "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla.",
-          "weather_entity_id": "Entità meteo per la scheda meteo nella pagina di stato. Lascia vuoto per non mostrare la scheda meteo.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
@@ -593,16 +603,18 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. L'ultima sezione, **Pagina Allarme**, non è una pagina a sé: imposta Alarmo e l'azione rapida della pagina Allarme.",
         "sections": {
           "page_1": {
-            "name": "Pagina di stato",
-            "description": "Mostra in alto gli indicatori HA, allarme e ora e la scheda meteo, poi le entità di questa pagina. Il suo titolo sul display è Home Assistant.",
+            "name": "Pagina 1: Pagina di stato",
+            "description": "La prima pagina dell'area Home Assistant. In alto c'è la sua scheda meteo, poi le sue entità; il meteo si imposta qui. Senza meteo e senza entità la pagina non viene mostrata sul display e gli indicatori HA, allarme e ora spariscono con lei. Il suo titolo sul display è Home Assistant.",
             "data": {
+              "weather_entity_id": "Meteo",
               "position": "Posizione",
               "entities": "Entità"
             },
             "data_description": {
+              "weather_entity_id": "Entità meteo per la scheda meteo in alto in questa pagina. Lascia vuoto per non mostrare la scheda meteo.",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
             }
@@ -696,6 +708,18 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "alarm": {
+            "name": "Pagina Allarme",
+            "description": "La pagina Allarme si apre dal pulsante Allarme nella pagina iniziale del C300X. Non è una delle pagine qui sopra e non ha posizione.",
+            "data": {
+              "alarm_entity_id": "Centrale di allarme Alarmo",
+              "alarm_page_entity_id": "Azione rapida"
+            },
+            "data_description": {
+              "alarm_entity_id": "Centrale di allarme che la pagina Allarme mostra e comanda. Lascia vuoto se non usi Alarmo.",
+              "alarm_page_entity_id": "Entità opzionale nella pagina Allarme, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
             }
           }
         }
@@ -1184,7 +1208,7 @@
         "name": "Nome",
         "secondary": "Riga secondaria",
         "status_page": "Pagina di stato",
-        "alarm_action": "Azione rapida Alarmo"
+        "alarm_page": "Pagina Allarme"
       }
     },
     "tile_size": {

@@ -2,8 +2,9 @@
 
 The display shows at most ``DASHBOARD_PAGE_MAX_COUNT`` pages. The form has one
 section per page: the first is the status page, which carries the badges and
-the weather card; every other page has a name, which the display shows as its
-heading. Each section has a position from 1 to ``DASHBOARD_PAGE_MAX_COUNT``,
+the weather card, set here as its Weather field; every other page has a name,
+which the display shows as its heading. A last section, which is no page, sets
+the Alarmo alarm panel and the quick action of the display's Alarm page. Each section has a position from 1 to ``DASHBOARD_PAGE_MAX_COUNT``,
 which orders the pages, and the entities shown on that page, in the order they
 are picked.
 
@@ -20,15 +21,28 @@ from typing import Any
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
+from .config_flow_dashboard import alarm_page_entity_id as _alarm_page_entity_id
+from .config_flow_forms import (
+    alarm_entity_selector as _alarm_entity_selector,
+)
+from .config_flow_forms import (
+    alarm_page_entity_selector as _alarm_page_entity_selector,
+)
 from .config_flow_forms import (
     dashboard_entity_custom_name_selector as _page_name_selector,
 )
 from .config_flow_forms import optional_suggested as _optional_suggested
+from .config_flow_forms import (
+    weather_entity_selector as _weather_entity_selector,
+)
+from .config_flow_input import _alarm_entity_id, _weather_entity_id
 from .const import (
+    CONF_ALARM_ENTITY_ID,
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
+    CONF_WEATHER_ENTITY_ID,
 )
 from .dashboard_entities import (
     DASHBOARD_ENTITY_DOMAINS,
@@ -44,6 +58,10 @@ from .schema_compat import vol
 PAGE_NAME_FIELD = "name"
 PAGE_POSITION_FIELD = "position"
 PAGE_ENTITIES_FIELD = "entities"
+PAGE_WEATHER_FIELD = CONF_WEATHER_ENTITY_ID
+ALARM_SECTION_KEY = "alarm"
+ALARM_ENTITY_FIELD = CONF_ALARM_ENTITY_ID
+ALARM_QUICK_FIELD = CONF_ALARM_PAGE_ENTITY_ID
 
 
 def page_section_key(slot: int) -> str:
@@ -139,6 +157,11 @@ def dashboard_pages_schema(dashboard_input: dict[str, Any]) -> vol.Schema:
             collapsed = free_section_shown
             free_section_shown = True
         page_fields: dict[Any, Any] = {}
+        if slot == 1:
+            page_fields[_optional_suggested(
+                PAGE_WEATHER_FIELD,
+                dashboard_input.get(CONF_WEATHER_ENTITY_ID),
+            )] = _weather_entity_selector()
         if slot > 1:
             page_fields[_optional_suggested(PAGE_NAME_FIELD, page["name"] if page else "")] = (
                 _page_name_selector()
@@ -155,6 +178,17 @@ def dashboard_pages_schema(dashboard_input: dict[str, Any]) -> vol.Schema:
             vol.Schema(page_fields),
             {"collapsed": collapsed},
         )
+    alarm = str(dashboard_input.get(CONF_ALARM_ENTITY_ID) or "")
+    quick = str(dashboard_input.get(CONF_ALARM_PAGE_ENTITY_ID) or "")
+    fields[vol.Required(ALARM_SECTION_KEY)] = section(
+        vol.Schema(
+            {
+                _optional_suggested(ALARM_ENTITY_FIELD, alarm): _alarm_entity_selector(),
+                _optional_suggested(ALARM_QUICK_FIELD, quick): _alarm_page_entity_selector(),
+            }
+        ),
+        {"collapsed": not (alarm or quick)},
+    )
     return vol.Schema(fields)
 
 
@@ -201,8 +235,10 @@ def dashboard_pages_input(
     missing name or entity list is empty and a missing position is the
     section's own number. A page is used when it has a name or entities; the
     status page is always used, and a page with entities needs a name. Pages
-    with the same position keep the order of their sections. Returns the
-    settings and the form errors.
+    with the same position keep the order of their sections. The weather of
+    the status page and the Alarmo entities of the last section are stored
+    with the pages; a section the post lacks keeps the saved value. Returns
+    the settings and the form errors.
     """
 
     errors: dict[str, str] = {}
@@ -238,6 +274,25 @@ def dashboard_pages_input(
         seen_names.add(name.casefold())
         seen_entities.update(entities)
         pages.append((_page_position(values.get(PAGE_POSITION_FIELD), slot), slot, name, entities))
+    weather = str(dashboard_input.get(CONF_WEATHER_ENTITY_ID) or "")
+    alarm = str(dashboard_input.get(CONF_ALARM_ENTITY_ID) or "")
+    quick = str(dashboard_input.get(CONF_ALARM_PAGE_ENTITY_ID) or "")
+    status = user_input.get(page_section_key(1))
+    if status is not None:
+        try:
+            weather = _weather_entity_id(status.get(PAGE_WEATHER_FIELD, ""))
+        except vol.Invalid:
+            errors.setdefault(page_section_key(1), "invalid_weather_entity")
+    alarm_values = user_input.get(ALARM_SECTION_KEY)
+    if alarm_values is not None:
+        try:
+            alarm = _alarm_entity_id(alarm_values.get(ALARM_ENTITY_FIELD, ""))
+        except vol.Invalid:
+            errors[ALARM_SECTION_KEY] = "invalid_alarm_entity"
+        try:
+            quick = _alarm_page_entity_id(alarm_values.get(ALARM_QUICK_FIELD, ""))
+        except vol.Invalid:
+            errors.setdefault(ALARM_SECTION_KEY, "invalid_alarm_page_entity")
     if errors:
         return dashboard_input, errors
 
@@ -246,9 +301,7 @@ def dashboard_pages_input(
         dashboard_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
     )
     # The Alarmo quick entity is on no page; its tile settings are kept.
-    kept_entities = seen_entities | {
-        str(dashboard_input.get(CONF_ALARM_PAGE_ENTITY_ID) or "")
-    }
+    kept_entities = seen_entities | {quick}
     ordered_entities: list[str] = []
     for _, _, name, page_entities in pages:
         for entity_id in page_entities:
@@ -262,6 +315,9 @@ def dashboard_pages_input(
             ordered_entities.append(entity_id)
     return {
         **dashboard_input,
+        CONF_WEATHER_ENTITY_ID: weather,
+        CONF_ALARM_ENTITY_ID: alarm,
+        CONF_ALARM_PAGE_ENTITY_ID: quick,
         CONF_DASHBOARD_ENTITIES: ordered_entities,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
             entity_id: options

@@ -25,6 +25,13 @@
 - Every settings field has a plain label and a help text; the choices of the
   tiles, the activations and the ICE filter are translated. German texts use
   real umlauts, French and Italian texts their accents.
+- The weather, Alarmo and the quick action of the Alarm page are set with the
+  display pages: **Weather** in the first section, an **Alarm page** section
+  last. The display and Display patch form keeps the patch, the home page
+  buttons, the behaviour after an action and the allowed actions. Saved values
+  carry over.
+- The status page, the first page, is left out when it has no weather and no
+  tile, and its HA, alarm and time badges with it. Its section explains this.
 - The display status text sits in the header bar, right of the title, in
   place of a row below the tiles. The tile area gains that row, so four half
   rows fit below the page switcher.

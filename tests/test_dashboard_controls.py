@@ -899,7 +899,7 @@ def test_a_dashboard_too_large_without_lists_is_logged_once(caplog):
     caplog.set_level(logging.WARNING, logger="custom_components.bticino_c300x.dashboard")
     for _ in range(2):
         payload = _dashboard(many)
-    assert len(payload["data"]["pages"][1]["items"]) == 40
+    assert len(payload["data"]["pages"][-1]["items"]) == 40
     warnings = [record for record in caplog.records if "display dashboard" in record.getMessage()]
     assert len(warnings) == 1
     _dashboard({"light.l0": _light(0)})

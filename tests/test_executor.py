@@ -2101,7 +2101,14 @@ def test_async_unlock_door_calls_agent_api() -> None:
 
 def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() -> None:
     hass = FakeHass(
-        states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
+        states=FakeStates(
+            {
+                "alarm_control_panel.home": FakeState("disarmed"),
+                "sensor.temperature": FakeState(
+                    "21.5", attributes={"friendly_name": "Temperature"}
+                ),
+            }
+        )
     )
     entry = FakeEntry(
         data={
@@ -2109,6 +2116,11 @@ def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() ->
             CONF_DEVICE_UI_ENABLED: True,
         },
         options={
+            # The status page is only shown with something on it.
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {"page": "C300X"}
+            },
             CONF_ACTIONS: {
                 "leave_home": {
                     "domain": "script",
@@ -2147,6 +2159,40 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
 
     monkeypatch.setattr(dashboard_module, "async_status", fail_status)
     hass = FakeHass(
+        states=FakeStates(
+            {
+                "alarm_control_panel.home": FakeState("disarmed"),
+                "sensor.temperature": FakeState(
+                    "21.5", attributes={"friendly_name": "Temperature"}
+                ),
+            }
+        )
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+            CONF_DEVICE_UI_ENABLED: True,
+        },
+        options={
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {"page": "C300X"}
+            },
+        },
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    assert result["data"]["pages"][0]["badges"][1] == {"state": "Alarm\nAus"}
+
+
+def test_async_dashboard_payload_leaves_out_an_empty_status_page() -> None:
+    """With no weather and no tile the status page has nothing to show.
+
+    Its badges stay away with it. Messages still need a page to appear on.
+    """
+
+    hass = FakeHass(
         states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
     )
     entry = FakeEntry(
@@ -2156,9 +2202,22 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
         },
     )
 
-    result = run(async_dashboard_payload(hass, entry))
+    assert run(async_dashboard_payload(hass, entry))["data"]["pages"] == []
 
-    assert result["data"]["pages"][0]["badges"][1] == {"state": "Alarm\nAus"}
+    entry.options[CONF_DASHBOARD_ENTITIES] = ["sensor.temperature"]
+    hass.states.values["sensor.temperature"] = FakeState(
+        "21.5", attributes={"friendly_name": "Temperature"}
+    )
+    pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
+    assert [page["title"] for page in pages] == [""]
+    assert not pages[0].get("badges")
+
+    entry.options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = {
+        "sensor.temperature": {"page": "C300X"}
+    }
+    pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
+    assert [page["title"] for page in pages] == ["C300X"]
+    assert len(pages[0]["badges"]) == 3
 
 
 def test_async_dashboard_payload_includes_configured_weather() -> None:
@@ -3390,4 +3449,4 @@ def test_async_dashboard_payload_keeps_agent_controls_off_main_page() -> None:
 
     result = run(async_dashboard_payload(hass, entry))
 
-    assert "buttons" not in result["data"]["pages"][0]
+    assert all("buttons" not in page for page in result["data"]["pages"])

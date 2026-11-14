@@ -13,12 +13,6 @@ from .config_flow_forms import (
     actions_json_field as _actions_json_field,
 )
 from .config_flow_forms import (
-    alarm_entity_selector as _alarm_entity_selector,
-)
-from .config_flow_forms import (
-    alarm_page_entity_selector as _alarm_page_entity_selector,
-)
-from .config_flow_forms import (
     dashboard_entity_custom_name_selector as _dashboard_entity_custom_name_selector,
 )
 from .config_flow_forms import (
@@ -32,9 +26,6 @@ from .config_flow_forms import (
 )
 from .config_flow_forms import (
     optional_suggested as _optional_suggested,
-)
-from .config_flow_forms import (
-    weather_entity_selector as _weather_entity_selector,
 )
 from .const import (
     CONF_ACTIONS,
@@ -244,55 +235,38 @@ def dashboard_entity_display_overrides_from_fields(
 
 
 def dashboard_schema(
-    default_alarm_entity: str,
-    default_weather_entity: str,
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = DASHBOARD_PREVENT_RETURN_DEFAULT,
-    default_dashboard_entities: Any = None,
-    default_dashboard_entity_display_overrides: Any = None,
-    default_dashboard_dynamic_homepage: bool = DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
-    default_alarm_page_entity: str = "",
     *,
+    default_dashboard_dynamic_homepage: bool = DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
     default_device_ui_enabled: bool = False,
 ) -> vol.Schema:
-    """Return the display dashboard schema.
+    """Return the display and Display patch schema.
 
-    The entities are chosen per page in the pages step; the saved ones are
-    kept here so the step can show them.
+    Alarmo, the weather and the entities are chosen per page in the pages
+    step; the saved ones are kept when this form is saved.
     """
 
-    del default_dashboard_entities, default_dashboard_entity_display_overrides
-    fields: dict[Any, Any] = {
+    return vol.Schema(
+        {
             vol.Optional(
                 CONF_DEVICE_UI_ENABLED,
                 default=default_device_ui_enabled,
             ): bool,
             vol.Optional(
-                CONF_DASHBOARD_PREVENT_RETURN,
-                default=default_dashboard_prevent_return,
-            ): bool,
-            vol.Optional(
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                 default=default_dashboard_dynamic_homepage,
             ): bool,
-            _optional_suggested(
-                CONF_ALARM_ENTITY_ID,
-                default_alarm_entity,
-            ): _alarm_entity_selector(),
-            _optional_suggested(
-                CONF_ALARM_PAGE_ENTITY_ID,
-                default_alarm_page_entity,
-            ): _alarm_page_entity_selector(),
-            _optional_suggested(
-                CONF_WEATHER_ENTITY_ID,
-                default_weather_entity,
-            ): _weather_entity_selector(),
+            vol.Optional(
+                CONF_DASHBOARD_PREVENT_RETURN,
+                default=default_dashboard_prevent_return,
+            ): bool,
             _optional_suggested(
                 CONF_ACTIONS_JSON,
                 default_actions_json,
             ): _actions_json_field(),
-    }
-    return vol.Schema(fields)
+        }
+    )
 
 
 def dashboard_entity_display_schema(
@@ -395,7 +369,7 @@ def dashboard_form_input(user_input: dict[str, Any]) -> dict[str, Any]:
 
     cleared = {
         str(key): [] if field.config.get("multiple") else ""
-        for key, field in dashboard_schema("", "").schema.items()
+        for key, field in dashboard_schema().schema.items()
         if key.default is vol.UNDEFINED and str(key) not in user_input
     }
     return {**cleared, **user_input}

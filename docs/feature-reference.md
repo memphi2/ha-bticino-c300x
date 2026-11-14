@@ -47,7 +47,8 @@ has a help text.
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
 | Media features | Doorstation media, Home Assistant media user, live audio gain, Ring Capture gain. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
 | Device activations | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
-| Display dashboard | Optional Display patch, Alarmo/weather/dashboard entities and action allowlist. | Yes, only when the Display patch is applied/restored. |
+| Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. |
+| Display pages and tiles | Weather, Alarmo and quick action, entities per page, size, name and secondary line of each tile. | Yes, only when the Display patch is applied/restored. |
 | Maintenance controls | SSH, noAuth, mDNS discovery, firewall patches, GUI reload, reboot, agent update/remove. | Yes, only when the corresponding entity, button or Repair is used. |
 
 ## Main User Features
@@ -87,8 +88,8 @@ Tap a mode to execute directly when no PIN is required; otherwise the keypad
 appears. Entry delay opens the disarm keypad when required. A pending command
 blocks repeated taps; unavailable data is not displayed as a ready alarm.
 
-Under **Display and Display patch**, **Quick action on the Alarm page** selects the optional quick
-action or status entity. Leave it empty to hide this area. To retain a stair-light
+Under **Display pages**, the last section **Alarm page** sets the Alarmo alarm
+panel and the **Quick action**, the optional quick action or status entity. Leave it empty to hide this area. To retain a stair-light
 shortcut, select the integration's stair-light button explicitly. No stair-light
 action is inserted automatically. Buttons, switches, scenes and scripts can be
 operated directly; other supported selections remain read-only on this page.
@@ -232,12 +233,15 @@ detail views.
 
 Switch the Display patch on under **Configure > Display and Display patch**;
 the settings menu then offers **Display pages** and **Display tiles**. Choose
-entities and the optional Alarmo quick entity with the normal HA selectors;
+the weather, Alarmo and the entities with the normal HA selectors;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
 The pages dialog has up to 8 pages, one section each. A section's title shows
-the page's name, for example **Page 2: Living room**.
+the page's name, for example **Page 2: Living room**. A last section,
+**Alarm page**, is none of them: it sets the Alarmo alarm panel and the quick
+action of the Alarm page, which opens from the home page button and has no
+position.
 
 | Field | Meaning |
 | --- | --- |
@@ -245,9 +249,11 @@ the page's name, for example **Page 2: Living room**.
 | **Position** | Order of the pages, 1 to 8; 1 is the first page. Left empty, the section's number is used; pages with the same position keep the order of their sections. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
-The first section is the status page: it carries the HA, alarm and time badges
-and the weather card at its top, and its heading on the display stays Home
-Assistant. Its internal name is `C300X`, which another page cannot use. Like
+The first section is the status page: it carries the weather card at its top,
+set in its **Weather** field, then its entities, and its heading on the display
+stays Home Assistant. Its HA, alarm and time badges show only while the page
+does: with no weather and no entity the page is left out, and the badges with
+it. Messages still get this page when it is the only one that can show them. Its internal name is `C300X`, which another page cannot use. Like
 any other page it can be moved with its position. A section without a name and
 entities stays unused; a page with entities needs a name. Each page name (in
 any capitalization) and each entity can be used once. Page names are limited to
@@ -274,11 +280,11 @@ entity id added. With more than two tiles the sections start collapsed.
 Missing or unavailable entities retain their configuration and show unavailable
 rather than changing the saved layout.
 
-The optional Alarmo quick entity gets a section of its own at the end, with name
-and secondary line, even if it is not selected for an overview page; saving the
-pages keeps these settings. Selecting it does not add it to
-the overview. Leave the quick entity empty to hide it; no stair-light default is
-inserted. Connection/maintenance settings remain separate. Calendar and notification
+The optional quick action of the Alarm page gets a section of its own at the end,
+titled **Alarm page › name**, with name and secondary line, even if it is not
+selected for an overview page; saving the pages keeps these settings. Selecting
+it does not add it to the overview. Leave the quick action empty to hide it; no
+stair-light default is inserted. Connection/maintenance settings remain separate. Calendar and notification
 logic stays in HA automations. This is a normal configuration dialog, not a visual
 editor, and opening the dialog does not operate a device.
 

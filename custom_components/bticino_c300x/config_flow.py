@@ -820,8 +820,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user_dashboard",
             data_schema=_dashboard_schema(
-                str((user_input or {}).get(CONF_ALARM_ENTITY_ID, "")),
-                str((user_input or {}).get(CONF_WEATHER_ENTITY_ID, "")),
                 str((user_input or {}).get(CONF_ACTIONS_JSON, "")),
                 bool(
                     (user_input or {}).get(
@@ -829,19 +827,11 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         _DASHBOARD_PREVENT_RETURN_DEFAULT,
                     )
                 ),
-                (user_input or {}).get(CONF_DASHBOARD_ENTITIES, []),
-                (user_input or {}).get(
-                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-                    {},
-                ),
                 default_dashboard_dynamic_homepage=bool(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
                     )
-                ),
-                default_alarm_page_entity=str(
-                    (user_input or {}).get(CONF_ALARM_PAGE_ENTITY_ID, "")
                 ),
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
@@ -1243,18 +1233,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_dashboard_schema(
                 str(
                     (user_input or {}).get(
-                        CONF_ALARM_ENTITY_ID,
-                        feature_defaults[CONF_ALARM_ENTITY_ID],
-                    )
-                ),
-                str(
-                    (user_input or {}).get(
-                        CONF_WEATHER_ENTITY_ID,
-                        feature_defaults[CONF_WEATHER_ENTITY_ID],
-                    )
-                ),
-                str(
-                    (user_input or {}).get(
                         CONF_ACTIONS_JSON,
                         _actions_json(feature_defaults[CONF_ACTIONS]),
                     )
@@ -1265,24 +1243,10 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
                     )
                 ),
-                (user_input or {}).get(
-                    CONF_DASHBOARD_ENTITIES,
-                    feature_defaults[CONF_DASHBOARD_ENTITIES],
-                ),
-                (user_input or {}).get(
-                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
-                ),
                 default_dashboard_dynamic_homepage=bool(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
-                    )
-                ),
-                default_alarm_page_entity=str(
-                    (user_input or {}).get(
-                        CONF_ALARM_PAGE_ENTITY_ID,
-                        feature_defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""),
                     )
                 ),
                 default_device_ui_enabled=bool(
@@ -1679,18 +1643,6 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             data_schema=_dashboard_schema(
                 str(
                     (user_input or {}).get(
-                        CONF_ALARM_ENTITY_ID,
-                        feature_defaults[CONF_ALARM_ENTITY_ID],
-                    )
-                ),
-                str(
-                    (user_input or {}).get(
-                        CONF_WEATHER_ENTITY_ID,
-                        feature_defaults[CONF_WEATHER_ENTITY_ID],
-                    )
-                ),
-                str(
-                    (user_input or {}).get(
                         CONF_ACTIONS_JSON,
                         _actions_json(feature_defaults[CONF_ACTIONS]),
                     )
@@ -1701,24 +1653,10 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                         feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
                     )
                 ),
-                (user_input or {}).get(
-                    CONF_DASHBOARD_ENTITIES,
-                    feature_defaults[CONF_DASHBOARD_ENTITIES],
-                ),
-                (user_input or {}).get(
-                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
-                ),
                 default_dashboard_dynamic_homepage=bool(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
-                    )
-                ),
-                default_alarm_page_entity=str(
-                    (user_input or {}).get(
-                        CONF_ALARM_PAGE_ENTITY_ID,
-                        feature_defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""),
                     )
                 ),
                 default_device_ui_enabled=bool(

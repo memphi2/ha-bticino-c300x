@@ -99,21 +99,15 @@
       },
       "user_dashboard": {
         "title": "C300X-Display-Dashboard",
-        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, folgen im nächsten Schritt die Display-Seiten und ihre Entitäten.",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter, Alarmo und die Entitäten jeder Seite.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
-          "alarm_entity_id": "Alarmo-Alarmzentrale",
-          "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
-          "weather_entity_id": "Wetter",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
-          "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite des Displays zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
-          "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden.",
-          "weather_entity_id": "Wetter-Entität für die Wetterkarte auf der Statusseite. Leer lassen für keine Wetterkarte.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
@@ -198,21 +192,15 @@
       },
       "reconfigure_dashboard": {
         "title": "C300X-Display-Dashboard neu konfigurieren",
-        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, folgen im nächsten Schritt die Display-Seiten und ihre Entitäten.",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter, Alarmo und die Entitäten jeder Seite.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
-          "alarm_entity_id": "Alarmo-Alarmzentrale",
-          "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
-          "weather_entity_id": "Wetter",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
-          "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite des Displays zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
-          "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden.",
-          "weather_entity_id": "Wetter-Entität für die Wetterkarte auf der Statusseite. Leer lassen für keine Wetterkarte.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
@@ -224,16 +212,18 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Der letzte Abschnitt, **Alarm-Seite**, ist keine eigene Seite: Er legt Alarmo und die Schnellaktion der Alarm-Seite fest.",
         "sections": {
           "page_1": {
-            "name": "Statusseite",
-            "description": "Zeigt oben die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte, darunter die Entitäten dieser Seite. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "name": "Seite 1: Statusseite",
+            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
@@ -327,22 +317,36 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "alarm": {
+            "name": "Alarm-Seite",
+            "description": "Die Alarm-Seite öffnet sich über den Button Alarm auf der Startseite des C300X. Sie gehört nicht zu den Seiten oben und hat keine Position.",
+            "data": {
+              "alarm_entity_id": "Alarmo-Alarmzentrale",
+              "alarm_page_entity_id": "Schnellaktion"
+            },
+            "data_description": {
+              "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
+              "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Der letzte Abschnitt, **Alarm-Seite**, ist keine eigene Seite: Er legt Alarmo und die Schnellaktion der Alarm-Seite fest.",
         "sections": {
           "page_1": {
-            "name": "Statusseite",
-            "description": "Zeigt oben die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte, darunter die Entitäten dieser Seite. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "name": "Seite 1: Statusseite",
+            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
@@ -436,6 +440,18 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "alarm": {
+            "name": "Alarm-Seite",
+            "description": "Die Alarm-Seite öffnet sich über den Button Alarm auf der Startseite des C300X. Sie gehört nicht zu den Seiten oben und hat keine Position.",
+            "data": {
+              "alarm_entity_id": "Alarmo-Alarmzentrale",
+              "alarm_page_entity_id": "Schnellaktion"
+            },
+            "data_description": {
+              "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
+              "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
             }
           }
         }
@@ -488,8 +504,8 @@
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
-          "dashboard": "Home-Assistant-Seiten auf dem Display, wann die Startseiten-Buttons erscheinen, Alarm, Wetter und Aktionen.",
-          "dashboard_pages": "Welche Entitäten auf dem Display erscheinen, auf welcher Seite und in welcher Reihenfolge.",
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
+          "dashboard_pages": "Wetter, Alarmo und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel."
         }
       },
@@ -567,21 +583,15 @@
       },
       "dashboard": {
         "title": "Display und Display-Patch",
-        "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Einstellungsmenü zusätzlich **Display-Seiten** und **Display-Kacheln**.",
+        "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Einstellungsmenü zusätzlich **Display-Seiten** (Wetter, Alarmo und was wo angezeigt wird) und **Display-Kacheln**.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
-          "alarm_entity_id": "Alarmo-Alarmzentrale",
-          "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
-          "weather_entity_id": "Wetter",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
-          "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite des Displays zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
-          "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden.",
-          "weather_entity_id": "Wetter-Entität für die Wetterkarte auf der Statusseite. Leer lassen für keine Wetterkarte.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
@@ -593,16 +603,18 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Der letzte Abschnitt, **Alarm-Seite**, ist keine eigene Seite: Er legt Alarmo und die Schnellaktion der Alarm-Seite fest.",
         "sections": {
           "page_1": {
-            "name": "Statusseite",
-            "description": "Zeigt oben die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte, darunter die Entitäten dieser Seite. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "name": "Seite 1: Statusseite",
+            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
@@ -696,6 +708,18 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "alarm": {
+            "name": "Alarm-Seite",
+            "description": "Die Alarm-Seite öffnet sich über den Button Alarm auf der Startseite des C300X. Sie gehört nicht zu den Seiten oben und hat keine Position.",
+            "data": {
+              "alarm_entity_id": "Alarmo-Alarmzentrale",
+              "alarm_page_entity_id": "Schnellaktion"
+            },
+            "data_description": {
+              "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
+              "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
             }
           }
         }
@@ -1184,7 +1208,7 @@
         "name": "Name",
         "secondary": "Zusatzzeile",
         "status_page": "Statusseite",
-        "alarm_action": "Alarmo-Schnellaktion"
+        "alarm_page": "Alarm-Seite"
       }
     },
     "tile_size": {

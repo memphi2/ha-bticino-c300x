@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -285,6 +286,10 @@ def test_bootstrap_install_uses_python_ssh_client(
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
+            if input_data and b"os.lstat(path)" in input_data:
+                assert len(self.commands) == 1
+                assert not self.uploads
+                return json.dumps({"missing": True})
             if command == f"readlink {device_installer.REMOTE_INIT_LINK}":
                 return f"{device_installer.REMOTE_INIT_SCRIPT}\n"
             return ""
@@ -439,6 +444,8 @@ def test_bootstrap_install_fails_when_startup_link_is_missing(
 
     class FakeSshClient:
         def run(self, command: str, input_data: bytes | None = None) -> str:
+            if input_data and b"os.lstat(path)" in input_data:
+                return json.dumps({"missing": True})
             if command == f"readlink {device_installer.REMOTE_INIT_LINK}":
                 return ""
             return ""
@@ -1225,8 +1232,8 @@ def test_install_reads_remote_config_and_writes_merged_result(
             self.writes: list[bytes] = []
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
-            if command.startswith("cat ") and "config.json" in command:
-                return old
+            if input_data and b"os.lstat(path)" in input_data:
+                return json.dumps({"content": old})
             if input_data and b"api-token" in input_data:
                 self.writes.append(input_data)
             return ""
@@ -1264,3 +1271,87 @@ def test_install_reads_remote_config_and_writes_merged_result(
 
     assert client.writes
     assert json.loads(client.writes[0])["mqtt"]["host"] == "broker.lan"
+
+
+@pytest.mark.parametrize("response", [
+    None, "", "not-json", "[]", '{"missing": false}', '{"missing": 1}',
+    '{"content": "broken"}', '{"content": "null"}', '{"content": "[]"}',
+    '{"content": null}',
+])
+def test_install_config_read_failure_never_writes_or_restarts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, response: str | None
+) -> None:
+    class FakeSshClient:
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+            self.closed = False
+
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            self.commands.append(command)
+            assert input_data and b"os.lstat(path)" in input_data
+            if response is None:
+                raise C300XDeviceInstallError("device_install_failed")
+            return response
+
+        def put_file(self, *args: Any, **kwargs: Any) -> bool:
+            pytest.fail("Payload upload before successful config read")
+
+        def close(self) -> None:
+            self.closed = True
+
+    client = FakeSshClient()
+    monkeypatch.setattr(device_installer, "_connect_device_client", lambda _r: client)
+    bundle = device_installer._ResolvedBundle(
+        (device_installer._PayloadFile(tmp_path / "payload", "/unused-agent", "700"),),
+        tmp_path / "unused-init",
+    )
+    request = C300XDeviceInstallRequest(
+        host="c300x.local", ssh_username="root", ssh_password="secret"
+    )
+    with pytest.raises(C300XDeviceInstallError):
+        device_installer._install_device_agent_sync(request, bundle, b"{}")
+    assert len(client.commands) == 1
+    assert client.closed
+
+
+@pytest.mark.parametrize("state", [
+    "missing", "valid", "malformed", "directory", "dangling", "denied", "read_error",
+])
+def test_config_read_script_local_files(tmp_path: Path, state: str) -> None:
+    path = tmp_path / "config.json"
+    if state in ("valid", "read_error"):
+        path.write_text('{"mqtt": {"host": "broker.lan"}}', encoding="utf-8")
+    elif state == "malformed":
+        path.write_text("broken", encoding="utf-8")
+    elif state == "directory":
+        path.mkdir()
+    elif state == "dangling":
+        path.symlink_to(tmp_path / "absent-target")
+
+    class LocalReadClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            assert input_data is not None
+            if state in ("denied", "read_error"):
+                target = "os.lstat" if state == "denied" else "builtins.open"
+                prefix = (
+                    "import os, builtins\n"
+                    "def denied(*args, **kwargs):\n"
+                    "    raise OSError(13, 'Permission denied')\n"
+                    f"{target} = denied\n"
+                )
+                input_data = prefix.encode() + input_data
+            result = subprocess.run(
+                [sys.executable, "-", str(path)], input=input_data,
+                capture_output=True, check=False,
+            )
+            if result.returncode:
+                raise C300XDeviceInstallError("device_install_failed")
+            return result.stdout.decode("utf-8")
+
+    client = LocalReadClient()
+    if state in ("malformed", "directory", "dangling", "denied", "read_error"):
+        with pytest.raises(C300XDeviceInstallError):
+            device_installer._read_remote_config_sync(client, str(path))
+    else:
+        result = device_installer._read_remote_config_sync(client, str(path))
+        assert result == (None if state == "missing" else {"mqtt": {"host": "broker.lan"}})

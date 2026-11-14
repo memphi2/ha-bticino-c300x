@@ -1526,3 +1526,16 @@ def test_alarm_page_picker_still_accepts_a_value_saved_from_another_domain() -> 
     assert "lock" in alarm_page_entity_selector("lock.front").config["domain"]
     # A domain the picker never knew is not let in through the saved value.
     assert "camera" not in alarm_page_entity_selector("camera.door").config["domain"]
+
+
+def test_alarm_schema_gives_the_saved_quick_entity_to_the_selector() -> None:
+    from custom_components.bticino_c300x.config_flow_alarm import alarm_schema
+
+    def quick_domains(saved: dict) -> list[str]:
+        for key, sel in alarm_schema(saved).schema.items():
+            if getattr(key, "schema", key) == "alarm_page_entity_id":
+                return list(sel.config["domain"])
+        raise AssertionError("no alarm page field")
+
+    assert "lock" in quick_domains({"alarm_page_entity_id": "lock.front"})
+    assert "lock" not in quick_domains({})

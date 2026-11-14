@@ -190,7 +190,7 @@ direct_copy_tree() {
     while IFS= read -r -d '' directory; do
         rel="${directory#$INSTALL_SOURCE_DIR/}"
         [[ "$rel" == "$directory" ]] && continue
-        mkdir -p "$TARGET_DIR/$rel"
+        mkdir -p "$TARGET_DIR/$rel" || return 1
     done < <(find "$INSTALL_SOURCE_DIR" -type d -not -name '__pycache__' -print0)
 
     while IFS= read -r -d '' file; do
@@ -198,20 +198,20 @@ direct_copy_tree() {
         case "$rel" in
             __pycache__/*|*/__pycache__/*) continue ;;
         esac
-        mkdir -p "$(dirname "$TARGET_DIR/$rel")"
-        cp -f "$file" "$TARGET_DIR/$rel"
+        mkdir -p "$(dirname "$TARGET_DIR/$rel")" || return 1
+        cp -f "$file" "$TARGET_DIR/$rel" || return 1
     done < <(find "$INSTALL_SOURCE_DIR" -type f -print0)
 
     if [[ "${C300X_INSTALL_PRUNE:-1}" == "1" ]]; then
         while IFS= read -r -d '' target_file; do
             rel="${target_file#$TARGET_DIR/}"
             if [[ ! -f "$INSTALL_SOURCE_DIR/$rel" ]]; then
-                rm -f "$target_file"
+                rm -f "$target_file" || return 1
             fi
         done < <(find "$TARGET_DIR" -type f -print0)
 
-        find "$TARGET_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} +
-        find "$TARGET_DIR" -depth -type d -empty -not -path "$TARGET_DIR" -delete
+        find "$TARGET_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} + || return 1
+        find "$TARGET_DIR" -depth -type d -empty -not -path "$TARGET_DIR" -delete || return 1
     fi
 
     if ! grep -F -q '_commands_with_alarmo_readiness' "$TARGET_DIR/alarm_state.py"; then
@@ -222,7 +222,14 @@ direct_copy_tree() {
     printf 'Installed HA test integration: %s\n' "$TARGET_DIR"
 }
 
-if ! direct_copy_tree; then
+if direct_copy_tree; then
+    :
+else
+    result=$?
+    if [[ "$result" != "2" ]]; then
+        printf 'HA test copy failed; installation is incomplete.\n' >&2
+        exit "$result"
+    fi
     printf 'Direct GVFS copy unavailable for %s; trying GIO file copy fallback.\n' "$TARGET_DIR" >&2
     gio_copy_tree
 fi

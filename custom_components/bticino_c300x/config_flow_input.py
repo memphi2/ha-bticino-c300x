@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.const import CONF_NAME
@@ -205,9 +207,30 @@ def _agent_host(value: Any) -> str:
     """Validate the configured device-agent host."""
 
     host = str(value or "").strip()
-    if not host:
+    if not host or any(char.isspace() for char in host) or "/" in host:
+        # Empty, or a URL: the form asks for the address only.
         raise vol.Invalid("invalid agent host")
+    if ":" in host:
+        # Only an IPv6 address has colons. "192.0.2.5:8091" would otherwise be
+        # wrapped in brackets and probed as a host that cannot exist.
+        try:
+            ipaddress.IPv6Address(host.removeprefix("[").removesuffix("]").split("%", 1)[0])
+        except ValueError as err:
+            raise vol.Invalid("invalid agent host") from err
     return host
+
+
+def _agent_port(user_input: dict[str, Any], errors: dict[str, str]) -> int:
+    """Return the device-agent port, reporting one outside 1..65535."""
+
+    try:
+        port = int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
+    except (TypeError, ValueError, OverflowError):
+        port = 0
+    if not 1 <= port <= 65535:
+        errors[CONF_AGENT_PORT] = "invalid_agent_port"
+        return DEFAULT_AGENT_PORT
+    return port
 
 
 def _initial_connection_input(
@@ -227,7 +250,7 @@ def _initial_connection_input(
 
     data: dict[str, Any] = {
         CONF_AGENT_HOST: agent_host,
-        CONF_AGENT_PORT: int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
+        CONF_AGENT_PORT: _agent_port(user_input, errors),
         CONF_CALLBACK_BASE_URL: callback_base_url,
     }
     if include_name:
@@ -257,13 +280,31 @@ def _agent_auth_input(
     )
 
 
+def _key_or_saved(
+    user_input: Mapping[str, Any],
+    saved: Mapping[str, Any] | None,
+    key: str,
+) -> str:
+    """Return the entered key, or the saved one when the field is empty."""
+
+    entered = str(user_input.get(key, "")).strip()
+    if entered or saved is None:
+        return entered
+    return str(saved.get(key, "") or "").strip()
+
+
 def _connection_input(
     user_input: dict[str, Any],
     *,
     include_name: bool = False,
     include_rotate: bool = False,
+    saved: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """Validate common connection page input."""
+    """Validate common connection page input.
+
+    The forms of an existing entry do not show the saved keys. With ``saved``
+    an empty key field keeps the saved key.
+    """
 
     errors: dict[str, str] = {}
     try:
@@ -271,16 +312,16 @@ def _connection_input(
     except vol.Invalid:
         errors[CONF_AGENT_HOST] = "invalid_agent_host"
         agent_host = ""
-    agent_token = str(user_input.get(CONF_AGENT_TOKEN, "")).strip()
+    agent_token = _key_or_saved(user_input, saved, CONF_AGENT_TOKEN)
     callback_base_url = _validated_callback_base_url(user_input, errors)
 
     data: dict[str, Any] = {
         CONF_AGENT_HOST: agent_host,
-        CONF_AGENT_PORT: int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
+        CONF_AGENT_PORT: _agent_port(user_input, errors),
         CONF_AGENT_TOKEN: agent_token,
-        CONF_MAINTENANCE_TOKEN: str(
-            user_input.get(CONF_MAINTENANCE_TOKEN, "")
-        ).strip(),
+        CONF_MAINTENANCE_TOKEN: _key_or_saved(
+            user_input, saved, CONF_MAINTENANCE_TOKEN
+        ),
         CONF_CALLBACK_BASE_URL: callback_base_url,
     }
     if include_name:
@@ -290,6 +331,21 @@ def _connection_input(
             user_input.get(CONF_ROTATE_SHARED_SECRET, False)
         )
     return data, errors
+
+
+def _actions_json_errors(values: dict[str, Any]) -> dict[str, str]:
+    """Return the form error for an action list that does not parse.
+
+    The dashboard step checks its own field before the flow moves on. The
+    final validation would report it too, but only after the pages and tiles
+    forms, whose input is then lost.
+    """
+
+    try:
+        parse_actions_json(values.get(CONF_ACTIONS_JSON, ""))
+    except ActionValidationError:
+        return {CONF_ACTIONS_JSON: "invalid_action_map"}
+    return {}
 
 
 def _device_activation_input(
@@ -345,21 +401,23 @@ def _dashboard_feature_input(
     dashboard_entity_display_overrides: dict[str, dict[str, str]] = {}
     dashboard_dynamic_homepage = _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
     actions: dict[str, dict[str, Any]] = {}
+    # The alarm commands do not need the Display patch, so Alarmo is kept
+    # with it off.
+    try:
+        alarm_entity_id = _alarm_entity_id(user_input.get(CONF_ALARM_ENTITY_ID, ""))
+    except vol.Invalid:
+        errors[CONF_ALARM_ENTITY_ID] = "invalid_alarm_entity"
+    try:
+        alarm_page_entity_id = _alarm_page_entity_id(
+            user_input.get(CONF_ALARM_PAGE_ENTITY_ID, "")
+        )
+    except vol.Invalid:
+        errors[CONF_ALARM_PAGE_ENTITY_ID] = "invalid_alarm_page_entity"
     if device_ui_enabled:
         try:
             actions = parse_actions_json(user_input.get(CONF_ACTIONS_JSON, ""))
         except ActionValidationError:
             errors[CONF_ACTIONS_JSON] = "invalid_action_map"
-        try:
-            alarm_entity_id = _alarm_entity_id(user_input.get(CONF_ALARM_ENTITY_ID, ""))
-        except vol.Invalid:
-            errors[CONF_ALARM_ENTITY_ID] = "invalid_alarm_entity"
-        try:
-            alarm_page_entity_id = _alarm_page_entity_id(
-                user_input.get(CONF_ALARM_PAGE_ENTITY_ID, "")
-            )
-        except vol.Invalid:
-            errors[CONF_ALARM_PAGE_ENTITY_ID] = "invalid_alarm_page_entity"
         try:
             weather_entity_id = _weather_entity_id(
                 user_input.get(CONF_WEATHER_ENTITY_ID, "")
@@ -381,9 +439,8 @@ def _dashboard_feature_input(
                 user_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, "")
             )
         except vol.Invalid:
-            errors[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
-                "invalid_dashboard_entity_display_overrides"
-            )
+            # Not a field of the form, where an error would not be shown.
+            errors["base"] = "invalid_dashboard_entity_display_overrides"
         dashboard_dynamic_homepage = bool(
             user_input.get(
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE,

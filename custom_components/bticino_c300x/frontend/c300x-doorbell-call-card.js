@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=99e63d62d540ca95";
+} from "./c300x-translations.js?v=cff8390bf24fff10";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,23 +15,23 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=99e63d62d540ca95";
+} from "./c300x-entity-resolver.js?v=cff8390bf24fff10";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=99e63d62d540ca95";
-import { C300XCardActions } from "./c300x-card-actions.js?v=99e63d62d540ca95";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=99e63d62d540ca95";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=99e63d62d540ca95";
+} from "./c300x-card-editor.js?v=cff8390bf24fff10";
+import { C300XCardActions } from "./c300x-card-actions.js?v=cff8390bf24fff10";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=cff8390bf24fff10";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=cff8390bf24fff10";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=99e63d62d540ca95";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=99e63d62d540ca95";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=99e63d62d540ca95";
+} from "./c300x-state-model.js?v=cff8390bf24fff10";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=cff8390bf24fff10";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=cff8390bf24fff10";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -227,6 +227,11 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   disconnectedCallback() {
     this._disposeResources();
+    // The same element can be attached again while the ring is still pending
+    // (another view and back, edit mode). "Preview already started" belongs
+    // to the peer that was just closed; an explicit stop by the user is kept
+    // in ringPreviewSuppressed and still prevents a restart.
+    this._lifecycle.ringPreviewStarted = false;
   }
 
   _disposeResources() {
@@ -563,6 +568,9 @@ class C300XDoorbellCallCard extends HTMLElement {
       }
       console.error("C300X talkback failed", err);
       this._error = err?.message || `${err}`;
+      if (this._lifecycle.previewStarting) {
+        this._lifecycle.ringPreviewSuppressed = true;
+      }
       this._closePeer(false);
       return false;
     } finally {

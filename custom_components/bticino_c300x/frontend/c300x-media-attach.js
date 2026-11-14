@@ -73,6 +73,9 @@ export class C300XMediaAttachment {
     if (this._currentGainDb() !== gainDb) {
       return;  // gain changed while awaiting resume; a newer call owns the state
     }
+    if (!this._audioContext || !this._gainNode) {
+      return;  // detached while awaiting resume; nothing left to engage
+    }
     if (this._audioContext.state && this._audioContext.state !== "running") {
       this._disengageGain();  // could not start -> audible passthrough
       return;

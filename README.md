@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v2.1.3-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.2.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -32,16 +32,17 @@ forwarding controls, messages and optional display pages.
   controls.
 - Stored video messages, voice memos and text memos when the agent reports
   those capabilities.
-- Optional C300X display pages for Alarmo, weather and selected Home Assistant
-  entities, with controls for lights, covers, climate, fans and media players,
-  and HA-driven notifications.
+- Optional native C300X display with up to eight configurable pages, weather,
+  Alarmo and HA-driven notifications. Control lights, covers, climate, media,
+  locks and other supported entities, with configurable tile sizes and labels.
+  See [Display setup](docs/quickstart.md#9-optional-native-display).
 - Media readiness diagnostics with guided Repairs for the common setup problems.
 - Optional automation blueprints for notifications, Ring Capture, local Wyoming
   transcription and strict phrase decisions.
 
 ## Requirements
 
-- Home Assistant `2026.7.0` or newer.
+- Home Assistant `2026.10.0` or newer.
 - BTicino Classe 300X / C300X firmware `1.7.x`.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
@@ -67,7 +68,7 @@ On Home Assistant `2026.11+`:
 
 ### HACS
 
-On Home Assistant `2026.7-2026.10`, find **BTicino C300X** in HACS, download it
+On Home Assistant `2026.10`, find **BTicino C300X** in HACS, download it
 and restart Home Assistant. Then add the integration under
 **Settings > Devices & services**. No custom repository is needed.
 

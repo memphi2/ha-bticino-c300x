@@ -931,10 +931,40 @@ def _safe_error_summary(value: Any) -> dict[str, str | None] | None:
     if not text:
         return None
     error_type, separator, message = text.partition(":")
+    if not _looks_like_error_type(error_type):
+        # Free text from the agent, not "Type: message": nothing in it can be
+        # told apart from an address or a name, so all of it is redacted.
+        return {"type": None, "message": _redact_error_message(text)}
     return {
-        "type": error_type[:80],
+        "type": error_type,
         "message": _redact_error_message(message if separator else ""),
     }
+
+
+def _looks_like_error_type(value: str) -> bool:
+    """Tell "ClientError" or "aiohttp.ClientError" from a dotted host name."""
+
+    if len(value) > 80 or not re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", value):
+        return False
+    # A class path ends in a class name; "c300x.fritz.box" does not.
+    return "." not in value or value.rsplit(".", 1)[1][:1].isupper()
+
+
+_IPV6_CANDIDATE = re.compile(
+    r"(?<![\w.])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,}(?:\.\d{1,3}){0,3}(?:%[\w.-]+)?"
+)
+
+
+def _redact_ipv6(match: re.Match[str]) -> str:
+    candidate = match.group(0)
+    address = candidate.split("%", 1)[0]
+    if _ip_address(address) is not None:
+        return "<ipv6>"
+    # "2001:db8::5:8080" written without brackets: the last group is a port.
+    head, _, port = address.rpartition(":")
+    if port.isdecimal() and _ip_address(head) is not None:
+        return "<ipv6>"
+    return candidate
 
 
 def _redact_error_message(value: str) -> str | None:
@@ -949,6 +979,9 @@ def _redact_error_message(value: str) -> str | None:
         text,
         flags=re.IGNORECASE,
     )
+    # Before the host name rules: they would take the first group of an
+    # unbracketed address for a name and leave the rest in the text.
+    text = _IPV6_CANDIDATE.sub(_redact_ipv6, text)
     text = re.sub(
         r"\b(?:[a-z0-9-]+\.)+[a-z][a-z0-9-]*(?::\d{1,5})?\b",
         "<hostname>",
@@ -963,7 +996,7 @@ def _redact_error_message(value: str) -> str | None:
     )
     words = []
     for word in text.split():
-        clean = word.strip("[](),;")
+        clean = word.strip("[](),;'\"")
         if ":" in clean and _ip_address(clean.split("%", 1)[0]) is not None:
             words.append(word.replace(clean, "<ipv6>"))
         else:

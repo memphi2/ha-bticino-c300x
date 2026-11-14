@@ -466,3 +466,25 @@ class _FakeRouteSocket:
 
     def getsockname(self) -> tuple[str, int]:
         return self._source
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://homeassistant.local.:8123",  # trailing dot, still mDNS
+        "http://127.1:8123",  # short spelling of loopback
+        "http://2130706433",  # 127.0.0.1 as one number
+        "http://a b:8123",  # not a host name
+    ],
+)
+def test_normalize_callback_base_url_rejects_disguised_or_malformed_hosts(url: str) -> None:
+    with pytest.raises(ValueError):
+        normalize_callback_base_url(url)
+
+
+def test_normalize_callback_base_url_keeps_ordinary_names_and_addresses() -> None:
+    assert normalize_callback_base_url("http://ha.example.org.:8123") == (
+        "http://ha.example.org.:8123"
+    )
+    assert normalize_callback_base_url("http://ha_core:8123") == "http://ha_core:8123"
+    assert normalize_callback_base_url("http://192.0.2.10:8123") == "http://192.0.2.10:8123"

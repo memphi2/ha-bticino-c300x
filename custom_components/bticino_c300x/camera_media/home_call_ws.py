@@ -91,7 +91,11 @@ def async_register_home_call_ws(hass: HomeAssistant, camera_type: type[Any]) -> 
         if not connection.user.permissions.check_entity(entity_id, POLICY_CONTROL):
             connection.send_error(msg["id"], "unauthorized", "Camera control permission required")
             return None
-        camera = get_camera_from_entity_id(hass, entity_id)
+        try:
+            camera = get_camera_from_entity_id(hass, entity_id)
+        except HomeAssistantError:
+            # The entity is missing or not loaded, for example during a reload.
+            camera = None
         if isinstance(camera, camera_type):
             return camera
         connection.send_error(

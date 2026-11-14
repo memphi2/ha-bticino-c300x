@@ -50,6 +50,23 @@ token is supplied through the `C300X_AGENT_TOKEN` environment variable.
 The setup page and diagnostics only report whether tokens are configured. They
 do not echo token values back.
 
+Reconfigure and options forms leave saved access and maintenance keys blank.
+Leaving a key field empty keeps the stored key; entering a value replaces it.
+These forms cannot remove a stored maintenance key.
+
+### RTSP Access
+
+The agent enforces `video.rtsp.username` and `video.rtsp.password` when both
+are configured. Partial credentials deny access; leaving both empty retains
+unauthenticated RTSP for the normal local integration setup. API tokens do not
+protect the RTSP port. Restrict that port to trusted clients with network rules.
+
+RTSP Basic authentication does not encrypt credentials or media. External
+clients must support the authentication challenge. Home Assistant's automatic
+RTSP readiness probe and ring capture do not yet fully support these separate
+credentials; configuring them manually can disable those integration features.
+Do not treat an absolute credential-bearing stream URL as a complete workaround.
+
 ## Legacy SSH Bootstrap
 
 From 2.1.0b2, first installation and explicit SSH recovery use
@@ -153,8 +170,13 @@ the release SBOM records the optional installer dependency separately.
 ## Availability Limits
 
 Incoming HTTP requests have bounded buffers, a total receive deadline and a
-bounded pending-client pool. Event delivery has one worker and a bounded queue;
-overflow and failed delivery are not reported as successful callbacks. Home
+bounded pending-client pool.
+HTTP response bodies may be up to 512 KiB, but all queued HTTP output together
+is limited to 512 KiB, with at most eight waiting connections and a two-second
+send deadline. When that budget is exhausted, further output is rejected rather
+than blocking the device loop or growing the queue.
+Event delivery has one worker and a bounded queue; overflow and failed delivery
+are not reported as successful callbacks. Home
 Assistant media downloads, conversions and cache retention have explicit limits.
 Display forwarding uses a separate worker with at most one outstanding request,
 leaving the HTTP loop available for nested HA commands. It does not retry or

@@ -84,6 +84,25 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
 _REQUEST_CONTENT_LENGTH_AUTO = object()
 
 
+@pytest.mark.parametrize("event", [False, True])
+@pytest.mark.parametrize(
+    ("expected", "supplied"),
+    [("secret", ""), ("secret", "wrong"), ("secret", "\u00e4"),
+     ("\u00e4", "\u00e4"), (None, "secret"), (123, "secret")],
+)
+def test_webhook_rejects_malformed_credentials(event, expected, supplied):
+    key = CONF_EVENT_WEBHOOK_TOKEN if event else CONF_SHARED_SECRET
+    header = HEADER_EVENT_TOKEN if event else HEADER_SHARED_SECRET
+    entry = SimpleNamespace(data={key: expected})
+    # No body reader: rejected authentication must not read or process the payload.
+    request = SimpleNamespace(headers={header: supplied})
+    if event:
+        response = asyncio.run(_async_handle_agent_event(None, entry, C300XEventState(), request))
+    else:
+        response = asyncio.run(_async_handle_webhook(None, entry, request))
+    assert response.status == 401
+
+
 @pytest.fixture(autouse=True)
 def webhook_ha_boundary(monkeypatch):
     from homeassistant.helpers import dispatcher, event
@@ -1258,9 +1277,8 @@ def test_snapshot_memo_event_refreshes_memo_entities_without_public_event() -> N
     assert event_state.event_sequence == 0
     assert event_state.last_event_data == {}
     assert runtime_data.memos["total"] == 1
-    assert runtime_data.memos["memos"][0]["id"] == "memo-1"
-    assert runtime_data.memos["memos"][0]["kind"] == "text"
-    assert runtime_data.memos_updated_at is not None
+    assert runtime_data.memos["memos"] == []
+    assert runtime_data.memos_updated_at is None
     assert signals == [(SIGNAL_MEMOS_CHANGED, "entry-1")]
 
 
@@ -1320,8 +1338,8 @@ def test_snapshot_voicemail_event_refreshes_message_entities_without_public_even
     assert hass.bus.events == []
     assert event_state.event_sequence == 0
     assert runtime_data.answering_machine_messages["total"] == 1
-    assert runtime_data.answering_machine_messages["messages"][0]["id"] == "message_1"
-    assert runtime_data.answering_machine_messages_updated_at is not None
+    assert runtime_data.answering_machine_messages["messages"] == []
+    assert runtime_data.answering_machine_messages_updated_at is None
     assert signals == [(SIGNAL_VIDEO_MESSAGES_CHANGED, "entry-1")]
 
 
@@ -1638,3 +1656,50 @@ def test_unparseable_forwarding_push_does_not_announce_the_old_mode() -> None:
     assert event_state.smartphone_forwarding_mode == "blocked"
     # ... but not announced as a change.
     assert event_data["mode"] is None
+
+
+@pytest.mark.parametrize(
+    ("event", "key", "task_attr"),
+    [
+        ("memos.changed", "memos", "memos_refresh_task"),
+        ("answering_machine.messages_changed", "voicemail", "answering_machine_messages_refresh_task"),
+    ],
+)
+def test_a_snapshot_schedules_the_read_that_brings_the_items_back(event, key, task_attr) -> None:
+    """The snapshot empties the item list; without a read it stays empty."""
+
+    async def run() -> object:
+        hass = _FakeHass()
+        event_state = C300XEventState()
+        runtime_data = SimpleNamespace(
+            event_state=event_state,
+            memos={"available": True, "memos": [{"id": "text/1", "kind": "text"}]},
+            memos_updated_at=None,
+            answering_machine_messages={"available": True, "messages": [{"id": "m1"}]},
+            answering_machine_messages_updated_at=None,
+            resources=C300XRuntimeResources(),
+        )
+        entry = SimpleNamespace(
+            entry_id="entry-1",
+            title="C300X",
+            data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+            options={},
+            runtime_data=runtime_data,
+        )
+        request = _FakeRequest(
+            "event-token",
+            {"event": event, "snapshot": True, "data": {key: {"available": True, "total": 1}}},
+        )
+        response = await _async_handle_agent_event(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            event_state,
+            request,  # type: ignore[arg-type]
+        )
+        task = getattr(runtime_data.resources, task_attr)
+        for pending in hass.tasks:
+            pending.cancel()
+        assert response.status == 200
+        return task
+
+    assert asyncio.run(run()) is not None

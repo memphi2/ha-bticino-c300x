@@ -6,18 +6,21 @@ import json
 from typing import Any
 
 from homeassistant.helpers import selector
-from homeassistant.helpers.selector import SelectOptionDict
 
 from .const import (
     ALARM_DOMAIN,
-    DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
+    DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+    DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
+    DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     WEATHER_DOMAIN,
 )
 from .dashboard_entities import (
+    ALARM_PAGE_ACTION_DOMAINS,
     ALARM_PAGE_ENTITY_DOMAINS,
     DASHBOARD_ENTITY_DOMAINS,
-    DASHBOARD_POSITION_MAX,
+    DASHBOARD_TILE_SIZE_AUTO,
+    DASHBOARD_TILE_SIZES,
 )
 from .schema_compat import vol
 
@@ -63,26 +66,55 @@ def dashboard_entity_selector() -> Any:
     )
 
 
-def alarm_page_entity_selector() -> Any:
-    """Return a single-entity selector for the alarm page quick tile."""
+def alarm_page_entity_selector(saved: Any = "") -> Any:
+    """Return a single-entity selector for the alarm page quick tile.
 
-    return selector.EntitySelector(
-        selector.EntitySelectorConfig(domain=list(ALARM_PAGE_ENTITY_DOMAINS)),
+    It offers the domains a tap can act on. A value saved earlier from another
+    domain is offered too, because the selector rejects a prefilled entity
+    outside its domains and the form could then not be saved at all.
+    """
+
+    domains = list(ALARM_PAGE_ACTION_DOMAINS)
+    saved_domain = str(saved or "").split(".", 1)[0]
+    if saved_domain in ALARM_PAGE_ENTITY_DOMAINS and saved_domain not in domains:
+        domains.append(saved_domain)
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain=domains))
+
+
+def _translated_choice(
+    translation_key: str,
+    options: Any,
+    *,
+    custom_value: bool = False,
+) -> Any:
+    """Return a dropdown whose choices the frontend translates."""
+
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=list(options),
+            translation_key=translation_key,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+            custom_value=custom_value,
+        )
     )
 
 
 def dashboard_entity_name_display_selector() -> Any:
     """Return the selector for one dashboard entity title."""
 
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value=DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME, label="Home Assistant name"),
-                SelectOptionDict(value="entity_id", label="Entity ID"),
-                SelectOptionDict(value=DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM, label="Custom name"),
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
+    return _translated_choice("tile_name", DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS)
+
+
+def dashboard_tile_name_selector() -> Any:
+    """Return the name of a tile: one of the choices or a typed text."""
+
+    return _translated_choice(
+        "tile_name",
+        (
+            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+            DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
+        ),
+        custom_value=True,
     )
 
 
@@ -92,43 +124,16 @@ def dashboard_entity_custom_name_selector() -> Any:
     return selector.TextSelector(selector.TextSelectorConfig())
 
 
-def dashboard_entity_order_selector() -> Any:
-    """Return a bounded position input for a native display page."""
-    return selector.NumberSelector(selector.NumberSelectorConfig(
-        min=0, max=DASHBOARD_POSITION_MAX, step=1, mode=selector.NumberSelectorMode.BOX,
-    ))
-
-
 def dashboard_entity_tile_size_selector() -> Any:
     """Return the width or height choice for one native display tile."""
 
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value="auto", label="Automatic"),
-                SelectOptionDict(value="half", label="Half"),
-                SelectOptionDict(value="full", label="Full"),
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
+    return _translated_choice("tile_size", (DASHBOARD_TILE_SIZE_AUTO, *DASHBOARD_TILE_SIZES))
 
 
 def dashboard_entity_secondary_info_selector() -> Any:
     """Return the selector for one dashboard entity secondary text."""
 
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value="state", label="State"),
-                SelectOptionDict(value="entity_id", label="Entity ID"),
-                SelectOptionDict(value="last_changed", label="Last changed"),
-                SelectOptionDict(value="last_updated", label="Last updated"),
-                SelectOptionDict(value="none", label="None"),
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
+    return _translated_choice("tile_secondary", DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS)
 
 
 def password_selector() -> Any:

@@ -7,6 +7,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER_PATH = ROOT / "scripts" / "device_routing_builder.py"
 
@@ -80,6 +82,44 @@ def test_patch_routing_rejects_unexpected_range_hash(tmp_path: Path) -> None:
         assert "unexpected precheck hash" in str(err)
     else:
         raise AssertionError("patch_routing accepted unexpected precheck range")
+
+
+@pytest.mark.parametrize("alias", ["same", "symlink", "hardlink"])
+def test_patch_routing_preserves_source_aliases(tmp_path, alias):
+    patcher = _load_patcher()
+    source = tmp_path / "source"
+    source.write_bytes(b"stock")
+    target = tmp_path / "target"
+    if alias == "same":
+        target = source
+    elif alias == "symlink":
+        target.symlink_to(source)
+    else:
+        target.hardlink_to(source)
+    patcher.STOCK_SHA256 = patcher.sha256(b"stock")
+    patcher.PATCHES = ()
+    with pytest.raises(patcher.PatchError, match="different files"):
+        patcher.patch_routing(source, target)
+    assert source.read_bytes() == b"stock"
+
+
+def test_patch_routing_replace_failure_preserves_existing_output(tmp_path, monkeypatch):
+    patcher = _load_patcher()
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.write_bytes(b"stock")
+    target.write_bytes(b"old output")
+    patcher.STOCK_SHA256 = patcher.sha256(b"stock")
+    patcher.PATCHES = ()
+
+    def fail_replace(*_args):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(patcher.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated"):
+        patcher.patch_routing(source, target)
+    assert source.read_bytes() == b"stock"
+    assert target.read_bytes() == b"old output"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["source", "target"]
 
 
 def test_python_and_agent_patch_tables_match() -> None:

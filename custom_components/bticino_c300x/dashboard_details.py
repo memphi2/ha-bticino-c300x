@@ -8,10 +8,22 @@ from .dashboard_controls import finite_number
 
 DETAIL_DOMAINS = frozenset({
     "light", "cover", "climate", "fan", "sensor", "binary_sensor", "media_player",
+    "lock", "vacuum", "valve", "humidifier", "water_heater",
+})
+_VACUUM_ACTIVITIES = frozenset({"cleaning", "docked", "idle", "paused", "returning", "error"})
+_LOCK_ACTIVITIES = frozenset({
+    "locked", "unlocked", "locking", "unlocking", "jammed", "open", "opening",
 })
 _CLIMATE_ACTIVITIES = frozenset({
     "off", "idle", "heating", "cooling", "drying", "fan", "defrosting", "preheating",
 })
+
+
+def _one_line(value: Any, limit: int) -> str:
+    """Return one line of text, cut to the limit with three dots."""
+
+    text = " ".join(value.split()) if isinstance(value, str) else ""
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
 
 
 def _percentage(value: Any) -> float | None:
@@ -64,15 +76,38 @@ def entity_details(
             if domain == "light":
                 value = round(max(0, min(255, value)) * 100 / 255)
             details.update(value=_display_number(value), unit="%", label="brightness" if domain == "light" else "percentage")
+    elif domain == "lock":
+        details["activity"] = state.state if state.state in _LOCK_ACTIVITIES else ""
+    elif domain == "vacuum":
+        details["activity"] = state.state if state.state in _VACUUM_ACTIVITIES else ""
+    elif domain == "humidifier":
+        # The reading is the humidity in the room; the target is a control.
+        humidity = _percentage(attrs.get("current_humidity"))
+        if humidity is not None:
+            details.update(value=_display_number(humidity), unit="%", label="humidity")
+    elif domain == "water_heater":
+        details.update(
+            value=_display_number(attrs.get("current_temperature")),
+            unit=temperature_unit, label="current_temperature",
+        )
+    elif domain == "valve":
+        position = _percentage(attrs.get("current_position"))
+        activity = state.state if state.state in {"opening", "closing", "open", "closed"} else ""
+        details.update(activity=activity)
+        # A valve without a position reads its state, not an unknown number.
+        if position is not None:
+            details.update(position=position, value=_display_number(position), unit="%", label="position")
     elif domain == "media_player":
         # Play/pause is confirmed on this; its button comes and goes with the
         # features a player reports in each state.
         details["playing"] = state.state == "playing"
-        # What is playing is the reading; without a title the state stands.
-        title = attrs.get("media_title")
-        title = " ".join(title.split()) if isinstance(title, str) else ""
-        if title and state.state in {"playing", "paused", "buffering"}:
-            details.update(value=title[:60])
+        # What is playing is the reading, the artist before the title; without
+        # either the state stands.
+        title = _one_line(attrs.get("media_title"), 60)
+        artist = _one_line(attrs.get("media_artist"), 40)
+        playing = f"{artist} - {title}" if artist and title else title or artist
+        if playing and state.state in {"playing", "paused", "buffering"}:
+            details.update(value=_one_line(playing, 60))
     elif domain in {"sensor", "binary_sensor"}:
         if domain == "sensor" and finite_number(state.state) is not None:
             details.update(

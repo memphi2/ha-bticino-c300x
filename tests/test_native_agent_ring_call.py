@@ -113,7 +113,7 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "build_ring_sdp(sdp_early" in ring_invite_body
     assert "build_ring_sdp(sdp_answer" in ring_invite_body
     assert "bridge->ring_srtp_state = srtp_ready ? &srtp : NULL;" in ring_invite_body
-    assert "start_talkback_proxy(bridge)" in ring_invite_body
+    assert "start_call_talkback(bridge)" in ring_invite_body
     # Ring answer is codec-configurable: the audio m-line payload is %s
     # (speex "96" by default, PCMU "0" opt-in), the speex rtpmap+fmtp are one
     # literal, and PCMU has its own rtpmap.
@@ -184,7 +184,7 @@ def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> N
         media_bridge.index("static void rtsp_note_request")
     ]
     describe_body = media_bridge[
-        media_bridge.index('} else if (strcmp(method, "DESCRIBE") == 0)') :
+        media_bridge.index('if (strcmp(method, "DESCRIBE") == 0)') :
         media_bridge.index('} else if (strcmp(method, "SETUP") == 0)')
     ]
     sharing_body = media_bridge[
@@ -478,7 +478,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "c300x_device_media_start" not in home_call_body
     assert "c300x_device_media_takeover" not in home_call_body
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
-    assert "start_talkback_proxy(bridge)" in home_call_thread
+    assert "start_call_talkback(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread
     assert "DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in drain_home_call_body
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
@@ -861,7 +861,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "ring_sleep_seconds(bridge, RING_RETRY_SECONDS)" in media_bridge
     assert "pthread_join(ring_thread, NULL)" in media_bridge
     assert (
-        "if (!g_bridge.ring_started && !g_bridge.home_call_started && !g_bridge.home_call_active)"
+        "if (!g_bridge.ring_started && !g_bridge.home_call_joinable && !g_bridge.home_call_active)"
         in bridge_stop_body
     )
     for field in (

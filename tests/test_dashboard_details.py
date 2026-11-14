@@ -107,3 +107,148 @@ def test_payload_includes_fan_controls_and_read_only_sensor_details():
     assert "controls" not in door
     assert door["details"]["value"] == "Offen"
     assert door["color"] == "#ff6b6b"
+
+
+@pytest.mark.parametrize(
+    ("value", "device_class", "expected"),
+    [
+        # A timestamp is shown as local day, month and time, never as ISO text.
+        ("2026-11-14T09:30:00+00:00", "timestamp", "14.11. 09:30"),
+        ("2026-11-14T09:30:00Z", "timestamp", "14.11. 09:30"),
+        ("2026-11-14", "date", "14.11.2026"),
+        # What does not parse keeps the plain label.
+        ("soon", "timestamp", "soon"),
+        ("2026-11-14T09:30:00+00:00", None, "2026-11-14T09:30:00+00:00"),
+    ],
+)
+def test_timestamp_and_date_sensors_show_a_short_local_time(value, device_class, expected):
+    from homeassistant.util import dt as dt_util
+
+    dt_util.set_default_time_zone(dt_util.UTC)
+    attrs = {"device_class": device_class} if device_class else {}
+    item = _dashboard_item_for_entity(
+        SimpleNamespace(
+            states=SimpleNamespace(get=lambda _entity: snapshot(value, **attrs)),
+            config=SimpleNamespace(language="en"),
+        ),
+        "sensor.last_ring",
+        10,
+    )
+    assert item["state_label"] == expected
+    assert item["details"]["value"] == expected
+
+
+def test_a_timestamp_shows_in_the_local_time_zone():
+    from zoneinfo import ZoneInfo
+
+    from homeassistant.util import dt as dt_util
+
+    dt_util.set_default_time_zone(ZoneInfo("Europe/Berlin"))
+    try:
+        item = _dashboard_item_for_entity(
+            SimpleNamespace(
+                states=SimpleNamespace(
+                    get=lambda _entity: snapshot("2026-11-14T09:30:00+00:00", device_class="timestamp")
+                ),
+                config=SimpleNamespace(language="de"),
+            ),
+            "sensor.last_ring",
+            10,
+        )
+    finally:
+        dt_util.set_default_time_zone(dt_util.UTC)
+    assert item["state_label"] == "14.11. 10:30"
+
+
+def test_a_text_that_is_cut_to_fit_ends_in_three_dots():
+    from custom_components.bticino_c300x.dashboard import _dashboard_text
+
+    assert _dashboard_text("short", "x", 60) == "short"
+    assert _dashboard_text("a" * 60, "x", 60) == "a" * 60
+    cut = _dashboard_text("word " * 30, "x", 20)
+    assert cut == "word word word wo..."
+    assert len(cut) == 20
+    assert _dashboard_text("  spaced \n out  ", "x", 60) == "spaced out"
+    assert _dashboard_text("", "fallback", 60) == "fallback"
+    assert _dashboard_text(None, "z" * 100, 60) == "z" * 60
+    # A long sensor text reaches the tile marked as cut.
+    item = _dashboard_item_for_entity(
+        SimpleNamespace(
+            states=SimpleNamespace(get=lambda _entity: snapshot("w" * 90)),
+            config=SimpleNamespace(language="en"),
+        ),
+        "sensor.note",
+        10,
+    )
+    assert item["state_label"] == "w" * 57 + "..."
+
+
+@pytest.mark.parametrize(
+    ("attrs", "expected"),
+    [
+        ({"media_title": "Song", "media_artist": "Band"}, "Band - Song"),
+        ({"media_title": "Song"}, "Song"),
+        ({"media_artist": "Band"}, "Band"),
+        ({"media_title": "S" * 80, "media_artist": "B" * 60}, ("B" * 37 + "..." + " - " + "S" * 17)),
+        ({"media_title": 5, "media_artist": None}, "Playing"),
+        ({}, "Playing"),
+    ],
+)
+def test_a_media_player_reads_artist_and_title(attrs, expected):
+    details = entity_details("media_player.room", snapshot("playing", **attrs), "Playing", "C")
+
+    assert details["value"][:60] == details["value"]
+    assert len(details["value"]) <= 60
+    if "S" * 80 in attrs.values():
+        assert details["value"].startswith("B" * 37 + "...")
+    else:
+        assert details["value"] == expected
+
+
+def test_what_is_playing_is_only_read_while_it_plays():
+    details = entity_details(
+        "media_player.room", snapshot("off", media_title="Song", media_artist="Band"), "Off", "C"
+    )
+    assert details["value"] == "Off"
+
+
+@pytest.mark.parametrize(
+    ("entity_id", "kind"),
+    [("automation.night", "switch"), ("siren.hall", "switch"), ("person.anna", "entity"), ("device_tracker.phone", "entity")],
+)
+def test_automations_sirens_and_presence_are_tiles(entity_id, kind):
+    item = _dashboard_item_for_entity(
+        SimpleNamespace(
+            states=SimpleNamespace(get=lambda _entity: snapshot("on")),
+            config=SimpleNamespace(language="en"),
+        ),
+        entity_id,
+        10,
+    )
+    assert item is not None
+    assert item["_kind"] == kind
+
+
+@pytest.mark.parametrize(
+    ("language", "home", "away"),
+    [("en", "Home", "Away"), ("de", "Zuhause", "Unterwegs"), ("fr", "Maison", "Absent"), ("it", "Casa", "Fuori")],
+)
+def test_a_person_reads_home_away_or_the_zone(language, home, away):
+    def label(value):
+        return _dashboard_item_for_entity(
+            SimpleNamespace(
+                states=SimpleNamespace(get=lambda _entity: snapshot(value)),
+                config=SimpleNamespace(language=language),
+            ),
+            "person.anna",
+            10,
+            language=language,
+        )
+
+    assert label("home")["state_label"] == home
+    assert label("not_home")["state_label"] == away
+    # A zone has its own name, which is the label.
+    assert label("Work")["state_label"] == "Work"
+    # At home is good news, away is neither.
+    assert label("home")["color"] == "#58d68d"
+    assert "color" not in label("not_home") or label("not_home")["color"] != "#58d68d"

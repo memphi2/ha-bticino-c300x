@@ -218,6 +218,7 @@ class C300XRuntimeResources:
     media_session_count: Callable[[], int] | None = None
     on_demand_capture_active: bool = False
     on_demand_capture_task: Task[Any] | None = None
+    ring_capture_task: Task[Any] | None = None
     media_stop_counts: dict[str, int] = field(default_factory=dict)
     agent_cpu_watchdog_task: Task[None] | None = None
     answering_machine_messages_refresh_task: Task[None] | None = None
@@ -237,6 +238,7 @@ class C300XRuntimeResources:
         )
         tasks = (
             self.on_demand_capture_task,
+            self.ring_capture_task,
             self.memos_refresh_task,
             self.answering_machine_messages_refresh_task,
             self.startup_sync_task,
@@ -253,6 +255,7 @@ class C300XRuntimeResources:
         self.media_session_count = None
         self.on_demand_capture_active = False
         self.on_demand_capture_task = None
+        self.ring_capture_task = None
         # Active stop contexts keep their old counter map until their finally.
         self.media_stop_counts = {}
         self.memos_refresh_task = None
@@ -268,7 +271,7 @@ class C300XRuntimeResources:
                 except Exception as err:
                     errors.append(err)
         for task in tasks:
-            if task is not None:
+            if task is not None and not task.cancelling():
                 task.cancel()
         if errors:
             raise ExceptionGroup("Failed to release C300X runtime resources", errors)

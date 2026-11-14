@@ -225,11 +225,11 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "cdc33513cf228971257b55a8f5662113ddbe046b1db4ade03829126cc7f0140a",
-    "js/c300x_ha.js": "75bec040d64654f2898ff5dc64a93aa0bd120198b943d771f81bbd915d45d10b",
-    "js/c300x_i18n.js": "2ea51304883ac9947206cdd2477a127f3740a0367d590a25db8bcb1e10bbc302",
-    "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
+    "Alarm.qml": "37270f903ee17d00332445d149921dbb13bffc48574a78772277faae19edfa40",
+    "HomeAssistant.qml": "66f83f36fc45d1b82d7d45e9ccfc320d53873c13a66bfe63fbcdb8e873075270",
+    "js/c300x_ha.js": "1dda5f70fcce7c78284220a97ac822d0bddc777cbf4c52f20bac1a4cff81e42d",
+    "js/c300x_i18n.js": "fc06da394fa0d766a9fed4af79204da37f827aa08880e602184acffd9f304375",
+    "js/c300x_memos.js": "b00878d55d0cc27f21a4b2603b1b3bed40cb80161d603d20121e49c3bba2c924",
 }
 
 
@@ -737,6 +737,73 @@ def test_home_assistant_weather_card_is_an_ordered_tile() -> None:
     assert "mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline" in delegate
 
 
+def test_home_assistant_page_name_is_the_header() -> None:
+    """A named page shows its name in the header instead of Home Assistant."""
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    header = next(
+        line for line in home_assistant_qml.splitlines() if line.strip().startswith("headerLabel:")
+    )
+    assert 'pageTitle.length > 0 ? pageTitle : uiText("home_assistant")' in header
+    # Notifications and an open entity keep their own header.
+    assert header.index("notificationsOpen") < header.index("selectedItem") < header.index("pageTitle")
+    # The name is not repeated above the tiles.
+    column_head = home_assistant_qml[
+        home_assistant_qml.index("id: contentColumn") : home_assistant_qml.index("id: itemColumn")
+    ]
+    assert "pageTitle" not in column_head
+
+
+def test_home_assistant_status_sits_in_the_header() -> None:
+    """The status text is in the header bar and costs the tiles no height.
+
+    It used to be the last row of the page column: 22 px plus the column
+    spacing. Under the pager row of a dashboard with several pages that left
+    the tiles 274 px, and four rows of half-height tiles need 286.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    status = home_assistant_qml[home_assistant_qml.index("id: status\n") :]
+    status = status[: status.index("}")]
+    assert "anchors.verticalCenter: header.verticalCenter" in status
+    assert "anchors.right: parent.right" in status
+    assert "elide: Text.ElideRight" in status
+    # The detail and notification views show their own status at the bottom.
+    assert "visible: !detailOpen && !notificationsOpen" in status
+
+    page_column = home_assistant_qml[
+        home_assistant_qml.index("id: notificationBanner") : home_assistant_qml.index("id: status\n")
+    ]
+    assert "status.height" not in page_column
+    scroll_height = next(
+        line.strip() for line in page_column.splitlines()
+        if line.strip().startswith("height: parent.height - ")
+    )
+    assert scroll_height == (
+        "height: parent.height"
+        " - (notificationBanner.visible ? notificationBanner.height + 9 : 0)"
+        " - (badgeGrid.visible ? badgeGrid.height + 9 : 0)"
+        " - (pagerRow.visible ? pagerRow.height + 9 : 0)"
+    )
+    # The firmware page is 480 px high under a 78 px header bar. With the 18 px
+    # margins, the 38 px pager row and the 9 px column spacing the tiles keep
+    # 319 px; four rows of half-height tiles, 64 px high and 10 px apart, fit.
+    assert "anchors.topMargin: 18" in home_assistant_qml
+    assert "anchors.bottomMargin: 18" in home_assistant_qml
+    assert "spacing: 9" in home_assistant_qml
+    assert "height: pageCount > 1 ? 38 : 0" in home_assistant_qml
+    assert "(tall ? 94 : 64)" in home_assistant_qml
+    assert 480 - 78 - 18 - 18 - (38 + 9) >= 4 * 64 + 3 * 10
+
+    # A long page name stays clear of the status and of the back button.
+    assert "headerLabel: headerTitle(" in home_assistant_qml
+    assert 'return text.length > 28 ? text.substring(0, 25) + "..." : text' in home_assistant_qml
+
+
 def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:
     """Every on/off toggle must look like the firmware switch.
 
@@ -787,7 +854,7 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     )
 
     assert home_assistant_qml.count('source: "images/settings/list_btn.svg"') == 0
-    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 5
+    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 6
     assert (
         home_assistant_qml.count(
             '? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"'
@@ -797,12 +864,33 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     for mouse_id in (
         "notificationActionMouse",
         "coverControlMouse",
+        "actionMouse",
         "controlButtonMouse",
         "adjustMouse",
         "notificationBannerMouse",
     ):
         assert f"id: {mouse_id}" in home_assistant_qml
         assert f"{mouse_id}.pressed ?" in home_assistant_qml
+
+
+def test_the_media_player_page_has_one_row_of_action_buttons() -> None:
+    """Previous, play/pause and next sit side by side, centred, above the rest.
+
+    They used to be three full-width bars with a small glyph at the top left.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Api.dashboardActionControls(selectedItem)" in home_assistant_qml
+    assert (
+        "property variant detailControls: Api.dashboardListControls("
+        in home_assistant_qml
+    )
+    # A button or switch row centres its label on the row.
+    assert 'verticalAlignment: control.kind === "button" || control.kind === "boolean"' in home_assistant_qml
+    assert home_assistant_qml.isascii()
 
 
 def test_home_assistant_reads_each_piece_of_state_once() -> None:
@@ -1459,7 +1547,7 @@ def test_only_idempotent_reads_share_a_display_round_trip() -> None:
         dashboard_js.index("function getJson(") :
         dashboard_js.index("function getJsonShared(")
     ]
-    assert 'forwardRequest(path, callback, errorCallback, "")' in plain
+    assert 'forwardRequest(path, callback, errorCallback, "", scope)' in plain
 
     # Exactly the two /ui/state producers opt in: Api.status for the alarm and
     # dashboard pages, homeButtons for the patched home page.

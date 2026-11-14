@@ -29,6 +29,8 @@ int c300x_patch_file_mode(
 
 int c300x_patch_ensure_parent_dir(const char *path);
 
+int c300x_patch_file_size_matches(const char *path, size_t size);
+
 int c300x_patch_copy_file_exact(const char *source, const char *target, mode_t mode);
 
 int c300x_patch_remount_root(const char *mode);

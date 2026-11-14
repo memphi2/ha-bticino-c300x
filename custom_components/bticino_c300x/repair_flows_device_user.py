@@ -38,7 +38,7 @@ class DeviceUserRepairFlow(RepairsFlow):
         """Create or repair the Home Assistant Flexisip user."""
 
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is None:
+        if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
         if user_input is None:
             return self.async_show_form(step_id="confirm")
@@ -52,6 +52,12 @@ class DeviceUserRepairFlow(RepairsFlow):
                 errors={"base": "device_user_setup_failed"},
             )
         entry.runtime_data.device_user_status = status
+        if status.get("homeassistant_user_present") is False:
+            # The agent answered, but the device still has no user.
+            return self.async_show_form(
+                step_id="confirm",
+                errors={"base": "device_user_setup_failed"},
+            )
         ir.async_delete_issue(
             hass=self.hass,
             domain=DOMAIN,

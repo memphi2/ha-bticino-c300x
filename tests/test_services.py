@@ -136,6 +136,7 @@ class _FakeHass:
         self.data: dict[str, Any] = {}
         self.config_entries = _FakeConfigEntries(entries)
         self.services = _FakeServices()
+        self.bus = types.SimpleNamespace(async_listen=lambda *_: lambda: None)
 
 
 class _FakeApi:
@@ -190,6 +191,7 @@ class _FakeApi:
         )
         self.doorbell_video_status = {
             **self.doorbell_video_status,
+            "last_media_started_at": "2026-11-14T12:00:00Z",
             "available": True,
             "window_available": True,
             "media_owner": "ring",
@@ -1546,7 +1548,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
         assert result == captured
         assert hass.services.responses[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)].value == "optional"
         assert api.capture_doorbell_call_calls == 0
-        assert api.doorbell_video_status_calls == 3
+        assert api.doorbell_video_status_calls == 4
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1591,7 +1593,7 @@ def test_capture_doorbell_call_service_uses_stored_runtime_data(monkeypatch) -> 
         captured_entry = calls[0]["args"][1]
         assert captured_entry.entry_id == "entry-id"
         assert captured_entry.runtime_data is runtime_data
-        assert api.doorbell_video_status_calls == 3
+        assert api.doorbell_video_status_calls == 4
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1813,7 +1815,7 @@ def test_capture_doorbell_call_service_translates_status_failures(monkeypatch) -
     asyncio.run(_run())
 
 
-def test_capture_doorbell_call_service_allows_shared_ring_preview(
+def test_capture_doorbell_call_service_refuses_audio_while_preview_is_watched(
     monkeypatch,
 ) -> None:  # noqa: ANN001
     async def _run() -> None:
@@ -1848,12 +1850,16 @@ def test_capture_doorbell_call_service_allows_shared_ring_preview(
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
-        await handler(types.SimpleNamespace(data={}))
+        try:
+            await handler(types.SimpleNamespace(data={}))
+        except SERVICE_VALIDATION_ERROR as err:
+            assert getattr(err, "translation_key", None) == "ring_capture_busy"
+        else:
+            raise AssertionError("the ring was answered under a watching client")
 
-        assert len(calls) == 1
-        assert api.doorbell_video_status_calls == 3
-        assert api.answer_doorbell_call_calls == [True]
-        assert api.hangup_doorbell_call_calls == 1
+        assert calls == []
+        assert api.answer_doorbell_call_calls == []
+        assert api.hangup_doorbell_call_calls == 0
 
     asyncio.run(_run())
 
@@ -1941,7 +1947,7 @@ def test_capture_doorbell_call_service_answers_audio_capture_without_announcemen
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         await handler(types.SimpleNamespace(data={}))
 
-        assert api.doorbell_video_status_calls == 3
+        assert api.doorbell_video_status_calls == 4
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1989,8 +1995,8 @@ def test_capture_doorbell_call_service_waits_for_answered_ring_before_capture(
 
         async def _status() -> dict[str, Any]:
             if statuses:
-                return statuses.pop(0)
-            raise AssertionError("unexpected extra status poll")
+                api.doorbell_video_status = {**statuses.pop(0), "last_media_started_at": "2026-11-14T12:00:00Z"}
+            return api.doorbell_video_status
 
         async def _answer() -> dict[str, Any]:
             calls.append("answer")
@@ -2066,8 +2072,8 @@ def test_capture_doorbell_call_service_tolerates_transient_status_gap_after_answ
 
         async def _status() -> dict[str, Any]:
             if statuses:
-                return statuses.pop(0)
-            raise AssertionError("unexpected extra status poll")
+                api.doorbell_video_status = {**statuses.pop(0), "last_media_started_at": "2026-11-14T12:00:00Z"}
+            return api.doorbell_video_status
 
         async def _answer() -> dict[str, Any]:
             calls.append("answer")
@@ -2166,7 +2172,7 @@ def test_capture_doorbell_call_service_uses_ring_hangup_prepare(
     asyncio.run(_run())
 
 
-def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
+def test_capture_doorbell_call_service_does_not_hang_up_unconfirmed_call(
     monkeypatch,
 ) -> None:  # noqa: ANN001
     async def _run() -> None:
@@ -2191,7 +2197,7 @@ def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
                     "media_owner": "ring",
                     "ring_call_active": True,
                     "ring_media_active": True,
-                    "ring_answer_requested": True,
+                    "ring_answer_requested": False,
                 }
             },
         ]
@@ -2243,9 +2249,9 @@ def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
         else:
             raise AssertionError("answer wait failure was not translated")
 
-        assert calls == ["answer", "prepare", "hangup"]
+        assert calls == ["answer"]
         assert api.answer_doorbell_call_calls == [True]
-        assert api.hangup_doorbell_call_calls == 1
+        assert api.hangup_doorbell_call_calls == 0
 
     asyncio.run(_run())
 
@@ -2457,6 +2463,47 @@ def test_write_text_memo_service_calls_agent_api_and_refreshes_memos() -> None:
     asyncio.run(_run())
 
 
+def test_write_text_memo_schedules_a_background_refresh_when_the_refresh_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheduled: list[str] = []
+
+    async def _failing_refresh(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("agent unreachable")
+
+    async def _diagnostics(*_args: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.use_cases.memos.async_memos", _failing_refresh
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.use_cases.memos.schedule_memos_refresh",
+        lambda _hass, _entry: scheduled.append("memos"),
+    )
+    monkeypatch.setattr(common_use_cases, "async_dispatcher_send", lambda *args: None)
+    monkeypatch.setattr(common_use_cases, "async_refresh_agent_diagnostics", _diagnostics)
+
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                api=api,
+                capabilities={"memos": {"supported": True, "write_text": True}},
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_WRITE_TEXT_MEMO)]
+        await handler(types.SimpleNamespace(data={"text": "new memo", "read": False}))
+
+        assert api.text_memo_calls == [{"text": "new memo", "read": False}]
+
+    asyncio.run(_run())
+    assert scheduled == ["memos"]
+
+
 def _translation_key(err: Exception) -> str | None:
     return getattr(err, "translation_key", None)
 
@@ -2647,6 +2694,12 @@ def test_common_latest_item_id_uses_cache_then_refreshes() -> None:
         )
         assert refreshes == 0
 
+        assert await common_use_cases.latest_item_id_for_entry(
+            entry, cache_attr="cached_payload", refresh=_refresh, latest=latest,
+            unavailable_error="missing_item", refresh_before_lookup=True,
+        ) == "fresh-id"
+        assert refreshes == 1
+
         entry.runtime_data.cached_payload = {}
         assert (
             await common_use_cases.latest_item_id_for_entry(
@@ -2658,7 +2711,7 @@ def test_common_latest_item_id_uses_cache_then_refreshes() -> None:
             )
             == "fresh-id"
         )
-        assert refreshes == 1
+        assert refreshes == 2
 
     asyncio.run(_run())
 
@@ -2746,7 +2799,21 @@ def test_common_refresh_after_message_mutation_notifies_listeners(monkeypatch) -
     assert diagnostics_refreshes == ["entry-id"]
 
 
-def test_common_refresh_after_message_mutation_translates_refresh_failures() -> None:
+def test_common_refresh_after_message_mutation_survives_refresh_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dispatcher_calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(
+        common_use_cases,
+        "async_dispatcher_send",
+        lambda *args: dispatcher_calls.append(args),
+    )
+
+    async def _diagnostics(*_args: Any) -> None:
+        return None
+
+    monkeypatch.setattr(common_use_cases, "async_refresh_agent_diagnostics", _diagnostics)
+
     async def _run() -> None:
         hass = _FakeHass([])
         entry = _FakeEntry(_FakeRuntimeData())
@@ -2754,19 +2821,47 @@ def test_common_refresh_after_message_mutation_translates_refresh_failures() -> 
         async def _refresh() -> dict[str, Any]:
             raise RuntimeError("agent failed")
 
-        try:
-            await common_use_cases.async_refresh_after_message_mutation(
-                hass,  # type: ignore[arg-type]
-                entry,
-                refresh=_refresh,
-                signal="signal-name",
-            )
-        except SERVICE_VALIDATION_ERROR as err:
-            assert _translation_key(err) == "agent_command_failed"
-        else:
-            raise AssertionError("refresh failure was not translated")
+        await common_use_cases.async_refresh_after_message_mutation(
+            hass,  # type: ignore[arg-type]
+            entry,
+            refresh=_refresh,
+            signal="signal-name",
+        )
 
     asyncio.run(_run())
+
+    assert [call[1:] for call in dispatcher_calls] == [("signal-name", "entry-id")]
+
+
+def test_common_refresh_after_message_mutation_retries_in_the_background_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(common_use_cases, "async_dispatcher_send", lambda *args: None)
+
+    async def _diagnostics(*_args: Any) -> None:
+        return None
+
+    monkeypatch.setattr(common_use_cases, "async_refresh_agent_diagnostics", _diagnostics)
+    retries: list[str] = []
+
+    async def _run(fail: bool) -> None:
+        async def _refresh() -> dict[str, Any]:
+            if fail:
+                raise RuntimeError("agent failed")
+            return {"ok": True}
+
+        await common_use_cases.async_refresh_after_message_mutation(
+            _FakeHass([]),  # type: ignore[arg-type]
+            _FakeEntry(_FakeRuntimeData()),
+            refresh=_refresh,
+            signal="signal-name",
+            retry=lambda: retries.append("retry"),
+        )
+
+    asyncio.run(_run(False))
+    assert retries == []
+    asyncio.run(_run(True))
+    assert retries == ["retry"]
 
 
 def test_common_play_media_calls_home_assistant_media_player() -> None:

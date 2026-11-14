@@ -112,7 +112,7 @@ def main() -> int:
         sys.stderr.write(f"missing native agent binary: {binary}\n")
         return 2
     assert_video_timer_preserves_existing_poll_timeout(binary)
-    assert_rtsp_udp_preserves_ipv4_mapped_peers(binary)
+    assert_rtsp_udp_is_rejected(binary)
     assert_overlong_activation_id_is_rejected(binary)
     assert_startup_diagnostics_are_read_only(binary)
     assert_graceful_shutdown_signal_is_handled(binary)
@@ -144,21 +144,19 @@ def assert_video_timer_preserves_existing_poll_timeout(binary: Path) -> None:
         raise AssertionError("video poll timeout must be combined with existing timers")
 
 
-def assert_rtsp_udp_preserves_ipv4_mapped_peers(binary: Path) -> None:
-    """Guard IPv4 UDP clients accepted through the dual-stack RTSP listener."""
+def assert_rtsp_udp_is_rejected(binary: Path) -> None:
+    """Reject unsupported UDP instead of sending RTP over the control socket."""
 
     source = binary.parents[2] / "src" / "media_bridge.c"
     if not source.exists():
         return
     content = source.read_text(encoding="utf-8")
     required = (
-        "rtsp_peer_ipv4_address",
-        "IN6_IS_ADDR_V4MAPPED",
-        "peer6->sin6_addr.s6_addr[12]",
-        "rtsp_peer_ipv4_address(peer, &slot->udp_client.sin_addr)",
+        "if (!tcp)",
+        "send_rtsp_response(fd, 461, cseq, NULL, NULL)",
     )
     if any(item not in content for item in required):
-        raise AssertionError("RTSP UDP peer handling must preserve IPv4-mapped IPv6 clients")
+        raise AssertionError("RTSP must reject unsupported UDP transport")
 
 
 def assert_overlong_activation_id_is_rejected(binary: Path) -> None:
@@ -710,7 +708,7 @@ def run_smoke(
                         "textRoot": str(text_memos_root),
                         "voiceRoot": str(voice_memos_root),
                         "watch": True,
-                        "maxMemos": 16,
+                        "maxMemos": 64,
                     },
                     "systemMetrics": {
                         "enabled": True,
@@ -2044,6 +2042,23 @@ def run_smoke(
             expected_agent_writes += 1
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(diagnostics, "last_write_reason", "voice")
+            # A full memo store with long texts must still be listed.
+            long_text = "\x01" * 500
+            for index in range(64):
+                write_memo(text_memos_root, f"long_{index:02d}", kind="text", read=True,
+                           unix_time=1710001000 + index)
+                (text_memos_root / f"long_{index:02d}" / "message.txt").write_text(
+                    long_text + "\n", encoding="utf-8")
+            deadline = time.monotonic() + 10
+            while True:
+                memos = api_get(api_port, "/api/v1/memos")
+                if memos.get("text_total") == 64 or time.monotonic() > deadline:
+                    break
+                time.sleep(0.2)
+            assert_json_field(memos, "text_total", 64)
+            listed = [memo.get("text") for memo in memos.get("memos", [])]
+            if listed.count(long_text) != 64:
+                raise AssertionError("a full memo store was not listed completely")
             sys.stdout.write("native agent smoke passed\n")
             return 0
         finally:
@@ -2316,6 +2331,11 @@ def assert_aborted_clients_do_not_leak_fds(
     api_port: int,
     ui_port: int,
 ) -> None:
+    # A display that kept a revision from before an agent restart must be
+    # told at once, not parked until the wait expires.
+    stale = ui_get(ui_port, f"/ui/events/next?since={ui_revision(ui_port) + 1000}", timeout=3)
+    assert_json_field(stale, "changed", True)
+    assert_json_field(stale, "revision", ui_revision(ui_port))
     baseline = process_fd_count(pid)
     if baseline is None:
         return
@@ -2332,7 +2352,7 @@ def assert_aborted_clients_do_not_leak_fds(
     ui_socket = socket.create_connection(("127.0.0.1", ui_port), timeout=3)
     try:
         ui_socket.sendall(
-            b"GET /ui/events/next?since=999999 HTTP/1.1\r\n"
+            b"GET /ui/events/next?since=" + str(ui_revision(ui_port)).encode() + b" HTTP/1.1\r\n"
             b"Host: 127.0.0.1\r\n"
             b"Connection: close\r\n"
             b"\r\n"

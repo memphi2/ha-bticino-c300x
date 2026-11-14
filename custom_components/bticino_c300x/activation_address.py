@@ -15,7 +15,9 @@ def normalize_stair_light_part(value: Any, *, default: str) -> str:
     """Return a two-digit P/N value used by the firmware UI."""
 
     raw = str(default if value in (None, "") else value).strip()
-    if not raw.isdigit() or len(raw) > 2:
+    # isdigit() also accepts a superscript two or an Arabic-Indic digit, which
+    # int() cannot read; only the ASCII digits are an address part.
+    if not (raw.isascii() and raw.isdigit()) or len(raw) > 2:
         raise vol.Invalid("invalid staircase light address part")
     return f"{int(raw):02d}"
 

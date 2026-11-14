@@ -189,6 +189,7 @@ class FakeRuntimeData:
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
     agent_update_state: Any = None
+    diagnostics: Any = None
 
 
 @dataclass(slots=True)
@@ -418,7 +419,7 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) ->
 
 
 @pytest.mark.parametrize("bootstrap", [False, True])
-def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap) -> None:
+def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
@@ -438,6 +439,11 @@ def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "update_failed"}
     assert entry.data.get("agent_update_payload_pending", False) is bootstrap
+    # The user sees a translated form; the cause has to be in the log.
+    assert any(
+        "agent update failed" in record.getMessage() and "upload failed" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_failed_second_transaction_remains_repairable_after_reload(monkeypatch) -> None:
@@ -653,7 +659,74 @@ def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
     assert hass.config_entries.reloads == ["entry-1"]
 
 
-def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
+def test_ssh_install_retry_runs_the_follow_up_steps_of_the_first_attempt(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    api = FakePatchApi()
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(api),
+        data={"agent_host": "192.0.2.60", "agent_token": "agent-token"},
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    installs: list[tuple[str, ...]] = [
+        ("/home/bticino/c300x/config.json", "/home/bticino/c300x/bootstrap_firewall.sh"),
+        (),
+    ]
+    waits = [RuntimeError("agent did not come back"), {"version": "1.1.0", "capabilities": {}}]
+
+    async def install_agent(*_args: Any, **_kwargs: Any) -> Any:
+        changed = installs.pop(0)
+        if not changed:
+            # The first install replaced the config, so the device no longer
+            # reports the IPv6 firewall as patched.
+            api.ipv6_firewall_status = {"available": True, "patched": False}
+        return types.SimpleNamespace(changed_files=changed)
+
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        return None
+
+    async def wait_for_agent(_api: Any) -> dict[str, Any]:
+        result = waits.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    async def migrate_mqtt(_api: Any) -> None:
+        return None
+
+    async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
+        setup_entry.runtime_data.agent_update_state = types.SimpleNamespace(
+            update_required=False
+        )
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(
+        repairs, "async_ensure_installer_dependencies", ensure_installer_dependencies
+    )
+    monkeypatch.setattr(repairs, "_async_wait_for_agent_after_update", wait_for_agent)
+    monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+    credentials = {"bootstrap_ssh_username": "root", "bootstrap_ssh_password": "secret"}
+
+    first = asyncio.run(flow.async_step_ssh_install(credentials))
+    assert first["errors"] == {"base": "ssh_install_failed"}
+    assert "apply_firewall" not in api.calls
+
+    second = asyncio.run(flow.async_step_ssh_install(credentials))
+    assert second == {"type": "create_entry", "data": {}}
+    assert "apply_firewall" in api.calls
+    assert "apply_ipv6_firewall" in api.calls
+
+    # A later install in the same flow starts without the old follow-up.
+    assert flow._ssh_install_followup is None
+
+
+def test_agent_update_repair_ssh_install_reports_failures(monkeypatch, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(
@@ -693,6 +766,12 @@ def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "ssh_install"
     assert result["errors"] == {"base": "ssh_install_failed"}
+    assert any(
+        "SSH install failed" in record.getMessage() and "ssh failed" in record.getMessage()
+        for record in caplog.records
+    )
+    # The password the user typed is never part of the log.
+    assert not any("secret" in record.getMessage() for record in caplog.records)
 
 
 def test_capture_external_patch_state_tolerates_agent_status_errors() -> None:
@@ -1362,6 +1441,56 @@ def test_media_setup_repair_runs_confirmed_fixable_actions() -> None:
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "enabled"
 
 
+def test_media_setup_repair_keeps_the_issue_when_the_check_still_fails(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    checks = {
+        "capabilities": {"ok": True},
+        "firewall": {"ok": False, "reason": "ipv4_media_ports_missing"},
+        "rtsp": {"ok": True},
+        "talkback_rtp": {"ok": True},
+        "homeassistant_user": {"ok": True},
+        "device_routing": {"ok": True},
+        "startup": {"ok": True},
+    }
+    api = FakePatchApi()
+    # The firewall action answers without an error, but the device still
+    # fails the check afterwards.
+    api.self_test_status = {"ok": False, "checks": dict(checks)}
+    runtime_data = FakeRuntimeData(
+        api,
+        capabilities={
+            "doorbell_video": {"supported": True},
+            "doorbell_call": {"supported": True},
+        },
+        self_test_status={"ok": False, "checks": dict(checks)},
+    )
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        repairs.ir, "async_delete_issue", lambda **kwargs: deleted.append(kwargs["issue_id"])
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert "apply_firewall" in api.calls
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "media_setup_repair_failed"}
+    assert "firewall" in result["description_placeholders"]["failed_checks"]
+    assert deleted == []
+
+    # Once the device passes the check, the same flow closes the issue.
+    api.self_test_status = {"ok": True, "checks": {**checks, "firewall": {"ok": True}}}
+    result = asyncio.run(flow.async_step_confirm({}))
+    assert result["type"] == "create_entry"
+    assert len(deleted) == 1
+
+
 def test_media_setup_repair_does_not_change_forwarding() -> None:
     api = FakePatchApi()
     runtime_data = FakeRuntimeData(
@@ -1690,6 +1819,35 @@ def test_device_user_repair_flow_reports_agent_failures() -> None:
         "step_id": "confirm",
         "errors": {"base": "device_user_setup_failed"},
     }
+
+
+def test_device_user_repair_keeps_the_issue_when_the_user_is_still_missing(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repair_flows_device_user as device_user_flow
+
+    api = FakePatchApi()
+    api.device_user_status = {"homeassistant_user_present": False}
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    hass = FakeHass(entry)
+    hass.config.location_name = "HA Test"
+    flow = DeviceUserRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        device_user_flow.ir,
+        "async_delete_issue",
+        lambda **kwargs: deleted.append(kwargs["issue_id"]),
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {
+        "type": "form",
+        "step_id": "confirm",
+        "errors": {"base": "device_user_setup_failed"},
+    }
+    assert deleted == []
 
 
 def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
@@ -2329,6 +2487,37 @@ def test_capture_external_patch_state_marks_unknown_firewall_status() -> None:
     assert patch_state.firewall_status_known is False
 
 
+def test_failed_qml_followup_survives_same_bundle_retry(monkeypatch):
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+    state = _ExternalPatchState(qml_patch_required=True, firewall_patched=False,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": True})
+    calls = []
+
+    async def restore(_entry, *, apply_full_patch):
+        calls.append(apply_full_patch)
+        if len(calls) == 1:
+            raise RuntimeError("temporary failure")
+
+    monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
+    with pytest.raises(RuntimeError, match="temporary failure"):
+        asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
+    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": False})
+    assert entry.data["agent_update_qml_pending"] is True
+    update = repairs.compare_agent_bundle(
+        {"version": "1.0", "agent": {"self_update_supported": True}},
+        {"agent_version": "1.0"}, qml_patch_pending=True,
+    )
+    assert update.update_required and update.self_update_repair_supported
+    asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
+    repairs._clear_qml_followup(hass, entry)
+    assert "agent_update_qml_pending" not in entry.data
+    assert calls == [True, True]
+
+
 def test_restore_external_patch_state_skips_active_patches_without_source_changes() -> None:
     api = FakePatchApi()
     entry = FakeEntry(runtime_data=FakeRuntimeData(api))
@@ -2545,3 +2734,79 @@ def test_restore_external_patch_state_skips_inactive_changed_patches() -> None:
     )
 
     assert api.calls == ["apply_qml_core", "reload_gui", "qml_status"]
+
+
+@pytest.mark.parametrize("flow_class", [DeviceUserRepairFlow, MediaSetupRepairFlow])
+def test_repair_flows_abort_cleanly_when_the_entry_never_set_up(flow_class) -> None:
+    """A failed or disabled entry has no runtime data; Fix must not raise.
+
+    The issue can still be listed, and the user can press Fix on it.
+    """
+
+    entry = types.SimpleNamespace(entry_id="entry-1", data={}, options={})
+    assert not hasattr(entry, "runtime_data")
+    flow = flow_class(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    assert asyncio.run(flow.async_step_confirm()) == {
+        "type": "abort", "reason": "entry_not_loaded",
+    }
+    assert asyncio.run(flow.async_step_confirm({})) == {
+        "type": "abort", "reason": "entry_not_loaded",
+    }
+
+
+def test_update_repair_confirm_without_self_update_opens_the_ssh_form_without_an_error() -> None:
+    """The empty confirm form is not a set of SSH credentials."""
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["step_id"] == "ssh_install"
+    assert not result.get("errors")
+
+
+def test_core_qml_hook_repair_clears_the_failed_status_read_that_raised_the_issue() -> None:
+    from custom_components.bticino_c300x.data import C300XOperationDiagnostics
+
+    api = FakePatchApi()
+    api.qml_status = {"available": True, "core_patched": True, "core_state": "patched"}
+    status_read = C300XOperationDiagnostics(last_error="timeout")
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            api,
+            capabilities={"maintenance": {"supported": True, "qml_core_patch": True}},
+            qml_patch_status={"available": True, "core_state": "unknown"},
+            diagnostics=types.SimpleNamespace(qml_patch_diagnostics=status_read),
+        )
+    )
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["type"] == "create_entry"
+    assert status_read.last_error is None
+
+
+def test_ssh_install_log_text_names_the_kind_of_the_cause_but_not_its_text() -> None:
+    from custom_components.bticino_c300x.repairs import _install_error_log_text
+
+    try:
+        try:
+            raise TimeoutError("timed out talking to 192.0.2.60")
+        except TimeoutError as cause:
+            raise RuntimeError("device_install_failed") from cause
+    except RuntimeError as err:
+        text = _install_error_log_text(err)
+
+    assert text == "RuntimeError: device_install_failed (cause: TimeoutError)"
+    assert _install_error_log_text(RuntimeError("invalid_ssh_username")) == (
+        "RuntimeError: invalid_ssh_username"
+    )

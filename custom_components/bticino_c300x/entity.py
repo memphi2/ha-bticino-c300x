@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
@@ -40,6 +41,7 @@ class C300XEntity(Entity):
         self._attr_unique_id = entry_entity_unique_id(entry, key)
         self._attr_device_info = _device_info(entry)
         self._last_connection_state_available = _connection_state_available(entry)
+        self._reconnect_refresh_task: asyncio.Task[None] | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -59,6 +61,7 @@ class C300XEntity(Entity):
     async def async_added_to_hass(self) -> None:
         """Update availability immediately when the agent connection changes."""
 
+        self.async_on_remove(self._cancel_reconnect_refresh)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -72,9 +75,35 @@ class C300XEntity(Entity):
         if entry_id != self._entry.entry_id:
             return
         current = _connection_state_available(self._entry)
+        if (
+            current is not False
+            and getattr(self, "_attr_available", True) is False
+            and hasattr(self, "async_update")
+            and (
+                self._reconnect_refresh_task is None
+                or self._reconnect_refresh_task.done()
+            )
+        ):
+            # These entities do not poll and are marked unavailable by their own
+            # failed read. The agent answered again, so ask it once more: nothing
+            # else would bring them back until the device itself reports a change.
+            self._reconnect_refresh_task = self.hass.async_create_background_task(
+                self._async_refresh_after_reconnect(),
+                f"{DOMAIN}_refresh_after_reconnect_{self._attr_unique_id}",
+            )
         if current == self._last_connection_state_available:
             return
         self._last_connection_state_available = current
+        self.async_write_ha_state()
+
+    @callback
+    def _cancel_reconnect_refresh(self) -> None:
+        if self._reconnect_refresh_task is not None:
+            self._reconnect_refresh_task.cancel()
+            self._reconnect_refresh_task = None
+
+    async def _async_refresh_after_reconnect(self) -> None:
+        await cast(Any, self).async_update()
         self.async_write_ha_state()
 
 

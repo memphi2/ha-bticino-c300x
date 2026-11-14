@@ -57,6 +57,7 @@ class AgentUpdateState:
             "bundle_hash_mismatch",
             "installed_bundle_manifest_missing",
             "payload_bootstrap_pending",
+            "qml_patch_pending",
             "version_mismatch",
         }
 
@@ -104,6 +105,7 @@ def compare_agent_bundle(
     bundle: dict[str, Any] | None,
     *,
     payload_bootstrap_pending: bool = False,
+    qml_patch_pending: bool = False,
 ) -> AgentUpdateState:
     """Compare the installed agent metadata with the packaged bundle metadata."""
 
@@ -148,6 +150,7 @@ def compare_agent_bundle(
     if (
         installed_version == available_version
         and not payload_bootstrap_pending
+        and not qml_patch_pending
         and (
             not available_bundle_hash
             or (
@@ -173,6 +176,12 @@ def compare_agent_bundle(
         return AgentUpdateState(
             state=UPDATE_STATE_UPDATE_AVAILABLE,
             reason="version_mismatch",
+            **common,
+        )
+    if qml_patch_pending:
+        return AgentUpdateState(
+            state=UPDATE_STATE_UPDATE_AVAILABLE,
+            reason="qml_patch_pending",
             **common,
         )
     if available_bundle_hash and not installed_bundle_hash:

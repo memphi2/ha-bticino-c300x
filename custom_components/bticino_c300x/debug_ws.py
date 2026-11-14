@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import reprlib
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(f"custom_components.{DOMAIN}.camera")
+_MAX_DEBUG_VALUE_LENGTH = 200
 
 _WsCommand = Callable[..., Any]
 _WsCommandDecorator = Callable[[_WsCommand], _WsCommand]
@@ -150,8 +152,8 @@ def _format_client_debug_snapshot(snapshot: dict[str, Any]) -> str:
         value = _nested_value(snapshot, path)
         if value is None or value == "":
             continue
-        if name == "session":
-            value = _short_session_id(str(value))
+        if name == "session" and isinstance(value, str):
+            value = _short_session_id(value)
         parts.append(f"{name}={_format_debug_value(value)}")
     return " ".join(parts)
 
@@ -172,6 +174,18 @@ def _short_session_id(session_id: str) -> str:
 
 
 def _format_debug_value(value: Any) -> str:
+    # Any logged-in user can send this value: keep it on one line and short,
+    # and never render more of it than is logged. A string is cut by slicing;
+    # anything else (a nested list or dict from the client) goes through
+    # reprlib, which stops after a few items and levels instead of building
+    # the whole text first.
     if isinstance(value, float):
-        return f"{value:.3f}"
-    return str(value).replace(" ", "_")
+        raw = f"{value:.3f}"
+    elif isinstance(value, str):
+        raw = value
+    else:
+        raw = reprlib.repr(value)
+    text = "".join(
+        char if char.isprintable() else "?" for char in raw[:_MAX_DEBUG_VALUE_LENGTH]
+    )
+    return text.replace(" ", "_")

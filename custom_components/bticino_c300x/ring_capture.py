@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
+import logging
+import math
+import shutil
 import threading
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -60,6 +64,7 @@ from .ring_talkback import (
 )
 from .value_parsing import optional_mapping
 
+_LOGGER = logging.getLogger(__name__)
 _RTSP_READY_TIMEOUT_SECONDS = 5.0
 _CAPTURE_WORK_DIR = Path("/config/c300x")
 RING_CAPTURE_PLAYBACK_MIME_TYPE = "video/mp4"
@@ -120,6 +125,11 @@ async def _async_capture_to_output(
 
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
+    # FFmpeg opens the clip only once its input works, so a run that fails
+    # earlier must leave the previous clip alone. What the file looked like
+    # before tells the cleanup whether this run touched it. Taken before the
+    # workspace exists, so a cancellation here leaves nothing behind.
+    output_before = await asyncio.to_thread(_output_signature, target)
     codec_pcmu = (
         await _async_talkback_codec_is_pcmu(entry, status)
         if not on_demand and (include_audio or announcement is not None)
@@ -130,10 +140,18 @@ async def _async_capture_to_output(
     if on_demand:
         # OPTIONS only checks the listener. Media begins with FFmpeg's PLAY;
         # recheck admission after readiness/filesystem awaits, before that PLAY.
-        ensure_on_demand_capture_runtime(entry, runtime)
-        status = await runtime.api.async_doorbell_video_status()
-        ensure_on_demand_capture_runtime(entry, runtime)
-        raise_if_on_demand_capture_blocked(entry, status)
+        try:
+            ensure_on_demand_capture_runtime(entry, runtime)
+            status = await runtime.api.async_doorbell_video_status()
+            ensure_on_demand_capture_runtime(entry, runtime)
+            raise_if_on_demand_capture_blocked(entry, status)
+        except BaseException:
+            await asyncio.to_thread(shutil.rmtree, work_dir, True)
+            raise
+    # The run directory stays only once its results are published; a run that
+    # fails or is cancelled before that would otherwise sit until it expires and
+    # count against the limit of workspaces.
+    published = False
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -160,11 +178,19 @@ async def _async_capture_to_output(
         await capture_task
         if talkback_task is not None:
             talkback_stop.set()
-            if talkback_task.done():
-                await talkback_task
-            else:
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(talkback_task, timeout=2.0)
+            try:
+                if talkback_task.done():
+                    await talkback_task
+                else:
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(talkback_task, timeout=2.0)
+            except Exception as err:  # noqa: BLE001 - see below
+                # The keepalive only holds the call's audio open for the
+                # recording, which is complete. An announcement is what the
+                # caller asked for, so its failure stays an error.
+                if announcement is not None:
+                    raise
+                _LOGGER.warning("C300X talkback keepalive ended with an error: %s", err)
             if not talkback_task.done():
                 talkback_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -182,6 +208,7 @@ async def _async_capture_to_output(
         )
         metadata["entry_id"] = entry.entry_id
         await async_write_json_file(hass, _capture_metadata_path(work_dir), metadata)
+        published = True
         await asyncio.to_thread(publish_capture_aliases, root, work_dir)
     finally:
         talkback_stop.set()
@@ -189,7 +216,31 @@ async def _async_capture_to_output(
             talkback_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await talkback_task
+        elif talkback_task is not None and not talkback_task.cancelled():
+            # Marks a failure of the task as seen, so that it is not reported
+            # as "never retrieved" when the capture failed first.
+            talkback_task.exception()
+        if not published:
+            await asyncio.to_thread(shutil.rmtree, work_dir, True)
+            # FFmpeg writes the clip in place, so a failed run that got as far
+            # as opening it leaves a partial or empty file that a player or
+            # automation would pick up. A clip this run never touched stays.
+            if await asyncio.to_thread(_output_signature, target) != output_before:
+                await asyncio.to_thread(_unlink_quietly, target)
     return metadata
+
+
+def _output_signature(path: Path) -> tuple[int, int, int] | None:
+    try:
+        info = path.stat()
+    except OSError:
+        return None
+    return (info.st_ino, info.st_size, info.st_mtime_ns)
+
+
+def _unlink_quietly(path: Path) -> None:
+    with contextlib.suppress(OSError):
+        path.unlink()
 
 
 def _normalized_audio_codec(value: Any) -> str | None:
@@ -354,6 +405,20 @@ def raise_if_ring_capture_blocked(status: Mapping[str, Any]) -> None:
     raise HomeAssistantError(f"C300X ring capture busy: {reason}")
 
 
+def raise_if_ring_answer_would_block_capture(status: Mapping[str, Any]) -> None:
+    """Reject a capture that has to answer the ring while a client watches it.
+
+    A capture may share an unanswered ring preview. Once the call is answered
+    it may not share the stream with another client, so the check after the
+    answer would fail: the visitor would be answered and hung up on, with no
+    clip. Say no before the call is touched.
+    """
+
+    snapshot = rtsp_resource_snapshot_from_status(status)
+    if max(snapshot.rtsp_clients or 0, snapshot.local_sessions) > 0:
+        raise HomeAssistantError("C300X ring capture busy: preview_client_blocks_answer")
+
+
 def ensure_on_demand_capture_runtime(entry: Any, runtime: Any) -> None:
     """Reject continuation after unload or replacement of our reservation."""
 
@@ -435,10 +500,15 @@ def ring_capture_media_items(hass: Any) -> list[dict[str, Any]]:
         safe_dir = _safe_c300x_path(hass, directory, "ring capture media directory")
         if not safe_dir.is_dir():
             continue
-        for path in safe_dir.glob("*.mp4"):
+        for candidate in safe_dir.glob("*.mp4"):
+            # A link that leads out of the allowed roots is not a capture.
+            try:
+                path = _safe_c300x_path(hass, candidate, "ring capture media file")
+            except HomeAssistantError:
+                continue
             if not path.is_file():
                 continue
-            file_name = path.name
+            file_name = candidate.name
             if file_name in items_by_name:
                 continue
             try:
@@ -467,11 +537,15 @@ def ring_capture_media_path(hass: Any, file_name: str) -> Path | None:
     except ValueError:
         return None
     for directory in _capture_media_dirs(hass):
-        path = _safe_c300x_path(
-            hass,
-            directory / safe_name,
-            "ring capture media file",
-        )
+        try:
+            path = _safe_c300x_path(
+                hass,
+                directory / safe_name,
+                "ring capture media file",
+            )
+        except HomeAssistantError:
+            # Refused in this directory (a link out of the roots): try the next.
+            continue
         if path.is_file():
             return path
     return None
@@ -849,14 +923,14 @@ async def _async_run_ffmpeg(
     )
 
 
-def _capture_frame_offsets(duration_seconds: int) -> tuple[float, float, float]:
+def _capture_frame_offsets(duration_seconds: float) -> tuple[float, float, float]:
     """Return stable still-frame offsets for the captured MP4."""
 
-    duration = max(0.1, float(duration_seconds))
+    duration = max(0.001, float(duration_seconds))
     first = (
         _CAPTURE_FRAME_START_SECONDS
         if duration > _CAPTURE_FRAME_START_SECONDS
-        else max(0.1, duration / 2)
+        else duration / 2
     )
     last = max(first, duration - _CAPTURE_FRAME_END_MARGIN_SECONDS)
     middle = first + ((last - first) / 2)
@@ -871,7 +945,18 @@ async def _async_extract_capture_frames(
 ) -> None:
     """Extract analysis still frames from a captured MP4."""
 
-    for index, offset in enumerate(_capture_frame_offsets(duration_seconds), start=1):
+    output = await _async_run_ffmpeg_command(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=duration", "-of", "json", str(source)],
+        command_timeout=10, error_prefix="C300X video duration probe failed", capture_stdout=True,
+    )
+    try:
+        actual_duration = float(json.loads(output)["streams"][0]["duration"])
+    except (ValueError, KeyError, IndexError, TypeError) as err:
+        raise HomeAssistantError("C300X capture has no usable video duration") from err
+    if not math.isfinite(actual_duration) or actual_duration <= 0:
+        raise HomeAssistantError("C300X capture has no usable video duration")
+    for index, offset in enumerate(_capture_frame_offsets(min(duration_seconds, actual_duration)), start=1):
         target = _capture_frame_path(output_dir, index)
         await _async_run_ffmpeg_command(
             [
@@ -893,6 +978,12 @@ async def _async_extract_capture_frames(
             command_timeout=10,
             error_prefix="C300X frame extraction failed",
         )
+        if not await asyncio.to_thread(_is_nonempty_file, target):
+            raise HomeAssistantError("C300X frame extraction produced no image")
+
+
+def _is_nonempty_file(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 0
 
 
 async def _async_extract_processed_audio_wav(source: Path, target: Path) -> None:
@@ -926,17 +1017,18 @@ async def _async_run_ffmpeg_command(
     *,
     command_timeout: int,
     error_prefix: str,
-) -> None:
+    capture_stdout: bool = False,
+) -> bytes:
     try:
         process = await asyncio.create_subprocess_exec(
             *command,
-            stdout=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE if capture_stdout else asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError as err:
-        raise HomeAssistantError("ffmpeg is not installed on Home Assistant") from err
+        raise HomeAssistantError(f"{command[0]} is not installed on Home Assistant") from err
     try:
-        _, stderr = await asyncio.wait_for(
+        stdout, stderr = await asyncio.wait_for(
             process.communicate(), timeout=command_timeout
         )
     except (TimeoutError, asyncio.CancelledError) as err:
@@ -949,3 +1041,4 @@ async def _async_run_ffmpeg_command(
     if process.returncode != 0:
         message = stderr.decode("utf-8", "replace").strip()
         raise HomeAssistantError(f"{error_prefix}{': ' + message if message else ''}")
+    return stdout or b""

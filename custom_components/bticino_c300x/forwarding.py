@@ -33,7 +33,7 @@ def forwarding_state_from_value(value: Any) -> str | None:
     text = str(value or "").strip().lower()
     if not text:
         return None
-    if text.isdigit():
+    if text.isascii() and text.isdigit():
         return FORWARDING_STATE_BY_CODE.get(int(text))
     if text in SMARTPHONE_FORWARDING_STATES:
         return text
@@ -50,7 +50,7 @@ def forwarding_mode_code_from_value(value: Any) -> int | None:
     text = str(value or "").strip().lower()
     if not text:
         return None
-    if text.isdigit():
+    if text.isascii() and text.isdigit():
         return int(text)
     if text in FORWARDING_CODE_BY_STATE:
         return FORWARDING_CODE_BY_STATE[text]

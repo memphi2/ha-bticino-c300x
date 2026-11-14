@@ -2,13 +2,16 @@
 
 ## Supported Release Line
 
-- `2.1.x`: current stable
-- `2.0.x` and older: no longer maintained; update to `2.1.x`
+- `2.2.x`: current stable
+- Pre-release versions containing `b` or `rc` are opt-in testing releases,
+  not replacements for the latest stable release. Enable beta versions in HACS
+  only when you want to test them.
 
 ## Compatibility Baseline
 
-- Minimum Home Assistant: `2026.7.0`
-- Validated Home Assistant: `2026.7.x` and `2026.10.x`
+- Minimum Home Assistant: `2026.10.0`
+- Home Assistant validation baseline: `2026.10.x` and `2026.11.x`
+- CI tests the fixed minimum and resolves the latest stable Home Assistant on every run.
 - Python: `3.14`
 - C300X firmware: `1.7.x`
 

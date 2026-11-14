@@ -22,6 +22,11 @@ _DEFAULT_RING_WAV_PATTERN = "*.raw.wav"
 _DEFAULT_RING_CAPTURE_METADATA_PATTERN = "*.capture.json"
 _WYOMING_CHUNK_BYTES = 8192
 _WYOMING_TIMEOUT_SECONDS = 60
+_WYOMING_CLOSE_TIMEOUT_SECONDS = 2
+# A transcript event is a few hundred bytes; anything near these sizes is a
+# broken or hostile server, not a speech result.
+_WYOMING_MAX_DATA_BYTES = 64 * 1024
+_WYOMING_MAX_PAYLOAD_BYTES = 1024 * 1024
 
 
 async def async_run_wyoming_ring_analysis(
@@ -306,48 +311,63 @@ async def _async_wyoming_transcribe(
         raise HomeAssistantError("C300X Wyoming Whisper connection failed") from err
 
     try:
-        data: dict[str, Any] = {}
-        if language:
-            data["language"] = language
-        await _async_write_wyoming_event(writer, "transcribe", data)
-        await _async_write_wyoming_event(
-            writer,
-            "audio-start",
-            {
-                "rate": wav["rate"],
-                "width": wav["width"],
-                "channels": wav["channels"],
-            },
-        )
-        audio = wav["audio"]
-        for offset in range(0, len(audio), _WYOMING_CHUNK_BYTES):
+        # One deadline for sending the audio and for the whole answer: a server
+        # that stops reading, or keeps sending other events, must not hold the
+        # call open for good.
+        async with asyncio.timeout(_WYOMING_TIMEOUT_SECONDS):
+            data: dict[str, Any] = {}
+            if language:
+                data["language"] = language
+            await _async_write_wyoming_event(writer, "transcribe", data)
             await _async_write_wyoming_event(
                 writer,
-                "audio-chunk",
+                "audio-start",
                 {
                     "rate": wav["rate"],
                     "width": wav["width"],
                     "channels": wav["channels"],
                 },
-                payload=audio[offset : offset + _WYOMING_CHUNK_BYTES],
             )
-        await _async_write_wyoming_event(writer, "audio-stop")
+            audio = wav["audio"]
+            for offset in range(0, len(audio), _WYOMING_CHUNK_BYTES):
+                await _async_write_wyoming_event(
+                    writer,
+                    "audio-chunk",
+                    {
+                        "rate": wav["rate"],
+                        "width": wav["width"],
+                        "channels": wav["channels"],
+                    },
+                    payload=audio[offset : offset + _WYOMING_CHUNK_BYTES],
+                )
+            await _async_write_wyoming_event(writer, "audio-stop")
 
-        while True:
-            event = await asyncio.wait_for(
-                _async_read_wyoming_event(reader),
-                timeout=_WYOMING_TIMEOUT_SECONDS,
-            )
-            if event.get("type") == "transcript":
-                text = str((event.get("data") or {}).get("text") or "").strip()
-                if text:
-                    return text
-                raise HomeAssistantError("C300X Wyoming Whisper returned empty transcript")
+            while True:
+                event = await _async_read_wyoming_event(reader)
+                if event.get("type") == "transcript":
+                    text = str((event.get("data") or {}).get("text") or "").strip()
+                    if text:
+                        return text
+                    raise HomeAssistantError(
+                        "C300X Wyoming Whisper returned empty transcript"
+                    )
     except TimeoutError as err:
         raise HomeAssistantError("C300X Wyoming Whisper transcription timed out") from err
+    except OSError as err:
+        raise HomeAssistantError("C300X Wyoming Whisper connection lost") from err
     finally:
         writer.close()
-        await writer.wait_closed()
+        try:
+            # A server that stopped reading leaves unsent data in the socket,
+            # and closing then waits for it to drain: do not wait for good.
+            async with asyncio.timeout(_WYOMING_CLOSE_TIMEOUT_SECONDS):
+                await writer.wait_closed()
+        except (OSError, TimeoutError, asyncio.CancelledError) as err:
+            transport = getattr(writer, "transport", None)
+            if transport is not None:
+                transport.abort()
+            if isinstance(err, asyncio.CancelledError):
+                raise
 
 
 async def _async_write_wyoming_event(
@@ -369,17 +389,35 @@ async def _async_write_wyoming_event(
 
 
 async def _async_read_wyoming_event(reader: asyncio.StreamReader) -> dict[str, Any]:
-    line = await reader.readline()
-    if not line:
-        raise HomeAssistantError("C300X Wyoming Whisper connection closed")
-    event = json.loads(line.decode("utf-8"))
-    data_length = int(event.get("data_length") or 0)
-    if data_length:
-        data = json.loads((await reader.readexactly(data_length)).decode("utf-8"))
-        event["data"] = {**event.get("data", {}), **data}
-    payload_length = int(event.get("payload_length") or 0)
-    if payload_length:
-        await reader.readexactly(payload_length)
+    try:
+        line = await reader.readline()
+        if not line:
+            raise HomeAssistantError("C300X Wyoming Whisper connection closed")
+        event = json.loads(line.decode("utf-8"))
+        if not isinstance(event, dict):
+            raise ValueError("event is not an object")
+        data_length = int(event.get("data_length") or 0)
+        payload_length = int(event.get("payload_length") or 0)
+        if not (
+            0 <= data_length <= _WYOMING_MAX_DATA_BYTES
+            and 0 <= payload_length <= _WYOMING_MAX_PAYLOAD_BYTES
+        ):
+            raise ValueError("event is too large")
+        if not isinstance(event.get("data") or {}, dict):
+            raise ValueError("event data is not an object")
+        if data_length:
+            data = json.loads((await reader.readexactly(data_length)).decode("utf-8"))
+            event["data"] = {**(event.get("data") or {}), **data}
+        if payload_length:
+            await reader.readexactly(payload_length)
+    except (
+        ValueError,
+        TypeError,
+        AttributeError,
+        OverflowError,
+        asyncio.IncompleteReadError,
+    ) as err:
+        raise HomeAssistantError("C300X Wyoming Whisper protocol error") from err
     return cast(dict[str, Any], event)
 
 

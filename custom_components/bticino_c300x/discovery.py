@@ -24,8 +24,10 @@ def discovery_unique_id(properties: Mapping[str, Any]) -> str | None:
     normalized = _normalized_properties(properties)
     for key in DISCOVERY_ID_KEYS:
         value = normalized.get(key)
-        if value:
-            return _normalize_unique_id(value)
+        unique_id = _normalize_unique_id(value) if value else ""
+        if unique_id:
+            # An id of separators only normalizes to "": that is no identity.
+            return unique_id
     return None
 
 

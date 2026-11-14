@@ -1,5 +1,179 @@
 # Changelog
 
+## v2.2.0 - 2026-11-14
+
+### Added
+
+- The display shows a page's name as its heading in place of Home Assistant;
+  the status page keeps Home Assistant. The separate title line above the
+  tiles is gone and leaves its room to the tiles.
+
+### Changed
+
+- **Configure** opens a menu of settings areas in the order of the setup:
+  connection, video and audio, activations, Alarm (Alarmo), display and
+  Display patch, display pages, display tiles. Each area saves on its own; the others keep
+  their settings. Pages and tiles are offered while the Display patch is on.
+- Settings fields use plain names in place of technical ones: access key and
+  maintenance key, address of Home Assistant for the C300X, video and audio
+  access.
+- The display tiles form has one collapsible section per tile, in display
+  order and titled "Page › Entity" with the entity's Home Assistant name. Each
+  has width, height, name and secondary line; the name is one field that takes
+  the Home Assistant name, the entity id or a typed text, in place of a name
+  choice plus a separate custom-name field.
+- Every settings field has a plain label and a help text; the choices of the
+  tiles, the activations and the ICE filter are translated. German texts use
+  real umlauts, French and Italian texts their accents.
+- The weather is set with the display pages, as the first field of the first
+  section, above its entities. Alarmo and the quick action of the Alarm page
+  have a step of their own, **Alarm (Alarmo)**, right after the activations in
+  the setup, the reconfigure and the settings menu. Alarmo is kept with the
+  Display patch off, since the alarm commands do not need it. The display and
+  Display patch form keeps the patch, the home page buttons, the behaviour
+  after an action and the allowed actions. Saved values carry over.
+- The status page, the first page, is left out when it has no weather and no
+  tile, and its HA, alarm and time badges with it. Its section explains this.
+- Humidifiers and water heaters can be picked as tiles with a detail page for
+  the target humidity or temperature and the mode.
+- Valves can be picked as tiles with a detail page: open, stop and close in one
+  row and a position slider where the valve has one.
+- Vacuums can be picked as tiles with a detail page: start, pause, stop, return
+  to base and locate in one row, and the suction choice.
+- Locks can be picked as tiles. Their detail page has lock, unlock and, where
+  the lock supports it, open in one row; unlocking and opening ask for a
+  second tap.
+- Automations and sirens can be picked as switch tiles, persons and device
+  trackers as read-only tiles that read home, away or the zone.
+- Tiles carry a small symbol for their type or device class, drawn from the
+  fonts on the device only. Sensors with the device class timestamp or date
+  show a short local time, a text that had to be cut ends in three dots, a
+  media player's line names the artist, and players and lights offer shuffle,
+  repeat and effects where they report them.
+- A media player's submenu shows previous, play/pause and next side by side
+  in one row of equal buttons with centred symbols, in place of three
+  full-width bars with a small glyph at the top left. A mute switch has its
+  label level with its box.
+- The display status text sits in the header bar, right of the title, in
+  place of a row below the tiles. The tile area gains that row, so four half
+  rows fit below the page switcher.
+- The pages dialog explains itself: each section is titled with its page's
+  name and says what it holds, every field has a short help text, and the
+  step lists what name, position and entities do.
+- A page's position runs from 1 to 8, the first page being 1, in place of 0
+  to 10000 in steps of 10.
+- New pages with entities need a name. Existing untitled pages can be saved
+  unchanged; adding another entity requires a name. Page names are unique
+  regardless of capitalization.
+- Besides the used pages, the first free section is open, so adding a page is
+  visible; the other free sections stay collapsed.
+
+### Fixed
+
+- Keep Alarmo controls usable after successfully requesting an already active
+  mode; an unchanged confirmed state no longer leaves commands pending.
+
+- Recover unavailable entities and memo/message caches after agent reconnects
+  without idle polling. Coalesce reconnect reads and cancel them on entity
+  removal; ignore registry changes belonging to other integrations.
+- Preserve early ICE candidates, restart a detached ring preview when the card
+  returns, and retain cards configured by entry ID without assigning another
+  device's camera. Handle audio-context cancellation without unhandled errors.
+- Serialize call talkback startup with media teardown, use the advertised RTSP
+  timeout for playing Ring and Home Call clients, and enforce authentication
+  deadlines even when requests arrive slowly. Validate interleaved channels.
+- Keep previous capture files when a new recording fails before writing, clean
+  up cancelled workspaces, and preserve completed captures during call-end
+  cleanup. Reject an audio capture before answering an already-viewed ring.
+- Cover Wyoming audio transmission, response reading and connection cleanup
+  with bounded waits; abort the transport on cancellation.
+- Retain pending SSH-install follow-up within a repair retry and verify media
+  and device-user repairs against the resulting device status. Report installation
+  error types without logging credentials or private error text.
+- Keep cleared page and Alarmo fields empty after validation errors. Validate
+  action lists on their own form, preserve older quick-action selections, and
+  expire stateless display feedback and obsolete lock confirmations.
+- Keep saved access and maintenance keys out of reconfigure/options forms;
+  empty key fields retain the existing credentials. Validate addresses, ports
+  and callback hosts before saving, including IPv6 and alternative IP spellings.
+- Redact diagnostic addresses and bound client debug formatting, including
+  nested session identifiers. Handle malformed agent numbers and encodings.
+- Deliver full memo lists using nonblocking HTTP output with a shared 512 KiB
+  queue budget. Avoid a flash sync for every staged update chunk; installed
+  files still sync before replacement.
+- Resynchronize display events immediately after an agent restart, reject auth
+  configurations that would prevent restart, and refuse truncated routing backups.
+  Backup size checks use the legacy-compatible device filesystem interface.
+- Preserve device-owned configuration during SSH reinstalls and sync saved
+  configuration, installed update files and private SIP account files before publishing
+  them. Restore routing only from a verified stock backup.
+- Reserve local-display HTTP capacity, bound unauthenticated RTSP connections,
+  and clear inbound SRTP keys after on-demand media stops.
+- Bound Wyoming data size and keep late talkback keepalive errors from failing
+  completed clips.
+- Validate non-finite numbers, addresses and message IDs; keep token fingerprints
+  admin-only. Log repair failures, avoid reloads for internal bookkeeping, and
+  retain the Alarmo command tap guard until the alarm state changes.
+- Reject malformed webhook credentials without an unhandled error, and release
+  webhook registrations when integration setup fails or is cancelled.
+- Do not send saved agent credentials to newly discovered addresses or replace
+  an existing entry's address from an unsolicited discovery announcement. Use
+  **Reconfigure** to confirm an address change.
+- Clearing optional display-dashboard fields now removes their saved values.
+  Media-player play/pause controls require the capability needed for the
+  player's current state.
+- Enforce explicitly configured RTSP credentials before admitting media clients,
+  and collect completed home-call threads before starting another call.
+  Empty RTSP credentials retain the existing local-network setup; see the
+  [RTSP access limitations](SECURITY.md#rtsp-access) before configuring credentials.
+- Discard queued display commands after timeout or page exit, refresh alarm
+  state after events that arrive during a read, and expire command feedback
+  with a one-shot timer. Already sent actions cannot be recalled.
+- Reconnect memo and message updates after transport failures with bounded
+  backoff and refresh unread counts after recovery. No additional idle polling.
+- Cancel ring captures when their integration runtime is unloaded and avoid
+  hanging up a replacement runtime or an observed replacement call. Stop
+  announcement workers cooperatively before releasing capture ownership.
+- Keep a shared on-demand stream alive when another WebRTC offer fails.
+- Preserve complete HTTP requests delayed by another handler and finish partial
+  responses through bounded nonblocking output buffers.
+- Decode JSON escapes consistently in HTTP inputs, saved configuration and
+  update manifests. Create temporary configuration files with private
+  permissions before writing credentials.
+- Bound mDNS query processing and ignore responses and unrelated queries.
+- Reject duplicate device endpoints before starting installation, preserve
+  customized obsolete blueprints, and resume unfinished display-update steps
+  when retrying an agent update.
+- Refresh message details before deleting the latest item. Extract capture
+  images using the video's actual duration and clear unavailable image aliases.
+- Keep RTSP probe errors scoped to their request and suppress automatic
+  preview retries after failure until a new ring.
+- Cancel in-flight media setup on stop, bound socket-write delays, reclaim
+  completed SIP workers and partially initialized SRTP sessions, and match
+  SDES keys to their own crypto attribute. Run device-media renewal outside
+  the audio worker.
+- Preserve pending configuration during MQTT changes and normalization,
+  retain coalesced MQTT commands until consumed, and round-trip activations
+  without an optional address.
+- Honor custom agent installation paths in maintenance scripts and normalize
+  absent notification action IDs for the device's Qt runtime.
+- Validate release ZIP contents against the checkout, stop local HA installation
+  on copy errors, correlate RTSP capture responses by connection and CSeq, and
+  prevent routing-patch output from overwriting its input.
+- A light or fan that is off shows 0 % on its display tile in place of `?`.
+- Keep the Alarmo quick entity's name and secondary line when saving pages.
+
+### Upgrade Notes
+
+- Update the native agent to **2.2.0** through the offered Repair after updating
+  the integration. The package includes a rebuilt agent and new display files.
+  Reapplying an active Display patch restarts the device GUI once.
+- RTSP supports TCP interleaving only. UDP requests are explicitly rejected;
+  Home Assistant already uses TCP.
+- Requires Home Assistant **2026.10.0** or newer; CI tests that minimum and the
+  latest stable HA release on every run. Update older HA installations before upgrading the integration.
+  Existing entries and cards can be kept.
+
 ## v2.1.3 - 2026-11-13
 
 ### Added

@@ -41,6 +41,7 @@ Page {
     property real lastStatusRefreshMs: 0
     property bool alarmOnline: false
     property bool commandPending: false
+    property string commandAwaitedState: ""
     property bool commandInFlight: false
     property bool quickActionPending: false
     property int quickActionGeneration: 0
@@ -78,9 +79,11 @@ Page {
     function pausePage() {
         pageActive = false
         runtimeGeneration += 1
+        Api.cancelPageCommands(page)
         clearPin()
         pinRequested = false
         commandPending = false
+        commandAwaitedState = ""
         commandInFlight = false
         quickActionPending = false
         alarmOnline = false
@@ -105,6 +108,7 @@ Page {
             return
         }
         lastStatusRefreshMs = now
+        if (force) Api.invalidateSharedRead("/ui/state")
         Api.status(status, page, alarmState, activeSince)
     }
 
@@ -458,6 +462,7 @@ Page {
         running: pageActive && quickActionPending
         onTriggered: {
             quickActionGeneration += 1
+            Api.cancelPageCommands(page, "quickActionGeneration")
             quickActionPending = false
             status.text = uiText("action_error")
             status.color = "#ff6b6b"
@@ -471,7 +476,9 @@ Page {
         running: pageActive && commandPending
         onTriggered: {
             runtimeGeneration += 1
+            Api.cancelPageCommands(page)
             commandPending = false
+            commandAwaitedState = ""
             commandInFlight = false
             setCommandFeedback("alarm_command_error", selectedCommand, "#ff6b6b")
             refreshAlarmStatus(true)

@@ -12,7 +12,7 @@ Install integration -> add device -> install/update agent -> check Media readine
 
 You need:
 
-- Home Assistant `2026.7.0` or newer.
+- Home Assistant `2026.10.0` or newer.
 - A BTicino Classe 300X / C300X on firmware `1.7.x`.
 - Root or SSH access on the C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
@@ -30,7 +30,7 @@ SSH-enablement workflow asks for a firmware target, use `1.7.19`.
 2. Find **BTicino C300X**, install it and confirm the community-integration notice.
 3. Follow any restart request before continuing.
 
-### HACS: Home Assistant 2026.7-2026.10
+### HACS: Home Assistant 2026.10
 
 1. Open **HACS**.
 2. Search for **BTicino C300X**.
@@ -142,6 +142,36 @@ notifications, capture, Wyoming transcription and strict phrase decisions. They
 are installed into Home Assistant's blueprint folder when the integration loads.
 
 Details: [Blueprints](blueprints.md)
+
+## 9. Optional Native Display
+
+These pages run on the C300X itself in its blue interface; they are not the
+Lovelace card or an embedded HA dashboard.
+
+1. Update the bundled agent, then enable and apply **Display patch** under
+   **Configure > Display and Display patch**. Applying it restarts the device GUI.
+2. Open **Display pages**. Choose an optional weather entity, name your pages,
+   set their order and select the entities for each. Up to eight pages are
+   available, including the status page. Drag entities to reorder their tiles.
+3. Open **Display tiles** to set each tile's width, height, name and secondary
+   line. Full-height tiles expose supported common controls directly; tap a
+   tile with a chevron for its detail controls.
+4. For Alarmo, choose the alarm panel under **Alarm (Alarmo)**. Its separate
+   subpage can have one optional quick action. Leave it empty to hide the action;
+   select the stair-light button explicitly if that is the shortcut you want.
+
+Lights, covers, climate, fans and media players have capability-based controls.
+Locks, vacuums, valves, humidifiers and water heaters also have detail controls;
+unlocking or opening a lock requires a second tap. Sensors and presence entities
+are read-only. Only configured entities can be operated from the display.
+
+After an integration update, update the agent and reapply the Display patch
+when prompted so the display receives the matching files. Page and tile
+settings themselves are stored in HA, not rewritten to the device on every change.
+
+Details: [Display controls](feature-reference.md#display-device-controls),
+[pages and tiles](feature-reference.md#display-settings) and
+[Alarmo](feature-reference.md#alarmo-display).
 
 ## After the First Test
 

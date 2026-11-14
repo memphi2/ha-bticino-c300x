@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .action import (
@@ -40,7 +41,9 @@ _DASHBOARD_SWITCH_DOMAINS = {"fan", "input_boolean", "light", "switch"}
 _DASHBOARD_SWITCH_SERVICES = {"toggle"}
 
 
-_DASHBOARD_TOGGLE_ENTITY_DOMAINS = {"fan", "input_boolean", "light", "switch"}
+_DASHBOARD_TOGGLE_ENTITY_DOMAINS = {
+    "automation", "fan", "humidifier", "input_boolean", "light", "siren", "switch",
+}
 
 
 _DASHBOARD_BUTTON_ENTITY_DOMAINS = {"button", "input_button", "scene", "script"}
@@ -52,7 +55,7 @@ _DASHBOARD_SLIDER_ENTITY_DOMAINS = {"input_number", "number"}
 _DASHBOARD_CHOICE_ENTITY_DOMAINS = {"input_select", "select"}
 
 
-_DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "sensor"}
+_DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "device_tracker", "person", "sensor"}
 
 
 _DASHBOARD_SUPPORTED_ENTITY_DOMAINS = DASHBOARD_ENTITY_DOMAIN_SET
@@ -134,10 +137,15 @@ def _dashboard_entity_ids(value: Any) -> tuple[str, ...]:
 
 
 def _dashboard_float(value: Any, fallback: float | None) -> float | None:
-    try:
-        return float(value)
-    except TypeError, ValueError:
+    """Return a finite float; NaN, inf and non-numbers give the fallback."""
+
+    if isinstance(value, bool):
         return fallback
+    try:
+        number = float(value)
+    except TypeError, ValueError, OverflowError:
+        return fallback
+    return number if math.isfinite(number) else fallback
 
 
 def _dashboard_first_attribute(attributes: dict[str, Any], *names: str) -> Any | None:

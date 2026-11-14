@@ -12,7 +12,7 @@ from ..memos import (
     latest_voice_memo_audio_id,
     voice_memo_media_source_id,
 )
-from ..message_refresh import async_memos
+from ..message_refresh import async_memos, schedule_memos_refresh
 from .common import (
     async_ensure_gui_function_patch,
     async_play_media,
@@ -55,6 +55,7 @@ class MemosUseCase:
             self._entry,
             refresh=lambda: async_memos(self._entry, force_refresh=True),
             signal=SIGNAL_MEMOS_CHANGED,
+            retry=lambda: schedule_memos_refresh(self._hass, self._entry),
         )
 
     async def delete_latest_text_memo(self) -> None:
@@ -78,6 +79,7 @@ class MemosUseCase:
             self._entry,
             refresh=lambda: async_memos(self._entry, force_refresh=True),
             signal=SIGNAL_MEMOS_CHANGED,
+            retry=lambda: schedule_memos_refresh(self._hass, self._entry),
         )
 
     async def _latest_memo_id(self, kind: str) -> str:
@@ -87,6 +89,7 @@ class MemosUseCase:
             refresh=lambda: async_memos(self._entry, force_refresh=True),
             latest=lambda memos: latest_memo_id(memos, kind),
             unavailable_error=f"{kind}_memo_not_available",
+            refresh_before_lookup=True,
         )
 
     async def _latest_voice_memo_audio_id(self) -> str:

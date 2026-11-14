@@ -56,14 +56,33 @@ def _load_bundle_stager():
     return module
 
 
-def _load_release_assets():
+def _load_release_assets(*, validate_contents=False):
     spec = importlib.util.spec_from_file_location("write_release_assets", RELEASE_ASSETS_SCRIPT)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     assert spec.loader is not None
     spec.loader.exec_module(module)
+    if not validate_contents:
+        # These metadata unit tests intentionally use small synthetic archives.
+        module.validate_release_contents = lambda _path: None
     return module
+
+
+def test_release_metadata_records_resolved_current_ha(monkeypatch):
+    writer = _load_release_assets()
+    monkeypatch.setenv("C300X_VALIDATED_CURRENT_HA_VERSION", "2026.12.2")
+    evidence = writer._lts_evidence(tag="v2.2.0", native_agent_reused_from=None)
+    assert evidence["current_homeassistant"] == "2026.12.2"
+    assert evidence["validated_homeassistant"] == ["2026.10.0", "2026.12.2"]
+
+
+@pytest.mark.parametrize("version", ["", "2026.11.0b1", "2026.9.4", "latest"])
+def test_release_metadata_rejects_invalid_resolved_ha(monkeypatch, version):
+    writer = _load_release_assets()
+    monkeypatch.setenv("C300X_VALIDATED_CURRENT_HA_VERSION", version)
+    with pytest.raises(writer.ReleaseAssetError):
+        writer._lts_evidence(tag="v2.2.0", native_agent_reused_from=None)
 
 
 def _load_release_tag_checker():
@@ -74,6 +93,44 @@ def _load_release_tag_checker():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.mark.parametrize("changed", [None, "manifest.json", "camera.py", "device_agent/bundle.json",
+                                     "device_agent/scripts/qml_patch.sh", "unexpected.py"])
+def test_release_contents_match_checkout(tmp_path, monkeypatch, changed):
+    import stage_device_agent_bundle as stager
+    from check_release_contents import validate_release_contents
+
+    binary = tmp_path / "agent"
+    binary.write_bytes(b"synthetic-agent")
+    monkeypatch.setattr(stager, "AGENT_BINARY", binary)
+    builder = _load_release_builder()
+    monkeypatch.setattr(builder, "PACKAGE_ROOT", tmp_path / "package")
+    builder._prepare_package(builder._integration_version())
+    if changed:
+        target = builder.PACKAGE_ROOT / changed
+        target.write_bytes(b"mismatched content")
+    archive = tmp_path / "release.zip"
+    builder._write_zip(archive)
+    if changed:
+        with pytest.raises(ValueError, match="differs from checkout"):
+            validate_release_contents(archive)
+    else:
+        validate_release_contents(archive)
+
+
+def test_release_writer_rejects_unbound_archive(tmp_path):
+    writer = _load_release_assets(validate_contents=True)
+    archive = tmp_path / "release.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        zipped.writestr("manifest.json", "{}")
+    with pytest.raises(writer.ReleaseAssetError, match="content validation failed"):
+        writer.write_release_assets(
+            zip_path=archive, tag="v2.1.1", repository="example/repo",
+            sha256sums_path=tmp_path / "SHA256SUMS", metadata_path=tmp_path / "metadata.json",
+            sbom_path=tmp_path / "sbom.json",
+        )
+    assert not (tmp_path / "metadata.json").exists()
 
 
 def _load_repo_checker():
@@ -452,9 +509,9 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
     assert metadata["lts_evidence"] == {
         "release": tag,
-        "min_homeassistant": "2026.7.0",
-        "current_homeassistant": "2026.10.0",
-        "validated_homeassistant": ["2026.7.0", "2026.10.0"],
+        "min_homeassistant": "2026.10.0",
+        "current_homeassistant": "2026.11.1",
+        "validated_homeassistant": ["2026.10.0", "2026.11.1"],
         "python": "3.14",
         "firmware_target": "1.7.x",
         "native_agent_rebuilt": True,

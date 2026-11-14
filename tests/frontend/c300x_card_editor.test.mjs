@@ -122,3 +122,28 @@ test("device action visibility labels are translated in every supported language
     }
   }
 });
+
+test("editor does not write its default entity into a card that names its device by entry_id", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  const events = [];
+  const listeners = new Map();
+  const form = { addEventListener: (name, handler) => listeners.set(name, handler) };
+  const editor = new module.C300XDoorbellCallCardEditor();
+  editor.attachShadow = () => (editor.shadowRoot = { querySelector: () => form });
+  editor.dispatchEvent = (event) => events.push(event);
+  editor.hass = { language: "en", states: { "camera.bticino_c300x_doorbell_camera_a": {} } };
+  editor.setConfig({ type: "custom:c300x-doorbell-call-card", entry_id: "entry-b" });
+
+  // The form sends back everything it shows, including the default entity.
+  listeners.get("value-changed")({ detail: { value: { ...form.data, show_door_unlock: false } } });
+
+  const saved = events.at(-1).detail.config;
+  assert.equal(saved.entry_id, "entry-b");
+  assert.equal("entity" in saved, false);
+  assert.equal(saved.show_door_unlock, false);
+
+  // An entity the user picks is written.
+  listeners.get("value-changed")({ detail: { value: { ...saved, entity: "camera.other" } } });
+  assert.equal(events.at(-1).detail.config.entity, "camera.other");
+});

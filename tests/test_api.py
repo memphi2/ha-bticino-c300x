@@ -3709,3 +3709,25 @@ def test_request_json_rejects_oversized_response_via_read_limit(
 
     with pytest.raises(C300XAgentApiResponseError, match="too large"):
         asyncio.run(api._request_json("GET", "/api/v1/state"))
+
+
+@pytest.mark.parametrize("dots", [".", "..", "...", "......"])
+def test_an_id_of_only_dots_is_never_a_message_or_memo_id(dots):
+    """A dot segment is resolved by the HTTP client and would name another endpoint.
+
+    ``messages/../video`` becomes ``video`` before it is sent, so the request
+    would reach a route the id never meant to select.
+    """
+
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_video_message_id(dots)
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_memo_id(f"voice/{dots}")
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_memo_id(f"text/{dots}")
+
+
+@pytest.mark.parametrize("message_id", ["20260101-1200.mp4", "a.b", "..a", "a..", "x" * 64])
+def test_ordinary_message_and_memo_ids_stay_valid(message_id):
+    assert normalize_video_message_id(message_id) == message_id
+    assert normalize_memo_id(f"voice/{message_id}") == f"voice/{message_id}"

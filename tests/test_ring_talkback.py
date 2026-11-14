@@ -105,10 +105,9 @@ def test_keep_talkback_alive_sync_pcmu_emits_payload_type_0(
     )
     monkeypatch.setattr(ring_talkback.random, "randrange", lambda *_args: 1)
     stop_event = threading.Event()
-    stop_event.set()
 
     ring_talkback._keep_talkback_alive_sync(
-        "192.0.2.10", None, stop_event, codec_pcmu=True
+        "192.0.2.10", None, stop_event, codec_pcmu=True, keep_alive=False,
     )
 
     assert sock.closed is True
@@ -311,19 +310,19 @@ def test_keep_talkback_alive_sync_sends_preroll_file_audio_and_flush(
     )
     monkeypatch.setattr(ring_talkback.random, "randrange", lambda *_args: 1)
     stop_event = threading.Event()
-    stop_event.set()
 
     ring_talkback._keep_talkback_alive_sync(
         "192.0.2.10",
         Path("announcement.wav"),
         stop_event,
+        keep_alive=False,
     )
 
     assert sock.closed is True
     assert len(sock.sent) >= 3
 
 
-def test_keep_talkback_alive_sync_flushes_after_keepalive_frame(
+def test_keep_talkback_alive_sync_does_not_flush_after_stop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_fake_av(monkeypatch, with_audio=False)
@@ -365,7 +364,8 @@ def test_keep_talkback_alive_sync_flushes_after_keepalive_frame(
 
     ring_talkback._keep_talkback_alive_sync("192.0.2.10", None, stop_event)
 
-    assert calls == ["frame", "flush"]
+    assert calls == ["frame"]
+    assert sock.sent == []
     assert sock.closed is True
 
 
@@ -381,7 +381,6 @@ def test_keep_talkback_alive_sync_rejects_source_without_audio(
     )
     monkeypatch.setattr(ring_talkback, "_ANNOUNCEMENT_PREROLL_SECONDS", 0.0)
     stop_event = threading.Event()
-    stop_event.set()
 
     with pytest.raises(ring_talkback.HomeAssistantError, match="has no audio stream"):
         ring_talkback._keep_talkback_alive_sync(
@@ -469,21 +468,18 @@ def test_async_play_and_keepalive_map_worker_errors(
     async def ok_wait(_entry: Any) -> None:
         return None
 
-    def broken_play(_host: str, _source: Path, *, codec_pcmu: bool = False) -> None:
-        raise RuntimeError("boom")
-
     def broken_keepalive(
         _host: str,
         _source: Path | None,
         _stop_event: threading.Event,
         *,
         codec_pcmu: bool = False,
+        keep_alive: bool = True,
     ) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(ring_talkback, "_async_wait_talkback_ready", ok_wait)
     monkeypatch.setattr(ring_talkback, "HomeAssistantError", TalkbackError)
-    monkeypatch.setattr(ring_talkback, "_play_announcement_sync", broken_play)
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", broken_keepalive)
     monkeypatch.setattr(ring_talkback.asyncio, "to_thread", _to_thread_inline)
 
@@ -512,20 +508,19 @@ def test_async_play_and_keepalive_propagate_homeassistant_errors(
     async def ok_wait(_entry: Any) -> None:
         return None
 
-    def broken_play(_host: str, _source: Path, *, codec_pcmu: bool = False) -> None:
-        raise ring_talkback.HomeAssistantError("expected play failure")
-
     def broken_keepalive(
         _host: str,
         _source: Path | None,
         _stop_event: threading.Event,
         *,
         codec_pcmu: bool = False,
+        keep_alive: bool = True,
     ) -> None:
-        raise ring_talkback.HomeAssistantError("expected keepalive failure")
+        raise ring_talkback.HomeAssistantError(
+            "expected keepalive failure" if keep_alive else "expected play failure"
+        )
 
     monkeypatch.setattr(ring_talkback, "_async_wait_talkback_ready", ok_wait)
-    monkeypatch.setattr(ring_talkback, "_play_announcement_sync", broken_play)
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", broken_keepalive)
     monkeypatch.setattr(ring_talkback.asyncio, "to_thread", _to_thread_inline)
 
@@ -551,10 +546,10 @@ def test_async_play_and_keepalive_propagate_homeassistant_errors(
         )
 
 
-def test_play_announcement_sync_sets_single_shot_stop_event(
+def test_single_shot_playback_does_not_use_cancellation_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    seen: list[tuple[str, Path | None, bool]] = []
+    seen = []
 
     def _keepalive(
         host: str,
@@ -562,18 +557,107 @@ def test_play_announcement_sync_sets_single_shot_stop_event(
         stop_event: threading.Event,
         *,
         codec_pcmu: bool = False,
+        keep_alive: bool = True,
     ) -> None:
-        seen.append((host, source, stop_event.is_set()))
+        seen.append((host, source, stop_event.is_set(), keep_alive))
 
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", _keepalive)
 
-    ring_talkback._play_announcement_sync("192.0.2.10", Path("announcement.wav"))
+    asyncio.run(ring_talkback._async_play_announcement("192.0.2.10", Path("announcement.wav")))
 
-    assert seen == [("192.0.2.10", Path("announcement.wav"), True)]
+    assert seen == [("192.0.2.10", Path("announcement.wav"), False, False)]
 
 
 async def _async_noop(*_args: Any) -> None:
     return None
+
+
+@pytest.mark.parametrize("samples,preroll", [(160, 0), (1600, 0), (160, 1)])
+def test_stop_signal_interrupts_file_fifo_and_preroll(monkeypatch, samples, preroll):
+    _install_fake_av(monkeypatch, with_audio=True)
+    monkeypatch.setattr(ring_talkback, "_ANNOUNCEMENT_PREROLL_SECONDS", preroll)
+    stop = threading.Event()
+
+    class Input(_FakeInputContainer):
+        def decode(self, stream):
+            return [_FakeAudioFrame(samples=samples) for _ in range(10)]
+
+    class Socket(_FakeSocket):
+        def sendto(self, data, target):
+            super().sendto(data, target)
+            stop.set()
+
+    sock = Socket()
+    monkeypatch.setattr(sys.modules["av"], "open", lambda *_: Input(True))
+    monkeypatch.setattr(ring_talkback, "_open_talkback_socket", lambda _: (sock, ("fake", 0)))
+    ring_talkback._keep_talkback_alive_sync("fake", Path("fake.wav"), stop)
+    assert len(sock.sent) == 1
+    assert sock.closed
+
+
+@pytest.mark.parametrize("keep_alive", [False, True])
+def test_cancellation_waits_for_actual_worker_socket_shutdown(monkeypatch, keep_alive):
+    _install_fake_av(monkeypatch, with_audio=True)
+    monkeypatch.setattr(ring_talkback, "_ANNOUNCEMENT_PREROLL_SECONDS", 0)
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        started, closing = asyncio.Event(), asyncio.Event()
+        release = threading.Event()
+        stop = threading.Event()
+
+        class Input(_FakeInputContainer):
+            def decode(self, stream):
+                return [_FakeAudioFrame(samples=16000)]
+
+        class Socket(_FakeSocket):
+            def sendto(self, data, target):
+                super().sendto(data, target)
+                loop.call_soon_threadsafe(started.set)
+
+            def close(self):
+                loop.call_soon_threadsafe(closing.set)
+                assert release.wait(5), "test did not release worker cleanup"
+                super().close()
+
+        sock = Socket()
+        monkeypatch.setattr(sys.modules["av"], "open", lambda *_: Input(True))
+        monkeypatch.setattr(ring_talkback, "_open_talkback_socket", lambda _: (sock, ("fake", 0)))
+        task = asyncio.create_task(ring_talkback._async_run_talkback_worker(
+            "fake", Path("fake.wav"), stop, codec_pcmu=False, keep_alive=keep_alive,
+        ))
+        try:
+            await asyncio.wait_for(started.wait(), 2)
+            task.cancel()
+            await asyncio.wait_for(closing.wait(), 2)
+            sent = len(sock.sent)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+            assert not sock.closed
+            assert stop.is_set()
+            assert len(sock.sent) == sent
+        finally:
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        assert sock.closed
+
+    asyncio.run(run())
+
+
+def test_worker_closes_socket_if_encoder_setup_fails(monkeypatch):
+    _install_fake_av(monkeypatch, with_audio=False)
+    sock = _FakeSocket()
+    monkeypatch.setattr(ring_talkback, "_open_talkback_socket", lambda _: (sock, ("fake", 0)))
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("encoder failure")
+
+    monkeypatch.setattr(ring_talkback, "_create_talkback_encoder", fail)
+    with pytest.raises(RuntimeError, match="encoder failure"):
+        ring_talkback._keep_talkback_alive_sync("fake", None, threading.Event())
+    assert sock.closed
 
 
 class _FakeRingStatusApi:

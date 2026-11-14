@@ -221,3 +221,49 @@ def _install_debug_ws_stubs(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
         websocket_api,
     )
     return registered
+
+
+def test_debug_values_from_the_client_stay_on_one_short_line() -> None:
+    forged = "ok\r\n2026-01-01 ERROR forged entry\x1b[31m"
+
+    formatted = debug_ws._format_debug_value(forged)
+
+    assert "\n" not in formatted and "\r" not in formatted and "\x1b" not in formatted
+    assert len(debug_ws._format_debug_value("x" * 5000)) == debug_ws._MAX_DEBUG_VALUE_LENGTH
+    assert debug_ws._format_debug_value(1.23456) == "1.235"
+    assert debug_ws._format_debug_value("a b") == "a_b"
+
+
+def test_a_nested_debug_value_is_not_rendered_in_full_before_it_is_cut() -> None:
+    class Loud:
+        rendered = 0
+
+        def __repr__(self) -> str:
+            Loud.rendered += 1
+            return "x"
+
+    nested = [[Loud() for _ in range(1000)] for _ in range(1000)]
+
+    formatted = debug_ws._format_debug_value(nested)
+
+    assert len(formatted) <= debug_ws._MAX_DEBUG_VALUE_LENGTH
+    assert Loud.rendered < 100
+    assert len(debug_ws._format_debug_value(1e308)) <= debug_ws._MAX_DEBUG_VALUE_LENGTH
+    assert debug_ws._format_debug_value(7) == "7"
+    assert debug_ws._format_debug_value(True) == "True"
+
+
+def test_nested_session_id_uses_the_bounded_debug_formatter() -> None:
+    class Counted:
+        rendered = 0
+
+        def __repr__(self) -> str:
+            Counted.rendered += 1
+            return "x"
+
+    value = [[Counted() for _ in range(100)] for _ in range(100)]
+    formatted = debug_ws._format_client_debug_snapshot({"session_id": value})
+
+    assert formatted.startswith("session=")
+    assert len(formatted) <= len("session=") + debug_ws._MAX_DEBUG_VALUE_LENGTH
+    assert Counted.rendered < 100

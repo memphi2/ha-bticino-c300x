@@ -14,7 +14,12 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
     pageItem.statusGeneration = request
     getJsonShared("/ui/state", function(data) {
         if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
-        if (!pageItem.commandInFlight) pageItem.commandPending = false
+        var awaitedState = pageItem.commandAwaitedState
+        if (awaitedState && !(data.alarm && data.alarm.state === awaitedState)) {
+            awaitedState = ""
+            pageItem.commandAwaitedState = ""
+        }
+        if (!pageItem.commandInFlight && !awaitedState) pageItem.commandPending = false
         pageItem.alarmOnline = !!(data.alarm && data.alarm.state
             && data.alarm.state !== "unavailable" && data.alarm.state !== "unknown")
         if (pageItem.clearCommandFeedback) {
@@ -74,6 +79,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         pageItem.alarmPageItem = alarmPageItem(data.alarm_page_entity)
     }, function(error) {
         if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
+        pageItem.commandAwaitedState = ""
         if (!pageItem.commandInFlight) pageItem.commandPending = false
         pageItem.alarmOnline = false
         pageItem.watchFailed = true
@@ -164,12 +170,8 @@ function finishDashboardRefresh(statusItem, pageItem) {
     }
 }
 
-// Nothing ever removes a feedback entry: setDashboardFeedback only replaces the
-// one for the same entity and aboutToHide keeps the list so a warning survives
-// until the user comes back. So a command that HA accepts but never reflects
-// would keep its tile on "action sent" for the rest of the session. Entries are
-// stamped and aged where they are read, which needs no periodic sweep and
-// cannot drop information a late confirmation still wants.
+// The page schedules only the next boundary. Date.now() alone cannot invalidate
+// a QML binding, so expiry also replaces the feedback property at that boundary.
 var FEEDBACK_UNCONFIRMED_MS = 15000
 var FEEDBACK_DISCARD_MS = 60000
 
@@ -187,8 +189,40 @@ function feedbackState(entry) {
     var age = Date.now() - (entry.at || 0)
     if (age >= FEEDBACK_DISCARD_MS) return ""
     if (entry.expected && entry.expected.stateless) return entry.state
-    if (entry.state === "action_sent" && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
+    if (entry.state === "action_sent" && entry.expected && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
     return entry.state
+}
+
+function nextFeedbackDelay(feedback) {
+    var delay = 0
+    var now = Date.now()
+    for (var i = 0; i < feedback.length; i++) {
+        var lifetime = feedback[i].state === "action_sent" && feedback[i].expected && !feedback[i].expected.stateless ? FEEDBACK_UNCONFIRMED_MS : FEEDBACK_DISCARD_MS
+        var remaining = Math.max(1, (feedback[i].at || 0) + lifetime - now)
+        if (delay === 0 || remaining < delay) delay = remaining
+    }
+    return delay
+}
+
+function expireDashboardFeedback(pageItem) {
+    var feedback = listOrEmpty(pageItem.controlFeedback)
+    var updated = []
+    var changed = false
+    for (var i = 0; i < feedback.length; i++) {
+        var state = feedbackState(feedback[i])
+        if (state === "") {
+            changed = true
+            continue
+        }
+        var entry = feedback[i]
+        if (state !== entry.state) {
+            entry = copyObject(entry)
+            entry.state = state
+            changed = true
+        }
+        updated.push(entry)
+    }
+    if (changed) pageItem.controlFeedback = updated
 }
 
 function dashboardExpectation(item, control, value) {
@@ -208,11 +242,30 @@ function dashboardExpectation(item, control, value) {
     if (control.command === "media_play_pause") {
         return {command: control.command, playing: control.playing !== true}
     }
+    if (item.details && item.details.type === "valve") {
+        if (control.command === "open_valve") return {command: control.command, activities: ["opening", "open"]}
+        if (control.command === "close_valve") return {command: control.command, activities: ["closing", "closed"]}
+        if (control.command === "stop_valve") return {command: control.command, activities: ["open", "closed"]}
+    }
+    if (item.details && item.details.type === "vacuum") {
+        if (control.command === "start") return {command: control.command, activities: ["cleaning"]}
+        if (control.command === "pause") return {command: control.command, activities: ["paused"]}
+        if (control.command === "stop") return {command: control.command, activities: ["idle", "docked", "paused"]}
+        if (control.command === "return_to_base") return {command: control.command, activities: ["returning", "docked"]}
+        return {command: control.command, stateless: true}
+    }
+    if (item.details && item.details.type === "lock") {
+        if (control.command === "lock") return {command: control.command, activity: "locked"}
+        if (control.command === "unlock") return {command: control.command, activity: "unlocked"}
+        return {command: control.command, stateless: true}
+    }
     if (control.command === "media_previous_track" || control.command === "media_next_track") {
         return {command: control.command, stateless: true}
     }
     return null
 }
+
+var EXPECTATION_TOLERANCE = {color_temp_kelvin: 30, hue: 3, saturation: 3}
 
 function dashboardExpectationMatches(item, expected) {
     if (!item || item.available === false || !expected || expected.stateless) return false
@@ -224,13 +277,22 @@ function dashboardExpectationMatches(item, expected) {
     if (expected.command === "close_cover") return activity === "closing" || activity === "closed"
     if (expected.command === "stop_cover") return activity === "open" || activity === "closed"
     var controls = listOrEmpty(item.controls)
+    if (expected.activity !== undefined) return Boolean(item.details) && item.details.activity === expected.activity
+    if (expected.activities !== undefined) {
+        var seen = item.details ? item.details.activity : ""
+        for (var a = 0; a < expected.activities.length; a++) {
+            if (expected.activities[a] === seen) return true
+        }
+        return false
+    }
     if (expected.playing !== undefined) return Boolean(item.details) && item.details.playing === expected.playing
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
         if (control.command !== expected.command || control.value === null || control.value === undefined) continue
         if (control.active === false) return false
         if (expected.kind === "number") {
-            return Math.abs(Number(control.value) - Number(expected.value)) < 0.000001
+            var tolerance = EXPECTATION_TOLERANCE.hasOwnProperty(expected.command) ? EXPECTATION_TOLERANCE[expected.command] : 0.000001
+            return Math.abs(Number(control.value) - Number(expected.value)) <= tolerance
         }
         return String(control.value) === String(expected.value)
     }
@@ -287,7 +349,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
         setDashboardFeedback(pageItem, item.entity_id, "state_unconfirmed")
         statusItem.text = uiText(pageItem, "state_unconfirmed")
         statusItem.color = "#f1c40f"
-    })
+    }, commandScope(pageItem, "commandGeneration"))
 }
 
 function homeButtons(callback) {
@@ -357,9 +419,9 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         if (generation !== pageItem.runtimeGeneration) return
         if (quickGeneration !== pageItem.quickActionGeneration) return
         pageItem.quickActionPending = false
-        statusItem.text = error
+        statusItem.text = statusErrorText(pageItem, error)
         statusItem.color = "#ff6b6b"
-    })
+    }, commandScope(pageItem, "quickActionGeneration"))
 }
 
 function dashboardSliderAction(item, direction, statusItem, pageItem) {
@@ -434,6 +496,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         return
     }
     var generation = pageItem.runtimeGeneration
+    var sentState = pageItem.alarmRawState
     pageItem.commandPending = true
     pageItem.commandInFlight = true
     var path = "/ui/alarm/command?command=" + encodeURIComponent(command)
@@ -447,11 +510,15 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         if (generation !== pageItem.runtimeGeneration) return
         pageItem.commandInFlight = false
         pageItem.commandPending = false
+        pageItem.commandAwaitedState = ""
         if (applyAlarmCommandResult(data, command, statusItem, pageItem)) {
             return
         }
         if (data.ok) {
             pageItem.commandPending = true
+            var targetState = pageItem.commandTargetState ? pageItem.commandTargetState(command) : ""
+            var alreadySatisfied = targetState && sentState === targetState && data.state === targetState
+            if (pageItem.alarmRawState === sentState && !alreadySatisfied) pageItem.commandAwaitedState = sentState
             if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("sending", command, "#f1c40f")
             } else {
@@ -474,8 +541,9 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         if (generation !== pageItem.runtimeGeneration) return
         pageItem.commandInFlight = false
         pageItem.commandPending = false
+        pageItem.commandAwaitedState = ""
         setErrorFeedback(command, statusItem, pageItem)
-    })
+    }, commandScope(pageItem, ""))
 }
 
 function alarmCheck(command, statusItem, pageItem) {
@@ -521,7 +589,7 @@ function alarmCheck(command, statusItem, pageItem) {
         pageItem.commandInFlight = false
         pageItem.commandPending = false
         setErrorFeedback(command, statusItem, pageItem)
-    })
+    }, commandScope(pageItem, ""))
 }
 
 function applyAlarmCommandResult(data, command, statusItem, pageItem) {
@@ -936,6 +1004,7 @@ function dashboardMixedItems(source) {
         }
         if (normalized.length > 0) {
             normalized[0].available = source[i].available !== false
+            if (source[i].glyph) normalized[0].glyph = source[i].glyph
             if (source[i].tile_width) normalized[0].tile_width = source[i].tile_width
             if (source[i].tile_height) normalized[0].tile_height = source[i].tile_height
             if (source[i].details) normalized[0].details = source[i].details
@@ -1000,7 +1069,7 @@ function dashboardVisibleControls(item, section) {
     var result = []
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
-        if (item && item.details && (item.details.type === "light" || item.details.type === "fan" || item.details.type === "media_player") && control.command === "toggle") continue
+        if (item && item.details && (item.details.type === "light" || item.details.type === "fan" || item.details.type === "media_player" || item.details.type === "humidifier") && control.command === "toggle") continue
         if (sections.length > 0 && item.details.type === "light") {
             if (section === "color_mode" && control.command === "color_temp_kelvin") continue
             if (section !== "color_mode" && control.command === "color") continue
@@ -1009,6 +1078,45 @@ function dashboardVisibleControls(item, section) {
             if (isMainClimateControl(control) === (section === "more_controls")) continue
         }
         result.push(control)
+    }
+    return result
+}
+
+var ACTION_ROWS = {
+    "media_player": ["media_previous_track", "media_play_pause", "media_next_track"],
+    "lock": ["lock", "unlock", "open"],
+    "vacuum": ["start", "pause", "stop", "return_to_base", "locate"],
+    "valve": ["open_valve", "stop_valve", "close_valve"]
+}
+
+function dashboardActionCommands(item) {
+    var type = item && item.details ? item.details.type : ""
+    return ACTION_ROWS.hasOwnProperty(type) ? ACTION_ROWS[type] : []
+}
+
+function dashboardActionControls(item) {
+    var commands = dashboardActionCommands(item)
+    var controls = commands.length > 0 ? listOrEmpty(item.controls) : []
+    var result = []
+    for (var i = 0; i < commands.length; i++) {
+        for (var j = 0; j < controls.length; j++) {
+            if (controls[j].command === commands[i]) result.push(controls[j])
+        }
+    }
+    return result
+}
+
+function dashboardListControls(item, section) {
+    var visible = dashboardVisibleControls(item, section)
+    var commands = dashboardActionCommands(item)
+    if (commands.length === 0 || dashboardActionControls(item).length === 0) return visible
+    var result = []
+    for (var i = 0; i < visible.length; i++) {
+        var inRow = false
+        for (var j = 0; j < commands.length; j++) {
+            if (visible[i].command === commands[j]) inRow = true
+        }
+        if (!inRow) result.push(visible[i])
     }
     return result
 }
@@ -1287,8 +1395,41 @@ var FORWARD_QUEUE_LIMIT = 8
 var forwardActive = null
 var forwardQueue = []
 
-function getJson(path, callback, errorCallback) {
-    forwardRequest(path, callback, errorCallback, "")
+function commandScope(owner, counter) {
+    return {owner: owner, generation: owner.runtimeGeneration, counter: counter,
+        counterValue: counter ? owner[counter] : 0, expires: Date.now() + 10000}
+}
+
+function commandScopeCurrent(scope) {
+    return !scope || (scope.owner && scope.owner.runtimeGeneration === scope.generation
+        && (!scope.counter || scope.owner[scope.counter] === scope.counterValue))
+}
+
+function cancelPageCommands(owner, counter) {
+    for (var i = forwardQueue.length - 1; i >= 0; i--) {
+        var entry = forwardQueue[i]
+        if (entry.scope && entry.scope.owner === owner && (counter === undefined || entry.scope.counter === counter)) {
+            forwardQueue.splice(i, 1)
+            entry.path = ""
+            entry.waiters = []
+        }
+    }
+    // A sent action cannot be recalled. Keep its slot until completion, but
+    // detach its callbacks so cancellation cannot report a late success.
+    if (forwardActive && forwardActive.scope && forwardActive.scope.owner === owner
+            && (counter === undefined || forwardActive.scope.counter === counter)) {
+        forwardActive.waiters = []
+    }
+}
+
+function getJson(path, callback, errorCallback, scope) {
+    forwardRequest(path, callback, errorCallback, "", scope)
+}
+
+function invalidateSharedRead(path) {
+    // A queued read is still fresh; an already dispatched read may predate the
+    // event. Keep its existing callers, but never attach the invalidation to it.
+    if (forwardActive && forwardActive.sharedPath === path) forwardActive.sharedPath = ""
 }
 
 function getJsonShared(path, callback, errorCallback) {
@@ -1311,10 +1452,11 @@ function getJsonShared(path, callback, errorCallback) {
     forwardRequest(path, callback, errorCallback, path)
 }
 
-function forwardRequest(path, callback, errorCallback, sharedPath) {
+function forwardRequest(path, callback, errorCallback, sharedPath, scope) {
     cleanupConnections()
     var entry = {
         path: path,
+        scope: scope,
         sharedPath: sharedPath,
         waiters: [{callback: callback, errorCallback: errorCallback}]
     }
@@ -1332,7 +1474,18 @@ function forwardRequest(path, callback, errorCallback, sharedPath) {
 }
 
 function sendForward(entry) {
+    if (!commandScopeCurrent(entry.scope)) return
+    if (entry.scope && Date.now() >= entry.scope.expires) {
+        for (var i = 0; i < entry.waiters.length; i++) {
+            try {
+                if (entry.waiters[i].errorCallback) entry.waiters[i].errorCallback("command expired")
+            } catch (error) {}
+        }
+        entry.path = ""
+        return
+    }
     var xhr = new XMLHttpRequest()
+    xhr.scope = entry.scope
     xhr.sharedPath = entry.sharedPath
     xhr.waiters = entry.waiters
     forwardActive = xhr
@@ -1361,9 +1514,12 @@ function deliverForward(xhr) {
     // request, and an answered read must not still collect waiters.
     xhr.waiters = []
     xhr.sharedPath = ""
+    if (!commandScopeCurrent(xhr.scope)) return
     var data = null
     var failure = ""
-    if (xhr.status === 200) {
+    if (xhr.scope && Date.now() >= xhr.scope.expires) {
+        failure = "command expired"
+    } else if (xhr.status === 200) {
         try {
             data = JSON.parse(xhr.responseText)
         } catch (error) {
@@ -1395,10 +1551,9 @@ function finishForward(xhr) {
         return
     }
     forwardActive = null
-    if (forwardQueue.length === 0) {
-        return
+    while (forwardActive === null && forwardQueue.length > 0) {
+        sendForward(forwardQueue.shift())
     }
-    sendForward(forwardQueue.shift())
 }
 
 function cleanupConnections() {

@@ -5,6 +5,7 @@ import http.client
 import json
 import subprocess
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -261,3 +262,30 @@ def test_disconnected_display_client_does_not_leave_request_busy(lab):
     assert status == 200
     assert request(lab.ui, target("door_unlock"))[0] == 200
     assert lab.own.frames.count("*8*19*20##") == 1
+
+
+def test_complete_api_request_arriving_during_unlock_is_not_expired(lab):
+    first = http.client.HTTPConnection("127.0.0.1", lab.api, timeout=4)
+    second = http.client.HTTPConnection("127.0.0.1", lab.api, timeout=4)
+    try:
+        first.connect()
+        second.connect()
+        time.sleep(0.05)  # Both receive slots exist before the slow handler starts.
+        first.request("POST", "/api/v1/locks/default/actions/unlock",
+                      headers={"Authorization": f"Bearer {TOKEN}"})
+        deadline = time.monotonic() + 1
+        while "*8*19*20##" not in lab.own.frames:
+            assert time.monotonic() < deadline
+            time.sleep(0.005)
+        # This fd was not readable at poll() return. Its request arrives during
+        # the first handler's default 2s hold, longer than the 500ms receive limit.
+        second.request("GET", "/api/v1/health")
+        response = first.getresponse()
+        assert response.status == 200
+        response.read()
+        response = second.getresponse()
+        assert response.status == 200
+        response.read()
+    finally:
+        first.close()
+        second.close()

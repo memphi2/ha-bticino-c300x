@@ -26,6 +26,7 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
+    CONF_AGENT_UPDATE_QML_PENDING,
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -36,6 +37,8 @@ from .const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
+    CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
     CONF_MAINTENANCE_TOKEN,
     CONF_SHARED_SECRET,
@@ -116,6 +119,7 @@ class C300XRuntimeManager:
         )
         self.platforms: tuple[str, ...] = BASE_PLATFORMS
         self._platform_gate_state_loaded = False
+        self._setup_runtime_data: BticinoC300XRuntimeData | None = None
 
     async def async_prepare(self) -> bool:
         """Prepare runtime data and finish Home Assistant setup."""
@@ -123,6 +127,28 @@ class C300XRuntimeManager:
         self.hass.data.setdefault(DOMAIN, {})
         if not self._required_config_present():
             return False
+
+        try:
+            return await self._async_prepare_runtime()
+        except (Exception, asyncio.CancelledError):
+            try:
+                if self._setup_runtime_data is not None:
+                    cleanup_entry_runtime_resources(
+                        self.hass, self.entry, self._setup_runtime_data
+                    )
+                else:
+                    # Registration can fail before runtime_data owns the callbacks.
+                    C300XRuntimeResources(
+                        unregister_webhook=self.unregister_webhook,
+                        unregister_event_webhook=self.unregister_event_webhook,
+                        unregister_event_registration=self.unregister_event_registration,
+                    ).close()
+            except Exception:
+                _LOGGER.exception("Failed to clean up interrupted C300X setup")
+            raise
+
+    async def _async_prepare_runtime(self) -> bool:
+        """Acquire runtime resources within the setup rollback boundary."""
 
         self.api = self._build_agent_api()
         await self.async_validate_agent()
@@ -193,6 +219,7 @@ class C300XRuntimeManager:
                 payload_bootstrap_pending=(
                     self.entry.data.get(CONF_AGENT_UPDATE_PAYLOAD_PENDING) is True
                 ),
+                qml_patch_pending=CONF_AGENT_UPDATE_QML_PENDING in self.entry.data,
             )
 
     async def async_register_callbacks(self) -> None:
@@ -385,6 +412,7 @@ class C300XRuntimeManager:
         self.hass.data.setdefault(DOMAIN, {}).setdefault(DATA_RUNTIME_ENTRIES, {})[
             self.entry.entry_id
         ] = self.entry.runtime_data
+        self._setup_runtime_data = self.entry.runtime_data
 
     def _api(self) -> C300XAgentApi:
         """Return the initialized API client."""
@@ -411,11 +439,21 @@ class C300XRuntimeManager:
 def _entry_update_listener(
     entry: BticinoC300XConfigEntry,
 ) -> Callable[[HomeAssistant, BticinoC300XConfigEntry], Awaitable[None]]:
-    """Do not reload an active updater for its internal recovery marker."""
+    """Do not reload for the bookkeeping markers the integration writes itself.
+
+    The recovery markers of an active update, and the record that the media
+    user was set up, and the handled-marker of the Lovelace card hint, change
+    no setting. Reloading for the last two ran the setup a second time, the
+    card hint one when the repair card was merely opened or dismissed.
+    """
 
     def settings(current: BticinoC300XConfigEntry) -> tuple[dict[str, Any], dict[str, Any]]:
         data = dict(current.data)
         data.pop(CONF_AGENT_UPDATE_PAYLOAD_PENDING, None)
+        data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
+        data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
+        data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
+        data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
         return data, dict(current.options)
 
     previous = settings(entry)

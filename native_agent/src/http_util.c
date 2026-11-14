@@ -8,7 +8,164 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
+
+struct http_output {
+    int fd;
+    int close_pending;
+    char *data;
+    size_t size;
+    size_t sent;
+    long long deadline;
+};
+
+/* Only the agent event loop sends HTTP responses and owns these slots. */
+static struct http_output outputs[C300X_HTTP_MAX_OUTPUTS];
+
+static long long output_now(void)
+{
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return 0;
+    }
+    return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+static void clear_output(struct http_output *output, int failed)
+{
+    if (failed || output->close_pending) {
+        (void)shutdown(output->fd, SHUT_RDWR);
+    }
+    if (output->close_pending) {
+        close(output->fd);
+    }
+    free(output->data);
+    memset(output, 0, sizeof(*output));
+}
+
+int c300x_http_write(int fd, const char *data, size_t size)
+{
+    struct http_output *slot = NULL;
+    size_t queued = 0;
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        queued += outputs[i].size;
+    }
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        struct http_output *output = &outputs[i];
+        if (output->data != NULL && output->fd == fd) {
+            if (size > C300X_HTTP_OUTPUT_LIMIT - output->size
+                || size > C300X_HTTP_OUTPUT_QUEUE_LIMIT - queued) {
+                clear_output(output, 1);
+                return 0;
+            }
+            char *grown = realloc(output->data, output->size + size);
+            if (grown == NULL) {
+                clear_output(output, 1);
+                return 0;
+            }
+            memcpy(grown + output->size, data, size);
+            output->data = grown;
+            output->size += size;
+            return 1;
+        }
+        if (output->data == NULL && slot == NULL) {
+            slot = output;
+        }
+    }
+    if (size == 0) {
+        return 1;
+    }
+    if (size > C300X_HTTP_OUTPUT_LIMIT) {
+        (void)shutdown(fd, SHUT_RDWR);
+        return 0;
+    }
+    ssize_t sent = send(fd, data, size, MSG_NOSIGNAL | MSG_DONTWAIT);
+    if (sent == (ssize_t)size) {
+        return 1;
+    }
+    if (sent < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+        (void)shutdown(fd, SHUT_RDWR);
+        return 0;
+    }
+    size_t used = sent > 0 ? (size_t)sent : 0;
+    if (size - used > C300X_HTTP_OUTPUT_QUEUE_LIMIT - queued) {
+        (void)shutdown(fd, SHUT_RDWR);
+        return 0;
+    }
+    char *pending = slot != NULL ? malloc(size - used) : NULL;
+    if (pending == NULL) {
+        (void)shutdown(fd, SHUT_RDWR);
+        return 0;
+    }
+    memcpy(pending, data + used, size - used);
+    *slot = (struct http_output){.fd = fd, .data = pending,
+        .size = size - used, .deadline = output_now() + C300X_HTTP_OUTPUT_TIMEOUT_MS};
+    return 1;
+}
+
+int c300x_http_outputs_prepare(struct pollfd *fds)
+{
+    int timeout = -1;
+    long long now = output_now();
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        struct http_output *output = &outputs[i];
+        fds[i] = (struct pollfd){.fd = output->data != NULL ? output->fd : -1,
+            .events = POLLOUT};
+        if (output->data != NULL) {
+            int remaining = output->deadline > now ? (int)(output->deadline - now) : 0;
+            if (timeout < 0 || remaining < timeout) {
+                timeout = remaining;
+            }
+        }
+    }
+    return timeout;
+}
+
+void c300x_http_outputs_handle(const struct pollfd *fds)
+{
+    long long now = output_now();
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        struct http_output *output = &outputs[i];
+        if (output->data == NULL) {
+            continue;
+        }
+        if (output->deadline <= now) {
+            clear_output(output, 1);
+            continue;
+        }
+        if (fds[i].fd != output->fd || !fds[i].revents) {
+            continue;
+        }
+        if (fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            clear_output(output, 1);
+            continue;
+        }
+        ssize_t sent = send(output->fd, output->data + output->sent,
+            output->size - output->sent, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (sent < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
+            continue;
+        }
+        if (sent <= 0) {
+            clear_output(output, 1);
+            continue;
+        }
+        output->sent += (size_t)sent;
+        if (output->sent == output->size) {
+            clear_output(output, 0);
+        }
+    }
+}
+
+void c300x_http_outputs_close(void)
+{
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        if (outputs[i].data != NULL) {
+            outputs[i].close_pending = 1;
+            clear_output(&outputs[i], 1);
+        }
+    }
+}
 
 int send_all_bytes(int fd, const char *payload, size_t payload_len)
 {
@@ -293,6 +450,12 @@ void close_agent_socket(int fd)
     if (fd < 0) {
         return;
     }
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        if (outputs[i].data != NULL && outputs[i].fd == fd) {
+            outputs[i].close_pending = 1;
+            return;
+        }
+    }
     (void)shutdown(fd, SHUT_RDWR);
     close(fd);
 }
@@ -314,8 +477,9 @@ void c300x_http_send_json(int client_fd, int status, const char *reason, const c
         body_len
     );
 
-    if (header_len > 0) {
-        (void)send(client_fd, header, (size_t)header_len, MSG_NOSIGNAL);
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header)
+        || !c300x_http_write(client_fd, header, (size_t)header_len)) {
+        return;
     }
-    (void)send(client_fd, body, body_len, MSG_NOSIGNAL);
+    (void)c300x_http_write(client_fd, body, body_len);
 }

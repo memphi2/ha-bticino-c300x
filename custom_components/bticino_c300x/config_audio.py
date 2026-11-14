@@ -17,7 +17,9 @@ def audio_gain_db(value: Any) -> float:
         gain = float(value)
     except (TypeError, ValueError) as err:
         raise vol.Invalid("invalid audio gain") from err
-    if gain < AUDIO_GAIN_DB_MIN or gain > AUDIO_GAIN_DB_MAX:
+    # Written as one range test so that NaN, which compares false with
+    # everything, fails it instead of slipping between two bound checks.
+    if not AUDIO_GAIN_DB_MIN <= gain <= AUDIO_GAIN_DB_MAX:
         raise vol.Invalid("invalid audio gain")
     return gain
 

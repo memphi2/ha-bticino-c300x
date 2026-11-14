@@ -71,3 +71,9 @@ def test_discovery_connection_updates_rejects_invalid_targets(
 
 def test_discovery_matches_entry_normalizes_identity() -> None:
     assert discovery_matches_entry("AA-BB-CC", "aa:bb:cc")
+
+
+def test_discovery_unique_id_of_separators_only_is_no_identity() -> None:
+    assert discovery_unique_id({"id": b"-:-"}) is None
+    # The next identity key still counts.
+    assert discovery_unique_id({"id": "::", "mac": "AA:BB:CC:00:11:22"}) == "aabbcc001122"

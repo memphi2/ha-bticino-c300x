@@ -240,8 +240,9 @@ def test_smartphone_forwarding_select_subscribes_to_agent_events() -> None:
     asyncio.run(entity.async_added_to_hass())
 
     assert listeners == [("bticino_c300x_agent_event_received", entity._handle_agent_event)]
-    assert callable(removers[0])
-    assert removers[1:] == ["unsub"]
+    assert removers[0] == entity._cancel_reconnect_refresh
+    assert callable(removers[1])
+    assert removers[2:] == ["unsub"]
 
 
 def test_smartphone_forwarding_select_ignores_unrelated_events() -> None:

@@ -525,6 +525,42 @@ def test_fan_speed_step_comes_from_the_fan(attrs, step, value):
     assert (control["command"], control["step"], control["value"]) == ("percentage", step, value)
 
 
+def test_a_light_that_is_off_is_at_zero_brightness():
+    """Home Assistant reports no brightness for a light that is off, and the
+    display showed "?" for the missing value. An off light is at 0 %, which is
+    also where its plus button starts. A light that is on without a reported
+    brightness stays unknown."""
+
+    def brightness(value, **attrs):
+        snapshot = state(value, supported_color_modes=["brightness"], **attrs)
+        return next(
+            control for control in entity_controls("light.room", snapshot)
+            if control["command"] == "brightness"
+        )["value"]
+
+    assert brightness("off", brightness=None) == 0
+    assert brightness("off") == 0
+    assert brightness("off", brightness=128) == 0
+    assert brightness("on", brightness=128) == 50
+    assert brightness("on", brightness=None) is None
+
+
+@pytest.mark.parametrize("attrs", [{}, {"percentage_step": 100 / 3}])
+def test_a_fan_that_is_off_is_at_zero_speed(attrs):
+    """A fan that is off may report no percentage, which the display showed
+    as "?". It stands still, so its speed is 0 on a fan with its own speeds
+    as well. A running fan without a reported percentage stays unknown."""
+
+    def speed(value, **extra):
+        snapshot = state(value, supported_features=1, **attrs, **extra)
+        return entity_controls("fan.room", snapshot)[0]["value"]
+
+    assert speed("off", percentage=None) == 0
+    assert speed("off") == 0
+    assert speed("off", percentage=66) == 0
+    assert speed("on", percentage=None) is None
+
+
 def test_climate_choices_require_capability_and_reported_options():
     assert entity_controls("climate.room", state(fan_modes=["auto"], swing_modes=["on"])) == []
     assert entity_controls("climate.room", state(supported_features=552)) == []
@@ -623,6 +659,14 @@ def test_media_player_controls_carry_bounded_values():
         assert unknown[0]["value"] is None
     # No source list means no source control instead of an empty picker.
     assert entity_controls("media_player.room", state("playing", supported_features=2048)) == []
+
+
+@pytest.mark.parametrize("value,features", [("playing", 16384), ("paused", 1), ("idle", 1)])
+def test_media_player_rejects_playback_command_without_required_state_feature(value, features):
+    hass = hass_for(state(value, supported_features=features))
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "media_player.room", "media_play_pause", None))
+    hass.services.async_call.assert_not_awaited()
 
 
 def test_a_choice_offers_its_first_options_that_fit_the_response():
@@ -863,7 +907,7 @@ def test_a_dashboard_too_large_without_lists_is_logged_once(caplog):
     caplog.set_level(logging.WARNING, logger="custom_components.bticino_c300x.dashboard")
     for _ in range(2):
         payload = _dashboard(many)
-    assert len(payload["data"]["pages"][1]["items"]) == 40
+    assert len(payload["data"]["pages"][-1]["items"]) == 40
     warnings = [record for record in caplog.records if "display dashboard" in record.getMessage()]
     assert len(warnings) == 1
     _dashboard({"light.l0": _light(0)})
@@ -971,3 +1015,527 @@ def test_media_player_states_are_compared_as_strings():
     assert "MediaPlayerState" not in source
     off = entity_controls("media_player.room", state("standby", supported_features=128 | 256))
     assert [control["command"] for control in off] == ["toggle"]
+
+
+@pytest.mark.parametrize(
+    "modes",
+    [
+        [["brightness"], "brightness"],
+        [{"mode": "x"}, None, 5, "brightness"],
+        "brightness",
+        None,
+        5,
+    ],
+)
+def test_odd_supported_color_modes_never_break_the_light_controls(modes) -> None:
+    """One custom light with an odd attribute must not blank the whole display.
+
+    A set built from an unhashable item raised TypeError, and the payload has
+    no per-entity guard.
+    """
+
+    controls = entity_controls("light.strip", state("on", supported_color_modes=modes))
+
+    assert [control["command"] for control in controls][0] == "toggle"
+    if isinstance(modes, list) and "brightness" in modes:
+        assert "brightness" in [control["command"] for control in controls]
+
+
+def test_a_media_player_offers_shuffle_and_repeat_where_it_reports_them():
+    controls = {
+        control["command"]: control
+        for control in entity_controls("media_player.room", state(
+            "playing", supported_features=4 | 8 | 32768 | 262144,
+            volume_level=0.5, is_volume_muted=False, shuffle=True, repeat="all",
+        ))
+    }
+    assert list(controls) == ["volume_level", "volume_mute", "shuffle", "repeat"]
+    assert controls["shuffle"] == {"command": "shuffle", "kind": "boolean", "value": True}
+    assert controls["repeat"] == {
+        "command": "repeat", "kind": "choice", "value": "all", "options": ["off", "all", "one"],
+    }
+    # A state that is not reported is unknown, never off.
+    unknown = {
+        control["command"]: control
+        for control in entity_controls("media_player.room", state(
+            "playing", supported_features=32768 | 262144, shuffle="yes", repeat="sometimes",
+        ))
+    }
+    assert unknown["shuffle"]["value"] is None
+    assert unknown["repeat"]["value"] is None
+    # Without the features there is nothing to offer.
+    assert entity_controls("media_player.room", state("playing", supported_features=4)) != []
+    assert not {"shuffle", "repeat"} & {
+        control["command"]
+        for control in entity_controls("media_player.room", state("playing", supported_features=4 | 8))
+    }
+
+
+@pytest.mark.parametrize(("command", "option", "service", "data"), [
+    ("shuffle", "true", "shuffle_set", {"shuffle": True}),
+    ("shuffle", "false", "shuffle_set", {"shuffle": False}),
+    ("repeat", "one", "repeat_set", {"repeat": "one"}),
+])
+def test_shuffle_and_repeat_send_their_explicit_services(command, option, service, data):
+    hass = hass_for(state("playing", supported_features=32768 | 262144, shuffle=False, repeat="off"))
+
+    asyncio.run(async_execute_control(hass, "media_player.room", command, option))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "media_player", service, {"entity_id": "media_player.room", **data}, blocking=True,
+    )
+
+
+def test_repeat_only_accepts_what_it_offers():
+    hass = hass_for(state("playing", supported_features=262144, repeat="off"))
+
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "media_player.room", "repeat", "random"))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_light_with_effects_offers_them_and_sends_the_chosen_one():
+    snapshot = state(
+        "on", supported_color_modes=["onoff"], supported_features=4,
+        effect="Rainbow", effect_list=["Rainbow", "Pulse", ""],
+    )
+    controls = {control["command"]: control for control in entity_controls("light.strip", snapshot)}
+    assert controls["effect"] == {
+        "command": "effect", "kind": "choice", "value": "Rainbow", "options": ["Rainbow", "Pulse"],
+    }
+    # Without the feature, or without effects, there is no picker.
+    assert "effect" not in {
+        control["command"]
+        for control in entity_controls("light.strip", state("on", supported_color_modes=["onoff"], effect_list=["x"]))
+    }
+    assert "effect" not in {
+        control["command"]
+        for control in entity_controls("light.strip", state("on", supported_color_modes=["onoff"], supported_features=4))
+    }
+
+    hass = hass_for(snapshot)
+    asyncio.run(async_execute_control(hass, "light.strip", "effect", "Pulse"))
+    hass.services.async_call.assert_awaited_once_with(
+        "light", "turn_on", {"entity_id": "light.strip", "effect": "Pulse"}, blocking=True,
+    )
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "light.strip", "effect", "Disco"))
+
+
+@pytest.mark.parametrize(
+    ("value", "features", "commands"),
+    [
+        ("locked", 0, ["unlock"]),
+        ("unlocked", 0, ["lock"]),
+        ("locked", 1, ["unlock", "open"]),
+        ("unlocked", 1, ["lock", "open"]),
+        # While it moves, is stuck or is open, both ways stay possible.
+        ("jammed", 0, ["lock", "unlock"]),
+        ("locking", 0, ["lock", "unlock"]),
+        ("open", 1, ["lock", "unlock", "open"]),
+        ("unavailable", 1, []),
+    ],
+)
+def test_a_lock_offers_the_actions_that_change_something(value, features, commands):
+    controls = entity_controls("lock.front", state(value, supported_features=features))
+
+    assert [control["command"] for control in controls] == commands
+    assert all(control["kind"] == "button" for control in controls)
+
+
+@pytest.mark.parametrize("command", ["lock", "unlock", "open"])
+def test_a_lock_sends_its_own_explicit_service(command):
+    hass = hass_for(state("jammed", supported_features=1))
+
+    asyncio.run(async_execute_control(hass, "lock.front", command, None))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "lock", command, {"entity_id": "lock.front"}, blocking=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "features", "command", "option"),
+    [
+        # Not offered in this state: the display's view was stale.
+        ("locked", 0, "lock", None),
+        ("unlocked", 0, "unlock", None),
+        # The latch can only be opened by a lock that can.
+        ("locked", 0, "open", None),
+        # Nothing else is a lock command, and none takes a value.
+        ("locked", 1, "toggle", None),
+        ("locked", 1, "unlock", "123456"),
+    ],
+)
+def test_a_lock_rejects_what_it_did_not_offer(value, features, command, option):
+    hass = hass_for(state(value, supported_features=features))
+
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "lock.front", command, option))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_lock_is_a_tile_with_a_detail_page_and_only_runs_selected_entities():
+    snapshot = state("locked", supported_features=1)
+    hass = hass_for(snapshot)
+    hass.config = SimpleNamespace(language="de")
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["lock.front"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "entity"
+    assert item["entity_id"] == "lock.front"
+    assert item["glyph"] == "⌂"
+    assert item["state_label"] == "Zugesperrt"
+    assert item["color"] == "#58d68d"
+    assert item["details"]["type"] == "lock"
+    assert item["details"]["activity"] == "locked"
+    assert [control["command"] for control in item["controls"]] == ["unlock", "open"]
+
+    asyncio.run(async_execute_dashboard_action(hass, entry, "lock.front:unlock"))
+    hass.services.async_call.assert_awaited_once_with(
+        "lock", "unlock", {"entity_id": "lock.front"}, blocking=True,
+    )
+    other = SimpleNamespace(data={}, options={"dashboard_entities": []}, entry_id="entry")
+    hass.services.async_call.reset_mock()
+    with pytest.raises((ValueError, KeyError)):
+        asyncio.run(async_execute_dashboard_action(hass, other, "lock.front:unlock"))
+    hass.services.async_call.assert_not_awaited()
+
+
+_VACUUM_ALL = 4 | 8 | 16 | 32 | 512 | 8192
+
+
+@pytest.mark.parametrize(
+    ("value", "features", "commands"),
+    [
+        ("docked", _VACUUM_ALL, ["start", "stop", "locate", "fan_speed"]),
+        ("cleaning", _VACUUM_ALL, ["pause", "stop", "return_to_base", "locate", "fan_speed"]),
+        ("paused", _VACUUM_ALL, ["start", "stop", "return_to_base", "locate", "fan_speed"]),
+        ("returning", _VACUUM_ALL, ["start", "stop", "locate", "fan_speed"]),
+        ("idle", 8192 | 16, ["start", "return_to_base"]),
+        ("error", 512, ["locate"]),
+        ("cleaning", 0, []),
+        ("unavailable", _VACUUM_ALL, []),
+    ],
+)
+def test_a_vacuum_offers_each_button_where_it_makes_sense(value, features, commands):
+    controls = entity_controls(
+        "vacuum.robot",
+        state(value, supported_features=features, fan_speed="Quiet", fan_speed_list=["Quiet", "Turbo"]),
+    )
+
+    assert [control["command"] for control in controls] == commands
+    speed = [control for control in controls if control["command"] == "fan_speed"]
+    assert all(control["kind"] == "button" for control in controls if control not in speed)
+    if speed:
+        assert speed[0] == {
+            "command": "fan_speed", "kind": "choice", "value": "Quiet", "options": ["Quiet", "Turbo"],
+        }
+
+
+@pytest.mark.parametrize("command", ["start", "pause", "stop", "return_to_base", "locate"])
+def test_a_vacuum_sends_its_explicit_service(command):
+    # A state in which every one of them is offered but start and pause: use two.
+    value = "cleaning" if command == "pause" else "paused"
+    hass = hass_for(state(value, supported_features=_VACUUM_ALL))
+
+    asyncio.run(async_execute_control(hass, "vacuum.robot", command, None))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "vacuum", command, {"entity_id": "vacuum.robot"}, blocking=True,
+    )
+
+
+def test_a_vacuum_sets_the_suction_from_its_list_only():
+    hass = hass_for(state("docked", supported_features=32, fan_speed="Quiet", fan_speed_list=["Quiet", "Turbo"]))
+
+    asyncio.run(async_execute_control(hass, "vacuum.robot", "fan_speed", "Turbo"))
+    hass.services.async_call.assert_awaited_once_with(
+        "vacuum", "set_fan_speed", {"entity_id": "vacuum.robot", "fan_speed": "Turbo"}, blocking=True,
+    )
+    hass.services.async_call.reset_mock()
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "vacuum.robot", "fan_speed", "Max"))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_vacuum_does_not_run_what_the_state_does_not_offer():
+    hass = hass_for(state("cleaning", supported_features=_VACUUM_ALL))
+
+    with pytest.raises(ValueError, match="unsupported_dashboard_control"):
+        asyncio.run(async_execute_control(hass, "vacuum.robot", "start", None))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_vacuum_is_a_tile_with_a_detail_page():
+    hass = hass_for(state("cleaning", supported_features=_VACUUM_ALL))
+    hass.config = SimpleNamespace(language="en")
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["vacuum.robot"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "entity"
+    assert item["glyph"] == "↺"
+    assert item["state_label"] == "Cleaning"
+    assert item["details"]["type"] == "vacuum"
+    assert item["details"]["activity"] == "cleaning"
+    assert [control["command"] for control in item["controls"]][:2] == ["pause", "stop"]
+
+
+@pytest.mark.parametrize(
+    ("features", "commands"),
+    [
+        (1 | 2 | 4 | 8, ["open_valve", "stop_valve", "close_valve", "position"]),
+        (1 | 2, ["open_valve", "close_valve"]),
+        (4, ["position"]),
+        (0, []),
+    ],
+)
+def test_a_valve_offers_only_what_it_reports(features, commands):
+    controls = entity_controls(
+        "valve.water", state("open", supported_features=features, current_position=40)
+    )
+
+    assert [control["command"] for control in controls] == commands
+    position = [control for control in controls if control["command"] == "position"]
+    if position:
+        assert position[0]["value"] == 40
+        assert (position[0]["min"], position[0]["max"], position[0]["unit"]) == (0.0, 100.0, "%")
+
+
+@pytest.mark.parametrize("command", ["open_valve", "stop_valve", "close_valve"])
+def test_a_valve_sends_its_explicit_service(command):
+    hass = hass_for(state("open", supported_features=1 | 2 | 8))
+
+    asyncio.run(async_execute_control(hass, "valve.water", command, None))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "valve", command, {"entity_id": "valve.water"}, blocking=True,
+    )
+
+
+def test_a_valve_sets_a_position_in_range_only():
+    hass = hass_for(state("open", supported_features=4, current_position=40))
+
+    asyncio.run(async_execute_control(hass, "valve.water", "position", "75"))
+    hass.services.async_call.assert_awaited_once_with(
+        "valve", "set_valve_position", {"entity_id": "valve.water", "position": 75}, blocking=True,
+    )
+    hass.services.async_call.reset_mock()
+    for value in ("101", "-1", "nan", "7.5"):
+        with pytest.raises(ValueError):
+            asyncio.run(async_execute_control(hass, "valve.water", "position", value))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_valve_is_a_tile_that_reads_its_position_or_its_state():
+    def tile(position):
+        hass = hass_for(state("open", supported_features=1 | 2, current_position=position))
+        hass.config = SimpleNamespace(language="en")
+        entry = SimpleNamespace(
+            data={}, options={"device_ui_enabled": True, "dashboard_entities": ["valve.water"]}, entry_id="entry",
+        )
+        payload = asyncio.run(async_dashboard_payload(hass, entry))
+        return next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    with_position = tile(40)
+    assert with_position["kind"] == "entity"
+    assert with_position["glyph"] == "↕"
+    assert with_position["details"]["type"] == "valve"
+    assert (with_position["details"]["value"], with_position["details"]["unit"]) == ("40", "%")
+    assert with_position["details"]["activity"] == "open"
+    # Without a position the reading stays the state, never an unknown number.
+    without = tile(None)
+    assert without["details"]["value"] == "Open"
+    assert "position" not in without["details"]
+
+
+def test_a_humidifier_offers_power_target_humidity_and_modes():
+    controls = {
+        control["command"]: control
+        for control in entity_controls("humidifier.room", state(
+            "on", supported_features=1, humidity=55, min_humidity=30, max_humidity=80,
+            mode="eco", available_modes=["eco", "sleep", ""],
+        ))
+    }
+
+    assert list(controls) == ["toggle", "target_humidity", "mode"]
+    assert controls["target_humidity"] == {
+        "command": "target_humidity", "kind": "number", "value": 55,
+        "min": 30.0, "max": 80.0, "step": 1.0, "unit": "%",
+    }
+    assert controls["mode"]["options"] == ["eco", "sleep"]
+    # Without the MODES feature there is no mode picker; the range defaults to 0-100.
+    plain = {
+        control["command"]: control
+        for control in entity_controls("humidifier.room", state("off", humidity=40))
+    }
+    assert list(plain) == ["toggle", "target_humidity"]
+    assert (plain["target_humidity"]["min"], plain["target_humidity"]["max"]) == (0.0, 100.0)
+
+
+@pytest.mark.parametrize(
+    ("command", "option", "service", "data"),
+    [
+        ("toggle", None, "toggle", {}),
+        ("target_humidity", "60", "set_humidity", {"humidity": 60}),
+        ("mode", "sleep", "set_mode", {"mode": "sleep"}),
+    ],
+)
+def test_a_humidifier_sends_its_explicit_services(command, option, service, data):
+    hass = hass_for(state("on", supported_features=1, humidity=55, mode="eco", available_modes=["eco", "sleep"]))
+
+    asyncio.run(async_execute_control(hass, "humidifier.room", command, option))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "humidifier", service, {"entity_id": "humidifier.room", **data}, blocking=True,
+    )
+
+
+def test_a_humidifier_rejects_a_target_out_of_its_range_and_an_unknown_mode():
+    hass = hass_for(state("on", supported_features=1, humidity=55, min_humidity=30, max_humidity=80,
+                          mode="eco", available_modes=["eco"]))
+
+    for command, option, message in (
+        ("target_humidity", "90", "invalid_dashboard_value"),
+        ("target_humidity", "10", "invalid_dashboard_value"),
+        ("mode", "turbo", "invalid_dashboard_option"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            asyncio.run(async_execute_control(hass, "humidifier.room", command, option))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_humidifier_is_a_switch_tile_that_reads_the_room_humidity():
+    hass = hass_for(state("on", supported_features=1, humidity=55, current_humidity=48, mode="eco", available_modes=["eco"]))
+    hass.config = SimpleNamespace(language="en")
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["humidifier.room"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "switch"
+    assert item["state"] is True
+    assert item["glyph"] == "☔"
+    assert item["details"]["type"] == "humidifier"
+    assert (item["details"]["value"], item["details"]["unit"]) == ("48", "%")
+    asyncio.run(async_execute_dashboard_action(hass, entry, "humidifier.room"))
+    hass.services.async_call.assert_awaited_once_with(
+        "humidifier", "toggle", {"entity_id": "humidifier.room"}, blocking=True,
+    )
+
+
+def test_a_water_heater_offers_target_temperature_and_operation_mode():
+    controls = {
+        control["command"]: control
+        for control in entity_controls("water_heater.boiler", state(
+            "eco", supported_features=1 | 2, temperature=55, min_temp=35, max_temp=65,
+            target_temp_step=1, operation_mode="eco", operation_list=["off", "eco", "electric"],
+        ), "C")
+    }
+
+    assert list(controls) == ["temperature", "operation_mode"]
+    assert controls["temperature"] == {
+        "command": "temperature", "kind": "number", "value": 55,
+        "min": 35.0, "max": 65.0, "step": 1.0, "unit": "C",
+    }
+    assert controls["operation_mode"]["value"] == "eco"
+    assert controls["operation_mode"]["options"] == ["off", "eco", "electric"]
+    assert entity_controls("water_heater.boiler", state("eco", supported_features=0)) == []
+
+
+@pytest.mark.parametrize(
+    ("command", "option", "data"),
+    [("temperature", "60", {"temperature": 60.0}), ("operation_mode", "electric", {"operation_mode": "electric"})],
+)
+def test_a_water_heater_sends_its_explicit_services(command, option, data):
+    hass = hass_for(state(
+        "eco", supported_features=1 | 2, temperature=55, min_temp=35, max_temp=65, target_temp_step=1,
+        operation_mode="eco", operation_list=["off", "eco", "electric"],
+    ))
+    service = "set_temperature" if command == "temperature" else "set_operation_mode"
+
+    asyncio.run(async_execute_control(hass, "water_heater.boiler", command, option))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "water_heater", service, {"entity_id": "water_heater.boiler", **data}, blocking=True,
+    )
+    hass.services.async_call.reset_mock()
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "water_heater.boiler", "temperature", "99"))
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "water_heater.boiler", "operation_mode", "boom"))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_water_heater_is_a_tile_that_reads_the_water_temperature():
+    hass = hass_for(state("eco", supported_features=1 | 2, current_temperature=48.6, temperature=55,
+                          min_temp=35, max_temp=65, operation_mode="eco", operation_list=["eco"]))
+    hass.config = SimpleNamespace(language="en", units=SimpleNamespace(temperature_unit="C"))
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["water_heater.boiler"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "entity"
+    assert item["glyph"] == "♨"
+    assert item["details"]["type"] == "water_heater"
+    assert (item["details"]["value"], item["details"]["unit"]) == ("48.6", "C")
+
+
+def test_alarm_page_picker_offers_only_domains_a_plain_tap_can_act_on() -> None:
+    from custom_components.bticino_c300x.dashboard_config import (
+        _DASHBOARD_BUTTON_ENTITY_DOMAINS,
+        _DASHBOARD_TOGGLE_ENTITY_DOMAINS,
+    )
+    from custom_components.bticino_c300x.dashboard_entities import (
+        ALARM_PAGE_ACTION_DOMAINS,
+        ALARM_PAGE_ENTITY_DOMAINS,
+    )
+
+    assert set(ALARM_PAGE_ACTION_DOMAINS) == (
+        _DASHBOARD_TOGGLE_ENTITY_DOMAINS | _DASHBOARD_BUTTON_ENTITY_DOMAINS
+    )
+    # Everything stored earlier stays valid, the picker only offers less.
+    assert set(ALARM_PAGE_ACTION_DOMAINS) <= set(ALARM_PAGE_ENTITY_DOMAINS)
+    for domain in ("lock", "vacuum", "valve", "water_heater", "person", "device_tracker"):
+        assert domain not in ALARM_PAGE_ACTION_DOMAINS
+
+
+def test_alarm_page_picker_still_accepts_a_value_saved_from_another_domain() -> None:
+    """The selector rejects a prefilled entity outside its domains, which would
+    make the whole alarm form impossible to save."""
+
+    from custom_components.bticino_c300x.config_flow_forms import (
+        alarm_page_entity_selector,
+    )
+
+    assert "lock" not in alarm_page_entity_selector().config["domain"]
+    assert "lock" not in alarm_page_entity_selector("switch.lamp").config["domain"]
+    assert "lock" in alarm_page_entity_selector("lock.front").config["domain"]
+    # A domain the picker never knew is not let in through the saved value.
+    assert "camera" not in alarm_page_entity_selector("camera.door").config["domain"]
+
+
+def test_alarm_schema_gives_the_saved_quick_entity_to_the_selector() -> None:
+    from custom_components.bticino_c300x.config_flow_alarm import alarm_schema
+
+    def quick_domains(saved: dict) -> list[str]:
+        for key, sel in alarm_schema(saved).schema.items():
+            if getattr(key, "schema", key) == "alarm_page_entity_id":
+                return list(sel.config["domain"])
+        raise AssertionError("no alarm page field")
+
+    assert "lock" in quick_domains({"alarm_page_entity_id": "lock.front"})
+    assert "lock" not in quick_domains({})

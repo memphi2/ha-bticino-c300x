@@ -42,10 +42,19 @@ def test_device_homeassistant_page_has_no_refresh_timer() -> None:
     text = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(encoding="utf-8")
     helper = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(encoding="utf-8")
 
-    assert text.count("Timer {") == 2
+    assert text.count("Timer {") == 3
     assert "repeat: true" not in text
     assert "running: pageActive && watchFailed" in text
     assert "running: pageActive && pendingEntity.length > 0" in text
+    feedback_timer = text[text.index("id: feedbackExpiry"):].split("}", 1)[0]
+    assert "repeat: false" in feedback_timer
+    assert "onTriggered: refreshFeedbackExpiry()" in feedback_timer
+    expiry = helper[
+        helper.index("function expireDashboardFeedback("):
+        helper.index("function dashboardExpectation(")
+    ]
+    assert "getJson" not in expiry
+    assert "XMLHttpRequest" not in expiry
     assert "refreshTimer" not in helper
     assert "setInterval" not in helper
 

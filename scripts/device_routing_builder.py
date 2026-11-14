@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -156,6 +158,10 @@ def _verify_range(data: bytes, patch: Patch, expected_sha256: str) -> bool:
 def patch_routing(source: Path, target: Path) -> str:
     """Patch *source* and write a new routing target to *target*."""
 
+    if source.resolve() == target.resolve() or (target.exists() and source.samefile(target)):
+        raise PatchError("Source and target must be different files")
+    if target.is_symlink():
+        raise PatchError("Target must not be a symbolic link")
     data = bytearray(source.read_bytes())
     digest = sha256(bytes(data))
     if digest != STOCK_SHA256:
@@ -180,8 +186,18 @@ def patch_routing(source: Path, target: Path) -> str:
 
     patched_digest = sha256(bytes(data))
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
-    target.chmod(source.stat().st_mode & 0o7777)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix=f".{target.name}.", delete=False) as output:
+            temporary = Path(output.name)
+            output.write(data)
+            output.flush()
+            os.fchmod(output.fileno(), source.stat().st_mode & 0o7777)
+            os.fsync(output.fileno())
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return patched_digest
 
 

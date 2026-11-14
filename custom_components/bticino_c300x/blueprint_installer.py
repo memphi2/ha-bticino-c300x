@@ -111,6 +111,13 @@ def install_bundled_blueprints(target_dir: Path) -> BlueprintInstallResult:
     for filename in _OBSOLETE_BLUEPRINT_FILES:
         target = target_dir / filename
         if target.exists():
+            target_hash = _content_hash(target.read_bytes())
+            if target.is_symlink() or (
+                manifest.get(filename) != target_hash
+                and not _is_legacy_shipped(filename, target_hash)
+            ):
+                _LOGGER.debug("Preserving customized obsolete C300X blueprint: %s", target)
+                continue
             target.unlink()
             removed.append(target)
         if filename in manifest:

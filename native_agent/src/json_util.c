@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,73 +60,49 @@ const char *c300x_json_string_or_null(const char *value, char *out, size_t out_l
     return c300x_json_string(value, out, out_len);
 }
 
-void c300x_json_string_field(const char *body, const char *field, char *out, size_t out_len)
+int c300x_json_string_field_checked(const char *body, const char *field, char *out, size_t out_len)
 {
-    char pattern[64];
-    const char *found;
-    const char *ptr;
-    size_t written = 0;
-
+    const char *value;
     if (out == NULL || out_len == 0) {
-        return;
+        return -1;
     }
     out[0] = '\0';
     if (body == NULL || field == NULL) {
-        return;
+        return -1;
     }
-    snprintf(pattern, sizeof(pattern), "\"%s\"", field);
-    found = strstr(body, pattern);
-    if (found == NULL) {
-        return;
+    const char *end = body + strlen(body);
+    if (!c300x_json_find_member(body, end, field, &value)) {
+        return 0;
     }
-    ptr = strchr(found + strlen(pattern), ':');
-    if (ptr == NULL) {
-        return;
-    }
-    ptr++;
-    while (*ptr != '\0' && isspace((unsigned char)*ptr)) {
-        ptr++;
-    }
-    if (*ptr != '"') {
-        return;
-    }
-    ptr++;
-    while (*ptr != '\0' && *ptr != '"' && written + 1 < out_len) {
-        if (*ptr == '\\' && ptr[1] != '\0') {
-            ptr++;
-        }
-        out[written++] = *ptr++;
-    }
-    out[written] = '\0';
+    return c300x_json_decode_string(value, end, out, out_len, NULL) ? 1 : -1;
+}
+
+void c300x_json_string_field(const char *body, const char *field, char *out, size_t out_len)
+{
+    (void)c300x_json_string_field_checked(body, field, out, out_len);
+}
+
+static int value_ends(char ch)
+{
+    return ch == '\0' || ch == ',' || ch == '}' || ch == ']'
+        || ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
 }
 
 int c300x_json_bool_field(const char *body, const char *field, int *out)
 {
-    char pattern[64];
-    const char *found;
     const char *ptr;
 
     if (body == NULL || field == NULL || out == NULL) {
         return 0;
     }
-    snprintf(pattern, sizeof(pattern), "\"%s\"", field);
-    found = strstr(body, pattern);
-    if (found == NULL) {
+    if (!c300x_json_find_member(body, body + strlen(body), field, &ptr)) {
         return 0;
     }
-    ptr = strchr(found + strlen(pattern), ':');
-    if (ptr == NULL) {
-        return 0;
-    }
-    ptr++;
-    while (*ptr != '\0' && isspace((unsigned char)*ptr)) {
-        ptr++;
-    }
-    if (strncmp(ptr, "true", 4) == 0) {
+    if (strncmp(ptr, "true", 4) == 0 && value_ends(ptr[4])) {
         *out = 1;
         return 1;
     }
-    if (strncmp(ptr, "false", 5) == 0) {
+    if (strncmp(ptr, "false", 5) == 0 && value_ends(ptr[5])) {
         *out = 0;
         return 1;
     }
@@ -134,8 +111,6 @@ int c300x_json_bool_field(const char *body, const char *field, int *out)
 
 int c300x_json_int_field(const char *body, const char *field, int *out)
 {
-    char pattern[64];
-    const char *found;
     const char *ptr;
     char *end = NULL;
     long value;
@@ -143,22 +118,14 @@ int c300x_json_int_field(const char *body, const char *field, int *out)
     if (body == NULL || field == NULL || out == NULL) {
         return 0;
     }
-    snprintf(pattern, sizeof(pattern), "\"%s\"", field);
-    found = strstr(body, pattern);
-    if (found == NULL) {
+    if (!c300x_json_find_member(body, body + strlen(body), field, &ptr)
+        || (*ptr != '-' && !isdigit((unsigned char)*ptr))) {
         return 0;
-    }
-    ptr = strchr(found + strlen(pattern), ':');
-    if (ptr == NULL) {
-        return 0;
-    }
-    ptr++;
-    while (*ptr != '\0' && isspace((unsigned char)*ptr)) {
-        ptr++;
     }
     errno = 0;
     value = strtol(ptr, &end, 10);
-    if (errno != 0 || end == ptr) {
+    if (errno != 0 || end == ptr || !value_ends(*end)
+        || value < INT_MIN || value > INT_MAX) {
         return 0;
     }
     *out = (int)value;

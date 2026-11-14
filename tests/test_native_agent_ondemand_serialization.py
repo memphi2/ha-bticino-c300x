@@ -50,7 +50,25 @@ def test_sip_setup_failure_carries_a_reason() -> None:
         MEDIA_BRIDGE
     )
     setup_body = _function_body(MEDIA_BRIDGE, "static bool send_sip_setup(")
-    assert '"invite_%d"' in setup_body
-    assert '"invite_io"' in setup_body
+    # Each reason names the step that failed: REGISTER first, then INVITE.
+    register_io = setup_body.index('"register_io"')
+    register_status = setup_body.index('"register_%d"')
+    invite_built = setup_body.index('"INVITE sip:')
+    invite_io = setup_body.index('"invite_io"')
+    assert register_io < register_status < invite_built < invite_io
+    assert '"ack_io"' not in setup_body
+    assert '"invite_%d"' not in setup_body
     assert '"answer_%d"' in setup_body
     assert '"answer_timeout"' in setup_body
+
+
+def test_home_call_receiver_report_takes_the_bridge_mutex() -> None:
+    """The talkback proxy uses the same SRTP session under the mutex."""
+
+    body = _function_body(MEDIA_BRIDGE, "static void *home_call_thread_func(")
+    report = body.index("send_srtcp_receiver_report(audio_rtcp_fd")
+    guard = body.rindex("bridge->home_call_srtp_state == &srtp", 0, report)
+    lock = body.rindex("pthread_mutex_lock(&bridge->mutex);", 0, report)
+    unlock = body.index("pthread_mutex_unlock(&bridge->mutex);", report)
+    assert lock < guard < report < unlock
+    assert body.count("pthread_mutex_unlock(&bridge->mutex);", lock, report) == 0

@@ -375,8 +375,16 @@ static int write_file_atomic(
         set_error(error, error_len, "tmp_path_too_long");
         return 0;
     }
-    fp = fopen(tmp_path, "w");
+    /* Created private: the files hold SIP credentials and must not be
+     * readable between creation and the final chmod. */
+    (void)unlink(tmp_path);
+    fd = open(tmp_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    fp = fd >= 0 ? fdopen(fd, "w") : NULL;
     if (fp == NULL) {
+        if (fd >= 0) {
+            close(fd);
+            unlink(tmp_path);
+        }
         set_error(error, error_len, "tmp_open_failed");
         return 0;
     }
@@ -386,14 +394,24 @@ static int write_file_atomic(
         set_error(error, error_len, "tmp_write_failed");
         return 0;
     }
-    fd = fileno(fp);
-    if (fd < 0 || fchmod(fd, mode) != 0) {
+    if (fflush(fp) != 0) {
+        fclose(fp);
+        unlink(tmp_path);
+        set_error(error, error_len, "tmp_write_failed");
+        return 0;
+    }
+    if (fchmod(fd, mode) != 0) {
         fclose(fp);
         unlink(tmp_path);
         set_error(error, error_len, "chmod_failed");
         return 0;
     }
-    (void)fsync(fd);
+    if (fsync(fd) != 0) {
+        fclose(fp);
+        unlink(tmp_path);
+        set_error(error, error_len, "tmp_sync_failed");
+        return 0;
+    }
     if (fclose(fp) != 0) {
         unlink(tmp_path);
         set_error(error, error_len, "tmp_close_failed");
@@ -793,7 +811,7 @@ static int ensure_account_line(
         set_error(error, error_len, "account_label_too_long");
         return 0;
     }
-    output_cap = accounts->len + strlen(expected_line) + 1;
+    output_cap = accounts->len + 1 + strlen(expected_line) + 1;
     output = calloc(output_cap, 1);
     if (output == NULL) {
         set_error(error, error_len, "out_of_memory");

@@ -186,6 +186,24 @@ test("non-zero gain routes through a GainNode and mutes the element", async () =
   }
 });
 
+test("detaching while the AudioContext resumes leaves nothing to engage and does not throw", async () => {
+  const audio = installAudioContextMock();
+  try {
+    const mediaElement = fakeMediaElement();
+    const attachment = new C300XMediaAttachment(mediaElement, streamWithAudio(), {
+      getGainDb: () => 6,
+    });
+    const playing = attachment.play();
+    attachment.detach();
+
+    await playing;
+
+    assert.equal(mediaElement.muted, false);
+  } finally {
+    audio.restore();
+  }
+});
+
 test("without a DynamicsCompressor the gain connects straight to destination", async () => {
   // Graceful fallback: the makeup gain must still work on browsers that lack
   // DynamicsCompressorNode; only the anti-clip limiter is skipped.

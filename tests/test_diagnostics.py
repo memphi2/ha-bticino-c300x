@@ -988,3 +988,49 @@ def test_https_callback_diagnostics_use_agent_capability() -> None:
         result = _connection_diagnostics(runtime)["event_subscription"]
         assert result["callback_is_supported"] is (supported is True)
         assert result["callback_is_clean_local_http"] is False
+
+
+def test_a_free_text_agent_error_is_redacted_as_a_whole() -> None:
+    """Without a "Type:" prefix the text before the first colon used to be
+    copied unredacted into the type."""
+
+    summary = _safe_error_summary("cannot reach 192.0.2.5 via http://x.local/a")
+
+    assert summary == {"type": None, "message": "cannot reach <ipv4> via <url>"}
+    assert _safe_error_summary("route to 192.0.2.5: no answer") == {
+        "type": None,
+        "message": "route to <ipv4>: no answer",
+    }
+    # A real exception name and a bare name keep their shape.
+    assert _safe_error_summary("ClientConnectorError") == {
+        "type": "ClientConnectorError",
+        "message": None,
+    }
+    assert _safe_error_summary("aiohttp.ClientError: failed 192.0.2.5") == {
+        "type": "aiohttp.ClientError",
+        "message": "failed <ipv4>",
+    }
+
+
+def test_error_redaction_covers_ipv6_addresses_as_aiohttp_writes_them() -> None:
+    summary = _safe_error_summary(
+        "C300XAgentApiConnectionError: Cannot connect to host 2001:db8:abcd::17:8080 "
+        "ssl:default [Connect call failed ('2001:db8:abcd::17', 8080, 0, 0)]"
+    )
+
+    assert summary is not None
+    assert summary["type"] == "C300XAgentApiConnectionError"
+    assert "db8" not in str(summary["message"])
+    assert "abcd" not in str(summary["message"])
+    assert _redact_error_message("failed via 'fe80::abcd%eth0' at 12:30:45") == (
+        "failed via '<ipv6>' at 12:30:45"
+    )
+
+
+def test_a_dotted_host_name_is_not_taken_for_an_error_type() -> None:
+    assert _safe_error_summary("c300x.fritz.box: connection refused") == {
+        "type": None,
+        "message": "<hostname>: connection refused",
+    }
+    assert _safe_error_summary("aiohttp.ClientError: failed")["type"] == "aiohttp.ClientError"
+    assert _safe_error_summary("maintenance_busy")["type"] == "maintenance_busy"

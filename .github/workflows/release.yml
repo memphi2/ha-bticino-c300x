@@ -28,7 +28,9 @@ env:
 jobs:
   validate:
     name: release validate (${{ matrix.name }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
+    outputs:
+      current-ha: ${{ steps.ha-version.outputs.current_ha }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,9 +51,14 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Resolve Home Assistant version
+        id: ha-version
+        run: python scripts/resolve_ha_version.py "${{ matrix.name }}"
       - name: Install Python validation tools
+        env:
+          HA_VERSION: ${{ steps.ha-version.outputs.version }}
         run: |
-          python -m pip install -r "${{ matrix.requirements-ha }}" -r "${{ matrix.requirements-lock }}"
+          python -m pip install "homeassistant==$HA_VERSION" -r "${{ matrix.requirements-ha }}" -r "${{ matrix.requirements-lock }}"
           python -m pip check
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -59,13 +66,13 @@ jobs:
       - name: Install native agent toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev pkg-config
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev libturbojpeg0 pkg-config
       - name: Validation gates
         run: python scripts/check_validate.py
 
   hacs:
     name: release hacs
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -81,7 +88,7 @@ jobs:
 
   hassfest:
     name: release hassfest
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -92,7 +99,7 @@ jobs:
 
   main-validation:
     name: main validation gate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       commit: ${{ steps.verified-main.outputs.commit }}
     permissions:
@@ -224,7 +231,7 @@ jobs:
       ref: ${{ needs.main-validation.outputs.commit }}
 
   publish:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs:
       - validate
       - hacs
@@ -335,6 +342,7 @@ jobs:
                 sha256sum -c SHA256SUMS
               )
               mkdir -p .release
+              python scripts/check_release_contents.py .release/reuse-current/ha-bticino-c300x.zip
               cp .release/reuse-current/ha-bticino-c300x.zip "$RELEASE_ZIP"
               cp .release/reuse-current/SHA256SUMS "$RELEASE_SHA256SUMS"
               cp .release/reuse-current/build-metadata.json "$RELEASE_METADATA"
@@ -366,7 +374,10 @@ jobs:
         run: scripts/build_hacs_release.py ${{ steps.reusable-agent.outputs.reuse_args }}
       - name: Generate release metadata
         if: steps.reusable-agent.outputs.asset_source == 'build'
+        env:
+          C300X_VALIDATED_CURRENT_HA_VERSION: ${{ needs.validate.outputs.current-ha }}
         run: |
+          test -n "$C300X_VALIDATED_CURRENT_HA_VERSION"
           scripts/write_release_assets.py \
             --zip "$RELEASE_ZIP" \
             --tag "${{ steps.release-tag.outputs.tag }}" \

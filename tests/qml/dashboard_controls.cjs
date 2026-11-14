@@ -17,7 +17,7 @@ const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "ut
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
-    interactionActive: false, listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
+    interactionActive: false, armedCommand: "", listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
     commandGeneration: 0, controlFeedback: [],
     currentPageIndex: 0, dashboardPages: [], items: [], selectedItem: null, status: {}});
 p.page = p;
@@ -105,9 +105,10 @@ queue.shift().success({...payload("five"), notifications: [
 ]});
 assert.equal(p.notifications.length, 1);
 p.notificationsOpen = true;
-p.notificationAction(p.notifications[0], null);
+p.notificationAction(p.notifications[0], undefined);
 assert.match(queue[0].url, /entities=notification.calendar&option=/);
 assert.equal(JSON.parse(decodeURIComponent(queue[0].url.split("&option=")[1])).revision, 12);
+assert.equal(JSON.parse(decodeURIComponent(queue[0].url.split("&option=")[1])).action_id, null);
 p.notificationAction(p.notifications[0], null);
 assert.equal(queue.length, 1, "notification actions are single-flight too");
 queue.shift().success({ok: true});
@@ -147,6 +148,15 @@ p.dashboardOnline = true;
 assert.equal(p.optionLabel({command: "color"}, "red"), "Red");
 assert.equal(p.optionLabel({command: "fan_mode"}, "custom mode"), "custom mode");
 assert.equal(p.optionLabel({command: "preset_mode"}, "auto"), "auto", "custom preset names remain unchanged");
+for (const lang of ["en", "de", "fr", "it"]) {
+    const modeLabels = {};
+    for (const key of Object.keys(I18n.DETAIL_LABELS[lang])) {
+        if (key.indexOf("mode_") !== 0) continue;
+        const label = I18n.DETAIL_LABELS[lang][key];
+        assert.equal(modeLabels[label], undefined, lang + ": " + key + " and " + modeLabels[label] + " read the same, two buttons could not be told apart");
+        modeLabels[label] = key;
+    }
+}
 for (const lang of ["de", "fr", "it"]) {
     assert.deepEqual(Object.keys(I18n.DETAIL_LABELS[lang]).sort(), Object.keys(I18n.DETAIL_LABELS.en).sort());
     for (const key of Object.keys(I18n.DETAIL_LABELS.en)) assert.notEqual(I18n.text(lang, key), key);
@@ -155,7 +165,8 @@ Api.dashboardControl(normalized, normalized.controls[0], "green", p.status, p);
 assert.equal(queue.length, 1, "a swatch sends one atomic color command");
 assert.match(queue.shift().url, /light.room%3Acolor&option=green$/);
 p.aboutToHide();
-assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 2, "entity details introduce no periodic timers");
+assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 3, "recovery, command watchdog and feedback expiry only");
+assert.equal((qml.match(/repeat: false/g) || []).length, 3, "all dashboard timers are one-shot");
 assert.match(qml, /anchors.top: entitySummary.bottom/);
 console.log("Entity detail controls and translations passed");
 
@@ -376,6 +387,48 @@ assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "the warning stays long 
 clock += 1;
 assert.equal(p.feedbackKey(stuck), "", "a settled entry stops being reported");
 assert.equal(p.readingColor(stuck), "#c7d0d9");
+// A light reports what it converted a command into: a color temperature in
+// mired, a hue and saturation through its own color space. Close counts.
+function lightWith(command, value) {
+    return {entity_id: "light.lamp", available: true, state: true, controls: [
+        {command: command, kind: "number", value: value, min: 0, max: 7000, step: 1}]};
+}
+function confirmed(command, sent, reported) {
+    const expected = Api.dashboardExpectation(lightWith(command, 0), {command: command, kind: "number"}, String(sent));
+    return Api.dashboardExpectationMatches(lightWith(command, reported), expected);
+}
+assert.equal(confirmed("color_temp_kelvin", 2700, 2703), true, "a color temperature a few kelvin off is the one that was sent");
+assert.equal(confirmed("color_temp_kelvin", 2700, 2730), true);
+assert.equal(confirmed("color_temp_kelvin", 2700, 2731), false, "but not one that is clearly another");
+assert.equal(confirmed("hue", 120, 122), true);
+assert.equal(confirmed("hue", 120, 124), false);
+assert.equal(confirmed("saturation", 80, 78), true);
+assert.equal(confirmed("brightness", 50, 51), false, "a brightness is still compared exactly");
+assert.equal(confirmed("brightness", 50, 50), true);
+// A one-shot action (a script, scene or button, a track skip) has no state that
+// Home Assistant could reflect, so it has nothing to be unconfirmed about.
+const oneShot = {entity_id: "script.leave", available: true};
+Api.setDashboardFeedback(p, oneShot.entity_id, "action_sent", null);
+assert.equal(Api.nextFeedbackDelay(p.controlFeedback.filter(e => e.entity_id === oneShot.entity_id)), 60000, "it is only forgotten, not turned into a warning");
+clock += 15000;
+assert.equal(p.feedbackKey(oneShot), "action_sent", "a one-shot action is not called unconfirmed");
+clock += 44999;
+assert.equal(p.feedbackKey(oneShot), "action_sent");
+clock += 1;
+assert.equal(p.feedbackKey(oneShot), "", "and it is forgotten after the lifetime of other feedback");
+// The quick action on the Alarm page shows a failed request in the user's
+// language, with the code, never the raw transport string.
+const quickStatus = {text: "", color: ""};
+p.quickActionPending = false;
+p.quickActionGeneration = 0;
+queue.length = 0;
+Api.dashboardAction({domain: "light", entity_id: "light.hall"}, quickStatus, p, false);
+assert.equal(queue.length, 1);
+queue.shift().error("API error: 503");
+assert.equal(quickStatus.text, "Status failed (503)", "a failed quick action is not shown as the raw English string");
+assert.equal(quickStatus.color, "#ff6b6b");
+Api.setDashboardFeedback(p, "light.hall", "action_sent", {command: "toggle", value: true});
+assert.equal(Api.nextFeedbackDelay(p.controlFeedback.filter(e => e.entity_id === "light.hall")), 15000, "a command with an expectation still gets its warning");
 
 // A late confirmation still lands, and is stamped again so it reads as fresh.
 p.controlFeedback = [];
@@ -410,6 +463,8 @@ assert.equal(p.feedbackKey(stuck), "");
 p.controlFeedback = [];
 Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "media_next_track", stateless: true});
 p.dashboardPages = [{items: [{entity_id: stuck.entity_id, state: true, available: true}]}];
+assert.equal(Api.nextFeedbackDelay(p.controlFeedback), Api.FEEDBACK_DISCARD_MS,
+    "a command without a state needs no check after the unconfirmed time, only its discard");
 clock += 15000;
 Api.confirmDashboardFeedback(p);
 assert.equal(p.feedbackKey(stuck), "action_sent", "a command without a state is never reported as unconfirmed");
@@ -520,12 +575,35 @@ assert.deepEqual(commands(Api.dashboardQuickControls({controls: [
     {command: "media_play_pause", kind: "button", playing: false},
     {command: "volume_level", kind: "number", value: 40, min: 0, max: 100, step: 1}]})),
     ["media_play_pause:0"], "a player without track buttons shows what it has, not a volume pair");
-assert.equal(p.controlLabel({command: "media_play_pause", playing: true}), "||");
-assert.equal(p.controlLabel({command: "media_play_pause", playing: false}), ">");
-assert.equal(p.controlLabel({command: "media_play_pause"}), ">", "an unknown state offers play");
-assert.equal(p.controlLabel({command: "media_previous_track"}), "«");
-assert.equal(p.controlLabel({command: "media_next_track"}), "»");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: true}), "\u25ae\u25ae");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: false}), "\u25b6");
+assert.equal(p.controlLabel({command: "media_play_pause"}), "\u25b6", "an unknown state offers play");
+assert.equal(p.controlLabel({command: "media_previous_track"}), "\u25c0\u25c0");
+assert.equal(p.controlLabel({command: "media_next_track"}), "\u25b6\u25b6");
+assert.deepEqual(Array.from(Api.dashboardActionControls(playerItem), c => c.command),
+    ["media_previous_track", "media_play_pause", "media_next_track"], "the transport buttons form one row");
+assert.deepEqual(Array.from(Api.dashboardListControls(playerItem, ""), c => c.command),
+    ["volume_level", "volume_mute", "source"], "the list below the row holds the rest");
+assert.deepEqual(Array.from(Api.dashboardActionControls({details: {type: "light"}, controls: playerItem.controls}), c => c.command), [],
+    "only a media player has a transport row");
+assert.deepEqual(Array.from(Api.dashboardListControls(climate, "more_controls"), c => c.command),
+    Array.from(Api.dashboardVisibleControls(climate, "more_controls"), c => c.command));
+assert.deepEqual(Array.from(Api.dashboardActionControls({details: {type: "media_player"}, controls: [
+    {command: "media_next_track", kind: "button"}, {command: "media_previous_track", kind: "button"}]}), c => c.command),
+    ["media_previous_track", "media_next_track"], "the row keeps its fixed order");
 assert.equal(p.optionLabel({command: "source"}, "off"), "off", "a source name is never translated as a mode");
+assert.equal(p.itemName({name: "Lamp", glyph: "\u2600"}), "\u2600 Lamp", "the symbol leads the name");
+assert.equal(p.itemName({name: "Lamp"}), "Lamp");
+assert.equal(p.itemName({entity_id: "light.room"}), "light.room");
+assert.equal(Api.dashboardMixedItems([{kind: "entity", domain: "c300x", entity_id: "light.room", name: "Room", glyph: "\u2600"}])[0].glyph, "\u2600");
+assert.equal(Api.dashboardMixedItems([{kind: "entity", domain: "c300x", entity_id: "light.room", name: "Room"}])[0].glyph, undefined);
+assert.equal(p.optionLabel({command: "effect"}, "off"), "off", "an effect name is never translated as a mode");
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["shuffle", "repeat", "effect", "mode_all", "mode_one"]) {
+        assert.notEqual(I18n.text(lang, key), key, key + " is translated in " + lang);
+    }
+}
+assert.equal(p.optionLabel({command: "repeat"}, "all"), "All");
 assert.deepEqual(Array.from(Api.dashboardVisibleControls(playerItem, ""), c => c.command),
     ["media_previous_track", "media_play_pause", "media_next_track", "volume_level", "volume_mute", "source"],
     "the power switch lives in the summary, not in the control list");
@@ -573,6 +651,108 @@ for (const language of ["en", "de", "fr", "it"]) {
     }
 }
 p.uiLanguage = "en";
+const lockItem = {entity_id: "lock.front", domain: "c300x", available: true, state: false,
+    details: {type: "lock", value: "Locked", state_label: "Locked", activity: "locked"}, controls: [
+    {command: "unlock", kind: "button"}, {command: "open", kind: "button"}]};
+assert.deepEqual(Array.from(Api.dashboardActionControls(lockItem), c => c.command), ["unlock", "open"],
+    "a lock offers what changes something, in the order of the row");
+assert.deepEqual(Array.from(Api.dashboardListControls(lockItem, ""), c => c.command), [], "all of a lock is in its row");
+assert.equal(p.detailState(lockItem), "", "the state is not said twice");
+p.dashboardOnline = true;
+p.pendingEntity = "";
+p.selectedItem = lockItem;
+const realDashboardControl = Api.dashboardControl;
+Api.dashboardControl = (item, control, option) => { sent.push(control.command); };
+var sent = [];
+p.pressAction(lockItem, lockItem.controls[0]);
+assert.deepEqual(sent, [], "a first tap on unlock only arms it");
+assert.equal(p.armedCommand, "unlock");
+p.pressAction(lockItem, lockItem.controls[1]);
+assert.deepEqual(sent, [], "another action takes over the arming");
+assert.equal(p.armedCommand, "open");
+p.pressAction(lockItem, lockItem.controls[1]);
+assert.deepEqual(sent, ["open"], "the second tap on the same action sends it");
+assert.equal(p.armedCommand, "");
+p.pressAction({details: {type: "lock"}}, {command: "lock", kind: "button"});
+assert.deepEqual(sent, ["open", "lock"], "locking needs no confirmation");
+p.pressAction({details: {type: "media_player"}}, {command: "media_next_track", kind: "button"});
+assert.deepEqual(sent, ["open", "lock", "media_next_track"], "nothing else is guarded");
+p.items = [lockItem];
+p.selectedItem = lockItem;
+p.armedCommand = "unlock";
+p.refreshSelectedItem();
+assert.equal(p.armedCommand, "unlock", "a refresh that still offers the armed action keeps the question");
+const withoutUnlock = Object.assign({}, lockItem, {controls: [lockItem.controls[1]]});
+p.items = [withoutUnlock];
+p.refreshSelectedItem();
+assert.equal(p.armedCommand, "", "the question is gone when the action stops being offered");
+p.items = [];
+p.selectedItem = lockItem;
+p.armedCommand = "unlock";
+p.aboutToHide();
+assert.equal(p.armedCommand, "", "a question left open is gone when the screen goes off or the page is left");
+p.armedCommand = "";
+p.dashboardOnline = true;
+p.pageActive = true;
+Api.dashboardControl = realDashboardControl;
+p.selectedItem = null;
+assert.match(qml, /function openDetails\(item\) \{\n        armedCommand = ""/, "opening a page starts unarmed");
+assert.doesNotMatch(qml, /armedCommand[^\n]*Timer|Timer[^}]*armedCommand/, "arming adds no timer");
+const lockExpectation = Api.dashboardExpectation(lockItem, lockItem.controls[0], null);
+assert.deepEqual(Object.assign({}, lockExpectation), {command: "unlock", activity: "unlocked"});
+assert.equal(Api.dashboardExpectationMatches(lockItem, lockExpectation), false, "still locked is no confirmation");
+const unlockedItem = JSON.parse(JSON.stringify(lockItem));
+unlockedItem.details.activity = "unlocked";
+assert.equal(Api.dashboardExpectationMatches(unlockedItem, lockExpectation), true);
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["lock", "unlock", "open", "confirm"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
+const vacuumItem = {entity_id: "vacuum.robot", domain: "c300x", available: true, state: false,
+    details: {type: "vacuum", value: "Docked", state_label: "Docked", activity: "docked"}, controls: [
+    {command: "locate", kind: "button"}, {command: "start", kind: "button"},
+    {command: "fan_speed", kind: "choice", value: "Quiet", options: ["Quiet", "Turbo"]},
+    {command: "return_to_base", kind: "button"}]};
+assert.deepEqual(Array.from(Api.dashboardActionControls(vacuumItem), c => c.command), ["start", "return_to_base", "locate"],
+    "the buttons of a vacuum come in the order of the row");
+assert.deepEqual(Array.from(Api.dashboardListControls(vacuumItem, ""), c => c.command), ["fan_speed"], "the suction stays in the list");
+assert.equal(p.detailState(vacuumItem), "", "the state is not said twice");
+assert.equal(p.optionLabel({command: "fan_speed"}, "Turbo"), "Turbo", "a suction name is never translated as a mode");
+const startExpectation = Api.dashboardExpectation(vacuumItem, vacuumItem.controls[1], null);
+assert.equal(Api.dashboardExpectationMatches(vacuumItem, startExpectation), false, "still docked is no confirmation");
+const cleaningItem = JSON.parse(JSON.stringify(vacuumItem));
+cleaningItem.details.activity = "cleaning";
+assert.equal(Api.dashboardExpectationMatches(cleaningItem, startExpectation), true);
+const dockExpectation = Api.dashboardExpectation(vacuumItem, vacuumItem.controls[3], null);
+assert.equal(Api.dashboardExpectationMatches(vacuumItem, dockExpectation), true, "already docked confirms the way back");
+assert.equal(Api.dashboardExpectationMatches(cleaningItem, dockExpectation), false);
+assert.equal(Api.dashboardExpectation(vacuumItem, vacuumItem.controls[0], null).stateless, true, "finding it leaves no state to confirm");
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["start", "pause", "stop", "return_to_base", "locate", "fan_speed"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
+const valveItem = {entity_id: "valve.water", domain: "c300x", available: true, state: false,
+    details: {type: "valve", value: "40", unit: "%", position: 40, activity: "open"}, controls: [
+    {command: "close_valve", kind: "button"}, {command: "position", kind: "number", value: 40, min: 0, max: 100, step: 1, unit: "%"},
+    {command: "open_valve", kind: "button"}]};
+assert.deepEqual(Array.from(Api.dashboardActionControls(valveItem), c => c.command), ["open_valve", "close_valve"]);
+assert.deepEqual(Array.from(Api.dashboardListControls(valveItem, ""), c => c.command), ["position"]);
+assert.equal(p.detailState(valveItem), "Open", "a valve says what it is doing next to its position");
+const closeExpectation = Api.dashboardExpectation(valveItem, valveItem.controls[0], null);
+assert.equal(Api.dashboardExpectationMatches(valveItem, closeExpectation), false, "still open is no confirmation");
+const closedItem = JSON.parse(JSON.stringify(valveItem));
+closedItem.details.activity = "closed";
+assert.equal(Api.dashboardExpectationMatches(closedItem, closeExpectation), true);
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["open_valve", "stop_valve", "close_valve"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
+const humidifierItem = {entity_id: "humidifier.room", domain: "c300x", available: true, state: true, kind: "switch",
+    details: {type: "humidifier", value: "48", unit: "%"}, controls: [
+    {command: "toggle", kind: "button"}, {command: "target_humidity", kind: "number", value: 55, min: 30, max: 80, step: 1, unit: "%"}]};
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(humidifierItem, ""), c => c.command), ["target_humidity"],
+    "the power switch of a humidifier lives in the summary, not in the control list");
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["mode", "target_humidity", "operation_mode"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
+assert.equal(I18n.text("en", "humidity"), "Humidity", "the weather label is not the target label");
 console.log("Media player controls passed");
 
 

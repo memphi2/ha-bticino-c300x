@@ -361,6 +361,13 @@ def test_dashboard_payload_normalization_helpers() -> None:
         )
     )
     assert slider == {"value": 5.5, "min": 1.0, "max": 10.0, "step": 1.0}
+    odd = _dashboard_slider_payload(
+        FakeState(
+            "nan",
+            attributes={"min": "nan", "max": float("inf"), "step": float("nan")},
+        )
+    )
+    assert odd == {"value": 0.0, "min": 0.0, "max": 100.0, "step": 1.0}
     assert _dashboard_slider_payload(None) == {
         "value": 0.0,
         "min": 0.0,
@@ -390,6 +397,11 @@ def test_dashboard_payload_normalization_helpers() -> None:
     assert len(choice["options"]) == 12
 
     assert _dashboard_float("bad", 7.0) == 7.0
+    assert _dashboard_float("nan", 7.0) == 7.0
+    assert _dashboard_float(float("inf"), 7.0) == 7.0
+    assert _dashboard_float("1e999", None) is None
+    assert _dashboard_float(10**400, 7.0) == 7.0
+    assert _dashboard_float(True, 7.0) == 7.0
     assert _dashboard_first_attribute({"min": "", "native_min": 0}, "min", "native_min") == 0
     assert _dashboard_text("  a   b   c  ", "fallback", 80) == "a b c"
     assert _dashboard_text("", "fallback", 4) == "fall"
@@ -551,6 +563,33 @@ def test_async_execute_dashboard_action_toggles_selected_switch() -> None:
     assert hass.services.calls == [
         ("switch", "toggle", {"entity_id": "switch.entry"}, True)
     ]
+
+
+def test_async_execute_dashboard_action_toggles_selected_automation_or_siren() -> None:
+    for entity_id in ("automation.night", "siren.hall"):
+        hass = FakeHass()
+        entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: [entity_id]})
+
+        result = run(async_execute_dashboard_action(hass, entry, entity_id))
+
+        assert result == {"ok": True, "action_id": entity_id}
+        assert hass.services.calls == [
+            (entity_id.split(".")[0], "toggle", {"entity_id": entity_id}, True)
+        ]
+
+
+def test_a_person_has_no_action_to_run() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["person.anna"]})
+
+    try:
+        run(async_execute_dashboard_action(hass, entry, "person.anna"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a person must not run an action")
+
+    assert hass.services.calls == []
 
 
 def test_async_execute_dashboard_action_presses_selected_button() -> None:
@@ -2101,7 +2140,14 @@ def test_async_unlock_door_calls_agent_api() -> None:
 
 def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() -> None:
     hass = FakeHass(
-        states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
+        states=FakeStates(
+            {
+                "alarm_control_panel.home": FakeState("disarmed"),
+                "sensor.temperature": FakeState(
+                    "21.5", attributes={"friendly_name": "Temperature"}
+                ),
+            }
+        )
     )
     entry = FakeEntry(
         data={
@@ -2109,6 +2155,11 @@ def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() ->
             CONF_DEVICE_UI_ENABLED: True,
         },
         options={
+            # The status page is only shown with something on it.
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {"page": "C300X"}
+            },
             CONF_ACTIONS: {
                 "leave_home": {
                     "domain": "script",
@@ -2147,6 +2198,40 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
 
     monkeypatch.setattr(dashboard_module, "async_status", fail_status)
     hass = FakeHass(
+        states=FakeStates(
+            {
+                "alarm_control_panel.home": FakeState("disarmed"),
+                "sensor.temperature": FakeState(
+                    "21.5", attributes={"friendly_name": "Temperature"}
+                ),
+            }
+        )
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+            CONF_DEVICE_UI_ENABLED: True,
+        },
+        options={
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {"page": "C300X"}
+            },
+        },
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    assert result["data"]["pages"][0]["badges"][1] == {"state": "Alarm\nAus"}
+
+
+def test_async_dashboard_payload_leaves_out_an_empty_status_page() -> None:
+    """With no weather and no tile the status page has nothing to show.
+
+    Its badges stay away with it. Messages still need a page to appear on.
+    """
+
+    hass = FakeHass(
         states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
     )
     entry = FakeEntry(
@@ -2156,9 +2241,22 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
         },
     )
 
-    result = run(async_dashboard_payload(hass, entry))
+    assert run(async_dashboard_payload(hass, entry))["data"]["pages"] == []
 
-    assert result["data"]["pages"][0]["badges"][1] == {"state": "Alarm\nAus"}
+    entry.options[CONF_DASHBOARD_ENTITIES] = ["sensor.temperature"]
+    hass.states.values["sensor.temperature"] = FakeState(
+        "21.5", attributes={"friendly_name": "Temperature"}
+    )
+    pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
+    assert [page["title"] for page in pages] == [""]
+    assert not pages[0].get("badges")
+
+    entry.options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = {
+        "sensor.temperature": {"page": "C300X"}
+    }
+    pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
+    assert [page["title"] for page in pages] == ["C300X"]
+    assert len(pages[0]["badges"]) == 3
 
 
 def test_async_dashboard_payload_includes_configured_weather() -> None:
@@ -2893,7 +2991,17 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
         "select.forwarding",
         "input_select.scene",
     ]
-    assert page["items"] == [
+    # Each tile carries the symbol of its type next to what it shows.
+    assert {item["entity_id"]: item.get("glyph") for item in page["items"]} == {
+        "switch.entry": "\u26a1",
+        "sensor.temperature": None,
+        "binary_sensor.window": "\u25a3",
+        "button.restart": "\u25c9",
+        "input_number.target": "\u25d0",
+        "select.forwarding": "\u2630",
+        "input_select.scene": "\u2630",
+    }
+    assert [{key: value for key, value in item.items() if key != "glyph"} for item in page["items"]] == [
         {
             "domain": "c300x",
             "entity_id": "switch.entry",
@@ -3390,4 +3498,4 @@ def test_async_dashboard_payload_keeps_agent_controls_off_main_page() -> None:
 
     result = run(async_dashboard_payload(hass, entry))
 
-    assert "buttons" not in result["data"]["pages"][0]
+    assert all("buttons" not in page for page in result["data"]["pages"])

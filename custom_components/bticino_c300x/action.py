@@ -211,7 +211,7 @@ def _copy_dashboard_number_fields(
             continue
         try:
             number = int(value[key])
-        except (TypeError, ValueError) as err:
+        except (TypeError, ValueError, OverflowError) as err:
             raise ActionValidationError(f"action {action_id} has invalid dashboard {key}") from err
         result[key] = max(number, 0)
 

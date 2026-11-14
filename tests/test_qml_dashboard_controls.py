@@ -7,13 +7,14 @@ from pathlib import Path
 import pytest
 
 
-def test_dashboard_production_controls() -> None:
+@pytest.mark.parametrize("script", ["dashboard_controls.cjs", "display_runtime.cjs"])
+def test_dashboard_production_controls(script: str) -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
-        [node, str(root / "tests/qml/dashboard_controls.cjs")],
+        [node, str(root / "tests/qml" / script)],
         capture_output=True,
         text=True,
         check=False,

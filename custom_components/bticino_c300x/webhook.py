@@ -62,6 +62,10 @@ from .executor import (
 from .forwarding import forwarding_state_from_value
 from .http_body import read_capped_body
 from .media_watchdog import handle_runtime_cpu_metrics_changed
+from .message_refresh import (
+    schedule_answering_machine_messages_refresh,
+    schedule_memos_refresh,
+)
 from .system_metrics import apply_system_metrics, metrics_are_fresh
 from .value_parsing import (
     DEFAULT_FALSE_VALUES,
@@ -107,6 +111,18 @@ class _AgentEventContext:
     event_type: str
     payload: dict[str, Any]
     data: dict[str, Any]
+
+
+def _secrets_match(expected: object, supplied: str) -> bool:
+    """Reject malformed credentials before the constant-time ASCII comparison."""
+
+    return (
+        isinstance(expected, str)
+        and bool(expected)
+        and expected.isascii()
+        and supplied.isascii()
+        and compare_digest(expected, supplied)
+    )
 
 
 def async_register_webhook(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> Callable[[], None]:
@@ -178,7 +194,7 @@ async def _async_handle_webhook(
 
     expected_secret = entry.data.get(CONF_SHARED_SECRET, "")
     supplied_secret = request.headers.get(HEADER_SHARED_SECRET, "")
-    if not expected_secret or not compare_digest(expected_secret, supplied_secret):
+    if not _secrets_match(expected_secret, supplied_secret):
         return _json_error("unauthorized", status=401)
 
     try:
@@ -300,7 +316,7 @@ async def _async_handle_agent_event(
 
     expected_token = entry.data.get(CONF_EVENT_WEBHOOK_TOKEN, "")
     supplied_token = request.headers.get(HEADER_EVENT_TOKEN, "")
-    if not expected_token or not compare_digest(expected_token, supplied_token):
+    if not _secrets_match(expected_token, supplied_token):
         return _json_error("unauthorized", status=401)
 
     payload = await _event_payload(request)
@@ -593,32 +609,37 @@ def _apply_snapshot_entity_refresh(
 ) -> None:
     """Refresh stateful entities for subscription snapshots without firing events."""
 
+    # A snapshot carries the counters only; the cache was just stored with an
+    # empty item list. The signal re-publishes that, the scheduled read brings
+    # the items back (and signals again). Without it the sensors would show a
+    # count with no latest item until the next change on the device.
+    resources = getattr(getattr(entry, "runtime_data", None), "resources", None)
     if event_type == "answering_machine_messages_changed":
         async_dispatcher_send(hass, SIGNAL_VIDEO_MESSAGES_CHANGED, entry.entry_id)
+        if resources is not None:
+            schedule_answering_machine_messages_refresh(hass, entry)
     elif event_type == "memos_changed":
         async_dispatcher_send(hass, SIGNAL_MEMOS_CHANGED, entry.entry_id)
+        if resources is not None:
+            schedule_memos_refresh(hass, entry)
 
 
 def _cache_voicemail_snapshot(entry: BticinoC300XConfigEntry, event_state: C300XEventState) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return
-    current = getattr(runtime_data, "answering_machine_messages", {})
-    messages = current.get("messages", []) if isinstance(current, dict) else []
     runtime_data.answering_machine_messages = normalize_answering_machine_messages(
-        {**_voicemail_event_data(event_state), "messages": messages}
+        {**_voicemail_event_data(event_state), "messages": []}
     )
-    runtime_data.answering_machine_messages_updated_at = dt_util.utcnow()
+    runtime_data.answering_machine_messages_updated_at = None
 
 
 def _cache_memos_snapshot(entry: BticinoC300XConfigEntry, event_state: C300XEventState) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return
-    current = getattr(runtime_data, "memos", {})
-    memos = current.get("memos", []) if isinstance(current, dict) else []
-    runtime_data.memos = normalize_memos({**_memos_event_data(event_state), "memos": memos})
-    runtime_data.memos_updated_at = dt_util.utcnow()
+    runtime_data.memos = normalize_memos({**_memos_event_data(event_state), "memos": []})
+    runtime_data.memos_updated_at = None
 
 
 def _apply_system_metrics_event(

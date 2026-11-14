@@ -13,7 +13,7 @@ Page {
         else if (selectedItem) selectedItem = null
         else tabView.activateTab(homePage)
     }
-    headerLabel: (notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : uiText("home_assistant")) + trsl.empty
+    headerLabel: headerTitle(notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
     property variant dashboardPages: []
@@ -48,18 +48,21 @@ Page {
     property variant selectedItem: null
     property bool detailOpen: selectedItem ? true : false
     property string detailSection: ""
+    property string armedCommand: ""
     property variant detailSections: Api.dashboardDetailSections(selectedItem)
-    property variant detailControls: Api.dashboardVisibleControls(selectedItem, detailSection)
+    property variant detailControls: Api.dashboardListControls(selectedItem, detailSection)
     property bool dashboardOnline: false
     property bool dashboardLoading: false
     property bool dashboardRefreshAgain: false
     property bool pageActive: false
+    onPageActiveChanged: refreshFeedbackExpiry()
     property bool watchFailed: false
     property int runtimeGeneration: 0
     property string pendingEntity: ""
     property bool controlInFlight: false
     property int commandGeneration: 0
     property variant controlFeedback: []
+    onControlFeedbackChanged: scheduleFeedbackExpiry()
     property bool interactionActive: false
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
     // its bindings. Doing that inside a flick drops frames on the device, and the
@@ -72,7 +75,7 @@ Page {
     property bool notificationsOpen: false
 
     function notificationAction(item, actionId) {
-        var command = {revision: item.revision, action_id: actionId}
+        var command = {revision: item.revision, action_id: actionId === undefined ? null : actionId}
         Api.dashboardControl({entity_id: "notification." + item.id}, {command: ""}, JSON.stringify(command), status, page)
     }
 
@@ -93,6 +96,7 @@ Page {
     function aboutToHide() {
         if (pendingEntity) Api.setDashboardFeedback(page, pendingEntity, "state_unconfirmed")
         pageActive = false
+        armedCommand = ""
         runtimeGeneration += 1
         dashboardLoading = false
         dashboardRefreshAgain = false
@@ -128,6 +132,7 @@ Page {
         for (var i = 0; i < current.length; i++) {
             if (current[i].entity_id === selectedItem.entity_id) {
                 selectedItem = current[i]
+                if (armedCommand !== "" && Api.dashboardControlByCommand(selectedItem, armedCommand) === null) armedCommand = ""
                 return
             }
         }
@@ -138,9 +143,9 @@ Page {
         if (control.command === "open_cover") return "\u2191"
         if (control.command === "stop_cover") return "\u25a0"
         if (control.command === "close_cover") return "\u2193"
-        if (control.command === "media_previous_track") return "\u00ab"
-        if (control.command === "media_next_track") return "\u00bb"
-        if (control.command === "media_play_pause") return control.playing === true ? "||" : ">"
+        if (control.command === "media_previous_track") return "\u25c0\u25c0"
+        if (control.command === "media_next_track") return "\u25b6\u25b6"
+        if (control.command === "media_play_pause") return control.playing === true ? "\u25ae\u25ae" : "\u25b6"
         return uiText(control.command)
     }
 
@@ -160,7 +165,7 @@ Page {
     }
 
     function optionLabel(control, option) {
-        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode") return String(option)
+        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode" || control.command === "effect" || control.command === "fan_speed") return String(option)
         var key = (control.command === "color" ? "color_" : "mode_") + String(option)
         var label = uiText(key)
         return label === key ? String(option) : label
@@ -171,6 +176,7 @@ Page {
         if (!dashboardOnline) return uiText("stale_state")
         if (item.available === false) return uiText("offline")
         var detail = item.details || {}
+        if (detail.type === "lock" || detail.type === "vacuum") return ""
         if (detail.activity) return uiText("activity_" + detail.activity)
         return detail.type === "sensor" || detail.type === "binary_sensor" ? "" : detail.state_label || ""
     }
@@ -223,6 +229,28 @@ Page {
         return key === "state_confirmed" ? "#58d68d" : "#c7d0d9"
     }
 
+    function scheduleFeedbackExpiry() {
+        if (!feedbackExpiry) return
+        feedbackExpiry.stop()
+        if (!pageActive) return
+        var delay = Api.nextFeedbackDelay(controlFeedback)
+        if (delay > 0) {
+            feedbackExpiry.interval = delay
+            feedbackExpiry.restart()
+        }
+    }
+
+    function refreshFeedbackExpiry() {
+        if (pageActive) Api.expireDashboardFeedback(page)
+        scheduleFeedbackExpiry()
+    }
+
+    Timer {
+        id: feedbackExpiry
+        repeat: false
+        onTriggered: refreshFeedbackExpiry()
+    }
+
     function replayDeferredRefresh() {
         if (listScrolling || dashboardLoading || !dashboardRefreshAgain) return
         dashboardRefreshAgain = false
@@ -236,7 +264,18 @@ Page {
         aboutToShow()
     }
 
+    function pressAction(item, control) {
+        var guarded = item && item.details && item.details.type === "lock" && (control.command === "unlock" || control.command === "open")
+        if (guarded && armedCommand !== control.command) {
+            armedCommand = control.command
+            return
+        }
+        armedCommand = ""
+        Api.dashboardControl(item, control, null, status, page)
+    }
+
     function openDetails(item) {
+        armedCommand = ""
         selectedItem = item
         var white = Api.dashboardControlByCommand(item, "color_temp_kelvin")
         detailSection = white && white.active === false ? "color_mode" : ""
@@ -296,7 +335,7 @@ Page {
     }
 
     function itemName(item) {
-        return item.name || item.entity_id || uiText("action")
+        return (item.glyph ? item.glyph + " " : "") + (item.name || item.entity_id || uiText("action"))
     }
 
     function itemDetail(item) {
@@ -369,6 +408,11 @@ Page {
 
     function uiText(key) {
         return I18n.text(uiLanguage, key)
+    }
+
+    function headerTitle(text) {
+        text = String(text || "")
+        return text.length > 28 ? text.substring(0, 25) + "..." : text
     }
 
     function uiWeather(key, fallback) {
@@ -793,7 +837,7 @@ Page {
             BasicButton {
                 id: summaryToggle
                 property bool hasToggle: Api.dashboardControlByCommand(selectedItem, "toggle") ? true : false
-                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player")
+                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player" || entitySummary.summary.type === "humidifier")
                 anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 22
                 width: 86; height: 36
                 enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
@@ -894,6 +938,31 @@ Page {
                     UbuntuLightText { width: (parent.width - 12) / 2; height: 44; text: modelData.value + " " + modelData.unit; textFormat: Text.PlainText; font.pixelSize: 24; color: "white"; elide: Text.ElideRight }
                 }
             }
+            Row {
+                id: actionRow
+                property variant actions: Api.dashboardActionControls(selectedItem)
+                visible: actions.length > 0
+                width: parent.width
+                height: visible ? 56 : 0
+                spacing: 8
+                Repeater {
+                    model: actionRow.actions.length
+                    Item {
+                        property variant control: actionRow.actions[index]
+                        width: (actionRow.width - (actionRow.actions.length - 1) * 8) / actionRow.actions.length
+                        height: 56
+                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
+                        Image { anchors.fill: parent; source: actionMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                        UbuntuLightText { anchors.centerIn: parent; text: armedCommand === control.command ? uiText("confirm") : controlLabel(control); font.pixelSize: text.length <= 3 ? 28 : 18; color: armedCommand === control.command ? "#f1c40f" : "white" }
+                        BeepingMouseArea {
+                            id: actionMouse
+                            anchors.fill: parent
+                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
+                            onClicked: pressAction(selectedItem, control)
+                        }
+                    }
+                }
+            }
             Repeater {
                 model: detailControls.length
                 Item {
@@ -916,13 +985,15 @@ Page {
                     }
                     UbuntuLightText {
                         visible: !controlRow.paletteTab
-                        width: parent.width
-                        height: 24
+                        width: control.kind === "boolean" ? parent.width - 136 : parent.width
+                        height: control.kind === "button" || control.kind === "boolean" ? 44 : 24
                         text: controlLabel(control) + (control.kind === "number" ? ": " + (sliderMouse.pressed ? numberText(control, preview) : controlValue(control)) : "")
                         textFormat: Text.PlainText
                         font.pixelSize: 18
                         color: "white"
                         elide: Text.ElideRight
+                        horizontalAlignment: control.kind === "button" ? Text.AlignHCenter : Text.AlignLeft
+                        verticalAlignment: control.kind === "button" || control.kind === "boolean" ? Text.AlignVCenter : Text.AlignTop
                     }
                     Row {
                         id: whitePresets
@@ -1140,7 +1211,7 @@ Page {
         Flickable {
             id: scroll
             width: parent.width
-            height: parent.height - notificationBanner.height - (notificationBanner.visible ? 9 : 0) - badgeGrid.height - pagerRow.height - status.height - 32
+            height: parent.height - (notificationBanner.visible ? notificationBanner.height + 9 : 0) - (badgeGrid.visible ? badgeGrid.height + 9 : 0) - (pagerRow.visible ? pagerRow.height + 9 : 0)
             contentWidth: width
             contentHeight: contentColumn.height
             clip: true
@@ -1149,17 +1220,6 @@ Page {
                 id: contentColumn
                 width: scroll.width
                 spacing: 10
-
-                UbuntuLightText {
-                    text: pageTitle + trsl.empty
-                    color: "white"
-                    font.pixelSize: 24
-                    width: parent.width
-                    height: pageTitle.length > 0 ? 34 : 0
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
 
                 Item {
                     width: parent.width
@@ -1914,15 +1974,20 @@ Page {
                 }
             }
         }
+    }
 
-        UbuntuLightText {
-            id: status
-            text: ""
-            color: "#c7d0d9"
-            font.pixelSize: 16
-            width: parent.width
-            height: 22
-            elide: Text.ElideRight
-        }
+    UbuntuLightText {
+        id: status
+        visible: !detailOpen && !notificationsOpen
+        anchors.right: parent.right
+        anchors.rightMargin: 40
+        anchors.verticalCenter: header.verticalCenter
+        width: 190
+        text: ""
+        textFormat: Text.PlainText
+        color: "#c7d0d9"
+        font.pixelSize: 16
+        horizontalAlignment: Text.AlignRight
+        elide: Text.ElideRight
     }
 }

@@ -53,3 +53,20 @@ def test_coerce_forwarding_mode_state_supports_partial_payloads() -> None:
         "mode": None,
         "state": "unknown",
     }
+
+
+def test_malformed_agent_values_are_no_reading_instead_of_an_exception() -> None:
+    """A faulty agent must not get a non-client exception through an entity read."""
+
+    from custom_components.bticino_c300x._api_core import _decode_text
+    from custom_components.bticino_c300x.value_parsing import optional_int
+
+    # JSON 1e999 is parsed as float infinity.
+    assert optional_int(float("inf")) is None
+    assert optional_int(float("inf"), 0) == 0
+    # str.isdigit() accepts characters int() rejects.
+    assert forwarding_state_from_value("²") is None
+    assert forwarding_mode_code_from_value("²") is None
+    # A charset Python does not know.
+    assert _decode_text(b'{"ok": true}', "bogus-charset") == '{"ok": true}'
+    assert _decode_text("ä".encode("latin-1"), "latin-1") == "ä"

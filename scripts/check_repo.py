@@ -510,10 +510,10 @@ def check_release_metadata() -> list[str]:
     min_ha_label = _version_minor_label(MIN_HOME_ASSISTANT_VERSION)
     current_ha_label = _version_minor_label(CURRENT_HOME_ASSISTANT_VERSION)
     if min_ha_label == current_ha_label:
-        validated_ha = f"Validated Home Assistant: `{min_ha_label}`"
+        validated_ha = f"Home Assistant validation baseline: `{min_ha_label}`"
     else:
         validated_ha = (
-            f"Validated Home Assistant: `{min_ha_label}` and `{current_ha_label}`"
+            f"Home Assistant validation baseline: `{min_ha_label}` and `{current_ha_label}`"
         )
     for expected in (
         f"Minimum Home Assistant: `{MIN_HOME_ASSISTANT_VERSION}`",

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_update_paths_hashes_and_unchanged_file_writes(tmp_path, sanitize):
     binary = tmp_path / "update-test"
     flags = ["-O1", "-g", "-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else ["-O2"]
-    sources = ["test/agent_update_test.c", "src/file_io.c", "src/string_util.c", "src/json_util.c", "src/sha256.c"]
+    sources = ["test/agent_update_test.c", "src/file_io.c", "src/string_util.c", "src/json_util.c", "src/json_parse.c", "src/sha256.c"]
     result = subprocess.run(
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
          "-Wall", "-Wextra", "-Werror", *flags,

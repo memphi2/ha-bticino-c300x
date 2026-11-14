@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from typing import Any, cast
 
 from homeassistant.components.switch import SwitchEntity
@@ -74,6 +75,20 @@ async def async_setup_entry(
     if entities:
         await _async_refresh_initial_states(entities)
         async_add_entities(entities)
+
+
+@contextmanager
+def _agent_action(message: str) -> Iterator[None]:
+    """Report a failed agent call of a switch action as a Home Assistant error.
+
+    The text is fixed: the client error names the agent address and goes into
+    the cause, not into what the user sees.
+    """
+
+    try:
+        yield
+    except C300XAgentApiError as err:
+        raise HomeAssistantError(message) from err
 
 
 class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
@@ -292,9 +307,12 @@ class C300XAnsweringMachineSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_answering_machine_enabled(
-            enabled
-        )
+        try:
+            status = await self._entry.runtime_data.api.async_set_answering_machine_enabled(
+                enabled
+            )
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X answering machine update failed") from err
         self._apply_status(status)
 
     def _apply_status(self, status: dict[str, Any]) -> None:
@@ -356,7 +374,10 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_ssh_enabled(enabled)
+        try:
+            status = await self._entry.runtime_data.api.async_set_ssh_enabled(enabled)
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X SSH update failed") from err
         self._apply_status(status)
 
     def _apply_status(self, status: dict[str, Any]) -> None:
@@ -411,10 +432,11 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply the Display patch."""
 
-        status = await async_apply_qml_patch_and_confirm(
-            self._entry,
-            self._dispatch_qml_patch_changed,
-        )
+        with _agent_action("C300X Display patch failed"):
+            status = await async_apply_qml_patch_and_confirm(
+                self._entry,
+                self._dispatch_qml_patch_changed,
+            )
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
@@ -422,10 +444,11 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the display files."""
 
-        status = await async_restore_qml_patch_and_confirm(
-            self._entry,
-            self._dispatch_qml_patch_changed,
-        )
+        with _agent_action("C300X Display patch restore failed"):
+            status = await async_restore_qml_patch_and_confirm(
+                self._entry,
+                self._dispatch_qml_patch_changed,
+            )
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
@@ -520,8 +543,9 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply the persistent IPv4 API firewall rule."""
 
-        await self._async_enable_maintenance_endpoint()
-        status = await self._entry.runtime_data.api.async_apply_firewall()
+        with _agent_action("C300X IPv4 firewall update failed"):
+            await self._async_enable_maintenance_endpoint()
+            status = await self._entry.runtime_data.api.async_apply_firewall()
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
@@ -529,7 +553,8 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the original IPv4 firewall script."""
 
-        status = await self._entry.runtime_data.api.async_restore_firewall()
+        with _agent_action("C300X IPv4 firewall restore failed"):
+            status = await self._entry.runtime_data.api.async_restore_firewall()
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
@@ -637,8 +662,9 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply the persistent IPv6 API firewall rules."""
 
-        await self._async_enable_maintenance_endpoint()
-        status = await self._entry.runtime_data.api.async_apply_ipv6_firewall()
+        with _agent_action("C300X IPv6 firewall update failed"):
+            await self._async_enable_maintenance_endpoint()
+            status = await self._entry.runtime_data.api.async_apply_ipv6_firewall()
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
@@ -646,7 +672,8 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the original IPv6 firewall script."""
 
-        status = await self._entry.runtime_data.api.async_restore_ipv6_firewall()
+        with _agent_action("C300X IPv6 firewall restore failed"):
+            status = await self._entry.runtime_data.api.async_restore_ipv6_firewall()
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
@@ -805,7 +832,8 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_mqtt_enabled(enabled)
+        with _agent_action("C300X MQTT bridge update failed"):
+            status = await self._entry.runtime_data.api.async_set_mqtt_enabled(enabled)
         self._apply_status(status)
 
     async def async_added_to_hass(self) -> None:
@@ -916,9 +944,10 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_legacy_mqtt_enabled(
-            enabled
-        )
+        with _agent_action("C300X legacy MQTT update failed"):
+            status = await self._entry.runtime_data.api.async_set_legacy_mqtt_enabled(
+                enabled
+            )
         self._apply_status(status)
 
     async def async_added_to_hass(self) -> None:
@@ -1076,16 +1105,17 @@ class C300XNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_no_auth_enabled(
-            enabled,
-            api_token=_configured_token(self._entry, CONF_AGENT_TOKEN)
-            if not enabled
-            else None,
-            maintenance_token=_configured_token(self._entry, CONF_MAINTENANCE_TOKEN)
-            if not enabled
-            else None,
-            maintenance_no_auth_allowed=False if not enabled else None,
-        )
+        with _agent_action("C300X noAuth update failed"):
+            status = await self._entry.runtime_data.api.async_set_no_auth_enabled(
+                enabled,
+                api_token=_configured_token(self._entry, CONF_AGENT_TOKEN)
+                if not enabled
+                else None,
+                maintenance_token=_configured_token(self._entry, CONF_MAINTENANCE_TOKEN)
+                if not enabled
+                else None,
+                maintenance_no_auth_allowed=False if not enabled else None,
+            )
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
@@ -1144,7 +1174,8 @@ class C300XMdnsDiscoverySwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_mdns_enabled(enabled)
+        with _agent_action("C300X mDNS discovery update failed"):
+            status = await self._entry.runtime_data.api.async_set_mdns_enabled(enabled)
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
@@ -1205,11 +1236,10 @@ class C300XMaintenanceNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = (
-            await self._entry.runtime_data.api.async_set_maintenance_no_auth_allowed(
+        with _agent_action("C300X maintenance access update failed"):
+            status = await self._entry.runtime_data.api.async_set_maintenance_no_auth_allowed(
                 enabled
             )
-        )
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 

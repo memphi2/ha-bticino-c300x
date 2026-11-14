@@ -16,28 +16,54 @@ from .const import (
 from .validation_patterns import ENTITY_OBJECT_ID_RE
 
 DASHBOARD_ENTITY_DOMAINS = (
+    "automation",
     "binary_sensor",
     "button",
     "climate",
     "cover",
+    "device_tracker",
     "fan",
+    "humidifier",
     "input_boolean",
     "input_button",
     "input_number",
     "input_select",
     "light",
+    "lock",
     "media_player",
     "number",
+    "person",
     "select",
     "script",
     "scene",
     "sensor",
+    "siren",
     "switch",
+    "vacuum",
+    "valve",
+    "water_heater",
 )
 DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)
 # The alarm page has room for one plain action tile, not for a player.
 ALARM_PAGE_ENTITY_DOMAINS = tuple(
     domain for domain in DASHBOARD_ENTITY_DOMAINS if domain != "media_player"
+)
+# What the alarm page offers to pick: only domains that a plain tap can act on
+# (a toggle or a press). A lock, a vacuum or a valve needs a command, a slider or
+# a list needs a direction, and a person or sensor only reads, so a tap on those
+# would fail with "read only". Entities saved earlier stay valid.
+ALARM_PAGE_ACTION_DOMAINS = (
+    "automation",
+    "button",
+    "fan",
+    "humidifier",
+    "input_boolean",
+    "input_button",
+    "light",
+    "scene",
+    "script",
+    "siren",
+    "switch",
 )
 # A tile is half or full in each direction. "auto" is never stored: an entity
 # without the key keeps the size its type has always had on the display.

@@ -339,6 +339,208 @@ def test_read_wyoming_event_rejects_closed_connection() -> None:
         asyncio.run(_run())
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"not json\n",
+        b"[1, 2]\n",
+        b'{"type":"transcript","data_length":"many"}\n',
+        b'{"type":"transcript","data_length":5}\n{"a"',
+        b'{"type":"transcript","data_length":3}\nnot',
+        b'{"type":"x","payload_length":2000000}\n',
+        b'{"type":"x","data_length":-1}\n',
+        b"x" * 200_000 + b"\n",
+        b'{"type":"x","payload_length":50}\nshort',
+        b'{"type":"x","data_length":1e999}\n',
+        b'{"type":"transcript","data":["x"]}\n',
+    ],
+    ids=[
+        "garbage", "not-an-object", "bad-length", "short-data", "bad-data-json",
+        "huge-payload", "negative-length", "overlong-line", "short-payload",
+        "infinite-length", "data-not-an-object",
+    ],
+)
+def test_read_wyoming_event_reports_protocol_errors(raw: bytes) -> None:
+    async def _run() -> None:
+        reader = asyncio.StreamReader()
+        reader.feed_data(raw)
+        reader.feed_eof()
+        await _async_read_wyoming_event(reader)
+
+    with pytest.raises(HomeAssistantError, match="protocol error"):
+        asyncio.run(_run())
+
+
+def test_wyoming_transcribe_has_one_deadline_for_the_whole_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _run() -> None:
+        writer = _FakeWyomingWriter()
+        reader = asyncio.StreamReader()
+
+        async def _open_connection(_host: str, _port: int):
+            return reader, writer
+
+        async def _feed() -> None:
+            while True:
+                reader.feed_data(b'{"type":"info"}\n')
+                await asyncio.sleep(0.05)
+
+        monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+        monkeypatch.setattr(ring_ai_module, "_WYOMING_TIMEOUT_SECONDS", 0.5)
+        feeder = asyncio.create_task(_feed())
+        try:
+            await _async_wyoming_transcribe(
+                "127.0.0.1",
+                10300,
+                {"rate": 16000, "width": 2, "channels": 1, "audio": b""},
+                language=None,
+            )
+        finally:
+            feeder.cancel()
+
+    with pytest.raises(HomeAssistantError, match="timed out"):
+        asyncio.run(asyncio.wait_for(_run(), timeout=5))
+
+
+def test_wyoming_transcribe_times_out_when_the_server_stops_reading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _StalledWriter(_FakeWyomingWriter):
+        async def drain(self) -> None:
+            await asyncio.sleep(3600)
+
+    async def _open_connection(_host: str, _port: int):
+        return asyncio.StreamReader(), _StalledWriter()
+
+    monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+    monkeypatch.setattr(ring_ai_module, "_WYOMING_TIMEOUT_SECONDS", 0.3)
+
+    with pytest.raises(HomeAssistantError, match="timed out"):
+        asyncio.run(
+            asyncio.wait_for(
+                _async_wyoming_transcribe(
+                    "127.0.0.1",
+                    10300,
+                    {"rate": 16000, "width": 2, "channels": 1, "audio": b"a" * 100},
+                    language=None,
+                ),
+                timeout=5,
+            )
+        )
+
+
+def test_wyoming_transcribe_does_not_wait_for_a_close_that_never_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    aborted: list[bool] = []
+
+    class _Transport:
+        def abort(self) -> None:
+            aborted.append(True)
+
+    class _StuckWriter(_FakeWyomingWriter):
+        transport = _Transport()
+
+        async def drain(self) -> None:
+            await asyncio.sleep(3600)
+
+        async def wait_closed(self) -> None:
+            await asyncio.sleep(3600)
+
+    async def _open_connection(_host: str, _port: int):
+        return asyncio.StreamReader(), _StuckWriter()
+
+    monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+    monkeypatch.setattr(ring_ai_module, "_WYOMING_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(ring_ai_module, "_WYOMING_CLOSE_TIMEOUT_SECONDS", 0.2)
+
+    with pytest.raises(HomeAssistantError, match="timed out"):
+        asyncio.run(
+            asyncio.wait_for(
+                _async_wyoming_transcribe(
+                    "127.0.0.1",
+                    10300,
+                    {"rate": 16000, "width": 2, "channels": 1, "audio": b"a" * 100},
+                    language=None,
+                ),
+                timeout=5,
+            )
+        )
+
+    assert aborted == [True]
+
+
+def test_wyoming_transcribe_aborts_the_transport_when_cancelled_while_closing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    aborted: list[bool] = []
+    closing = asyncio.Event()
+
+    class _Transport:
+        def abort(self) -> None:
+            aborted.append(True)
+
+    class _ClosingWriter(_FakeWyomingWriter):
+        transport = _Transport()
+
+        async def drain(self) -> None:
+            raise ConnectionResetError
+
+        async def wait_closed(self) -> None:
+            closing.set()
+            await asyncio.sleep(3600)
+
+    async def _open_connection(_host: str, _port: int):
+        return asyncio.StreamReader(), _ClosingWriter()
+
+    monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+
+    async def _run() -> None:
+        task = asyncio.create_task(
+            _async_wyoming_transcribe(
+                "127.0.0.1",
+                10300,
+                {"rate": 16000, "width": 2, "channels": 1, "audio": b"a" * 100},
+                language=None,
+            )
+        )
+        await asyncio.wait_for(closing.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(_run())
+
+    assert aborted == [True]
+
+
+def test_wyoming_transcribe_reports_a_dropped_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _BrokenWriter(_FakeWyomingWriter):
+        async def drain(self) -> None:
+            raise ConnectionResetError
+
+        async def wait_closed(self) -> None:
+            raise ConnectionResetError
+
+    async def _open_connection(_host: str, _port: int):
+        return asyncio.StreamReader(), _BrokenWriter()
+
+    monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+
+    with pytest.raises(HomeAssistantError, match="connection lost"):
+        asyncio.run(
+            _async_wyoming_transcribe(
+                "127.0.0.1",
+                10300,
+                {"rate": 16000, "width": 2, "channels": 1, "audio": b""},
+                language=None,
+            )
+        )
+
+
 def test_safe_mtime_returns_zero_for_unreadable_path(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise_os_error(self: Path):  # noqa: ANN202
         raise OSError

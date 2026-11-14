@@ -18,6 +18,7 @@ def sip_io_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             str(NATIVE / "test/media_sip_io_test.c"),
             str(NATIVE / "src/media_sip_io.c"),
+            str(NATIVE / "src/media_rtsp_io.c"),
             str(NATIVE / "src/media_sip.c"),
             str(NATIVE / "src/string_util.c"),
             str(NATIVE / "src/time_util.c"),

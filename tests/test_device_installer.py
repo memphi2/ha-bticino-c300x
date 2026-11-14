@@ -1190,3 +1190,77 @@ def test_bootstrap_firewall_logic_lives_in_project_script() -> None:
     assert "--dport $TALKBACK_RTP_PORT" in script
     assert "# c300x-native-agent firewall begin" in script
     assert "# c300x-native-agent ipv6 firewall begin" in script
+
+
+def test_merge_existing_device_config_keeps_device_owned_sections() -> None:
+    template = device_installer._device_config_json(
+        api_token="new-api", maintenance_token="new-maint", agent_port=8089
+    ).encode()
+    existing = {
+        "api": {"token": "old-api"},
+        "mqtt": {"enabled": True, "host": "broker.lan", "password": "pw"},
+        "displayBridge": {"enabled": True},
+        "maintenance": {"adminToken": "old-maint"},
+    }
+
+    merged = json.loads(device_installer._merge_existing_device_config(template, existing))
+
+    assert merged["mqtt"] == existing["mqtt"]
+    assert merged["displayBridge"] == {"enabled": True}
+    assert merged["api"]["token"] == "new-api"
+    assert merged["maintenance"]["adminToken"] == "new-maint"
+    assert merged["memos"]["enabled"] is True
+    for odd in (None, [], "x", {"mqtt": "nope"}):
+        result = json.loads(device_installer._merge_existing_device_config(template, odd))
+        assert result == json.loads(template)
+
+
+def test_install_reads_remote_config_and_writes_merged_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old = json.dumps({"mqtt": {"enabled": True, "host": "broker.lan"}})
+
+    class FakeSshClient:
+        def __init__(self) -> None:
+            self.writes: list[bytes] = []
+
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            if command.startswith("cat ") and "config.json" in command:
+                return old
+            if input_data and b"api-token" in input_data:
+                self.writes.append(input_data)
+            return ""
+
+        def put_file(self, source: Path, remote_path: str, mode: str | None = None) -> bool:
+            return True
+
+        def close(self) -> None:
+            pass
+
+    init_script = tmp_path / "c300x-native-agent"
+    init_script.write_text(
+        f'DEFAULT_AGENT_DIR="{DEFAULT_REMOTE_DIR}"\n', encoding="utf-8"
+    )
+    client = FakeSshClient()
+    monkeypatch.setattr(
+        device_installer,
+        "_resolve_bundle",
+        lambda _dir: device_installer._ResolvedBundle((), init_script),
+    )
+    monkeypatch.setattr(device_installer, "_connect_device_client", lambda _r: client)
+    monkeypatch.setattr(device_installer, "_verify_startup_sync", lambda _c: None)
+    monkeypatch.setattr(device_installer.asyncio, "to_thread", _to_thread_inline)
+
+    asyncio.run(
+        async_install_device_agent(
+            C300XDeviceInstallRequest(
+                host="c300x.local", ssh_username="root", ssh_password="secret",
+                apply_firewall_patch=False,
+            ),
+            api_token="api-token",
+            maintenance_token="maintenance-token",
+        )
+    )
+
+    assert client.writes
+    assert json.loads(client.writes[0])["mqtt"]["host"] == "broker.lan"

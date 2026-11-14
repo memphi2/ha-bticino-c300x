@@ -181,24 +181,33 @@ bool c300x_media_sip_parse_sdp_sdes_key(
         if (line_end == NULL) {
             line_end = line + strlen(line);
         }
-        if (
-            strncasecmp(line, "a=crypto:", strlen("a=crypto:")) == 0
-            && strstr(line, "AES_CM_128_HMAC_SHA1_80") != NULL
-        ) {
-            const char *inline_key = strstr(line, "inline:");
-            if (inline_key == NULL || inline_key >= line_end) {
-                return false;
+        if (strncasecmp(line, "a=crypto:", 9) == 0) {
+            const char *suite = line + 9;
+            while (suite < line_end && *suite >= '0' && *suite <= '9') suite++;
+            if (suite > line + 9 && suite < line_end && *suite == ' ') {
+                while (suite < line_end && *suite == ' ') suite++;
+                const char *supported = "AES_CM_128_HMAC_SHA1_80";
+                size_t suite_len = strlen(supported);
+                if ((size_t)(line_end - suite) > suite_len &&
+                    memcmp(suite, supported, suite_len) == 0 && suite[suite_len] == ' ') {
+                    const char *key = suite + suite_len;
+                    while (key < line_end && *key == ' ') key++;
+                    if (line_end - key < 7 || memcmp(key, "inline:", 7) != 0) return false;
+                    key += 7;
+                    const char *end = key;
+                    while (end < line_end && *end != '|' && *end != ';' && *end != ' ') end++;
+                    char encoded[41];
+                    if (end - key != 40) return false;
+                    memcpy(encoded, key, 40);
+                    encoded[40] = '\0';
+                    bool valid = c300x_media_base64_decode(encoded, decoded, sizeof(decoded), &decoded_len)
+                        && decoded_len == C300X_MEDIA_SRTP_MASTER_KEY_LEN;
+                    secure_zero(encoded, sizeof(encoded));
+                    if (valid) memcpy(out, decoded, C300X_MEDIA_SRTP_MASTER_KEY_LEN);
+                    secure_zero(decoded, sizeof(decoded));
+                    return valid;
+                }
             }
-            inline_key += strlen("inline:");
-            if (!c300x_media_base64_decode(inline_key, decoded, sizeof(decoded), &decoded_len)) {
-                return false;
-            }
-            if (decoded_len < C300X_MEDIA_SRTP_MASTER_KEY_LEN) {
-                return false;
-            }
-            memcpy(out, decoded, C300X_MEDIA_SRTP_MASTER_KEY_LEN);
-            secure_zero(decoded, sizeof(decoded));
-            return true;
         }
         if (*line_end == '\0') {
             break;

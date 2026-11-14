@@ -48,13 +48,14 @@ from .dashboard_config import (
     configured_dashboard_prevent_return,
     configured_weather_entity_id,
 )
-from .dashboard_controls import choice_options, entity_controls
+from .dashboard_controls import choice_options, entity_controls, finite_number
 from .dashboard_details import DETAIL_DOMAINS, entity_details
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
     dashboard_entity_secondary_info_override,
 )
+from .dashboard_glyphs import dashboard_glyph
 from .dashboard_labels import (
     _BINARY_SENSOR_DEVICE_CLASS_COLORS,
     _BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE,
@@ -238,17 +239,20 @@ async def async_dashboard_payload(
         main_page["weather"] = weather
         main_page["items"].append({"_kind": "weather", "_order": 0})
 
+    notifications = notification_payload(entry)
+    shown = [
+        page
+        for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
+        if _dashboard_page_has_content(page)
+    ]
+    if not shown and notifications:
+        # The messages need a page to appear on, even an otherwise empty one.
+        shown = [main_page]
     return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,
-        "notifications": notification_payload(entry),
-        "data": {
-            "pages": [
-                _finalize_dashboard_page(page)
-                for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
-                if _dashboard_page_has_content(page)
-            ]
-        },
+        "notifications": notifications,
+        "data": {"pages": [_finalize_dashboard_page(page) for page in shown]},
     })
 
 
@@ -361,6 +365,8 @@ def _alarm_page_entity(
             "color": _DASHBOARD_COLOR_WARNING,
         }
     payload = dict(item)
+    # The Alarm page draws its quick action without the symbol of a tile.
+    payload.pop("glyph", None)
     payload["kind"] = str(payload.pop("_kind", "entity"))
     payload.pop("_page", None)
     payload.pop("_order", None)
@@ -413,6 +419,34 @@ def dashboard_item_for_state(
     language: str = "en",
 ) -> dict[str, Any] | None:
     """Render a snapshot without looking up newer state during an event comparison."""
+    item = _dashboard_item_for_state(
+        hass,
+        entity_id,
+        state,
+        order,
+        name_display=name_display,
+        custom_name=custom_name,
+        secondary_info=secondary_info,
+        language=language,
+    )
+    if item is not None:
+        glyph = dashboard_glyph(entity_id, getattr(state, "attributes", None))
+        if glyph:
+            item["glyph"] = glyph
+    return item
+
+
+def _dashboard_item_for_state(
+    hass: HomeAssistant,
+    entity_id: str,
+    state: Any,
+    order: int = 0,
+    *,
+    name_display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+    custom_name: str = "",
+    secondary_info: str = DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+    language: str = "en",
+) -> dict[str, Any] | None:
     domain = entity_id.split(".", 1)[0]
     if domain not in _DASHBOARD_SUPPORTED_ENTITY_DOMAINS:
         return None
@@ -443,16 +477,24 @@ def dashboard_item_for_state(
         )
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
     if domain in {
-        "light", "cover", "climate", "fan", "media_player",
+        "light", "cover", "climate", "fan", "media_player", "lock", "vacuum", "valve",
+        "humidifier", "water_heater",
         "number", "input_number", "select", "input_select",
     }:
         item["controls"] = entity_controls(entity_id, state, unit)
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
         if domain == "climate" and state is not None:
-            item["current_temperature"] = state.attributes.get("current_temperature")
+            item["current_temperature"] = finite_number(
+                state.attributes.get("current_temperature")
+            )
             item["temperature_unit"] = unit
-        if domain in {"cover", "climate"}:
+        if domain in {"cover", "climate", "lock", "vacuum", "valve", "water_heater"}:
             item["_kind"] = "entity"
+            if domain == "lock":
+                # Locked is good, unlocked and jammed are not.
+                color = _entity_state_color(state, entity_id=entity_id)
+                if color is not None:
+                    item["color"] = color
             return item
         if domain == "media_player":
             item["_kind"] = "entity"
@@ -722,6 +764,10 @@ def _entity_state_label(
             fallback=fallback,
             language=language,
         )
+    if str(entity_id or getattr(state, "entity_id", "")).startswith("sensor."):
+        moment = _sensor_time_label(state_value, attributes.get("device_class"))
+        if moment:
+            return moment
     label = _dashboard_state_label(state_value, language)
     unit = attributes.get("unit_of_measurement")
     labels = _DASHBOARD_STATE_LABELS_BY_LANGUAGE.get(
@@ -732,6 +778,28 @@ def _entity_state_label(
     if label == "unknown" and fallback:
         return fallback
     return _dashboard_text(label, fallback, 60)
+
+
+def _sensor_time_label(state_value: str, device_class: Any) -> str:
+    """Return a timestamp or date sensor as local day, month and time.
+
+    A sensor of these classes reports an ISO text, far too long for a tile.
+    Anything that does not parse is left to the plain label.
+    """
+
+    kind = str(device_class or "").lower()
+    if kind not in {"timestamp", "date"}:
+        return ""
+    try:
+        if kind == "date":
+            return datetime.fromisoformat(state_value).strftime("%d.%m.%Y")
+        moment = datetime.fromisoformat(state_value)
+    except ValueError:
+        return ""
+    as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
+    if callable(as_local) and moment.tzinfo is not None:
+        moment = as_local(moment)
+    return moment.strftime("%d.%m. %H:%M")
 
 
 def _binary_sensor_state_label(
@@ -791,9 +859,11 @@ def _binary_sensor_state_color(
 
 
 def _raw_state_color(raw: str) -> str | None:
-    if raw in {"closed", "disarmed", "idle", "locked", "off", "ok", "safe"}:
+    if raw in {"closed", "disarmed", "home", "idle", "locked", "off", "ok", "safe"}:
         return _DASHBOARD_COLOR_GOOD
     if raw in {
+        "error",
+        "jammed",
         "on",
         "open",
         "problem",
@@ -882,10 +952,14 @@ def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
 
 
 def _dashboard_text(value: Any, fallback: str, max_length: int) -> str:
+    """Return a bounded one-line text; a cut one ends in three dots."""
+
     if isinstance(value, str):
         text = " ".join(value.split())
         if text:
-            return text[:max_length]
+            if len(text) > max_length:
+                return text[: max_length - 3].rstrip() + "..."
+            return text
     return fallback[:max_length]
 
 
@@ -947,12 +1021,10 @@ def _finalize_dashboard_items(items: Any) -> list[dict[str, Any]]:
 
 
 def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
-    return any(
-        bool(page.get(key))
-        for key in (
-            "badges",
-            "items",
-            "weather",
-            "flow",
-        )
-    )
+    """Return whether a page has something to show.
+
+    The status badges do not count: with no weather and no tile the page is
+    left out, and so are its badges.
+    """
+
+    return any(bool(page.get(key)) for key in ("items", "weather", "flow"))

@@ -9,11 +9,17 @@ from typing import Any
 from homeassistant.components.climate.const import ClimateEntityFeature
 from homeassistant.components.cover.const import CoverEntityFeature
 from homeassistant.components.fan import const as fan_const
+from homeassistant.components.humidifier.const import HumidifierEntityFeature
 from homeassistant.components.light.const import (
     COLOR_MODES_BRIGHTNESS,
     COLOR_MODES_COLOR,
+    LightEntityFeature,
 )
+from homeassistant.components.lock.const import LockEntityFeature
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
+from homeassistant.components.vacuum.const import VacuumEntityFeature
+from homeassistant.components.valve.const import ValveEntityFeature
+from homeassistant.components.water_heater.const import WaterHeaterEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.util.percentage import (
     percentage_to_ranged_value,
@@ -129,7 +135,7 @@ def _fan_speed_count(attrs: Any) -> int | None:
     return count if 1 <= count < 100 else None
 
 
-def _fan_speed_control(attrs: Any) -> dict[str, Any] | None:
+def _fan_speed_control(attrs: Any, *, off: bool = False) -> dict[str, Any] | None:
     """Offer a fan's speed in percent, on the grid of its own speeds.
 
     A fan rounds a requested percentage up to its next speed and reports a
@@ -138,9 +144,12 @@ def _fan_speed_control(attrs: Any) -> dict[str, Any] | None:
     and the value is the current speed on that grid. The step is rounded down
     to six decimals because the display finds the last step as
     floor(100 / step), which the exact quotient misses for some fans.
+
+    A fan that is off stands still, whatever percentage it reports or leaves
+    out; without this the display shows an unknown speed.
     """
 
-    percentage = finite_number(attrs.get("percentage"))
+    percentage = 0 if off else finite_number(attrs.get("percentage"))
     count = _fan_speed_count(attrs)
     if count is None:
         return _number("percentage", percentage, 0, 100, 1, "%")
@@ -211,9 +220,18 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
     controls: list[dict[str, Any] | None] = []
     if domain == "light":
         controls.append({"command": "toggle", "kind": "button"})
-        modes = set(attrs.get("supported_color_modes") or ())
+        reported = attrs.get("supported_color_modes")
+        # Only the text items of a list count; one light with an odd attribute
+        # must not break the controls of every other tile.
+        modes = (
+            {mode for mode in reported if isinstance(mode, str)}
+            if isinstance(reported, (list, tuple, set, frozenset))
+            else set()
+        )
         if modes & COLOR_MODES_BRIGHTNESS:
-            brightness = finite_number(attrs.get("brightness"))
+            # Home Assistant reports no brightness for a light that is off;
+            # it is at 0 %, not at an unknown brightness.
+            brightness = 0 if state.state == "off" else finite_number(attrs.get("brightness"))
             controls.append(
                 _number(
                     "brightness",
@@ -245,6 +263,8 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
                     _number("saturation", hs[1], 0, 100, 1, "%"),
                 )
             )
+        if features & LightEntityFeature.EFFECT:
+            controls.append(_choice("effect", attrs.get("effect"), attrs.get("effect_list")))
     elif domain == "cover":
         for command, feature in (
             ("open_cover", CoverEntityFeature.OPEN),
@@ -306,7 +326,7 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
         if features & toggle_feature:
             controls.append({"command": "toggle", "kind": "button"})
         if features & FanEntityFeature.SET_SPEED:
-            controls.append(_fan_speed_control(attrs))
+            controls.append(_fan_speed_control(attrs, off=state.state == "off"))
         if features & FanEntityFeature.OSCILLATE:
             oscillating = attrs.get("oscillating")
             controls.append({
@@ -350,12 +370,73 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
                 "command": "volume_mute", "kind": "boolean",
                 "value": muted if isinstance(muted, bool) else None,
             })
+        if features & MediaPlayerEntityFeature.SHUFFLE_SET:
+            shuffle = attrs.get("shuffle")
+            controls.append({
+                "command": "shuffle", "kind": "boolean",
+                "value": shuffle if isinstance(shuffle, bool) else None,
+            })
+        if features & MediaPlayerEntityFeature.REPEAT_SET:
+            controls.append(_choice("repeat", attrs.get("repeat"), ["off", "all", "one"]))
         if features & MediaPlayerEntityFeature.SELECT_SOURCE:
             controls.append(_choice("source", attrs.get("source"), attrs.get("source_list")))
         if features & MediaPlayerEntityFeature.SELECT_SOUND_MODE:
             controls.append(
                 _choice("sound_mode", attrs.get("sound_mode"), attrs.get("sound_mode_list"))
             )
+    elif domain == "lock":
+        # Each action is offered where it changes something. Opening the
+        # latch is a third action, only for a lock that can do it.
+        if state.state != "locked":
+            controls.append({"command": "lock", "kind": "button"})
+        if state.state != "unlocked":
+            controls.append({"command": "unlock", "kind": "button"})
+        if features & LockEntityFeature.OPEN:
+            controls.append({"command": "open", "kind": "button"})
+    elif domain == "humidifier":
+        controls.append({"command": "toggle", "kind": "button"})
+        controls.append(_number(
+            "target_humidity", attrs.get("humidity"),
+            attrs.get("min_humidity", 0), attrs.get("max_humidity", 100), 1, "%",
+        ))
+        if features & HumidifierEntityFeature.MODES:
+            controls.append(_choice("mode", attrs.get("mode"), attrs.get("available_modes")))
+    elif domain == "water_heater":
+        if features & WaterHeaterEntityFeature.TARGET_TEMPERATURE:
+            controls.append(_number(
+                "temperature", attrs.get("temperature"),
+                attrs.get("min_temp"), attrs.get("max_temp"),
+                attrs.get("target_temp_step", 0.5), unit,
+            ))
+        if features & WaterHeaterEntityFeature.OPERATION_MODE:
+            controls.append(_choice(
+                "operation_mode", attrs.get("operation_mode"), attrs.get("operation_list"),
+            ))
+    elif domain == "valve":
+        for valve_command, valve_feature in (
+            ("open_valve", ValveEntityFeature.OPEN),
+            ("stop_valve", ValveEntityFeature.STOP),
+            ("close_valve", ValveEntityFeature.CLOSE),
+        ):
+            if features & valve_feature:
+                controls.append({"command": valve_command, "kind": "button"})
+        if features & ValveEntityFeature.SET_POSITION:
+            controls.append(_number("position", attrs.get("current_position"), 0, 100, 1, "%"))
+    elif domain == "vacuum":
+        # Each button is offered where it makes sense in the current state.
+        cleaning = state.state == "cleaning"
+        if features & VacuumEntityFeature.START and not cleaning:
+            controls.append({"command": "start", "kind": "button"})
+        if features & VacuumEntityFeature.PAUSE and cleaning:
+            controls.append({"command": "pause", "kind": "button"})
+        if features & VacuumEntityFeature.STOP:
+            controls.append({"command": "stop", "kind": "button"})
+        if features & VacuumEntityFeature.RETURN_HOME and state.state not in {"docked", "returning"}:
+            controls.append({"command": "return_to_base", "kind": "button"})
+        if features & VacuumEntityFeature.LOCATE:
+            controls.append({"command": "locate", "kind": "button"})
+        if features & VacuumEntityFeature.FAN_SPEED:
+            controls.append(_choice("fan_speed", attrs.get("fan_speed"), attrs.get("fan_speed_list")))
     elif domain in {"number", "input_number"}:
         controls.append(
             _number(
@@ -411,6 +492,8 @@ async def async_execute_control(
             data[command] = int(value)
         elif command == "color":
             data["hs_color"] = list(COLOR_PRESETS[value][:2])
+        elif command == "effect":
+            data["effect"] = value
         elif command in {"hue", "saturation"}:
             hs = state.attributes.get("hs_color")
             hs = (
@@ -467,6 +550,7 @@ async def async_execute_control(
         service = {
             "volume_level": "volume_set", "volume_mute": "volume_mute",
             "source": "select_source", "sound_mode": "select_sound_mode",
+            "shuffle": "shuffle_set", "repeat": "repeat_set",
         }.get(command, command)
         # Home Assistant's toggle and play/pause services demand both features
         # of their pair; the explicit service for the current state needs only
@@ -479,8 +563,31 @@ async def async_execute_control(
             data["volume_level"] = value / 100
         elif command == "volume_mute":
             data["is_volume_muted"] = value
-        elif command in {"source", "sound_mode"}:
+        elif command in {"source", "sound_mode", "repeat"}:
             data[command] = value
+        elif command == "shuffle":
+            data["shuffle"] = value
+    elif domain == "lock":
+        service = command
+    elif domain == "humidifier":
+        service = {
+            "toggle": "toggle", "target_humidity": "set_humidity", "mode": "set_mode",
+        }[command]
+        if command == "target_humidity":
+            data["humidity"] = int(value)
+        elif command == "mode":
+            data["mode"] = value
+    elif domain == "water_heater":
+        service = "set_temperature" if command == "temperature" else "set_operation_mode"
+        data[command] = value
+    elif domain == "valve":
+        service = "set_valve_position" if command == "position" else command
+        if command == "position":
+            data["position"] = int(value)
+    elif domain == "vacuum":
+        service = "set_fan_speed" if command == "fan_speed" else command
+        if command == "fan_speed":
+            data["fan_speed"] = value
     elif domain in {"number", "input_number"}:
         service = "set_value"
         data["value"] = value

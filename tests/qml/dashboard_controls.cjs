@@ -380,6 +380,17 @@ clock += 44999;
 assert.equal(p.feedbackKey(oneShot), "action_sent");
 clock += 1;
 assert.equal(p.feedbackKey(oneShot), "", "and it is forgotten after the lifetime of other feedback");
+// The quick action on the Alarm page shows a failed request in the user's
+// language, with the code, never the raw transport string.
+const quickStatus = {text: "", color: ""};
+p.quickActionPending = false;
+p.quickActionGeneration = 0;
+queue.length = 0;
+Api.dashboardAction({domain: "light", entity_id: "light.hall"}, quickStatus, p, false);
+assert.equal(queue.length, 1);
+queue.shift().error("API error: 503");
+assert.equal(quickStatus.text, "Status failed (503)", "a failed quick action is not shown as the raw English string");
+assert.equal(quickStatus.color, "#ff6b6b");
 Api.setDashboardFeedback(p, "light.hall", "action_sent", {command: "toggle", value: true});
 assert.equal(Api.nextFeedbackDelay(p.controlFeedback.filter(e => e.entity_id === "light.hall")), 15000, "a command with an expectation still gets its warning");
 

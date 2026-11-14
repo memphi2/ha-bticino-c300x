@@ -383,7 +383,7 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         if (generation !== pageItem.runtimeGeneration) return
         if (quickGeneration !== pageItem.quickActionGeneration) return
         pageItem.quickActionPending = false
-        statusItem.text = error
+        statusItem.text = statusErrorText(pageItem, error)
         statusItem.color = "#ff6b6b"
     }, commandScope(pageItem, "quickActionGeneration"))
 }

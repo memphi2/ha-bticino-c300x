@@ -107,7 +107,7 @@
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
         "data_description": {
-          "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di allarme, meteo, pagine e riquadri.",
+          "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di meteo, pagine e riquadri. Le impostazioni Alarmo vengono mantenute.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
@@ -200,7 +200,7 @@
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
         "data_description": {
-          "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di allarme, meteo, pagine e riquadri.",
+          "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di meteo, pagine e riquadri. Le impostazioni Alarmo vengono mantenute.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
@@ -576,7 +576,7 @@
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
         "data_description": {
-          "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di allarme, meteo, pagine e riquadri.",
+          "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di meteo, pagine e riquadri. Le impostazioni Alarmo vengono mantenute.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."

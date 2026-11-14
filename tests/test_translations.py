@@ -35,6 +35,21 @@ def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> No
                 assert prerequisite in hint
 
 
+def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
+    """With the Display patch off the Alarmo entities stay (alarm commands do
+    not need the patch); only weather, pages and tiles are discarded."""
+
+    for path in (INTEGRATION / "strings.json", *sorted(TRANSLATIONS.glob("*.json"))):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        texts = [
+            data["config"]["step"]["user_dashboard"]["data_description"]["device_ui_enabled"],
+            data["config"]["step"]["reconfigure_dashboard"]["data_description"]["device_ui_enabled"],
+            data["options"]["step"]["dashboard"]["data_description"]["device_ui_enabled"],
+        ]
+        for text in texts:
+            assert "Alarmo" in text, (path.name, text)
+
+
 def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
     for path in (
         INTEGRATION / "strings.json",

@@ -506,13 +506,6 @@ def _dashboard_item_for_state(
                 # The tile shows its state line; for a player that is what is playing.
                 item["state_label"] = item["details"]["value"]
             return item
-        if domain == "media_player":
-            item["_kind"] = "entity"
-            # Idle and paused are switched on; only off and standby are not.
-            item["state"] = state is not None and state.state not in {
-                "off", "standby", "unknown", "unavailable",
-            }
-            return item
     if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
         item["_kind"] = "switch"
         item["state"] = _dashboard_state_is_on(state.state if state else None)

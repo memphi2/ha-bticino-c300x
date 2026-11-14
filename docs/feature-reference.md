@@ -326,7 +326,9 @@ Sections of used pages are open, and so is the first free one.
 
 An entry saved before the pages dialog opens it with its existing pages: the
 status page first, then the others in the order their names first appeared.
-Entities without a page name keep their untitled page; saving asks for a name.
+Entities without a page name keep their untitled page when saved unchanged.
+Adding another entity to that page requires a name. The tiles form labels it
+**Page without title**.
 
 The display tiles form has one section per tile, in the order the display
 shows them: page by page, and within a page in the order of its entities. A

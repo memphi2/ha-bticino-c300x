@@ -1,7 +1,7 @@
 # Current Legal and Provenance Audit Snapshot
 
-Checked: 2026-11-08. Source line: integration and native agent `2.1.0b3`,
-based on `v2.1.0b2` with the review corrections. This report covers the
+Checked: 2026-11-14. Source line: integration and native agent `2.2.0`,
+prepared from `v2.1.3` with the display additions and review corrections. This report covers the
 repository, not a newly published release.
 
 This is a technical provenance and packaging review, not a legal opinion,
@@ -9,7 +9,7 @@ authorship proof, patent clearance, or a current vulnerability assessment.
 
 ## Verified Scope
 
-The local `scripts/check_legal_audit.py` gate passed against 626 tracked files.
+The local `scripts/check_legal_audit.py` gate passed against 691 tracked files.
 It checks forbidden payloads and directories, required license/privacy/security
 documents, runtime dependency declarations, reference markers, and the expected
 project artwork hash. It is a policy check, not a source-similarity detector.
@@ -19,7 +19,7 @@ and non-affiliation notices, and a privacy notice. No tracked firmware images,
 APKs, packet captures, device backups, or native library binaries were found by
 the gate. Builds and device-specific inputs remain outside tracked source.
 
-The prior 1.9.11 snapshot dated 2026-11-02 is superseded; its full text remains in
+The prior 2.1.0b3 snapshot dated 2026-11-08 is superseded; its full text remains in
 Git history. Its search results and release-artifact checks are not evidence for
 the current code or a future release.
 
@@ -62,8 +62,8 @@ history, exports, recordings, and backups.
 
 - No new internet source-similarity, trademark, patent, or advisory search.
 - No legal clearance for third-party codecs, libraries, or trademarks.
-- No full device installation, firmware modification, or live load measurement.
-  A separate read-only C300X login confirmed the replacement SSH client.
+- No device installation, firmware modification, or live load measurement in
+  this review. Earlier device tests do not validate this release candidate.
 - No final release ZIP, release signatures, or remote attestations checked.
 
 ## Repeatable Checks

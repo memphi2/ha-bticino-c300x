@@ -926,7 +926,7 @@ Returns auth/bootstrap configuration without token values. Important fields:
 - `api_token_configured`
 - `api_token_fingerprint`
 - `maintenance_token_configured`
-- `maintenance_token_fingerprint`
+- `maintenance_token_fingerprint` (empty without maintenance authorization)
 - `maintenance_enabled`
 - `maintenance_no_auth_allowed`
 - feature enabled flags, for example `video_enabled`, `events_enabled`,

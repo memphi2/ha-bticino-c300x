@@ -62,21 +62,51 @@
   step lists what name, position and entities do.
 - A page's position runs from 1 to 8, the first page being 1, in place of 0
   to 10000 in steps of 10.
-- A page with entities needs a name, since the display shows it as the
-  heading; an older entry's untitled page asks for one when saved. Page names
-  are unique regardless of capitalization.
+- New pages with entities need a name. Existing untitled pages can be saved
+  unchanged; adding another entity requires a name. Page names are unique
+  regardless of capitalization.
 - Besides the used pages, the first free section is open, so adding a page is
   visible; the other free sections stay collapsed.
 
 ### Fixed
 
+- Recover unavailable entities and memo/message caches after agent reconnects
+  without idle polling. Coalesce reconnect reads and cancel them on entity
+  removal; ignore registry changes belonging to other integrations.
+- Preserve early ICE candidates, restart a detached ring preview when the card
+  returns, and retain cards configured by entry ID without assigning another
+  device's camera. Handle audio-context cancellation without unhandled errors.
+- Serialize call talkback startup with media teardown, use the advertised RTSP
+  timeout for playing Ring and Home Call clients, and enforce authentication
+  deadlines even when requests arrive slowly. Validate interleaved channels.
+- Keep previous capture files when a new recording fails before writing, clean
+  up cancelled workspaces, and preserve completed captures during call-end
+  cleanup. Reject an audio capture before answering an already-viewed ring.
+- Cover Wyoming audio transmission, response reading and connection cleanup
+  with bounded waits; abort the transport on cancellation.
+- Retain pending SSH-install follow-up within a repair retry and verify media
+  and device-user repairs against the resulting device status. Report installation
+  error types without logging credentials or private error text.
+- Keep cleared page and Alarmo fields empty after validation errors. Validate
+  action lists on their own form, preserve older quick-action selections, and
+  expire stateless display feedback and obsolete lock confirmations.
+- Keep saved access and maintenance keys out of reconfigure/options forms;
+  empty key fields retain the existing credentials. Validate addresses, ports
+  and callback hosts before saving, including IPv6 and alternative IP spellings.
+- Redact diagnostic addresses and bound client debug formatting, including
+  nested session identifiers. Handle malformed agent numbers and encodings.
+- Deliver full memo lists using nonblocking HTTP output with a shared 512 KiB
+  queue budget. Avoid a flash sync for every staged update chunk; installed
+  files still sync before replacement.
+- Resynchronize display events immediately after an agent restart, reject auth
+  configurations that would prevent restart, and refuse truncated routing backups.
 - Preserve device-owned configuration during SSH reinstalls and sync saved
-  configuration, update files and private SIP account files before publishing
+  configuration, installed update files and private SIP account files before publishing
   them. Restore routing only from a verified stock backup.
 - Reserve local-display HTTP capacity, bound unauthenticated RTSP connections,
   and clear inbound SRTP keys after on-demand media stops.
-- Bound Wyoming transcription duration and data size, remove failed capture
-  output, and keep late talkback keepalive errors from failing completed clips.
+- Bound Wyoming data size and keep late talkback keepalive errors from failing
+  completed clips.
 - Validate non-finite numbers, addresses and message IDs; keep token fingerprints
   admin-only. Log repair failures, avoid reloads for internal bookkeeping, and
   retain the Alarmo command tap guard until the alarm state changes.
@@ -126,11 +156,8 @@
 - Validate release ZIP contents against the checkout, stop local HA installation
   on copy errors, correlate RTSP capture responses by connection and CSeq, and
   prevent routing-patch output from overwriting its input.
-
-
 - A light or fan that is off shows 0 % on its display tile in place of `?`.
-- Saving the pages kept no display settings of the Alarmo quick entity, so
-  its name and secondary line were lost.
+- Keep the Alarmo quick entity's name and secondary line when saving pages.
 
 ### Upgrade Notes
 

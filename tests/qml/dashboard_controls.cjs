@@ -369,6 +369,19 @@ assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "the warning stays long 
 clock += 1;
 assert.equal(p.feedbackKey(stuck), "", "a settled entry stops being reported");
 assert.equal(p.readingColor(stuck), "#c7d0d9");
+// A one-shot action (a script, scene or button, a track skip) has no state that
+// Home Assistant could reflect, so it has nothing to be unconfirmed about.
+const oneShot = {entity_id: "script.leave", available: true};
+Api.setDashboardFeedback(p, oneShot.entity_id, "action_sent", null);
+assert.equal(Api.nextFeedbackDelay(p.controlFeedback.filter(e => e.entity_id === oneShot.entity_id)), 60000, "it is only forgotten, not turned into a warning");
+clock += 15000;
+assert.equal(p.feedbackKey(oneShot), "action_sent", "a one-shot action is not called unconfirmed");
+clock += 44999;
+assert.equal(p.feedbackKey(oneShot), "action_sent");
+clock += 1;
+assert.equal(p.feedbackKey(oneShot), "", "and it is forgotten after the lifetime of other feedback");
+Api.setDashboardFeedback(p, "light.hall", "action_sent", {command: "toggle", value: true});
+assert.equal(Api.nextFeedbackDelay(p.controlFeedback.filter(e => e.entity_id === "light.hall")), 15000, "a command with an expectation still gets its warning");
 
 // A late confirmation still lands, and is stamped again so it reads as fresh.
 p.controlFeedback = [];

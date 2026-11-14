@@ -182,7 +182,7 @@ function feedbackState(entry) {
     if (!entry) return ""
     var age = Date.now() - (entry.at || 0)
     if (age >= FEEDBACK_DISCARD_MS) return ""
-    if (entry.state === "action_sent" && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
+    if (entry.state === "action_sent" && entry.expected && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
     return entry.state
 }
 
@@ -190,7 +190,7 @@ function nextFeedbackDelay(feedback) {
     var delay = 0
     var now = Date.now()
     for (var i = 0; i < feedback.length; i++) {
-        var lifetime = feedback[i].state === "action_sent" ? FEEDBACK_UNCONFIRMED_MS : FEEDBACK_DISCARD_MS
+        var lifetime = feedback[i].state === "action_sent" && feedback[i].expected ? FEEDBACK_UNCONFIRMED_MS : FEEDBACK_DISCARD_MS
         var remaining = Math.max(1, (feedback[i].at || 0) + lifetime - now)
         if (delay === 0 || remaining < delay) delay = remaining
     }

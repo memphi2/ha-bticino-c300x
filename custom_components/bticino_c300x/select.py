@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -105,9 +106,12 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         mode = _FORWARDING_MODE_BY_LABEL.get(option, option)
         if mode not in SMARTPHONE_FORWARDING_MODES:
             return
-        status = await self._entry.runtime_data.api.async_set_smartphone_forwarding_mode(
-            mode
-        )
+        try:
+            status = await self._entry.runtime_data.api.async_set_smartphone_forwarding_mode(
+                mode
+            )
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X smartphone forwarding update failed") from err
         self._apply_status(status)
         self.async_write_ha_state()
 
@@ -216,12 +220,15 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         """Switch the device codec (apply=PCMU, restore=speex); reboots."""
 
         api = self._entry.runtime_data.api
-        if option == "pcmu":
-            status = await api.async_apply_audio_codec()
-        elif option == "speex":
-            status = await api.async_restore_audio_codec()
-        else:
-            return
+        try:
+            if option == "pcmu":
+                status = await api.async_apply_audio_codec()
+            elif option == "speex":
+                status = await api.async_restore_audio_codec()
+            else:
+                return
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X audio codec change failed") from err
         self._apply_action_result(option, status)
         self.async_write_ha_state()
 

@@ -292,9 +292,12 @@ class C300XAnsweringMachineSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_answering_machine_enabled(
-            enabled
-        )
+        try:
+            status = await self._entry.runtime_data.api.async_set_answering_machine_enabled(
+                enabled
+            )
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X answering machine update failed") from err
         self._apply_status(status)
 
     def _apply_status(self, status: dict[str, Any]) -> None:
@@ -356,7 +359,10 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_ssh_enabled(enabled)
+        try:
+            status = await self._entry.runtime_data.api.async_set_ssh_enabled(enabled)
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X SSH update failed") from err
         self._apply_status(status)
 
     def _apply_status(self, status: dict[str, Any]) -> None:

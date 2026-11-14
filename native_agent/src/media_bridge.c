@@ -125,6 +125,7 @@ static int doorbell_devaddr(const struct c300x_config *config) {
 
 typedef struct {
     int fd;
+    int connection_index;
     struct sockaddr_storage peer;
 } rtsp_client_thread_arg_t;
 
@@ -5946,7 +5947,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     int slot_index = -1;
     int remaining_clients = 0;
     int evicted_clients = 0;
-    int connection_index = -1;
     bool authenticated = false;
     bool ever_authenticated = false;
     int auth_rejections = 0;
@@ -5955,20 +5955,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     if (request == NULL || read_buffer_data == NULL) {
         free(request);
         free(read_buffer_data);
-        close(fd);
-        return;
-    }
-
-    pthread_mutex_lock(&g_bridge.mutex);
-    if (g_bridge.running) {
-        connection_index = c300x_rtsp_connection_add(g_bridge.rtsp_connection_fds, fd);
-    }
-    pthread_mutex_unlock(&g_bridge.mutex);
-    if (connection_index < 0) {
-        send_rtsp_response(fd, 453, "1", NULL, NULL);
-        free(request);
-        free(read_buffer_data);
-        close(fd);
         return;
     }
     while (g_bridge.running) {
@@ -6410,11 +6396,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         }
     }
 
-    if (connection_index >= 0) {
-        pthread_mutex_lock(&g_bridge.mutex);
-        g_bridge.rtsp_connection_fds[connection_index] = 0;
-        pthread_mutex_unlock(&g_bridge.mutex);
-    }
     if (slot_index >= 0) {
         bool unregistered;
         pthread_mutex_lock(&g_bridge.mutex);
@@ -6438,7 +6419,29 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     }
     free(request);
     free(read_buffer_data);
+}
+
+static int reserve_rtsp_client(media_bridge_t *bridge, int fd) {
+    int index = -1;
+    pthread_mutex_lock(&bridge->mutex);
+    if (bridge->running) {
+        index = c300x_rtsp_connection_add(bridge->rtsp_connection_fds, fd);
+        if (index >= 0) {
+            bridge->rtsp_client_threads++;
+        }
+    }
+    pthread_mutex_unlock(&bridge->mutex);
+    return index;
+}
+
+static void release_rtsp_client(media_bridge_t *bridge, int fd, int index) {
+    pthread_mutex_lock(&bridge->mutex);
+    /* Keep shutdown from acting on a closed and potentially reused descriptor. */
     close(fd);
+    bridge->rtsp_connection_fds[index] = 0;
+    bridge->rtsp_client_threads--;
+    pthread_cond_broadcast(&bridge->ready_cond);
+    pthread_mutex_unlock(&bridge->mutex);
 }
 
 static void *rtsp_client_thread(void *arg) {
@@ -6448,14 +6451,35 @@ static void *rtsp_client_thread(void *arg) {
         return NULL;
     }
     handle_rtsp_client(client->fd, &client->peer);
+    int fd = client->fd;
+    int index = client->connection_index;
     free(client);
-    pthread_mutex_lock(&g_bridge.mutex);
-    if (g_bridge.rtsp_client_threads > 0) {
-        g_bridge.rtsp_client_threads--;
-    }
-    pthread_cond_broadcast(&g_bridge.ready_cond);
-    pthread_mutex_unlock(&g_bridge.mutex);
+    release_rtsp_client(&g_bridge, fd, index);
     return NULL;
+}
+
+static void start_rtsp_client(media_bridge_t *bridge, int fd, const struct sockaddr_storage *peer) {
+    int index = reserve_rtsp_client(bridge, fd);
+    if (index < 0) {
+        /* Do not allocate or block the accept loop sending an overload response. */
+        close(fd);
+        return;
+    }
+    rtsp_client_thread_arg_t *client = calloc(1, sizeof(*client));
+    if (client == NULL) {
+        release_rtsp_client(bridge, fd, index);
+        return;
+    }
+    client->fd = fd;
+    client->connection_index = index;
+    client->peer = *peer;
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, rtsp_client_thread, client) == 0) {
+        pthread_detach(thread);
+    } else {
+        free(client);
+        release_rtsp_client(bridge, fd, index);
+    }
 }
 
 static int create_rtsp_listener(uint16_t port) {
@@ -6522,29 +6546,7 @@ static void *rtsp_server_thread(void *arg) {
             }
             break;
         }
-        rtsp_client_thread_arg_t *client = calloc(1, sizeof(*client));
-        if (client == NULL) {
-            close(client_fd);
-            continue;
-        }
-        client->fd = client_fd;
-        client->peer = peer;
-        pthread_t client_thread;
-        pthread_mutex_lock(&bridge->mutex);
-        bridge->rtsp_client_threads++;
-        pthread_mutex_unlock(&bridge->mutex);
-        if (pthread_create(&client_thread, NULL, rtsp_client_thread, client) == 0) {
-            pthread_detach(client_thread);
-        } else {
-            pthread_mutex_lock(&bridge->mutex);
-            if (bridge->rtsp_client_threads > 0) {
-                bridge->rtsp_client_threads--;
-            }
-            pthread_cond_broadcast(&bridge->ready_cond);
-            pthread_mutex_unlock(&bridge->mutex);
-            free(client);
-            close(client_fd);
-        }
+        start_rtsp_client(bridge, client_fd, &peer);
     }
 
     bool should_close = true;

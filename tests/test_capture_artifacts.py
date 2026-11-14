@@ -34,6 +34,43 @@ def test_short_video_extracts_real_frames_and_removes_absent_aliases(tmp_path):
     assert (tmp_path / "frame_01.jpg").resolve() == work / "frame_01.jpg"
 
 
+def test_h264_capture_extracts_jpeg_frames_with_native_ffmpeg(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("FFmpeg tools not installed")
+    source = tmp_path / "limited.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
+         "color=c=red:s=64x64:r=10:d=1", "-pix_fmt", "yuv420p",
+         "-color_range", "tv", "-c:v", "libx264", str(source)],
+        check=True, timeout=10,
+    )
+    work = tmp_path / "frames"
+    work.mkdir()
+    asyncio.run(ring_capture._async_extract_capture_frames(source, work, duration_seconds=1))
+    assert all((work / f"frame_{index:02}.jpg").stat().st_size > 0 for index in (1, 2, 3))
+
+
+def test_frame_extraction_explicitly_converts_each_jpeg_to_full_range(monkeypatch, tmp_path):
+    commands = []
+
+    async def run(command, **kwargs):
+        if command[0] == "ffprobe":
+            return b'{"streams":[{"duration":"3"}]}'
+        commands.append(command)
+        (tmp_path / command[-1]).write_bytes(b"test-output")
+        return b""
+
+    monkeypatch.setattr(ring_capture, "_async_run_ffmpeg_command", run)
+    asyncio.run(ring_capture._async_extract_capture_frames(
+        tmp_path / "clip.mp4", tmp_path, duration_seconds=3,
+    ))
+    assert len(commands) == 3
+    for command in commands:
+        assert command[command.index("-vf") + 1] == "scale=out_range=full"
+        assert command.index("-vf") > command.index("-i")
+        assert "-strict" not in command
+
+
 def test_frame_extraction_rejects_success_without_output(monkeypatch, tmp_path):
     async def run(*args, **kwargs):
         return b'{"streams":[{"duration":"1"}]}'

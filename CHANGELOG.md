@@ -16,6 +16,8 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 
 ### Fixed
 
+- Convert extracted capture frames explicitly to full color range before JPEG
+  encoding instead of relying on automatic ffmpeg format negotiation.
 - Preserve technical event types such as `ring` on the event entities so
   type-filtered automations match; keep translated labels in display attributes.
 - Wait briefly when a startup status check temporarily occupies maintenance

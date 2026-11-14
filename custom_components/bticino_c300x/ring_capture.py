@@ -969,6 +969,8 @@ async def _async_extract_capture_frames(
                 str(source),
                 "-ss",
                 f"{offset:.3f}",
+                "-vf",
+                "scale=out_range=full",
                 "-frames:v",
                 "1",
                 "-q:v",

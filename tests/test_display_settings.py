@@ -341,6 +341,39 @@ def test_the_pages_form_rejects_what_the_display_cannot_show(
     assert result["errors"] == errors
 
 
+@pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
+def test_a_field_emptied_before_an_error_stays_empty_in_the_form(monkeypatch, flow_kind):
+    saved = {
+        "device_ui_enabled": True,
+        "dashboard_entities": ["light.two"],
+        "dashboard_entity_display_overrides": {"light.two": {"page": "Room"}},
+    }
+    entry = SimpleNamespace(data=dict(saved), options={}, runtime_data=None)
+    dashboard_step, pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
+    data = {key: dict(value) for key, value in post_pages_like_home_assistant(form["data_schema"]).items()}
+    assert data["page_2"]["entities"] == ["light.two"]
+    # The user empties the entities of the page, so the field is not sent,
+    # and names another page the same, which the form rejects.
+    del data["page_2"]["entities"]
+    data["page_3"] = {"name": " room ", "position": 5}
+    result = asyncio.run(pages_step(data))
+
+    assert result["errors"] == {"page_3": "dashboard_page_name_duplicate"}
+    shown = {
+        str(key): {
+            str(field): (field.description or {}).get("suggested_value")
+            for field in page_section.schema.schema
+        }
+        for key, page_section in result["data_schema"].schema.items()
+    }
+    assert shown["page_2"]["entities"] is None
+    assert shown["page_2"]["name"] == "Room"
+    assert shown["page_3"]["name"] == " room "
+    assert shown["page_3"]["position"] == 5
+
+
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
 def test_an_emptied_page_position_returns_to_the_place_of_its_section(monkeypatch, flow_kind):
     """Home Assistant leaves an emptied number box out of the form it sends."""

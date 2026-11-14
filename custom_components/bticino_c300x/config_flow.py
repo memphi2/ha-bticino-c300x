@@ -783,9 +783,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Show the pages of the initial C300X display dashboard."""
 
-        schema = _dashboard_pages_schema(self._setup_dashboard_input)
-        if user_input is not None:
-            schema = self.add_suggested_values_to_schema(schema, user_input)
+        schema = _dashboard_pages_schema(self._setup_dashboard_input, user_input)
         return self.async_show_form(
             step_id="user_dashboard_pages",
             data_schema=schema,
@@ -1209,9 +1207,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Show the pages of the C300X display dashboard for reconfigure."""
 
-        schema = _dashboard_pages_schema(self._reconfigure_dashboard_input)
-        if user_input is not None:
-            schema = self.add_suggested_values_to_schema(schema, user_input)
+        schema = _dashboard_pages_schema(self._reconfigure_dashboard_input, user_input)
         return self.async_show_form(
             step_id="reconfigure_dashboard_pages",
             data_schema=schema,
@@ -1633,9 +1629,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Show the pages of the C300X display dashboard options."""
 
-        schema = _dashboard_pages_schema(self._dashboard_options)
-        if user_input is not None:
-            schema = self.add_suggested_values_to_schema(schema, user_input)
+        schema = _dashboard_pages_schema(self._dashboard_options, user_input)
         return self.async_show_form(
             step_id="dashboard_pages",
             data_schema=schema,

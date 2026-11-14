@@ -128,14 +128,29 @@ def dashboard_page_layout(dashboard_input: dict[str, Any]) -> list[dict[str, Any
     return layout[:DASHBOARD_PAGE_MAX_COUNT]
 
 
-def dashboard_pages_schema(dashboard_input: dict[str, Any]) -> vol.Schema:
+def dashboard_pages_schema(
+    dashboard_input: dict[str, Any],
+    posted: dict[str, Any] | None = None,
+) -> vol.Schema:
     """Return the pages form, one section per page.
 
     The sections of used pages are open, and so is the first free one, where
     a new page can be added; the other free sections are collapsed.
+
+    A form shown again after an error passes what was sent as ``posted``.
+    Each field then shows the sent value only. Home Assistant leaves an
+    emptied field out of what it sends, so such a field stays empty instead
+    of showing the saved value again.
     """
 
     layout = dashboard_page_layout(dashboard_input)
+
+    def shown(slot: int, field: str, saved: Any) -> Any:
+        if posted is None:
+            return saved
+        values = posted.get(page_section_key(slot))
+        return values.get(field) if isinstance(values, dict) else None
+
     fields: dict[Any, Any] = {}
     free_section_shown = False
     for slot in range(1, DASHBOARD_PAGE_MAX_COUNT + 1):
@@ -148,19 +163,24 @@ def dashboard_pages_schema(dashboard_input: dict[str, Any]) -> vol.Schema:
         if slot == 1:
             page_fields[_optional_suggested(
                 PAGE_WEATHER_FIELD,
-                dashboard_input.get(CONF_WEATHER_ENTITY_ID),
+                shown(slot, PAGE_WEATHER_FIELD, dashboard_input.get(CONF_WEATHER_ENTITY_ID)),
             )] = _weather_entity_selector()
         if slot > 1:
-            page_fields[_optional_suggested(PAGE_NAME_FIELD, page["name"] if page else "")] = (
-                _page_name_selector()
-            )
+            page_fields[_optional_suggested(
+                PAGE_NAME_FIELD,
+                shown(slot, PAGE_NAME_FIELD, page["name"] if page else "") or "",
+            )] = _page_name_selector()
         page_fields[_optional_suggested(
             PAGE_POSITION_FIELD,
-            page["order"] if page else None,
+            shown(slot, PAGE_POSITION_FIELD, page["order"] if page else None),
         )] = _page_position_selector()
         page_fields[_optional_suggested(
             PAGE_ENTITIES_FIELD,
-            page["entities"] if page and page["entities"] else None,
+            shown(
+                slot,
+                PAGE_ENTITIES_FIELD,
+                page["entities"] if page and page["entities"] else None,
+            ),
         )] = _page_entity_selector()
         fields[vol.Required(page_section_key(slot))] = section(
             vol.Schema(page_fields),

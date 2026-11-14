@@ -72,9 +72,25 @@ class C300XEntity(Entity):
         if entry_id != self._entry.entry_id:
             return
         current = _connection_state_available(self._entry)
+        if (
+            current is not False
+            and getattr(self, "_attr_available", True) is False
+            and hasattr(self, "async_update")
+        ):
+            # These entities do not poll and are marked unavailable by their own
+            # failed read. The agent answered again, so ask it once more: nothing
+            # else would bring them back until the device itself reports a change.
+            self.hass.async_create_background_task(
+                self._async_refresh_after_reconnect(),
+                f"{DOMAIN}_refresh_after_reconnect_{self._attr_unique_id}",
+            )
         if current == self._last_connection_state_available:
             return
         self._last_connection_state_available = current
+        self.async_write_ha_state()
+
+    async def _async_refresh_after_reconnect(self) -> None:
+        await cast(Any, self).async_update()
         self.async_write_ha_state()
 
 

@@ -1656,3 +1656,50 @@ def test_unparseable_forwarding_push_does_not_announce_the_old_mode() -> None:
     assert event_state.smartphone_forwarding_mode == "blocked"
     # ... but not announced as a change.
     assert event_data["mode"] is None
+
+
+@pytest.mark.parametrize(
+    ("event", "key", "task_attr"),
+    [
+        ("memos.changed", "memos", "memos_refresh_task"),
+        ("answering_machine.messages_changed", "voicemail", "answering_machine_messages_refresh_task"),
+    ],
+)
+def test_a_snapshot_schedules_the_read_that_brings_the_items_back(event, key, task_attr) -> None:
+    """The snapshot empties the item list; without a read it stays empty."""
+
+    async def run() -> object:
+        hass = _FakeHass()
+        event_state = C300XEventState()
+        runtime_data = SimpleNamespace(
+            event_state=event_state,
+            memos={"available": True, "memos": [{"id": "text/1", "kind": "text"}]},
+            memos_updated_at=None,
+            answering_machine_messages={"available": True, "messages": [{"id": "m1"}]},
+            answering_machine_messages_updated_at=None,
+            resources=C300XRuntimeResources(),
+        )
+        entry = SimpleNamespace(
+            entry_id="entry-1",
+            title="C300X",
+            data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+            options={},
+            runtime_data=runtime_data,
+        )
+        request = _FakeRequest(
+            "event-token",
+            {"event": event, "snapshot": True, "data": {key: {"available": True, "total": 1}}},
+        )
+        response = await _async_handle_agent_event(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            event_state,
+            request,  # type: ignore[arg-type]
+        )
+        task = getattr(runtime_data.resources, task_attr)
+        for pending in hass.tasks:
+            pending.cancel()
+        assert response.status == 200
+        return task
+
+    assert asyncio.run(run()) is not None

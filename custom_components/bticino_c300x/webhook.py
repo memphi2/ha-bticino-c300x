@@ -62,6 +62,10 @@ from .executor import (
 from .forwarding import forwarding_state_from_value
 from .http_body import read_capped_body
 from .media_watchdog import handle_runtime_cpu_metrics_changed
+from .message_refresh import (
+    schedule_answering_machine_messages_refresh,
+    schedule_memos_refresh,
+)
 from .system_metrics import apply_system_metrics, metrics_are_fresh
 from .value_parsing import (
     DEFAULT_FALSE_VALUES,
@@ -605,10 +609,19 @@ def _apply_snapshot_entity_refresh(
 ) -> None:
     """Refresh stateful entities for subscription snapshots without firing events."""
 
+    # A snapshot carries the counters only; the cache was just stored with an
+    # empty item list. The signal re-publishes that, the scheduled read brings
+    # the items back (and signals again). Without it the sensors would show a
+    # count with no latest item until the next change on the device.
+    resources = getattr(getattr(entry, "runtime_data", None), "resources", None)
     if event_type == "answering_machine_messages_changed":
         async_dispatcher_send(hass, SIGNAL_VIDEO_MESSAGES_CHANGED, entry.entry_id)
+        if resources is not None:
+            schedule_answering_machine_messages_refresh(hass, entry)
     elif event_type == "memos_changed":
         async_dispatcher_send(hass, SIGNAL_MEMOS_CHANGED, entry.entry_id)
+        if resources is not None:
+            schedule_memos_refresh(hass, entry)
 
 
 def _cache_voicemail_snapshot(entry: BticinoC300XConfigEntry, event_state: C300XEventState) -> None:

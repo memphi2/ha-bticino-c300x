@@ -5,16 +5,18 @@
 #include "c300x_agent.h"
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/select.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
 #define DEVICE_MEDIA_PORT 30007
+#define DEVICE_MEDIA_COMMAND_TIMEOUT_MS 2000
 #define DEVICE_MEDIA_TAKEOVER_SETTLE_MS 800
 
 static int video_rtp_port(const struct c300x_config *config) {
@@ -25,11 +27,32 @@ static int audio_rtp_port(const struct c300x_config *config) {
     return (int)config->video_rtp_port_start;
 }
 
-static ssize_t send_all(int fd, const void *buf, size_t len) {
+static long long monotonic_ms(void) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) return -1;
+    return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+static bool wait_socket(int fd, short events, long long deadline) {
+    for (;;) {
+        long long now = monotonic_ms();
+        if (now < 0 || now >= deadline) return false;
+        struct pollfd pending = {.fd = fd, .events = events};
+        int ready = poll(&pending, 1, (int)(deadline - now));
+        if (ready < 0 && errno == EINTR) continue;
+        /* POLLIN may accompany HUP when the peer sends its final reply. */
+        return ready > 0 && !(pending.revents & (POLLERR | POLLNVAL))
+            && (pending.revents & events) != 0;
+    }
+}
+
+static ssize_t send_all(int fd, const void *buf, size_t len, long long deadline) {
     const char *p = buf;
     size_t left = len;
     while (left > 0) {
-        ssize_t n = send(fd, p, left, MSG_NOSIGNAL);
+        if (!wait_socket(fd, POLLOUT, deadline)) return -1;
+        ssize_t n = send(fd, p, left, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
         if (n <= 0) {
             return n;
         }
@@ -39,8 +62,8 @@ static ssize_t send_all(int fd, const void *buf, size_t len) {
     return (ssize_t)len;
 }
 
-static int connect_local_tcp(int port) {
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+static int connect_local_tcp(int port, long long deadline) {
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     if (fd < 0) {
         return -1;
     }
@@ -55,29 +78,44 @@ static int connect_local_tcp(int port) {
     }
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        close(fd);
-        return -1;
+        if ((errno != EINPROGRESS && errno != EINTR)
+            || !wait_socket(fd, POLLOUT, deadline)) {
+            close(fd);
+            return -1;
+        }
+        int error = 0;
+        socklen_t size = sizeof(error);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) != 0 || error != 0) {
+            close(fd);
+            return -1;
+        }
     }
     return fd;
 }
 
 static bool send_device_media_command(const char *command, char *reply, size_t reply_len) {
+    if (reply_len == 0) return false;
     reply[0] = '\0';
-    int fd = connect_local_tcp(DEVICE_MEDIA_PORT);
+    long long now = monotonic_ms();
+    if (now < 0) return false;
+    /* Retries and partial writes share the command's original deadline. */
+    long long deadline = now + DEVICE_MEDIA_COMMAND_TIMEOUT_MS;
+    int fd = connect_local_tcp(DEVICE_MEDIA_PORT, deadline);
     if (fd < 0) {
         return false;
     }
     bool ok = false;
-    if (send_all(fd, command, strlen(command)) > 0) {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(fd, &readfds);
-        struct timeval timeout = {2, 0};
-        if (select(fd + 1, &readfds, NULL, NULL, &timeout) > 0) {
-            ssize_t n = recv(fd, reply, reply_len - 1, 0);
-            if (n > 0) {
-                reply[n] = '\0';
+    if (send_all(fd, command, strlen(command), deadline) > 0) {
+        size_t used = 0;
+        while (used + 1 < reply_len && wait_socket(fd, POLLIN, deadline)) {
+            ssize_t n = recv(fd, reply + used, reply_len - used - 1, MSG_DONTWAIT);
+            if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+            if (n <= 0) break;
+            used += (size_t)n;
+            reply[used] = '\0';
+            if (strstr(reply, "##") != NULL) {
                 ok = strstr(reply, "*#*1##") != NULL;
+                break;
             }
         }
     }

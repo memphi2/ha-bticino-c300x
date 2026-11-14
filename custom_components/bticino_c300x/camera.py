@@ -1713,9 +1713,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             cached_external_media_active=self._external_media_active,
             cached_external_owner=self._external_owner,
             local_sessions=self._active_local_media_sessions(source_status),
-            last_error=(
-                None if self._rtsp_cooldown_scope == "home_call" else self._last_rtsp_error
-            ),
+            # A failed probe belongs to its request, not subsequent calls.
+            # The request reports the error; fresh admission uses device facts.
             cooldown_active=(
                 self._rtsp_unavailable_until > time.monotonic()
                 and self._rtsp_cooldown_scope != "home_call"

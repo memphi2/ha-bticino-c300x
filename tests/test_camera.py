@@ -257,6 +257,17 @@ def test_doorbell_camera_sets_visible_entity_icon() -> None:
     assert C300XDoorbellCamera(_FakeEntry()).icon == "mdi:cctv"
 
 
+def test_failed_probe_does_not_block_next_call_or_manual_retry() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())
+    camera._last_rtsp_error = "TimeoutError"
+    idle = camera._derive_media_decision({"media_owner": "idle", "bridge": {}})
+    assert idle.state is not MediaState.ERROR
+    ring = camera._derive_media_decision({
+        "media_owner": "ring", "bridge": {"ring_call_active": True},
+    })
+    assert ring.state is MediaState.RING_PENDING
+
+
 def test_camera_setup_entry_adds_entity_only_when_capability_is_supported() -> None:
     async def _run() -> None:
         unsupported = _FakeEntry()

@@ -229,26 +229,28 @@ entity-display dialog. Choose entities and the optional Alarmo quick entity with
 the normal HA selectors; control types come from their actual capabilities, not
 a manually chosen widget.
 
-The pages dialog has up to 8 pages, one section each:
+The pages dialog has up to 8 pages, one section each. A section's title shows
+the page's name, for example **Page 2: Living room**.
 
 | Field | Meaning |
 | --- | --- |
-| **Name** | Title of the page. The status page has none. |
-| **Position** | Order of the pages, 0 to 10000, lowest first. An emptied position returns to the place of its section (0, 10, 20, ...). |
+| **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
+| **Position** | Order of the pages, 1 to 8; 1 is the first page. Left empty, the section's number is used; pages with the same position keep the order of their sections. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
 The first section is the status page: it carries the HA, alarm and time badges
-and the weather card, at its top. Its internal name is `C300X`, which another
-page cannot use, and the display shows no title for it. Like any other page it
-can be moved with its position. A page needs a name or entities; an entity and
-a page name can each be used once. Page names are limited to 60 characters; a
-longer one is cut and a position is rounded to a whole number. Pages that only
-configured actions use follow the configured pages.
+and the weather card at its top, and its heading on the display stays Home
+Assistant. Its internal name is `C300X`, which another page cannot use. Like
+any other page it can be moved with its position. A section without a name and
+entities stays unused; a page with entities needs a name. Each page name (in
+any capitalization) and each entity can be used once. Page names are limited to
+60 characters; a longer one is cut, and a position is rounded to a whole
+number. Pages that only configured actions use follow the configured pages.
+Sections of used pages are open, and so is the first free one.
 
 An entry saved before the pages dialog opens it with its existing pages: the
-status page first, then the others in the order their names first appeared,
-10 apart. Entities without a page name keep their untitled page until it is
-given a name or emptied.
+status page first, then the others in the order their names first appeared.
+Entities without a page name keep their untitled page; saving asks for a name.
 
 The entity-display dialog sets **Width**, **Height**, name and secondary line
 of each tile. A custom name left empty shows the Home Assistant name. Missing or

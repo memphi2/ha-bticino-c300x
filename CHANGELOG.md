@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.1.4 - Unreleased
+
+### Added
+
+- The display shows a page's name as its heading in place of Home Assistant;
+  the status page keeps Home Assistant. The separate title line above the
+  tiles is gone and leaves its room to the tiles.
+
+### Changed
+
+- The pages dialog explains itself: each section is titled with its page's
+  name and says what it holds, every field has a short help text, and the
+  step lists what name, position and entities do.
+- A page's position runs from 1 to 8, the first page being 1, in place of 0
+  to 10000 in steps of 10.
+- A page with entities needs a name, since the display shows it as the
+  heading; an older entry's untitled page asks for one when saved. Page names
+  are unique regardless of capitalization.
+- Besides the used pages, the first free section is open, so adding a page is
+  visible; the other free sections stay collapsed.
+
+### Upgrade Notes
+
+- The native agent stays at `2.1.2`; only the display files change. Their
+  new bundle hash makes the agent-update Repair offer them, it installs the
+  display files alone, and the integration re-applies an active Display patch
+  itself, which restarts the device GUI once. The page name in the heading
+  needs these display files.
+
 ## v2.1.3 - 2026-11-13
 
 ### Added

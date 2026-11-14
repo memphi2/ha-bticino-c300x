@@ -218,7 +218,6 @@ static int backup_is_stock(const char *backup_path, const char *target_path)
     char sha256[65];
     unsigned char *data = NULL;
     size_t len = 0;
-    struct stat target;
     int stock;
 
     if (c300x_sha256_file_hex(backup_path, sha256, sizeof(sha256))
@@ -231,7 +230,7 @@ static int backup_is_stock(const char *backup_path, const char *target_path)
     /* The ranges only cover the patched bytes. A copy that was cut off behind
      * the last range would pass them, so it must also be as long as the file
      * it is a backup of: the patch never changes the length. */
-    if (stat(target_path, &target) != 0 || (size_t)target.st_size != len) {
+    if (!c300x_patch_file_size_matches(target_path, len)) {
         free(data);
         return 0;
     }

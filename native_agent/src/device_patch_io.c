@@ -14,6 +14,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef __arm__
@@ -35,6 +36,13 @@ static int patch_stat_path(const char *path, C300X_PATCH_STAT_STRUCT *status)
 #else
     return stat(path, status);
 #endif
+}
+
+int c300x_patch_file_size_matches(const char *path, size_t size)
+{
+    C300X_PATCH_STAT_STRUCT st;
+    return patch_stat_path(path, &st) == 0 && S_ISREG(st.st_mode)
+        && st.st_size >= 0 && (uintmax_t)st.st_size == (uintmax_t)size;
 }
 
 int c300x_patch_file_mode(

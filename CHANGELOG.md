@@ -100,6 +100,7 @@
   files still sync before replacement.
 - Resynchronize display events immediately after an agent restart, reject auth
   configurations that would prevent restart, and refuse truncated routing backups.
+  Backup size checks use the legacy-compatible device filesystem interface.
 - Preserve device-owned configuration during SSH reinstalls and sync saved
   configuration, installed update files and private SIP account files before publishing
   them. Restore routing only from a verified stock backup.

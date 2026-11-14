@@ -2893,9 +2893,7 @@ cleanup:
     if (video_rtcp_fd >= 0) {
         close(video_rtcp_fd);
     }
-    if (srtp_ready) {
-        media_srtp_deinit_state(&srtp);
-    }
+    media_srtp_deinit_state(&srtp);
     secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
     secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
     secure_zero(offer_audio_key_raw, sizeof(offer_audio_key_raw));
@@ -4865,7 +4863,6 @@ static void *home_call_thread_func(void *arg) {
     char contact_uri[512];
     int target_audio_port = 7078;
     media_srtp_state_t srtp;
-    bool srtp_ready = false;
     bool invite_sent = false;
     bool answered = false;
     bool started_event_sent = false;
@@ -4926,8 +4923,6 @@ static void *home_call_thread_func(void *arg) {
         c300x_video_bridge_set_error(bridge->video, "home_call_srtp_failed");
         goto cleanup;
     }
-    srtp_ready = true;
-
     fd = connect_sip_socket(bridge->config);
     if (fd < 0) {
         c300x_video_bridge_set_error(bridge->video, "home_call_sip_connect_failed");
@@ -5145,9 +5140,7 @@ cleanup:
     }
     bridge->home_call_last_talkback_ms = 0;
     pthread_mutex_unlock(&bridge->mutex);
-    if (srtp_ready) {
-        media_srtp_deinit_state(&srtp);
-    }
+    media_srtp_deinit_state(&srtp);
     secure_zero(offer_audio_key_raw, sizeof(offer_audio_key_raw));
     secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
     home_call_cleanup(bridge, fd, audio_fd, audio_rtcp_fd);

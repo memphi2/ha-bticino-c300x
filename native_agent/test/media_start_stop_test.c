@@ -14,6 +14,37 @@ static int test_bind(int, const struct sockaddr *, socklen_t);
 static atomic_bool connecting, release_connect;
 static int peer = -1;
 static bool start_result;
+static int session_attempts, session_frees, fail_session;
+static int fake_create(c300x_srtp_t *session, const c300x_srtp_policy_t *policy) {
+    (void)policy;
+    if (++session_attempts == fail_session) return 1;
+    *session = malloc(1);
+    assert(*session);
+    return 0;
+}
+static int fake_dealloc(c300x_srtp_t session) {
+    free(session);
+    session_frees++;
+    return 0;
+}
+static void fake_policy(c300x_srtp_crypto_policy_t *policy) {
+    memset(policy, 0, sizeof(*policy));
+}
+static void test_partial_srtp_cleanup(void) {
+    g_srtp_api.srtp_create = fake_create;
+    g_srtp_api.srtp_dealloc = fake_dealloc;
+    g_srtp_api.crypto_policy_set_rtp_default = fake_policy;
+    g_srtp_api.crypto_policy_set_rtcp_default = fake_policy;
+    const char *offer = "INVITE sip:alluser@test.invalid SIP/2.0\r\n\r\nv=0\r\n"
+        "m=audio 7078 RTP/SAVP 96\r\na=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\r\n"
+        "m=video 9078 RTP/SAVP 96\r\na=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\r\n";
+    for (fail_session = 1; fail_session <= 4; fail_session++) {
+        session_attempts = session_frees = 0;
+        handle_ring_invite(&g_bridge, -1, offer, "ha", "ha@test.invalid");
+        assert(session_attempts == fail_session);
+        assert(session_frees == fail_session - 1);
+    }
+}
 static int test_bind(int fd, const struct sockaddr *address, socklen_t size) {
     (void)address; (void)size;
     struct sockaddr_in local = {.sin_family = AF_INET, .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
@@ -58,6 +89,7 @@ int main(void) {
     assert(g_bridge.video);
     g_bridge.running = true;
     g_srtp_api.initialized = g_srtp_api.available = 1;
+    test_partial_srtp_cleanup();
     pthread_t start, stop;
     assert(pthread_create(&start, NULL, start_worker, NULL) == 0);
     while (!atomic_load(&connecting)) usleep(1000);

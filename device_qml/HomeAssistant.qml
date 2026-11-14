@@ -48,6 +48,7 @@ Page {
     property variant selectedItem: null
     property bool detailOpen: selectedItem ? true : false
     property string detailSection: ""
+    property string armedCommand: ""
     property variant detailSections: Api.dashboardDetailSections(selectedItem)
     property variant detailControls: Api.dashboardListControls(selectedItem, detailSection)
     property bool dashboardOnline: false
@@ -171,6 +172,7 @@ Page {
         if (!dashboardOnline) return uiText("stale_state")
         if (item.available === false) return uiText("offline")
         var detail = item.details || {}
+        if (detail.type === "lock") return ""
         if (detail.activity) return uiText("activity_" + detail.activity)
         return detail.type === "sensor" || detail.type === "binary_sensor" ? "" : detail.state_label || ""
     }
@@ -236,7 +238,18 @@ Page {
         aboutToShow()
     }
 
+    function pressAction(item, control) {
+        var guarded = item && item.details && item.details.type === "lock" && (control.command === "unlock" || control.command === "open")
+        if (guarded && armedCommand !== control.command) {
+            armedCommand = control.command
+            return
+        }
+        armedCommand = ""
+        Api.dashboardControl(item, control, null, status, page)
+    }
+
     function openDetails(item) {
+        armedCommand = ""
         selectedItem = item
         var white = Api.dashboardControlByCommand(item, "color_temp_kelvin")
         detailSection = white && white.active === false ? "color_mode" : ""
@@ -914,12 +927,12 @@ Page {
                         height: 56
                         opacity: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
                         Image { anchors.fill: parent; source: actionMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
-                        UbuntuLightText { anchors.centerIn: parent; text: controlLabel(control); font.pixelSize: text.length <= 3 ? 28 : 18; color: "white" }
+                        UbuntuLightText { anchors.centerIn: parent; text: armedCommand === control.command ? uiText("confirm") : controlLabel(control); font.pixelSize: text.length <= 3 ? 28 : 18; color: armedCommand === control.command ? "#f1c40f" : "white" }
                         BeepingMouseArea {
                             id: actionMouse
                             anchors.fill: parent
                             enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
-                            onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
+                            onClicked: pressAction(selectedItem, control)
                         }
                     }
                 }

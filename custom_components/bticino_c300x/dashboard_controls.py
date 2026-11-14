@@ -14,6 +14,7 @@ from homeassistant.components.light.const import (
     COLOR_MODES_COLOR,
     LightEntityFeature,
 )
+from homeassistant.components.lock.const import LockEntityFeature
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.util.percentage import (
@@ -372,6 +373,15 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append(
                 _choice("sound_mode", attrs.get("sound_mode"), attrs.get("sound_mode_list"))
             )
+    elif domain == "lock":
+        # Each action is offered where it changes something. Opening the
+        # latch is a third action, only for a lock that can do it.
+        if state.state != "locked":
+            controls.append({"command": "lock", "kind": "button"})
+        if state.state != "unlocked":
+            controls.append({"command": "unlock", "kind": "button"})
+        if features & LockEntityFeature.OPEN:
+            controls.append({"command": "open", "kind": "button"})
     elif domain in {"number", "input_number"}:
         controls.append(
             _number(
@@ -502,6 +512,8 @@ async def async_execute_control(
             data[command] = value
         elif command == "shuffle":
             data["shuffle"] = value
+    elif domain == "lock":
+        service = command
     elif domain in {"number", "input_number"}:
         service = "set_value"
         data["value"] = value

@@ -34,6 +34,9 @@
   after an action and the allowed actions. Saved values carry over.
 - The status page, the first page, is left out when it has no weather and no
   tile, and its HA, alarm and time badges with it. Its section explains this.
+- Locks can be picked as tiles. Their detail page has lock, unlock and, where
+  the lock supports it, open in one row; unlocking and opening ask for a
+  second tap.
 - Automations and sirens can be picked as switch tiles, persons and device
   trackers as read-only tiles that read home, away or the zone.
 - Tiles carry a small symbol for their type or device class, drawn from the

@@ -1088,3 +1088,87 @@ def test_a_light_with_effects_offers_them_and_sends_the_chosen_one():
     )
     with pytest.raises(ValueError, match="invalid_dashboard_option"):
         asyncio.run(async_execute_control(hass, "light.strip", "effect", "Disco"))
+
+
+@pytest.mark.parametrize(
+    ("value", "features", "commands"),
+    [
+        ("locked", 0, ["unlock"]),
+        ("unlocked", 0, ["lock"]),
+        ("locked", 1, ["unlock", "open"]),
+        ("unlocked", 1, ["lock", "open"]),
+        # While it moves, is stuck or is open, both ways stay possible.
+        ("jammed", 0, ["lock", "unlock"]),
+        ("locking", 0, ["lock", "unlock"]),
+        ("open", 1, ["lock", "unlock", "open"]),
+        ("unavailable", 1, []),
+    ],
+)
+def test_a_lock_offers_the_actions_that_change_something(value, features, commands):
+    controls = entity_controls("lock.front", state(value, supported_features=features))
+
+    assert [control["command"] for control in controls] == commands
+    assert all(control["kind"] == "button" for control in controls)
+
+
+@pytest.mark.parametrize("command", ["lock", "unlock", "open"])
+def test_a_lock_sends_its_own_explicit_service(command):
+    hass = hass_for(state("jammed", supported_features=1))
+
+    asyncio.run(async_execute_control(hass, "lock.front", command, None))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "lock", command, {"entity_id": "lock.front"}, blocking=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "features", "command", "option"),
+    [
+        # Not offered in this state: the display's view was stale.
+        ("locked", 0, "lock", None),
+        ("unlocked", 0, "unlock", None),
+        # The latch can only be opened by a lock that can.
+        ("locked", 0, "open", None),
+        # Nothing else is a lock command, and none takes a value.
+        ("locked", 1, "toggle", None),
+        ("locked", 1, "unlock", "123456"),
+    ],
+)
+def test_a_lock_rejects_what_it_did_not_offer(value, features, command, option):
+    hass = hass_for(state(value, supported_features=features))
+
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "lock.front", command, option))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_lock_is_a_tile_with_a_detail_page_and_only_runs_selected_entities():
+    snapshot = state("locked", supported_features=1)
+    hass = hass_for(snapshot)
+    hass.config = SimpleNamespace(language="de")
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["lock.front"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "entity"
+    assert item["entity_id"] == "lock.front"
+    assert item["glyph"] == "⌂"
+    assert item["state_label"] == "Zugesperrt"
+    assert item["color"] == "#58d68d"
+    assert item["details"]["type"] == "lock"
+    assert item["details"]["activity"] == "locked"
+    assert [control["command"] for control in item["controls"]] == ["unlock", "open"]
+
+    asyncio.run(async_execute_dashboard_action(hass, entry, "lock.front:unlock"))
+    hass.services.async_call.assert_awaited_once_with(
+        "lock", "unlock", {"entity_id": "lock.front"}, blocking=True,
+    )
+    other = SimpleNamespace(data={}, options={"dashboard_entities": []}, entry_id="entry")
+    hass.services.async_call.reset_mock()
+    with pytest.raises((ValueError, KeyError)):
+        asyncio.run(async_execute_dashboard_action(hass, other, "lock.front:unlock"))
+    hass.services.async_call.assert_not_awaited()

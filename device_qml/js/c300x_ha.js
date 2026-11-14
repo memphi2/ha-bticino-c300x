@@ -208,6 +208,11 @@ function dashboardExpectation(item, control, value) {
     if (control.command === "media_play_pause") {
         return {command: control.command, playing: control.playing !== true}
     }
+    if (item.details && item.details.type === "lock") {
+        if (control.command === "lock") return {command: control.command, activity: "locked"}
+        if (control.command === "unlock") return {command: control.command, activity: "unlocked"}
+        return {command: control.command, stateless: true}
+    }
     if (control.command === "media_previous_track" || control.command === "media_next_track") {
         return {command: control.command, stateless: true}
     }
@@ -224,6 +229,7 @@ function dashboardExpectationMatches(item, expected) {
     if (expected.command === "close_cover") return activity === "closing" || activity === "closed"
     if (expected.command === "stop_cover") return activity === "open" || activity === "closed"
     var controls = listOrEmpty(item.controls)
+    if (expected.activity !== undefined) return Boolean(item.details) && item.details.activity === expected.activity
     if (expected.playing !== undefined) return Boolean(item.details) && item.details.playing === expected.playing
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
@@ -1015,7 +1021,8 @@ function dashboardVisibleControls(item, section) {
 }
 
 var ACTION_ROWS = {
-    "media_player": ["media_previous_track", "media_play_pause", "media_next_track"]
+    "media_player": ["media_previous_track", "media_play_pause", "media_next_track"],
+    "lock": ["lock", "unlock", "open"]
 }
 
 function dashboardActionCommands(item) {

@@ -28,6 +28,7 @@ DASHBOARD_ENTITY_DOMAINS = (
     "input_number",
     "input_select",
     "light",
+    "lock",
     "media_player",
     "number",
     "person",

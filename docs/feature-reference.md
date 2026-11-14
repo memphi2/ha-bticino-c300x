@@ -201,6 +201,14 @@ these settings existed therefore looks the same until a size is chosen.
 - Sensors with the device class timestamp or date show a short local time such
   as `14.11. 10:30` or `14.11.2026`, not the ISO text. A text that had to be
   cut ends in three dots.
+- Locks are tiles that read locked, unlocked, locking, unlocking or jammed and
+  open a detail page. It offers what changes something (lock when it is not
+  locked, unlock when it is not unlocked) and, for a lock that can, opening
+  the latch, in one row of equal buttons. Unlocking and opening ask for a
+  second tap on the same button, which then reads "Sure?"; locking does not.
+  A tap on another button takes over the question. The question stays until
+  the page is left. The display sends the explicit lock, unlock or open
+  service for a lock that was selected on a page, never for another entity.
 - Automations and sirens are switch tiles. Persons and device trackers are
   read-only tiles that say home, away or the name of the zone.
 - Sensor and binary-sensor tiles use larger readings and read-only details.

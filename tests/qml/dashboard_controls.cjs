@@ -17,7 +17,7 @@ const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "ut
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
-    interactionActive: false, listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
+    interactionActive: false, armedCommand: "", listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
     commandGeneration: 0, controlFeedback: [],
     currentPageIndex: 0, dashboardPages: [], items: [], selectedItem: null, status: {}});
 p.page = p;
@@ -596,6 +596,45 @@ for (const language of ["en", "de", "fr", "it"]) {
     }
 }
 p.uiLanguage = "en";
+const lockItem = {entity_id: "lock.front", domain: "c300x", available: true, state: false,
+    details: {type: "lock", value: "Locked", state_label: "Locked", activity: "locked"}, controls: [
+    {command: "unlock", kind: "button"}, {command: "open", kind: "button"}]};
+assert.deepEqual(Array.from(Api.dashboardActionControls(lockItem), c => c.command), ["unlock", "open"],
+    "a lock offers what changes something, in the order of the row");
+assert.deepEqual(Array.from(Api.dashboardListControls(lockItem, ""), c => c.command), [], "all of a lock is in its row");
+assert.equal(p.detailState(lockItem), "", "the state is not said twice");
+p.dashboardOnline = true;
+p.pendingEntity = "";
+p.selectedItem = lockItem;
+const realDashboardControl = Api.dashboardControl;
+Api.dashboardControl = (item, control, option) => { sent.push(control.command); };
+var sent = [];
+p.pressAction(lockItem, lockItem.controls[0]);
+assert.deepEqual(sent, [], "a first tap on unlock only arms it");
+assert.equal(p.armedCommand, "unlock");
+p.pressAction(lockItem, lockItem.controls[1]);
+assert.deepEqual(sent, [], "another action takes over the arming");
+assert.equal(p.armedCommand, "open");
+p.pressAction(lockItem, lockItem.controls[1]);
+assert.deepEqual(sent, ["open"], "the second tap on the same action sends it");
+assert.equal(p.armedCommand, "");
+p.pressAction({details: {type: "lock"}}, {command: "lock", kind: "button"});
+assert.deepEqual(sent, ["open", "lock"], "locking needs no confirmation");
+p.pressAction({details: {type: "media_player"}}, {command: "media_next_track", kind: "button"});
+assert.deepEqual(sent, ["open", "lock", "media_next_track"], "nothing else is guarded");
+Api.dashboardControl = realDashboardControl;
+p.selectedItem = null;
+assert.match(qml, /function openDetails\(item\) \{\n        armedCommand = ""/, "opening a page starts unarmed");
+assert.doesNotMatch(qml, /armedCommand[^\n]*Timer|Timer[^}]*armedCommand/, "arming adds no timer");
+const lockExpectation = Api.dashboardExpectation(lockItem, lockItem.controls[0], null);
+assert.deepEqual(Object.assign({}, lockExpectation), {command: "unlock", activity: "unlocked"});
+assert.equal(Api.dashboardExpectationMatches(lockItem, lockExpectation), false, "still locked is no confirmation");
+const unlockedItem = JSON.parse(JSON.stringify(lockItem));
+unlockedItem.details.activity = "unlocked";
+assert.equal(Api.dashboardExpectationMatches(unlockedItem, lockExpectation), true);
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["lock", "unlock", "open", "confirm"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
 console.log("Media player controls passed");
 
 

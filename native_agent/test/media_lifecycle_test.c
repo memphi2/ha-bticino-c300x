@@ -112,7 +112,7 @@ static int tracked_create(pthread_t *thread, const pthread_attr_t *attr,
 static atomic_bool race_talkback_start;
 static pthread_t racing_call;
 static void *racing_call_worker(void *arg) {
-    assert(start_call_talkback(arg));
+    assert(start_talkback_proxy(arg));
     return NULL;
 }
 
@@ -563,6 +563,13 @@ static void talkback_stop_race_test(void) {
     pthread_mutex_unlock(&g_bridge.mutex);
     stop_media_session(false, false);
     assert(!g_bridge.talkback_started && g_bridge.talkback_fd < 0);
+    /* A call must not wait for a session start or stop as a whole: those
+     * hold the lifecycle lock for seconds while they talk SIP. */
+    pthread_mutex_lock(&media_lifecycle_mutex);
+    assert(start_talkback_proxy(&g_bridge));
+    pthread_mutex_unlock(&media_lifecycle_mutex);
+    stop_media_session(false, false);
+    assert(!g_bridge.talkback_started && !g_bridge.talkback_joining);
 }
 
 int main(int argc, char **argv) {

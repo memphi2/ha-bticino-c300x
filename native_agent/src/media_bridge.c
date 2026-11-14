@@ -166,6 +166,7 @@ typedef struct {
     bool sip_stop;
     bool ondemand_media_stop;
     bool talkback_stop;
+    bool talkback_joining;
     bool ring_stop;
     bool home_call_stop;
     bool home_call_send_bye;
@@ -273,13 +274,6 @@ typedef struct {
 static bool start_talkback_proxy(media_bridge_t *bridge);
 
 static pthread_mutex_t media_lifecycle_mutex = PTHREAD_MUTEX_INITIALIZER;
-/* A call thread must not start the proxy while a session stop joins it */
-static bool start_call_talkback(media_bridge_t *bridge) {
-    pthread_mutex_lock(&media_lifecycle_mutex);
-    bool started = start_talkback_proxy(bridge);
-    pthread_mutex_unlock(&media_lifecycle_mutex);
-    return started;
-}
 static media_bridge_t g_bridge = {
     .mutex = PTHREAD_MUTEX_INITIALIZER,
     .ready_cond = PTHREAD_COND_INITIALIZER,
@@ -2835,7 +2829,7 @@ static void handle_ring_invite(
     audio_rtcp_fd = -1;
     video_fd = -1;
     video_rtcp_fd = -1;
-    if (!start_call_talkback(bridge)) {
+    if (!start_talkback_proxy(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "ring_talkback_start_failed");
     }
 
@@ -5017,7 +5011,7 @@ static void *home_call_thread_func(void *arg) {
         bridge->home_call_last_talkback_ms = 0;
         bridge->home_call_srtp_state = &srtp;
         pthread_mutex_unlock(&bridge->mutex);
-        if (!start_call_talkback(bridge)) {
+        if (!start_talkback_proxy(bridge)) {
             c300x_video_bridge_set_error(bridge->video, "home_call_talkback_start_failed");
         }
         dispatch_home_call_state_event(bridge, "home_call.answered");
@@ -5358,6 +5352,12 @@ static void *talkback_proxy_thread(void *arg) {
 
 static bool start_talkback_proxy(media_bridge_t *bridge) {
     pthread_mutex_lock(&bridge->mutex);
+    /* A stop that joins the old proxy must see its stop flag stay set. */
+    while (bridge->talkback_joining) {
+        pthread_mutex_unlock(&bridge->mutex);
+        usleep(2000);
+        pthread_mutex_lock(&bridge->mutex);
+    }
     if (bridge->talkback_started) {
         pthread_mutex_unlock(&bridge->mutex);
         return true;
@@ -5562,6 +5562,7 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     sip_monitor_started = g_bridge.sip_monitor_joinable;
     ondemand_media_started = g_bridge.ondemand_media_joinable;
     talkback_started = g_bridge.talkback_started;
+    g_bridge.talkback_joining = talkback_started;
     sip_thread = g_bridge.sip_thread;
     ondemand_media_thread_id = g_bridge.ondemand_media_thread;
     talkback_thread = g_bridge.talkback_thread;
@@ -5600,6 +5601,9 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     }
     if (talkback_started) {
         pthread_join(talkback_thread, NULL);
+        pthread_mutex_lock(&g_bridge.mutex);
+        g_bridge.talkback_joining = false;
+        pthread_mutex_unlock(&g_bridge.mutex);
     }
     if (ondemand_media_started && !pthread_equal(ondemand_media_thread_id, pthread_self())) {
         pthread_join(ondemand_media_thread_id, NULL);

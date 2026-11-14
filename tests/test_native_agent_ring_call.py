@@ -113,7 +113,9 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "build_ring_sdp(sdp_early" in ring_invite_body
     assert "build_ring_sdp(sdp_answer" in ring_invite_body
     assert "bridge->ring_srtp_state = srtp_ready ? &srtp : NULL;" in ring_invite_body
-    assert "start_call_talkback(bridge)" in ring_invite_body
+    assert "start_talkback_proxy(bridge)" in ring_invite_body
+    # The ring must not wait for a session start that holds the lifecycle lock.
+    assert "media_lifecycle_mutex" not in ring_invite_body
     # Ring answer is codec-configurable: the audio m-line payload is %s
     # (speex "96" by default, PCMU "0" opt-in), the speex rtpmap+fmtp are one
     # literal, and PCMU has its own rtpmap.
@@ -478,7 +480,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "c300x_device_media_start" not in home_call_body
     assert "c300x_device_media_takeover" not in home_call_body
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
-    assert "start_call_talkback(bridge)" in home_call_thread
+    assert "start_talkback_proxy(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread
     assert "DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in drain_home_call_body
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body

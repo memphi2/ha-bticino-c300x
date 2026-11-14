@@ -5,14 +5,24 @@
 
 static int tracked_create(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
 static int tracked_join(pthread_t, void **);
+static long long test_clock(void);
+#define c300x_monotonic_ms test_clock
 #define pthread_create tracked_create
 #define pthread_join tracked_join
 #undef _POSIX_C_SOURCE
 #include "../src/media_bridge.c"
 #undef pthread_create
 #undef pthread_join
+#undef c300x_monotonic_ms
+extern long long c300x_monotonic_ms(void);
 
 static atomic_int joins;
+static atomic_int renewals, clock_reads;
+static atomic_llong clock_offset;
+static long long test_clock(void) {
+    atomic_fetch_add(&clock_reads, 1);
+    return c300x_monotonic_ms() + atomic_load(&clock_offset);
+}
 static atomic_bool wait_for_stop;
 static atomic_bool fail_create;
 
@@ -23,6 +33,13 @@ bool c300x_device_media_takeover(const struct c300x_config *config) {
     return false;
 }
 void c300x_device_media_stop(const struct c300x_config *config) { (void)config; }
+bool c300x_device_media_start(const struct c300x_config *config) {
+    (void)config;
+    assert(pthread_equal(pthread_self(), g_bridge.sip_thread));
+    atomic_fetch_add(&renewals, 1);
+    usleep(300000);
+    return true;
+}
 int c300x_device_user_media_identity(const char *hint, struct c300x_device_user_identity *identity) {
     (void)hint;
     (void)identity;
@@ -209,6 +226,22 @@ static void sip_join_test(void) {
     }
 }
 
+static void sip_renew_test(void) {
+    int pair[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    g_bridge.sip_fd = pair[0];
+    g_bridge.media_active = true;
+    g_bridge.sip_monitor_started = g_bridge.sip_monitor_joinable = true;
+    atomic_store(&clock_reads, 0);
+    assert(pthread_create(&g_bridge.sip_thread, NULL, sip_monitor_thread, &g_bridge) == 0);
+    while (atomic_load(&clock_reads) == 0) usleep(1000);
+    atomic_store(&clock_offset, 21000);
+    while (atomic_load(&renewals) == 0) usleep(1000);
+    stop_media_session(false, false);
+    assert(atomic_load(&renewals) == 1);
+    close(pair[1]);
+}
+
 static void *forward_worker(void *arg) {
     (void)arg;
     unsigned char packet[12] = {0x80, 96};
@@ -310,6 +343,8 @@ int main(int argc, char **argv) {
         stalled_client_test();
     } else if (strcmp(argv[1], "sip_join") == 0) {
         sip_join_test();
+    } else if (strcmp(argv[1], "sip_renew") == 0) {
+        sip_renew_test();
     } else if (strncmp(argv[1], "home_", 5) == 0) {
         home_test(&config, video, argv[1]);
     } else {

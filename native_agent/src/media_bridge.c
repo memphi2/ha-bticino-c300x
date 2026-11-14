@@ -3142,6 +3142,8 @@ static void *ring_receiver_thread(void *arg) {
 static void *sip_monitor_thread(void *arg) {
     media_bridge_t *bridge = arg;
     char message[SIP_BUFFER_SIZE];
+    long long next_device_media_renew = c300x_monotonic_ms() + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
+    long long next_sip_keepalive = 0;
 
     while (true) {
         int fd;
@@ -3176,6 +3178,18 @@ static void *sip_monitor_thread(void *arg) {
             break;
         }
 
+        long long now = c300x_monotonic_ms();
+        if (now >= next_sip_keepalive) {
+            (void)send_all(fd, "\r\n\r\n", 4);
+            next_sip_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
+        }
+        if (now >= next_device_media_renew) {
+            pthread_mutex_lock(&bridge->mutex);
+            bool renew = bridge->media_active && !bridge->sip_stop;
+            pthread_mutex_unlock(&bridge->mutex);
+            if (renew) (void)c300x_device_media_start(bridge->config);
+            next_device_media_renew = now + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
+        }
         int n = read_message_poll(fd, message, sizeof(message), 1);
         if (n < 0) {
             break;
@@ -3834,8 +3848,6 @@ static void *ondemand_media_thread(void *arg) {
     long long next_media_keepalive = 0;
     long long next_audio_rtp = 0;
     long long next_rtcp = 0;
-    long long next_sip_keepalive = 0;
-    long long next_device_media_renew = c300x_monotonic_ms() + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
 
     memset(&srtp, 0, sizeof(srtp));
     pthread_mutex_lock(&bridge->mutex);
@@ -3886,7 +3898,6 @@ static void *ondemand_media_thread(void *arg) {
 
     while (true) {
         bool stop;
-        int sip_fd;
         int audio_rtp_fd;
         int audio_rtcp_fd;
         int video_rtp_fd;
@@ -3896,7 +3907,6 @@ static void *ondemand_media_thread(void *arg) {
 
         pthread_mutex_lock(&bridge->mutex);
         stop = bridge->ondemand_media_stop || bridge->sip_stop;
-        sip_fd = bridge->sip_fd;
         audio_rtp_fd = bridge->ondemand_audio_rtp_fd;
         audio_rtcp_fd = bridge->ondemand_audio_rtcp_fd;
         video_rtp_fd = bridge->ondemand_video_rtp_fd;
@@ -3991,16 +4001,6 @@ static void *ondemand_media_thread(void *arg) {
                 send_srtcp_pli(video_rtcp_fd, target_video_port + 1, srtp.video, srtp.rtcp_sender_ssrc, video_ssrc);
             }
             next_rtcp = now + 1000;
-        }
-        if (next_sip_keepalive == 0 || now >= next_sip_keepalive) {
-            if (sip_fd >= 0) {
-                (void)send_all(sip_fd, "\r\n\r\n", 4);
-            }
-            next_sip_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
-        }
-        if (next_device_media_renew == 0 || now >= next_device_media_renew) {
-            (void)c300x_device_media_start(bridge->config);
-            next_device_media_renew = now + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
         }
     }
 

@@ -3782,6 +3782,13 @@ static void handle_auth_config_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"lan_binding_requires_allow_lan\"}\n");
         AUTH_CONFIG_POST_RETURN();
     }
+    {
+        char listen_error[128];
+        if (!c300x_config_listen_valid(updated, listen_error, sizeof(listen_error))) {
+            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_listen_settings\"}\n");
+            AUTH_CONFIG_POST_RETURN();
+        }
+    }
     if (!updated->api_no_auth && updated->api_token[0] == '\0') {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"api_token_required\"}\n");
         AUTH_CONFIG_POST_RETURN();

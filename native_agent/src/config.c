@@ -9,6 +9,7 @@
 #include "string_util.h"
 
 #include <ctype.h>
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -698,6 +699,26 @@ int c300x_config_set_activation_items_json(
         error,
         error_len
     );
+}
+
+int c300x_config_listen_valid(const struct c300x_config *config, char *error, size_t error_len) {
+    struct in_addr address;
+    if (inet_pton(AF_INET, config->listen_host, &address) != 1) {
+        set_error(error, error_len, "listen.host must be an IPv4 address");
+        return 0;
+    }
+    if (config->api_port == 0 || config->ui_port == 0 || config->api_port == config->ui_port) {
+        set_error(error, error_len, "listen.apiPort and listen.uiPort must be different, non-zero ports");
+        return 0;
+    }
+    if (
+        config->video_enabled
+        && (config->api_port == config->video_rtsp_port || config->ui_port == config->video_rtsp_port)
+    ) {
+        set_error(error, error_len, "listen ports must differ from video.rtsp.port");
+        return 0;
+    }
+    return 1;
 }
 
 int c300x_load_config(
@@ -1528,6 +1549,9 @@ int c300x_load_config(
 
     if (strcmp(config->listen_host, "127.0.0.1") != 0 && !config->allow_lan) {
         set_error(error, error_len, "LAN binding requires listen.allowLan=true");
+        return 0;
+    }
+    if (!c300x_config_listen_valid(config, error, error_len)) {
         return 0;
     }
     if (!address_is_valid(config->stair_light_default_address)) {

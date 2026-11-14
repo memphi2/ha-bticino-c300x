@@ -219,21 +219,67 @@ remount_ro() {
 }
 
 finish_write_action() {
-    remount_ro
+    write_rc=$?
     trap - EXIT HUP INT TERM
+    recovery_ok=1
+    if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
+        for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
+            if [ -f "$WRITE_TRANSACTION/$transaction_rel" ]; then
+                if ! mkdir -p "$(dirname "$GUI_DIR/$transaction_rel")" \
+                    || ! mv -f "$WRITE_TRANSACTION/$transaction_rel" "$GUI_DIR/$transaction_rel"; then
+                    recovery_ok=0
+                fi
+            else
+                rm -f "$GUI_DIR/$transaction_rel" || recovery_ok=0
+            fi
+        done
+    fi
+    if [ "$recovery_ok" = "1" ]; then
+        if [ -n "${WRITE_TRANSACTION:-}" ]; then
+            rm -rf "$WRITE_TRANSACTION" || write_rc=1
+        fi
+    else
+        printf 'GUI rollback failed; recovery files retained in %s\n' "$WRITE_TRANSACTION" >&2
+        write_rc=1
+    fi
+    if [ "${WRITE_TRANSACTION_COMMITTED:-0}" = "1" ] && [ "${REMOVE_EMPTY_JS:-0}" = "1" ]; then
+        rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
+    fi
+    remount_ro || write_rc=1
+    return "$write_rc"
 }
 
 abort_write_action() {
-    remount_ro
-    trap - EXIT HUP INT TERM
+    finish_write_action || true
     exit 130
 }
 
 run_write_action() {
+    WRITE_TRANSACTION=
+    WRITE_TRANSACTION_READY=0
+    WRITE_TRANSACTION_COMMITTED=0
+    REMOVE_EMPTY_JS=0
     trap finish_write_action EXIT
     trap abort_write_action HUP INT TERM
     remount_rw
+    # Keep recovery on the GUI filesystem so rollback needs no further copies.
+    transaction_dir="$GUI_DIR/.c300x-qml-transaction.$$"
+    (umask 077; mkdir "$transaction_dir")
+    WRITE_TRANSACTION="$transaction_dir"
+    for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
+        transaction_source="$GUI_DIR/$transaction_rel"
+        if [ -L "$transaction_source" ] || { [ -e "$transaction_source" ] && [ ! -f "$transaction_source" ]; }; then
+            printf 'Unsupported GUI file type: %s\n' "$transaction_source" >&2
+            return 1
+        fi
+        if [ -f "$transaction_source" ]; then
+            mkdir -p "$(dirname "$WRITE_TRANSACTION/$transaction_rel")"
+            cp -p "$transaction_source" "$WRITE_TRANSACTION/$transaction_rel"
+        fi
+    done
+    WRITE_TRANSACTION_READY=1
     "$@"
+    WRITE_TRANSACTION_COMMITTED=1
     finish_write_action
 }
 
@@ -269,7 +315,13 @@ backup_file() {
             ;;
     esac
     mkdir -p "$(dirname "$backup_dest")"
-    cp -p "$backup_src" "$backup_dest"
+    backup_temp_dir="$(mktemp -d "$backup_dest.tmp.XXXXXX")" || return 1
+    if ! cp -p "$backup_src" "$backup_temp_dir/original" \
+        || ! mv -f "$backup_temp_dir/original" "$backup_dest"; then
+        rm -rf "$backup_temp_dir"
+        return 1
+    fi
+    rmdir "$backup_temp_dir"
 }
 
 install_file() {
@@ -1121,7 +1173,7 @@ restore_patch_files() {
     restore_file "js/c300x_i18n.js"
     restore_file "js/c300x_memos.js"
     remove_obsolete_gui_files
-    rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
+    REMOVE_EMPTY_JS=1
 }
 
 restore_media_user_label_changed_count() {
@@ -1149,7 +1201,9 @@ restore_media_user_label_files() {
 }
 
 restore_core_patch_files() {
-    restore_file "EventManager.qml"
+    if [ -e "$BACKUP_DIR/EventManager.qml" ] || core_partial_patch_present; then
+        restore_file "EventManager.qml"
+    fi
     restore_file "C300XRingerControl.qml"
 }
 

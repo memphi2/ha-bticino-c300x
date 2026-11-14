@@ -213,11 +213,12 @@ static int all_patch_ranges_match(
 
 /* A backup is only worth restoring when it is the stock file: a truncated copy,
  * one of another firmware, or a patched one must never replace the target. */
-static int backup_is_stock(const char *backup_path)
+static int backup_is_stock(const char *backup_path, const char *target_path)
 {
     char sha256[65];
     unsigned char *data = NULL;
     size_t len = 0;
+    struct stat target;
     int stock;
 
     if (c300x_sha256_file_hex(backup_path, sha256, sizeof(sha256))
@@ -225,6 +226,13 @@ static int backup_is_stock(const char *backup_path)
         return 1;
     }
     if (!c300x_patch_read_file(backup_path, &data, &len)) {
+        return 0;
+    }
+    /* The ranges only cover the patched bytes. A copy that was cut off behind
+     * the last range would pass them, so it must also be as long as the file
+     * it is a backup of: the patch never changes the length. */
+    if (stat(target_path, &target) != 0 || (size_t)target.st_size != len) {
+        free(data);
         return 0;
     }
     stock = all_patch_ranges_match(data, len, 0);
@@ -333,7 +341,7 @@ int c300x_device_routing_apply(
         return 0;
     }
     if (
-        (!status->backup_present || !backup_is_stock(backup_path))
+        (!status->backup_present || !backup_is_stock(backup_path, target_path))
         && !c300x_patch_copy_file_exact(target_path, backup_path, original_mode)
     ) {
         set_error(error, error_len, "routing_backup_failed");
@@ -437,7 +445,7 @@ int c300x_device_routing_restore(
         set_error(error, error_len, "routing_backup_stat_failed");
         return 0;
     }
-    if (!backup_is_stock(backup_path)) {
+    if (!backup_is_stock(backup_path, target_path)) {
         set_error(error, error_len, "routing_backup_invalid");
         return 0;
     }

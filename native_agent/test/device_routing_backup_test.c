@@ -6,9 +6,21 @@ static int test_remount(const char *mode);
 #define C300X_DEVICE_PATCH_BACKUP_DIR g_backup_dir
 #define C300X_DEVICE_PATCH_STOCK_SHA256 g_stock_sha
 #define c300x_patch_remount_root test_remount
+#define c300x_patch_range_matches test_range_matches
 #include "../src/device_routing.c"
 #undef c300x_patch_remount_root
+#undef c300x_patch_range_matches
 #include <assert.h>
+
+/* The stock bytes of the real ranges cannot be built here. A backup "has"
+ * them when the test says so. */
+static int g_ranges_match;
+int test_range_matches(const unsigned char *data, size_t len,
+                       const struct c300x_patch_range *patch, const char *sha256)
+{
+    (void)data; (void)len; (void)patch; (void)sha256;
+    return g_ranges_match;
+}
 
 static int test_remount(const char *mode)
 {
@@ -59,6 +71,22 @@ int main(int argc, char **argv)
     assert(!c300x_device_routing_restore(&status, error, sizeof(error)));
     assert(strcmp(error, "routing_backup_invalid") == 0);
     expect(target, "modified");
+
+    /* A backup of another build passes by its ranges, when it is complete. */
+    g_ranges_match = 1;
+    put(backup, "other-build!");
+    put(target, "modified-123");
+    assert(c300x_device_routing_restore(&status, error, sizeof(error)));
+    expect(target, "other-build!");
+
+    /* A copy that was cut off behind the last range still has the ranges,
+     * but it is shorter than the file: it must not replace the target. */
+    put(backup, "other-b");
+    put(target, "modified-123");
+    assert(!c300x_device_routing_restore(&status, error, sizeof(error)));
+    assert(strcmp(error, "routing_backup_invalid") == 0);
+    expect(target, "modified-123");
+    g_ranges_match = 0;
 
     /* Applying over a stock target replaces a backup that is not stock. */
     put(target, "stock-binary");

@@ -39,6 +39,7 @@ from .config_flow_forms import (
 )
 from .const import (
     CONF_DASHBOARD_ENTITIES,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
@@ -231,3 +232,40 @@ def tile_form(
         shown=form.shown,
         fields=form.fields,
     )
+
+
+async def async_tile_form(
+    flow: Any,
+    dashboard_input: dict[str, Any],
+    overrides: Any,
+) -> TileForm:
+    """Build the tiles form and keep it on the flow for reading the post."""
+
+    hass = getattr(flow, "hass", None)
+    form = tile_form(
+        dashboard_input,
+        overrides,
+        labels=await async_tile_labels(hass),
+        hass=hass,
+    )
+    flow._tile_form = form
+    return form
+
+
+async def async_tile_entity_fields(
+    flow: Any,
+    dashboard_input: dict[str, Any],
+    user_input: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a posted tiles form as the per-entity display fields.
+
+    The post is read with the form that was shown, so a name that changed in
+    between does not move a tile's settings to another entity.
+    """
+
+    form: TileForm = getattr(flow, "_tile_form", None) or await async_tile_form(
+        flow,
+        dashboard_input,
+        dashboard_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {}),
+    )
+    return form.entity_fields(user_input)

@@ -89,6 +89,7 @@ from .config_flow_features import (
 from .config_flow_features import (
     options_features_schema as _options_features_schema,
 )
+from .config_flow_features import options_menu as _options_menu
 from .config_flow_features import (
     reconfigure_connection_schema_from_current as _reconfigure_connection_schema_from_current,
 )
@@ -116,8 +117,8 @@ from .config_flow_input import (
     _weather_entity_id,
 )
 from .config_flow_tiles import TileForm as _TileForm
-from .config_flow_tiles import async_tile_labels as _async_tile_labels
-from .config_flow_tiles import tile_form as _tile_form
+from .config_flow_tiles import async_tile_entity_fields as _async_tile_entity_fields
+from .config_flow_tiles import async_tile_form as _async_tile_form
 from .config_schemas import (
     reconfigure_connection_schema as _reconfigure_connection_schema,
 )
@@ -1351,60 +1352,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow."""
 
         return BticinoC300XOptionsFlow(config_entry)
-
-
-async def _async_tile_form(
-    flow: Any,
-    dashboard_input: dict[str, Any],
-    overrides: Any,
-) -> _TileForm:
-    """Build the tiles form and keep it on the flow for reading the post."""
-
-    hass = getattr(flow, "hass", None)
-    form = _tile_form(
-        dashboard_input,
-        overrides,
-        labels=await _async_tile_labels(hass),
-        hass=hass,
-    )
-    flow._tile_form = form
-    return form
-
-
-async def _async_tile_entity_fields(
-    flow: Any,
-    dashboard_input: dict[str, Any],
-    user_input: dict[str, Any],
-) -> dict[str, Any]:
-    """Return a posted tiles form as the per-entity display fields.
-
-    The post is read with the form that was shown, so a name that changed in
-    between does not move a tile's settings to another entity.
-    """
-
-    form: _TileForm = getattr(flow, "_tile_form", None) or await _async_tile_form(
-        flow,
-        dashboard_input,
-        dashboard_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {}),
-    )
-    return form.entity_fields(user_input)
-
-
-def _options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
-    """Return the settings areas the options menu offers, most used first.
-
-    Pages need the Display patch, which the dashboard area switches on. The
-    tiles need something to show as well: an entity on a page or the Alarmo
-    quick entity.
-    """
-
-    saved = _current_feature_options(config_entry)
-    menu: list[str] = []
-    if saved[CONF_DEVICE_UI_ENABLED]:
-        menu.append("dashboard_pages")
-        if _dashboard_entity_display_has_fields(_dashboard_input_defaults({}, saved)):
-            menu.append("dashboard_entity_display")
-    return [*menu, "dashboard", "features", "device_activations", "connection"]
 
 
 class BticinoC300XOptionsFlow(config_entries.OptionsFlow):

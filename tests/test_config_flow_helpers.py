@@ -3007,3 +3007,19 @@ def test_alarmo_is_kept_when_the_display_patch_is_switched_off() -> None:
         {CONF_DEVICE_UI_ENABLED: False, CONF_ALARM_ENTITY_ID: "light.hall"}
     )
     assert errors == {CONF_ALARM_ENTITY_ID: "invalid_alarm_entity"}
+
+
+@pytest.mark.parametrize("value", ["²", "٣", "¹²", "1²", "１"])
+def test_a_stair_light_part_with_a_digit_that_int_cannot_read_is_invalid(value) -> None:
+    """str.isdigit() is true for a superscript two, but int() cannot read it.
+
+    The ValueError that followed was not a vol.Invalid, so typing such a
+    character ended the flow step in an unhandled exception.
+    """
+
+    from custom_components.bticino_c300x.activation_address import normalize_stair_light_part
+
+    with pytest.raises(vol.Invalid):
+        normalize_stair_light_part(value, default="00")
+    assert normalize_stair_light_part("7", default="00") == "07"
+    assert normalize_stair_light_part("", default="03") == "03"

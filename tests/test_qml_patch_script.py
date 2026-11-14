@@ -226,8 +226,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "cdc33513cf228971257b55a8f5662113ddbe046b1db4ade03829126cc7f0140a",
-    "js/c300x_ha.js": "75bec040d64654f2898ff5dc64a93aa0bd120198b943d771f81bbd915d45d10b",
+    "HomeAssistant.qml": "36532ee51953ae39b6bf199017b647f350f45d07659cbe3b9fa469e68936f32a",
+    "js/c300x_ha.js": "24fe812b517df4f18834038d13fbf834238bbcbc270a1373ed8b57732ad3f25e",
     "js/c300x_i18n.js": "2ea51304883ac9947206cdd2477a127f3740a0367d590a25db8bcb1e10bbc302",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -737,6 +737,73 @@ def test_home_assistant_weather_card_is_an_ordered_tile() -> None:
     assert "mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline" in delegate
 
 
+def test_home_assistant_page_name_is_the_header() -> None:
+    """A named page shows its name in the header instead of Home Assistant."""
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    header = next(
+        line for line in home_assistant_qml.splitlines() if line.strip().startswith("headerLabel:")
+    )
+    assert 'pageTitle.length > 0 ? pageTitle : uiText("home_assistant")' in header
+    # Notifications and an open entity keep their own header.
+    assert header.index("notificationsOpen") < header.index("selectedItem") < header.index("pageTitle")
+    # The name is not repeated above the tiles.
+    column_head = home_assistant_qml[
+        home_assistant_qml.index("id: contentColumn") : home_assistant_qml.index("id: itemColumn")
+    ]
+    assert "pageTitle" not in column_head
+
+
+def test_home_assistant_status_sits_in_the_header() -> None:
+    """The status text is in the header bar and costs the tiles no height.
+
+    It used to be the last row of the page column: 22 px plus the column
+    spacing. Under the pager row of a dashboard with several pages that left
+    the tiles 274 px, and four rows of half-height tiles need 286.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    status = home_assistant_qml[home_assistant_qml.index("id: status\n") :]
+    status = status[: status.index("}")]
+    assert "anchors.verticalCenter: header.verticalCenter" in status
+    assert "anchors.right: parent.right" in status
+    assert "elide: Text.ElideRight" in status
+    # The detail and notification views show their own status at the bottom.
+    assert "visible: !detailOpen && !notificationsOpen" in status
+
+    page_column = home_assistant_qml[
+        home_assistant_qml.index("id: notificationBanner") : home_assistant_qml.index("id: status\n")
+    ]
+    assert "status.height" not in page_column
+    scroll_height = next(
+        line.strip() for line in page_column.splitlines()
+        if line.strip().startswith("height: parent.height - ")
+    )
+    assert scroll_height == (
+        "height: parent.height"
+        " - (notificationBanner.visible ? notificationBanner.height + 9 : 0)"
+        " - (badgeGrid.visible ? badgeGrid.height + 9 : 0)"
+        " - (pagerRow.visible ? pagerRow.height + 9 : 0)"
+    )
+    # The firmware page is 480 px high under a 78 px header bar. With the 18 px
+    # margins, the 38 px pager row and the 9 px column spacing the tiles keep
+    # 319 px; four rows of half-height tiles, 64 px high and 10 px apart, fit.
+    assert "anchors.topMargin: 18" in home_assistant_qml
+    assert "anchors.bottomMargin: 18" in home_assistant_qml
+    assert "spacing: 9" in home_assistant_qml
+    assert "height: pageCount > 1 ? 38 : 0" in home_assistant_qml
+    assert "(tall ? 94 : 64)" in home_assistant_qml
+    assert 480 - 78 - 18 - 18 - (38 + 9) >= 4 * 64 + 3 * 10
+
+    # A long page name stays clear of the status and of the back button.
+    assert "headerLabel: headerTitle(" in home_assistant_qml
+    assert 'return text.length > 28 ? text.substring(0, 25) + "..." : text' in home_assistant_qml
+
+
 def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:
     """Every on/off toggle must look like the firmware switch.
 
@@ -787,7 +854,7 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     )
 
     assert home_assistant_qml.count('source: "images/settings/list_btn.svg"') == 0
-    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 5
+    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 6
     assert (
         home_assistant_qml.count(
             '? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"'
@@ -797,12 +864,33 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     for mouse_id in (
         "notificationActionMouse",
         "coverControlMouse",
+        "transportMouse",
         "controlButtonMouse",
         "adjustMouse",
         "notificationBannerMouse",
     ):
         assert f"id: {mouse_id}" in home_assistant_qml
         assert f"{mouse_id}.pressed ?" in home_assistant_qml
+
+
+def test_the_media_player_page_has_one_row_of_transport_buttons() -> None:
+    """Previous, play/pause and next sit side by side, centred, above the rest.
+
+    They used to be three full-width bars with a small glyph at the top left.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Api.dashboardTransportControls(selectedItem)" in home_assistant_qml
+    assert (
+        "property variant detailControls: Api.dashboardListControls("
+        in home_assistant_qml
+    )
+    # A button or switch row centres its label on the row.
+    assert 'verticalAlignment: control.kind === "button" || control.kind === "boolean"' in home_assistant_qml
+    assert home_assistant_qml.isascii()
 
 
 def test_home_assistant_reads_each_piece_of_state_once() -> None:

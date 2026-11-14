@@ -288,3 +288,92 @@ def _translation_placeholders(
     for key, child in value.items():
         placeholders.update(_translation_placeholders(child, (*prefix, key)))
     return placeholders
+
+
+def test_options_menu_names_and_explains_every_area() -> None:
+    """Each area of the options menu has a label and a line saying what it holds."""
+
+    areas = {
+        "dashboard_pages", "dashboard_alarm", "dashboard_entity_display", "dashboard",
+        "features", "device_activations", "connection",
+    }
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        steps = _load_json(path)["options"]["step"]
+        menu = steps["init"]
+        assert menu["title"] and menu["description"], path.name
+        assert set(menu["menu_options"]) == areas, path.name
+        assert set(menu["menu_option_descriptions"]) == areas, path.name
+        assert all(menu["menu_options"].values()), path.name
+        assert all(menu["menu_option_descriptions"].values()), path.name
+        # A menu entry leads to a step of the same name.
+        assert areas <= set(steps), path.name
+
+
+def test_tiles_form_labels_and_choices_are_translated_in_every_language() -> None:
+    """The tiles form reads its field labels and choices from the selectors."""
+
+    from custom_components.bticino_c300x.config_flow_forms import (
+        dashboard_entity_secondary_info_selector,
+        dashboard_entity_tile_size_selector,
+        dashboard_tile_name_selector,
+    )
+    from custom_components.bticino_c300x.config_flow_tiles import (
+        TILE_LABEL_TRANSLATION_KEY,
+        TILE_LABELS,
+    )
+
+    choices = {
+        TILE_LABEL_TRANSLATION_KEY: set(TILE_LABELS),
+        **{
+            field.config["translation_key"]: set(field.config["options"])
+            for field in (
+                dashboard_entity_tile_size_selector(),
+                dashboard_tile_name_selector(),
+                dashboard_entity_secondary_info_selector(),
+            )
+        },
+    }
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        selectors = _load_json(path)["selector"]
+        for key, options in choices.items():
+            translated = selectors[key]["options"]
+            assert options <= set(translated), (path.name, key)
+            assert all(translated[option].strip() for option in options), (path.name, key)
+        labels = selectors[TILE_LABEL_TRANSLATION_KEY]["options"]
+        fields = [labels[key] for key in ("width", "height", "name", "secondary")]
+        # The labels are the keys of a tile's fields.
+        assert len(set(fields)) == len(fields), path.name
+    assert _load_json(INTEGRATION / "strings.json")["selector"][
+        TILE_LABEL_TRANSLATION_KEY
+    ]["options"] == TILE_LABELS
+
+
+def test_settings_choices_are_translated_in_every_language() -> None:
+    from custom_components.bticino_c300x.config_schemas import (
+        _device_activation_action_selector,
+        _device_activation_mode_selector,
+        _device_activation_type_selector,
+        webrtc_ice_policy_selector,
+    )
+
+    for field in (
+        _device_activation_action_selector(has_items=True),
+        _device_activation_mode_selector(),
+        _device_activation_type_selector(),
+        webrtc_ice_policy_selector(),
+    ):
+        key = field.config["translation_key"]
+        for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+            translated = _load_json(path)["selector"][key]["options"]
+            assert set(field.config["options"]) == set(translated), (path.name, key)
+            assert all(text.strip() for text in translated.values()), (path.name, key)
+
+
+def test_every_settings_field_has_a_help_text() -> None:
+    """Each field of the options forms says what it does, in every language."""
+
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        steps = _load_json(path)["options"]["step"]
+        for step_id, step in steps.items():
+            data = step.get("data", {})
+            assert set(data) <= set(step.get("data_description", {})), (path.name, step_id)

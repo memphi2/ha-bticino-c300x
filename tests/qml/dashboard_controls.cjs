@@ -520,11 +520,22 @@ assert.deepEqual(commands(Api.dashboardQuickControls({controls: [
     {command: "media_play_pause", kind: "button", playing: false},
     {command: "volume_level", kind: "number", value: 40, min: 0, max: 100, step: 1}]})),
     ["media_play_pause:0"], "a player without track buttons shows what it has, not a volume pair");
-assert.equal(p.controlLabel({command: "media_play_pause", playing: true}), "||");
-assert.equal(p.controlLabel({command: "media_play_pause", playing: false}), ">");
-assert.equal(p.controlLabel({command: "media_play_pause"}), ">", "an unknown state offers play");
-assert.equal(p.controlLabel({command: "media_previous_track"}), "«");
-assert.equal(p.controlLabel({command: "media_next_track"}), "»");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: true}), "\u25ae\u25ae");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: false}), "\u25b6");
+assert.equal(p.controlLabel({command: "media_play_pause"}), "\u25b6", "an unknown state offers play");
+assert.equal(p.controlLabel({command: "media_previous_track"}), "\u25c0\u25c0");
+assert.equal(p.controlLabel({command: "media_next_track"}), "\u25b6\u25b6");
+assert.deepEqual(Array.from(Api.dashboardTransportControls(playerItem), c => c.command),
+    ["media_previous_track", "media_play_pause", "media_next_track"], "the transport buttons form one row");
+assert.deepEqual(Array.from(Api.dashboardListControls(playerItem, ""), c => c.command),
+    ["volume_level", "volume_mute", "source"], "the list below the row holds the rest");
+assert.deepEqual(Array.from(Api.dashboardTransportControls({details: {type: "light"}, controls: playerItem.controls}), c => c.command), [],
+    "only a media player has a transport row");
+assert.deepEqual(Array.from(Api.dashboardListControls(climate, "more_controls"), c => c.command),
+    Array.from(Api.dashboardVisibleControls(climate, "more_controls"), c => c.command));
+assert.deepEqual(Array.from(Api.dashboardTransportControls({details: {type: "media_player"}, controls: [
+    {command: "media_next_track", kind: "button"}, {command: "media_previous_track", kind: "button"}]}), c => c.command),
+    ["media_previous_track", "media_next_track"], "the row keeps its fixed order");
 assert.equal(p.optionLabel({command: "source"}, "off"), "off", "a source name is never translated as a mode");
 assert.deepEqual(Array.from(Api.dashboardVisibleControls(playerItem, ""), c => c.command),
     ["media_previous_track", "media_play_pause", "media_next_track", "volume_level", "volume_mute", "source"],

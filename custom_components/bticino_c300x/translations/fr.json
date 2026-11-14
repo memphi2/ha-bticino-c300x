@@ -6,24 +6,26 @@
         "description": "Saisissez d'abord l'adresse du C300X. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les tokens et options.",
         "data": {
           "name": "Nom",
-          "agent_host": "Hote de l'agent appareil",
-          "agent_port": "Port HTTP de l'agent appareil",
-          "callback_base_url": "Override URL de base callback (optionnel)"
+          "agent_host": "Adresse du C300X",
+          "agent_port": "Port",
+          "callback_base_url": "Adresse de Home Assistant pour le C300X (optionnel)"
         },
         "data_description": {
-          "callback_base_url": "Laisser vide pour conserver le comportement actuel. HTTP n'initialise pas TLS. Une URL HTTPS explicite active TLS avec vérification, nécessite un agent à jour et un certificat de confiance correspondant au nom d'hôte, et augmente la charge de l'appareil. Le passage HTTP/HTTPS redémarre uniquement l'agent lorsque les médias sont inactifs."
+          "agent_host": "Adresse IP ou nom d'hôte de votre C300X.",
+          "agent_port": "Port sur lequel le C300X répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
+          "callback_base_url": "Le C300X signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le C300X. Passer de http à https ou inversement redémarre le service du C300X dès qu'aucun appel ni flux n'est en cours."
         }
       },
       "agent_missing": {
         "title": "Agent natif introuvable",
-        "description": "Home Assistant n'a pas pu joindre l'agent natif C300X a l'adresse configuree. Vous pouvez installer maintenant l'agent inclus ou continuer pour configurer manuellement un agent deja installe.",
+        "description": "Home Assistant n'a pas pu joindre l'agent natif C300X a l'adresse configurée. Vous pouvez installer maintenant l'agent inclus ou continuer pour configurer manuellement un agent déjà installe.",
         "data": {
           "bootstrap_install_agent": "Installer l'agent natif sur le C300X"
         }
       },
       "bootstrap_install": {
         "title": "Installer l'agent C300X natif",
-        "description": "Cette etape ecrit l'agent natif, la configuration de tokens generee, le script de demarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilises que pour cette installation et ne sont pas stockes.",
+        "description": "Cette étape écrit l'agent natif, la configuration de tokens générée, le script de démarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
         "data": {
           "bootstrap_ssh_username": "Utilisateur SSH C300X",
           "bootstrap_ssh_password": "Mot de passe SSH C300X"
@@ -33,457 +35,715 @@
         "title": "Identifiants de l'agent appareil",
         "description": "Saisissez les tokens de l'agent natif joignable. Laissez le token API vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
         "data": {
-          "agent_token": "Token API de l'agent appareil",
-          "maintenance_token": "Token maintenance de l'agent appareil"
+          "agent_token": "Clé d'accès",
+          "maintenance_token": "Clé de maintenance"
+        },
+        "data_description": {
+          "agent_token": "Clé avec laquelle Home Assistant se connecte au C300X. Elle a été créée à l'installation.",
+          "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages."
         }
       },
       "user_features": {
         "title": "Fonctions BTicino C300X",
-        "description": "Selectionnez les fonctions media Home Assistant exposees par cette installation C300X.",
+        "description": "Sélectionnez les fonctions média Home Assistant exposées par cette installation C300X.",
         "data": {
-          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
-          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
-          "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
-          "webrtc_ice_policy": "Filtre de candidats ICE WebRTC",
-          "native_two_way_audio": "Audio bidirectionnel dans le lecteur caméra HA"
+          "video_enabled": "Vidéo et son du poste de porte",
+          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le C300X",
+          "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
+          "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
+          "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite HA 2026.11+, Two-way audio activé dans Paramètres > Système > Labs, WebRTC, HTTPS et l'autorisation du microphone du navigateur. Répondez aux appels entrants via la carte C300X ; cette option ne répond pas automatiquement. Le microphone de la carte reste inchangé. Aucun polling supplémentaire au repos ni mise à jour de l'agent nécessaire."
+          "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
+          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le C300X. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
+          "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
+          "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
+          "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
         }
       },
       "user_device_activations": {
-        "title": "Activations appareil supplementaires",
-        "description": "Activations supplementaires configurees : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronise apres l'enregistrement, et seulement si sa configuration d'activations differe.",
+        "title": "Activations appareil supplémentaires",
+        "description": "Activations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_p": "Adresse P lumiere escalier",
-          "device_activation_stair_light_n": "Adresse N lumiere escalier",
+          "device_activation_mode": "Adresse de l'éclairage d'escalier",
+          "device_activation_stair_light_p": "Éclairage d'escalier P",
+          "device_activation_stair_light_n": "Éclairage d'escalier N",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
+        },
+        "data_description": {
+          "device_activation_mode": "Automatique utilise les activations telles qu'elles sont définies ici ou signalées par l'appareil. Manuel ajoute un éclairage d'escalier construit à partir des valeurs P et N ci-dessous.",
+          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
+          "device_activation_flow_target": "L'activation à modifier ou à supprimer."
         }
       },
       "user_device_activation_item": {
         "title": "Activation appareil",
         "description": "Configurez un bouton d'activation base sur adresse.",
         "data": {
-          "device_activation_item_id": "ID bouton",
-          "device_activation_item_name": "Nom du bouton",
-          "device_activation_item_type": "Type de bouton",
-          "device_activation_item_address": "Adresse d'activation"
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Nom",
+          "device_activation_item_type": "Type",
+          "device_activation_item_address": "Adresse"
+        },
+        "data_description": {
+          "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
+          "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, une lumière ou l'éclairage d'escalier.",
+          "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
+        }
+      },
+      "user_dashboard_alarm": {
+        "title": "Alarme (Alarmo)",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "user_dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
         "data": {
-          "device_ui_enabled": "Appliquer le patch display",
-          "alarm_entity_id": "Entite Alarmo",
-          "alarm_page_entity_id": "Entite de la page alarme",
-          "weather_entity_id": "Entite meteo",
-          "dashboard_entities": "Entites du tableau de bord",
-          "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
-          "actions_json": "JSON de la liste autorisee des actions dashboard",
-          "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
+          "device_ui_enabled": "Pages Home Assistant sur l'écran",
+          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
+          "actions_json": "Actions autorisées (pour experts)",
+          "dashboard_prevent_return": "Rester sur la page après une action"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages d'alarme, de météo, de pages et de tuiles.",
+          "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
+          "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
         }
       },
       "user_dashboard_entity_display": {
-        "title": "Affichage des entites dashboard",
-        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "title": "Tuiles de l'écran",
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "reconfigure": {
         "title": "Reconfigurer BTicino C300X",
-        "description": "Mettez a jour la connexion a l'agent, le token maintenance ou renouvelez les identifiants webhook.",
+        "description": "Mettez à jour la connexion a l'agent, le token maintenance ou renouvelez les identifiants webhook.",
         "data": {
-          "agent_host": "Hote de l'agent appareil",
-          "agent_port": "Port HTTP de l'agent appareil",
-          "agent_token": "Token API de l'agent appareil",
-          "maintenance_token": "Token maintenance de l'agent appareil",
-          "callback_base_url": "Override URL de base callback (optionnel)",
+          "agent_host": "Adresse du C300X",
+          "agent_port": "Port",
+          "agent_token": "Clé d'accès",
+          "maintenance_token": "Clé de maintenance",
+          "callback_base_url": "Adresse de Home Assistant pour le C300X (optionnel)",
           "rotate_shared_secret": "Renouveler le secret partage"
         },
         "data_description": {
-          "callback_base_url": "Laisser vide pour conserver le comportement actuel. HTTP n'initialise pas TLS. Une URL HTTPS explicite active TLS avec vérification, nécessite un agent à jour et un certificat de confiance correspondant au nom d'hôte, et augmente la charge de l'appareil. Le passage HTTP/HTTPS redémarre uniquement l'agent lorsque les médias sont inactifs."
+          "agent_host": "Adresse IP ou nom d'hôte de votre C300X.",
+          "agent_port": "Port sur lequel le C300X répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
+          "agent_token": "Clé avec laquelle Home Assistant se connecte au C300X. Elle a été créée à l'installation.",
+          "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages.",
+          "callback_base_url": "Le C300X signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le C300X. Passer de http à https ou inversement redémarre le service du C300X dès qu'aucun appel ni flux n'est en cours."
         }
       },
       "reconfigure_features": {
         "title": "Reconfigurer les fonctions BTicino C300X",
-        "description": "Mettez a jour les reglages media et utilisateur media Home Assistant.",
+        "description": "Mettez à jour les réglages média et utilisateur média Home Assistant.",
         "data": {
-          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
-          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
-          "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
-          "webrtc_ice_policy": "Filtre de candidats ICE WebRTC",
-          "native_two_way_audio": "Audio bidirectionnel dans le lecteur caméra HA"
+          "video_enabled": "Vidéo et son du poste de porte",
+          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le C300X",
+          "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
+          "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
+          "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite HA 2026.11+, Two-way audio activé dans Paramètres > Système > Labs, WebRTC, HTTPS et l'autorisation du microphone du navigateur. Répondez aux appels entrants via la carte C300X ; cette option ne répond pas automatiquement. Le microphone de la carte reste inchangé. Aucun polling supplémentaire au repos ni mise à jour de l'agent nécessaire."
+          "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
+          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le C300X. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
+          "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
+          "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
+          "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
         }
       },
       "reconfigure_device_activations": {
-        "title": "Activations appareil supplementaires",
-        "description": "Activations supplementaires configurees : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronise apres l'enregistrement, et seulement si sa configuration d'activations differe.",
+        "title": "Activations appareil supplémentaires",
+        "description": "Activations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_p": "Adresse P lumiere escalier",
-          "device_activation_stair_light_n": "Adresse N lumiere escalier",
+          "device_activation_mode": "Adresse de l'éclairage d'escalier",
+          "device_activation_stair_light_p": "Éclairage d'escalier P",
+          "device_activation_stair_light_n": "Éclairage d'escalier N",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
+        },
+        "data_description": {
+          "device_activation_mode": "Automatique utilise les activations telles qu'elles sont définies ici ou signalées par l'appareil. Manuel ajoute un éclairage d'escalier construit à partir des valeurs P et N ci-dessous.",
+          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
+          "device_activation_flow_target": "L'activation à modifier ou à supprimer."
         }
       },
       "reconfigure_device_activation_item": {
         "title": "Activation appareil",
         "description": "Configurez un bouton d'activation base sur adresse.",
         "data": {
-          "device_activation_item_id": "ID bouton",
-          "device_activation_item_name": "Nom du bouton",
-          "device_activation_item_type": "Type de bouton",
-          "device_activation_item_address": "Adresse d'activation"
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Nom",
+          "device_activation_item_type": "Type",
+          "device_activation_item_address": "Adresse"
+        },
+        "data_description": {
+          "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
+          "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, une lumière ou l'éclairage d'escalier.",
+          "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
+        }
+      },
+      "reconfigure_dashboard_alarm": {
+        "title": "Alarme (Alarmo)",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "reconfigure_dashboard": {
         "title": "Reconfigurer le dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
         "data": {
-          "device_ui_enabled": "Appliquer le patch display",
-          "alarm_entity_id": "Entite Alarmo",
-          "alarm_page_entity_id": "Entite de la page alarme",
-          "weather_entity_id": "Entite meteo",
-          "dashboard_entities": "Entites du tableau de bord",
-          "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
-          "actions_json": "JSON de la liste autorisee des actions dashboard",
-          "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
+          "device_ui_enabled": "Pages Home Assistant sur l'écran",
+          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
+          "actions_json": "Actions autorisées (pour experts)",
+          "dashboard_prevent_return": "Rester sur la page après une action"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages d'alarme, de météo, de pages et de tuiles.",
+          "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
+          "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
         }
       },
       "reconfigure_dashboard_entity_display": {
-        "title": "Affichage des entites dashboard",
-        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "title": "Tuiles de l'écran",
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "user_dashboard_pages": {
-        "title": "Pages de l'ecran",
-        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "title": "Pages de l'écran",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
         "sections": {
           "page_1": {
-            "name": "Page d'etat",
+            "name": "Page 1 : Page d'état",
+            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "weather_entity_id": "Météo",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
-        "title": "Pages de l'ecran",
-        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "title": "Pages de l'écran",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
         "sections": {
           "page_1": {
-            "name": "Page d'etat",
+            "name": "Page 1 : Page d'état",
+            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "weather_entity_id": "Météo",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           }
         }
       }
     },
     "abort": {
-      "already_configured": "BTicino C300X est deja configure.",
-      "reconfigure_successful": "BTicino C300X a ete reconfigure. Mettez a jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvele les identifiants."
+      "already_configured": "BTicino C300X est déjà configure.",
+      "reconfigure_successful": "BTicino C300X a été reconfigure. Mettez à jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvelé les identifiants."
     },
     "error": {
       "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",
-      "device_install_failed": "L'installation SSH a echoue. Verifiez l'acces SSH et reessayez.",
-      "device_install_verify_failed": "L'installation est terminee, mais l'agent natif ne repond pas avec le token genere.",
+      "device_install_failed": "L'installation SSH a échoué. Vérifiez l'accès SSH et réessayez.",
+      "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec le token genere.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
-      "invalid_agent_host": "Saisissez l'hote de l'agent appareil.",
+      "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",
       "invalid_device_host": "Saisissez l'adresse du C300X.",
-      "installer_dependency_missing": "La dependance Python SSH optionnelle n'a pas pu etre installee ou chargee. Verifiez l'installation des paquets Home Assistant et reessayez.",
+      "installer_dependency_missing": "La dépendance Python SSH optionnelle n'a pas pu être installée ou chargée. Vérifiez l'installation des paquets Home Assistant et réessayez.",
       "invalid_ssh_password": "Saisissez le mot de passe SSH du C300X.",
       "invalid_ssh_username": "Saisissez l'utilisateur SSH du C300X.",
-      "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
-      "invalid_alarm_page_entity": "Selectionnez une entite dashboard prise en charge pour la page alarme ou laissez vide.",
-      "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
+      "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
+      "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
+      "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
       "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
-      "invalid_device_activations": "Verifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent etre uniques; le mode lumiere escalier manuel reserve deja stair_light.",
-      "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
+      "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode lumière escalier manuel réserve déjà stair_light.",
+      "invalid_stair_light_part": "Saisissez une valeur P/N numérique de 0 à 99.",
       "required": "Ce champ est obligatoire.",
-      "dashboard_page_name_reserved": "C300X est le nom interne de la page d'etat ; choisissez un autre nom de page.",
-      "dashboard_page_name_duplicate": "Deux pages ont le meme nom ; donnez a chaque page le sien.",
-      "dashboard_entity_on_several_pages": "Une entite est choisie sur plusieurs pages ; gardez-la sur une seule page.",
-      "invalid_dashboard_pages": "Les pages enregistrees de l'ecran ne sont pas valides ; configurez les pages a nouveau.",
-      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran."
+      "dashboard_page_name_reserved": "C300X est le nom interne de la page d'état ; choisissez un autre nom de page.",
+      "dashboard_page_name_duplicate": "Deux pages ont le même nom ; donnez à chaque page le sien.",
+      "dashboard_entity_on_several_pages": "Une entité est choisie sur plusieurs pages ; gardez-la sur une seule page.",
+      "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
+      "invalid_dashboard_entities": "Une entité ne peut pas être affichée sur l'écran.",
+      "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page."
     }
   },
   "options": {
     "step": {
+      "init": {
+        "title": "Réglages C300X",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation ; les autres rubriques conservent leurs réglages.",
+        "menu_options": {
+          "connection": "Connexion au C300X",
+          "features": "Vidéo et audio",
+          "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
+          "dashboard_alarm": "Alarme (Alarmo)",
+          "dashboard": "Écran et patch display",
+          "dashboard_pages": "Pages de l'écran",
+          "dashboard_entity_display": "Tuiles de l'écran"
+        },
+        "menu_option_descriptions": {
+          "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
+          "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
+          "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
+          "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
+          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
+        }
+      },
       "connection": {
-        "title": "Connexion BTicino C300X",
-        "description": "Configurez la connexion locale a l'agent appareil et le token de maintenance.",
+        "title": "Connexion au C300X",
+        "description": "Comment Home Assistant et le C300X se joignent.",
         "data": {
-          "agent_host": "Hote de l'agent appareil",
-          "agent_port": "Port HTTP de l'agent appareil",
-          "agent_token": "Token API de l'agent appareil",
-          "maintenance_token": "Token maintenance de l'agent appareil",
-          "callback_base_url": "Override URL de base callback (optionnel)"
+          "agent_host": "Adresse du C300X",
+          "agent_port": "Port",
+          "agent_token": "Clé d'accès",
+          "maintenance_token": "Clé de maintenance",
+          "callback_base_url": "Adresse de Home Assistant pour le C300X (optionnel)"
         },
         "data_description": {
-          "callback_base_url": "Laisser vide pour conserver le comportement actuel. HTTP n'initialise pas TLS. Une URL HTTPS explicite active TLS avec vérification, nécessite un agent à jour et un certificat de confiance correspondant au nom d'hôte, et augmente la charge de l'appareil. Le passage HTTP/HTTPS redémarre uniquement l'agent lorsque les médias sont inactifs."
+          "agent_host": "Adresse IP ou nom d'hôte de votre C300X.",
+          "agent_port": "Port sur lequel le C300X répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
+          "agent_token": "Clé avec laquelle Home Assistant se connecte au C300X. Elle a été créée à l'installation.",
+          "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages.",
+          "callback_base_url": "Le C300X signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le C300X. Passer de http à https ou inversement redémarre le service du C300X dès qu'aucun appel ni flux n'est en cours."
         }
       },
       "features": {
-        "title": "Fonctions BTicino C300X",
-        "description": "Configurez les reglages media et utilisateur media Home Assistant.",
+        "title": "Vidéo et audio",
+        "description": "Image et son du poste de porte dans Home Assistant.",
         "data": {
-          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
-          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
-          "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
-          "webrtc_ice_policy": "Filtre de candidats ICE WebRTC",
-          "native_two_way_audio": "Audio bidirectionnel dans le lecteur caméra HA"
+          "video_enabled": "Vidéo et son du poste de porte",
+          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le C300X",
+          "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
+          "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
+          "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite HA 2026.11+, Two-way audio activé dans Paramètres > Système > Labs, WebRTC, HTTPS et l'autorisation du microphone du navigateur. Répondez aux appels entrants via la carte C300X ; cette option ne répond pas automatiquement. Le microphone de la carte reste inchangé. Aucun polling supplémentaire au repos ni mise à jour de l'agent nécessaire."
+          "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
+          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le C300X. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
+          "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
+          "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
+          "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
         }
       },
       "device_activations": {
-        "title": "Activations appareil supplementaires",
-        "description": "Activations supplementaires configurees : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronise apres l'enregistrement, et seulement si sa configuration d'activations differe.",
+        "title": "Activations : serrures, lumières, éclairage d'escalier",
+        "description": "Activations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
         "data": {
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_p": "Adresse P lumiere escalier",
-          "device_activation_stair_light_n": "Adresse N lumiere escalier",
+          "device_activation_mode": "Adresse de l'éclairage d'escalier",
+          "device_activation_stair_light_p": "Éclairage d'escalier P",
+          "device_activation_stair_light_n": "Éclairage d'escalier N",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
+        },
+        "data_description": {
+          "device_activation_mode": "Automatique utilise les activations telles qu'elles sont définies ici ou signalées par l'appareil. Manuel ajoute un éclairage d'escalier construit à partir des valeurs P et N ci-dessous.",
+          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
+          "device_activation_flow_target": "L'activation à modifier ou à supprimer."
         }
       },
       "device_activation_item": {
-        "title": "Activation appareil",
-        "description": "Configurez un bouton d'activation base sur adresse.",
+        "title": "Activation",
+        "description": "Une activation de l'installation, affichée dans Home Assistant comme bouton.",
         "data": {
-          "device_activation_item_id": "ID bouton",
-          "device_activation_item_name": "Nom du bouton",
-          "device_activation_item_type": "Type de bouton",
-          "device_activation_item_address": "Adresse d'activation"
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Nom",
+          "device_activation_item_type": "Type",
+          "device_activation_item_address": "Adresse"
+        },
+        "data_description": {
+          "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
+          "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, une lumière ou l'éclairage d'escalier.",
+          "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
+        }
+      },
+      "dashboard_alarm": {
+        "title": "Alarme (Alarmo)",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "dashboard": {
-        "title": "Dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "title": "Écran et patch display",
+        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
         "data": {
-          "device_ui_enabled": "Appliquer le patch display",
-          "alarm_entity_id": "Entite Alarmo",
-          "alarm_page_entity_id": "Entite de la page alarme",
-          "weather_entity_id": "Entite meteo",
-          "dashboard_entities": "Entites du tableau de bord",
-          "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
-          "actions_json": "JSON de la liste autorisee des actions dashboard",
-          "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
+          "device_ui_enabled": "Pages Home Assistant sur l'écran",
+          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
+          "actions_json": "Actions autorisées (pour experts)",
+          "dashboard_prevent_return": "Rester sur la page après une action"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages d'alarme, de météo, de pages et de tuiles.",
+          "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
+          "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
         }
       },
-      "dashboard_entity_display": {
-        "title": "Affichage des entites dashboard",
-        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
-      },
       "dashboard_pages": {
-        "title": "Pages de l'ecran",
-        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "title": "Pages de l'écran",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
         "sections": {
           "page_1": {
-            "name": "Page d'etat",
+            "name": "Page 1 : Page d'état",
+            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "weather_entity_id": "Météo",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
-              "entities": "Entites"
+              "entities": "Entités"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'écran",
+              "position": "1 = première page",
+              "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           }
         }
+      },
+      "dashboard_entity_display": {
+        "title": "Tuiles de l'écran",
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       }
     },
     "error": {
-      "invalid_action_map": "Le JSON de la liste autorisee d'actions est invalide.",
-      "invalid_actions": "Le JSON de la liste autorisee d'actions est invalide.",
-      "invalid_agent_host": "Saisissez l'hote de l'agent appareil.",
+      "invalid_action_map": "Le JSON de la liste autorisée d'actions est invalide.",
+      "invalid_actions": "Le JSON de la liste autorisée d'actions est invalide.",
+      "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",
-      "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
-      "invalid_alarm_page_entity": "Selectionnez une entite dashboard prise en charge pour la page alarme ou laissez vide.",
-      "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
+      "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
+      "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
+      "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
       "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
-      "invalid_device_activations": "Verifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent etre uniques; le mode lumiere escalier manuel reserve deja stair_light.",
-      "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
-      "dashboard_page_name_reserved": "C300X est le nom interne de la page d'etat ; choisissez un autre nom de page.",
-      "dashboard_page_name_duplicate": "Deux pages ont le meme nom ; donnez a chaque page le sien.",
-      "dashboard_entity_on_several_pages": "Une entite est choisie sur plusieurs pages ; gardez-la sur une seule page.",
-      "invalid_dashboard_pages": "Les pages enregistrees de l'ecran ne sont pas valides ; configurez les pages a nouveau.",
-      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran."
+      "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode lumière escalier manuel réserve déjà stair_light.",
+      "invalid_stair_light_part": "Saisissez une valeur P/N numérique de 0 à 99.",
+      "dashboard_page_name_reserved": "C300X est le nom interne de la page d'état ; choisissez un autre nom de page.",
+      "dashboard_page_name_duplicate": "Deux pages ont le même nom ; donnez à chaque page le sien.",
+      "dashboard_entity_on_several_pages": "Une entité est choisie sur plusieurs pages ; gardez-la sur une seule page.",
+      "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
+      "invalid_dashboard_entities": "Une entité ne peut pas être affichée sur l'écran.",
+      "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page."
     }
   },
   "entity": {
@@ -494,73 +754,73 @@
     },
     "button": {
       "delete_latest_video_message": {
-        "name": "Supprimer le dernier message video"
+        "name": "Supprimer le dernier message vidéo"
       },
       "delete_latest_text_memo": {
-        "name": "Supprimer le dernier memo texte"
+        "name": "Supprimer le dernier mémo texte"
       },
       "door_unlock": {
         "name": "Ouvrir la porte"
       },
       "reboot": {
-        "name": "Redemarrer"
+        "name": "Redémarrer"
       },
       "remove_agent": {
         "name": "Supprimer l'agent appareil"
       },
       "restart_agent": {
-        "name": "Redemarrer l'agent appareil"
+        "name": "Redémarrer l'agent appareil"
       },
       "reload_gui": {
         "name": "Recharger l'interface appareil"
       },
       "stair_light": {
-        "name": "Lumiere d'escalier"
+        "name": "Lumière d'escalier"
       },
       "stop_doorbell_video": {
-        "name": "Arreter la camera de sonnette"
+        "name": "Arrêter la caméra de sonnette"
       },
       "delete_latest_voice_memo": {
-        "name": "Supprimer le dernier memo vocal"
+        "name": "Supprimer le dernier mémo vocal"
       }
     },
     "camera": {
       "doorbell_camera": {
-        "name": "Camera de sonnette"
+        "name": "Caméra de sonnette"
       }
     },
     "event": {
       "doorbell_event": {
-        "name": "Evenement de sonnette",
+        "name": "Événement de sonnette",
         "state": {
           "ring": "Sonnerie"
         }
       },
       "agent_event": {
-        "name": "Evenement appareil",
+        "name": "Événement appareil",
         "state": {
-          "agent_restarted": "Agent appareil redemarre",
-          "answering_machine_messages_changed": "Messages video mis a jour",
-          "call_ended": "Appel termine",
-          "call_started": "Appel demarre",
-          "door_unlock_ended": "Ouverture porte terminee",
-          "door_unlock_started": "Ouverture porte demarree",
-          "doorbell_media_closed": "Flux camera de sonnette termine",
-          "doorbell_pressed": "Sonnette appuyee",
-          "doorbell_view_requested": "Vue camera de sonnette demandee",
-          "home_call_answered": "Appel domicile repondu",
-          "home_call_ended": "Appel domicile termine",
-          "home_call_started": "Appel domicile demarre",
-          "memos_changed": "Memos mis a jour",
-          "ringer_muted": "Sonnerie coupee",
-          "ringer_unmuted": "Sonnerie activee",
-          "ringer_volume_changed": "Volume sonnerie modifie",
-          "smartphone_forwarding_changed": "Renvoi smartphone modifie",
-          "stair_light_activated": "Lumiere d'escalier activee",
-          "stair_light_released": "Lumiere d'escalier relachee",
-          "system_metrics_changed": "Metriques systeme mises a jour",
-          "agent_diagnostics_changed": "Diagnostics ecritures agent mis a jour",
-          "activation_executed": "Activation appareil executee"
+          "agent_restarted": "Agent appareil redémarré",
+          "answering_machine_messages_changed": "Messages vidéo mis a jour",
+          "call_ended": "Appel terminé",
+          "call_started": "Appel démarré",
+          "door_unlock_ended": "Ouverture porte terminée",
+          "door_unlock_started": "Ouverture porte démarrée",
+          "doorbell_media_closed": "Flux caméra de sonnette terminé",
+          "doorbell_pressed": "Sonnette appuyée",
+          "doorbell_view_requested": "Vue caméra de sonnette demandée",
+          "home_call_answered": "Appel domicile répondu",
+          "home_call_ended": "Appel domicile terminé",
+          "home_call_started": "Appel domicile démarré",
+          "memos_changed": "Mémos mis a jour",
+          "ringer_muted": "Sonnerie coupée",
+          "ringer_unmuted": "Sonnerie activée",
+          "ringer_volume_changed": "Volume sonnerie modifié",
+          "smartphone_forwarding_changed": "Renvoi smartphone modifié",
+          "stair_light_activated": "Lumière d'escalier activée",
+          "stair_light_released": "Lumière d'escalier relâchée",
+          "system_metrics_changed": "Métriques système mises a jour",
+          "agent_diagnostics_changed": "Diagnostics écritures agent mis a jour",
+          "activation_executed": "Activation appareil exécutée"
         }
       }
     },
@@ -589,7 +849,7 @@
     },
     "sensor": {
       "agent_status": {
-        "name": "Etat de l'agent appareil",
+        "name": "État de l'agent appareil",
         "state": {
           "ok": "OK",
           "warning": "Avertissement",
@@ -597,11 +857,11 @@
         }
       },
       "media_readiness": {
-        "name": "Disponibilite media",
+        "name": "Disponibilité média",
         "state": {
-          "ready": "Pret",
+          "ready": "Prêt",
           "warning": "Avertissement",
-          "blocked": "Bloque",
+          "blocked": "Bloqué",
           "unavailable": "Indisponible"
         }
       },
@@ -611,21 +871,21 @@
           "unknown": "Diagnostics non charges",
           "agent_offline": "Agent hors ligne",
           "agent_reconnecting": "Reconnexion",
-          "repair_required": "Reparation requise",
+          "repair_required": "Réparation requise",
           "subscription_missing": "Abonnement manquant",
-          "display_event_watchdog": "Watchdog evenements display actif",
+          "display_event_watchdog": "Watchdog événements display actif",
           "media_watchdog_tripped": "Watchdog CPU actif",
-          "external_media_active": "Media externe actif",
-          "media_stopping": "Arret media",
+          "external_media_active": "Média externe actif",
+          "media_stopping": "Arrêt média",
           "home_call_active": "Appel domicile actif",
-          "home_call_starting": "Appel domicile demarre",
-          "ring_media_active": "Media sonnette actif",
+          "home_call_starting": "Appel domicile démarré",
+          "ring_media_active": "Média sonnette actif",
           "ring_call_active": "Appel sonnette actif",
-          "doorbell_call_active": "Appel video sonnette actif",
-          "media_starting": "Media demarre",
-          "doorbell_media_active": "Media sonnette actif",
+          "doorbell_call_active": "Appel vidéo sonnette actif",
+          "media_starting": "Média démarré",
+          "doorbell_media_active": "Média sonnette actif",
           "rtsp_busy": "RTSP occupe",
-          "media_resources_open": "Ressources media ouvertes",
+          "media_resources_open": "Ressources média ouvertes",
           "idle": "Inactif"
         }
       },
@@ -636,40 +896,40 @@
         "name": "Charge appareil"
       },
       "device_memory": {
-        "name": "Memoire appareil"
+        "name": "Mémoire appareil"
       },
       "device_temperature": {
-        "name": "Temperature appareil"
+        "name": "Température appareil"
       },
       "voicemail_messages": {
-        "name": "Messages video"
+        "name": "Messages vidéo"
       },
       "text_memos": {
-        "name": "Memos texte"
+        "name": "Mémos texte"
       },
       "voice_memos": {
-        "name": "Memos vocaux"
+        "name": "Mémos vocaux"
       },
       "doorbell_state": {
-        "name": "Etat sonnette",
+        "name": "État sonnette",
         "state": {
           "idle": "Inactif",
           "ringing": "Sonne",
-          "view_requested": "Vue camera active",
-          "view_requeste": "Vue camera active",
-          "pressed": "Sonnette appuyee",
+          "view_requested": "Vue caméra active",
+          "view_requeste": "Vue caméra active",
+          "pressed": "Sonnette appuyée",
           "ring": "Sonne",
-          "doorbell_pressed": "Sonnette appuyee",
-          "doorbell_view_requested": "Vue camera active",
-          "doorbell_media_closed": "Flux camera termine",
-          "media_closed": "Flux camera termine",
-          "closed": "Flux camera termine"
+          "doorbell_pressed": "Sonnette appuyée",
+          "doorbell_view_requested": "Vue caméra active",
+          "doorbell_media_closed": "Flux caméra terminé",
+          "media_closed": "Flux caméra terminé",
+          "closed": "Flux caméra terminé"
         }
       }
     },
     "switch": {
       "answering_machine": {
-        "name": "Repondeur"
+        "name": "Répondeur"
       },
       "ringer_mute": {
         "name": "Sonnerie muette"
@@ -684,7 +944,7 @@
         "name": "Maintenance noAuth agent"
       },
       "maintenance_mdns_discovery": {
-        "name": "Decouverte mDNS agent"
+        "name": "Découverte mDNS agent"
       },
       "gui_function_patch": {
         "name": "Display patch"
@@ -708,22 +968,22 @@
   },
   "exceptions": {
     "alarm_not_configured": {
-      "message": "Aucune entite alarm_control_panel n'est configuree."
+      "message": "Aucune entité alarm_control_panel n'est configurée."
     },
     "agent_command_failed": {
-      "message": "La commande de l'agent C300X a echoue ou n'est pas prise en charge par l'agent installe."
+      "message": "La commande de l'agent C300X a échoué ou n'est pas prise en charge par l'agent installe."
     },
     "gui_function_patch_required": {
-      "message": "Cette action necessite le patch display C300X. Activez et appliquez d'abord le patch display dans les options de l'integration."
+      "message": "Cette action nécessite le patch display C300X. Activez et appliquez d'abord le patch display dans les options de l'intégration."
     },
     "doorbell_video_not_available": {
-      "message": "La video de sonnette n'est pas activee ou n'est pas prise en charge par l'agent C300X installe."
+      "message": "La vidéo de sonnette n'est pas activée ou n'est pas prise en charge par l'agent C300X installé."
     },
     "home_call_not_available": {
-      "message": "L'appel domicile n'est pas active ou n'est pas pris en charge par l'agent C300X installe."
+      "message": "L'appel domicile n'est pas active ou n'est pas pris en charge par l'agent C300X installé."
     },
     "ring_capture_busy": {
-      "message": "La capture d'appel C300X est occupee, car un autre client video est deja connecte."
+      "message": "La capture d'appel C300X est occupée, car un autre client vidéo est déjà connecte."
     },
     "capture_announcement_requires_ring": {
       "message": "Les annonces sont disponibles uniquement en mode sonnette. Supprimez announcement_path pour enregistrer sans sonnerie."
@@ -732,7 +992,7 @@
       "message": "L’enregistrement à la demande nécessite des médias libres. Fermez les autres flux vidéo ou appels, puis réessayez."
     },
     "entry_id_required": {
-      "message": "L'ID d'entree est requis quand plusieurs entrees BTicino C300X existent."
+      "message": "L'ID d'entrée est requis quand plusieurs entrées BTicino C300X existent."
     },
     "invalid_action_id": {
       "message": "L'ID d'action est invalide."
@@ -744,22 +1004,22 @@
       "message": "L'ID de verrou est invalide."
     },
     "maintenance_action_not_supported": {
-      "message": "L'action de maintenance de l'agent C300X n'est pas prise en charge, pas activee, ou aucun token de maintenance n'est configure."
+      "message": "L'action de maintenance de l'agent C300X n'est pas prise en charge, pas activée, ou aucun token de maintenance n'est configure."
     },
     "video_message_not_available": {
-      "message": "Aucun message video C300X n'est disponible."
+      "message": "Aucun message vidéo C300X n'est disponible."
     },
     "text_memo_not_available": {
-      "message": "Aucun memo texte C300X n'est disponible."
+      "message": "Aucun mémo texte C300X n'est disponible."
     },
     "unknown_action": {
       "message": "L'ID d'action {action_id} n'est pas configure."
     },
     "unknown_entry": {
-      "message": "L'entree BTicino C300X selectionnee n'existe pas."
+      "message": "L'entrée BTicino C300X sélectionnée n'existe pas."
     },
     "voice_memo_not_available": {
-      "message": "Aucun memo vocal C300X n'est disponible."
+      "message": "Aucun mémo vocal C300X n'est disponible."
     },
     "alarm_not_ready": {
       "message": "L'alarme ne peut pas être armée car un ou plusieurs capteurs l'empêchent."
@@ -776,8 +1036,8 @@
   },
   "issues": {
     "agent_capability_mismatch": {
-      "title": "Les capacites de l'agent C300X sont manquantes",
-      "description": "L'agent C300X configure pour {entry_title} a repondu sans capacites utilisables. Mettez a jour ou reconfigurez l'agent local, puis rechargez l'integration."
+      "title": "Les capacités de l'agent C300X sont manquantes",
+      "description": "L'agent C300X configure pour {entry_title} a répondu sans capacités utilisables. Mettez à jour ou reconfigurez l'agent local, puis rechargez l'intégration."
     },
     "device_agent_update_required": {
       "title": "Mise a jour de l'agent C300X requise",
@@ -785,11 +1045,11 @@
         "step": {
           "confirm": {
             "title": "Mettre a jour l'agent C300X",
-            "description": "Home Assistant televerse l'agent natif package via l'API de maintenance actuellement configuree. Les identifiants SSH ne sont pas necessaires. Les patchs display et pare-feu actifs sont d'abord verifies en lecture seule et rafraichis uniquement s'ils etaient deja actifs et si la source de patch packagee a change. Si vous utilisez les appels Ring Call Home Assistant uniquement, verifiez aussi le patch utilisateur media Home Assistant / patch de routage dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch display : {qml_patch_status}\nRaison : {reason}"
+            "description": "Home Assistant téléverse l'agent natif package via l'API de maintenance actuellement configurée. Les identifiants SSH ne sont pas nécessaires. Les patchs display et pare-feu actifs sont d'abord vérifiés en lecture seule et rafraîchis uniquement s'ils étaient déjà actifs et si la source de patch packagée a change. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}"
           },
           "ssh_install": {
-            "title": "Reinstaller l'agent C300X via SSH",
-            "description": "Cet agent installe ne peut pas encore se mettre a jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraichira uniquement les patchs display et pare-feu actifs si la source de patch packagee a change. Les identifiants SSH ne sont pas stockes. Si vous utilisez les appels Ring Call Home Assistant uniquement, verifiez aussi le patch utilisateur media Home Assistant / patch de routage dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch display : {qml_patch_status}\nRaison : {reason}",
+            "title": "Réinstaller l'agent C300X via SSH",
+            "description": "Cet agent installé ne peut pas encore se mettre à jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraîchira uniquement les patchs display et pare-feu actifs si la source de patch packagée a change. Les identifiants SSH ne sont pas stockés. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}",
             "data": {
               "bootstrap_ssh_username": "Utilisateur SSH",
               "bootstrap_ssh_password": "Mot de passe SSH"
@@ -797,91 +1057,91 @@
           }
         },
         "error": {
-          "ssh_install_failed": "La reparation par SSH a echoue. Verifiez l'acces SSH et reessayez.",
-          "update_failed": "La mise a jour de l'agent a echoue. Verifiez que l'acces maintenance est actif et reessayez.",
-          "update_verify_failed": "La mise a jour a ete envoyee, mais l'agent signale encore un bundle plus ancien ou incompatible."
+          "ssh_install_failed": "La réparation par SSH a échoué. Vérifiez l'accès SSH et réessayez.",
+          "update_failed": "La mise à jour de l'agent a échoué. Vérifiez que l'accès maintenance est actif et réessayez.",
+          "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible."
         },
         "abort": {
-          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
         }
       }
     },
     "device_agent_startup_disabled": {
-      "title": "L'agent C300X ne demarre pas apres redemarrage",
-      "description": "{entry_title} peut joindre l'agent C300X maintenant, mais le lien de demarrage du peripherique est manquant ou invalide. Apres le prochain redemarrage du C300X, l'agent cessera de fonctionner a nouveau. Lancez la reparation/mise a jour de l'agent ou reinstallez l'agent via SSH pour recreer le lien de demarrage."
+      "title": "L'agent C300X ne démarre pas après redémarrage",
+      "description": "{entry_title} peut joindre l'agent C300X maintenant, mais le lien de démarrage du périphérique est manquant ou invalide. Après le prochain redémarrage du C300X, l'agent cessera de fonctionner à nouveau. Lancez la réparation/mise à jour de l'agent ou réinstallez l'agent via SSH pour recréer le lien de démarrage."
     },
     "device_agent_self_test_failed": {
-      "title": "Le self-test de l'agent C300X signale un probleme",
-      "description": "{entry_title} peut joindre l'agent C300X, mais le self-test en lecture seule signale un controle de configuration en echec. Controles en echec : {failed_checks}. Raisons : {reasons}. Action conseillee : {actions}. Aucune reparation automatique n'a ete executee. Le pare-feu IPv6 est optionnel sauf si cette instance HA joint l'appareil en IPv6."
+      "title": "Le self-test de l'agent C300X signale un problème",
+      "description": "{entry_title} peut joindre l'agent C300X, mais le self-test en lecture seule signale un contrôle de configuration en échec. Contrôles en échec : {failed_checks}. Raisons : {reasons}. Action conseillée : {actions}. Aucune réparation automatique n'a été exécutée. Le pare-feu IPv6 est optionnel sauf si cette instance HA joint l'appareil en IPv6."
     },
     "device_agent_ui_event_watchdog": {
-      "title": "Le watcher d'evenements display C300X a ete protege",
-      "description": "{entry_title} a detecte trop de watchers d'evenements display C300X simultanes. L'agent a refuse le watcher supplementaire pour eviter une boucle de polling locale qui peut surcharger le C300X. Watchers actifs : {waiters}/{capacity}. Watchers refuses : {overflows}. Rechargez la GUI display C300X depuis l'integration si le dashboard ou les memos de l'ecran ne se mettent plus a jour, puis actualisez les diagnostics."
+      "title": "Le watcher d'événements display C300X a été protégé",
+      "description": "{entry_title} a détecté trop de watchers d'événements display C300X simultanés. L'agent a refusé le watcher supplémentaire pour éviter une boucle de polling locale qui peut surcharger le C300X. Watchers actifs : {waiters}/{capacity}. Watchers refusés : {overflows}. Rechargez la GUI display C300X depuis l'intégration si le dashboard ou les mémos de l'écran ne se mettent plus a jour, puis actualisez les diagnostics."
     },
     "device_core_qml_hook_required": {
-      "title": "Hook media core C300X manquant",
+      "title": "Hook média core C300X manquant",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Appliquer le hook media core C300X",
-            "description": "Home Assistant appliquera uniquement le hook media core minimal necessaire pour detecter la fermeture d'une session media par l'ecran C300X ou un autre client media. C'est separe du patch display dashboard optionnel.\n\nEtat actuel du hook core : {qml_patch_status}"
+            "title": "Appliquer le hook média core C300X",
+            "description": "Home Assistant appliquera uniquement le hook média core minimal nécessaire pour détecter la fermeture d'une session média par l'écran C300X ou un autre client média. C'est séparé du patch display dashboard optionnel.\n\nÉtat actuel du hook core : {qml_patch_status}"
           }
         },
         "error": {
-          "core_patch_failed": "L'application du hook media core a echoue. Verifiez l'acces maintenance et reessayez.",
-          "core_patch_verify_failed": "L'action du hook media core a ete executee, mais l'agent n'a pas confirme l'etat patche."
+          "core_patch_failed": "L'application du hook média core a échoué. Vérifiez l'accès maintenance et réessayez.",
+          "core_patch_verify_failed": "L'action du hook média core a été exécutée, mais l'agent n'a pas confirmé l'état patche."
         },
         "abort": {
-          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee.",
-          "core_patch_unsupported": "L'agent appareil C300X installe ne prend pas en charge l'application du hook media core."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
+          "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge l'application du hook média core."
         }
       }
     },
     "device_user_required": {
-      "title": "Configuration utilisateur media C300X requise",
+      "title": "Configuration utilisateur média C300X requise",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Creer l'utilisateur media Home Assistant",
-            "description": "Home Assistant demandera a l'agent appareil de creer ou reparer l'utilisateur media C300X dedie `homeassistant`. Les utilisateurs media existants sont conserves. L'agent ecrit uniquement l'etat utilisateur et routage necessaire sur l'appareil."
+            "title": "Créer l'utilisateur média Home Assistant",
+            "description": "Home Assistant demandera à l'agent appareil de créer ou réparer l'utilisateur média C300X dédié `homeassistant`. Les utilisateurs média existants sont conserves. L'agent écrit uniquement l'état utilisateur et routage nécessaire sur l'appareil."
           }
         },
         "error": {
-          "device_user_setup_failed": "La configuration utilisateur appareil a echoue. Verifiez l'acces maintenance et reessayez."
+          "device_user_setup_failed": "La configuration utilisateur appareil a échoué. Vérifiez l'accès maintenance et réessayez."
         },
         "abort": {
-          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
         }
       }
     },
     "media_setup_repair_required": {
-      "title": "Echec des controles de configuration media C300X : {failed_checks}",
+      "title": "Échec des contrôles de configuration média C300X : {failed_checks}",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Reparer la configuration media C300X",
-            "description": "Home Assistant peut executer maintenant la reparation adaptee aux checks media-readiness en echec. Selon les erreurs, cela peut recontroler l'accessibilite de l'agent, actualiser les metadonnees de configuration agent, appliquer le pare-feu media IPv4 ou reparer l'utilisateur/routage media Home Assistant. Le forwarding Ring Call n'est jamais modifie par cette reparation. IPv6 est optionnel et n'est pas modifie.\n\nChecks en echec : {failed_checks}\nChecks reparables : {fixable_checks}\nAction recommandee : {recommended_action}"
+            "title": "Réparer la configuration média C300X",
+            "description": "Home Assistant peut exécuter maintenant la réparation adaptée aux checks media-readiness en échec. Selon les erreurs, cela peut recontrôler l'accessibilité de l'agent, actualiser les métadonnées de configuration agent, appliquer le pare-feu média IPv4 ou réparer l'utilisateur/routage média Home Assistant. Le forwarding Ring Call n'est jamais modifié par cette réparation. IPv6 est optionnel et n'est pas modifié.\n\nChecks en échec : {failed_checks}\nChecks réparables : {fixable_checks}\nAction recommandée : {recommended_action}"
           }
         },
         "error": {
-          "media_setup_repair_failed": "La reparation de la configuration media a echoue. Verifiez l'acces maintenance et reessayez."
+          "media_setup_repair_failed": "La réparation de la configuration média a échoué. Vérifiez l'accès maintenance et réessayez."
         },
         "abort": {
-          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
         }
       }
     },
     "invalid_action_map": {
       "title": "La liste d'actions dashboard C300X est invalide",
-      "description": "La liste d'actions de {entry_title} ne peut pas etre analysee : {error}. Corrigez la carte d'actions configuree, puis rechargez l'integration."
+      "description": "La liste d'actions de {entry_title} ne peut pas être analysée : {error}. Corrigez la carte d'actions configurée, puis rechargez l'intégration."
     },
     "missing_alarm_entity": {
-      "title": "L'entite d'alarme C300X configuree est manquante",
-      "description": "{entry_title} reference {entity_id}, mais Home Assistant ne connait pas cette entite. Choisissez une entite alarm_control_panel existante dans les options ou videz le reglage d'alarme."
+      "title": "L'entité d'alarme C300X configurée est manquante",
+      "description": "{entry_title} référence {entity_id}, mais Home Assistant ne connaît pas cette entité. Choisissez une entité alarm_control_panel existante dans les options ou videz le réglage d'alarme."
     },
     "media_watchdog_timeout": {
-      "title": "Le watchdog media C300X a arrete une session en forte charge",
-      "description": "{entry_title} a signale une charge CPU soutenue de l'appareil pendant au moins {duration_seconds} secondes ({cpu_percent}%). Home Assistant a ferme ses sessions media C300X actives afin de ne pas maintenir l'appareil sous charge. Raison : {reason}."
+      "title": "Le watchdog média C300X a arrêté une session en forte charge",
+      "description": "{entry_title} a signalé une charge CPU soutenue de l'appareil pendant au moins {duration_seconds} secondes ({cpu_percent}%). Home Assistant a ferme ses sessions média C300X actives afin de ne pas maintenir l'appareil sous charge. Raison : {reason}."
     },
     "frontend_card_setup_hint": {
       "title": "Ajouter la carte Lovelace C300X",
@@ -889,15 +1149,15 @@
         "step": {
           "init": {
             "title": "Configurer la carte Lovelace C300X",
-            "description": "Cette mise a jour exige d'actualiser les cartes Lovelace C300X generees. Executez cette reparation une seule fois pour actualiser la vue de dashboard C300X dans {dashboard_path} et remplacer les anciens layouts generes avec cartes separees. Ignorez-la uniquement si vous avez deja actualise toutes les cartes C300X manuellement.",
+            "description": "Cette mise à jour exige d'actualiser les cartes Lovelace C300X générées. Exécutez cette réparation une seule fois pour actualiser la vue de dashboard C300X dans {dashboard_path} et remplacer les anciens layouts générés avec cartes séparées. Ignorez-la uniquement si vous avez déjà actualisé toutes les cartes C300X manuellement.",
             "menu_options": {
-              "confirm": "Creer ou actualiser la carte",
+              "confirm": "Créer ou actualiser la carte",
               "ignore": "Ignorer cette indication"
             }
           },
           "confirm": {
-            "title": "Creer ou actualiser la carte Lovelace C300X",
-            "description": "Home Assistant ajoutera ou actualisera une vue C300X dans un dashboard Lovelace en mode storage. La vue contient la carte Doorstation/Home Call consolidee pour {entry_title}. Les anciens layouts generes avec cartes separees dans le dashboard selectionne sont remplaces.",
+            "title": "Créer ou actualiser la carte Lovelace C300X",
+            "description": "Home Assistant ajoutera ou actualisera une vue C300X dans un dashboard Lovelace en mode storage. La vue contient la carte Doorstation/Home Call consolidée pour {entry_title}. Les anciens layouts générés avec cartes séparées dans le dashboard sélectionné sont remplacés.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "Chemin de la vue"
@@ -905,13 +1165,13 @@
           }
         },
         "error": {
-          "camera_entity_missing": "Home Assistant n'a pas trouve l'entite camera C300X pour cette entree de configuration.",
-          "lovelace_config_invalid": "La configuration du dashboard Lovelace selectionne n'est pas modifiable au format attendu.",
-          "lovelace_storage_unavailable": "Aucun dashboard Lovelace en mode storage n'est disponible. Les dashboards YAML doivent etre modifies manuellement.",
+          "camera_entity_missing": "Home Assistant n'a pas trouvé l'entité caméra C300X pour cette entrée de configuration.",
+          "lovelace_config_invalid": "La configuration du dashboard Lovelace sélectionné n'est pas modifiable au format attendu.",
+          "lovelace_storage_unavailable": "Aucun dashboard Lovelace en mode storage n'est disponible. Les dashboards YAML doivent être modifies manuellement.",
           "lovelace_unavailable": "Lovelace n'est pas encore disponible."
         },
         "abort": {
-          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
         }
       }
     },
@@ -931,7 +1191,7 @@
           "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X."
         },
         "abort": {
-          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
         }
       }
     }
@@ -941,6 +1201,68 @@
       "options": {
         "ring": "Appel de sonnette",
         "on_demand": "Enregistrement sans sonnerie"
+      }
+    },
+    "tile_field": {
+      "options": {
+        "width": "Largeur",
+        "height": "Hauteur",
+        "name": "Nom",
+        "secondary": "Ligne secondaire",
+        "status_page": "Page d'état",
+        "alarm_page": "Page Alarme"
+      }
+    },
+    "tile_size": {
+      "options": {
+        "auto": "Automatique",
+        "half": "Demie",
+        "full": "Pleine"
+      }
+    },
+    "tile_name": {
+      "options": {
+        "friendly_name": "Nom de Home Assistant",
+        "entity_id": "ID de l'entité",
+        "custom": "Texte personnel"
+      }
+    },
+    "tile_secondary": {
+      "options": {
+        "state": "État",
+        "entity_id": "ID de l'entité",
+        "last_changed": "Dernier changement",
+        "last_updated": "Dernière mise à jour",
+        "none": "Rien"
+      }
+    },
+    "device_activation_flow_action": {
+      "options": {
+        "done": "Terminer et enregistrer",
+        "add": "Ajouter une activation",
+        "edit": "Modifier une activation",
+        "remove": "Supprimer une activation"
+      }
+    },
+    "device_activation_item_type": {
+      "options": {
+        "lock": "Serrure de porte",
+        "light": "Lumière",
+        "stair_light": "Éclairage d'escalier"
+      }
+    },
+    "device_activation_mode": {
+      "options": {
+        "automatic": "Automatique",
+        "manual": "Manuel (P et N)"
+      }
+    },
+    "webrtc_ice_policy": {
+      "options": {
+        "all": "Toutes les adresses",
+        "drop_link_local": "Sans adresses link-local (fe80::, 169.254.x.x)",
+        "prefer_ipv4_ula": "IPv4 et IPv6 local (ULA) - recommandé",
+        "ipv4_only": "IPv4 uniquement"
       }
     }
   },

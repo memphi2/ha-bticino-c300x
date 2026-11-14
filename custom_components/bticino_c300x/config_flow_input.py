@@ -345,21 +345,23 @@ def _dashboard_feature_input(
     dashboard_entity_display_overrides: dict[str, dict[str, str]] = {}
     dashboard_dynamic_homepage = _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
     actions: dict[str, dict[str, Any]] = {}
+    # The alarm commands do not need the Display patch, so Alarmo is kept
+    # with it off.
+    try:
+        alarm_entity_id = _alarm_entity_id(user_input.get(CONF_ALARM_ENTITY_ID, ""))
+    except vol.Invalid:
+        errors[CONF_ALARM_ENTITY_ID] = "invalid_alarm_entity"
+    try:
+        alarm_page_entity_id = _alarm_page_entity_id(
+            user_input.get(CONF_ALARM_PAGE_ENTITY_ID, "")
+        )
+    except vol.Invalid:
+        errors[CONF_ALARM_PAGE_ENTITY_ID] = "invalid_alarm_page_entity"
     if device_ui_enabled:
         try:
             actions = parse_actions_json(user_input.get(CONF_ACTIONS_JSON, ""))
         except ActionValidationError:
             errors[CONF_ACTIONS_JSON] = "invalid_action_map"
-        try:
-            alarm_entity_id = _alarm_entity_id(user_input.get(CONF_ALARM_ENTITY_ID, ""))
-        except vol.Invalid:
-            errors[CONF_ALARM_ENTITY_ID] = "invalid_alarm_entity"
-        try:
-            alarm_page_entity_id = _alarm_page_entity_id(
-                user_input.get(CONF_ALARM_PAGE_ENTITY_ID, "")
-            )
-        except vol.Invalid:
-            errors[CONF_ALARM_PAGE_ENTITY_ID] = "invalid_alarm_page_entity"
         try:
             weather_entity_id = _weather_entity_id(
                 user_input.get(CONF_WEATHER_ENTITY_ID, "")

@@ -525,6 +525,42 @@ def test_fan_speed_step_comes_from_the_fan(attrs, step, value):
     assert (control["command"], control["step"], control["value"]) == ("percentage", step, value)
 
 
+def test_a_light_that_is_off_is_at_zero_brightness():
+    """Home Assistant reports no brightness for a light that is off, and the
+    display showed "?" for the missing value. An off light is at 0 %, which is
+    also where its plus button starts. A light that is on without a reported
+    brightness stays unknown."""
+
+    def brightness(value, **attrs):
+        snapshot = state(value, supported_color_modes=["brightness"], **attrs)
+        return next(
+            control for control in entity_controls("light.room", snapshot)
+            if control["command"] == "brightness"
+        )["value"]
+
+    assert brightness("off", brightness=None) == 0
+    assert brightness("off") == 0
+    assert brightness("off", brightness=128) == 0
+    assert brightness("on", brightness=128) == 50
+    assert brightness("on", brightness=None) is None
+
+
+@pytest.mark.parametrize("attrs", [{}, {"percentage_step": 100 / 3}])
+def test_a_fan_that_is_off_is_at_zero_speed(attrs):
+    """A fan that is off may report no percentage, which the display showed
+    as "?". It stands still, so its speed is 0 on a fan with its own speeds
+    as well. A running fan without a reported percentage stays unknown."""
+
+    def speed(value, **extra):
+        snapshot = state(value, supported_features=1, **attrs, **extra)
+        return entity_controls("fan.room", snapshot)[0]["value"]
+
+    assert speed("off", percentage=None) == 0
+    assert speed("off") == 0
+    assert speed("off", percentage=66) == 0
+    assert speed("on", percentage=None) is None
+
+
 def test_climate_choices_require_capability_and_reported_options():
     assert entity_controls("climate.room", state(fan_modes=["auto"], swing_modes=["on"])) == []
     assert entity_controls("climate.room", state(supported_features=552)) == []
@@ -863,7 +899,7 @@ def test_a_dashboard_too_large_without_lists_is_logged_once(caplog):
     caplog.set_level(logging.WARNING, logger="custom_components.bticino_c300x.dashboard")
     for _ in range(2):
         payload = _dashboard(many)
-    assert len(payload["data"]["pages"][1]["items"]) == 40
+    assert len(payload["data"]["pages"][-1]["items"]) == 40
     warnings = [record for record in caplog.records if "display dashboard" in record.getMessage()]
     assert len(warnings) == 1
     _dashboard({"light.l0": _light(0)})

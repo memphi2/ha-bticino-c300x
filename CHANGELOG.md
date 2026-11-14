@@ -1,5 +1,71 @@
 # Changelog
 
+## v2.1.4 - Unreleased
+
+### Added
+
+- The display shows a page's name as its heading in place of Home Assistant;
+  the status page keeps Home Assistant. The separate title line above the
+  tiles is gone and leaves its room to the tiles.
+
+### Changed
+
+- **Configure** opens a menu of settings areas in the order of the setup:
+  connection, video and audio, activations, Alarm (Alarmo), display and
+  Display patch, display pages, display tiles. Each area saves on its own; the others keep
+  their settings. Pages and tiles are offered while the Display patch is on.
+- Settings fields use plain names in place of technical ones: access key and
+  maintenance key, address of Home Assistant for the C300X, video and audio
+  access.
+- The display tiles form has one collapsible section per tile, in display
+  order and titled "Page › Entity" with the entity's Home Assistant name. Each
+  has width, height, name and secondary line; the name is one field that takes
+  the Home Assistant name, the entity id or a typed text, in place of a name
+  choice plus a separate custom-name field.
+- Every settings field has a plain label and a help text; the choices of the
+  tiles, the activations and the ICE filter are translated. German texts use
+  real umlauts, French and Italian texts their accents.
+- The weather is set with the display pages, as the first field of the first
+  section, above its entities. Alarmo and the quick action of the Alarm page
+  have a step of their own, **Alarm (Alarmo)**, right after the activations in
+  the setup, the reconfigure and the settings menu. Alarmo is kept with the
+  Display patch off, since the alarm commands do not need it. The display and
+  Display patch form keeps the patch, the home page buttons, the behaviour
+  after an action and the allowed actions. Saved values carry over.
+- The status page, the first page, is left out when it has no weather and no
+  tile, and its HA, alarm and time badges with it. Its section explains this.
+- A media player's submenu shows previous, play/pause and next side by side
+  in one row of equal buttons with centred symbols, in place of three
+  full-width bars with a small glyph at the top left. A mute switch has its
+  label level with its box.
+- The display status text sits in the header bar, right of the title, in
+  place of a row below the tiles. The tile area gains that row, so four half
+  rows fit below the page switcher.
+- The pages dialog explains itself: each section is titled with its page's
+  name and says what it holds, every field has a short help text, and the
+  step lists what name, position and entities do.
+- A page's position runs from 1 to 8, the first page being 1, in place of 0
+  to 10000 in steps of 10.
+- A page with entities needs a name, since the display shows it as the
+  heading; an older entry's untitled page asks for one when saved. Page names
+  are unique regardless of capitalization.
+- Besides the used pages, the first free section is open, so adding a page is
+  visible; the other free sections stay collapsed.
+
+### Fixed
+
+- A light or fan that is off shows 0 % on its display tile in place of `?`.
+- Saving the pages kept no display settings of the Alarmo quick entity, so
+  its name and secondary line were lost.
+
+### Upgrade Notes
+
+- The native agent stays at `2.1.2`; only the display files change. Their
+  new bundle hash makes the agent-update Repair offer them, it installs the
+  display files alone, and the integration re-applies an active Display patch
+  itself, which restarts the device GUI once. The page name in the heading
+  and the status in the header bar need these display files.
+
 ## v2.1.3 - 2026-11-13
 
 ### Added

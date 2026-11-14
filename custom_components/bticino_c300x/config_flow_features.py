@@ -12,6 +12,10 @@ from .config_flow_dashboard import (
     DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
 )
 from .config_flow_dashboard import (
+    dashboard_entity_display_has_fields,
+    dashboard_input_defaults,
+)
+from .config_flow_dashboard import (
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
 )
 from .config_flow_dashboard import (
@@ -435,3 +439,21 @@ def _config_default(
     """Return an option override when present, otherwise setup data."""
 
     return entry_config_value(config_entry, key, default)
+
+
+def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
+    """Return the settings areas the options menu offers.
+
+    They follow the setup: connection, video and audio, activations, Alarmo,
+    the display and its patch, then its pages and tiles. Pages and tiles need
+    the Display patch, which the display area switches on. The tiles need
+    something to show as well: an entity on a page or the Alarmo quick entity.
+    """
+
+    saved = current_feature_options(config_entry)
+    menu = ["connection", "features", "device_activations", "dashboard_alarm", "dashboard"]
+    if saved[CONF_DEVICE_UI_ENABLED]:
+        menu.append("dashboard_pages")
+        if dashboard_entity_display_has_fields(dashboard_input_defaults({}, saved)):
+            menu.append("dashboard_entity_display")
+    return menu

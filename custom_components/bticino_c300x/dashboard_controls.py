@@ -129,7 +129,7 @@ def _fan_speed_count(attrs: Any) -> int | None:
     return count if 1 <= count < 100 else None
 
 
-def _fan_speed_control(attrs: Any) -> dict[str, Any] | None:
+def _fan_speed_control(attrs: Any, *, off: bool = False) -> dict[str, Any] | None:
     """Offer a fan's speed in percent, on the grid of its own speeds.
 
     A fan rounds a requested percentage up to its next speed and reports a
@@ -138,9 +138,12 @@ def _fan_speed_control(attrs: Any) -> dict[str, Any] | None:
     and the value is the current speed on that grid. The step is rounded down
     to six decimals because the display finds the last step as
     floor(100 / step), which the exact quotient misses for some fans.
+
+    A fan that is off stands still, whatever percentage it reports or leaves
+    out; without this the display shows an unknown speed.
     """
 
-    percentage = finite_number(attrs.get("percentage"))
+    percentage = 0 if off else finite_number(attrs.get("percentage"))
     count = _fan_speed_count(attrs)
     if count is None:
         return _number("percentage", percentage, 0, 100, 1, "%")
@@ -213,7 +216,9 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
         controls.append({"command": "toggle", "kind": "button"})
         modes = set(attrs.get("supported_color_modes") or ())
         if modes & COLOR_MODES_BRIGHTNESS:
-            brightness = finite_number(attrs.get("brightness"))
+            # Home Assistant reports no brightness for a light that is off;
+            # it is at 0 %, not at an unknown brightness.
+            brightness = 0 if state.state == "off" else finite_number(attrs.get("brightness"))
             controls.append(
                 _number(
                     "brightness",
@@ -306,7 +311,7 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
         if features & toggle_feature:
             controls.append({"command": "toggle", "kind": "button"})
         if features & FanEntityFeature.SET_SPEED:
-            controls.append(_fan_speed_control(attrs))
+            controls.append(_fan_speed_control(attrs, off=state.state == "off"))
         if features & FanEntityFeature.OSCILLATE:
             oscillating = attrs.get("oscillating")
             controls.append({

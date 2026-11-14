@@ -1013,6 +1013,29 @@ function dashboardVisibleControls(item, section) {
     return result
 }
 
+function dashboardTransportControls(item) {
+    var controls = item && item.details && item.details.type === "media_player" ? listOrEmpty(item.controls) : []
+    var commands = ["media_previous_track", "media_play_pause", "media_next_track"]
+    var result = []
+    for (var i = 0; i < commands.length; i++) {
+        for (var j = 0; j < controls.length; j++) {
+            if (controls[j].command === commands[i]) result.push(controls[j])
+        }
+    }
+    return result
+}
+
+function dashboardListControls(item, section) {
+    var visible = dashboardVisibleControls(item, section)
+    if (dashboardTransportControls(item).length === 0) return visible
+    var result = []
+    for (var i = 0; i < visible.length; i++) {
+        var command = visible[i].command
+        if (command !== "media_previous_track" && command !== "media_play_pause" && command !== "media_next_track") result.push(visible[i])
+    }
+    return result
+}
+
 function dashboardCoverControls(item) {
     var controls = item ? listOrEmpty(item.controls) : []
     var result = []

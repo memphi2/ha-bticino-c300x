@@ -471,6 +471,50 @@ def test_wyoming_transcribe_does_not_wait_for_a_close_that_never_finishes(
     assert aborted == [True]
 
 
+def test_wyoming_transcribe_aborts_the_transport_when_cancelled_while_closing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    aborted: list[bool] = []
+    closing = asyncio.Event()
+
+    class _Transport:
+        def abort(self) -> None:
+            aborted.append(True)
+
+    class _ClosingWriter(_FakeWyomingWriter):
+        transport = _Transport()
+
+        async def drain(self) -> None:
+            raise ConnectionResetError
+
+        async def wait_closed(self) -> None:
+            closing.set()
+            await asyncio.sleep(3600)
+
+    async def _open_connection(_host: str, _port: int):
+        return asyncio.StreamReader(), _ClosingWriter()
+
+    monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+
+    async def _run() -> None:
+        task = asyncio.create_task(
+            _async_wyoming_transcribe(
+                "127.0.0.1",
+                10300,
+                {"rate": 16000, "width": 2, "channels": 1, "audio": b"a" * 100},
+                language=None,
+            )
+        )
+        await asyncio.wait_for(closing.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(_run())
+
+    assert aborted == [True]
+
+
 def test_wyoming_transcribe_reports_a_dropped_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

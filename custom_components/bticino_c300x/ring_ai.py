@@ -362,10 +362,12 @@ async def _async_wyoming_transcribe(
             # and closing then waits for it to drain: do not wait for good.
             async with asyncio.timeout(_WYOMING_CLOSE_TIMEOUT_SECONDS):
                 await writer.wait_closed()
-        except (OSError, TimeoutError):
+        except (OSError, TimeoutError, asyncio.CancelledError) as err:
             transport = getattr(writer, "transport", None)
             if transport is not None:
                 transport.abort()
+            if isinstance(err, asyncio.CancelledError):
+                raise
 
 
 async def _async_write_wyoming_event(

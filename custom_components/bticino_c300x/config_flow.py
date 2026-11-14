@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import AbortFlow
 
 from .api import (
     C300XAgentApi,
@@ -382,6 +383,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         await self.async_set_unique_id(_manual_setup_unique_id(self._setup_connection))
         self._abort_if_unique_id_configured()
+        for entry in self._async_current_entries():
+            if _entry_connection_matches_discovery(entry, self._setup_connection):
+                raise AbortFlow("already_configured")
 
     async def async_step_agent_auth(
         self,

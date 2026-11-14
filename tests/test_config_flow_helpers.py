@@ -13,6 +13,7 @@ import pytest
 import voluptuous as vol
 import voluptuous_serialize
 from homeassistant.helpers import aiohttp_client
+from homeassistant.data_entry_flow import AbortFlow
 
 from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     BticinoC300XOptionsFlow,
@@ -852,6 +853,36 @@ def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:
     )
 
     assert errors == {CONF_ALARM_PAGE_ENTITY_ID: "invalid_alarm_page_entity"}
+
+
+@pytest.fixture(autouse=True)
+def default_current_entries(monkeypatch):
+    monkeypatch.setattr(BticinoC300XConfigFlow, "_async_current_entries", lambda self: [])
+
+
+def test_bootstrap_stable_identity_duplicate_before_mutation(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow._setup_connection = {CONF_AGENT_HOST: "C300X.local.", CONF_AGENT_PORT: 8091}
+    entry = SimpleNamespace(unique_id="c300x-stable-id", data={}, options={
+        CONF_AGENT_HOST: "c300x.local", CONF_AGENT_PORT: 8091,
+    })
+    flow._async_current_entries = lambda: [entry]
+
+    async def set_id(*args, **kwargs):
+        pass
+
+    flow.async_set_unique_id = set_id
+    flow._abort_if_unique_id_configured = lambda: None
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("duplicate setup must not touch device")
+
+    monkeypatch.setattr(config_flow_module, "async_install_device_agent", forbidden)
+    with pytest.raises(AbortFlow, match="already_configured"):
+        asyncio.run(flow.async_step_bootstrap_install({
+            CONF_BOOTSTRAP_SSH_USERNAME: "user", CONF_BOOTSTRAP_SSH_PASSWORD: "password",
+        }))
 
 
 def test_manual_setup_duplicate_aborts_before_agent_probe(monkeypatch: pytest.MonkeyPatch) -> None:

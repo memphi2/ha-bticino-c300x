@@ -201,6 +201,8 @@ these settings existed therefore looks the same until a size is chosen.
 - Sensors with the device class timestamp or date show a short local time such
   as `14.11. 10:30` or `14.11.2026`, not the ISO text. A text that had to be
   cut ends in three dots.
+- Automations and sirens are switch tiles. Persons and device trackers are
+  read-only tiles that say home, away or the name of the zone.
 - Sensor and binary-sensor tiles use larger readings and read-only details.
   Numeric sensors retain their unit and reported display precision. Details may
   show the entity's numeric battery level, humidity and illuminance attributes;

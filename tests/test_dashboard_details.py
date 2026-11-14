@@ -210,3 +210,45 @@ def test_what_is_playing_is_only_read_while_it_plays():
         "media_player.room", snapshot("off", media_title="Song", media_artist="Band"), "Off", "C"
     )
     assert details["value"] == "Off"
+
+
+@pytest.mark.parametrize(
+    ("entity_id", "kind"),
+    [("automation.night", "switch"), ("siren.hall", "switch"), ("person.anna", "entity"), ("device_tracker.phone", "entity")],
+)
+def test_automations_sirens_and_presence_are_tiles(entity_id, kind):
+    item = _dashboard_item_for_entity(
+        SimpleNamespace(
+            states=SimpleNamespace(get=lambda _entity: snapshot("on")),
+            config=SimpleNamespace(language="en"),
+        ),
+        entity_id,
+        10,
+    )
+    assert item is not None
+    assert item["_kind"] == kind
+
+
+@pytest.mark.parametrize(
+    ("language", "home", "away"),
+    [("en", "Home", "Away"), ("de", "Zuhause", "Unterwegs"), ("fr", "Maison", "Absent"), ("it", "Casa", "Fuori")],
+)
+def test_a_person_reads_home_away_or_the_zone(language, home, away):
+    def label(value):
+        return _dashboard_item_for_entity(
+            SimpleNamespace(
+                states=SimpleNamespace(get=lambda _entity: snapshot(value)),
+                config=SimpleNamespace(language=language),
+            ),
+            "person.anna",
+            10,
+            language=language,
+        )
+
+    assert label("home")["state_label"] == home
+    assert label("not_home")["state_label"] == away
+    # A zone has its own name, which is the label.
+    assert label("Work")["state_label"] == "Work"
+    # At home is good news, away is neither.
+    assert label("home")["color"] == "#58d68d"
+    assert "color" not in label("not_home") or label("not_home")["color"] != "#58d68d"

@@ -40,7 +40,7 @@ _DASHBOARD_SWITCH_DOMAINS = {"fan", "input_boolean", "light", "switch"}
 _DASHBOARD_SWITCH_SERVICES = {"toggle"}
 
 
-_DASHBOARD_TOGGLE_ENTITY_DOMAINS = {"fan", "input_boolean", "light", "switch"}
+_DASHBOARD_TOGGLE_ENTITY_DOMAINS = {"automation", "fan", "input_boolean", "light", "siren", "switch"}
 
 
 _DASHBOARD_BUTTON_ENTITY_DOMAINS = {"button", "input_button", "scene", "script"}
@@ -52,7 +52,7 @@ _DASHBOARD_SLIDER_ENTITY_DOMAINS = {"input_number", "number"}
 _DASHBOARD_CHOICE_ENTITY_DOMAINS = {"input_select", "select"}
 
 
-_DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "sensor"}
+_DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "device_tracker", "person", "sensor"}
 
 
 _DASHBOARD_SUPPORTED_ENTITY_DOMAINS = DASHBOARD_ENTITY_DOMAIN_SET

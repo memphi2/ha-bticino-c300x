@@ -34,6 +34,8 @@
   after an action and the allowed actions. Saved values carry over.
 - The status page, the first page, is left out when it has no weather and no
   tile, and its HA, alarm and time badges with it. Its section explains this.
+- Automations and sirens can be picked as switch tiles, persons and device
+  trackers as read-only tiles that read home, away or the zone.
 - Tiles carry a small symbol for their type or device class, drawn from the
   fonts on the device only. Sensors with the device class timestamp or date
   show a short local time, a text that had to be cut ends in three dots, a

@@ -553,6 +553,33 @@ def test_async_execute_dashboard_action_toggles_selected_switch() -> None:
     ]
 
 
+def test_async_execute_dashboard_action_toggles_selected_automation_or_siren() -> None:
+    for entity_id in ("automation.night", "siren.hall"):
+        hass = FakeHass()
+        entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: [entity_id]})
+
+        result = run(async_execute_dashboard_action(hass, entry, entity_id))
+
+        assert result == {"ok": True, "action_id": entity_id}
+        assert hass.services.calls == [
+            (entity_id.split(".")[0], "toggle", {"entity_id": entity_id}, True)
+        ]
+
+
+def test_a_person_has_no_action_to_run() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["person.anna"]})
+
+    try:
+        run(async_execute_dashboard_action(hass, entry, "person.anna"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a person must not run an action")
+
+    assert hass.services.calls == []
+
+
 def test_async_execute_dashboard_action_presses_selected_button() -> None:
     hass = FakeHass()
     entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["button.restart"]})

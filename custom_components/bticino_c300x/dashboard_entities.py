@@ -16,10 +16,12 @@ from .const import (
 from .validation_patterns import ENTITY_OBJECT_ID_RE
 
 DASHBOARD_ENTITY_DOMAINS = (
+    "automation",
     "binary_sensor",
     "button",
     "climate",
     "cover",
+    "device_tracker",
     "fan",
     "input_boolean",
     "input_button",
@@ -28,10 +30,12 @@ DASHBOARD_ENTITY_DOMAINS = (
     "light",
     "media_player",
     "number",
+    "person",
     "select",
     "script",
     "scene",
     "sensor",
+    "siren",
     "switch",
 )
 DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)

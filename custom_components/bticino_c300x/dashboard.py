@@ -851,9 +851,11 @@ def _binary_sensor_state_color(
 
 
 def _raw_state_color(raw: str) -> str | None:
-    if raw in {"closed", "disarmed", "idle", "locked", "off", "ok", "safe"}:
+    if raw in {"closed", "disarmed", "home", "idle", "locked", "off", "ok", "safe"}:
         return _DASHBOARD_COLOR_GOOD
     if raw in {
+        "error",
+        "jammed",
         "on",
         "open",
         "problem",

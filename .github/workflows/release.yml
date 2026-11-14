@@ -28,7 +28,7 @@ env:
 jobs:
   validate:
     name: release validate (${{ matrix.name }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -59,13 +59,13 @@ jobs:
       - name: Install native agent toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev libturbojpeg pkg-config
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev libturbojpeg0 pkg-config
       - name: Validation gates
         run: python scripts/check_validate.py
 
   hacs:
     name: release hacs
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -81,7 +81,7 @@ jobs:
 
   hassfest:
     name: release hassfest
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -92,7 +92,7 @@ jobs:
 
   main-validation:
     name: main validation gate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       commit: ${{ steps.verified-main.outputs.commit }}
     permissions:
@@ -224,7 +224,7 @@ jobs:
       ref: ${{ needs.main-validation.outputs.commit }}
 
   publish:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs:
       - validate
       - hacs

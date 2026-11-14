@@ -192,6 +192,12 @@ int main(int argc, char **argv)
     assert(c300x_config_listen_valid(loaded, error, sizeof(error)));
     strcpy(loaded->listen_host, "localhost");
     assert(!c300x_config_listen_valid(loaded, error, sizeof(error)));
+    strcpy(loaded->listen_host, "::");
+    assert(c300x_config_listen_valid(loaded, error, sizeof(error)));
+    strcpy(loaded->listen_host, "2001:db8::1");
+    assert(c300x_config_listen_valid(loaded, error, sizeof(error)));
+    strcpy(loaded->listen_host, "1::2::3");
+    assert(!c300x_config_listen_valid(loaded, error, sizeof(error)));
     strcpy(loaded->listen_host, "127.0.0.1");
     loaded->ui_port = loaded->api_port;
     assert(!c300x_config_listen_valid(loaded, error, sizeof(error)));

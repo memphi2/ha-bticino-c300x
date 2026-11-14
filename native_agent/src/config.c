@@ -702,9 +702,15 @@ int c300x_config_set_activation_items_json(
 }
 
 int c300x_config_listen_valid(const struct c300x_config *config, char *error, size_t error_len) {
+    /* The listener treats a host with a colon as IPv6 and anything else as
+     * IPv4, so the same split decides what a valid literal is here. */
+    struct in6_addr address6;
     struct in_addr address;
-    if (inet_pton(AF_INET, config->listen_host, &address) != 1) {
-        set_error(error, error_len, "listen.host must be an IPv4 address");
+    int is_ipv6 = strchr(config->listen_host, ':') != NULL;
+    if (is_ipv6
+            ? inet_pton(AF_INET6, config->listen_host, &address6) != 1
+            : inet_pton(AF_INET, config->listen_host, &address) != 1) {
+        set_error(error, error_len, "listen.host must be an IPv4 or IPv6 address");
         return 0;
     }
     if (config->api_port == 0 || config->ui_port == 0 || config->api_port == config->ui_port) {

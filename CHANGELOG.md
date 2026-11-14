@@ -10,6 +10,21 @@
 
 ### Changed
 
+- **Configure** opens a menu of settings areas: display pages, display tiles,
+  display and Display patch, video and audio, activations, connection. Each
+  area saves on its own; the others keep their settings. Pages and tiles are
+  offered while the Display patch is on.
+- The display tiles form has one collapsible section per tile, in display
+  order and titled "Page › Entity" with the entity's Home Assistant name. Each
+  has width, height, name and secondary line; the name is one field that takes
+  the Home Assistant name, the entity id or a typed text, in place of a name
+  choice plus a separate custom-name field.
+- Every settings field has a plain label and a help text; the choices of the
+  tiles, the activations and the ICE filter are translated. German texts use
+  real umlauts, French and Italian texts their accents.
+- The display status text sits in the header bar, right of the title, in
+  place of a row below the tiles. The tile area gains that row, so four half
+  rows fit below the page switcher.
 - The pages dialog explains itself: each section is titled with its page's
   name and says what it holds, every field has a short help text, and the
   step lists what name, position and entities do.
@@ -21,13 +36,19 @@
 - Besides the used pages, the first free section is open, so adding a page is
   visible; the other free sections stay collapsed.
 
+### Fixed
+
+- A light or fan that is off shows 0 % on its display tile in place of `?`.
+- Saving the pages kept no display settings of the Alarmo quick entity, so
+  its name and secondary line were lost.
+
 ### Upgrade Notes
 
 - The native agent stays at `2.1.2`; only the display files change. Their
   new bundle hash makes the agent-update Repair offer them, it installs the
   display files alone, and the integration re-applies an active Display patch
   itself, which restarts the device GUI once. The page name in the heading
-  needs these display files.
+  and the status in the header bar need these display files.
 
 ## v2.1.3 - 2026-11-13
 

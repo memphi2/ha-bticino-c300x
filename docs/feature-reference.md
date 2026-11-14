@@ -36,6 +36,12 @@ The integration is local-first:
 
 ## Setup and Options
 
+**Configure** opens a menu of settings areas. Each area is a form of its own
+and saves when it is submitted; the other areas keep their settings. Display
+pages and display tiles are offered while the Display patch is on, the tiles
+only once there is an entity on a page or an Alarmo quick action. Every field
+has a help text.
+
 | Area | Purpose | Writes to device |
 | --- | --- | --- |
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
@@ -126,7 +132,7 @@ compact one leaves them to the submenu. Back returns to the same overview page
 and scroll position; a state refresh that arrives while the list is moving is
 applied once it settles.
 
-Each tile's size is set per entity in the entity-display dialog. **Width** is
+Each tile's size is set per entity in the display tiles form. **Width** is
 half or full. **Height** is half, the compact 64 px tile, or full, a 94 px tile
 like a sensor's. A full-height tile carries the entity's own buttons, so the
 common action needs no submenu:
@@ -224,10 +230,11 @@ detail views.
 
 ## Display Settings
 
-Use **Configure > Display dashboard**, then the pages dialog and the
-entity-display dialog. Choose entities and the optional Alarmo quick entity with
-the normal HA selectors; control types come from their actual capabilities, not
-a manually chosen widget.
+Switch the Display patch on under **Configure > Display and Display patch**;
+the settings menu then offers **Display pages** and **Display tiles**. Choose
+entities and the optional Alarmo quick entity with the normal HA selectors;
+control types come from their actual capabilities, not a manually chosen
+widget.
 
 The pages dialog has up to 8 pages, one section each. A section's title shows
 the page's name, for example **Page 2: Living room**.
@@ -252,13 +259,24 @@ An entry saved before the pages dialog opens it with its existing pages: the
 status page first, then the others in the order their names first appeared.
 Entities without a page name keep their untitled page; saving asks for a name.
 
-The entity-display dialog sets **Width**, **Height**, name and secondary line
-of each tile. A custom name left empty shows the Home Assistant name. Missing or
-unavailable entities retain their configuration and show unavailable rather than
-changing the saved layout.
+The display tiles form has one section per tile, in the order the display
+shows them: page by page, and within a page in the order of its entities. A
+section is titled with the page and the entity's Home Assistant name, for
+example **Living room › Ceiling light**; two tiles with the same title get the
+entity id added. With more than two tiles the sections start collapsed.
 
-The optional Alarmo quick entity also gets its name and secondary-line settings,
-even if it is not selected for an overview page. Selecting it does not add it to
+| Field | Meaning |
+| --- | --- |
+| **Width**, **Height** | Half or full; Automatic keeps the usual size of the entity type. |
+| **Name** | The Home Assistant name, the entity id, or a typed text of your own. Left empty, the Home Assistant name is shown. |
+| **Secondary line** | State, entity id, last changed, last updated, or nothing. |
+
+Missing or unavailable entities retain their configuration and show unavailable
+rather than changing the saved layout.
+
+The optional Alarmo quick entity gets a section of its own at the end, with name
+and secondary line, even if it is not selected for an overview page; saving the
+pages keeps these settings. Selecting it does not add it to
 the overview. Leave the quick entity empty to hide it; no stair-light default is
 inserted. Connection/maintenance settings remain separate. Calendar and notification
 logic stays in HA automations. This is a normal configuration dialog, not a visual

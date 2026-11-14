@@ -48,7 +48,7 @@ zip under `.release/`.
 The bootstrap installer puts the following files on the C300X:
 
 - `c300x-agent-native`
-- generated `config.json` with generated API and maintenance tokens
+- generated `config.json` with generated API and maintenance tokens (a reinstall keeps the sections of an existing file that Home Assistant does not own: MQTT, mDNS, events, voicemail, memos, metrics, video and display bridge)
 - `/etc/init.d/c300x-native-agent` and `/etc/rc5.d/S40c300x-native-agent`
 - display support files under the agent directory
 - `qml_patch.sh`

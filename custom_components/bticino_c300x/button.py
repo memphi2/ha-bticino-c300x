@@ -372,20 +372,33 @@ class C300XDeleteLatestStoredItemButton(C300XEntity, ButtonEntity):
 
         try:
             await spec.delete_item(self._entry.runtime_data.api, item_id)
-            items = await spec.fetch(self._entry, force_refresh=True)
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(spec.unsupported_error) from err
         except C300XAgentApiError as err:
             raise HomeAssistantError(spec.delete_error) from err
 
-        self._attr_available = bool(items.get("available", True))
+        # The item is gone on the device. A failed re-read is not a failed
+        # delete: say so in the log and let the background refresh fetch it.
+        try:
+            items = await spec.fetch(self._entry, force_refresh=True)
+        except C300XAgentApiError as err:
+            _LOGGER.warning("%s after a delete: %s", spec.refresh_error, type(err).__name__)
+            spec.schedule_refresh(self.hass, self._entry)
+        else:
+            self._attr_available = bool(items.get("available", True))
         async_dispatcher_send(self.hass, spec.signal, self._entry.entry_id)
         await async_refresh_agent_diagnostics(self.hass, self._entry)
 
     @callback
     def _handle_items_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
+        if entry_id != self._entry.entry_id:
+            return
+        # A failed read on press marks the button unavailable. The store being
+        # readable again is what ends that, there is no poll that would.
+        payload = getattr(self._entry.runtime_data, self._items_spec.payload_attr, None)
+        if isinstance(payload, dict) and payload.get("available", True):
+            self._attr_available = True
+        self.async_write_ha_state()
 
     @callback
     def _handle_agent_event(self, event: Event) -> None:

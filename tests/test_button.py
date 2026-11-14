@@ -2008,3 +2008,65 @@ def test_delete_latest_text_memo_button_requires_display_patch_after_refresh() -
             raise AssertionError("missing Display patch was not rejected")
 
     asyncio.run(_run())
+
+
+def test_delete_button_recovers_after_a_failed_read_when_the_store_reads_again() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                api=_FailingMemoApi("memos", C300XAgentApiError("failed")),
+                capabilities={"memos": {"supported": True, "delete": True}},
+                qml_patch_status={"available": True, "patched": True},
+                memos={"available": True, "memos": []},
+            ),
+        )
+        entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+        with pytest.raises(HOME_ASSISTANT_ERROR):
+            await entity.async_press()
+        assert entity.available is False
+
+        # A later refresh by anyone stores a readable payload and signals it.
+        entry.runtime_data.memos = {
+            "available": True,
+            "memos": [{"id": "text/1", "kind": "text", "unix_time": 1}],
+        }
+        entity._handle_items_changed(entry.entry_id)
+
+        assert entity.available is True
+
+    asyncio.run(_run())
+
+
+def test_delete_button_reports_success_when_only_the_reread_fails() -> None:
+    class _DeleteWorksReadFails(_FakeMemoApi):
+        async def async_memos(self) -> dict[str, Any]:
+            self.memos_calls += 1
+            raise C300XAgentApiError("timeout at 192.0.2.10")
+
+    async def _run() -> None:
+        api = _DeleteWorksReadFails()
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                api=api,
+                capabilities={"memos": {"supported": True, "delete": True}},
+                qml_patch_status={"available": True, "patched": True},
+                memos={
+                    "available": True,
+                    "memos": [{"id": "text/1", "kind": "text", "unix_time": 1}],
+                },
+            ),
+        )
+        entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+
+        await entity.async_press()
+
+        assert api.delete_calls == ["text/1"]
+        # The background refresh is what fetches the list again.
+        assert entry.runtime_data.resources.memos_refresh_task is not None
+        entry.runtime_data.resources.memos_refresh_task.cancel()
+
+    asyncio.run(_run())

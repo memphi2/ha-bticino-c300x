@@ -659,6 +659,73 @@ def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
     assert hass.config_entries.reloads == ["entry-1"]
 
 
+def test_ssh_install_retry_runs_the_follow_up_steps_of_the_first_attempt(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    api = FakePatchApi()
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(api),
+        data={"agent_host": "192.0.2.60", "agent_token": "agent-token"},
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    installs: list[tuple[str, ...]] = [
+        ("/home/bticino/c300x/config.json", "/home/bticino/c300x/bootstrap_firewall.sh"),
+        (),
+    ]
+    waits = [RuntimeError("agent did not come back"), {"version": "1.1.0", "capabilities": {}}]
+
+    async def install_agent(*_args: Any, **_kwargs: Any) -> Any:
+        changed = installs.pop(0)
+        if not changed:
+            # The first install replaced the config, so the device no longer
+            # reports the IPv6 firewall as patched.
+            api.ipv6_firewall_status = {"available": True, "patched": False}
+        return types.SimpleNamespace(changed_files=changed)
+
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        return None
+
+    async def wait_for_agent(_api: Any) -> dict[str, Any]:
+        result = waits.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    async def migrate_mqtt(_api: Any) -> None:
+        return None
+
+    async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
+        setup_entry.runtime_data.agent_update_state = types.SimpleNamespace(
+            update_required=False
+        )
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(
+        repairs, "async_ensure_installer_dependencies", ensure_installer_dependencies
+    )
+    monkeypatch.setattr(repairs, "_async_wait_for_agent_after_update", wait_for_agent)
+    monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+    credentials = {"bootstrap_ssh_username": "root", "bootstrap_ssh_password": "secret"}
+
+    first = asyncio.run(flow.async_step_ssh_install(credentials))
+    assert first["errors"] == {"base": "ssh_install_failed"}
+    assert "apply_firewall" not in api.calls
+
+    second = asyncio.run(flow.async_step_ssh_install(credentials))
+    assert second == {"type": "create_entry", "data": {}}
+    assert "apply_firewall" in api.calls
+    assert "apply_ipv6_firewall" in api.calls
+
+    # A later install in the same flow starts without the old follow-up.
+    assert flow._ssh_install_followup is None
+
+
 def test_agent_update_repair_ssh_install_reports_failures(monkeypatch, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 

@@ -425,6 +425,12 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
 
         self.hass = hass
         self._entry_id = entry_id
+        # Patch state and changes of an SSH install whose follow-up steps
+        # did not finish. A second install changes no file, so it alone
+        # would not know that the follow-up steps are still due.
+        self._ssh_install_followup: (
+            tuple[_ExternalPatchState, _ExternalPatchChanges] | None
+        ) = None
 
     async def async_step_init(
         self,
@@ -605,6 +611,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 ),
             )
             changes = _ExternalPatchChanges.from_install_result(install_result)
+            if self._ssh_install_followup is not None:
+                patch_state = self._ssh_install_followup[0].merged(patch_state)
+                changes = self._ssh_install_followup[1].merged(changes)
+            self._ssh_install_followup = (patch_state, changes)
             _remember_qml_followup(self.hass, entry, patch_state, {
                 "qml_patch_changed": changes.qml_patch_changed,
             })
@@ -614,6 +624,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 patch_state,
                 changes,
             )
+            self._ssh_install_followup = None
             _clear_qml_followup(self.hass, entry)
             await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
@@ -765,6 +776,20 @@ class _ExternalPatchState:
         self.firewall_status_known = firewall_status_known
         self.ipv6_firewall_patched = ipv6_firewall_patched
 
+    def merged(self, later: _ExternalPatchState) -> _ExternalPatchState:
+        """Return the patches that were active in this or a later snapshot."""
+
+        return _ExternalPatchState(
+            qml_patch_required=self.qml_patch_required or later.qml_patch_required,
+            firewall_patched=self.firewall_patched or later.firewall_patched,
+            firewall_status_known=(
+                self.firewall_status_known or later.firewall_status_known
+            ),
+            ipv6_firewall_patched=(
+                self.ipv6_firewall_patched or later.ipv6_firewall_patched
+            ),
+        )
+
 
 class _ExternalPatchChanges:
     """Logical device-artifact changes produced by an agent update/install."""
@@ -783,6 +808,23 @@ class _ExternalPatchChanges:
         self.firewall_patch_changed = firewall_patch_changed
         self.ipv6_firewall_patch_changed = ipv6_firewall_patch_changed
         self.config_schema_changed = config_schema_changed
+
+    def merged(self, later: _ExternalPatchChanges) -> _ExternalPatchChanges:
+        """Return the changes of this and a later install together."""
+
+        return _ExternalPatchChanges(
+            runtime_changed=self.runtime_changed or later.runtime_changed,
+            qml_patch_changed=self.qml_patch_changed or later.qml_patch_changed,
+            firewall_patch_changed=(
+                self.firewall_patch_changed or later.firewall_patch_changed
+            ),
+            ipv6_firewall_patch_changed=(
+                self.ipv6_firewall_patch_changed or later.ipv6_firewall_patch_changed
+            ),
+            config_schema_changed=(
+                self.config_schema_changed or later.config_schema_changed
+            ),
+        )
 
     @classmethod
     def from_update_result(cls, update_result: dict[str, Any]) -> _ExternalPatchChanges:

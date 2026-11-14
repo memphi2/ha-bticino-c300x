@@ -197,7 +197,7 @@ function nextFeedbackDelay(feedback) {
     var delay = 0
     var now = Date.now()
     for (var i = 0; i < feedback.length; i++) {
-        var lifetime = feedback[i].state === "action_sent" && feedback[i].expected ? FEEDBACK_UNCONFIRMED_MS : FEEDBACK_DISCARD_MS
+        var lifetime = feedback[i].state === "action_sent" && feedback[i].expected && !feedback[i].expected.stateless ? FEEDBACK_UNCONFIRMED_MS : FEEDBACK_DISCARD_MS
         var remaining = Math.max(1, (feedback[i].at || 0) + lifetime - now)
         if (delay === 0 || remaining < delay) delay = remaining
     }

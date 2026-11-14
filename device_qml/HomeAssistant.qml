@@ -132,6 +132,7 @@ Page {
         for (var i = 0; i < current.length; i++) {
             if (current[i].entity_id === selectedItem.entity_id) {
                 selectedItem = current[i]
+                if (armedCommand !== "" && Api.dashboardControlByCommand(selectedItem, armedCommand) === null) armedCommand = ""
                 return
             }
         }

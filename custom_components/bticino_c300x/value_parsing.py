@@ -34,7 +34,8 @@ def optional_int(value: Any, default: int | None = None) -> int | None:
 
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: JSON numbers such as 1e999 arrive as float infinity.
         return default
 
 

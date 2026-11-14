@@ -28,6 +28,15 @@ _MAX_JSON_RESPONSE_BYTES = 8 * 1024 * 1024
 _MAX_MEDIA_RESPONSE_BYTES = 32 * 1024 * 1024
 
 
+def _decode_text(raw: bytes, charset: str | None) -> str:
+    """Decode an agent response; a charset Python does not know means UTF-8."""
+
+    try:
+        return raw.decode(charset or "utf-8", errors="replace")
+    except LookupError:
+        return raw.decode("utf-8", errors="replace")
+
+
 class _C300XApiCore:
     """HTTP transport + shared helpers for the api mixins."""
 
@@ -71,7 +80,7 @@ class _C300XApiCore:
                 )
                 if raw is None:
                     raise C300XAgentApiResponseError("device agent response too large")
-                text = raw.decode(response.charset or "utf-8", errors="replace")
+                text = _decode_text(raw, response.charset)
                 self._raise_for_agent_status(response.status, text, path)
         except TimeoutError as err:
             raise C300XAgentApiConnectionError(
@@ -112,7 +121,7 @@ class _C300XApiCore:
                 if response.status < 200 or response.status >= 300:
                     self._raise_for_agent_status(
                         response.status,
-                        content.decode(response.charset or "utf-8", errors="replace"),
+                        _decode_text(content, response.charset),
                         path,
                     )
                 content_type = response.headers.get(

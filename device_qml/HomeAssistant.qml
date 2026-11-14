@@ -161,7 +161,7 @@ Page {
     }
 
     function optionLabel(control, option) {
-        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode" || control.command === "effect") return String(option)
+        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode" || control.command === "effect" || control.command === "fan_speed") return String(option)
         var key = (control.command === "color" ? "color_" : "mode_") + String(option)
         var label = uiText(key)
         return label === key ? String(option) : label
@@ -172,7 +172,7 @@ Page {
         if (!dashboardOnline) return uiText("stale_state")
         if (item.available === false) return uiText("offline")
         var detail = item.details || {}
-        if (detail.type === "lock") return ""
+        if (detail.type === "lock" || detail.type === "vacuum") return ""
         if (detail.activity) return uiText("activity_" + detail.activity)
         return detail.type === "sensor" || detail.type === "binary_sensor" ? "" : detail.state_label || ""
     }

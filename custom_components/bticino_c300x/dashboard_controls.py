@@ -16,6 +16,7 @@ from homeassistant.components.light.const import (
 )
 from homeassistant.components.lock.const import LockEntityFeature
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
+from homeassistant.components.vacuum.const import VacuumEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.util.percentage import (
     percentage_to_ranged_value,
@@ -382,6 +383,21 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append({"command": "unlock", "kind": "button"})
         if features & LockEntityFeature.OPEN:
             controls.append({"command": "open", "kind": "button"})
+    elif domain == "vacuum":
+        # Each button is offered where it makes sense in the current state.
+        cleaning = state.state == "cleaning"
+        if features & VacuumEntityFeature.START and not cleaning:
+            controls.append({"command": "start", "kind": "button"})
+        if features & VacuumEntityFeature.PAUSE and cleaning:
+            controls.append({"command": "pause", "kind": "button"})
+        if features & VacuumEntityFeature.STOP:
+            controls.append({"command": "stop", "kind": "button"})
+        if features & VacuumEntityFeature.RETURN_HOME and state.state not in {"docked", "returning"}:
+            controls.append({"command": "return_to_base", "kind": "button"})
+        if features & VacuumEntityFeature.LOCATE:
+            controls.append({"command": "locate", "kind": "button"})
+        if features & VacuumEntityFeature.FAN_SPEED:
+            controls.append(_choice("fan_speed", attrs.get("fan_speed"), attrs.get("fan_speed_list")))
     elif domain in {"number", "input_number"}:
         controls.append(
             _number(
@@ -514,6 +530,10 @@ async def async_execute_control(
             data["shuffle"] = value
     elif domain == "lock":
         service = command
+    elif domain == "vacuum":
+        service = "set_fan_speed" if command == "fan_speed" else command
+        if command == "fan_speed":
+            data["fan_speed"] = value
     elif domain in {"number", "input_number"}:
         service = "set_value"
         data["value"] = value

@@ -209,6 +209,11 @@ these settings existed therefore looks the same until a size is chosen.
   A tap on another button takes over the question. The question stays until
   the page is left. The display sends the explicit lock, unlock or open
   service for a lock that was selected on a page, never for another entity.
+- Vacuums are tiles that read what the robot does (cleaning, docked,
+  returning, paused, idle, error) and open a detail page with start, pause,
+  stop, return to base and locate in one row, each only where the robot reports
+  the feature and where it makes sense in its state, and the suction choice
+  below. The display sends the explicit vacuum service of the button.
 - Automations and sirens are switch tiles. Persons and device trackers are
   read-only tiles that say home, away or the name of the zone.
 - Sensor and binary-sensor tiles use larger readings and read-only details.

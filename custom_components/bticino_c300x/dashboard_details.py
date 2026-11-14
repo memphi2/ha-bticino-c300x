@@ -8,8 +8,9 @@ from .dashboard_controls import finite_number
 
 DETAIL_DOMAINS = frozenset({
     "light", "cover", "climate", "fan", "sensor", "binary_sensor", "media_player",
-    "lock",
+    "lock", "vacuum",
 })
+_VACUUM_ACTIVITIES = frozenset({"cleaning", "docked", "idle", "paused", "returning", "error"})
 _LOCK_ACTIVITIES = frozenset({
     "locked", "unlocked", "locking", "unlocking", "jammed", "open", "opening",
 })
@@ -77,6 +78,8 @@ def entity_details(
             details.update(value=_display_number(value), unit="%", label="brightness" if domain == "light" else "percentage")
     elif domain == "lock":
         details["activity"] = state.state if state.state in _LOCK_ACTIVITIES else ""
+    elif domain == "vacuum":
+        details["activity"] = state.state if state.state in _VACUUM_ACTIVITIES else ""
     elif domain == "media_player":
         # Play/pause is confirmed on this; its button comes and goes with the
         # features a player reports in each state.

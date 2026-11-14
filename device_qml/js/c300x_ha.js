@@ -208,6 +208,13 @@ function dashboardExpectation(item, control, value) {
     if (control.command === "media_play_pause") {
         return {command: control.command, playing: control.playing !== true}
     }
+    if (item.details && item.details.type === "vacuum") {
+        if (control.command === "start") return {command: control.command, activities: ["cleaning"]}
+        if (control.command === "pause") return {command: control.command, activities: ["paused"]}
+        if (control.command === "stop") return {command: control.command, activities: ["idle", "docked", "paused"]}
+        if (control.command === "return_to_base") return {command: control.command, activities: ["returning", "docked"]}
+        return {command: control.command, stateless: true}
+    }
     if (item.details && item.details.type === "lock") {
         if (control.command === "lock") return {command: control.command, activity: "locked"}
         if (control.command === "unlock") return {command: control.command, activity: "unlocked"}
@@ -230,6 +237,13 @@ function dashboardExpectationMatches(item, expected) {
     if (expected.command === "stop_cover") return activity === "open" || activity === "closed"
     var controls = listOrEmpty(item.controls)
     if (expected.activity !== undefined) return Boolean(item.details) && item.details.activity === expected.activity
+    if (expected.activities !== undefined) {
+        var seen = item.details ? item.details.activity : ""
+        for (var a = 0; a < expected.activities.length; a++) {
+            if (expected.activities[a] === seen) return true
+        }
+        return false
+    }
     if (expected.playing !== undefined) return Boolean(item.details) && item.details.playing === expected.playing
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
@@ -1022,7 +1036,8 @@ function dashboardVisibleControls(item, section) {
 
 var ACTION_ROWS = {
     "media_player": ["media_previous_track", "media_play_pause", "media_next_track"],
-    "lock": ["lock", "unlock", "open"]
+    "lock": ["lock", "unlock", "open"],
+    "vacuum": ["start", "pause", "stop", "return_to_base", "locate"]
 }
 
 function dashboardActionCommands(item) {

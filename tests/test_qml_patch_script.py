@@ -226,9 +226,9 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "6420d826292f58aeba67b0c77c022bf38a34478a527bfb1ea808c7cd19f346da",
-    "js/c300x_ha.js": "f158bb5425083eb34812be8b8dc0c35004dfef7def13883d98b40be34c035ca6",
-    "js/c300x_i18n.js": "7d893e049d8fb27124c3d9b27b8a2f291fdf81bb4ea785262d61e114b69ad4b8",
+    "HomeAssistant.qml": "7f329a3c59eab607394ab7054f5bdce03706242a52bf91b5e831ade4fec19f9a",
+    "js/c300x_ha.js": "421bc0020935cb1df9a4dc32fdc789755c2b3b7b7a127718dc84bbe75098a173",
+    "js/c300x_i18n.js": "2c0e43032ea0c74284c705c8f70d6d091dae56c0695031dfd1df53af92b159ed",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
 

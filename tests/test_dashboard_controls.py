@@ -1172,3 +1172,86 @@ def test_a_lock_is_a_tile_with_a_detail_page_and_only_runs_selected_entities():
     with pytest.raises((ValueError, KeyError)):
         asyncio.run(async_execute_dashboard_action(hass, other, "lock.front:unlock"))
     hass.services.async_call.assert_not_awaited()
+
+
+_VACUUM_ALL = 4 | 8 | 16 | 32 | 512 | 8192
+
+
+@pytest.mark.parametrize(
+    ("value", "features", "commands"),
+    [
+        ("docked", _VACUUM_ALL, ["start", "stop", "locate", "fan_speed"]),
+        ("cleaning", _VACUUM_ALL, ["pause", "stop", "return_to_base", "locate", "fan_speed"]),
+        ("paused", _VACUUM_ALL, ["start", "stop", "return_to_base", "locate", "fan_speed"]),
+        ("returning", _VACUUM_ALL, ["start", "stop", "locate", "fan_speed"]),
+        ("idle", 8192 | 16, ["start", "return_to_base"]),
+        ("error", 512, ["locate"]),
+        ("cleaning", 0, []),
+        ("unavailable", _VACUUM_ALL, []),
+    ],
+)
+def test_a_vacuum_offers_each_button_where_it_makes_sense(value, features, commands):
+    controls = entity_controls(
+        "vacuum.robot",
+        state(value, supported_features=features, fan_speed="Quiet", fan_speed_list=["Quiet", "Turbo"]),
+    )
+
+    assert [control["command"] for control in controls] == commands
+    speed = [control for control in controls if control["command"] == "fan_speed"]
+    assert all(control["kind"] == "button" for control in controls if control not in speed)
+    if speed:
+        assert speed[0] == {
+            "command": "fan_speed", "kind": "choice", "value": "Quiet", "options": ["Quiet", "Turbo"],
+        }
+
+
+@pytest.mark.parametrize("command", ["start", "pause", "stop", "return_to_base", "locate"])
+def test_a_vacuum_sends_its_explicit_service(command):
+    # A state in which every one of them is offered but start and pause: use two.
+    value = "cleaning" if command == "pause" else "paused"
+    hass = hass_for(state(value, supported_features=_VACUUM_ALL))
+
+    asyncio.run(async_execute_control(hass, "vacuum.robot", command, None))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "vacuum", command, {"entity_id": "vacuum.robot"}, blocking=True,
+    )
+
+
+def test_a_vacuum_sets_the_suction_from_its_list_only():
+    hass = hass_for(state("docked", supported_features=32, fan_speed="Quiet", fan_speed_list=["Quiet", "Turbo"]))
+
+    asyncio.run(async_execute_control(hass, "vacuum.robot", "fan_speed", "Turbo"))
+    hass.services.async_call.assert_awaited_once_with(
+        "vacuum", "set_fan_speed", {"entity_id": "vacuum.robot", "fan_speed": "Turbo"}, blocking=True,
+    )
+    hass.services.async_call.reset_mock()
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "vacuum.robot", "fan_speed", "Max"))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_vacuum_does_not_run_what_the_state_does_not_offer():
+    hass = hass_for(state("cleaning", supported_features=_VACUUM_ALL))
+
+    with pytest.raises(ValueError, match="unsupported_dashboard_control"):
+        asyncio.run(async_execute_control(hass, "vacuum.robot", "start", None))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_vacuum_is_a_tile_with_a_detail_page():
+    hass = hass_for(state("cleaning", supported_features=_VACUUM_ALL))
+    hass.config = SimpleNamespace(language="en")
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["vacuum.robot"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "entity"
+    assert item["glyph"] == "↺"
+    assert item["state_label"] == "Cleaning"
+    assert item["details"]["type"] == "vacuum"
+    assert item["details"]["activity"] == "cleaning"
+    assert [control["command"] for control in item["controls"]][:2] == ["pause", "stop"]

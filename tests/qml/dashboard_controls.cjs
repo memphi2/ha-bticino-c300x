@@ -635,6 +635,28 @@ assert.equal(Api.dashboardExpectationMatches(unlockedItem, lockExpectation), tru
 for (const lang of ["en", "de", "fr", "it"]) {
     for (const key of ["lock", "unlock", "open", "confirm"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
 }
+const vacuumItem = {entity_id: "vacuum.robot", domain: "c300x", available: true, state: false,
+    details: {type: "vacuum", value: "Docked", state_label: "Docked", activity: "docked"}, controls: [
+    {command: "locate", kind: "button"}, {command: "start", kind: "button"},
+    {command: "fan_speed", kind: "choice", value: "Quiet", options: ["Quiet", "Turbo"]},
+    {command: "return_to_base", kind: "button"}]};
+assert.deepEqual(Array.from(Api.dashboardActionControls(vacuumItem), c => c.command), ["start", "return_to_base", "locate"],
+    "the buttons of a vacuum come in the order of the row");
+assert.deepEqual(Array.from(Api.dashboardListControls(vacuumItem, ""), c => c.command), ["fan_speed"], "the suction stays in the list");
+assert.equal(p.detailState(vacuumItem), "", "the state is not said twice");
+assert.equal(p.optionLabel({command: "fan_speed"}, "Turbo"), "Turbo", "a suction name is never translated as a mode");
+const startExpectation = Api.dashboardExpectation(vacuumItem, vacuumItem.controls[1], null);
+assert.equal(Api.dashboardExpectationMatches(vacuumItem, startExpectation), false, "still docked is no confirmation");
+const cleaningItem = JSON.parse(JSON.stringify(vacuumItem));
+cleaningItem.details.activity = "cleaning";
+assert.equal(Api.dashboardExpectationMatches(cleaningItem, startExpectation), true);
+const dockExpectation = Api.dashboardExpectation(vacuumItem, vacuumItem.controls[3], null);
+assert.equal(Api.dashboardExpectationMatches(vacuumItem, dockExpectation), true, "already docked confirms the way back");
+assert.equal(Api.dashboardExpectationMatches(cleaningItem, dockExpectation), false);
+assert.equal(Api.dashboardExpectation(vacuumItem, vacuumItem.controls[0], null).stateless, true, "finding it leaves no state to confirm");
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["start", "pause", "stop", "return_to_base", "locate", "fan_speed"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
 console.log("Media player controls passed");
 
 

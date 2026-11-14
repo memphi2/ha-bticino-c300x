@@ -226,7 +226,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "22ba066d26dd8488e9623ff6494df2b7fee179e2775a7fad7f7b05675cc863fc",
+    "HomeAssistant.qml": "c7a0837a056449d612e191b1ed24ed2801b76f2f308d93cf1ecfad6f80a13a0c",
     "js/c300x_ha.js": "75bec040d64654f2898ff5dc64a93aa0bd120198b943d771f81bbd915d45d10b",
     "js/c300x_i18n.js": "2ea51304883ac9947206cdd2477a127f3740a0367d590a25db8bcb1e10bbc302",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -754,6 +754,54 @@ def test_home_assistant_page_name_is_the_header() -> None:
         home_assistant_qml.index("id: contentColumn") : home_assistant_qml.index("id: itemColumn")
     ]
     assert "pageTitle" not in column_head
+
+
+def test_home_assistant_status_sits_in_the_header() -> None:
+    """The status text is in the header bar and costs the tiles no height.
+
+    It used to be the last row of the page column: 22 px plus the column
+    spacing. Under the pager row of a dashboard with several pages that left
+    the tiles 274 px, and four rows of half-height tiles need 286.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    status = home_assistant_qml[home_assistant_qml.index("id: status\n") :]
+    status = status[: status.index("}")]
+    assert "anchors.verticalCenter: header.verticalCenter" in status
+    assert "anchors.right: parent.right" in status
+    assert "elide: Text.ElideRight" in status
+    # The detail and notification views show their own status at the bottom.
+    assert "visible: !detailOpen && !notificationsOpen" in status
+
+    page_column = home_assistant_qml[
+        home_assistant_qml.index("id: notificationBanner") : home_assistant_qml.index("id: status\n")
+    ]
+    assert "status.height" not in page_column
+    scroll_height = next(
+        line.strip() for line in page_column.splitlines()
+        if line.strip().startswith("height: parent.height - ")
+    )
+    assert scroll_height == (
+        "height: parent.height"
+        " - (notificationBanner.visible ? notificationBanner.height + 9 : 0)"
+        " - (badgeGrid.visible ? badgeGrid.height + 9 : 0)"
+        " - (pagerRow.visible ? pagerRow.height + 9 : 0)"
+    )
+    # The firmware page is 480 px high under a 78 px header bar. With the 18 px
+    # margins, the 38 px pager row and the 9 px column spacing the tiles keep
+    # 319 px; four rows of half-height tiles, 64 px high and 10 px apart, fit.
+    assert "anchors.topMargin: 18" in home_assistant_qml
+    assert "anchors.bottomMargin: 18" in home_assistant_qml
+    assert "spacing: 9" in home_assistant_qml
+    assert "height: pageCount > 1 ? 38 : 0" in home_assistant_qml
+    assert "(tall ? 94 : 64)" in home_assistant_qml
+    assert 480 - 78 - 18 - 18 - (38 + 9) >= 4 * 64 + 3 * 10
+
+    # A long page name stays clear of the status and of the back button.
+    assert "headerLabel: headerTitle(" in home_assistant_qml
+    assert 'return text.length > 28 ? text.substring(0, 25) + "..." : text' in home_assistant_qml
 
 
 def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:

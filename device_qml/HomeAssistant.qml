@@ -13,7 +13,7 @@ Page {
         else if (selectedItem) selectedItem = null
         else tabView.activateTab(homePage)
     }
-    headerLabel: (notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
+    headerLabel: headerTitle(notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
     property variant dashboardPages: []
@@ -369,6 +369,11 @@ Page {
 
     function uiText(key) {
         return I18n.text(uiLanguage, key)
+    }
+
+    function headerTitle(text) {
+        text = String(text || "")
+        return text.length > 28 ? text.substring(0, 25) + "..." : text
     }
 
     function uiWeather(key, fallback) {
@@ -1140,7 +1145,7 @@ Page {
         Flickable {
             id: scroll
             width: parent.width
-            height: parent.height - notificationBanner.height - (notificationBanner.visible ? 9 : 0) - badgeGrid.height - pagerRow.height - status.height - 32
+            height: parent.height - (notificationBanner.visible ? notificationBanner.height + 9 : 0) - (badgeGrid.visible ? badgeGrid.height + 9 : 0) - (pagerRow.visible ? pagerRow.height + 9 : 0)
             contentWidth: width
             contentHeight: contentColumn.height
             clip: true
@@ -1903,15 +1908,20 @@ Page {
                 }
             }
         }
+    }
 
-        UbuntuLightText {
-            id: status
-            text: ""
-            color: "#c7d0d9"
-            font.pixelSize: 16
-            width: parent.width
-            height: 22
-            elide: Text.ElideRight
-        }
+    UbuntuLightText {
+        id: status
+        visible: !detailOpen && !notificationsOpen
+        anchors.right: parent.right
+        anchors.rightMargin: 40
+        anchors.verticalCenter: header.verticalCenter
+        width: 190
+        text: ""
+        textFormat: Text.PlainText
+        color: "#c7d0d9"
+        font.pixelSize: 16
+        horizontalAlignment: Text.AlignRight
+        elide: Text.ElideRight
     }
 }

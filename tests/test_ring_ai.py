@@ -430,6 +430,47 @@ def test_wyoming_transcribe_times_out_when_the_server_stops_reading(
         )
 
 
+def test_wyoming_transcribe_does_not_wait_for_a_close_that_never_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    aborted: list[bool] = []
+
+    class _Transport:
+        def abort(self) -> None:
+            aborted.append(True)
+
+    class _StuckWriter(_FakeWyomingWriter):
+        transport = _Transport()
+
+        async def drain(self) -> None:
+            await asyncio.sleep(3600)
+
+        async def wait_closed(self) -> None:
+            await asyncio.sleep(3600)
+
+    async def _open_connection(_host: str, _port: int):
+        return asyncio.StreamReader(), _StuckWriter()
+
+    monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+    monkeypatch.setattr(ring_ai_module, "_WYOMING_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(ring_ai_module, "_WYOMING_CLOSE_TIMEOUT_SECONDS", 0.2)
+
+    with pytest.raises(HomeAssistantError, match="timed out"):
+        asyncio.run(
+            asyncio.wait_for(
+                _async_wyoming_transcribe(
+                    "127.0.0.1",
+                    10300,
+                    {"rate": 16000, "width": 2, "channels": 1, "audio": b"a" * 100},
+                    language=None,
+                ),
+                timeout=5,
+            )
+        )
+
+    assert aborted == [True]
+
+
 def test_wyoming_transcribe_reports_a_dropped_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

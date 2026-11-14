@@ -22,6 +22,7 @@ _DEFAULT_RING_WAV_PATTERN = "*.raw.wav"
 _DEFAULT_RING_CAPTURE_METADATA_PATTERN = "*.capture.json"
 _WYOMING_CHUNK_BYTES = 8192
 _WYOMING_TIMEOUT_SECONDS = 60
+_WYOMING_CLOSE_TIMEOUT_SECONDS = 2
 # A transcript event is a few hundred bytes; anything near these sizes is a
 # broken or hostile server, not a speech result.
 _WYOMING_MAX_DATA_BYTES = 64 * 1024
@@ -356,8 +357,15 @@ async def _async_wyoming_transcribe(
         raise HomeAssistantError("C300X Wyoming Whisper connection lost") from err
     finally:
         writer.close()
-        with contextlib.suppress(OSError):
-            await writer.wait_closed()
+        try:
+            # A server that stopped reading leaves unsent data in the socket,
+            # and closing then waits for it to drain: do not wait for good.
+            async with asyncio.timeout(_WYOMING_CLOSE_TIMEOUT_SECONDS):
+                await writer.wait_closed()
+        except (OSError, TimeoutError):
+            transport = getattr(writer, "transport", None)
+            if transport is not None:
+                transport.abort()
 
 
 async def _async_write_wyoming_event(

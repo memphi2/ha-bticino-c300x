@@ -1434,3 +1434,27 @@ def test_talkback_codec_is_pcmu_rejects_unresolved_codec() -> None:
 
     with pytest.raises(HomeAssistantError, match="talkback codec is unknown"):
         asyncio.run(_async_talkback_codec_is_pcmu(entry, {}))
+
+
+def test_a_symlinked_capture_outside_the_allowed_roots_is_skipped_not_fatal(tmp_path: Path) -> None:
+    """A link in the capture directory must not break the listing or the player.
+
+    The target is refused by the path check. That used to raise out of the
+    media path lookup, which ended the HTTP view in an error and skipped the
+    other directories, and the listing offered the link as a playable item.
+    """
+
+    hass = _FakeHass(tmp_path / "config")
+    local_dir = tmp_path / "config" / "media" / "c300x"
+    local_dir.mkdir(parents=True)
+    good = local_dir / "doorbell_20260719_100000.mp4"
+    good.write_bytes(b"clip")
+    outside = tmp_path / "elsewhere" / "secret.mp4"
+    outside.parent.mkdir()
+    outside.write_bytes(b"not a capture")
+    evil = local_dir / "doorbell_20260719_100001.mp4"
+    evil.symlink_to(outside)
+
+    assert [item["id"] for item in ring_capture_media_items(hass)] == [good.name]
+    assert ring_capture_media_path(hass, evil.name) is None
+    assert ring_capture_media_path(hass, good.name) == good

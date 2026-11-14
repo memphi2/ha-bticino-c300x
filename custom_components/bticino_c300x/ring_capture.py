@@ -437,10 +437,15 @@ def ring_capture_media_items(hass: Any) -> list[dict[str, Any]]:
         safe_dir = _safe_c300x_path(hass, directory, "ring capture media directory")
         if not safe_dir.is_dir():
             continue
-        for path in safe_dir.glob("*.mp4"):
+        for candidate in safe_dir.glob("*.mp4"):
+            # A link that leads out of the allowed roots is not a capture.
+            try:
+                path = _safe_c300x_path(hass, candidate, "ring capture media file")
+            except HomeAssistantError:
+                continue
             if not path.is_file():
                 continue
-            file_name = path.name
+            file_name = candidate.name
             if file_name in items_by_name:
                 continue
             try:
@@ -469,11 +474,15 @@ def ring_capture_media_path(hass: Any, file_name: str) -> Path | None:
     except ValueError:
         return None
     for directory in _capture_media_dirs(hass):
-        path = _safe_c300x_path(
-            hass,
-            directory / safe_name,
-            "ring capture media file",
-        )
+        try:
+            path = _safe_c300x_path(
+                hass,
+                directory / safe_name,
+                "ring capture media file",
+            )
+        except HomeAssistantError:
+            # Refused in this directory (a link out of the roots): try the next.
+            continue
         if path.is_file():
             return path
     return None

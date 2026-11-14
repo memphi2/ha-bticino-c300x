@@ -1458,3 +1458,76 @@ def test_a_symlinked_capture_outside_the_allowed_roots_is_skipped_not_fatal(tmp_
     assert [item["id"] for item in ring_capture_media_items(hass)] == [good.name]
     assert ring_capture_media_path(hass, evil.name) is None
     assert ring_capture_media_path(hass, good.name) == good
+
+
+def _capture_fakes(monkeypatch: pytest.MonkeyPatch, ffmpeg) -> None:
+    async def _ready(_rtsp_url: str) -> None:
+        return None
+
+    async def _talkback(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    for name, value in (
+        ("_async_wait_rtsp_ready", _ready),
+        ("_async_run_ffmpeg", ffmpeg),
+        ("_async_keep_talkback_alive_when_ready", _talkback),
+    ):
+        monkeypatch.setattr(f"custom_components.bticino_c300x.ring_capture.{name}", value)
+
+
+def _capture_workspaces(tmp_path: Path) -> list[Path]:
+    return [
+        child
+        for captures in tmp_path.rglob("captures")
+        for child in captures.iterdir()
+        if child.is_dir()
+    ]
+
+
+def test_a_failed_capture_removes_its_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A failed run used to leave its directory until the one hour expiry.
+
+    With a retrying automation 64 of them fill the limit, and every later
+    capture is then refused until the oldest expires.
+    """
+
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    async def _failing_ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        raise HomeAssistantError("ffmpeg failed")
+
+    _capture_fakes(monkeypatch, _failing_ffmpeg)
+
+    for _ in range(3):
+        with pytest.raises(HomeAssistantError, match="ffmpeg failed"):
+            asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
+
+    assert _capture_workspaces(tmp_path) == []
+
+
+def test_a_finished_capture_keeps_its_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    async def _ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    _capture_fakes(monkeypatch, _ffmpeg)
+
+    metadata = asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
+
+    workspaces = _capture_workspaces(tmp_path)
+    assert [path.name for path in workspaces] == [metadata["capture_id"]]

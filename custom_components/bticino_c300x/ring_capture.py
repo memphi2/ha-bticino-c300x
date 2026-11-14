@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import math
+import shutil
 import threading
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -132,10 +133,18 @@ async def _async_capture_to_output(
     if on_demand:
         # OPTIONS only checks the listener. Media begins with FFmpeg's PLAY;
         # recheck admission after readiness/filesystem awaits, before that PLAY.
-        ensure_on_demand_capture_runtime(entry, runtime)
-        status = await runtime.api.async_doorbell_video_status()
-        ensure_on_demand_capture_runtime(entry, runtime)
-        raise_if_on_demand_capture_blocked(entry, status)
+        try:
+            ensure_on_demand_capture_runtime(entry, runtime)
+            status = await runtime.api.async_doorbell_video_status()
+            ensure_on_demand_capture_runtime(entry, runtime)
+            raise_if_on_demand_capture_blocked(entry, status)
+        except BaseException:
+            await asyncio.to_thread(shutil.rmtree, work_dir, True)
+            raise
+    # The run directory stays only once its results are published; a run that
+    # fails or is cancelled before that would otherwise sit until it expires and
+    # count against the limit of workspaces.
+    published = False
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -184,6 +193,7 @@ async def _async_capture_to_output(
         )
         metadata["entry_id"] = entry.entry_id
         await async_write_json_file(hass, _capture_metadata_path(work_dir), metadata)
+        published = True
         await asyncio.to_thread(publish_capture_aliases, root, work_dir)
     finally:
         talkback_stop.set()
@@ -191,6 +201,8 @@ async def _async_capture_to_output(
             talkback_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await talkback_task
+        if not published:
+            await asyncio.to_thread(shutil.rmtree, work_dir, True)
     return metadata
 
 

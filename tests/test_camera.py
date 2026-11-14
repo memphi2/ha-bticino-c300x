@@ -335,6 +335,20 @@ def test_doorbell_camera_returns_local_still_without_device_warmup() -> None:
     assert entry.runtime_data.api.activate_calls == []
 
 
+def test_doorbell_camera_uses_native_ring_snapshot_when_available() -> None:
+    entry = _FakeEntry()
+
+    async def snapshot() -> tuple[bytes, str]:
+        return b"jpeg", "image/jpeg"
+
+    entry.runtime_data.api.async_doorbell_snapshot = snapshot
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    assert asyncio.run(camera.async_camera_image()) == b"jpeg"
+    assert camera.camera_image() == b"jpeg"
+    assert camera.content_type == "image/jpeg"
+
+
 def test_doorbell_camera_proxy_still_uses_local_fallback() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
@@ -2268,6 +2282,21 @@ def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -
     source = camera._build_stream_url(audio=False)
 
     assert source == "rtsp://127.0.0.1:6554/doorbell-video"
+    assert entry.runtime_data.api.activate_calls == []
+
+
+def test_doorbell_snapshot_keeps_smartphone_forwarding_unchanged() -> None:
+    entry = _FakeEntry()
+    entry.runtime_data.event_state.smartphone_forwarding_mode = "enabled"
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._handle_agent_event(SimpleNamespace(data={
+        "entry_id": entry.entry_id,
+        "event": "doorbell.pressed",
+    }))
+
+    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "enabled"
+    assert camera.extra_state_attributes["ring_snapshot_pending"] is True
     assert entry.runtime_data.api.activate_calls == []
 
 

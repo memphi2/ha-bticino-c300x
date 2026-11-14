@@ -1134,7 +1134,22 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
         video.index("void c300x_video_note_event")
     ]
 
+    snapshot = (ROOT / "native_agent" / "src" / "aswm_snapshot.c").read_text(
+        encoding="utf-8"
+    )
     assert 'strcmp(event_type, "doorbell.pressed") == 0' in event_payload
+    assert 'c300x_aswm_snapshot_start();' in http
+    assert '"/api/v1/video/doorbell/snapshot"' in http
+    assert '"/tmp/aswm.raw"' in snapshot
+    assert '"/tmp/c300x-doorbell-snapshot.jpg"' in snapshot
+    assert 'raw_fingerprint()' in snapshot
+    assert 'while ((bytes_read = fread(buffer, 1, sizeof(buffer), raw_file)) > 0)' in snapshot
+    assert 'time_t event_time' in snapshot
+    assert 'rename(temporary_path, ASWM_SNAPSHOT_PATH)' in snapshot
+    assert 'run_ffmpeg(ASWM_SYSTEM_FFMPEG_PATH, temporary_path)' in snapshot
+    assert 'pthread_mutex_lock(&snapshot_mutex);' in snapshot
+    assert 'unlink(ASWM_SNAPSHOT_PATH);' in snapshot
+    assert 'snapshot_not_ready' in http
     assert 'strcmp(event_type, "doorbell.view_requested") == 0' in event_payload
     assert 'strcmp(event_type, "doorbell.media.closed") == 0' in event_payload
     assert "status.ring_call_active" in event_payload

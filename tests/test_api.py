@@ -2214,6 +2214,24 @@ def test_hangup_doorbell_call_requests_authenticated_endpoint() -> None:
     )
 
 
+def test_doorbell_snapshot_requests_authenticated_binary_endpoint() -> None:
+    session = _FakeSession(
+        response_body=b"jpeg",
+        content_type="image/jpeg",
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_doorbell_snapshot()) == (b"jpeg", "image/jpeg")
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/video/doorbell/snapshot",
+    )
+
+
 def test_capture_doorbell_call_requests_authenticated_endpoint() -> None:
     session = _FakeSession('{"ok": true, "path": "/tmp/capture.jpg"}')
     api = C300XAgentApi(

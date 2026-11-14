@@ -61,6 +61,7 @@ has a help text.
 | --- | --- | --- |
 | Doorbell ring event | Event entity, automations, blueprints, card state. | Receives real C300X ring events from the native agent. |
 | On-demand camera | Camera entity, C300X Doorbell Call Card, `activate_doorbell_video` / `stop_doorbell_video`. | Uses local RTSP through Home Assistant's WebRTC provider/go2rtc and does not require Home Assistant Ring Call forwarding. |
+| Doorbell snapshot | Existing Doorbell camera entity after `doorbell.pressed`. | Uses the local ASWM `/tmp/aswm.raw` buffer and a device-side `ffmpeg`; it does not change Smartphone forwarding, answer the call or use RTSP/MQTT/cloud. Requires ASWM to create `/tmp/aswm.raw` and `ffmpeg` at `/home/bticino/cfg/extra/c300x-controller/ffmpeg` or `/usr/bin/ffmpeg`. |
 | Ring Call preview | C300X Doorbell Call Card. | Multiple browser previews are supported; only the active answered browser should show Answer/Hang Up. |
 | Ring Call answer/hangup | C300X card, mobile blueprints, `answer_doorbell_call`, `hangup_doorbell_call`. | Requires Forwarding set to Home Assistant and media readiness without blocking failures. |
 | Talkback | Browser microphone through the card, or optionally the native HA camera player on HA 2026.11+. | Native HA control is off by default. Enable **Two-way audio in the HA camera player** in the integration options and Two-way audio in HA Labs. Requires WebRTC, HTTPS and microphone permission. Card talkback is unchanged. |

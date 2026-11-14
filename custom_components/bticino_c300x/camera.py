@@ -22,6 +22,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
 from .agent_diagnostics import publish_agent_media_facts
+from .api_errors import C300XAgentApiError, C300XAgentApiUnsupportedError
 from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.background_tasks import CameraBackgroundTasks
 from .camera_media.ha_compat import (
@@ -247,6 +248,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._closing_webrtc_sessions = 0
         self._reconcile_in_flight = False
         self._last_state_snapshot: _CameraStateSnapshot | None = None
+        self._ring_snapshot: bytes | None = None
+        self._ring_snapshot_pending = False
+        self._ring_snapshot_error: str | None = None
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
         self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
@@ -286,6 +290,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             "video_owner": self._video_owner,
             "external_media_active": self._external_media_active,
             "external_owner": self._external_owner,
+            "ring_snapshot_available": self._ring_snapshot is not None,
+            "ring_snapshot_pending": self._ring_snapshot_pending,
+            "ring_snapshot_error": self._ring_snapshot_error,
             "last_video_block_reason": self._last_video_block_reason,
             "talkback_supported": self._talkback_supported(),
             # The configured doorstation gain (from HA's own config-flow option,
@@ -312,24 +319,87 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         width: int | None = None,
         height: int | None = None,
     ) -> bytes:
-        """Return a local still fallback instead of touching the C300X media path."""
+        """Return the cached ring snapshot without touching the media path."""
 
-        return STILL_IMAGE_BYTES
+        if self._ring_snapshot is not None:
+            self.content_type = "image/jpeg"
+            return self._ring_snapshot
+        return self._fallback_still()
 
     async def async_camera_image(
         self,
         width: int | None = None,
         height: int | None = None,
     ) -> bytes:
-        """Return a local still fallback without starting an on-demand video session.
+        """Return the latest local ring snapshot without starting video."""
 
-        The C300X video path is session based. Home Assistant and HA Cloud may
-        ask for a camera proxy still before opening WebRTC; using the base camera
-        implementation raises NotImplementedError, while warming RTSP here would
-        create surprise device load. Live viewing continues through WebRTC.
-        """
+        snapshot_request = getattr(
+            self._runtime_data.api,
+            "async_doorbell_snapshot",
+            None,
+        )
+        if (
+            self._ring_snapshot is None
+            and not self._ring_snapshot_pending
+            and self._last_media_state in RING_CALL_STATES
+        ):
+            self._ring_snapshot_pending = True
+        if self._ring_snapshot is not None and not self._ring_snapshot_pending:
+            self.content_type = "image/jpeg"
+            return self._ring_snapshot
+        capture_was_pending = self._ring_snapshot_pending
+        if self._ring_snapshot_pending and callable(snapshot_request):
+            await self._async_refresh_ring_snapshot()
+        if self._ring_snapshot is not None and not self._ring_snapshot_pending:
+            self.content_type = "image/jpeg"
+            return self._ring_snapshot
+        if not callable(snapshot_request):
+            self._ring_snapshot_pending = False
+            return self._fallback_still()
+        if capture_was_pending:
+            return self._fallback_still()
+        try:
+            image, content_type = await snapshot_request()
+        except C300XAgentApiError:
+            return self._fallback_still()
+        if content_type.split(";", 1)[0] != "image/jpeg" or not image:
+            return self._fallback_still()
+        self._ring_snapshot = image
+        self._ring_snapshot_error = None
+        self.content_type = "image/jpeg"
+        return image
 
+    def _fallback_still(self) -> bytes:
+        self.content_type = STILL_IMAGE_CONTENT_TYPE
         return STILL_IMAGE_BYTES
+
+    async def _async_refresh_ring_snapshot(self) -> None:
+        snapshot_request = getattr(self._runtime_data.api, "async_doorbell_snapshot", None)
+        if not callable(snapshot_request):
+            self._ring_snapshot_pending = False
+            return
+        for _ in range(20):
+            try:
+                image, content_type = await snapshot_request()
+            except C300XAgentApiUnsupportedError:
+                self._ring_snapshot_pending = False
+                self._ring_snapshot_error = "unsupported_agent"
+                return
+            except C300XAgentApiError:
+                self._ring_snapshot_error = "snapshot_not_ready"
+                await asyncio.sleep(0.25)
+                continue
+            if content_type.split(";", 1)[0] == "image/jpeg" and image:
+                self._ring_snapshot = image
+                self._ring_snapshot_pending = False
+                self._ring_snapshot_error = None
+                self.content_type = "image/jpeg"
+                self._async_write_ha_state_if_ready()
+                return
+            await asyncio.sleep(0.25)
+        self._ring_snapshot_pending = False
+        if self._ring_snapshot is None and self._ring_snapshot_error is None:
+            self._ring_snapshot_error = "aswm_or_ffmpeg_unavailable"
 
     async def stream_source(self) -> str:
         """Return the RTSP source HA or its WebRTC provider should consume."""
@@ -1490,6 +1560,10 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         if self._background_tasks.closing or event.data.get("entry_id") != self._entry.entry_id:
             return
         event_type = agent_event_key(event.data)
+        if event_type == "doorbell_pressed":
+            self._ring_snapshot = None
+            self._ring_snapshot_pending = True
+            self._ring_snapshot_error = None
         if event_type in HOME_CALL_EVENTS:
             self._handle_home_call_event(event_type, event.data)
             self._record_media_timeline(

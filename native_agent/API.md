@@ -173,6 +173,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/memos/actions/delete` | API | Deletes selected memos. |
 | `GET` | `/api/v1/video/doorbell` | API | None. |
 | `GET` | `/api/v1/video/doorbell/status` | API | None. |
+| `GET` | `/api/v1/video/doorbell/snapshot` | API | Returns the latest local ASWM JPEG snapshot, when available. |
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |

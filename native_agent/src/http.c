@@ -1,4 +1,5 @@
 #include "activations.h"
+#include "aswm_snapshot.h"
 #include "activation_discovery.h"
 #include "agent_update.h"
 #include "c300x_agent.h"
@@ -5509,6 +5510,7 @@ static int map_openwebnet_event(
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
     }
     if (parse_openwebnet_doorbell_press_event(msg)) {
+        c300x_aswm_snapshot_start();
         size_t used = 0;
         c300x_copy_string(type, type_len, "doorbell.pressed");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
@@ -5979,6 +5981,16 @@ static void api_state(
         );
     }
     send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_doorbell_snapshot_get(int client_fd)
+{
+    const char *snapshot_path = c300x_aswm_snapshot_path();
+    if (access(snapshot_path, R_OK) != 0) {
+        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"snapshot_not_ready\"}\n");
+        return;
+    }
+    send_file_response(client_fd, snapshot_path, "image/jpeg", "no-cache");
 }
 
 static void handle_doorbell_video_get(
@@ -10137,6 +10149,10 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/ringer") == 0) {
         handle_ringer_get(client_fd, config, runtime);
+        return;
+    }
+    if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/video/doorbell/snapshot") == 0) {
+        handle_doorbell_snapshot_get(client_fd);
         return;
     }
     if (

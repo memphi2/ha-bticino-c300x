@@ -100,6 +100,14 @@ class _ApiMediaMixin(_C300XApiCore):
         )
         return _ok_response(data)
 
+    async def async_doorbell_snapshot(self) -> tuple[bytes, str]:
+        """Return the latest local doorbell snapshot, when available."""
+
+        return await self._request_bytes(
+            "GET",
+            "/api/v1/video/doorbell/snapshot",
+        )
+
     async def async_capture_doorbell_call(self) -> dict[str, Any]:
         """Request a native doorbell ring-call capture."""
 

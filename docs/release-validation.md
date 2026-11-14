@@ -47,10 +47,15 @@ for the user-facing opt-in workflow.
 
 ## Isolated Integration Tests
 
-On Ubuntu development hosts, install `libturbojpeg0` before running the HA
-camera tests or typing gate (`sudo apt-get install libturbojpeg0`). The Python
-wrapper alone does not provide the native library. Validate and Release CI
-install it explicitly; it is not bundled with the integration or device agent.
+Install the native TurboJPEG library before running the HA camera tests or
+typing gate. The package name depends on the Ubuntu version:
+
+- Ubuntu 26.04 development hosts: `sudo apt-get install libturbojpeg0`.
+- Ubuntu 24.04 Validate and Release CI runners: `sudo apt-get install libturbojpeg`.
+
+The Python wrapper alone does not provide the native library. Both CI workflows
+install the Ubuntu 24.04 package explicitly; it is not bundled with the
+integration or device agent.
 Verify the development environment with:
 
 ```bash

@@ -3,6 +3,8 @@
 static int checked_mkstemp(char *path);
 static FILE *checked_fdopen(int fd, const char *mode);
 static int checked_fchown(int fd, uid_t uid, gid_t gid);
+static int checked_fsync(int fd);
+#define fsync checked_fsync
 #define mkstemp checked_mkstemp
 #define fdopen checked_fdopen
 #define fchown checked_fchown
@@ -10,11 +12,14 @@ static int checked_fchown(int fd, uid_t uid, gid_t gid);
 #undef mkstemp
 #undef fdopen
 #undef fchown
+#undef fsync
 #include <assert.h>
 #include <dirent.h>
 
 static int created;
 static int fail_owner;
+static int synced;
+extern int fsync(int);
 extern int mkstemp(char *);
 extern FILE *fdopen(int, const char *);
 extern int fchown(int, uid_t, gid_t);
@@ -28,6 +33,12 @@ static int checked_mkstemp(char *path)
     assert((status.st_mode & 0777) == 0600);
     created++;
     return fd;
+}
+
+static int checked_fsync(int fd)
+{
+    synced++;
+    return fsync(fd);
 }
 
 static FILE *checked_fdopen(int fd, const char *mode)
@@ -128,6 +139,7 @@ int main(int argc, char **argv)
     int changed = 0;
     assert(c300x_save_config_if_changed(config, error, sizeof(error), &changed));
     assert(changed && created == 1);
+    assert(synced == 1);
     umask(previous);
     struct stat before, after;
     assert(stat(config->config_path, &before) == 0);

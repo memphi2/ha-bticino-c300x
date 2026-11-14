@@ -2287,6 +2287,12 @@ static int save_config_internal(
         set_error(error, error_len, "unable to write temporary config file");
         return 0;
     }
+    if (fflush(file) != 0 || fsync(fileno(file)) != 0) {
+        (void)fclose(file);
+        (void)unlink(temporary_path);
+        set_error(error, error_len, "unable to flush temporary config file");
+        return 0;
+    }
     if (fclose(file) != 0) {
         (void)unlink(temporary_path);
         set_error(error, error_len, "unable to write temporary config file");

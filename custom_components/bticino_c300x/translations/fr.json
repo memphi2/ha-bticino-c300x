@@ -99,7 +99,7 @@
       },
       "user_dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo, Alarmo et les entités de chaque page.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page. Alarmo se règle ensuite dans le menu des réglages.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
@@ -192,7 +192,7 @@
       },
       "reconfigure_dashboard": {
         "title": "Reconfigurer le dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo, Alarmo et les entités de chaque page.",
+        "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page. Alarmo se règle ensuite dans le menu des réglages.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
@@ -212,7 +212,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. La dernière section, **Page Alarme**, n'est pas une page à part : elle règle Alarmo et l'action rapide de la page Alarme.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -317,25 +317,13 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
-            }
-          },
-          "alarm": {
-            "name": "Page Alarme",
-            "description": "La page Alarme s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Ce n'est pas l'une des pages ci-dessus et elle n'a pas de position.",
-            "data": {
-              "alarm_entity_id": "Centrale d'alarme Alarmo",
-              "alarm_page_entity_id": "Action rapide"
-            },
-            "data_description": {
-              "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
-              "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. La dernière section, **Page Alarme**, n'est pas une page à part : elle règle Alarmo et l'action rapide de la page Alarme.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -440,18 +428,6 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
-            }
-          },
-          "alarm": {
-            "name": "Page Alarme",
-            "description": "La page Alarme s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Ce n'est pas l'une des pages ci-dessus et elle n'a pas de position.",
-            "data": {
-              "alarm_entity_id": "Centrale d'alarme Alarmo",
-              "alarm_page_entity_id": "Action rapide"
-            },
-            "data_description": {
-              "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
-              "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
             }
           }
         }
@@ -498,6 +474,7 @@
           "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
           "dashboard": "Écran et patch display",
           "dashboard_pages": "Pages de l'écran",
+          "dashboard_alarm": "Alarme (Alarmo)",
           "dashboard_entity_display": "Tuiles de l'écran"
         },
         "menu_option_descriptions": {
@@ -505,7 +482,8 @@
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
           "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
-          "dashboard_pages": "Météo, Alarmo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
+          "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo de la page Alarme et son action rapide.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
         }
       },
@@ -583,7 +561,7 @@
       },
       "dashboard": {
         "title": "Écran et patch display",
-        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo, Alarmo et ce qui s'affiche où) et **Tuiles de l'écran**.",
+        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo et ce qui s'affiche où), **Alarme (Alarmo)** et **Tuiles de l'écran**.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
@@ -603,7 +581,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. La dernière section, **Page Alarme**, n'est pas une page à part : elle règle Alarmo et l'action rapide de la page Alarme.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -709,19 +687,19 @@
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
-          },
-          "alarm": {
-            "name": "Page Alarme",
-            "description": "La page Alarme s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Ce n'est pas l'une des pages ci-dessus et elle n'a pas de position.",
-            "data": {
-              "alarm_entity_id": "Centrale d'alarme Alarmo",
-              "alarm_page_entity_id": "Action rapide"
-            },
-            "data_description": {
-              "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo.",
-              "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
-            }
           }
+        }
+      },
+      "dashboard_alarm": {
+        "title": "Alarme (Alarmo)",
+        "description": "La page Alarme de l'écran s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Elle affiche et commande une centrale d'alarme Alarmo et peut proposer une action rapide à côté.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que la page Alarme affiche et commande. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       }
     },

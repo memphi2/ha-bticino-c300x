@@ -99,7 +99,7 @@
       },
       "user_dashboard": {
         "title": "C300X-Display-Dashboard",
-        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter, Alarmo und die Entitäten jeder Seite.",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite. Alarmo stellst du danach im Einstellungsmenü ein.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
@@ -192,7 +192,7 @@
       },
       "reconfigure_dashboard": {
         "title": "C300X-Display-Dashboard neu konfigurieren",
-        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter, Alarmo und die Entitäten jeder Seite.",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite. Alarmo stellst du danach im Einstellungsmenü ein.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
@@ -212,7 +212,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Der letzte Abschnitt, **Alarm-Seite**, ist keine eigene Seite: Er legt Alarmo und die Schnellaktion der Alarm-Seite fest.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
@@ -317,25 +317,13 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
-            }
-          },
-          "alarm": {
-            "name": "Alarm-Seite",
-            "description": "Die Alarm-Seite öffnet sich über den Button Alarm auf der Startseite des C300X. Sie gehört nicht zu den Seiten oben und hat keine Position.",
-            "data": {
-              "alarm_entity_id": "Alarmo-Alarmzentrale",
-              "alarm_page_entity_id": "Schnellaktion"
-            },
-            "data_description": {
-              "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
-              "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Der letzte Abschnitt, **Alarm-Seite**, ist keine eigene Seite: Er legt Alarmo und die Schnellaktion der Alarm-Seite fest.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
@@ -440,18 +428,6 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
-            }
-          },
-          "alarm": {
-            "name": "Alarm-Seite",
-            "description": "Die Alarm-Seite öffnet sich über den Button Alarm auf der Startseite des C300X. Sie gehört nicht zu den Seiten oben und hat keine Position.",
-            "data": {
-              "alarm_entity_id": "Alarmo-Alarmzentrale",
-              "alarm_page_entity_id": "Schnellaktion"
-            },
-            "data_description": {
-              "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
-              "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
             }
           }
         }
@@ -498,6 +474,7 @@
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
           "dashboard": "Display und Display-Patch",
           "dashboard_pages": "Display-Seiten",
+          "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard_entity_display": "Display-Kacheln"
         },
         "menu_option_descriptions": {
@@ -505,7 +482,8 @@
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
-          "dashboard_pages": "Wetter, Alarmo und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
+          "dashboard_pages": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
+          "dashboard_alarm": "Alarmo-Alarmzentrale der Alarm-Seite und ihre Schnellaktion.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel."
         }
       },
@@ -583,7 +561,7 @@
       },
       "dashboard": {
         "title": "Display und Display-Patch",
-        "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Einstellungsmenü zusätzlich **Display-Seiten** (Wetter, Alarmo und was wo angezeigt wird) und **Display-Kacheln**.",
+        "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Einstellungsmenü zusätzlich **Display-Seiten** (Wetter und was wo angezeigt wird), **Alarm (Alarmo)** und **Display-Kacheln**.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
@@ -603,7 +581,7 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Der letzte Abschnitt, **Alarm-Seite**, ist keine eigene Seite: Er legt Alarmo und die Schnellaktion der Alarm-Seite fest.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
@@ -709,19 +687,19 @@
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
-          },
-          "alarm": {
-            "name": "Alarm-Seite",
-            "description": "Die Alarm-Seite öffnet sich über den Button Alarm auf der Startseite des C300X. Sie gehört nicht zu den Seiten oben und hat keine Position.",
-            "data": {
-              "alarm_entity_id": "Alarmo-Alarmzentrale",
-              "alarm_page_entity_id": "Schnellaktion"
-            },
-            "data_description": {
-              "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
-              "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
-            }
           }
+        }
+      },
+      "dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "Die Alarm-Seite des Displays öffnet sich über den Button Alarm auf der Startseite des C300X. Sie zeigt und bedient eine Alarmo-Alarmzentrale und kann daneben eine Schnellaktion anbieten.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
         }
       }
     },

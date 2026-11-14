@@ -2357,24 +2357,28 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         CONF_DASHBOARD_PREVENT_RETURN: True,
     })
     _save_options_area(entry, result)
-    # The patch is on: pages can be set up, and there are no tiles yet.
+    # The patch is on: pages and Alarmo can be set up, and there are no tiles yet.
     assert _options_menu_of(entry) == [
-        "connection", "features", "device_activations", "dashboard", "dashboard_pages",
+        "connection", "features", "device_activations",
+        "dashboard", "dashboard_pages", "dashboard_alarm",
     ]
 
-    # The weather, Alarmo and the quick action are set with the pages.
+    # The weather is set with the status page.
     _flow, result = _options_area(entry, "dashboard_pages", {
         "page_1": {"weather_entity_id": "weather.home"},
         "page_2": {"name": "Doors", "position": 5, "entities": ["switch.entry"]},
-        "alarm": {
-            "alarm_entity_id": "alarm_control_panel.home",
-            "alarm_page_entity_id": "button.stair_light",
-        },
+    })
+    _save_options_area(entry, result)
+
+    # Alarmo and its quick action have an area of their own.
+    _flow, result = _options_area(entry, "dashboard_alarm", {
+        "alarm_entity_id": "alarm_control_panel.home",
+        "alarm_page_entity_id": "button.stair_light",
     })
     _save_options_area(entry, result)
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
-        "dashboard", "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "dashboard_pages", "dashboard_alarm", "dashboard_entity_display",
     ]
 
     flow, entity_options_form = _options_area(entry, "dashboard_entity_display")
@@ -2434,7 +2438,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
 
     # Saving an area again without a change stores the same settings.
     saved = dict(entry.options)
-    for step_id in ("connection", "features", "dashboard"):
+    for step_id in ("connection", "features", "dashboard", "dashboard_alarm"):
         flow, form = _options_area(entry, step_id)
         # The form posts a prefilled field as it is shown.
         shown = {
@@ -2759,7 +2763,7 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
     menu = _options_menu_of(entry)
     assert menu == [
         "connection", "features", "device_activations",
-        "dashboard", "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "dashboard_pages", "dashboard_alarm", "dashboard_entity_display",
     ]
     for step_id in menu:
         _flow, form = _options_area(entry, step_id)
@@ -2769,7 +2773,8 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
     # Tiles need something to show: without an entity the menu leaves them out.
     entry.data[CONF_DASHBOARD_ENTITIES] = []
     assert _options_menu_of(entry) == [
-        "connection", "features", "device_activations", "dashboard", "dashboard_pages",
+        "connection", "features", "device_activations",
+        "dashboard", "dashboard_pages", "dashboard_alarm",
     ]
 
 

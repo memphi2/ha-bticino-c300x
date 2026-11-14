@@ -99,7 +99,7 @@
       },
       "user_dashboard": {
         "title": "C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather, Alarmo and the entities on each page.",
+        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page. Alarmo is set in the settings menu afterwards.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
@@ -192,7 +192,7 @@
       },
       "reconfigure_dashboard": {
         "title": "Reconfigure C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather, Alarmo and the entities on each page.",
+        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page. Alarmo is set in the settings menu afterwards.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
@@ -212,7 +212,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. The last section, **Alarm page**, is no page of its own: it sets Alarmo and the quick action of the Alarm page.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
@@ -317,25 +317,13 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
-            }
-          },
-          "alarm": {
-            "name": "Alarm page",
-            "description": "The Alarm page opens from the Alarm button on the home page of the C300X. It is not one of the pages above and has no position.",
-            "data": {
-              "alarm_entity_id": "Alarmo alarm panel",
-              "alarm_page_entity_id": "Quick action"
-            },
-            "data_description": {
-              "alarm_entity_id": "Alarm panel the Alarm page shows and operates. Leave empty if you do not use Alarmo.",
-              "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. The last section, **Alarm page**, is no page of its own: it sets Alarmo and the quick action of the Alarm page.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
@@ -440,18 +428,6 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
-            }
-          },
-          "alarm": {
-            "name": "Alarm page",
-            "description": "The Alarm page opens from the Alarm button on the home page of the C300X. It is not one of the pages above and has no position.",
-            "data": {
-              "alarm_entity_id": "Alarmo alarm panel",
-              "alarm_page_entity_id": "Quick action"
-            },
-            "data_description": {
-              "alarm_entity_id": "Alarm panel the Alarm page shows and operates. Leave empty if you do not use Alarmo.",
-              "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
             }
           }
         }
@@ -498,6 +474,7 @@
           "device_activations": "Activations: locks, lights, stair light",
           "dashboard": "Display and Display patch",
           "dashboard_pages": "Display pages",
+          "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard_entity_display": "Display tiles"
         },
         "menu_option_descriptions": {
@@ -505,7 +482,8 @@
           "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
           "dashboard": "Home Assistant pages on the display on or off, home page buttons, behaviour after an action and allowed actions.",
-          "dashboard_pages": "Weather, Alarmo, and which entities appear on which page and in which order.",
+          "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
+          "dashboard_alarm": "Alarmo alarm panel of the Alarm page and its quick action.",
           "dashboard_entity_display": "Size, name and secondary line of each tile."
         }
       },
@@ -583,7 +561,7 @@
       },
       "dashboard": {
         "title": "Display and Display patch",
-        "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the settings menu also offers **Display pages** (weather, Alarmo and what is shown where) and **Display tiles**.",
+        "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the settings menu also offers **Display pages** (weather and what is shown where), **Alarm (Alarmo)** and **Display tiles**.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
@@ -603,7 +581,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. The last section, **Alarm page**, is no page of its own: it sets Alarmo and the quick action of the Alarm page.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
@@ -709,19 +687,19 @@
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
             }
-          },
-          "alarm": {
-            "name": "Alarm page",
-            "description": "The Alarm page opens from the Alarm button on the home page of the C300X. It is not one of the pages above and has no position.",
-            "data": {
-              "alarm_entity_id": "Alarmo alarm panel",
-              "alarm_page_entity_id": "Quick action"
-            },
-            "data_description": {
-              "alarm_entity_id": "Alarm panel the Alarm page shows and operates. Leave empty if you do not use Alarmo.",
-              "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
-            }
           }
+        }
+      },
+      "dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "The Alarm page of the display opens from the Alarm button on the home page of the C300X. It shows and operates an Alarmo alarm panel, and can offer one quick action beside it.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel the Alarm page shows and operates. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
         }
       }
     },

@@ -294,7 +294,7 @@ def test_options_menu_names_and_explains_every_area() -> None:
     """Each area of the options menu has a label and a line saying what it holds."""
 
     areas = {
-        "dashboard_pages", "dashboard_entity_display", "dashboard",
+        "dashboard_pages", "dashboard_alarm", "dashboard_entity_display", "dashboard",
         "features", "device_activations", "connection",
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):

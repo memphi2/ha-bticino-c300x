@@ -12,7 +12,7 @@
 
 - **Configure** opens a menu of settings areas in the order of the setup:
   connection, video and audio, activations, display and Display patch,
-  display pages, display tiles. Each area saves on its own; the others keep
+  display pages, Alarm (Alarmo), display tiles. Each area saves on its own; the others keep
   their settings. Pages and tiles are offered while the Display patch is on.
 - Settings fields use plain names in place of technical ones: access key and
   maintenance key, address of Home Assistant for the C300X, video and audio
@@ -25,11 +25,13 @@
 - Every settings field has a plain label and a help text; the choices of the
   tiles, the activations and the ICE filter are translated. German texts use
   real umlauts, French and Italian texts their accents.
-- The weather, Alarmo and the quick action of the Alarm page are set with the
-  display pages: **Weather** in the first section, an **Alarm page** section
-  last. The display and Display patch form keeps the patch, the home page
-  buttons, the behaviour after an action and the allowed actions. Saved values
-  carry over.
+- The weather is set with the display pages, as the first field of the first
+  section, above its entities. Alarmo and the quick action of the Alarm page
+  have an area of their own in the settings menu, **Alarm (Alarmo)**, between
+  the pages and the tiles. The display and Display patch form keeps the patch,
+  the home page buttons, the behaviour after an action and the allowed
+  actions. Saved values carry over. New entries set Alarmo there after the
+  setup.
 - The status page, the first page, is left out when it has no weather and no
   tile, and its HA, alarm and time badges with it. Its section explains this.
 - A media player's submenu shows previous, play/pause and next side by side

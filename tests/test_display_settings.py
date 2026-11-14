@@ -423,60 +423,124 @@ def test_emptying_the_actions_stores_them_empty(monkeypatch, flow_kind):
 
 
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
-@pytest.mark.parametrize("section,field,saved", [
-    ("alarm", "alarm_entity_id", {"alarm_entity_id": "alarm_control_panel.home"}),
-    ("alarm", "alarm_page_entity_id", {"alarm_page_entity_id": "switch.porch"}),
-    ("page_1", "weather_entity_id", {"weather_entity_id": "weather.home"}),
-])
-def test_alarmo_and_weather_are_set_with_the_pages(
-    monkeypatch, flow_kind, section, field, saved
-):
-    """The weather and Alarmo come with the pages, prefilled from what is saved.
+def test_the_weather_is_set_with_the_status_page(monkeypatch, flow_kind):
+    """The weather comes with page 1, prefilled from what is saved.
 
     Home Assistant's form leaves an emptied picker out of what it sends, which
     stores the setting empty in place of bringing the saved value back.
     """
 
     entry = SimpleNamespace(
-        data={"device_ui_enabled": True, **saved}, options={}, runtime_data=None
+        data={"device_ui_enabled": True, "weather_entity_id": "weather.home"},
+        options={},
+        runtime_data=None,
     )
     dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
 
     form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
     assert form["step_id"].endswith("dashboard_pages")
-    # The display and patch form has none of them.
-    assert post_pages_like_home_assistant(form["data_schema"])[section][field] == saved[field]
+    # The display and patch form has none of it, and the weather is the first
+    # field of the status page, above its entities.
+    assert [str(key) for key in form["data_schema"].schema["page_1"].schema.schema] == [
+        "weather_entity_id", "position", "entities",
+    ]
+    assert "page_9" not in {str(key) for key in form["data_schema"].schema}
+    assert post_pages_like_home_assistant(form["data_schema"])["page_1"]["weather_entity_id"] == "weather.home"
 
     # Kept, as shown.
     result = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
-    if result["type"] == "form":
-        result = asyncio.run(display_step(post_tiles_like_home_assistant(result["data_schema"])))
     assert result["type"] == "finished", result.get("errors")
-    assert result["data"][field] == saved[field]
+    assert result["data"]["weather_entity_id"] == "weather.home"
 
     # Emptied.
     result = asyncio.run(pages_step(post_pages_like_home_assistant(
-        form["data_schema"], {section: {field: None}},
+        form["data_schema"], {"page_1": {"weather_entity_id": None}},
     )))
-    if result["type"] == "form":
-        result = asyncio.run(display_step(post_tiles_like_home_assistant(result["data_schema"])))
     assert result["type"] == "finished", result.get("errors")
-    assert result["data"][field] == ""
+    assert result["data"]["weather_entity_id"] == ""
+
+
+@pytest.mark.parametrize("saved,changes,stored", [
+    ({}, {"alarm_entity_id": "alarm_control_panel.home"}, {"alarm_entity_id": "alarm_control_panel.home"}),
+    (
+        {"alarm_entity_id": "alarm_control_panel.home", "alarm_page_entity_id": "switch.porch"},
+        {},
+        {"alarm_entity_id": "alarm_control_panel.home", "alarm_page_entity_id": "switch.porch"},
+    ),
+    # An emptied picker is left out of the post and stores the setting empty.
+    (
+        {"alarm_entity_id": "alarm_control_panel.home", "alarm_page_entity_id": "switch.porch"},
+        {"alarm_entity_id": None},
+        {"alarm_entity_id": "", "alarm_page_entity_id": "switch.porch"},
+    ),
+    (
+        {"alarm_entity_id": "alarm_control_panel.home", "alarm_page_entity_id": "switch.porch"},
+        {"alarm_page_entity_id": None},
+        {"alarm_entity_id": "alarm_control_panel.home", "alarm_page_entity_id": ""},
+    ),
+])
+def test_the_alarm_area_sets_alarmo_and_its_quick_action(monkeypatch, saved, changes, stored):
+    """Alarmo has an area of its own in the options menu, prefilled and saved alone."""
+
+    entry = SimpleNamespace(
+        data={
+            "device_ui_enabled": True,
+            "dashboard_entities": ["light.room"],
+            "dashboard_entity_display_overrides": {
+                "light.room": {"page": "Room"},
+                "switch.porch": {"name": "custom", "custom_name": "Porch"},
+                "switch.old": {"secondary": "none"},
+            },
+            **saved,
+        },
+        options={},
+        runtime_data=None,
+    )
+    flow = _OptionsAreas(entry)._flow()
+    form = asyncio.run(flow.async_step_dashboard_alarm())
+    assert form["step_id"] == "dashboard_alarm"
+    assert [str(key) for key in form["data_schema"].schema] == ["alarm_entity_id", "alarm_page_entity_id"]
+
+    result = asyncio.run(flow.async_step_dashboard_alarm(
+        post_like_home_assistant(form["data_schema"], changes)
+    ))
+
+    assert result["type"] == "finished", result.get("errors")
+    for key, value in stored.items():
+        assert result["data"][key] == value
+    # What the area does not show stays; the display settings of an entity
+    # that is no longer shown go.
+    assert result["data"]["dashboard_entities"] == ["light.room"]
+    overrides = result["data"]["dashboard_entity_display_overrides"]
+    assert overrides["light.room"] == {"page": "Room"}
+    assert "switch.old" not in overrides
+    assert ("switch.porch" in overrides) == (stored.get("alarm_page_entity_id") == "switch.porch")
+
+
+@pytest.mark.parametrize("changes,errors", [
+    ({"alarm_entity_id": "light.hall"}, {"alarm_entity_id": "invalid_alarm_entity"}),
+    ({"alarm_page_entity_id": "camera.door"}, {"alarm_page_entity_id": "invalid_alarm_page_entity"}),
+])
+def test_the_alarm_area_rejects_a_wrong_entity(monkeypatch, changes, errors):
+    entry = SimpleNamespace(data={"device_ui_enabled": True}, options={}, runtime_data=None)
+    flow = _OptionsAreas(entry)._flow()
+    form = asyncio.run(flow.async_step_dashboard_alarm())
+
+    # The form is checked by Home Assistant before the step; call the step
+    # with what it would pass on.
+    result = asyncio.run(flow.async_step_dashboard_alarm(changes))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "dashboard_alarm"
+    assert result["errors"] == errors
+    assert form["step_id"] == "dashboard_alarm"
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
 @pytest.mark.parametrize("changes,errors", [
     ({"page_1": {"weather_entity_id": "sensor.temp"}}, {"page_1": "invalid_weather_entity"}),
-    (
-        {"alarm": {"alarm_entity_id": "light.hall"}},
-        {"alarm": "invalid_alarm_entity"},
-    ),
-    (
-        {"alarm": {"alarm_page_entity_id": "camera.door"}},
-        {"alarm": "invalid_alarm_page_entity"},
-    ),
 ])
-def test_the_pages_form_rejects_a_wrong_weather_or_alarm_entity(
+def test_the_pages_form_rejects_a_wrong_weather_entity(
     monkeypatch, flow_kind, changes, errors
 ):
     entry = SimpleNamespace(data={"device_ui_enabled": True}, options={}, runtime_data=None)
@@ -1045,24 +1109,15 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
 
     assert [(field["name"], field["type"]) for field in fields] == [
         *((f"page_{slot}", "expandable") for slot in range(1, 9)),
-        ("alarm", "expandable"),
     ]
-    # Used pages are open, and so is the first free one to add a page. The
-    # Alarmo section is open once something is set in it.
-    assert [field["expanded"] for field in fields] == [True, True, True] + [False] * 6
+    # Used pages are open, and so is the first free one to add a page.
+    assert [field["expanded"] for field in fields] == [True, True, True] + [False] * 5
     assert [item["name"] for item in fields[0]["schema"]] == [
         "weather_entity_id", "position", "entities",
     ]
     assert [item["name"] for item in fields[1]["schema"]] == ["name", "position", "entities"]
     assert fields[1]["schema"][0]["description"] == {"suggested_value": "Room"}
-    assert [item["name"] for item in fields[8]["schema"]] == [
-        "alarm_entity_id", "alarm_page_entity_id",
-    ]
-    configured = convert(
-        dashboard_pages_schema({"alarm_page_entity_id": "button.porch"}),
-        custom_serializer=cv.custom_serializer,
-    )
-    assert configured[8]["expanded"] is True
+
 
 
 @pytest.mark.parametrize(

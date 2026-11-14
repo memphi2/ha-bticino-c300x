@@ -44,6 +44,8 @@ from .config_flow_activations import (
 from .config_flow_activations import (
     activation_settings_step as _activation_settings_step,
 )
+from .config_flow_alarm import alarm_input as _alarm_input
+from .config_flow_alarm import alarm_schema as _alarm_schema
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -1536,6 +1538,27 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             user_input,
             feature_defaults,
             errors,
+        )
+
+    async def async_step_dashboard_alarm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage Alarmo and the quick action of the display's Alarm page."""
+
+        feature_defaults = self._load_saved()
+        errors: dict[str, str] = {}
+        schema = _alarm_schema(self._dashboard_options)
+        if user_input is not None:
+            dashboard_input, errors = _alarm_input(self._dashboard_options, user_input)
+            if not errors:
+                self._dashboard_options = dashboard_input
+                return await self._async_save_options(feature_defaults)
+            schema = self.add_suggested_values_to_schema(schema, user_input)
+        return self.async_show_form(
+            step_id="dashboard_alarm",
+            data_schema=schema,
+            errors=errors,
         )
 
     async def async_step_dashboard_pages(

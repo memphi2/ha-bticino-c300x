@@ -445,15 +445,15 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     """Return the settings areas the options menu offers.
 
     They follow the setup: connection, video and audio, activations, the
-    display and its patch, then its pages and tiles. Pages need the Display
-    patch, which the display area switches on. The tiles need something to
-    show as well: an entity on a page or the Alarmo quick entity.
+    display and its patch, then its pages, Alarmo and tiles. Pages and Alarmo
+    need the Display patch, which the display area switches on. The tiles need
+    something to show as well: an entity on a page or the Alarmo quick entity.
     """
 
     saved = current_feature_options(config_entry)
     menu = ["connection", "features", "device_activations", "dashboard"]
     if saved[CONF_DEVICE_UI_ENABLED]:
-        menu.append("dashboard_pages")
+        menu += ["dashboard_pages", "dashboard_alarm"]
         if dashboard_entity_display_has_fields(dashboard_input_defaults({}, saved)):
             menu.append("dashboard_entity_display")
     return menu

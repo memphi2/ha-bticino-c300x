@@ -48,7 +48,8 @@ has a help text.
 | Media features | Doorstation media, Home Assistant media user, live audio gain, Ring Capture gain. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
 | Device activations | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
 | Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. |
-| Display pages and tiles | Weather, Alarmo and quick action, entities per page, size, name and secondary line of each tile. | Yes, only when the Display patch is applied/restored. |
+| Display pages and tiles | Weather, entities per page, size, name and secondary line of each tile. |
+| Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | Yes, only when the Display patch is applied/restored. | Yes, only when the Display patch is applied/restored. |
 | Maintenance controls | SSH, noAuth, mDNS discovery, firewall patches, GUI reload, reboot, agent update/remove. | Yes, only when the corresponding entity, button or Repair is used. |
 
 ## Main User Features
@@ -88,8 +89,8 @@ Tap a mode to execute directly when no PIN is required; otherwise the keypad
 appears. Entry delay opens the disarm keypad when required. A pending command
 blocks repeated taps; unavailable data is not displayed as a ready alarm.
 
-Under **Display pages**, the last section **Alarm page** sets the Alarmo alarm
-panel and the **Quick action**, the optional quick action or status entity. Leave it empty to hide this area. To retain a stair-light
+Under **Configure > Alarm (Alarmo)**, the Alarmo alarm panel and the **Quick
+action**, the optional quick action or status entity, are set. Leave it empty to hide this area. To retain a stair-light
 shortcut, select the integration's stair-light button explicitly. No stair-light
 action is inserted automatically. Buttons, switches, scenes and scripts can be
 operated directly; other supported selections remain read-only on this page.
@@ -234,16 +235,16 @@ detail views.
 ## Display Settings
 
 Switch the Display patch on under **Configure > Display and Display patch**;
-the settings menu then offers **Display pages** and **Display tiles**. Choose
-the weather, Alarmo and the entities with the normal HA selectors;
+the settings menu then offers **Display pages**, **Alarm (Alarmo)** and
+**Display tiles**. Choose the weather, Alarmo and the entities with the normal
+HA selectors;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
 The pages dialog has up to 8 pages, one section each. A section's title shows
-the page's name, for example **Page 2: Living room**. A last section,
-**Alarm page**, is none of them: it sets the Alarmo alarm panel and the quick
-action of the Alarm page, which opens from the home page button and has no
-position.
+the page's name, for example **Page 2: Living room**. Alarmo is not one of
+the pages: its Alarm page opens from the home page button and has an area of
+its own in the settings menu.
 
 | Field | Meaning |
 | --- | --- |
@@ -282,8 +283,8 @@ entity id added. With more than two tiles the sections start collapsed.
 Missing or unavailable entities retain their configuration and show unavailable
 rather than changing the saved layout.
 
-The optional quick action of the Alarm page gets a section of its own at the end,
-titled **Alarm page › name**, with name and secondary line, even if it is not
+The optional quick action of the Alarm page, set under **Alarm (Alarmo)**, gets a
+section of its own at the end, titled **Alarm page › name**, with name and secondary line, even if it is not
 selected for an overview page; saving the pages keeps these settings. Selecting
 it does not add it to the overview. Leave the quick action empty to hide it; no
 stair-light default is inserted. Connection/maintenance settings remain separate. Calendar and notification

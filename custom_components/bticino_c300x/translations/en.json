@@ -87,8 +87,8 @@
         }
       },
       "user_dashboard_entity_display": {
-        "title": "Dashboard entity display",
-        "description": "Set tile width and height, name and secondary line for the entities on the display pages. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+        "title": "Display tiles",
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "reconfigure": {
         "title": "Reconfigure BTicino C300X",
@@ -155,8 +155,8 @@
         }
       },
       "reconfigure_dashboard_entity_display": {
-        "title": "Dashboard entity display",
-        "description": "Set tile width and height, name and secondary line for the entities on the display pages. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+        "title": "Display tiles",
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "user_dashboard_pages": {
         "title": "Display pages",
@@ -493,8 +493,8 @@
         }
       },
       "dashboard_entity_display": {
-        "title": "Dashboard entity display",
-        "description": "Set tile width and height, name and secondary line for the entities on the display pages. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+        "title": "Display tiles",
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "dashboard_pages": {
         "title": "Display pages",
@@ -1080,6 +1080,39 @@
       "options": {
         "ring": "Ring call",
         "on_demand": "Live recording without ringing"
+      }
+    },
+    "tile_field": {
+      "options": {
+        "width": "Width",
+        "height": "Height",
+        "name": "Name",
+        "secondary": "Secondary line",
+        "status_page": "Status page",
+        "alarm_action": "Alarmo quick action"
+      }
+    },
+    "tile_size": {
+      "options": {
+        "auto": "Automatic",
+        "half": "Half",
+        "full": "Full"
+      }
+    },
+    "tile_name": {
+      "options": {
+        "friendly_name": "Name from Home Assistant",
+        "entity_id": "Entity ID",
+        "custom": "Own text"
+      }
+    },
+    "tile_secondary": {
+      "options": {
+        "state": "State",
+        "entity_id": "Entity ID",
+        "last_changed": "Last changed",
+        "last_updated": "Last updated",
+        "none": "Nothing"
       }
     }
   },

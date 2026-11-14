@@ -135,6 +135,27 @@ def _dashboard_entity_layout_field(index: int, entity_id: str, name: str) -> str
     return f"{_dashboard_entity_field_label(index, entity_id)} - {name}"
 
 
+def dashboard_entity_display_field_names(entity_ids: Any) -> dict[str, dict[str, str]]:
+    """Return the per-entity fields the display settings are read from.
+
+    The tiles form shows one section per entity and posts these fields; see
+    ``config_flow_tiles``.
+    """
+
+    return {
+        entity_id: {
+            "name": _dashboard_entity_name_field(index, entity_id),
+            "custom_name": _dashboard_entity_custom_name_field(index, entity_id),
+            "secondary": _dashboard_entity_secondary_field(index, entity_id),
+            **{
+                size_key: _dashboard_entity_layout_field(index, entity_id, size_label)
+                for size_key, size_label in _DASHBOARD_ENTITY_SIZE_FIELDS
+            },
+        }
+        for index, entity_id in enumerate(dashboard_entity_ids(entity_ids), start=1)
+    }
+
+
 def dashboard_display_entity_ids(data: dict[str, Any]) -> list[str]:
     """Include the optional Alarmo shortcut without adding it to the overview."""
     entities = dashboard_entity_ids(data.get(CONF_DASHBOARD_ENTITIES, []))
@@ -156,26 +177,6 @@ def _dashboard_entity_secondary_info(value: Any) -> str:
     if info not in DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS:
         return DASHBOARD_ENTITY_SECONDARY_INFO_STATE
     return info
-
-
-def dashboard_entity_display_form_complete(
-    user_input: dict[str, Any] | None,
-    entity_ids: Any,
-) -> bool:
-    """Return whether the per-entity display controls were rendered and posted.
-
-    The custom name is a text field that Home Assistant leaves out when it is
-    empty, so only the two selects show that the controls were posted.
-    """
-
-    if user_input is None:
-        return True
-    entities = dashboard_entity_ids(entity_ids)
-    return all(
-        _dashboard_entity_name_field(index, entity_id) in user_input
-        and _dashboard_entity_secondary_field(index, entity_id) in user_input
-        for index, entity_id in enumerate(entities, start=1)
-    )
 
 
 def dashboard_entity_display_overrides_from_fields(
@@ -299,7 +300,11 @@ def dashboard_entity_display_schema(
     default_dashboard_entity_display_overrides: Any = None,
     *, layout_entity_ids: Any = None,
 ) -> vol.Schema:
-    """Return the per-entity display options schema."""
+    """Return the per-entity fields the display settings are read from.
+
+    The form that is shown groups them into a section per tile, see
+    ``config_flow_tiles``; a post of it is turned back into these fields.
+    """
 
     dashboard_entities = dashboard_entity_ids(default_dashboard_entities or [])
     dashboard_overrides = normalize_dashboard_entity_display_overrides(

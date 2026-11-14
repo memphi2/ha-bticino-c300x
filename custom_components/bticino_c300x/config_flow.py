@@ -51,15 +51,6 @@ from .config_flow_dashboard import (
     DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
 )
 from .config_flow_dashboard import (
-    dashboard_display_entity_ids as _dashboard_display_entity_ids,
-)
-from .config_flow_dashboard import (
-    dashboard_entity_display_form as _dashboard_entity_display_form,
-)
-from .config_flow_dashboard import (
-    dashboard_entity_display_form_complete as _dashboard_entity_display_form_complete,
-)
-from .config_flow_dashboard import (
     dashboard_entity_display_has_fields as _dashboard_entity_display_has_fields,
 )
 from .config_flow_dashboard import (
@@ -124,6 +115,9 @@ from .config_flow_input import (
     _setup_connection_schema,
     _weather_entity_id,
 )
+from .config_flow_tiles import TileForm as _TileForm
+from .config_flow_tiles import async_tile_labels as _async_tile_labels
+from .config_flow_tiles import tile_form as _tile_form
 from .config_schemas import (
     reconfigure_connection_schema as _reconfigure_connection_schema,
 )
@@ -260,6 +254,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._setup_device_activations: list[dict[str, Any]] = []
         self._setup_activation_edit_id: str | None = None
         self._setup_dashboard_input: dict[str, Any] = {}
+        self._tile_form: _TileForm | None = None
         self._reconfigure_connection: dict[str, Any] = {}
         self._reconfigure_feature_data: dict[str, Any] = {}
         self._reconfigure_device_activations: list[dict[str, Any]] = []
@@ -750,7 +745,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self._async_show_user_dashboard_pages_form(user_input, errors)
             self._setup_dashboard_input = dashboard_input
             if _dashboard_entity_display_has_fields(self._setup_dashboard_input):
-                return self._async_show_user_dashboard_entity_display_form(None, errors)
+                return await self._async_show_user_dashboard_entity_display_form(None, errors)
             return await self._async_create_setup_entry_from_dashboard(errors)
         return self._async_show_user_dashboard_pages_form(None, errors)
 
@@ -783,14 +778,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_user_dashboard()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not _dashboard_entity_display_form_complete(
-                user_input,
-                _dashboard_display_entity_ids(self._setup_dashboard_input),
-            ):
-                return self._async_show_user_dashboard_entity_display_form(
-                    user_input,
-                    errors,
-                )
+            user_input = await _async_tile_entity_fields(
+                self, self._setup_dashboard_input, user_input
+            )
             self._setup_dashboard_input[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
                 _dashboard_input_defaults(
                     _dashboard_entity_display_input(
@@ -800,7 +790,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES]
             )
             return await self._async_create_setup_entry_from_dashboard(errors)
-        return self._async_show_user_dashboard_entity_display_form(user_input, errors)
+        return await self._async_show_user_dashboard_entity_display_form(user_input, errors)
 
     async def _async_create_setup_entry_from_dashboard(
         self,
@@ -865,7 +855,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    def _async_show_user_dashboard_entity_display_form(
+    async def _async_show_user_dashboard_entity_display_form(
         self,
         user_input: dict[str, Any] | None,
         errors: dict[str, str],
@@ -874,13 +864,16 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user_dashboard_entity_display",
-            data_schema=_dashboard_entity_display_form(
-                self._setup_dashboard_input,
-                (user_input or self._setup_dashboard_input).get(
-                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-                    {},
-                ),
-            ),
+            data_schema=(
+                await _async_tile_form(
+                    self,
+                    self._setup_dashboard_input,
+                    (user_input or self._setup_dashboard_input).get(
+                        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                        {},
+                    ),
+                )
+            ).schema,
             errors=errors,
         )
 
@@ -1195,15 +1188,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_reconfigure_dashboard()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not _dashboard_entity_display_form_complete(
-                user_input,
-                _dashboard_display_entity_ids(self._reconfigure_dashboard_input),
-            ):
-                return await self._async_show_reconfigure_dashboard_entity_display_form(
-                    user_input,
-                    feature_defaults,
-                    errors,
-                )
+            user_input = await _async_tile_entity_fields(
+                self, self._reconfigure_dashboard_input, user_input
+            )
             self._reconfigure_dashboard_input[
                 CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES
             ] = _dashboard_input_defaults(
@@ -1321,13 +1308,16 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         return self.async_show_form(
             step_id="reconfigure_dashboard_entity_display",
-            data_schema=_dashboard_entity_display_form(
-                self._reconfigure_dashboard_input,
-                (user_input or self._reconfigure_dashboard_input).get(
-                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
-                ),
-            ),
+            data_schema=(
+                await _async_tile_form(
+                    self,
+                    self._reconfigure_dashboard_input,
+                    (user_input or self._reconfigure_dashboard_input).get(
+                        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                        feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
+                    ),
+                )
+            ).schema,
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
                 entry
@@ -1363,6 +1353,43 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return BticinoC300XOptionsFlow(config_entry)
 
 
+async def _async_tile_form(
+    flow: Any,
+    dashboard_input: dict[str, Any],
+    overrides: Any,
+) -> _TileForm:
+    """Build the tiles form and keep it on the flow for reading the post."""
+
+    hass = getattr(flow, "hass", None)
+    form = _tile_form(
+        dashboard_input,
+        overrides,
+        labels=await _async_tile_labels(hass),
+        hass=hass,
+    )
+    flow._tile_form = form
+    return form
+
+
+async def _async_tile_entity_fields(
+    flow: Any,
+    dashboard_input: dict[str, Any],
+    user_input: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a posted tiles form as the per-entity display fields.
+
+    The post is read with the form that was shown, so a name that changed in
+    between does not move a tile's settings to another entity.
+    """
+
+    form: _TileForm = getattr(flow, "_tile_form", None) or await _async_tile_form(
+        flow,
+        dashboard_input,
+        dashboard_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {}),
+    )
+    return form.entity_fields(user_input)
+
+
 def _options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     """Return the settings areas the options menu offers, most used first.
 
@@ -1395,6 +1422,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self._device_activations: list[dict[str, Any]] = []
         self._activation_edit_id: str | None = None
         self._dashboard_options: dict[str, Any] = {}
+        self._tile_form: _TileForm | None = None
 
     async def async_step_init(
         self,
@@ -1645,15 +1673,9 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not _dashboard_entity_display_form_complete(
-                user_input,
-                _dashboard_display_entity_ids(self._dashboard_options),
-            ):
-                return await self._async_show_options_dashboard_entity_display_form(
-                    user_input,
-                    feature_defaults,
-                    errors,
-                )
+            user_input = await _async_tile_entity_fields(
+                self, self._dashboard_options, user_input
+            )
             self._dashboard_options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
                 _dashboard_input_defaults(
                     _dashboard_entity_display_input(
@@ -1775,13 +1797,16 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="dashboard_entity_display",
-            data_schema=_dashboard_entity_display_form(
-                self._dashboard_options,
-                (user_input or self._dashboard_options).get(
-                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
-                ),
-            ),
+            data_schema=(
+                await _async_tile_form(
+                    self,
+                    self._dashboard_options,
+                    (user_input or self._dashboard_options).get(
+                        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                        feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
+                    ),
+                )
+            ).schema,
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
                 self._config_entry

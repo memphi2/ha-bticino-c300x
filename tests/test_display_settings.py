@@ -12,7 +12,6 @@ from custom_components.bticino_c300x.config_flow import (
 from custom_components.bticino_c300x.config_flow_dashboard import (
     dashboard_display_entity_ids,
     dashboard_entity_display_form,
-    dashboard_entity_display_form_complete,
     dashboard_entity_display_input,
     dashboard_entity_display_overrides_from_fields,
     dashboard_entity_display_schema,
@@ -22,6 +21,11 @@ from custom_components.bticino_c300x.config_flow_dashboard_pages import (
     dashboard_page_layout,
     dashboard_pages_input,
     dashboard_pages_placeholders,
+)
+from custom_components.bticino_c300x.config_flow_tiles import (
+    TILE_LABELS,
+    async_tile_labels,
+    tile_form,
 )
 from custom_components.bticino_c300x.dashboard import (
     async_dashboard_payload,
@@ -73,6 +77,23 @@ def post_pages_like_home_assistant(schema, changes=None):
     return schema(data)
 
 
+def post_tiles_like_home_assistant(schema, changes=None):
+    """Post the tiles form the way Home Assistant's frontend does.
+
+    Each tile is a section that is posted with what it shows. ``changes``
+    maps a field label to a new value and applies to every tile.
+    """
+
+    data = {}
+    for key, tile_section in schema.schema.items():
+        values = {str(field): field.default() for field in tile_section.schema.schema}
+        values.update(changes or {})
+        data[str(key)] = {
+            name: value for name, value in values.items() if value not in (None, "")
+        }
+    return schema(data)
+
+
 def test_entity_display_dialog_keeps_the_page_and_position_of_each_entity():
     old = {
         "light.room": {
@@ -114,7 +135,6 @@ def test_emptied_text_fields_are_stored_empty():
     emptied = {"1. Room - Custom name": ""}
     posted = post_like_home_assistant(schema, emptied)
     assert not set(emptied) & set(posted)
-    assert dashboard_entity_display_form_complete(posted, ["light.room"])
 
     result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
 
@@ -227,7 +247,10 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     assert form["description_placeholders"]["page_2_name"] == ": Study"
     assert form["description_placeholders"]["page_3_name"] == ""
     form = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
-    posted = post_like_home_assistant(form["data_schema"], {"1. Room - Custom name": ""})
+    assert list(form["data_schema"].schema) == ["Study \u203a Room"]
+    # The name shows the typed text; emptied, it is left out of the post.
+    assert post_tiles_like_home_assistant(form["data_schema"])["Study \u203a Room"]["Name"] == "Desk"
+    posted = post_tiles_like_home_assistant(form["data_schema"], {"Name": "friendly_name"})
     result = asyncio.run(display_step(posted))
 
     assert result["type"] == "finished", result.get("errors")
@@ -252,7 +275,14 @@ def test_the_pages_form_places_and_orders_the_pages(monkeypatch, flow_kind):
         "page_4": {"name": "Garden", "position": 1, "entities": ["cover.shade"]},
     })
     form = asyncio.run(pages_step(posted))
-    result = asyncio.run(display_step(post_like_home_assistant(form["data_schema"])))
+    # One section per tile, in the order the display shows them.
+    assert list(form["data_schema"].schema) == [
+        "Garden \u203a Shade",
+        "Status page \u203a Temp",
+        "Living room \u203a Two",
+        "Living room \u203a One",
+    ]
+    result = asyncio.run(display_step(post_tiles_like_home_assistant(form["data_schema"])))
 
     assert result["type"] == "finished", result.get("errors")
     assert result["data"]["dashboard_pages"] == [
@@ -397,7 +427,7 @@ def test_emptying_a_dashboard_field_stores_it_empty(
     result = asyncio.run(pages_step(post_pages_like_home_assistant(result["data_schema"])))
     if result["type"] == "form":
         assert result["step_id"].endswith("dashboard_entity_display")
-        result = asyncio.run(display_step(post_like_home_assistant(result["data_schema"])))
+        result = asyncio.run(display_step(post_tiles_like_home_assistant(result["data_schema"])))
 
     assert result["type"] == "finished", result.get("errors")
     assert result["data"][stored] == empty
@@ -426,10 +456,15 @@ def test_a_weather_entity_needs_no_entity_display_dialog(monkeypatch, flow_kind)
 @pytest.mark.parametrize(
     ("changes", "stored"),
     [
-        # A custom name without its text leaves the Home Assistant name.
-        ({"1. Room - Name": "custom", "1. Room - Custom name": ""}, {}),
-        ({"1. Room - Name": "custom", "1. Room - Custom name": "   "}, {}),
-        ({"1. Room - Name": "custom", "1. Room - Custom name": "Desk"}, {"name": "custom", "custom_name": "Desk"}),
+        # A name without a text leaves the Home Assistant name.
+        ({"Name": ""}, {}),
+        ({"Name": "   "}, {}),
+        ({"Name": "custom"}, {}),
+        # A typed text is a name of its own.
+        ({"Name": " Desk "}, {"name": "custom", "custom_name": "Desk"}),
+        ({"Name": "entity_id"}, {"name": "entity_id"}),
+        ({"Width": "full", "Height": "half"}, {"width": "full", "height": "half"}),
+        ({"Secondary line": "none"}, {"secondary": "none"}),
     ],
 )
 def test_the_entity_display_dialog_stores_only_what_the_display_accepts(
@@ -443,7 +478,7 @@ def test_the_entity_display_dialog_stores_only_what_the_display_accepts(
     form = asyncio.run(pages_step(post_pages_like_home_assistant(
         form["data_schema"], {"page_2": {"name": "x" * 70, "entities": ["light.room"]}}
     )))
-    result = asyncio.run(display_step(post_like_home_assistant(form["data_schema"], changes)))
+    result = asyncio.run(display_step(post_tiles_like_home_assistant(form["data_schema"], changes)))
 
     # A rejected value would send the user back to the dashboard form without
     # a message and drop every change made in the dialog.
@@ -1024,3 +1059,109 @@ def test_saving_the_pages_keeps_the_name_of_the_alarmo_quick_entity():
         "button.stair_light": {"name": "custom", "custom_name": "Stairs"},
         "light.one": {"page": "C300X"},
     }
+
+
+def test_the_tiles_form_has_a_section_per_tile_named_after_page_and_entity():
+    settings = {
+        "alarm_page_entity_id": "button.stair_light",
+        "dashboard_entities": ["light.desk", "light.lamp", "sensor.temp"],
+        "dashboard_pages": [{"name": "Study", "order": 1}, {"name": "C300X", "order": 2}],
+    }
+    saved = {
+        "light.desk": {"page": "Study", "name": "custom", "custom_name": "Desk", "width": "full"},
+        "light.lamp": {"page": "Study", "name": "entity_id", "secondary": "none"},
+        "sensor.temp": {"page": "C300X"},
+        "button.stair_light": {"name": "custom", "custom_name": "Stairs"},
+    }
+    settings["dashboard_entity_display_overrides"] = saved
+    # Two entities of a page share a name; Home Assistant names the others.
+    names = {"light.desk": "Lamp", "light.lamp": "Lamp", "sensor.temp": "Temperatur außen"}
+    hass = SimpleNamespace(states=SimpleNamespace(
+        get=lambda entity_id: (
+            SimpleNamespace(name=names[entity_id]) if entity_id in names else None
+        )
+    ))
+    labels = {"width": "Breite", "name": "Name", "status_page": "Statusseite"}
+
+    form = tile_form(settings, saved, labels=labels, hass=hass)
+
+    assert list(form.sections.items()) == [
+        ("Study › Lamp", "light.desk"),
+        ("Study › Lamp (light.lamp)", "light.lamp"),
+        ("Statusseite › Temperatur außen", "sensor.temp"),
+        # On no page, and named after its entity id without a state.
+        ("Alarmo quick action › Stair Light", "button.stair_light"),
+    ]
+    shown = post_tiles_like_home_assistant(form.schema)
+    assert shown == {
+        "Study › Lamp": {
+            "Breite": "full", "Height": "auto", "Name": "Desk", "Secondary line": "state",
+        },
+        "Study › Lamp (light.lamp)": {
+            "Breite": "auto", "Height": "auto", "Name": "entity_id", "Secondary line": "none",
+        },
+        "Statusseite › Temperatur außen": {
+            "Breite": "auto", "Height": "auto", "Name": "friendly_name", "Secondary line": "state",
+        },
+        # The quick entity is no tile of a page and has no size.
+        "Alarmo quick action › Stair Light": {"Name": "Stairs", "Secondary line": "state"},
+    }
+    # Many tiles start as a list of closed sections.
+    assert all(tile.options == {"collapsed": True} for tile in form.schema.schema.values())
+
+    def stored(post):
+        fields = form.entity_fields(post)
+        return dashboard_input_defaults(
+            dashboard_entity_display_input(settings, fields)
+        )["dashboard_entity_display_overrides"]
+
+    # Posted as shown, nothing changes.
+    assert stored(shown) == saved
+    # A tile whose section or field was not sent keeps what it showed.
+    assert stored({}) == saved
+    assert stored({"Study › Lamp": {"Height": "half"}})["light.desk"] == {
+        **saved["light.desk"], "height": "half",
+    }
+    # A change reaches the entity of its section, also behind the shared name.
+    changed = stored({**shown, "Study › Lamp (light.lamp)": {
+        "Breite": "half", "Height": "full", "Name": "Reading", "Secondary line": "last_changed",
+    }})
+    assert changed["light.lamp"] == {
+        "page": "Study", "width": "half", "height": "full",
+        "name": "custom", "custom_name": "Reading", "secondary": "last_changed",
+    }
+    assert changed["light.desk"] == saved["light.desk"]
+
+
+def test_a_few_tiles_are_shown_open():
+    settings = {"dashboard_entities": ["light.one", "light.two"]}
+
+    form = tile_form(settings)
+
+    # Entities from before pages could be set up are on the status page.
+    assert list(form.sections) == ["Status page \u203a One", "Status page \u203a Two"]
+    assert [tile.options for tile in form.schema.schema.values()] == [{"collapsed": False}] * 2
+
+
+def test_tile_labels_come_in_the_language_of_home_assistant(monkeypatch):
+    prefix = "component.bticino_c300x.selector.tile_field.options."
+
+    async def translations(_hass, language, category, integrations):
+        assert (language, category, set(integrations)) == ("de", "selector", {"bticino_c300x"})
+        return wanted
+
+    monkeypatch.setattr("homeassistant.helpers.translation.async_get_translations", translations)
+    hass = SimpleNamespace(config=SimpleNamespace(language="de"))
+
+    wanted = {prefix + "width": "Breite", prefix + "secondary": "Zusatzzeile"}
+    labels = asyncio.run(async_tile_labels(hass))
+    assert labels["width"] == "Breite"
+    assert labels["secondary"] == "Zusatzzeile"
+    # A label without a translation stays English.
+    assert labels["height"] == "Height"
+
+    # Two fields under one label would be one field: the English labels are used.
+    wanted = {prefix + "width": "Size", prefix + "height": "Size"}
+    assert asyncio.run(async_tile_labels(hass)) == TILE_LABELS
+    # Without Home Assistant, as in a unit test, the labels are English.
+    assert asyncio.run(async_tile_labels(None)) == TILE_LABELS

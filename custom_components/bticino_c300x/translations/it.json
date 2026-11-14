@@ -87,8 +87,8 @@
         }
       },
       "user_dashboard_entity_display": {
-        "title": "Visualizzazione entita dashboard",
-        "description": "Imposta larghezza e altezza del riquadro, nome e riga secondaria delle entita delle pagine del display. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "title": "Riquadri del display",
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "reconfigure": {
         "title": "Riconfigura BTicino C300X",
@@ -155,8 +155,8 @@
         }
       },
       "reconfigure_dashboard_entity_display": {
-        "title": "Visualizzazione entita dashboard",
-        "description": "Imposta larghezza e altezza del riquadro, nome e riga secondaria delle entita delle pagine del display. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "title": "Riquadri del display",
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
@@ -493,8 +493,8 @@
         }
       },
       "dashboard_entity_display": {
-        "title": "Visualizzazione entita dashboard",
-        "description": "Imposta larghezza e altezza del riquadro, nome e riga secondaria delle entita delle pagine del display. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "title": "Riquadri del display",
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "dashboard_pages": {
         "title": "Pagine del display",
@@ -1080,6 +1080,39 @@
       "options": {
         "ring": "Chiamata del campanello",
         "on_demand": "Registrazione senza suonare"
+      }
+    },
+    "tile_field": {
+      "options": {
+        "width": "Larghezza",
+        "height": "Altezza",
+        "name": "Nome",
+        "secondary": "Riga secondaria",
+        "status_page": "Pagina di stato",
+        "alarm_action": "Azione rapida Alarmo"
+      }
+    },
+    "tile_size": {
+      "options": {
+        "auto": "Automatico",
+        "half": "Metà",
+        "full": "Piena"
+      }
+    },
+    "tile_name": {
+      "options": {
+        "friendly_name": "Nome di Home Assistant",
+        "entity_id": "ID entità",
+        "custom": "Testo proprio"
+      }
+    },
+    "tile_secondary": {
+      "options": {
+        "state": "Stato",
+        "entity_id": "ID entità",
+        "last_changed": "Ultima modifica",
+        "last_updated": "Ultimo aggiornamento",
+        "none": "Niente"
       }
     }
   },

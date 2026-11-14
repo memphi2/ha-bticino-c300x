@@ -87,8 +87,8 @@
         }
       },
       "user_dashboard_entity_display": {
-        "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Kachelbreite und -hoehe, Name und Zusatzzeile der Entitaeten auf den Display-Seiten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "title": "Display-Kacheln",
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "reconfigure": {
         "title": "BTicino C300X neu konfigurieren",
@@ -155,8 +155,8 @@
         }
       },
       "reconfigure_dashboard_entity_display": {
-        "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Kachelbreite und -hoehe, Name und Zusatzzeile der Entitaeten auf den Display-Seiten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "title": "Display-Kacheln",
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
@@ -493,8 +493,8 @@
         }
       },
       "dashboard_entity_display": {
-        "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Kachelbreite und -hoehe, Name und Zusatzzeile der Entitaeten auf den Display-Seiten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "title": "Display-Kacheln",
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
@@ -1080,6 +1080,39 @@
       "options": {
         "ring": "Klingelruf",
         "on_demand": "Liveaufnahme ohne Klingeln"
+      }
+    },
+    "tile_field": {
+      "options": {
+        "width": "Breite",
+        "height": "Höhe",
+        "name": "Name",
+        "secondary": "Zusatzzeile",
+        "status_page": "Statusseite",
+        "alarm_action": "Alarmo-Schnellaktion"
+      }
+    },
+    "tile_size": {
+      "options": {
+        "auto": "Automatisch",
+        "half": "Halb",
+        "full": "Voll"
+      }
+    },
+    "tile_name": {
+      "options": {
+        "friendly_name": "Name aus Home Assistant",
+        "entity_id": "Entitäts-ID",
+        "custom": "Eigener Text"
+      }
+    },
+    "tile_secondary": {
+      "options": {
+        "state": "Zustand",
+        "entity_id": "Entitäts-ID",
+        "last_changed": "Zuletzt geändert",
+        "last_updated": "Zuletzt aktualisiert",
+        "none": "Nichts"
       }
     }
   },

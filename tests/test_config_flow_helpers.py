@@ -48,7 +48,6 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
 from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
-    dashboard_entity_display_form_complete as _dashboard_entity_display_form_complete,
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
     dashboard_entity_display_schema as _dashboard_entity_display_schema,
     dashboard_entity_ids as _dashboard_entity_ids,
@@ -1023,9 +1022,11 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
     result = asyncio.run(
         flow.async_step_user_dashboard_entity_display(
             entity_display_form["data_schema"]({
-                "1. Temperature - Name": "custom",
-                "1. Temperature - Custom name": "Outside",
-                "1. Temperature - Secondary line": "none",
+                "Status page \u203a Temperature": {
+                    "Name": "Outside",
+                    "Secondary line": "none",
+                },
+                "Alarmo quick action \u203a Stair Light": {},
             })
         )
     )
@@ -1402,26 +1403,6 @@ def test_user_dashboard_without_features_returns_features_form() -> None:
     result = asyncio.run(flow.async_step_user_dashboard({}))
 
     assert result["step_id"] == "user_features"
-
-
-def test_user_dashboard_entity_display_requires_all_rendered_fields() -> None:
-    flow = BticinoC300XConfigFlow()
-    flow._setup_dashboard_input = {
-        CONF_DEVICE_UI_ENABLED: True,
-        CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
-        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {},
-    }
-    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
-
-    result = asyncio.run(
-        flow.async_step_user_dashboard_entity_display(
-            {
-                "1. Temperature - Name": "custom",
-            }
-        )
-    )
-
-    assert result["step_id"] == "user_dashboard_entity_display"
 
 
 def test_zeroconf_probes_agent_before_auth_form(
@@ -2073,31 +2054,6 @@ def test_dashboard_entity_display_schema_adds_controls_for_selected_entities() -
     assert result["1. Temperature - Secondary line"] == "none"
 
 
-def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields() -> None:
-    assert not _dashboard_entity_display_form_complete(
-        {CONF_DASHBOARD_ENTITIES: ["sensor.temperature"]},
-        ["sensor.temperature"],
-    )
-    assert _dashboard_entity_display_form_complete(
-        {
-            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
-            "1. Temperature - Name": "friendly_name",
-            "1. Temperature - Custom name": "",
-            "1. Temperature - Secondary line": "state",
-        },
-        ["sensor.temperature"],
-    )
-    # Home Assistant leaves an empty custom name out of the post.
-    assert _dashboard_entity_display_form_complete(
-        {
-            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
-            "1. Temperature - Name": "friendly_name",
-            "1. Temperature - Secondary line": "state",
-        },
-        ["sensor.temperature"],
-    )
-
-
 def test_options_features_schema_never_contains_dashboard_fields() -> None:
     entry = SimpleNamespace(
         data={
@@ -2442,9 +2398,8 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     result = asyncio.run(
         flow.async_step_dashboard_entity_display(
             entity_options_form["data_schema"]({
-                "1. Entry - Name": "custom",
-                "1. Entry - Custom name": "Entry",
-                "1. Entry - Secondary line": "state",
+                "Doors \u203a Entry": {"Name": "Entry", "Secondary line": "state"},
+                "Alarmo quick action \u203a Stair Light": {},
             })
         )
     )
@@ -2640,9 +2595,11 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     result = asyncio.run(
         flow.async_step_reconfigure_dashboard_entity_display(
             entity_display_form["data_schema"]({
-                "1. Forwarding - Name": "friendly_name",
-                "1. Forwarding - Custom name": "",
-                "1. Forwarding - Secondary line": "last_changed",
+                "Status page \u203a Forwarding": {
+                    "Name": "friendly_name",
+                    "Secondary line": "last_changed",
+                },
+                "Alarmo quick action \u203a Stair Light": {},
             })
         )
     )

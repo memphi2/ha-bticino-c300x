@@ -307,3 +307,42 @@ def test_options_menu_names_and_explains_every_area() -> None:
         assert all(menu["menu_option_descriptions"].values()), path.name
         # A menu entry leads to a step of the same name.
         assert areas <= set(steps), path.name
+
+
+def test_tiles_form_labels_and_choices_are_translated_in_every_language() -> None:
+    """The tiles form reads its field labels and choices from the selectors."""
+
+    from custom_components.bticino_c300x.config_flow_forms import (
+        dashboard_entity_secondary_info_selector,
+        dashboard_entity_tile_size_selector,
+        dashboard_tile_name_selector,
+    )
+    from custom_components.bticino_c300x.config_flow_tiles import (
+        TILE_LABEL_TRANSLATION_KEY,
+        TILE_LABELS,
+    )
+
+    choices = {
+        TILE_LABEL_TRANSLATION_KEY: set(TILE_LABELS),
+        **{
+            field.config["translation_key"]: set(field.config["options"])
+            for field in (
+                dashboard_entity_tile_size_selector(),
+                dashboard_tile_name_selector(),
+                dashboard_entity_secondary_info_selector(),
+            )
+        },
+    }
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        selectors = _load_json(path)["selector"]
+        for key, options in choices.items():
+            translated = selectors[key]["options"]
+            assert options <= set(translated), (path.name, key)
+            assert all(translated[option].strip() for option in options), (path.name, key)
+        labels = selectors[TILE_LABEL_TRANSLATION_KEY]["options"]
+        fields = [labels[key] for key in ("width", "height", "name", "secondary")]
+        # The labels are the keys of a tile's fields.
+        assert len(set(fields)) == len(fields), path.name
+    assert _load_json(INTEGRATION / "strings.json")["selector"][
+        TILE_LABEL_TRANSLATION_KEY
+    ]["options"] == TILE_LABELS

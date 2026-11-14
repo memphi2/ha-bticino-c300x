@@ -87,8 +87,8 @@
         }
       },
       "user_dashboard_entity_display": {
-        "title": "Affichage des entites dashboard",
-        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "title": "Tuiles de l'écran",
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "reconfigure": {
         "title": "Reconfigurer BTicino C300X",
@@ -155,8 +155,8 @@
         }
       },
       "reconfigure_dashboard_entity_display": {
-        "title": "Affichage des entites dashboard",
-        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "title": "Tuiles de l'écran",
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "user_dashboard_pages": {
         "title": "Pages de l'ecran",
@@ -493,8 +493,8 @@
         }
       },
       "dashboard_entity_display": {
-        "title": "Affichage des entites dashboard",
-        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "title": "Tuiles de l'écran",
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "dashboard_pages": {
         "title": "Pages de l'ecran",
@@ -1080,6 +1080,39 @@
       "options": {
         "ring": "Appel de sonnette",
         "on_demand": "Enregistrement sans sonnerie"
+      }
+    },
+    "tile_field": {
+      "options": {
+        "width": "Largeur",
+        "height": "Hauteur",
+        "name": "Nom",
+        "secondary": "Ligne secondaire",
+        "status_page": "Page d'état",
+        "alarm_action": "Action rapide Alarmo"
+      }
+    },
+    "tile_size": {
+      "options": {
+        "auto": "Automatique",
+        "half": "Demie",
+        "full": "Pleine"
+      }
+    },
+    "tile_name": {
+      "options": {
+        "friendly_name": "Nom de Home Assistant",
+        "entity_id": "ID de l'entité",
+        "custom": "Texte personnel"
+      }
+    },
+    "tile_secondary": {
+      "options": {
+        "state": "État",
+        "entity_id": "ID de l'entité",
+        "last_changed": "Dernier changement",
+        "last_updated": "Dernière mise à jour",
+        "none": "Rien"
       }
     }
   },

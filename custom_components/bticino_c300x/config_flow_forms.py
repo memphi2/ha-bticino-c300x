@@ -6,17 +6,20 @@ import json
 from typing import Any
 
 from homeassistant.helpers import selector
-from homeassistant.helpers.selector import SelectOptionDict
 
 from .const import (
     ALARM_DOMAIN,
-    DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
+    DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+    DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
+    DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     WEATHER_DOMAIN,
 )
 from .dashboard_entities import (
     ALARM_PAGE_ENTITY_DOMAINS,
     DASHBOARD_ENTITY_DOMAINS,
+    DASHBOARD_TILE_SIZE_AUTO,
+    DASHBOARD_TILE_SIZES,
 )
 from .schema_compat import vol
 
@@ -70,18 +73,40 @@ def alarm_page_entity_selector() -> Any:
     )
 
 
-def dashboard_entity_name_display_selector() -> Any:
-    """Return the selector for one dashboard entity title."""
+def _translated_choice(
+    translation_key: str,
+    options: Any,
+    *,
+    custom_value: bool = False,
+) -> Any:
+    """Return a dropdown whose choices the frontend translates."""
 
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value=DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME, label="Home Assistant name"),
-                SelectOptionDict(value="entity_id", label="Entity ID"),
-                SelectOptionDict(value=DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM, label="Custom name"),
-            ],
+            options=list(options),
+            translation_key=translation_key,
             mode=selector.SelectSelectorMode.DROPDOWN,
+            custom_value=custom_value,
         )
+    )
+
+
+def dashboard_entity_name_display_selector() -> Any:
+    """Return the selector for one dashboard entity title."""
+
+    return _translated_choice("tile_name", DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS)
+
+
+def dashboard_tile_name_selector() -> Any:
+    """Return the name of a tile: one of the choices or a typed text."""
+
+    return _translated_choice(
+        "tile_name",
+        (
+            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+            DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
+        ),
+        custom_value=True,
     )
 
 
@@ -94,33 +119,13 @@ def dashboard_entity_custom_name_selector() -> Any:
 def dashboard_entity_tile_size_selector() -> Any:
     """Return the width or height choice for one native display tile."""
 
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value="auto", label="Automatic"),
-                SelectOptionDict(value="half", label="Half"),
-                SelectOptionDict(value="full", label="Full"),
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
+    return _translated_choice("tile_size", (DASHBOARD_TILE_SIZE_AUTO, *DASHBOARD_TILE_SIZES))
 
 
 def dashboard_entity_secondary_info_selector() -> Any:
     """Return the selector for one dashboard entity secondary text."""
 
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value="state", label="State"),
-                SelectOptionDict(value="entity_id", label="Entity ID"),
-                SelectOptionDict(value="last_changed", label="Last changed"),
-                SelectOptionDict(value="last_updated", label="Last updated"),
-                SelectOptionDict(value="none", label="None"),
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
+    return _translated_choice("tile_secondary", DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS)
 
 
 def password_selector() -> Any:

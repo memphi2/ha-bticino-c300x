@@ -10,6 +10,12 @@ static long long test_clock(void);
 #define pthread_create tracked_create
 #define pthread_join tracked_join
 #undef _POSIX_C_SOURCE
+/* The auth cases send many rejected requests on one connection; the unauth
+ * cases switch to the real limit and a short lifetime. */
+static int unauth_rejections = 1000;
+static int unauth_lifetime = 30;
+#define RTSP_UNAUTH_MAX_REJECTIONS unauth_rejections
+#define RTSP_UNAUTH_LIFETIME_SECONDS unauth_lifetime
 #include "../src/media_bridge.c"
 #undef pthread_create
 #undef pthread_join
@@ -109,6 +115,62 @@ static void request(int fd, const char *method, const char *headers, int status)
     if (status == 401) {
         assert(strstr(response, "401 Unauthorized\r\n"));
         assert(strstr(response, C300X_RTSP_AUTH_CHALLENGE));
+    }
+}
+
+static bool peer_closed(int fd) {
+    char byte;
+    return recv(fd, &byte, 1, 0) == 0;
+}
+
+static void unauth_test(struct c300x_config *config, bool lifetime) {
+    int pair[2];
+    pthread_t client;
+    strcpy(config->video_rtsp_username, "user");
+    strcpy(config->video_rtsp_password, "pass");
+    unauth_rejections = 5;
+    unauth_lifetime = lifetime ? 1 : 30;
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    struct timeval timeout = {5, 0};
+    assert(setsockopt(pair[0], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
+    assert(pthread_create(&client, NULL, client_worker, &pair[1]) == 0);
+    if (lifetime) {
+        /* Sending something often enough to beat the read timeout must not
+         * keep a connection that never authenticates. */
+        long long start = c300x_monotonic_ms();
+        for (;;) {
+            request(pair[0], "OPTIONS", "", 200);
+            if (c300x_monotonic_ms() - start > 4000) break;
+            usleep(300000);
+            struct pollfd closed = {.fd = pair[0], .events = POLLIN};
+            if (poll(&closed, 1, 0) == 1) break;
+        }
+        assert(peer_closed(pair[0]));
+        assert(c300x_monotonic_ms() - start < 3500);
+    } else {
+        /* Four rejections are fine, the fifth closes the connection. */
+        for (int i = 0; i < RTSP_UNAUTH_MAX_REJECTIONS; i++) {
+            request(pair[0], "DESCRIBE", "Authorization: Basic dXNlcjpiYWQ=\r\n", 401);
+        }
+        assert(peer_closed(pair[0]));
+    }
+    assert(pthread_join(client, NULL) == 0);
+    close(pair[0]);
+    close(pair[1]);
+    if (!lifetime) {
+        /* One challenge and an answer is what a real client does. */
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+        assert(setsockopt(pair[0], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
+        assert(pthread_create(&client, NULL, client_worker, &pair[1]) == 0);
+        request(pair[0], "DESCRIBE", "", 401);
+        request(pair[0], "DESCRIBE", "Authorization: Basic dXNlcjpwYXNz\r\n", 200);
+        for (int i = 0; i < 2 * RTSP_UNAUTH_MAX_REJECTIONS; i++) {
+            request(pair[0], "DESCRIBE", "", 401);
+        }
+        shutdown(pair[0], SHUT_RDWR);
+        assert(pthread_join(client, NULL) == 0);
+        close(pair[0]);
+        close(pair[1]);
     }
 }
 
@@ -341,6 +403,10 @@ int main(int argc, char **argv) {
     g_bridge.running = true;
     if (strcmp(argv[1], "serve") == 0) {
         serve_ffprobe(&config, video);
+    } else if (strcmp(argv[1], "unauth_rejections") == 0) {
+        unauth_test(&config, false);
+    } else if (strcmp(argv[1], "unauth_lifetime") == 0) {
+        unauth_test(&config, true);
     } else if (strcmp(argv[1], "stalled_client") == 0) {
         stalled_client_test();
     } else if (strcmp(argv[1], "sip_join") == 0) {

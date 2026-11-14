@@ -42,6 +42,15 @@
 #define SIP_DOMAIN_FILE "/etc/flexisip/domain-registration.conf"
 #define DEFAULT_SIP_PORT 5060
 #define RTSP_IDLE_TIMEOUT_SECONDS 180
+/* A connection that has not authenticated yet is closed after this many
+ * seconds in total, however often it sends something, and after this many
+ * rejected requests. Real clients need one challenge and answer it at once. */
+#ifndef RTSP_UNAUTH_LIFETIME_SECONDS
+#define RTSP_UNAUTH_LIFETIME_SECONDS 30
+#endif
+#ifndef RTSP_UNAUTH_MAX_REJECTIONS
+#define RTSP_UNAUTH_MAX_REJECTIONS 5
+#endif
 #define RTSP_TEARDOWN_CLOSE_WAIT_SECONDS 3
 #define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800
 #define RTSP_CLIENT_DRAIN_POLL_MS 50
@@ -5953,6 +5962,9 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     int evicted_clients = 0;
     int connection_index = -1;
     bool authenticated = false;
+    bool ever_authenticated = false;
+    int auth_rejections = 0;
+    long long unauth_deadline = c300x_monotonic_ms() + (long long)RTSP_UNAUTH_LIFETIME_SECONDS * 1000LL;
 
     if (request == NULL || read_buffer_data == NULL) {
         free(request);
@@ -5976,6 +5988,19 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     while (g_bridge.running) {
         int interleaved_channel = -1;
         size_t interleaved_len = 0;
+        int read_timeout_seconds = teardown_seen
+            ? RTSP_TEARDOWN_CLOSE_WAIT_SECONDS
+            : (media_started ? RTSP_IDLE_TIMEOUT_SECONDS : 30);
+        if (!ever_authenticated) {
+            long long remaining_ms = unauth_deadline - c300x_monotonic_ms();
+            if (remaining_ms <= 0) {
+                break;
+            }
+            int remaining_seconds = (int)((remaining_ms + 999) / 1000);
+            if (remaining_seconds < read_timeout_seconds) {
+                read_timeout_seconds = remaining_seconds;
+            }
+        }
         rtsp_read_result_t read_result = read_rtsp_request_or_interleaved(
             &read_buffer,
             fd,
@@ -5985,9 +6010,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             sizeof(interleaved),
             &interleaved_channel,
             &interleaved_len,
-            teardown_seen
-                ? RTSP_TEARDOWN_CLOSE_WAIT_SECONDS
-                : (media_started ? RTSP_IDLE_TIMEOUT_SECONDS : 30)
+            read_timeout_seconds
         );
         if (read_result == RTSP_READ_INTERLEAVED) {
             if (authenticated && slot_index >= 0 && interleaved_len > 0) {
@@ -6021,8 +6044,12 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         authenticated = c300x_media_rtsp_authorized(g_bridge.config, request);
         if (!authenticated) {
             send_rtsp_response(fd, 401, cseq, C300X_RTSP_AUTH_CHALLENGE, NULL);
+            if (!ever_authenticated && ++auth_rejections >= RTSP_UNAUTH_MAX_REJECTIONS) {
+                break;
+            }
             continue;
         }
+        ever_authenticated = true;
         if (slot_index < 0 && !teardown_seen) {
             pthread_mutex_lock(&g_bridge.mutex);
             bool accepted = g_bridge.running && register_rtsp_client_locked(

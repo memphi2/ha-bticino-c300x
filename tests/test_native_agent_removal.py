@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+from test_qml_patch_script import _write_original_gui
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "native_agent/scripts/remove_agent.sh"
@@ -61,7 +62,16 @@ def device(tmp_path: Path, removal_binary: Path) -> dict[str, str]:
         path = tmp_path / name
         path.write_text(content)
         env[key] = str(path)
-    env["C300X_QML_PATCH_SCRIPT"] = str(tmp_path / "absent-qml-script")
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    _write_original_gui(gui)
+    env.update({
+        "C300X_QML_PATCH_SCRIPT": str(ROOT / "native_agent/scripts/qml_patch.sh"),
+        "C300X_QML_GUI_DIR": str(gui),
+        "C300X_QML_BACKUP_DIR": str(original / "gui/skins/default"),
+        "C300X_QML_NO_REMOUNT": "1",
+        "C300X_QML_RELOAD_GUI": "0",
+    })
     mocks = tmp_path / "commands"
     mocks.mkdir()
     for command in ("mount", "start-stop-daemon", "pidof", "killall", "ssh-init", "reboot"):

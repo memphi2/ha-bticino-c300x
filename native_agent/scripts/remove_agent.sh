@@ -38,10 +38,15 @@ remount_root_ro() {
 }
 
 restore_qml() {
+    if [ ! -x "$QML_PATCH" ]; then
+        printf 'Cannot verify GUI restoration without executable patch script; keeping agent files and backups in place\n' >&2
+        exit 1
+    fi
     if [ -x "$QML_PATCH" ]; then
         status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" status 2>/dev/null || true)"
         if printf '%s' "$status" | grep -F -q '"state":"original"' \
-            && printf '%s' "$status" | grep -F -q '"core_state":"original"'; then
+            && printf '%s' "$status" | grep -F -q '"core_state":"original"' \
+            && printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
             return 0
         fi
         if ! C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" restore-all >/dev/null 2>&1; then

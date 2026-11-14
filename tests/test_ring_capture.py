@@ -1538,6 +1538,74 @@ def test_a_failed_capture_leaves_no_partial_clip(
     assert not target.exists()
 
 
+def _talkback_failure_entry(tmp_path: Path) -> tuple[Any, Any, Path]:
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    return (
+        _FakeHass(tmp_path / "config"),
+        _FakeEntry(
+            runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+            data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+        ),
+        target,
+    )
+
+
+def test_a_talkback_failure_does_not_fail_a_finished_recording(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    hass, entry, target = _talkback_failure_entry(tmp_path)
+
+    async def _ffmpeg(_url: Any, path: Path, **_kwargs: Any) -> None:
+        await asyncio.to_thread(path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(path.write_bytes, b"clip")
+
+    async def _failing_talkback(*_args: Any, **_kwargs: Any) -> None:
+        raise HomeAssistantError("C300X talkback was not ready for announcement playback")
+
+    _capture_fakes(monkeypatch, _ffmpeg)
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_keep_talkback_alive_when_ready",
+        _failing_talkback,
+    )
+
+    metadata = asyncio.run(
+        async_capture_doorbell_ring_call(hass, entry, output_path=str(target), include_audio=True)
+    )
+
+    assert metadata["output_path"] == str(target)
+    assert target.read_bytes() == b"clip"
+    assert "talkback keepalive ended with an error" in caplog.text
+
+
+def test_an_announcement_failure_still_fails_the_capture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    hass, entry, target = _talkback_failure_entry(tmp_path)
+    announcement = target.parent / "announce.wav"
+    announcement.parent.mkdir(parents=True)
+    announcement.write_bytes(b"fake")
+
+    async def _ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _failing_talkback(*_args: Any, **_kwargs: Any) -> None:
+        raise HomeAssistantError("C300X announcement playback failed")
+
+    _capture_fakes(monkeypatch, _ffmpeg)
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_keep_talkback_alive_when_ready",
+        _failing_talkback,
+    )
+
+    with pytest.raises(HomeAssistantError, match="announcement playback failed"):
+        asyncio.run(
+            async_capture_doorbell_ring_call(
+                hass, entry, output_path=str(target), include_audio=True,
+                announcement_path=str(announcement),
+            )
+        )
+
+
 def test_a_finished_capture_keeps_its_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import math
 import shutil
 import threading
@@ -63,6 +64,7 @@ from .ring_talkback import (
 )
 from .value_parsing import optional_mapping
 
+_LOGGER = logging.getLogger(__name__)
 _RTSP_READY_TIMEOUT_SECONDS = 5.0
 _CAPTURE_WORK_DIR = Path("/config/c300x")
 RING_CAPTURE_PLAYBACK_MIME_TYPE = "video/mp4"
@@ -70,6 +72,8 @@ _CAPTURE_FRAME_COUNT = 3
 _CAPTURE_FRAME_START_SECONDS = 1.0
 _CAPTURE_FRAME_END_MARGIN_SECONDS = 0.2
 DEFAULT_RING_CAPTURE_METADATA_GLOB = "/config/c300x/*.capture.json"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_capture_doorbell_ring_call(
@@ -171,11 +175,19 @@ async def _async_capture_to_output(
         await capture_task
         if talkback_task is not None:
             talkback_stop.set()
-            if talkback_task.done():
-                await talkback_task
-            else:
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(talkback_task, timeout=2.0)
+            try:
+                if talkback_task.done():
+                    await talkback_task
+                else:
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(talkback_task, timeout=2.0)
+            except Exception as err:  # noqa: BLE001 - see below
+                # The keepalive only holds the call's audio open for the
+                # recording, which is complete. An announcement is what the
+                # caller asked for, so its failure stays an error.
+                if announcement is not None:
+                    raise
+                _LOGGER.warning("C300X talkback keepalive ended with an error: %s", err)
             if not talkback_task.done():
                 talkback_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -201,6 +213,10 @@ async def _async_capture_to_output(
             talkback_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await talkback_task
+        elif talkback_task is not None and not talkback_task.cancelled():
+            # Marks a failure of the task as seen, so that it is not reported
+            # as "never retrieved" when the capture failed first.
+            talkback_task.exception()
         if not published:
             await asyncio.to_thread(shutil.rmtree, work_dir, True)
             # FFmpeg writes the clip in place, so a failed run leaves a partial

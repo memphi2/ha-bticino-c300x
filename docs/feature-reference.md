@@ -87,7 +87,7 @@ Tap a mode to execute directly when no PIN is required; otherwise the keypad
 appears. Entry delay opens the disarm keypad when required. A pending command
 blocks repeated taps; unavailable data is not displayed as a ready alarm.
 
-Under **Display dashboard**, **Alarm page entity** selects the optional quick
+Under **Display and Display patch**, **Quick action on the Alarm page** selects the optional quick
 action or status entity. Leave it empty to hide this area. To retain a stair-light
 shortcut, select the integration's stair-light button explicitly. No stair-light
 action is inserted automatically. Buttons, switches, scenes and scripts can be
@@ -102,7 +102,7 @@ Call are not yet confirmed on hardware.
 
 ## Display Home Page Buttons
 
-**Use dynamic home page buttons** under **Display dashboard** decides how the
+**Dynamic home page mode** under **Display and Display patch** decides how the
 Alarm and Home Assistant buttons reach the device's home page.
 
 | Setting | Home page |
@@ -121,7 +121,7 @@ the form shows that state instead of an unrelated default.
 ## Display Device Controls
 
 Select lights, covers, climate entities, fans, media players and sensors under
-**Display dashboard**. Entities with controls share the two-column overview
+**Display pages**. Entities with controls share the two-column overview
 with sensors.
 A chevron marks every tile that has a submenu: tap anywhere on such a tile to
 open its supported controls, or tap a sensor tile for its read-only details.

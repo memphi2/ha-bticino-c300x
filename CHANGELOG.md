@@ -10,10 +10,13 @@
 
 ### Changed
 
-- **Configure** opens a menu of settings areas: display pages, display tiles,
-  display and Display patch, video and audio, activations, connection. Each
-  area saves on its own; the others keep their settings. Pages and tiles are
-  offered while the Display patch is on.
+- **Configure** opens a menu of settings areas in the order of the setup:
+  connection, video and audio, activations, display and Display patch,
+  display pages, display tiles. Each area saves on its own; the others keep
+  their settings. Pages and tiles are offered while the Display patch is on.
+- Settings fields use plain names in place of technical ones: access key and
+  maintenance key, address of Home Assistant for the C300X, video and audio
+  access. The home page setting is called **Dynamic home page mode**.
 - The display tiles form has one collapsible section per tile, in display
   order and titled "Page › Entity" with the entity's Home Assistant name. Each
   has width, height, name and secondary line; the name is one field that takes

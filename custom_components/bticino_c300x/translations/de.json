@@ -6,14 +6,14 @@
         "description": "Gib zuerst die C300X-Adresse ein. Wenn der native Device-Agent nicht erreichbar ist, kann Home Assistant vor Token- und Funktionsauswahl durch eine einmalige Agent-Installation führen.",
         "data": {
           "name": "Name",
-          "agent_host": "Adresse des Geräts",
-          "agent_port": "Port des Device-Agents",
-          "callback_base_url": "Callback-Basis-URL Override (optional)"
+          "agent_host": "Adresse des C300X",
+          "agent_port": "Port",
+          "callback_base_url": "Adresse von Home Assistant für den C300X (optional)"
         },
         "data_description": {
-          "agent_host": "IP-Adresse oder Hostname des C300X, auf dem der Device-Agent läuft.",
-          "agent_port": "HTTP-Port des Device-Agents. Standard ist 8091.",
-          "callback_base_url": "Leer lassen, um das bisherige Verhalten beizubehalten. HTTP initialisiert kein TLS. Eine explizite HTTPS-URL aktiviert geprüftes TLS, benötigt einen aktualisierten Agenten und ein vertrauenswürdiges, zum Hostnamen passendes Zertifikat und erzeugt zusätzliche Gerätelast. Beim Wechsel HTTP/HTTPS startet nur der Agent neu, sobald keine Medien aktiv sind."
+          "agent_host": "IP-Adresse oder Hostname deines C300X.",
+          "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
+          "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
         }
       },
       "agent_missing": {
@@ -35,12 +35,12 @@
         "title": "Device-Agent-Zugangsdaten",
         "description": "Gib die Token für den erreichbaren nativen Agent ein. Lasse den API-Token nur leer, solange der Agent noch im noAuth-Bootstrap-Modus läuft.",
         "data": {
-          "agent_token": "API-Token",
-          "maintenance_token": "Maintenance-Token"
+          "agent_token": "Zugangsschlüssel",
+          "maintenance_token": "Wartungsschlüssel"
         },
         "data_description": {
-          "agent_token": "Token, das Home Assistant bei jeder Anfrage an den Device-Agent mitschickt.",
-          "maintenance_token": "Eigenes Token für Wartungsaktionen wie Updates, Patches und Neustart."
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt.",
+          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts."
         }
       },
       "user_features": {
@@ -48,19 +48,19 @@
         "description": "Wählt die Home-Assistant-Medienfunktionen für diese C300X-Installation aus.",
         "data": {
           "video_enabled": "Video und Ton der Türstation",
-          "create_homeassistant_user": "Media-Benutzer auf dem Gerät einrichten",
+          "create_homeassistant_user": "Zugang für Video und Ton auf dem C300X einrichten",
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
-          "ring_capture_audio_gain_db": "Lautstärke Ring Capture (dB)",
-          "webrtc_ice_policy": "Netzwerkadressen für den Livestream",
-          "native_two_way_audio": "Two-way Audio im HA-Kameraplayer"
+          "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
+          "webrtc_ice_policy": "Verbindungswege für das Livebild",
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
-          "create_homeassistant_user": "Video und Ton brauchen einen lokalen Benutzer auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
+          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
-          "ring_capture_audio_gain_db": "Lautstärke des Tons in Ring-Capture-Aufnahmen. -20 bis +20 dB; Standard ist 6.",
-          "webrtc_ice_policy": "Welche Adressen dem Browser für den Livestream angeboten werden. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Benötigt HA 2026.11+, Two-way Audio unter Einstellungen > System > Labs, WebRTC, HTTPS und die Mikrofonfreigabe im Browser. Eingehende Anrufe zuerst über die C300X-Karte annehmen; diese Option nimmt sie nicht automatisch an. Talkback in der Karte bleibt unverändert. Kein zusätzliches Polling im Leerlauf und kein Agent-Update nötig."
+          "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
+          "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
         }
       },
       "user_device_activations": {
@@ -70,7 +70,7 @@
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
           "device_activation_stair_light_n": "Treppenlicht N",
-          "device_activation_flow_action": "Was tun",
+          "device_activation_flow_action": "Aktion",
           "device_activation_flow_target": "Aktivierung"
         },
         "data_description": {
@@ -94,28 +94,28 @@
           "device_activation_item_id": "Buchstaben, Ziffern, _ und -, höchstens 32 Zeichen. Jede ID gibt es nur einmal.",
           "device_activation_item_name": "Name des Buttons in Home Assistant, höchstens 63 Zeichen.",
           "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Licht oder das Treppenlicht.",
-          "device_activation_item_address": "OpenWebNet-Adresse (where), an die die Aktivierung geht, höchstens 31 Zeichen."
+          "device_activation_item_address": "Adresse in der Türanlage, an die die Aktivierung geht (OpenWebNet „where“), höchstens 31 Zeichen."
         }
       },
       "user_dashboard": {
         "title": "C300X-Display-Dashboard",
         "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, folgen im nächsten Schritt die Display-Seiten und ihre Entitäten.",
         "data": {
-          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display (Display-Patch)",
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
           "weather_entity_id": "Wetter",
-          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
-          "actions_json": "Erlaubte Aktionen (JSON)",
+          "dashboard_dynamic_homepage": "Dynamischer Startseiten-Modus",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
         "data_description": {
-          "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X. Aus: stellt die originalen Display-Dateien wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
+          "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
           "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite des Displays zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden.",
           "weather_entity_id": "Wetter-Entität für die Wetterkarte auf der Statusseite. Leer lassen für keine Wetterkarte.",
-          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite nur, solange sie etwas zu öffnen haben. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
-          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen: ein Eintrag je Aktions-ID mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
         }
       },
@@ -127,19 +127,19 @@
         "title": "BTicino C300X neu konfigurieren",
         "description": "Aktualisiert Device-Agent-Verbindung, Maintenance-Token oder rotiert Webhook-Zugangsdaten.",
         "data": {
-          "agent_host": "Adresse des Geräts",
-          "agent_port": "Port des Device-Agents",
-          "agent_token": "API-Token",
-          "maintenance_token": "Maintenance-Token",
-          "callback_base_url": "Callback-Basis-URL Override (optional)",
+          "agent_host": "Adresse des C300X",
+          "agent_port": "Port",
+          "agent_token": "Zugangsschlüssel",
+          "maintenance_token": "Wartungsschlüssel",
+          "callback_base_url": "Adresse von Home Assistant für den C300X (optional)",
           "rotate_shared_secret": "Shared Secret rotieren"
         },
         "data_description": {
-          "agent_host": "IP-Adresse oder Hostname des C300X, auf dem der Device-Agent läuft.",
-          "agent_port": "HTTP-Port des Device-Agents. Standard ist 8091.",
-          "agent_token": "Token, das Home Assistant bei jeder Anfrage an den Device-Agent mitschickt.",
-          "maintenance_token": "Eigenes Token für Wartungsaktionen wie Updates, Patches und Neustart.",
-          "callback_base_url": "Leer lassen, um das bisherige Verhalten beizubehalten. HTTP initialisiert kein TLS. Eine explizite HTTPS-URL aktiviert geprüftes TLS, benötigt einen aktualisierten Agenten und ein vertrauenswürdiges, zum Hostnamen passendes Zertifikat und erzeugt zusätzliche Gerätelast. Beim Wechsel HTTP/HTTPS startet nur der Agent neu, sobald keine Medien aktiv sind."
+          "agent_host": "IP-Adresse oder Hostname deines C300X.",
+          "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt.",
+          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts.",
+          "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
         }
       },
       "reconfigure_features": {
@@ -147,19 +147,19 @@
         "description": "Aktualisiert Medien- und Home-Assistant-Media-User-Einstellungen.",
         "data": {
           "video_enabled": "Video und Ton der Türstation",
-          "create_homeassistant_user": "Media-Benutzer auf dem Gerät einrichten",
+          "create_homeassistant_user": "Zugang für Video und Ton auf dem C300X einrichten",
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
-          "ring_capture_audio_gain_db": "Lautstärke Ring Capture (dB)",
-          "webrtc_ice_policy": "Netzwerkadressen für den Livestream",
-          "native_two_way_audio": "Two-way Audio im HA-Kameraplayer"
+          "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
+          "webrtc_ice_policy": "Verbindungswege für das Livebild",
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
-          "create_homeassistant_user": "Video und Ton brauchen einen lokalen Benutzer auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
+          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
-          "ring_capture_audio_gain_db": "Lautstärke des Tons in Ring-Capture-Aufnahmen. -20 bis +20 dB; Standard ist 6.",
-          "webrtc_ice_policy": "Welche Adressen dem Browser für den Livestream angeboten werden. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Benötigt HA 2026.11+, Two-way Audio unter Einstellungen > System > Labs, WebRTC, HTTPS und die Mikrofonfreigabe im Browser. Eingehende Anrufe zuerst über die C300X-Karte annehmen; diese Option nimmt sie nicht automatisch an. Talkback in der Karte bleibt unverändert. Kein zusätzliches Polling im Leerlauf und kein Agent-Update nötig."
+          "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
+          "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
         }
       },
       "reconfigure_device_activations": {
@@ -169,7 +169,7 @@
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
           "device_activation_stair_light_n": "Treppenlicht N",
-          "device_activation_flow_action": "Was tun",
+          "device_activation_flow_action": "Aktion",
           "device_activation_flow_target": "Aktivierung"
         },
         "data_description": {
@@ -193,28 +193,28 @@
           "device_activation_item_id": "Buchstaben, Ziffern, _ und -, höchstens 32 Zeichen. Jede ID gibt es nur einmal.",
           "device_activation_item_name": "Name des Buttons in Home Assistant, höchstens 63 Zeichen.",
           "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Licht oder das Treppenlicht.",
-          "device_activation_item_address": "OpenWebNet-Adresse (where), an die die Aktivierung geht, höchstens 31 Zeichen."
+          "device_activation_item_address": "Adresse in der Türanlage, an die die Aktivierung geht (OpenWebNet „where“), höchstens 31 Zeichen."
         }
       },
       "reconfigure_dashboard": {
         "title": "C300X-Display-Dashboard neu konfigurieren",
         "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, folgen im nächsten Schritt die Display-Seiten und ihre Entitäten.",
         "data": {
-          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display (Display-Patch)",
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
           "weather_entity_id": "Wetter",
-          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
-          "actions_json": "Erlaubte Aktionen (JSON)",
+          "dashboard_dynamic_homepage": "Dynamischer Startseiten-Modus",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
         "data_description": {
-          "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X. Aus: stellt die originalen Display-Dateien wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
+          "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
           "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite des Displays zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden.",
           "weather_entity_id": "Wetter-Entität für die Wetterkarte auf der Statusseite. Leer lassen für keine Wetterkarte.",
-          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite nur, solange sie etwas zu öffnen haben. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
-          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen: ein Eintrag je Aktions-ID mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
         }
       },
@@ -477,38 +477,38 @@
         "title": "C300X-Einstellungen",
         "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest; die anderen Bereiche behalten ihre Einstellungen.",
         "menu_options": {
-          "dashboard_pages": "Display-Seiten",
-          "dashboard_entity_display": "Display-Kacheln",
-          "dashboard": "Display und Display-Patch",
+          "connection": "Verbindung zum C300X",
           "features": "Video und Audio",
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
-          "connection": "Verbindung zum Gerät"
+          "dashboard": "Display und Display-Patch",
+          "dashboard_pages": "Display-Seiten",
+          "dashboard_entity_display": "Display-Kacheln"
         },
         "menu_option_descriptions": {
-          "dashboard_pages": "Welche Entitäten auf dem Display erscheinen, auf welcher Seite und in welcher Reihenfolge.",
-          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
-          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Alarm, Wetter und Standby-Aktionen.",
-          "features": "Kamerastream, Gegensprechen, Lautstärken und der Media-Benutzer auf dem Gerät.",
+          "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
+          "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
-          "connection": "Adresse und Tokens des Device-Agents, Callback-Adresse von Home Assistant."
+          "dashboard": "Home-Assistant-Seiten auf dem Display, dynamischer Startseiten-Modus, Alarm, Wetter und Aktionen.",
+          "dashboard_pages": "Welche Entitäten auf dem Display erscheinen, auf welcher Seite und in welcher Reihenfolge.",
+          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel."
         }
       },
       "connection": {
-        "title": "Verbindung zum Gerät",
-        "description": "So erreicht Home Assistant den Device-Agent auf dem C300X.",
+        "title": "Verbindung zum C300X",
+        "description": "So erreichen sich Home Assistant und der C300X.",
         "data": {
-          "agent_host": "Adresse des Geräts",
-          "agent_port": "Port des Device-Agents",
-          "agent_token": "API-Token",
-          "maintenance_token": "Maintenance-Token",
-          "callback_base_url": "Callback-Basis-URL Override (optional)"
+          "agent_host": "Adresse des C300X",
+          "agent_port": "Port",
+          "agent_token": "Zugangsschlüssel",
+          "maintenance_token": "Wartungsschlüssel",
+          "callback_base_url": "Adresse von Home Assistant für den C300X (optional)"
         },
         "data_description": {
-          "agent_host": "IP-Adresse oder Hostname des C300X, auf dem der Device-Agent läuft.",
-          "agent_port": "HTTP-Port des Device-Agents. Standard ist 8091.",
-          "agent_token": "Token, das Home Assistant bei jeder Anfrage an den Device-Agent mitschickt.",
-          "maintenance_token": "Eigenes Token für Wartungsaktionen wie Updates, Patches und Neustart.",
-          "callback_base_url": "Leer lassen, um das bisherige Verhalten beizubehalten. HTTP initialisiert kein TLS. Eine explizite HTTPS-URL aktiviert geprüftes TLS, benötigt einen aktualisierten Agenten und ein vertrauenswürdiges, zum Hostnamen passendes Zertifikat und erzeugt zusätzliche Gerätelast. Beim Wechsel HTTP/HTTPS startet nur der Agent neu, sobald keine Medien aktiv sind."
+          "agent_host": "IP-Adresse oder Hostname deines C300X.",
+          "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt.",
+          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts.",
+          "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
         }
       },
       "features": {
@@ -516,19 +516,19 @@
         "description": "Bild und Ton der Türstation in Home Assistant.",
         "data": {
           "video_enabled": "Video und Ton der Türstation",
-          "create_homeassistant_user": "Media-Benutzer auf dem Gerät einrichten",
+          "create_homeassistant_user": "Zugang für Video und Ton auf dem C300X einrichten",
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
-          "ring_capture_audio_gain_db": "Lautstärke Ring Capture (dB)",
-          "webrtc_ice_policy": "Netzwerkadressen für den Livestream",
-          "native_two_way_audio": "Two-way Audio im HA-Kameraplayer"
+          "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
+          "webrtc_ice_policy": "Verbindungswege für das Livebild",
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
-          "create_homeassistant_user": "Video und Ton brauchen einen lokalen Benutzer auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
+          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
-          "ring_capture_audio_gain_db": "Lautstärke des Tons in Ring-Capture-Aufnahmen. -20 bis +20 dB; Standard ist 6.",
-          "webrtc_ice_policy": "Welche Adressen dem Browser für den Livestream angeboten werden. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Benötigt HA 2026.11+, Two-way Audio unter Einstellungen > System > Labs, WebRTC, HTTPS und die Mikrofonfreigabe im Browser. Eingehende Anrufe zuerst über die C300X-Karte annehmen; diese Option nimmt sie nicht automatisch an. Talkback in der Karte bleibt unverändert. Kein zusätzliches Polling im Leerlauf und kein Agent-Update nötig."
+          "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
+          "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
         }
       },
       "device_activations": {
@@ -538,7 +538,7 @@
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
           "device_activation_stair_light_n": "Treppenlicht N",
-          "device_activation_flow_action": "Was tun",
+          "device_activation_flow_action": "Aktion",
           "device_activation_flow_target": "Aktivierung"
         },
         "data_description": {
@@ -562,28 +562,28 @@
           "device_activation_item_id": "Buchstaben, Ziffern, _ und -, höchstens 32 Zeichen. Jede ID gibt es nur einmal.",
           "device_activation_item_name": "Name des Buttons in Home Assistant, höchstens 63 Zeichen.",
           "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Licht oder das Treppenlicht.",
-          "device_activation_item_address": "OpenWebNet-Adresse (where), an die die Aktivierung geht, höchstens 31 Zeichen."
+          "device_activation_item_address": "Adresse in der Türanlage, an die die Aktivierung geht (OpenWebNet „where“), höchstens 31 Zeichen."
         }
       },
       "dashboard": {
         "title": "Display und Display-Patch",
         "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Einstellungsmenü zusätzlich **Display-Seiten** und **Display-Kacheln**.",
         "data": {
-          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display (Display-Patch)",
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
           "weather_entity_id": "Wetter",
-          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
-          "actions_json": "Erlaubte Aktionen (JSON)",
+          "dashboard_dynamic_homepage": "Dynamischer Startseiten-Modus",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
         "data_description": {
-          "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X. Aus: stellt die originalen Display-Dateien wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
+          "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Alarm, Wetter, Seiten und Kacheln.",
           "alarm_entity_id": "Alarmzentrale, die die Alarm-Seite des Displays zeigt und bedient. Leer lassen, wenn du Alarmo nicht nutzt.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden.",
           "weather_entity_id": "Wetter-Entität für die Wetterkarte auf der Statusseite. Leer lassen für keine Wetterkarte.",
-          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite nur, solange sie etwas zu öffnen haben. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
-          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen: ein Eintrag je Aktions-ID mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
         }
       },

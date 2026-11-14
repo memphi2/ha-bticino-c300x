@@ -2328,7 +2328,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     )
     # Without the Display patch there are no pages or tiles to set up.
     assert _options_menu_of(entry) == [
-        "dashboard", "features", "device_activations", "connection",
+        "connection", "features", "device_activations", "dashboard",
     ]
 
     _flow, result = _options_area(entry, "connection", {
@@ -2383,8 +2383,8 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _save_options_area(entry, result)
     # The patch is on and the Alarmo quick entity has a name to set.
     assert _options_menu_of(entry) == [
-        "dashboard_pages", "dashboard_entity_display",
-        "dashboard", "features", "device_activations", "connection",
+        "connection", "features", "device_activations",
+        "dashboard", "dashboard_pages", "dashboard_entity_display",
     ]
 
     _flow, result = _options_area(entry, "dashboard_pages", {
@@ -2774,8 +2774,8 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
 
     menu = _options_menu_of(entry)
     assert menu == [
-        "dashboard_pages", "dashboard_entity_display",
-        "dashboard", "features", "device_activations", "connection",
+        "connection", "features", "device_activations",
+        "dashboard", "dashboard_pages", "dashboard_entity_display",
     ]
     for step_id in menu:
         _flow, form = _options_area(entry, step_id)
@@ -2785,7 +2785,7 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
     # Tiles need something to show: without an entity the menu leaves them out.
     entry.data[CONF_DASHBOARD_ENTITIES] = []
     assert _options_menu_of(entry) == [
-        "dashboard_pages", "dashboard", "features", "device_activations", "connection",
+        "connection", "features", "device_activations", "dashboard", "dashboard_pages",
     ]
 
 

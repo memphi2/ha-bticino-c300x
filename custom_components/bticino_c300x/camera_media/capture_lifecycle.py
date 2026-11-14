@@ -21,6 +21,7 @@ class RingCaptureCallGuard:
 
     def __init__(self, hass: Any, entry_id: str) -> None:
         self.invalidated = False
+        self.finished = False
         self.started_at: str | None = None
         task = asyncio.current_task()
 
@@ -34,6 +35,11 @@ class RingCaptureCallGuard:
             }:
                 return
             self.invalidated = True
+            if self.finished:
+                # The capture is done and published. The call changing now only
+                # decides whether the cleanup may hang up; it must not turn the
+                # finished capture into a cancelled one.
+                return
             if task is not None and not task.done() and not task.cancelling():
                 task.cancel()
 

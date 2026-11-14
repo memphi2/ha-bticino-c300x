@@ -277,3 +277,32 @@ def test_capture_answer_preserves_capability_check(capture, monkeypatch, stage):
         asyncio.run(use_case.capture())
     entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
     recording.assert_not_awaited()
+
+
+@pytest.mark.parametrize("event", ["call_ended", "doorbell_media_closed", "doorbell_pressed"])
+def test_call_event_during_cleanup_does_not_cancel_a_finished_capture(capture, event):
+    """The clip exists; the call ending while the cleanup reads the status is no cancel."""
+
+    use_case, entry, bus, _, status = capture
+    api = entry.runtime_data.api
+    original_status = api.async_doorbell_video_status
+    recorded = False
+
+    async def record(*args, **kwargs):
+        nonlocal recorded
+        recorded = True
+        return {"capture_id": "test"}
+
+    async def read_status(*args, **kwargs):
+        if recorded:
+            bus.fire(entry.entry_id, event)
+            await asyncio.sleep(0)
+        return await original_status(*args, **kwargs)
+
+    capture[3].side_effect = record
+    api.async_doorbell_video_status = read_status
+
+    assert asyncio.run(use_case.capture()) == {"capture_id": "test"}
+    # The call changed: no automatic hangup of what may be a new call.
+    api.async_hangup_doorbell_call.assert_not_awaited()
+    assert bus.listeners == []

@@ -129,6 +129,8 @@ class RingCaptureUseCase:
                 capture_error = err
                 raise
             finally:
+                if call_guard is not None and capture_error is None:
+                    call_guard.finished = True
                 if on_demand and resources.on_demand_capture_task is capture_task:
                     # RTSP disconnect cleans up our media; never globally stop
                     # a call or camera session which may have replaced it.

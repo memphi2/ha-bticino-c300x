@@ -122,7 +122,14 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
     controls: list[dict[str, Any] | None] = []
     if domain == "light":
         controls.append({"command": "toggle", "kind": "button"})
-        modes = set(attrs.get("supported_color_modes") or ())
+        reported = attrs.get("supported_color_modes")
+        # Only the text items of a list count; one light with an odd attribute
+        # must not break the controls of every other tile.
+        modes = (
+            {mode for mode in reported if isinstance(mode, str)}
+            if isinstance(reported, (list, tuple, set, frozenset))
+            else set()
+        )
         if modes & COLOR_MODES_BRIGHTNESS:
             brightness = finite_number(attrs.get("brightness"))
             controls.append(

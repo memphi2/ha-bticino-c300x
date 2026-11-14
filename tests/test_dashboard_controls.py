@@ -592,3 +592,27 @@ def test_media_player_states_are_compared_as_strings():
     assert "MediaPlayerState" not in source
     off = entity_controls("media_player.room", state("standby", supported_features=128 | 256))
     assert [control["command"] for control in off] == ["toggle"]
+
+
+@pytest.mark.parametrize(
+    "modes",
+    [
+        [["brightness"], "brightness"],
+        [{"mode": "x"}, None, 5, "brightness"],
+        "brightness",
+        None,
+        5,
+    ],
+)
+def test_odd_supported_color_modes_never_break_the_light_controls(modes) -> None:
+    """One custom light with an odd attribute must not blank the whole display.
+
+    A set built from an unhashable item raised TypeError, and the payload has
+    no per-entity guard.
+    """
+
+    controls = entity_controls("light.strip", state("on", supported_color_modes=modes))
+
+    assert [control["command"] for control in controls][0] == "toggle"
+    if isinstance(modes, list) and "brightness" in modes:
+        assert "brightness" in [control["command"] for control in controls]

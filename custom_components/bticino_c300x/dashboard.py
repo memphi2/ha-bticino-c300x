@@ -725,6 +725,10 @@ def _entity_state_label(
             fallback=fallback,
             language=language,
         )
+    if str(entity_id or getattr(state, "entity_id", "")).startswith("sensor."):
+        moment = _sensor_time_label(state_value, attributes.get("device_class"))
+        if moment:
+            return moment
     label = _dashboard_state_label(state_value, language)
     unit = attributes.get("unit_of_measurement")
     labels = _DASHBOARD_STATE_LABELS_BY_LANGUAGE.get(
@@ -735,6 +739,28 @@ def _entity_state_label(
     if label == "unknown" and fallback:
         return fallback
     return _dashboard_text(label, fallback, 60)
+
+
+def _sensor_time_label(state_value: str, device_class: Any) -> str:
+    """Return a timestamp or date sensor as local day, month and time.
+
+    A sensor of these classes reports an ISO text, far too long for a tile.
+    Anything that does not parse is left to the plain label.
+    """
+
+    kind = str(device_class or "").lower()
+    if kind not in {"timestamp", "date"}:
+        return ""
+    try:
+        if kind == "date":
+            return datetime.fromisoformat(state_value).strftime("%d.%m.%Y")
+        moment = datetime.fromisoformat(state_value)
+    except ValueError:
+        return ""
+    as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
+    if callable(as_local) and moment.tzinfo is not None:
+        moment = as_local(moment)
+    return moment.strftime("%d.%m. %H:%M")
 
 
 def _binary_sensor_state_label(

@@ -107,3 +107,54 @@ def test_payload_includes_fan_controls_and_read_only_sensor_details():
     assert "controls" not in door
     assert door["details"]["value"] == "Offen"
     assert door["color"] == "#ff6b6b"
+
+
+@pytest.mark.parametrize(
+    ("value", "device_class", "expected"),
+    [
+        # A timestamp is shown as local day, month and time, never as ISO text.
+        ("2026-11-14T09:30:00+00:00", "timestamp", "14.11. 09:30"),
+        ("2026-11-14T09:30:00Z", "timestamp", "14.11. 09:30"),
+        ("2026-11-14", "date", "14.11.2026"),
+        # What does not parse keeps the plain label.
+        ("soon", "timestamp", "soon"),
+        ("2026-11-14T09:30:00+00:00", None, "2026-11-14T09:30:00+00:00"),
+    ],
+)
+def test_timestamp_and_date_sensors_show_a_short_local_time(value, device_class, expected):
+    from homeassistant.util import dt as dt_util
+
+    dt_util.set_default_time_zone(dt_util.UTC)
+    attrs = {"device_class": device_class} if device_class else {}
+    item = _dashboard_item_for_entity(
+        SimpleNamespace(
+            states=SimpleNamespace(get=lambda _entity: snapshot(value, **attrs)),
+            config=SimpleNamespace(language="en"),
+        ),
+        "sensor.last_ring",
+        10,
+    )
+    assert item["state_label"] == expected
+    assert item["details"]["value"] == expected
+
+
+def test_a_timestamp_shows_in_the_local_time_zone():
+    from zoneinfo import ZoneInfo
+
+    from homeassistant.util import dt as dt_util
+
+    dt_util.set_default_time_zone(ZoneInfo("Europe/Berlin"))
+    try:
+        item = _dashboard_item_for_entity(
+            SimpleNamespace(
+                states=SimpleNamespace(
+                    get=lambda _entity: snapshot("2026-11-14T09:30:00+00:00", device_class="timestamp")
+                ),
+                config=SimpleNamespace(language="de"),
+            ),
+            "sensor.last_ring",
+            10,
+        )
+    finally:
+        dt_util.set_default_time_zone(dt_util.UTC)
+    assert item["state_label"] == "14.11. 10:30"

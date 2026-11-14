@@ -104,3 +104,37 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
         assert status["checks"]["device_routing"]["reason"] == "device_routing_missing"
     for path, original in originals.items():
         assert (path.read_bytes(), path.stat().st_mtime_ns) == original
+
+
+def test_native_account_line_is_added_to_a_file_without_a_final_newline(tmp_path: Path) -> None:
+    """The line that is added needs the newline that ends the last account too.
+
+    The output buffer was sized for the old content plus the new line, so a
+    file whose last line had no newline was refused as too large and the
+    Home Assistant account could not be provisioned on that device.
+    """
+
+    binary = tmp_path / "device-user-accounts"
+    subprocess.run(
+        [
+            "gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+            "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
+            f"-DFLEXISIP_ACCOUNTS_FILE={json.dumps(str(tmp_path / 'accounts.txt'))}",
+            str(NATIVE / "test/device_user_accounts_test.c"),
+            str(NATIVE / "src/string_util.c"),
+            "-o", str(binary),
+        ], check=True, capture_output=True, text=True,
+    )
+
+    result = subprocess.run([str(binary)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stdout
+    assert result.stdout.splitlines() == [
+        "unterminated:Alice|alice",
+        "Bob|bob",
+        "Home Assistant|homeassistant",
+        "terminated:Alice|alice",
+        "Bob|bob",
+        "Home Assistant|homeassistant",
+        "empty:Home Assistant|homeassistant",
+    ]

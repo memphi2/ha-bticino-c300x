@@ -793,7 +793,7 @@ static int ensure_account_line(
         set_error(error, error_len, "account_label_too_long");
         return 0;
     }
-    output_cap = accounts->len + strlen(expected_line) + 1;
+    output_cap = accounts->len + 1 + strlen(expected_line) + 1;
     output = calloc(output_cap, 1);
     if (output == NULL) {
         set_error(error, error_len, "out_of_memory");

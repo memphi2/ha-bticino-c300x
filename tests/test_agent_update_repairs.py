@@ -418,7 +418,7 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) ->
 
 
 @pytest.mark.parametrize("bootstrap", [False, True])
-def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap) -> None:
+def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
@@ -438,6 +438,11 @@ def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "update_failed"}
     assert entry.data.get("agent_update_payload_pending", False) is bootstrap
+    # The user sees a translated form; the cause has to be in the log.
+    assert any(
+        "agent update failed" in record.getMessage() and "upload failed" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_failed_second_transaction_remains_repairable_after_reload(monkeypatch) -> None:
@@ -653,7 +658,7 @@ def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
     assert hass.config_entries.reloads == ["entry-1"]
 
 
-def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
+def test_agent_update_repair_ssh_install_reports_failures(monkeypatch, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(
@@ -693,6 +698,12 @@ def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "ssh_install"
     assert result["errors"] == {"base": "ssh_install_failed"}
+    assert any(
+        "SSH install failed" in record.getMessage() and "ssh failed" in record.getMessage()
+        for record in caplog.records
+    )
+    # The password the user typed is never part of the log.
+    assert not any("secret" in record.getMessage() for record in caplog.records)
 
 
 def test_capture_external_patch_state_tolerates_agent_status_errors() -> None:

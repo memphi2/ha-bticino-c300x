@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import suppress
 from typing import Any, cast
 
@@ -59,6 +60,7 @@ from .device_installer import (
 )
 from .device_user import homeassistant_account_label
 from .entry_config import entry_config_value
+from .error_text import compact_error_text
 from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
@@ -78,6 +80,8 @@ from .repair_issues import (
     repair_issue_id,
 )
 from .schema_compat import vol
+
+_LOGGER = logging.getLogger(__name__)
 
 _AGENT_UPDATE_RESTART_SETTLE_SECONDS = 1.0
 
@@ -476,7 +480,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             _clear_qml_followup(self.hass, entry)
             await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
-        except Exception:  # noqa: BLE001 - Repairs shows a translated failure
+        except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
+            _LOGGER.warning("C300X agent update failed: %s", compact_error_text(err))
             return self.async_show_form(
                 step_id="confirm",
                 data_schema=vol.Schema({}),
@@ -586,7 +591,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             _clear_qml_followup(self.hass, entry)
             await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
-        except Exception:  # noqa: BLE001 - Repairs shows a translated failure
+        except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
+            _LOGGER.warning("C300X SSH install failed: %s", compact_error_text(err))
             return self.async_show_form(
                 step_id="ssh_install",
                 data_schema=_ssh_install_schema(),

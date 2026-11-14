@@ -152,8 +152,8 @@ def _format_client_debug_snapshot(snapshot: dict[str, Any]) -> str:
         value = _nested_value(snapshot, path)
         if value is None or value == "":
             continue
-        if name == "session":
-            value = _short_session_id(str(value))
+        if name == "session" and isinstance(value, str):
+            value = _short_session_id(value)
         parts.append(f"{name}={_format_debug_value(value)}")
     return " ".join(parts)
 

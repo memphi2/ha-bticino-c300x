@@ -251,3 +251,19 @@ def test_a_nested_debug_value_is_not_rendered_in_full_before_it_is_cut() -> None
     assert len(debug_ws._format_debug_value(1e308)) <= debug_ws._MAX_DEBUG_VALUE_LENGTH
     assert debug_ws._format_debug_value(7) == "7"
     assert debug_ws._format_debug_value(True) == "True"
+
+
+def test_nested_session_id_uses_the_bounded_debug_formatter() -> None:
+    class Counted:
+        rendered = 0
+
+        def __repr__(self) -> str:
+            Counted.rendered += 1
+            return "x"
+
+    value = [[Counted() for _ in range(100)] for _ in range(100)]
+    formatted = debug_ws._format_client_debug_snapshot({"session_id": value})
+
+    assert formatted.startswith("session=")
+    assert len(formatted) <= len("session=") + debug_ws._MAX_DEBUG_VALUE_LENGTH
+    assert Counted.rendered < 100

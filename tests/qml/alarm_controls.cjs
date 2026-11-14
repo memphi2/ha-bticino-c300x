@@ -309,3 +309,14 @@ assert.equal(early.commandAwaitedState, "", "a state that already changed is not
 state(early, "armed_home");
 assert.equal(early.commandPending, false, "nothing left to wait for after the change was seen");
 }
+
+for (const [command, raw] of [["arm_home", "armed_home"], ["disarm", "disarmed"]]) {
+    const satisfied = page();
+    satisfied.alarmRawState = raw;
+    satisfied.alarmCommandDetails = [{command, code_required: false}];
+    Api.alarmCommand(command, "", satisfied.status, satisfied, satisfied.alarmState, satisfied.activeSince, false);
+    pending.shift().success({ok: true, state: raw});
+    state(satisfied, raw);
+    assert.equal(satisfied.commandPending, false, "already-satisfied command releases controls on unchanged status");
+    assert.equal(satisfied.commandAwaitedState, "");
+}

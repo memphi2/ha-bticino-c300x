@@ -516,7 +516,9 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         }
         if (data.ok) {
             pageItem.commandPending = true
-            if (pageItem.alarmRawState === sentState) pageItem.commandAwaitedState = sentState
+            var targetState = pageItem.commandTargetState ? pageItem.commandTargetState(command) : ""
+            var alreadySatisfied = targetState && sentState === targetState && data.state === targetState
+            if (pageItem.alarmRawState === sentState && !alreadySatisfied) pageItem.commandAwaitedState = sentState
             if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("sending", command, "#f1c40f")
             } else {

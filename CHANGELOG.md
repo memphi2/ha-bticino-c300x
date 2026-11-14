@@ -70,6 +70,9 @@
 
 ### Fixed
 
+- Keep Alarmo controls usable after successfully requesting an already active
+  mode; an unchanged confirmed state no longer leaves commands pending.
+
 - Recover unavailable entities and memo/message caches after agent reconnects
   without idle polling. Coalesce reconnect reads and cancel them on entity
   removal; ignore registry changes belonging to other integrations.

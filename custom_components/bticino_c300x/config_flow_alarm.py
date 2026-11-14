@@ -124,7 +124,8 @@ def alarm_step(
         data, errors = alarm_input(current, user_input)
         if not errors:
             return data, None
-        schema = flow.add_suggested_values_to_schema(schema, user_input)
+        # An omitted optional picker was cleared, not left unchanged.
+        schema = alarm_schema(user_input)
     return None, flow.async_show_form(
         step_id=step_id, data_schema=schema, errors=errors
     )

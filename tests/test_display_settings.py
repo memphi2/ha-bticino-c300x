@@ -569,6 +569,21 @@ def test_the_alarm_area_rejects_a_wrong_entity(monkeypatch, changes, errors):
     assert form["step_id"] == "dashboard_alarm"
 
 
+def test_alarm_error_does_not_restore_a_cleared_picker():
+    entry = SimpleNamespace(
+        data={"device_ui_enabled": True, "alarm_entity_id": "alarm_control_panel.home"},
+        options={}, runtime_data=None,
+    )
+    flow = _OptionsAreas(entry)._flow()
+    result = asyncio.run(flow.async_step_dashboard_alarm({
+        "alarm_page_entity_id": "camera.invalid",
+    }))
+
+    assert result["errors"] == {"alarm_page_entity_id": "invalid_alarm_page_entity"}
+    alarm_key = next(key for key in result["data_schema"].schema if str(key) == "alarm_entity_id")
+    assert not (alarm_key.description or {}).get("suggested_value")
+
+
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
 @pytest.mark.parametrize("changes,errors", [
     ({"page_1": {"weather_entity_id": "sensor.temp"}}, {"page_1": "invalid_weather_entity"}),

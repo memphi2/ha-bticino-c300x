@@ -1548,8 +1548,17 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
     ]
 
 
-def test_zeroconf_merges_existing_manual_entry_when_token_matches(
+@pytest.mark.parametrize("host,port,merge", [
+    ("192.0.2.60", 8091, True),
+    ("192.0.2.99", 8091, False),
+    ("192.0.2.60", 8092, False),
+    ("c300x-agent.local.", 8091, False),
+])
+def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
     monkeypatch: pytest.MonkeyPatch,
+    host: str,
+    port: int,
+    merge: bool,
 ) -> None:
     calls: list[str] = []
     entry = SimpleNamespace(
@@ -1587,8 +1596,9 @@ def test_zeroconf_merges_existing_manual_entry_when_token_matches(
         *,
         api_token: str = "",
     ) -> str:
+        assert api_token == "", "Discovery must never disclose saved credentials"
         calls.append(f"probe:{connection[CONF_AGENT_HOST]}:{api_token}")
-        return "reachable" if api_token == "known-token" else "missing"
+        return "missing"
 
     flow.async_set_unique_id = async_set_unique_id  # type: ignore[method-assign]
     flow._abort_if_unique_id_configured = abort_if_unique_id_configured  # type: ignore[method-assign]
@@ -1602,22 +1612,51 @@ def test_zeroconf_merges_existing_manual_entry_when_token_matches(
     result = asyncio.run(
         flow.async_step_zeroconf(
             SimpleNamespace(
-                host="c300x-agent.local.",
-                port=8091,
+                host=host,
+                port=port,
                 properties={"id": "c300x-aabbcc001122", "name": "Door Station"},
                 name="BTicino C300X Agent._bticino-c300x-agent._tcp.local.",
             )
         )
     )
 
-    assert result == {"type": "abort", "reason": "already_configured"}
+    assert result == {"type": "abort", "reason": "already_configured" if merge else "cannot_connect"}
     assert calls == [
         "unique:c300xaabbcc001122",
         "abort_check",
-        "probe:c300x-agent.local.:known-token",
-        "update:bticino_c300x:192.0.2.60:8091:c300xaabbcc001122",
-        "abort:already_configured",
+        *([
+            "update:bticino_c300x:192.0.2.60:8091:c300xaabbcc001122",
+            "abort:already_configured",
+        ] if merge else [f"probe:{host}:", "abort:cannot_connect"]),
     ]
+
+
+def test_zeroconf_identity_cannot_redirect_an_existing_entry(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.context = {}
+
+    async def set_identity(*args, **kwargs):
+        pass
+
+    def abort_existing(**kwargs):
+        assert "updates" not in kwargs
+        raise RuntimeError("already configured")
+
+    flow.async_set_unique_id = set_identity
+    flow._abort_if_unique_id_configured = abort_existing
+    flow._async_current_entries = lambda: []
+
+    async def forbid_probe(*args, **kwargs):
+        pytest.fail("A rediscovered identity must not probe the announced endpoint")
+
+    monkeypatch.setattr(config_flow_module, "_async_probe_agent", forbid_probe)
+    with pytest.raises(RuntimeError, match="already configured"):
+        asyncio.run(flow.async_step_zeroconf(SimpleNamespace(
+            host="192.0.2.99", port=8091,
+            properties={"id": "c300x-aabbcc001122"},
+            name="BTicino C300X Agent._bticino-c300x-agent._tcp.local.",
+        )))
 
 
 def test_zeroconf_rediscovery_requests_runtime_event_registration(
@@ -2201,7 +2240,30 @@ def test_dashboard_input_defaults_preserve_existing_keep_page_open() -> None:
     result = _dashboard_input_defaults({}, defaults)
 
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
-    assert result[CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
+    assert result[CONF_ALARM_PAGE_ENTITY_ID] == ""
+
+
+def test_submitted_dashboard_clears_omitted_optional_fields():
+    defaults = {
+        CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+        CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
+        CONF_WEATHER_ENTITY_ID: "weather.home",
+        CONF_DASHBOARD_ENTITIES: ["light.room"],
+        CONF_ACTIONS: {"open": {"service": "button.press", "entity_id": "button.door"}},
+        CONF_DASHBOARD_PREVENT_RETURN: True,
+    }
+    schema = _dashboard_schema(
+        default_alarm_entity=defaults[CONF_ALARM_ENTITY_ID],
+        default_actions_json="{}",
+        default_weather_entity=defaults[CONF_WEATHER_ENTITY_ID],
+        default_alarm_page_entity=defaults[CONF_ALARM_PAGE_ENTITY_ID],
+        default_dashboard_entities=defaults[CONF_DASHBOARD_ENTITIES],
+    )
+    result = _dashboard_input_defaults(schema({}), defaults)
+    for key in (CONF_ALARM_ENTITY_ID, CONF_ALARM_PAGE_ENTITY_ID, CONF_WEATHER_ENTITY_ID, CONF_ACTIONS_JSON):
+        assert result[key] == ""
+    assert result[CONF_DASHBOARD_ENTITIES] == []
+    assert result[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {}
 
 
 @pytest.mark.parametrize(

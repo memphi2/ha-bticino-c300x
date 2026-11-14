@@ -838,8 +838,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             decision
         ):
             return f"ring:{self._entry.entry_id}"
-        suffix = "audio" if wants_audio else "video"
-        return f"doorbell:{self._entry.entry_id}:{suffix}"
+        # Video-only offers also consume /doorbell. A failed offer must not
+        # stop the shared native source while another offer still owns it.
+        return f"doorbell:{self._entry.entry_id}"
 
     async def _async_cleanup_failed_provider_offer(
         self,

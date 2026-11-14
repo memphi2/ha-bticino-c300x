@@ -70,16 +70,21 @@ void c300x_http_clients_handle(struct c300x_http_clients *clients, const struct 
         if (client->fd < 0) {
             continue;
         }
-        if (client->deadline <= c300x_system_metrics_monotonic_ms()) {
-            clear_client(client);
-            continue;
-        }
-        if (fds[i].fd != client->fd || !fds[i].revents) {
+        /* Data may have arrived during a previous handler, after poll().
+         * Give expired clients one nonblocking read, never another wait. */
+        int expired = client->deadline <= c300x_system_metrics_monotonic_ms();
+        if (!expired && (fds[i].fd != client->fd || !fds[i].revents)) {
             continue;
         }
         ssize_t received = recv(client->fd, client->buffer + client->used,
             REQUEST_BUFFER_SIZE - client->used - 1, MSG_DONTWAIT);
-        if (received < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (received < 0 && errno == EINTR) {
+            continue;
+        }
+        if (received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            if (expired) {
+                clear_client(client);
+            }
             continue;
         }
         if (received <= 0) {
@@ -90,6 +95,9 @@ void c300x_http_clients_handle(struct c300x_http_clients *clients, const struct 
         int size_error;
         int status = c300x_http_request_status(client->buffer, client->used, REQUEST_BUFFER_SIZE, &size_error);
         if (status == 0) {
+            if (client->deadline <= c300x_system_metrics_monotonic_ms()) {
+                clear_client(client);
+            }
             continue;
         }
         if (status > 0) {

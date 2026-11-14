@@ -484,7 +484,10 @@ def test_palette_cannot_bypass_color_capabilities(attrs, value):
 # SELECT_SOUND_MODE 65536.
 @pytest.mark.parametrize("value,features,commands", [
     ("playing", 1 | 16 | 32 | 16384, ["media_previous_track", "media_play_pause", "media_next_track"]),
-    ("playing", 16384, ["media_play_pause"]),
+    ("playing", 16384, []),
+    ("playing", 1, ["media_play_pause"]),
+    ("paused", 1, []),
+    ("paused", 16384, ["media_play_pause"]),
     ("playing", 128 | 256, ["toggle"]),
     ("off", 128, ["toggle"]),
     ("off", 256, []),
@@ -526,6 +529,14 @@ def test_media_player_controls_carry_bounded_values():
         assert unknown[0]["value"] is None
     # No source list means no source control instead of an empty picker.
     assert entity_controls("media_player.room", state("playing", supported_features=2048)) == []
+
+
+@pytest.mark.parametrize("value,features", [("playing", 16384), ("paused", 1), ("idle", 1)])
+def test_media_player_rejects_playback_command_without_required_state_feature(value, features):
+    hass = hass_for(state(value, supported_features=features))
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "media_player.room", "media_play_pause", None))
+    hass.services.async_call.assert_not_awaited()
 
 
 @pytest.mark.parametrize("value,attrs,command,option,service,data", [

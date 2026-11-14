@@ -54,12 +54,14 @@ Page {
     property bool dashboardLoading: false
     property bool dashboardRefreshAgain: false
     property bool pageActive: false
+    onPageActiveChanged: refreshFeedbackExpiry()
     property bool watchFailed: false
     property int runtimeGeneration: 0
     property string pendingEntity: ""
     property bool controlInFlight: false
     property int commandGeneration: 0
     property variant controlFeedback: []
+    onControlFeedbackChanged: scheduleFeedbackExpiry()
     property bool interactionActive: false
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
     // its bindings. Doing that inside a flick drops frames on the device, and the
@@ -216,6 +218,28 @@ Page {
         if (!dashboardOnline || key === "state_unconfirmed" || key === "sending") return "#f1c40f"
         if (key === "action_error") return "#ff6b6b"
         return key === "state_confirmed" ? "#58d68d" : "#c7d0d9"
+    }
+
+    function scheduleFeedbackExpiry() {
+        if (!feedbackExpiry) return
+        feedbackExpiry.stop()
+        if (!pageActive) return
+        var delay = Api.nextFeedbackDelay(controlFeedback)
+        if (delay > 0) {
+            feedbackExpiry.interval = delay
+            feedbackExpiry.restart()
+        }
+    }
+
+    function refreshFeedbackExpiry() {
+        if (pageActive) Api.expireDashboardFeedback(page)
+        scheduleFeedbackExpiry()
+    }
+
+    Timer {
+        id: feedbackExpiry
+        repeat: false
+        onTriggered: refreshFeedbackExpiry()
     }
 
     function replayDeferredRefresh() {

@@ -136,6 +136,7 @@ class _FakeHass:
         self.data: dict[str, Any] = {}
         self.config_entries = _FakeConfigEntries(entries)
         self.services = _FakeServices()
+        self.bus = types.SimpleNamespace(async_listen=lambda *_: lambda: None)
 
 
 class _FakeApi:
@@ -190,6 +191,7 @@ class _FakeApi:
         )
         self.doorbell_video_status = {
             **self.doorbell_video_status,
+            "last_media_started_at": "2026-11-14T12:00:00Z",
             "available": True,
             "window_available": True,
             "media_owner": "ring",
@@ -1546,7 +1548,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
         assert result == captured
         assert hass.services.responses[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)].value == "optional"
         assert api.capture_doorbell_call_calls == 0
-        assert api.doorbell_video_status_calls == 3
+        assert api.doorbell_video_status_calls == 4
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1591,7 +1593,7 @@ def test_capture_doorbell_call_service_uses_stored_runtime_data(monkeypatch) -> 
         captured_entry = calls[0]["args"][1]
         assert captured_entry.entry_id == "entry-id"
         assert captured_entry.runtime_data is runtime_data
-        assert api.doorbell_video_status_calls == 3
+        assert api.doorbell_video_status_calls == 4
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1851,7 +1853,7 @@ def test_capture_doorbell_call_service_allows_shared_ring_preview(
         await handler(types.SimpleNamespace(data={}))
 
         assert len(calls) == 1
-        assert api.doorbell_video_status_calls == 3
+        assert api.doorbell_video_status_calls == 4
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1941,7 +1943,7 @@ def test_capture_doorbell_call_service_answers_audio_capture_without_announcemen
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         await handler(types.SimpleNamespace(data={}))
 
-        assert api.doorbell_video_status_calls == 3
+        assert api.doorbell_video_status_calls == 4
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1989,8 +1991,8 @@ def test_capture_doorbell_call_service_waits_for_answered_ring_before_capture(
 
         async def _status() -> dict[str, Any]:
             if statuses:
-                return statuses.pop(0)
-            raise AssertionError("unexpected extra status poll")
+                api.doorbell_video_status = {**statuses.pop(0), "last_media_started_at": "2026-11-14T12:00:00Z"}
+            return api.doorbell_video_status
 
         async def _answer() -> dict[str, Any]:
             calls.append("answer")
@@ -2066,8 +2068,8 @@ def test_capture_doorbell_call_service_tolerates_transient_status_gap_after_answ
 
         async def _status() -> dict[str, Any]:
             if statuses:
-                return statuses.pop(0)
-            raise AssertionError("unexpected extra status poll")
+                api.doorbell_video_status = {**statuses.pop(0), "last_media_started_at": "2026-11-14T12:00:00Z"}
+            return api.doorbell_video_status
 
         async def _answer() -> dict[str, Any]:
             calls.append("answer")
@@ -2166,7 +2168,7 @@ def test_capture_doorbell_call_service_uses_ring_hangup_prepare(
     asyncio.run(_run())
 
 
-def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
+def test_capture_doorbell_call_service_does_not_hang_up_unconfirmed_call(
     monkeypatch,
 ) -> None:  # noqa: ANN001
     async def _run() -> None:
@@ -2191,7 +2193,7 @@ def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
                     "media_owner": "ring",
                     "ring_call_active": True,
                     "ring_media_active": True,
-                    "ring_answer_requested": True,
+                    "ring_answer_requested": False,
                 }
             },
         ]
@@ -2243,9 +2245,9 @@ def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
         else:
             raise AssertionError("answer wait failure was not translated")
 
-        assert calls == ["answer", "prepare", "hangup"]
+        assert calls == ["answer"]
         assert api.answer_doorbell_call_calls == [True]
-        assert api.hangup_doorbell_call_calls == 1
+        assert api.hangup_doorbell_call_calls == 0
 
     asyncio.run(_run())
 

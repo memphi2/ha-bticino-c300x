@@ -290,3 +290,4 @@ assert.equal(stopped.forwardActive, null);
 assert.equal(stoppedSent.length, 1, "no queued request is started by the teardown");
 assert.equal(stopped.connections.length, 0);
 console.log("Alarm QML production controls passed");
+require("./display_runtime.cjs");

@@ -296,6 +296,82 @@ def test_setup_entry_rejects_missing_required_fields() -> None:
     assert asyncio.run(integration.async_setup_entry(hass, entry)) is False
 
 
+@pytest.mark.parametrize("stage", ["event-webhook", "event-registration", "services", "platforms"])
+@pytest.mark.parametrize("cancelled", [False, True])
+@pytest.mark.parametrize("cleanup_error", [False, True])
+def test_setup_failure_releases_callbacks_and_allows_retry(
+    monkeypatch, stage, cancelled, cleanup_error
+):
+    from custom_components.bticino_c300x import events, repair_issues, services, webhook
+
+    active = set()
+    fail = True
+    original_error = asyncio.CancelledError() if cancelled else RuntimeError("setup failed")
+
+    def checkpoint(name):
+        if fail and stage == name:
+            raise original_error
+
+    def register(name):
+        checkpoint(name)
+        assert name not in active
+        active.add(name)
+
+        def release():
+            active.remove(name)
+            if fail and cleanup_error and name == "event-webhook":
+                raise RuntimeError("cleanup failed")
+
+        return release
+
+    async def register_events(*args, **kwargs):
+        return register("event-registration")
+
+    async def service_setup(hass):
+        checkpoint("services")
+
+    async def platforms(self):
+        checkpoint("platforms")
+
+    async def noop(*args):
+        pass
+
+    monkeypatch.setattr(webhook, "async_register_webhook", lambda *args: register("webhook"))
+    monkeypatch.setattr(webhook, "async_register_agent_event_webhook", lambda *args: register("event-webhook"))
+    monkeypatch.setattr(events, "async_start_agent_event_registration", register_events)
+    monkeypatch.setattr(services, "async_setup_services", service_setup)
+    monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", lambda *args: None)
+    monkeypatch.setattr(runtime_manager, "_async_remove_stale_gui_dependent_entities", lambda *args: None)
+    manager_type = runtime_manager.C300XRuntimeManager
+    monkeypatch.setattr(manager_type, "_required_config_present", lambda self: True)
+    monkeypatch.setattr(manager_type, "_build_agent_api", lambda self: object())
+    monkeypatch.setattr(manager_type, "async_validate_agent", noop)
+    monkeypatch.setattr(manager_type, "async_sync_platform_gate_state", noop)
+    monkeypatch.setattr(manager_type, "async_sync_activation_state", noop)
+    monkeypatch.setattr(manager_type, "async_forward_platforms", platforms)
+    monkeypatch.setattr(manager_type, "async_schedule_startup_sync", lambda self: None)
+    entry = _entry()
+    entry.add_update_listener = lambda callback: lambda: None
+    entry.async_on_unload = lambda callback: None
+    hass = SimpleNamespace(data={})
+
+    async def exercise():
+        with pytest.raises(type(original_error)) as caught:
+            await manager_type(hass, entry).async_prepare()
+        assert caught.value is original_error
+        assert not active
+        assert entry.entry_id not in hass.data[DOMAIN].get(DATA_RUNTIME_ENTRIES, {})
+
+        nonlocal fail
+        fail = False
+        assert await manager_type(hass, entry).async_prepare()
+        assert active == {"webhook", "event-webhook", "event-registration"}
+        runtime_manager.cleanup_entry_runtime_resources(hass, entry)
+        assert not active
+
+    asyncio.run(exercise())
+
+
 def test_remove_entry_clears_repair_issues_and_runtime_resources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -323,9 +399,11 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
             unregister_event_webhook=lambda: callbacks.append("event-webhook"),
             unregister_webhook=lambda: callbacks.append("webhook"),
             memos_refresh_task=SimpleNamespace(
+                cancelling=lambda: 0,
                 cancel=lambda: cancelled.append("memos")
             ),
             answering_machine_messages_refresh_task=SimpleNamespace(
+                cancelling=lambda: 0,
                 cancel=lambda: cancelled.append("messages")
             ),
         ),
@@ -1419,9 +1497,11 @@ def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
             unregister_event_webhook=lambda: callbacks.append("event-webhook"),
             unregister_webhook=lambda: callbacks.append("webhook"),
             memos_refresh_task=SimpleNamespace(
+                cancelling=lambda: 0,
                 cancel=lambda: cancelled.append("memos")
             ),
             answering_machine_messages_refresh_task=SimpleNamespace(
+                cancelling=lambda: 0,
                 cancel=lambda: cancelled.append("messages")
             ),
         ),
@@ -1471,9 +1551,11 @@ def test_unload_entry_preserves_runtime_state_when_platform_unload_fails() -> No
             unregister_event_webhook=lambda: callbacks.append("event-webhook"),
             unregister_webhook=lambda: callbacks.append("webhook"),
             memos_refresh_task=SimpleNamespace(
+                cancelling=lambda: 0,
                 cancel=lambda: cancelled.append("memos")
             ),
             answering_machine_messages_refresh_task=SimpleNamespace(
+                cancelling=lambda: 0,
                 cancel=lambda: cancelled.append("messages")
             ),
         ),

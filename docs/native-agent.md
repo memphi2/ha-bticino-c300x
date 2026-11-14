@@ -160,6 +160,10 @@ uses a per-device TXT `id` and host name derived from the device MAC address
 when available, with a hostname fallback, and is controlled by the `mdns.enabled`
 config flag and the HA mDNS maintenance switch.
 
+Discovery announcements never receive stored access tokens or change an existing
+entry's host and port. If the device address changes, use **Reconfigure** in Home
+Assistant to confirm the new address. A DHCP reservation avoids address changes.
+
 The Display patch and Display reload maintenance paths are intentionally narrow: the
 agent can only run the configured local UI helper with fixed `status`, `apply`,
 `restore`, or `reload` arguments. The patch is a complete Display patch, not just two extra pages: it wires MainApp navigation, transforms the

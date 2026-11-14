@@ -78,6 +78,7 @@ Page {
     function pausePage() {
         pageActive = false
         runtimeGeneration += 1
+        Api.cancelPageCommands(page)
         clearPin()
         pinRequested = false
         commandPending = false
@@ -105,6 +106,7 @@ Page {
             return
         }
         lastStatusRefreshMs = now
+        if (force) Api.invalidateSharedRead("/ui/state")
         Api.status(status, page, alarmState, activeSince)
     }
 
@@ -458,6 +460,7 @@ Page {
         running: pageActive && quickActionPending
         onTriggered: {
             quickActionGeneration += 1
+            Api.cancelPageCommands(page, "quickActionGeneration")
             quickActionPending = false
             status.text = uiText("action_error")
             status.color = "#ff6b6b"
@@ -471,6 +474,7 @@ Page {
         running: pageActive && commandPending
         onTriggered: {
             runtimeGeneration += 1
+            Api.cancelPageCommands(page)
             commandPending = false
             commandInFlight = false
             setCommandFeedback("alarm_command_error", selectedCommand, "#ff6b6b")

@@ -9,6 +9,7 @@ import struct
 import threading
 import time
 from collections.abc import Mapping
+from contextlib import suppress
 from fractions import Fraction
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -55,13 +56,7 @@ async def async_keep_talkback_alive_when_ready(
 
     await _async_wait_talkback_ready(entry)
     try:
-        await asyncio.to_thread(
-            _keep_talkback_alive_sync,
-            host,
-            source,
-            stop_event,
-            codec_pcmu=codec_pcmu,
-        )
+        await _async_run_talkback_worker(host, source, stop_event, codec_pcmu=codec_pcmu)
     except HomeAssistantError:
         raise
     except Exception as err:
@@ -95,8 +90,8 @@ async def _async_play_announcement(
     """Play one HA-local announcement file into the C300X talkback RTP port."""
 
     try:
-        await asyncio.to_thread(
-            _play_announcement_sync, host, source, codec_pcmu=codec_pcmu
+        await _async_run_talkback_worker(
+            host, source, threading.Event(), codec_pcmu=codec_pcmu, keep_alive=False,
         )
     except HomeAssistantError:
         raise
@@ -104,12 +99,31 @@ async def _async_play_announcement(
         raise HomeAssistantError("C300X announcement playback failed") from err
 
 
-def _play_announcement_sync(
-    host: str, source: Path, *, codec_pcmu: bool = False
+async def _async_run_talkback_worker(
+    host: str, source: Path | None, stop_event: threading.Event,
+    *, codec_pcmu: bool, keep_alive: bool = True,
 ) -> None:
-    stop_event = threading.Event()
-    stop_event.set()
-    _keep_talkback_alive_sync(host, source, stop_event, codec_pcmu=codec_pcmu)
+    """Do not release capture ownership until the executor has closed its socket."""
+    worker = asyncio.create_task(asyncio.to_thread(
+        _keep_talkback_alive_sync, host, source, stop_event,
+        codec_pcmu=codec_pcmu, keep_alive=keep_alive,
+    ))
+    try:
+        await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        stop_event.set()
+        # Repeated cancellation (caller, timeout, unload) must not detach the
+        # thread. Shield its task until cooperative shutdown really completes.
+        while not worker.done():
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
+        with suppress(Exception):
+            worker.result()
+        raise
 
 
 def _keep_talkback_alive_sync(
@@ -118,6 +132,7 @@ def _keep_talkback_alive_sync(
     stop_event: threading.Event,
     *,
     codec_pcmu: bool = False,
+    keep_alive: bool = True,
 ) -> None:
     try:
         import av
@@ -126,6 +141,8 @@ def _keep_talkback_alive_sync(
     except ImportError as err:
         raise HomeAssistantError("PyAV is not installed on Home Assistant") from err
 
+    if stop_event.is_set():
+        return
     sequence = random.randrange(0, 65536)
     timestamp = random.randrange(0, 2**32)
     ssrc = random.randrange(1, 2**32)
@@ -134,14 +151,12 @@ def _keep_talkback_alive_sync(
         _TALKBACK_PCMU_PAYLOAD_TYPE if codec_pcmu else _TALKBACK_SPEEX_PAYLOAD_TYPE
     )
     sock, target = _open_talkback_socket(host)
-    encoder = _create_talkback_encoder(av, codec_pcmu=codec_pcmu)
-    fifo = AudioFifo()
-    resampler = AudioResampler(
-        format="s16",
-        layout="mono",
-        rate=_TALKBACK_SAMPLE_RATE,
-    )
     try:
+        encoder = _create_talkback_encoder(av, codec_pcmu=codec_pcmu)
+        fifo = AudioFifo()
+        resampler = AudioResampler(
+            format="s16", layout="mono", rate=_TALKBACK_SAMPLE_RATE,
+        )
         sequence, timestamp, marker = _send_talkback_silence_preroll(
             av,
             encoder,
@@ -152,8 +167,9 @@ def _keep_talkback_alive_sync(
             ssrc,
             marker,
             payload_type=payload_type,
+            stop_event=stop_event,
         )
-        if source is not None:
+        if source is not None and not stop_event.is_set():
             with av.open(str(source)) as container:
                 audio_stream = next(
                     (stream for stream in container.streams if stream.type == "audio"),
@@ -163,6 +179,8 @@ def _keep_talkback_alive_sync(
                     raise HomeAssistantError("C300X announcement file has no audio stream")
                 audio_frame_type = getattr(av, "AudioFrame", None)
                 for decoded_frame in container.decode(audio_stream):
+                    if stop_event.is_set():
+                        break
                     if isinstance(audio_frame_type, type) and not isinstance(
                         decoded_frame,
                         audio_frame_type,
@@ -181,8 +199,9 @@ def _keep_talkback_alive_sync(
                             ssrc,
                             marker,
                             payload_type=payload_type,
+                            stop_event=stop_event,
                         )
-                while fifo.samples:
+                while fifo.samples and not stop_event.is_set():
                     fifo_frame = fifo.read(min(_TALKBACK_FRAME_SAMPLES, fifo.samples))
                     if fifo_frame is None:
                         break
@@ -196,8 +215,9 @@ def _keep_talkback_alive_sync(
                         ssrc,
                         marker,
                         payload_type=payload_type,
+                        stop_event=stop_event,
                     )
-        while not stop_event.is_set():
+        while keep_alive and not stop_event.is_set():
             frame = _new_silence_frame(av)
             sequence, timestamp, marker = _send_encoded_talkback_frame(
                 encoder,
@@ -209,8 +229,13 @@ def _keep_talkback_alive_sync(
                 ssrc,
                 marker,
                 payload_type=payload_type,
+                stop_event=stop_event,
             )
+        if stop_event.is_set():
+            return
         for packet in encoder.encode(None):
+            if stop_event.is_set():
+                break
             payload = bytes(packet)
             if not payload:
                 continue
@@ -249,9 +274,12 @@ def _send_talkback_silence_preroll(
     marker: bool,
     *,
     payload_type: int = _TALKBACK_SPEEX_PAYLOAD_TYPE,
+    stop_event: threading.Event | None = None,
 ) -> tuple[int, int, bool]:
     frames = int(_ANNOUNCEMENT_PREROLL_SECONDS * _TALKBACK_SAMPLE_RATE / _TALKBACK_FRAME_SAMPLES)
     for _ in range(frames):
+        if stop_event is not None and stop_event.is_set():
+            break
         frame = _new_silence_frame(av_module)
         sequence, timestamp, marker = _send_encoded_talkback_frame(
             encoder,
@@ -263,6 +291,7 @@ def _send_talkback_silence_preroll(
             ssrc,
             marker,
             payload_type=payload_type,
+            stop_event=stop_event,
         )
     return sequence, timestamp, marker
 
@@ -308,8 +337,11 @@ def _send_ready_talkback_frames(
     marker: bool,
     *,
     payload_type: int = _TALKBACK_SPEEX_PAYLOAD_TYPE,
+    stop_event: threading.Event | None = None,
 ) -> tuple[int, int, bool]:
     while fifo.samples >= _TALKBACK_FRAME_SAMPLES:
+        if stop_event is not None and stop_event.is_set():
+            break
         frame = fifo.read(_TALKBACK_FRAME_SAMPLES)
         if frame is None:
             break
@@ -323,6 +355,7 @@ def _send_ready_talkback_frames(
             ssrc,
             marker,
             payload_type=payload_type,
+            stop_event=stop_event,
         )
     return sequence, timestamp, marker
 
@@ -338,9 +371,12 @@ def _send_encoded_talkback_frame(
     marker: bool,
     *,
     payload_type: int = _TALKBACK_SPEEX_PAYLOAD_TYPE,
+    stop_event: threading.Event | None = None,
 ) -> tuple[int, int, bool]:
     samples = max(1, int(getattr(frame, "samples", _TALKBACK_FRAME_SAMPLES) or _TALKBACK_FRAME_SAMPLES))
     for packet in encoder.encode(frame):
+        if stop_event is not None and stop_event.is_set():
+            break
         payload = bytes(packet)
         if not payload:
             continue
@@ -353,7 +389,10 @@ def _send_encoded_talkback_frame(
             timestamp + max(1, int(getattr(packet, "duration", None) or samples))
         ) & 0xFFFFFFFF
         marker = False
-        time.sleep(samples / _TALKBACK_SAMPLE_RATE)
+        if stop_event is None:
+            time.sleep(samples / _TALKBACK_SAMPLE_RATE)
+        else:
+            stop_event.wait(samples / _TALKBACK_SAMPLE_RATE)
     return sequence, timestamp, marker
 
 

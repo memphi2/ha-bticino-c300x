@@ -155,7 +155,8 @@ Api.dashboardControl(normalized, normalized.controls[0], "green", p.status, p);
 assert.equal(queue.length, 1, "a swatch sends one atomic color command");
 assert.match(queue.shift().url, /light.room%3Acolor&option=green$/);
 p.aboutToHide();
-assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 2, "entity details introduce no periodic timers");
+assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 3, "recovery, command watchdog and feedback expiry only");
+assert.equal((qml.match(/repeat: false/g) || []).length, 3, "all dashboard timers are one-shot");
 assert.match(qml, /anchors.top: entitySummary.bottom/);
 console.log("Entity detail controls and translations passed");
 

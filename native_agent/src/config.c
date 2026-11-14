@@ -5,10 +5,12 @@
 #endif
 
 #include "c300x_agent.h"
+#include "json_util.h"
 #include "string_util.h"
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -278,6 +280,12 @@ static char *read_file(const char *path, char *error, size_t error_len)
         fclose(file);
         return NULL;
     }
+    if (memchr(buffer, '\0', (size_t)size) != NULL) {
+        set_error(error, error_len, "config contains an embedded NUL");
+        free(buffer);
+        fclose(file);
+        return NULL;
+    }
     fclose(file);
     return buffer;
 }
@@ -290,77 +298,9 @@ static const char *skip_ws(const char *ptr, const char *end)
     return ptr;
 }
 
-static const char *skip_json_string(const char *ptr, const char *end)
-{
-    if (ptr >= end || *ptr != '"') {
-        return NULL;
-    }
-    ptr++;
-    while (ptr < end) {
-        if (*ptr == '\\') {
-            ptr += ptr + 1 < end ? 2 : 1;
-            continue;
-        }
-        if (*ptr == '"') {
-            return ptr + 1;
-        }
-        ptr++;
-    }
-    return NULL;
-}
-
 static const char *skip_json_value(const char *ptr, const char *end)
 {
-    int object_depth = 0;
-    int array_depth = 0;
-
-    ptr = skip_ws(ptr, end);
-    if (ptr >= end) {
-        return NULL;
-    }
-    if (*ptr == '"') {
-        return skip_json_string(ptr, end);
-    }
-    while (ptr < end) {
-        if (*ptr == '"') {
-            ptr = skip_json_string(ptr, end);
-            if (ptr == NULL) {
-                return NULL;
-            }
-            continue;
-        }
-        if (*ptr == '{') {
-            object_depth++;
-        } else if (*ptr == '}') {
-            if (object_depth == 0) {
-                break;
-            }
-            object_depth--;
-            if (object_depth == 0 && array_depth == 0) {
-                return ptr + 1;
-            }
-        } else if (*ptr == '[') {
-            array_depth++;
-        } else if (*ptr == ']') {
-            if (array_depth == 0) {
-                break;
-            }
-            array_depth--;
-            if (object_depth == 0 && array_depth == 0) {
-                return ptr + 1;
-            }
-        } else if (object_depth == 0 && array_depth == 0 && (*ptr == ',' || *ptr == '}')) {
-            return ptr;
-        }
-        ptr++;
-    }
-    return ptr;
-}
-
-static int key_equals(const char *start, const char *end, const char *key)
-{
-    size_t key_len = strlen(key);
-    return (size_t)(end - start) == key_len && strncmp(start, key, key_len) == 0;
+    return c300x_json_skip_value(ptr, end);
 }
 
 static int find_member(
@@ -370,49 +310,7 @@ static int find_member(
     const char **value
 )
 {
-    const char *ptr = skip_ws(object_start, object_end);
-
-    if (ptr >= object_end || *ptr != '{') {
-        return 0;
-    }
-    ptr++;
-    while (ptr < object_end) {
-        const char *key_start;
-        const char *key_end;
-        const char *after_key;
-
-        ptr = skip_ws(ptr, object_end);
-        if (ptr >= object_end || *ptr == '}') {
-            return 0;
-        }
-        if (*ptr != '"') {
-            return 0;
-        }
-        key_start = ptr + 1;
-        after_key = skip_json_string(ptr, object_end);
-        if (after_key == NULL) {
-            return 0;
-        }
-        key_end = after_key - 1;
-        ptr = skip_ws(after_key, object_end);
-        if (ptr >= object_end || *ptr != ':') {
-            return 0;
-        }
-        ptr = skip_ws(ptr + 1, object_end);
-        if (key_equals(key_start, key_end, key)) {
-            *value = ptr;
-            return 1;
-        }
-        ptr = skip_json_value(ptr, object_end);
-        if (ptr == NULL) {
-            return 0;
-        }
-        ptr = skip_ws(ptr, object_end);
-        if (ptr < object_end && *ptr == ',') {
-            ptr++;
-        }
-    }
-    return 0;
+    return c300x_json_find_member(object_start, object_end, key, value);
 }
 
 static int object_bounds(const char *value, const char *document_end, const char **end)
@@ -519,30 +417,8 @@ static int nested_member4(
 
 static int string_value(const char *value, const char *document_end, char *out, size_t out_len)
 {
-    const char *ptr;
-    size_t written = 0;
-
-    value = skip_ws(value, document_end);
-    if (value >= document_end || *value != '"') {
-        return 0;
-    }
-    ptr = value + 1;
-    while (ptr < document_end && *ptr != '"') {
-        char ch = *ptr++;
-        if (ch == '\\' && ptr < document_end) {
-            ch = *ptr++;
-        }
-        if (written + 1 < out_len) {
-            out[written++] = ch;
-        }
-    }
-    if (ptr >= document_end || *ptr != '"') {
-        return 0;
-    }
-    if (out_len > 0) {
-        out[written] = '\0';
-    }
-    return 1;
+    return c300x_json_decode_string(skip_ws(value, document_end), document_end,
+        out, out_len, NULL);
 }
 
 static int uint16_value(const char *value, const char *document_end, uint16_t *out)
@@ -810,6 +686,11 @@ int c300x_config_set_activation_items_json(
         return 0;
     }
     document_end = items_json + strlen(items_json);
+    const char *after = c300x_json_skip_value(items_json, document_end);
+    if (after == NULL || skip_ws(after, document_end) != document_end) {
+        set_error(error, error_len, "activations.items must be a valid JSON array");
+        return 0;
+    }
     return parse_activation_items_value(
         items_json,
         document_end,
@@ -850,6 +731,11 @@ int c300x_load_config(
         return 0;
     }
     document_end = document + strlen(document);
+    if (!c300x_json_object_valid(document)) {
+        free(document);
+        set_error(error, error_len, "config must be a valid JSON object");
+        return 0;
+    }
 
     if (nested_member(document, document_end, "listen", "host", &value)) {
         if (!string_value(value, document_end, config->listen_host, sizeof(config->listen_host))) {
@@ -2141,7 +2027,7 @@ static int ensure_config_mode(
     if (!read_config_file_metadata(path, &mode, NULL, NULL)) {
         return 1;
     }
-    if ((mode & 0777) == 0600) {
+    if ((mode & 07777) == 0600) {
         return 1;
     }
     if (chmod(path, 0600) != 0) {
@@ -2161,7 +2047,7 @@ static int save_config_internal(
     int *changed
 )
 {
-    char temporary_path[C300X_MAX_PATH_LEN + 8];
+    char temporary_path[C300X_MAX_PATH_LEN + 16];
     FILE *file;
     uid_t owner_uid = 0;
     gid_t owner_gid = 0;
@@ -2175,7 +2061,7 @@ static int save_config_internal(
         set_error(error, error_len, "config path is not set");
         return 0;
     }
-    if (snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", config->config_path) >= (int)sizeof(temporary_path)) {
+    if (snprintf(temporary_path, sizeof(temporary_path), "%s.tmp.XXXXXX", config->config_path) >= (int)sizeof(temporary_path)) {
         set_error(error, error_len, "config path is too long");
         return 0;
     }
@@ -2185,8 +2071,28 @@ static int save_config_internal(
         &owner_uid,
         &owner_gid
     );
-    file = fopen(temporary_path, "w");
+    if (!have_owner && errno != ENOENT) {
+        set_error(error, error_len, "unable to read config file metadata");
+        return 0;
+    }
+    /* mkstemp uses O_EXCL and mode 0600, before any secret reaches disk. */
+    fd = mkstemp(temporary_path);
+    if (fd < 0) {
+        set_error(error, error_len, "unable to create temporary config file");
+        return 0;
+    }
+    if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0
+        || (have_owner && fchown(fd, owner_uid, owner_gid) != 0)
+        || fchmod(fd, 0600) != 0) {
+        close(fd);
+        (void)unlink(temporary_path);
+        set_error(error, error_len, "unable to secure temporary config file or preserve owner");
+        return 0;
+    }
+    file = fdopen(fd, "w");
     if (file == NULL) {
+        close(fd);
+        (void)unlink(temporary_path);
         set_error(error, error_len, "unable to open temporary config file");
         return 0;
     }
@@ -2349,17 +2255,10 @@ static int save_config_internal(
     fprintf(file, "    \"enabled\": %s,\n", config->display_bridge_enabled ? "true" : "false");
     fprintf(file, "    \"homeAssistant\": {\"requestTimeoutMs\": %d}\n  }\n}\n", config->home_assistant_request_timeout_ms);
 
-    fd = fileno(file);
-    if (fd < 0 || fchmod(fd, 0600) != 0) {
+    if (ferror(file)) {
         (void)fclose(file);
         (void)unlink(temporary_path);
-        set_error(error, error_len, "unable to secure temporary config file");
-        return 0;
-    }
-    if (have_owner && fchown(fd, owner_uid, owner_gid) != 0 && errno != EPERM) {
-        (void)fclose(file);
-        (void)unlink(temporary_path);
-        set_error(error, error_len, "unable to preserve config file owner");
+        set_error(error, error_len, "unable to write temporary config file");
         return 0;
     }
     if (fclose(file) != 0) {

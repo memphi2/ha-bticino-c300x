@@ -109,6 +109,18 @@ class _AgentEventContext:
     data: dict[str, Any]
 
 
+def _secrets_match(expected: object, supplied: str) -> bool:
+    """Reject malformed credentials before the constant-time ASCII comparison."""
+
+    return (
+        isinstance(expected, str)
+        and bool(expected)
+        and expected.isascii()
+        and supplied.isascii()
+        and compare_digest(expected, supplied)
+    )
+
+
 def async_register_webhook(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> Callable[[], None]:
     """Register the per-entry webhook and return an unregister callback."""
 
@@ -178,7 +190,7 @@ async def _async_handle_webhook(
 
     expected_secret = entry.data.get(CONF_SHARED_SECRET, "")
     supplied_secret = request.headers.get(HEADER_SHARED_SECRET, "")
-    if not expected_secret or not compare_digest(expected_secret, supplied_secret):
+    if not _secrets_match(expected_secret, supplied_secret):
         return _json_error("unauthorized", status=401)
 
     try:
@@ -300,7 +312,7 @@ async def _async_handle_agent_event(
 
     expected_token = entry.data.get(CONF_EVENT_WEBHOOK_TOKEN, "")
     supplied_token = request.headers.get(HEADER_EVENT_TOKEN, "")
-    if not expected_token or not compare_digest(expected_token, supplied_token):
+    if not _secrets_match(expected_token, supplied_token):
         return _json_error("unauthorized", status=401)
 
     payload = await _event_payload(request)

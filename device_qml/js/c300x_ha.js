@@ -164,12 +164,8 @@ function finishDashboardRefresh(statusItem, pageItem) {
     }
 }
 
-// Nothing ever removes a feedback entry: setDashboardFeedback only replaces the
-// one for the same entity and aboutToHide keeps the list so a warning survives
-// until the user comes back. So a command that HA accepts but never reflects
-// would keep its tile on "action sent" for the rest of the session. Entries are
-// stamped and aged where they are read, which needs no periodic sweep and
-// cannot drop information a late confirmation still wants.
+// The page schedules only the next boundary. Date.now() alone cannot invalidate
+// a QML binding, so expiry also replaces the feedback property at that boundary.
 var FEEDBACK_UNCONFIRMED_MS = 15000
 var FEEDBACK_DISCARD_MS = 60000
 
@@ -188,6 +184,38 @@ function feedbackState(entry) {
     if (age >= FEEDBACK_DISCARD_MS) return ""
     if (entry.state === "action_sent" && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
     return entry.state
+}
+
+function nextFeedbackDelay(feedback) {
+    var delay = 0
+    var now = Date.now()
+    for (var i = 0; i < feedback.length; i++) {
+        var lifetime = feedback[i].state === "action_sent" ? FEEDBACK_UNCONFIRMED_MS : FEEDBACK_DISCARD_MS
+        var remaining = Math.max(1, (feedback[i].at || 0) + lifetime - now)
+        if (delay === 0 || remaining < delay) delay = remaining
+    }
+    return delay
+}
+
+function expireDashboardFeedback(pageItem) {
+    var feedback = listOrEmpty(pageItem.controlFeedback)
+    var updated = []
+    var changed = false
+    for (var i = 0; i < feedback.length; i++) {
+        var state = feedbackState(feedback[i])
+        if (state === "") {
+            changed = true
+            continue
+        }
+        var entry = feedback[i]
+        if (state !== entry.state) {
+            entry = copyObject(entry)
+            entry.state = state
+            changed = true
+        }
+        updated.push(entry)
+    }
+    if (changed) pageItem.controlFeedback = updated
 }
 
 function dashboardExpectation(item, control, value) {
@@ -285,7 +313,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
         setDashboardFeedback(pageItem, item.entity_id, "state_unconfirmed")
         statusItem.text = uiText(pageItem, "state_unconfirmed")
         statusItem.color = "#f1c40f"
-    })
+    }, commandScope(pageItem, "commandGeneration"))
 }
 
 function homeButtons(callback) {
@@ -357,7 +385,7 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         pageItem.quickActionPending = false
         statusItem.text = error
         statusItem.color = "#ff6b6b"
-    })
+    }, commandScope(pageItem, "quickActionGeneration"))
 }
 
 function dashboardSliderAction(item, direction, statusItem, pageItem) {
@@ -473,7 +501,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         pageItem.commandInFlight = false
         pageItem.commandPending = false
         setErrorFeedback(command, statusItem, pageItem)
-    })
+    }, commandScope(pageItem, ""))
 }
 
 function alarmCheck(command, statusItem, pageItem) {
@@ -519,7 +547,7 @@ function alarmCheck(command, statusItem, pageItem) {
         pageItem.commandInFlight = false
         pageItem.commandPending = false
         setErrorFeedback(command, statusItem, pageItem)
-    })
+    }, commandScope(pageItem, ""))
 }
 
 function applyAlarmCommandResult(data, command, statusItem, pageItem) {
@@ -1285,8 +1313,41 @@ var FORWARD_QUEUE_LIMIT = 8
 var forwardActive = null
 var forwardQueue = []
 
-function getJson(path, callback, errorCallback) {
-    forwardRequest(path, callback, errorCallback, "")
+function commandScope(owner, counter) {
+    return {owner: owner, generation: owner.runtimeGeneration, counter: counter,
+        counterValue: counter ? owner[counter] : 0, expires: Date.now() + 10000}
+}
+
+function commandScopeCurrent(scope) {
+    return !scope || (scope.owner && scope.owner.runtimeGeneration === scope.generation
+        && (!scope.counter || scope.owner[scope.counter] === scope.counterValue))
+}
+
+function cancelPageCommands(owner, counter) {
+    for (var i = forwardQueue.length - 1; i >= 0; i--) {
+        var entry = forwardQueue[i]
+        if (entry.scope && entry.scope.owner === owner && (counter === undefined || entry.scope.counter === counter)) {
+            forwardQueue.splice(i, 1)
+            entry.path = ""
+            entry.waiters = []
+        }
+    }
+    // A sent action cannot be recalled. Keep its slot until completion, but
+    // detach its callbacks so cancellation cannot report a late success.
+    if (forwardActive && forwardActive.scope && forwardActive.scope.owner === owner
+            && (counter === undefined || forwardActive.scope.counter === counter)) {
+        forwardActive.waiters = []
+    }
+}
+
+function getJson(path, callback, errorCallback, scope) {
+    forwardRequest(path, callback, errorCallback, "", scope)
+}
+
+function invalidateSharedRead(path) {
+    // A queued read is still fresh; an already dispatched read may predate the
+    // event. Keep its existing callers, but never attach the invalidation to it.
+    if (forwardActive && forwardActive.sharedPath === path) forwardActive.sharedPath = ""
 }
 
 function getJsonShared(path, callback, errorCallback) {
@@ -1309,10 +1370,11 @@ function getJsonShared(path, callback, errorCallback) {
     forwardRequest(path, callback, errorCallback, path)
 }
 
-function forwardRequest(path, callback, errorCallback, sharedPath) {
+function forwardRequest(path, callback, errorCallback, sharedPath, scope) {
     cleanupConnections()
     var entry = {
         path: path,
+        scope: scope,
         sharedPath: sharedPath,
         waiters: [{callback: callback, errorCallback: errorCallback}]
     }
@@ -1330,7 +1392,18 @@ function forwardRequest(path, callback, errorCallback, sharedPath) {
 }
 
 function sendForward(entry) {
+    if (!commandScopeCurrent(entry.scope)) return
+    if (entry.scope && Date.now() >= entry.scope.expires) {
+        for (var i = 0; i < entry.waiters.length; i++) {
+            try {
+                if (entry.waiters[i].errorCallback) entry.waiters[i].errorCallback("command expired")
+            } catch (error) {}
+        }
+        entry.path = ""
+        return
+    }
     var xhr = new XMLHttpRequest()
+    xhr.scope = entry.scope
     xhr.sharedPath = entry.sharedPath
     xhr.waiters = entry.waiters
     forwardActive = xhr
@@ -1359,9 +1432,12 @@ function deliverForward(xhr) {
     // request, and an answered read must not still collect waiters.
     xhr.waiters = []
     xhr.sharedPath = ""
+    if (!commandScopeCurrent(xhr.scope)) return
     var data = null
     var failure = ""
-    if (xhr.status === 200) {
+    if (xhr.scope && Date.now() >= xhr.scope.expires) {
+        failure = "command expired"
+    } else if (xhr.status === 200) {
         try {
             data = JSON.parse(xhr.responseText)
         } catch (error) {
@@ -1393,10 +1469,9 @@ function finishForward(xhr) {
         return
     }
     forwardActive = null
-    if (forwardQueue.length === 0) {
-        return
+    while (forwardActive === null && forwardQueue.length > 0) {
+        sendForward(forwardQueue.shift())
     }
-    sendForward(forwardQueue.shift())
 }
 
 function cleanupConnections() {

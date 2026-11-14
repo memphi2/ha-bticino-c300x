@@ -84,6 +84,25 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
 _REQUEST_CONTENT_LENGTH_AUTO = object()
 
 
+@pytest.mark.parametrize("event", [False, True])
+@pytest.mark.parametrize(
+    ("expected", "supplied"),
+    [("secret", ""), ("secret", "wrong"), ("secret", "\u00e4"),
+     ("\u00e4", "\u00e4"), (None, "secret"), (123, "secret")],
+)
+def test_webhook_rejects_malformed_credentials(event, expected, supplied):
+    key = CONF_EVENT_WEBHOOK_TOKEN if event else CONF_SHARED_SECRET
+    header = HEADER_EVENT_TOKEN if event else HEADER_SHARED_SECRET
+    entry = SimpleNamespace(data={key: expected})
+    # No body reader: rejected authentication must not read or process the payload.
+    request = SimpleNamespace(headers={header: supplied})
+    if event:
+        response = asyncio.run(_async_handle_agent_event(None, entry, C300XEventState(), request))
+    else:
+        response = asyncio.run(_async_handle_webhook(None, entry, request))
+    assert response.status == 401
+
+
 @pytest.fixture(autouse=True)
 def webhook_ha_boundary(monkeypatch):
     from homeassistant.helpers import dispatcher, event

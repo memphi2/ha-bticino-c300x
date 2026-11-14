@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize(
-    "harness", ["http_request_test.c", "http_file_test.c", "http_clients_test.c"]
+    "harness", ["http_request_test.c", "http_file_test.c", "http_clients_test.c", "http_output_test.c"]
 )
 def test_native_http_transport(tmp_path: Path, harness: str) -> None:
     binary = tmp_path / "http-request-test"

@@ -1,5 +1,8 @@
 """Verify native authorization over loopback, including persisted config."""
 
+import http.client
+import json
+
 import pytest
 import test_native_display_roundtrip as native_lab
 
@@ -66,3 +69,56 @@ def test_only_explicit_bootstrap_can_install_credentials(lab, expected):
         status, body = request(lab.api, AUTH, headers=headers)
         assert status == 200
         assert body["noAuth"] is False
+
+
+@pytest.mark.parametrize("auth_config", [{
+    "maintenance": {"enabled": True, "adminToken": "existing-admin"},
+}], indirect=True)
+def test_json_unicode_roundtrip_and_field_boundaries(lab):
+    headers = {HEADER: "existing-admin"}
+    synthetic_password = 's\u00ebcret\\"\n\U0001f4a1'
+    assert request(lab.api, "/api/v1/maintenance/mqtt", {
+        "password": synthetic_password, "username": "Home Assistant M\u00fcnchen",
+    }, headers=headers)[0] == 200
+    persisted = json.loads(lab.config_path.read_text())
+    assert persisted["mqtt"]["password"] == synthetic_password
+    assert persisted["mqtt"]["username"] == "Home Assistant M\u00fcnchen"
+    # A key-like string value or nested key must not change top-level settings.
+    assert request(lab.api, AUTH, {
+        "description": "noAuth", "nested": {"noAuth": True}, "allowLan": True,
+    }, headers=headers)[0] == 200
+    assert request(lab.api, AUTH)[1]["noAuth"] is False
+    before = lab.config_path.read_bytes()
+    assert request(lab.api, AUTH, {"apiToken": "x" * 512}, headers=headers)[0] == 400
+    assert request(lab.api, AUTH, {"apiPort": 4294967297}, headers=headers)[0] == 400
+    assert lab.config_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("body", [
+    b'{"noAuth":trueX}', b'{"apiToken":"bad\\u0000suffix"}',
+    b'{"apiToken":"bad\\uD800"}', b'{"noAuth":true}garbage',
+])
+@pytest.mark.parametrize("auth_config", [{
+    "maintenance": {"enabled": True, "adminToken": "existing-admin"},
+}], indirect=True)
+def test_invalid_json_is_rejected_before_config_mutation(lab, body):
+    before = lab.config_path.read_bytes()
+    connection = http.client.HTTPConnection("127.0.0.1", lab.api, timeout=3)
+    try:
+        connection.request("POST", AUTH, body, {HEADER: "existing-admin"})
+        response = connection.getresponse()
+        assert response.status == 400
+        response.read()
+    finally:
+        connection.close()
+    assert lab.config_path.read_bytes() == before
+
+
+def test_decoded_callback_secrets_cannot_inject_headers(lab):
+    assert request(lab.api, "/api/v1/display-bridge", {
+        "webhook_url": "http://127.0.0.1:9/display", "shared_secret": "x\r\nInjected: yes",
+    })[0] == 400
+    assert request(lab.api, "/api/v1/events/subscriptions", {
+        "callback_url": "http://127.0.0.1:9/events", "token": "x\r\nInjected: yes",
+        "events": ["ringer.muted"],
+    })[0] == 400

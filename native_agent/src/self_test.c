@@ -3,6 +3,7 @@
 #include "device_user.h"
 #include "device_routing.h"
 #include "string_util.h"
+#include "http_util.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -412,21 +413,6 @@ int c300x_self_test_json(
     );
 }
 
-static void write_all(int fd, const char *data, size_t len)
-{
-    while (len > 0) {
-        ssize_t written = write(fd, data, len);
-        if (written < 0 && errno == EINTR) {
-            continue;
-        }
-        if (written <= 0) {
-            return;
-        }
-        data += written;
-        len -= (size_t)written;
-    }
-}
-
 static void send_json_response(int client_fd, int status, const char *reason, const char *body)
 {
     char header[256];
@@ -445,10 +431,11 @@ static void send_json_response(int client_fd, int status, const char *reason, co
         body_len
     );
 
-    if (header_len > 0 && header_len < (int)sizeof(header)) {
-        write_all(client_fd, header, (size_t)header_len);
+    if (header_len <= 0 || header_len >= (int)sizeof(header)
+        || !c300x_http_write(client_fd, header, (size_t)header_len)) {
+        return;
     }
-    write_all(client_fd, body, body_len);
+    (void)c300x_http_write(client_fd, body, body_len);
 }
 
 void c300x_self_test_send_response(

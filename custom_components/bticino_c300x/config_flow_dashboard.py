@@ -5,9 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from .config_flow_forms import (
-    actions_json as _actions_json,
-)
-from .config_flow_forms import (
     actions_json_field as _actions_json_field,
 )
 from .config_flow_forms import (
@@ -41,7 +38,6 @@ from .config_flow_forms import (
     weather_entity_selector as _weather_entity_selector,
 )
 from .const import (
-    CONF_ACTIONS,
     CONF_ACTIONS_JSON,
     CONF_ALARM_ENTITY_ID,
     CONF_ALARM_PAGE_ENTITY_ID,
@@ -392,19 +388,19 @@ def dashboard_input_defaults(
     )
     data.setdefault(
         CONF_ALARM_ENTITY_ID,
-        "" if defaults is None else defaults[CONF_ALARM_ENTITY_ID],
+        "",
     )
     data.setdefault(
         CONF_ALARM_PAGE_ENTITY_ID,
-        "" if defaults is None else defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""),
+        "",
     )
     data.setdefault(
         CONF_WEATHER_ENTITY_ID,
-        "" if defaults is None else defaults[CONF_WEATHER_ENTITY_ID],
+        "",
     )
     data.setdefault(
         CONF_DASHBOARD_ENTITIES,
-        [] if defaults is None else defaults.get(CONF_DASHBOARD_ENTITIES, []),
+        [],
     )
     data.setdefault(
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -428,7 +424,7 @@ def dashboard_input_defaults(
     )
     data.setdefault(
         CONF_ACTIONS_JSON,
-        "" if defaults is None else _actions_json(defaults[CONF_ACTIONS]),
+        "",
     )
     data.setdefault(
         CONF_DASHBOARD_PREVENT_RETURN,

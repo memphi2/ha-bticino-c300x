@@ -192,14 +192,11 @@ def test_native_agent_config_save_preserves_existing_owner() -> None:
     assert "fchown(fd, owner_uid, owner_gid)" in save_body
     assert "chown(temporary_path, owner_uid, owner_gid)" not in save_body
     assert "chmod(temporary_path, 0600)" not in save_body
-    assert "errno != EPERM" in save_body
-    write_close_block = save_body.split(
-        "fd = fileno(file);", maxsplit=1
-    )[1].split("if (files_equal", maxsplit=1)[0]
-    assert write_close_block.index("fchmod(fd, 0600)") < write_close_block.index(
-        "fchown(fd, owner_uid"
-    )
-    assert write_close_block.index("fchown(fd, owner_uid") < write_close_block.rindex(
-        "fclose(file)"
-    )
+    assert "errno != EPERM" not in save_body
+    assert "mkstemp(temporary_path)" in save_body
+    assert 'fopen(temporary_path, "w")' not in save_body
+    assert save_body.index("mkstemp(") < save_body.index("fchown(fd, owner_uid")
+    assert save_body.index("fchown(fd, owner_uid") < save_body.index("fchmod(fd, 0600)")
+    assert save_body.index("fchmod(fd, 0600)") < save_body.index("fdopen(fd,")
+    assert save_body.index("fdopen(fd,") < save_body.index("fprintf(file,")
     assert save_body.rindex("fclose(file)") < save_body.index("rename(")

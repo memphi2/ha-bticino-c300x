@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Fixed
+
+- Reject malformed webhook credentials without an unhandled error, and release
+  webhook registrations when integration setup fails or is cancelled.
+- Do not send saved agent credentials to newly discovered addresses or replace
+  an existing entry's address from an unsolicited discovery announcement. Use
+  **Reconfigure** to confirm an address change.
+- Clearing optional display-dashboard fields now removes their saved values.
+  Media-player play/pause controls require the capability needed for the
+  player's current state.
+- Enforce explicitly configured RTSP credentials before admitting media clients,
+  and collect completed home-call threads before starting another call.
+  Empty RTSP credentials retain the existing local-network setup; see the
+  [RTSP access limitations](SECURITY.md#rtsp-access) before configuring credentials.
+- Discard queued display commands after timeout or page exit, refresh alarm
+  state after events that arrive during a read, and expire command feedback
+  with a one-shot timer. Already sent actions cannot be recalled.
+- Reconnect memo and message updates after transport failures with bounded
+  backoff and refresh unread counts after recovery. No additional idle polling.
+- Cancel ring captures when their integration runtime is unloaded and avoid
+  hanging up a replacement runtime or an observed replacement call. Stop
+  announcement workers cooperatively before releasing capture ownership.
+- Keep a shared on-demand stream alive when another WebRTC offer fails.
+- Preserve complete HTTP requests delayed by another handler and finish partial
+  responses through bounded nonblocking output buffers.
+- Decode JSON escapes consistently in HTTP inputs, saved configuration and
+  update manifests. Create temporary configuration files with private
+  permissions before writing credentials.
+
 ### Added
 
 - Choose width and height for each entity tile on the native display. Width is

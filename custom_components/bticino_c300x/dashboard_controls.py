@@ -239,7 +239,12 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append({"command": "toggle", "kind": "button"})
         if features & MediaPlayerEntityFeature.PREVIOUS_TRACK:
             controls.append({"command": "media_previous_track", "kind": "button"})
-        if features & (MediaPlayerEntityFeature.PLAY | MediaPlayerEntityFeature.PAUSE):
+        playback_feature = (
+            MediaPlayerEntityFeature.PAUSE
+            if state.state == "playing"
+            else MediaPlayerEntityFeature.PLAY
+        )
+        if features & playback_feature:
             controls.append({
                 "command": "media_play_pause", "kind": "button",
                 "playing": state.state == "playing",

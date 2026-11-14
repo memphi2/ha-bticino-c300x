@@ -116,6 +116,7 @@ class C300XRuntimeManager:
         )
         self.platforms: tuple[str, ...] = BASE_PLATFORMS
         self._platform_gate_state_loaded = False
+        self._setup_runtime_data: BticinoC300XRuntimeData | None = None
 
     async def async_prepare(self) -> bool:
         """Prepare runtime data and finish Home Assistant setup."""
@@ -123,6 +124,28 @@ class C300XRuntimeManager:
         self.hass.data.setdefault(DOMAIN, {})
         if not self._required_config_present():
             return False
+
+        try:
+            return await self._async_prepare_runtime()
+        except (Exception, asyncio.CancelledError):
+            try:
+                if self._setup_runtime_data is not None:
+                    cleanup_entry_runtime_resources(
+                        self.hass, self.entry, self._setup_runtime_data
+                    )
+                else:
+                    # Registration can fail before runtime_data owns the callbacks.
+                    C300XRuntimeResources(
+                        unregister_webhook=self.unregister_webhook,
+                        unregister_event_webhook=self.unregister_event_webhook,
+                        unregister_event_registration=self.unregister_event_registration,
+                    ).close()
+            except Exception:
+                _LOGGER.exception("Failed to clean up interrupted C300X setup")
+            raise
+
+    async def _async_prepare_runtime(self) -> bool:
+        """Acquire runtime resources within the setup rollback boundary."""
 
         self.api = self._build_agent_api()
         await self.async_validate_agent()
@@ -385,6 +408,7 @@ class C300XRuntimeManager:
         self.hass.data.setdefault(DOMAIN, {}).setdefault(DATA_RUNTIME_ENTRIES, {})[
             self.entry.entry_id
         ] = self.entry.runtime_data
+        self._setup_runtime_data = self.entry.runtime_data
 
     def _api(self) -> C300XAgentApi:
         """Return the initialized API client."""

@@ -2284,42 +2284,35 @@ static void json_events_array_range(
     struct subscription *subscription
 )
 {
-    const char *found = strstr(start, "\"events\"");
     const char *ptr;
 
     subscription->event_count = 0;
-    if (found == NULL || found >= end) {
-        return;
-    }
-    ptr = strchr(found, '[');
-    if (ptr == NULL || ptr >= end) {
+    if (!c300x_json_find_member(start, end, "events", &ptr) || ptr >= end || *ptr != '[') {
         return;
     }
     ptr++;
     while (ptr < end && subscription->event_count < C300X_MAX_SUBSCRIPTION_EVENTS) {
-        size_t written = 0;
-        while (ptr < end && *ptr != '"' && *ptr != ']') {
+        while (ptr < end && isspace((unsigned char)*ptr)) {
             ptr++;
         }
         if (ptr >= end || *ptr == ']') {
             return;
         }
-        ptr++;
-        while (ptr < end && *ptr != '"' && written + 1 < sizeof(subscription->events[0])) {
-            if (*ptr == '\\' && ptr + 1 < end) {
-                ptr++;
-            }
-            subscription->events[subscription->event_count][written++] = *ptr++;
+        if (!c300x_json_decode_string(ptr, end,
+            subscription->events[subscription->event_count], sizeof(subscription->events[0]), &ptr)
+            || !validate_event_name(subscription->events[subscription->event_count])) {
+            subscription->event_count = 0;
+            return;
         }
-        subscription->events[subscription->event_count][written] = '\0';
-        if (written > 0 && validate_event_name(subscription->events[subscription->event_count])) {
-            subscription->event_count++;
-        }
-        while (ptr < end && *ptr != ',' && *ptr != ']') {
+        subscription->event_count++;
+        while (ptr < end && isspace((unsigned char)*ptr)) {
             ptr++;
         }
         if (ptr < end && *ptr == ',') {
             ptr++;
+        } else if (ptr >= end || *ptr != ']') {
+            subscription->event_count = 0;
+            return;
         }
     }
 }
@@ -2581,8 +2574,12 @@ static void handle_subscriptions_post(
     int had_existing;
 
     memset(&subscription, 0, sizeof(subscription));
-    c300x_json_string_field(request->body, "callback_url", subscription.callback_url, sizeof(subscription.callback_url));
-    c300x_json_string_field(request->body, "token", subscription.token, sizeof(subscription.token));
+    if (c300x_json_string_field_checked(request->body, "callback_url", subscription.callback_url, sizeof(subscription.callback_url)) < 0
+        || c300x_json_string_field_checked(request->body, "token", subscription.token, sizeof(subscription.token)) < 0
+        || strpbrk(subscription.token, "\r\n") != NULL) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_subscription\"}\n");
+        return;
+    }
     json_events_array_range(request->body, request->body + strlen(request->body), &subscription);
     if (subscription.callback_url[0] == '\0') {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"callback_url_required\"}\n");
@@ -2709,8 +2706,12 @@ static void handle_display_bridge_post(
         return;
     }
 
-    c300x_json_string_field(request->body, "webhook_url", webhook_url, sizeof(webhook_url));
-    c300x_json_string_field(request->body, "shared_secret", shared_secret, sizeof(shared_secret));
+    if (c300x_json_string_field_checked(request->body, "webhook_url", webhook_url, sizeof(webhook_url)) < 0
+        || c300x_json_string_field_checked(request->body, "shared_secret", shared_secret, sizeof(shared_secret)) < 0
+        || strpbrk(shared_secret, "\r\n") != NULL) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_display_bridge\"}\n");
+        return;
+    }
     if (webhook_url[0] == '\0') {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"webhook_url_required\"}\n");
         return;
@@ -3403,9 +3404,13 @@ static void handle_setup_page(int client_fd)
         NULL
     };
 
-    (void)send(client_fd, header, strlen(header), MSG_NOSIGNAL);
+    if (!c300x_http_write(client_fd, header, strlen(header))) {
+        return;
+    }
     for (size_t index = 0; parts[index] != NULL; index++) {
-        (void)send(client_fd, parts[index], strlen(parts[index]), MSG_NOSIGNAL);
+        if (!c300x_http_write(client_fd, parts[index], strlen(parts[index]))) {
+            return;
+        }
     }
 }
 
@@ -3509,7 +3514,8 @@ static int json_optional_port(const char *body, const char *field, uint16_t *out
 {
     int value = 0;
     if (!c300x_json_int_field(body, field, &value)) {
-        return 0;
+        const char *member;
+        return c300x_json_find_member(body, body + strlen(body), field, &member) ? -1 : 0;
     }
     if (value < 1 || value > 65535) {
         return -1;
@@ -3518,7 +3524,7 @@ static int json_optional_port(const char *body, const char *field, uint16_t *out
     return 1;
 }
 
-static void maybe_json_string_field(
+static int maybe_json_string_field(
     const char *body,
     const char *first_name,
     const char *second_name,
@@ -3526,10 +3532,11 @@ static void maybe_json_string_field(
     size_t out_len
 )
 {
-    c300x_json_string_field(body, first_name, out, out_len);
-    if (out[0] == '\0' && second_name != NULL) {
-        c300x_json_string_field(body, second_name, out, out_len);
+    int result = c300x_json_string_field_checked(body, first_name, out, out_len);
+    if (result >= 0 && out[0] == '\0' && second_name != NULL) {
+        result = c300x_json_string_field_checked(body, second_name, out, out_len);
     }
+    return result;
 }
 
 static int auth_config_requires_restart(
@@ -3630,33 +3637,28 @@ static void handle_auth_config_post(
     if (c300x_json_bool_field(request->body, "noAuth", &value) || c300x_json_bool_field(request->body, "no_auth", &value)) {
         updated->api_no_auth = value;
     }
-    maybe_json_string_field(request->body, "apiToken", "api_token", api_token, sizeof(api_token));
+    if (maybe_json_string_field(request->body, "apiToken", "api_token", api_token, sizeof(api_token)) < 0
+        || maybe_json_string_field(request->body, "maintenanceToken", "maintenance_token",
+            maintenance_token, sizeof(maintenance_token)) < 0
+        || maybe_json_string_field(request->body, "listenHost", "listen_host", listen_host, sizeof(listen_host)) < 0
+        || maybe_json_string_field(request->body, "stairLightDefaultAddress", "stair_light_default_address",
+            stair_address, sizeof(stair_address)) < 0
+        || maybe_json_string_field(request->body, "activationItemsJson", "activation_items_json",
+            activation_items_json, sizeof(activation_items_json)) < 0) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_config_string\"}\n");
+        AUTH_CONFIG_POST_RETURN();
+    }
     if (api_token[0] != '\0') {
         snprintf(updated->api_token, sizeof(updated->api_token), "%s", api_token);
         snprintf(updated->api_file_token, sizeof(updated->api_file_token), "%s", api_token);
         updated->api_token_from_env = 0;
     }
-    maybe_json_string_field(
-        request->body,
-        "maintenanceToken",
-        "maintenance_token",
-        maintenance_token,
-        sizeof(maintenance_token)
-    );
     if (maintenance_token[0] != '\0') {
         snprintf(updated->maintenance_admin_token, sizeof(updated->maintenance_admin_token), "%s", maintenance_token);
     }
-    maybe_json_string_field(request->body, "listenHost", "listen_host", listen_host, sizeof(listen_host));
     if (listen_host[0] != '\0') {
         snprintf(updated->listen_host, sizeof(updated->listen_host), "%s", listen_host);
     }
-    maybe_json_string_field(
-        request->body,
-        "stairLightDefaultAddress",
-        "stair_light_default_address",
-        stair_address,
-        sizeof(stair_address)
-    );
     if (stair_address[0] != '\0') {
         if (!address_is_valid(stair_address)) {
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_stair_light_address\"}\n");
@@ -3722,13 +3724,6 @@ static void handle_auth_config_post(
             updated->activations_count = 0;
         }
     }
-    maybe_json_string_field(
-        request->body,
-        "activationItemsJson",
-        "activation_items_json",
-        activation_items_json,
-        sizeof(activation_items_json)
-    );
     if (activation_items_json[0] != '\0') {
         if (!c300x_config_set_activation_items_json(
             updated,
@@ -4627,46 +4622,11 @@ static int maybe_json_mqtt_string(
     size_t out_len
 )
 {
-    char pattern[64];
-    const char *found;
-    const char *ptr;
-    size_t written = 0;
-
-    if (out_len == 0) {
-        return -1;
-    }
-    snprintf(pattern, sizeof(pattern), "\"%s\"", field);
-    found = strstr(body, pattern);
-    if (found == NULL) {
+    const char *value;
+    if (!c300x_json_find_member(body, body + strlen(body), field, &value)) {
         return 0;
     }
-    ptr = strchr(found + strlen(pattern), ':');
-    if (ptr == NULL) {
-        return -1;
-    }
-    ptr++;
-    while (*ptr != '\0' && isspace((unsigned char)*ptr)) {
-        ptr++;
-    }
-    if (*ptr != '"') {
-        return -1;
-    }
-    ptr++;
-    while (*ptr != '\0' && *ptr != '"') {
-        char ch = *ptr++;
-        if (ch == '\\' && *ptr != '\0') {
-            ch = *ptr++;
-        }
-        if (written + 1 >= out_len) {
-            return -1;
-        }
-        out[written++] = ch;
-    }
-    if (*ptr != '"') {
-        return -1;
-    }
-    out[written] = '\0';
-    return 1;
+    return c300x_json_decode_string(value, body + strlen(body), out, out_len, NULL) ? 1 : -1;
 }
 
 static void handle_mqtt_post(
@@ -10752,6 +10712,10 @@ static void handle_client(int client_fd, int kind, char *buffer, void *context)
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"bad_request\"}\n");
         goto cleanup;
     }
+    if (request->body_len > 0 && !c300x_json_object_valid(request->body)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_json\"}\n");
+        goto cleanup;
+    }
 
     if (kind == LISTENER_API) {
         handle_api_request(client_fd, config, runtime, request);
@@ -10782,7 +10746,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -10903,6 +10867,7 @@ int c300x_run(struct c300x_config *config)
         int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
         int http_poll_index;
+        int output_poll_index;
         int file_poll_index;
         int callback_poll_index;
         int display_poll_index;
@@ -10918,6 +10883,10 @@ int c300x_run(struct c300x_config *config)
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
         poll_count += C300X_HTTP_MAX_CLIENTS;
+        output_poll_index = (int)poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c300x_http_outputs_prepare(&poll_fds[poll_count]));
+        poll_count += C300X_HTTP_MAX_OUTPUTS;
         file_poll_index = (int)poll_count;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_http_file_transfers_prepare(&runtime->file_transfers,
@@ -11050,6 +11019,7 @@ int c300x_run(struct c300x_config *config)
             runtime_set_wake_reason(runtime, "event");
         }
         /* Drain old descriptors before accept can reuse one of their numbers. */
+        c300x_http_outputs_handle(&poll_fds[output_poll_index]);
         c300x_command_job_tick(&runtime->maintenance_job);
         finish_maintenance_job(runtime);
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
@@ -11193,6 +11163,7 @@ cleanup:
             close_agent_socket(runtime->maintenance_client_fd);
         }
         c300x_recent_events_clear(&runtime->recent_events);
+        c300x_http_outputs_close();
     }
     c300x_video_destroy(video);
     free(runtime);

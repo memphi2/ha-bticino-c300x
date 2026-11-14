@@ -468,7 +468,8 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             connection,
             discovery_matches_entry=discovery_matches_entry,
         )
-        self._abort_if_unique_id_configured(updates=connection)
+        # mDNS identity and addresses are untrusted. Never redirect stored credentials.
+        self._abort_if_unique_id_configured()
         existing_entry_abort = (
             await self._async_abort_if_zeroconf_targets_existing_manual_entry(
                 discovered_unique_id,
@@ -517,11 +518,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return None
             if not _entry_uses_manual_setup_unique_id(entry):
                 continue
-            if not await _async_discovery_targets_configured_entry(
-                self.hass,
-                entry,
-                connection,
-            ):
+            if not _entry_connection_matches_discovery(entry, connection):
                 continue
             self.hass.config_entries.async_update_entry(
                 entry,
@@ -1650,33 +1647,6 @@ def _entry_uses_manual_setup_unique_id(
 
     unique_id = str(getattr(config_entry, "unique_id", "") or "")
     return unique_id == DOMAIN or unique_id.startswith(f"{DOMAIN}:")
-
-
-async def _async_discovery_targets_configured_entry(
-    hass: Any,
-    config_entry: BticinoC300XConfigEntry,
-    connection: dict[str, Any],
-) -> bool:
-    """Return true when a discovery endpoint is the already configured agent."""
-
-    if _entry_connection_matches_discovery(config_entry, connection):
-        return True
-
-    token = str(_config_default(config_entry, CONF_AGENT_TOKEN, "") or "").strip()
-    if not token:
-        return False
-    probe_connection = {
-        CONF_AGENT_HOST: connection[CONF_AGENT_HOST],
-        CONF_AGENT_PORT: connection[CONF_AGENT_PORT],
-    }
-    return (
-        await _async_probe_agent(
-            hass,
-            probe_connection,
-            api_token=token,
-        )
-        == "reachable"
-    )
 
 
 def _entry_connection_matches_discovery(

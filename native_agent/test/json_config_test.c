@@ -108,6 +108,11 @@ int main(int argc, char **argv)
     struct c300x_config *loaded = calloc(1, sizeof(*loaded));
     assert(config && loaded);
     c300x_default_config(config);
+    const char *activation = "{\"id\":\"command-only\",\"name\":\"Custom\",\"pressCommand\":\"*1*1*11##\"}";
+    char activation_error[256];
+    assert(parse_activation_item(activation, activation + strlen(activation),
+                                &config->activations[0], activation_error, sizeof(activation_error)));
+    config->activations_count = 1;
     snprintf(config->config_path, sizeof(config->config_path), "%s/config.json", argv[1]);
     snprintf(config->api_token, sizeof(config->api_token), "synthetic-api");
     snprintf(config->mqtt_password, sizeof(config->mqtt_password), "s\xc3\xab" "cret\n\\\"");
@@ -128,6 +133,9 @@ int main(int argc, char **argv)
     assert(stat(config->config_path, &before) == 0);
     assert((before.st_mode & 0777) == 0600);
     assert(c300x_load_config(config->config_path, loaded, error, sizeof(error)));
+    assert(loaded->activations_count == 1);
+    assert(loaded->activations[0].address[0] == '\0');
+    assert(strcmp(loaded->activations[0].press_command, "*1*1*11##") == 0);
     assert(strcmp(loaded->mqtt_password, config->mqtt_password) == 0);
     assert(strcmp(loaded->lock_name, config->lock_name) == 0);
     assert(c300x_save_config_if_changed(config, error, sizeof(error), &changed) && !changed);

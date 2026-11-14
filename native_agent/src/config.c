@@ -1773,8 +1773,10 @@ static void write_activation_item(
     write_json_string(file, activation->type);
     fprintf(file, ",\"addressMode\": ");
     write_json_string(file, activation->address_mode);
-    fprintf(file, ",\"address\": ");
-    write_json_string(file, activation->address);
+    if (activation->address[0] != '\0') {
+        fprintf(file, ",\"address\": ");
+        write_json_string(file, activation->address);
+    }
     fprintf(file, ",\"pressCommand\": ");
     write_json_string(file, activation->press_command);
     fprintf(file, ",\"releaseCommand\": ");

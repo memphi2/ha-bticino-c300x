@@ -2459,6 +2459,47 @@ def test_write_text_memo_service_calls_agent_api_and_refreshes_memos() -> None:
     asyncio.run(_run())
 
 
+def test_write_text_memo_schedules_a_background_refresh_when_the_refresh_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheduled: list[str] = []
+
+    async def _failing_refresh(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("agent unreachable")
+
+    async def _diagnostics(*_args: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.use_cases.memos.async_memos", _failing_refresh
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.use_cases.memos.schedule_memos_refresh",
+        lambda _hass, _entry: scheduled.append("memos"),
+    )
+    monkeypatch.setattr(common_use_cases, "async_dispatcher_send", lambda *args: None)
+    monkeypatch.setattr(common_use_cases, "async_refresh_agent_diagnostics", _diagnostics)
+
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                api=api,
+                capabilities={"memos": {"supported": True, "write_text": True}},
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_WRITE_TEXT_MEMO)]
+        await handler(types.SimpleNamespace(data={"text": "new memo", "read": False}))
+
+        assert api.text_memo_calls == [{"text": "new memo", "read": False}]
+
+    asyncio.run(_run())
+    assert scheduled == ["memos"]
+
+
 def _translation_key(err: Exception) -> str | None:
     return getattr(err, "translation_key", None)
 

@@ -555,6 +555,95 @@ test("failed automatic preview waits for a new ring lifecycle", async () => {
   }
 });
 
+test("failed passive answered preview waits for a new ring lifecycle", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?failed-passive-preview");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  let starts = 0;
+  card._createWebrtcClient = () => ({
+    close() {},
+    async start() {
+      starts++;
+      // Bound the reproduction even if the immediate retry loop regresses.
+      if (starts >= 6) await new Promise(() => {});
+      throw new Error("provider unavailable");
+    },
+  });
+  const answered = fakeHass({ cameraEntity: { state: "idle", attributes: {
+    media_state: "ring_active", media_primary_action: "wait",
+  } } });
+  const markPreview = () => {
+    card._lifecycle.ringPreviewStarted = true;
+    card._lifecycle.ringPreviewActive = true;
+  };
+  try {
+    markPreview();
+    card.hass = answered;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 1);
+    for (let i = 0; i < 5; i++) card._updateState();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 1);
+    assert.equal(card._error, "provider unavailable");
+    card.hass = fakeHass();
+    markPreview();
+    card.hass = answered;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 2);
+  } finally {
+    card.disconnectedCallback();
+  }
+});
+
+test("stale passive preview failure cannot suppress a replacement card session", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?stale-passive-preview");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  let rejectStart;
+  card._replaceDoorbellWebrtcStream = () => new Promise((_, reject) => { rejectStart = reject; });
+  const pending = card._startPassiveAnsweredDoorbellPreview();
+  card.setConfig({ entity: "camera.replacement" });
+  try {
+    rejectStart(new Error("old provider failed"));
+    await pending;
+    assert.equal(card._lifecycle.ringPreviewSuppressed, false);
+    assert.equal(card._lifecycle.passiveAnsweredPreviewStarted, false);
+    assert.equal(card._error, "");
+  } finally {
+    card.disconnectedCallback();
+  }
+});
+
+test("failed old transition does not clear a replacement transition video", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?stale-transition-cleanup");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  let rejectStart;
+  const oldClient = {
+    close() {},
+    start: () => new Promise((_, reject) => { rejectStart = reject; }),
+  };
+  card._createWebrtcClient = () => oldClient;
+  const pending = card._replaceDoorbellWebrtcStream({ onPromoted() {} });
+  card.setConfig({ entity: "camera.replacement" });
+  const replacement = { close() {} };
+  const stream = { id: "replacement stream" };
+  card._transitionWebrtc = replacement;
+  card._transitionVideoEl.srcObject = stream;
+  try {
+    rejectStart(new Error("old provider failed"));
+    await assert.rejects(pending, /old provider failed/);
+    assert.equal(card._transitionWebrtc, replacement);
+    assert.equal(card._transitionVideoEl.srcObject, stream);
+  } finally {
+    card.disconnectedCallback();
+  }
+});
+
 test("microphone permission resolving after disposal cannot restart media", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-microphone");

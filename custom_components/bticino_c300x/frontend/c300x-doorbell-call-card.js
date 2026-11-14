@@ -632,6 +632,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (this._transitionWebrtc || !this._transitionVideoEl) {
       return;
     }
+    const generation = this._mediaGeneration;
     this._lifecycle.passiveAnsweredPreviewStarted = true;
     try {
       await this._replaceDoorbellWebrtcStream({
@@ -643,7 +644,9 @@ class C300XDoorbellCallCard extends HTMLElement {
         },
       });
     } catch (err) {
-      this._lifecycle.passiveAnsweredPreviewStarted = false;
+      if (generation !== this._mediaGeneration) return;
+      // Retry only after a new ring lifecycle, not from the error rerender.
+      this._lifecycle.ringPreviewSuppressed = true;
       console.error("C300X passive ring preview transition failed", err);
       this._error = err?.message || `${err}`;
       this._updateState();
@@ -661,6 +664,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._error = "";
     this._clearNotice();
     const previous = this._webrtc;
+    const transitionVideoEl = this._transitionVideoEl;
     let next = null;
     let promoted = false;
     const transitionHasVideo = () =>
@@ -722,13 +726,13 @@ class C300XDoorbellCallCard extends HTMLElement {
         promote();
       }
     } catch (err) {
-      this._transitionVideoEl.removeEventListener("loadeddata", promote);
-      this._transitionVideoEl.removeEventListener("playing", promote);
+      transitionVideoEl.removeEventListener("loadeddata", promote);
+      transitionVideoEl.removeEventListener("playing", promote);
       if (this._transitionWebrtc === next) {
         this._transitionWebrtc = null;
+        transitionVideoEl.srcObject = null;
       }
       next.close();
-      this._transitionVideoEl.srcObject = null;
       throw err;
     }
   }

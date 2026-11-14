@@ -2962,3 +2962,20 @@ class _FakeQmlPatchApi:
 
 def _schema_key_names(schema: vol.Schema) -> list[str]:
     return [getattr(key, "schema", key) for key in schema.schema]
+
+
+@pytest.mark.parametrize("value", ["nan", "NaN", float("nan"), "inf", "-inf", float("inf")])
+def test_audio_gain_rejects_values_that_are_not_finite(value) -> None:
+    """NaN is neither below nor above the range, so a plain range check passes it."""
+
+    from custom_components.bticino_c300x.config_audio import (
+        audio_gain_db,
+        audio_gain_db_or_default,
+    )
+
+    with pytest.raises(vol.Invalid):
+        audio_gain_db(value)
+    assert audio_gain_db_or_default(value, 6.0) == 6.0
+    assert audio_gain_db("0") == 0.0
+    assert audio_gain_db(-20) == -20.0
+    assert audio_gain_db("20.0") == 20.0

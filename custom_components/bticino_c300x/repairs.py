@@ -166,7 +166,7 @@ class MediaSetupRepairFlow(RepairsFlow):
         """Repair explicitly confirmed media setup prerequisites."""
 
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is None:
+        if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
         readiness = media_readiness(entry)
         placeholders = _media_setup_repair_placeholders(readiness)

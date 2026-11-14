@@ -2576,3 +2576,24 @@ def test_restore_external_patch_state_skips_inactive_changed_patches() -> None:
     )
 
     assert api.calls == ["apply_qml_core", "reload_gui", "qml_status"]
+
+
+@pytest.mark.parametrize("flow_class", [DeviceUserRepairFlow, MediaSetupRepairFlow])
+def test_repair_flows_abort_cleanly_when_the_entry_never_set_up(flow_class) -> None:
+    """A failed or disabled entry has no runtime data; Fix must not raise.
+
+    The issue can still be listed, and the user can press Fix on it.
+    """
+
+    entry = types.SimpleNamespace(entry_id="entry-1", data={}, options={})
+    assert not hasattr(entry, "runtime_data")
+    flow = flow_class(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    assert asyncio.run(flow.async_step_confirm()) == {
+        "type": "abort", "reason": "entry_not_loaded",
+    }
+    assert asyncio.run(flow.async_step_confirm({})) == {
+        "type": "abort", "reason": "entry_not_loaded",
+    }

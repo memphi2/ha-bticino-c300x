@@ -378,6 +378,24 @@ assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "the warning stays long 
 clock += 1;
 assert.equal(p.feedbackKey(stuck), "", "a settled entry stops being reported");
 assert.equal(p.readingColor(stuck), "#c7d0d9");
+// A light reports what it converted a command into: a color temperature in
+// mired, a hue and saturation through its own color space. Close counts.
+function lightWith(command, value) {
+    return {entity_id: "light.lamp", available: true, state: true, controls: [
+        {command: command, kind: "number", value: value, min: 0, max: 7000, step: 1}]};
+}
+function confirmed(command, sent, reported) {
+    const expected = Api.dashboardExpectation(lightWith(command, 0), {command: command, kind: "number"}, String(sent));
+    return Api.dashboardExpectationMatches(lightWith(command, reported), expected);
+}
+assert.equal(confirmed("color_temp_kelvin", 2700, 2703), true, "a color temperature a few kelvin off is the one that was sent");
+assert.equal(confirmed("color_temp_kelvin", 2700, 2730), true);
+assert.equal(confirmed("color_temp_kelvin", 2700, 2731), false, "but not one that is clearly another");
+assert.equal(confirmed("hue", 120, 122), true);
+assert.equal(confirmed("hue", 120, 124), false);
+assert.equal(confirmed("saturation", 80, 78), true);
+assert.equal(confirmed("brightness", 50, 51), false, "a brightness is still compared exactly");
+assert.equal(confirmed("brightness", 50, 50), true);
 // A one-shot action (a script, scene or button, a track skip) has no state that
 // Home Assistant could reflect, so it has nothing to be unconfirmed about.
 const oneShot = {entity_id: "script.leave", available: true};

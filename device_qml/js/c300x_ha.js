@@ -238,6 +238,8 @@ function dashboardExpectation(item, control, value) {
     return null
 }
 
+var EXPECTATION_TOLERANCE = {color_temp_kelvin: 30, hue: 3, saturation: 3}
+
 function dashboardExpectationMatches(item, expected) {
     if (!item || item.available === false || !expected) return false
     if (expected.command === "toggle") return item.state === expected.value
@@ -256,7 +258,8 @@ function dashboardExpectationMatches(item, expected) {
         if (control.command !== expected.command || control.value === null || control.value === undefined) continue
         if (control.active === false) return false
         if (expected.kind === "number") {
-            return Math.abs(Number(control.value) - Number(expected.value)) < 0.000001
+            var tolerance = EXPECTATION_TOLERANCE.hasOwnProperty(expected.command) ? EXPECTATION_TOLERANCE[expected.command] : 0.000001
+            return Math.abs(Number(control.value) - Number(expected.value)) <= tolerance
         }
         return String(control.value) === String(expected.value)
     }

@@ -1277,9 +1277,8 @@ def test_snapshot_memo_event_refreshes_memo_entities_without_public_event() -> N
     assert event_state.event_sequence == 0
     assert event_state.last_event_data == {}
     assert runtime_data.memos["total"] == 1
-    assert runtime_data.memos["memos"][0]["id"] == "memo-1"
-    assert runtime_data.memos["memos"][0]["kind"] == "text"
-    assert runtime_data.memos_updated_at is not None
+    assert runtime_data.memos["memos"] == []
+    assert runtime_data.memos_updated_at is None
     assert signals == [(SIGNAL_MEMOS_CHANGED, "entry-1")]
 
 
@@ -1339,8 +1338,8 @@ def test_snapshot_voicemail_event_refreshes_message_entities_without_public_even
     assert hass.bus.events == []
     assert event_state.event_sequence == 0
     assert runtime_data.answering_machine_messages["total"] == 1
-    assert runtime_data.answering_machine_messages["messages"][0]["id"] == "message_1"
-    assert runtime_data.answering_machine_messages_updated_at is not None
+    assert runtime_data.answering_machine_messages["messages"] == []
+    assert runtime_data.answering_machine_messages_updated_at is None
     assert signals == [(SIGNAL_VIDEO_MESSAGES_CHANGED, "entry-1")]
 
 

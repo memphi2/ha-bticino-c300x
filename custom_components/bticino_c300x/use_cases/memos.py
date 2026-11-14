@@ -87,6 +87,7 @@ class MemosUseCase:
             refresh=lambda: async_memos(self._entry, force_refresh=True),
             latest=lambda memos: latest_memo_id(memos, kind),
             unavailable_error=f"{kind}_memo_not_available",
+            refresh_before_lookup=True,
         )
 
     async def _latest_voice_memo_audio_id(self) -> str:

@@ -112,12 +112,13 @@ async def latest_item_id_for_entry(
     refresh: Callable[[], Awaitable[dict[str, Any]]],
     latest: Callable[[dict[str, Any]], str | None],
     unavailable_error: str,
+    refresh_before_lookup: bool = False,
 ) -> str:
     """Return a cached latest id, refreshing once if the cache has none."""
 
     payload = getattr(entry.runtime_data, cache_attr, {})
     item_id = latest(payload) if isinstance(payload, dict) else None
-    if item_id is not None:
+    if item_id is not None and not refresh_before_lookup:
         return item_id
     try:
         payload = await refresh()

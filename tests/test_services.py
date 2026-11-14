@@ -2649,6 +2649,12 @@ def test_common_latest_item_id_uses_cache_then_refreshes() -> None:
         )
         assert refreshes == 0
 
+        assert await common_use_cases.latest_item_id_for_entry(
+            entry, cache_attr="cached_payload", refresh=_refresh, latest=latest,
+            unavailable_error="missing_item", refresh_before_lookup=True,
+        ) == "fresh-id"
+        assert refreshes == 1
+
         entry.runtime_data.cached_payload = {}
         assert (
             await common_use_cases.latest_item_id_for_entry(
@@ -2660,7 +2666,7 @@ def test_common_latest_item_id_uses_cache_then_refreshes() -> None:
             )
             == "fresh-id"
         )
-        assert refreshes == 1
+        assert refreshes == 2
 
     asyncio.run(_run())
 

@@ -615,22 +615,18 @@ def _cache_voicemail_snapshot(entry: BticinoC300XConfigEntry, event_state: C300X
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return
-    current = getattr(runtime_data, "answering_machine_messages", {})
-    messages = current.get("messages", []) if isinstance(current, dict) else []
     runtime_data.answering_machine_messages = normalize_answering_machine_messages(
-        {**_voicemail_event_data(event_state), "messages": messages}
+        {**_voicemail_event_data(event_state), "messages": []}
     )
-    runtime_data.answering_machine_messages_updated_at = dt_util.utcnow()
+    runtime_data.answering_machine_messages_updated_at = None
 
 
 def _cache_memos_snapshot(entry: BticinoC300XConfigEntry, event_state: C300XEventState) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return
-    current = getattr(runtime_data, "memos", {})
-    memos = current.get("memos", []) if isinstance(current, dict) else []
-    runtime_data.memos = normalize_memos({**_memos_event_data(event_state), "memos": memos})
-    runtime_data.memos_updated_at = dt_util.utcnow()
+    runtime_data.memos = normalize_memos({**_memos_event_data(event_state), "memos": []})
+    runtime_data.memos_updated_at = None
 
 
 def _apply_system_metrics_event(

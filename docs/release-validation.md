@@ -8,42 +8,35 @@ for normal users.
 Validate that the current Home Assistant integration, bundled Lovelace card and
 packaged C300X device agent work together on a real C300X.
 
-## Stable and Beta Channels
+## Stable Releases
 
-- Stable: `X.Y.Z`, tagged `vX.Y.Z`.
-- Beta: `X.Y.ZbN`, tagged `vX.Y.ZbN`, starting at `b1`.
-- Release candidate: `X.Y.ZrcN`, tagged `vX.Y.ZrcN`, starting at `rc1`.
+Stable versions use `X.Y.Z`, tagged `vX.Y.Z`.
 
 Versions are canonical and shared by the integration manifest, project metadata,
-changelog and release notes. A beta label is not permission to skip validation.
-Both channels require the tagged commit to be the validated `main` HEAD, the
-release checks, browser checks and verified provenance/SBOM attestations. The
-optional `beta` development branch runs normal Validate, Browser and CodeQL
-checks; it is not a shortcut around the main release gate.
+changelog and release notes. The tagged commit must be the validated `main` HEAD,
+with release checks, browser checks and verified provenance/SBOM attestations.
+Development branches are not a shortcut around the release gate.
 
-The publisher derives the channel from the tag. Beta/RC releases are marked
-as GitHub prereleases and explicitly excluded from Latest. New releases are
-drafts until their four downloaded assets match the validated local artifacts.
+New releases are drafts until their four downloaded assets match the validated
+local artifacts.
 Reruns verify existing assets, notes and channel without overwriting them;
 conflicts or API errors stop publication. Tags are checked against the source
 commit again immediately before publishing a draft.
 
-Each channel ships `ha-bticino-c300x.zip`, `SHA256SUMS`, `build-metadata.json`
+Each release ships `ha-bticino-c300x.zip`, `SHA256SUMS`, `build-metadata.json`
 and `sbom.spdx.json`. The ZIP includes the frontend and device-agent bundle.
-Agent reuse and version-bump checks include preceding beta/RC tags, ordered
-numerically (`b2 < b10 < rc1 < stable`) and restricted to merged older versions.
-Changes to native inputs require an agent version bump and rebuild, including
-between two betas. Integration-only changes may retain the verified agent;
-never relabel an old binary to give it the integration's beta version.
+Agent reuse and version-bump checks consider merged older versions in version
+order. Changes to native inputs require an agent version bump and rebuild.
+Integration-only changes may retain the verified agent; never relabel an old
+binary to give it the integration's new version.
 Display files under `device_qml` ship in the bundle without entering the
 binary: their content is covered by the bundle hash, which the agent-update
 check compares, so a display-only change is delivered to the device on the
 verified agent and does not require a version bump.
 
 Prepare a new version and its dated notes only when that release is intended.
-Adding beta support or creating a development branch does not publish a beta.
-See [beta installation and return to stable](advanced-maintenance.md#beta-versions)
-for the user-facing opt-in workflow.
+Creating a development branch does not publish a release. Version 2.3.0 is the
+direct stable successor to 2.1.3; 2.2.0 is withdrawn and is not an upgrade step.
 
 ## Isolated Integration Tests
 
@@ -256,6 +249,40 @@ Agent binary reuse is allowed only if none of these paths changed:
 If any path above changed, do not release with a reused native-agent binary.
 Build with a verified `C300X_DEVICE_SYSROOT`, run the ABI/stack gates, and keep
 the resulting sysroot evidence in `build-metadata.json`.
+
+### Reviewed Local Native Build
+
+Hosted CI does not have the private device sysroot. Before preparing a release,
+build the ARM agent locally with that sysroot and run the ABI and stack checks.
+Then generate the source-bound approval record:
+
+```bash
+.venv/bin/python scripts/native_build_lock.py \
+  --generate native_agent/build/armhf/c300x-agent-native
+.venv/bin/python scripts/native_build_lock.py --check-inputs
+```
+
+Review and commit `native_agent/build-lock.json` together with the final release
+sources. It records the packaged executable's SHA-256, the agent version and a
+digest of native and bundle inputs. Build settings are represented by a hash,
+not private filesystem paths. Any covered source change invalidates the lock;
+regenerate it only after reviewing and rebuilding the affected inputs.
+
+CI checks both the source digest and executable hash before packaging. A ZIP
+downloaded from a release is only a transport for these approved bytes, not
+independent proof that its executable was built from the current source. The
+lock is maintainer approval of a local build, not a reproducible-build claim or
+an independent attestation of the private compiler/sysroot contents.
+
+For a fresh native build, prepare a draft at the final release tag containing
+only `ha-bticino-c300x.zip`, with the body exactly
+`C300X native build transport`. Build that ZIP from the committed release tree;
+do not upload local metadata into this transport draft. After all gates pass,
+CI requires the ZIP to match its regenerated package byte for byte, adds its
+verified metadata and checked-in notes, then verifies downloads before
+publication. It never replaces conflicting assets or an existing published
+release. An interrupted metadata upload can require manual cleanup of the
+unpublished draft before retrying.
 
 ## Legal and Provenance Audit
 

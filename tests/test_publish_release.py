@@ -54,8 +54,14 @@ def setup_publication(monkeypatch, tmp_path, *, version="2.1.0b1", existing=Fals
             if corrupt:
                 (destination / "SHA256SUMS").write_text("corrupt")
         elif args[:3] == ("gh", "release", "edit"):
-            assert "--draft=false" in args
-            release["draft"] = False
+            if "--notes-file" in args:
+                release["body"] = notes.read_text()
+            else:
+                assert "--draft=false" in args
+                release["draft"] = False
+        elif args[:3] == ("gh", "release", "upload"):
+            assert "--clobber" not in args
+            release["assets"] = [{"name": name} for name in publisher.ASSETS]
         else:
             pytest.fail(f"Unexpected external command: {args}")
         return ""
@@ -158,3 +164,65 @@ def test_duplicate_release_lookup_stops_before_publication(monkeypatch, tmp_path
     with pytest.raises(ValueError, match="multiple releases"):
         publisher.publish("owner/repo", "v2.1.0b1", directory)
     assert not any(call[:2] == ("gh", "release") for call in calls)
+
+
+def test_explicit_transport_draft_finalizes_without_replacing_zip(monkeypatch, tmp_path):
+    publisher, directory, release, calls = setup_publication(
+        monkeypatch, tmp_path, existing=True, draft=True)
+    release["body"] = publisher.TRANSPORT_NOTES
+    release["assets"] = [{"name": publisher.ASSETS[0]}]
+    publisher.publish("owner/repo", "v2.1.0b1", directory, finalize_transport_draft=True)
+    assert release["draft"] is False
+    uploads = [call for call in calls if call[:3] == ("gh", "release", "upload")]
+    assert len(uploads) == 1
+    assert not any("--clobber" in call for call in calls)
+    assert str(directory / publisher.ASSETS[0]) not in uploads[0]
+    assert uploads[0][-3:] == tuple(str(directory / name) for name in publisher.ASSETS[1:])
+
+
+def test_cli_enables_transport_finalization_only_explicitly(monkeypatch, tmp_path):
+    publisher, directory, _, _ = setup_publication(monkeypatch, tmp_path)
+    calls = []
+    monkeypatch.setattr(publisher, "publish", lambda *args, **kwargs: calls.append((args, kwargs)))
+    import sys
+
+    command = ["publish_release.py", "--repo", "owner/repo", "--tag", "v2.1.0b1",
+               "--directory", str(directory)]
+    for flag in (False, True):
+        monkeypatch.setattr(sys, "argv", command + (["--finalize-transport-draft"] if flag else []))
+        assert publisher.main() == 0
+        assert calls[-1] == (("owner/repo", "v2.1.0b1", directory), {"finalize_transport_draft": flag})
+
+
+def test_transport_identity_ignores_download_count_but_not_asset_replacement(monkeypatch, tmp_path):
+    publisher, _, _, _ = setup_publication(monkeypatch, tmp_path)
+    before = {"id": 1, "draft": True, "assets": [{"id": 2, "name": "zip", "download_count": 0}]}
+    after = {"id": 1, "draft": True, "assets": [{"id": 2, "name": "zip", "download_count": 1}]}
+    assert publisher._transport_identity(before) == publisher._transport_identity(after)
+    after["assets"][0]["id"] = 3
+    assert publisher._transport_identity(before) != publisher._transport_identity(after)
+
+
+@pytest.mark.parametrize("failure", ["published", "no-opt-in", "extra-assets", "wrong-zip", "moved"])
+def test_transport_conflicts_never_mutate_release(monkeypatch, tmp_path, failure):
+    publisher, directory, release, calls = setup_publication(
+        monkeypatch, tmp_path, existing=True, draft=failure != "published", moved=failure == "moved")
+    release["body"] = publisher.TRANSPORT_NOTES
+    release["assets"] = [{"name": publisher.ASSETS[0]}]
+    if failure == "extra-assets":
+        release["assets"].append({"name": "build-metadata.json"})
+    if failure == "wrong-zip":
+        original = publisher.run
+
+        def corrupt(*args):
+            result = original(*args)
+            if args[:3] == ("gh", "release", "download"):
+                (Path(args[args.index("--dir") + 1]) / publisher.ASSETS[0]).write_bytes(b"old ZIP")
+            return result
+
+        monkeypatch.setattr(publisher, "run", corrupt)
+    with pytest.raises(ValueError):
+        publisher.publish("owner/repo", "v2.1.0b1", directory,
+                          finalize_transport_draft=failure != "no-opt-in")
+    assert not any(call[:3] in (("gh", "release", "upload"), ("gh", "release", "edit"))
+                   for call in calls)

@@ -829,8 +829,10 @@ def check_hacs_metadata() -> list[str]:
         "scripts/check_release_tag.py": "release workflow must validate tag metadata",
         "--attestation-context": "release workflow must bind the signer to the release checkout",
         "scripts/build_hacs_release.py": "release workflow must build the HACS zip asset",
+        "--agent-binary native_agent/build/armhf/c300x-agent-native": "release workflow must bind the packaged executable to the selected build output",
         "Resolve reusable native agent": "release workflow must resolve reusable native-agent assets",
-        "Native agent/bundle inputs changed": "release workflow must block agent reuse when bundle inputs changed",
+        "scripts/native_build_lock.py --check-inputs": "release workflow must validate reviewed native inputs",
+        "--build-lock native_agent/build-lock.json": "release workflow must validate reviewed executable bytes before attestation",
         "gh release download": "release workflow must download the previous release asset for agent reuse",
         "--reuse-agent-from-release-zip": "release workflow must pass reusable agent assets to the HACS builder",
         "scripts/write_release_assets.py": "release workflow must write release metadata assets",
@@ -850,6 +852,8 @@ def check_hacs_metadata() -> list[str]:
     for token, message in required_release_tokens.items():
         if token not in release_workflow:
             failures.append(message)
+    if "asset_source=current-release" in release_workflow:
+        failures.append("release workflow must not re-attest self-described same-tag assets")
     release_assets_script = (ROOT / "scripts" / "write_release_assets.py").read_text(
         encoding="utf-8"
     )
@@ -868,9 +872,12 @@ def check_hacs_metadata() -> list[str]:
     native_agent_docs = (ROOT / "docs" / "native-agent.md").read_text(
         encoding="utf-8"
     )
+    from native_build_lock import INPUT_DIRS, INPUT_FILES
+
+    locked_inputs = set(INPUT_DIRS) | set(INPUT_FILES)
     for path in NATIVE_AGENT_BUNDLE_INPUT_PATHS:
-        if path not in release_workflow:
-            failures.append(f"release workflow must gate agent reuse on {path}")
+        if path not in locked_inputs:
+            failures.append(f"native build lock must gate agent reuse on {path}")
         if path not in release_validation:
             failures.append(f"docs/release-validation.md must document agent reuse path {path}")
         if path not in native_agent_docs:

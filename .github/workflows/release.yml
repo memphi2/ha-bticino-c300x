@@ -277,6 +277,8 @@ jobs:
           RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
         run: |
           set -euo pipefail
+          # This checked-in approval is independent of all downloaded metadata.
+          python scripts/native_build_lock.py --check-inputs
           if [ -n "${C300X_DEVICE_SYSROOT:-}" ] \
             && [ -f "${C300X_DEVICE_SYSROOT}/lib/libc.so.6" ]; then
             echo "asset_source=build" >> "$GITHUB_OUTPUT"
@@ -285,93 +287,31 @@ jobs:
             exit 0
           fi
           previous_tag="$(python scripts/release_version.py "$RELEASE_TAG")"
-          if [ -z "$previous_tag" ]; then
-            echo "::error::C300X_DEVICE_SYSROOT is unavailable and no previous release tag exists for agent reuse"
-            exit 1
-          fi
-          changed_inputs="$(git diff --name-only "$previous_tag..HEAD" -- \
-            native_agent/src \
-            native_agent/scripts \
-            native_agent/VERSION \
-            native_agent/Makefile \
-            native_agent/config.example.json \
-            device_qml \
-            custom_components/bticino_c300x/device_agent/init \
-            scripts/stage_device_agent_bundle.py \
-            scripts/device_file_strip.py)"
-          if [ -n "$changed_inputs" ]; then
-            printf '%s\n' "$changed_inputs"
-            for attempt in $(seq 1 60); do
-              rm -rf .release/reuse-current
-              mkdir -p .release/reuse-current
-              if gh release view "$RELEASE_TAG" >/dev/null 2>&1 \
-                && gh release download "$RELEASE_TAG" \
-                  --pattern ha-bticino-c300x.zip \
-                  --pattern SHA256SUMS \
-                  --pattern build-metadata.json \
-                  --pattern sbom.spdx.json \
-                  --dir .release/reuse-current \
-                  --clobber; then
-              CURRENT_RELEASE_TAG="$RELEASE_TAG" python - <<'PY'
-          import json
-          import os
-          import subprocess
-          import sys
-          from pathlib import Path
-          
-          metadata = json.loads(Path(".release/reuse-current/build-metadata.json").read_text())
-          expected = {
-              "release_tag": os.environ["CURRENT_RELEASE_TAG"],
-              "git_commit": subprocess.check_output(
-                  ["git", "rev-parse", "HEAD"],
-                  text=True,
-              ).strip(),
-              "native_agent_version": Path("native_agent/VERSION").read_text().strip(),
-          }
-          for key, value in expected.items():
-              if metadata.get(key) != value:
-                  print(f"current release asset metadata mismatch for {key}", file=sys.stderr)
-                  sys.exit(1)
-          bundle = metadata.get("device_agent_bundle") or {}
-          if bundle.get("agent_version") != expected["native_agent_version"]:
-              print("current release asset agent version mismatch", file=sys.stderr)
-              sys.exit(1)
-          PY
-              (
-                cd .release/reuse-current
-                sha256sum -c SHA256SUMS
-              )
-              mkdir -p .release
-              python scripts/check_release_contents.py .release/reuse-current/ha-bticino-c300x.zip
-              cp .release/reuse-current/ha-bticino-c300x.zip "$RELEASE_ZIP"
-              cp .release/reuse-current/SHA256SUMS "$RELEASE_SHA256SUMS"
-              cp .release/reuse-current/build-metadata.json "$RELEASE_METADATA"
-              cp .release/reuse-current/sbom.spdx.json "$RELEASE_SBOM"
-              echo "asset_source=current-release" >> "$GITHUB_OUTPUT"
-              echo "reuse_args=" >> "$GITHUB_OUTPUT"
-              echo "reused_from=" >> "$GITHUB_OUTPUT"
-              exit 0
-              fi
-              if [ "$attempt" -lt 60 ]; then
-                echo "Waiting for same-tag release assets for $RELEASE_TAG ($attempt/60)"
-                sleep 10
-              fi
-            done
-            echo "::error::Native agent/bundle inputs changed since $previous_tag; C300X_DEVICE_SYSROOT or same-tag release assets built from this commit are required"
-            exit 1
-          fi
           mkdir -p .release/reuse
-          gh release download "$previous_tag" \
-            --pattern ha-bticino-c300x.zip \
-            --dir .release/reuse \
-            --clobber
-          test -s .release/reuse/ha-bticino-c300x.zip
-          echo "asset_source=build" >> "$GITHUB_OUTPUT"
-          echo "reuse_args=--reuse-agent-from-release-zip .release/reuse/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
-          echo "reused_from=$previous_tag" >> "$GITHUB_OUTPUT"
+          # Prefer the locally built same-tag draft asset. An older asset is
+          # usable only with the SAME current source/version/byte approval.
+          for candidate in "$RELEASE_TAG" "$previous_tag"; do
+            [ -n "$candidate" ] || continue
+            rm -f .release/reuse/ha-bticino-c300x.zip
+            if gh release download "$candidate" \
+              --pattern ha-bticino-c300x.zip --dir .release/reuse --clobber \
+              && python scripts/native_build_lock.py --zip .release/reuse/ha-bticino-c300x.zip; then
+              echo "asset_source=build" >> "$GITHUB_OUTPUT"
+              echo "reuse_args=--reuse-agent-from-release-zip .release/reuse/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
+              echo "reused_from=$candidate" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::No release executable matches the reviewed native build lock; build locally and review its lock before release."
+          exit 1
       - name: Build HACS release zip
         if: steps.reusable-agent.outputs.asset_source == 'build'
         run: scripts/build_hacs_release.py ${{ steps.reusable-agent.outputs.reuse_args }}
+      - name: Bind packaged agent to selected build output
+        run: |
+          python scripts/check_release_contents.py "$RELEASE_ZIP" \
+            --agent-binary native_agent/build/armhf/c300x-agent-native \
+            --build-lock native_agent/build-lock.json
       - name: Generate release metadata
         if: steps.reusable-agent.outputs.asset_source == 'build'
         env:
@@ -443,4 +383,5 @@ jobs:
           python scripts/publish_release.py \
             --repo "$GITHUB_REPOSITORY" \
             --tag "$RELEASE_TAG" \
-            --directory .release
+            --directory .release \
+            --finalize-transport-draft

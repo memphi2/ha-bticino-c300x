@@ -146,9 +146,8 @@ def _load_repo_checker():
 def test_every_script_the_bundle_stager_imports_is_a_bundle_input() -> None:
     """A helper that shapes the agent bundle must force a rebuild when it changes.
 
-    The release workflow reuses the previous release's agent assets unless a
-    listed bundle input changed, so an unlisted helper would ship a bundle built
-    by its old version.
+    The reviewed lock covers the stager and its local transformation helpers;
+    release packaging always regenerates the bundle from current sources.
     """
 
     import ast
@@ -167,14 +166,14 @@ def test_every_script_the_bundle_stager_imports_is_a_bundle_input() -> None:
     assert "scripts/device_file_strip.py" in helpers
 
     checker = _load_repo_checker()
-    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    lock_script = (ROOT / "scripts/native_build_lock.py").read_text(encoding="utf-8")
     documents = {
         name: (ROOT / name).read_text(encoding="utf-8")
         for name in ("docs/release-validation.md", "docs/native-agent.md", "SUPPORT.md")
     }
     for helper in helpers:
         assert helper in checker.NATIVE_AGENT_BUNDLE_INPUT_PATHS
-        assert helper in workflow
+        assert helper in lock_script
         for name, text in documents.items():
             assert f"`{helper}`" in text, name
     # The strip changes only the display files, never the agent binary.
@@ -263,45 +262,75 @@ def test_release_builder_can_reuse_agent_from_release_zip(
         archive.writestr("device_agent/armhf/c300x-agent-native", b"agent")
 
     monkeypatch.setattr(builder, "AGENT_BINARY", agent_binary)
+    checked = []
+    monkeypatch.setattr(builder, "validate_archive", lambda path, **kwargs: checked.append(path))
 
     builder._restore_agent_from_release_zip(release_zip)
 
+    assert checked == [release_zip]
     assert agent_binary.read_bytes() == b"agent"
     assert agent_binary.stat().st_mode & 0o777 == 0o700
 
 
-def test_release_workflow_accepts_verified_same_tag_assets() -> None:
-    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-    changed_inputs_block = workflow.split(
-        'if [ -n "$changed_inputs" ]; then',
-        1,
-    )[1].split(
-        'echo "::error::Native agent/bundle inputs changed',
-        1,
-    )[0]
+@pytest.mark.parametrize("has_sysroot", [False, True])
+def test_release_workflow_requires_reviewed_inputs_before_download(tmp_path, has_sysroot):
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    steps = workflow["jobs"]["publish"]["steps"]
+    resolve = next(step["run"] for step in steps if step.get("id") == "reusable-agent")
+    sysroot = tmp_path / "sysroot"
+    if has_sysroot:
+        (sysroot / "lib").mkdir(parents=True)
+        (sysroot / "lib/libc.so.6").touch()
+    output = tmp_path / "output"
+    # Execute the actual workflow decision without network or repository mutation.
+    stubs = '''
+    python() { [ -f "$C300X_DEVICE_SYSROOT/lib/libc.so.6" ]; }
+    git() { printf 'native_agent/src/video_snapshot.c\\n'; }
+    gh() { touch unexpected-download; return 1; }
+    '''
+    result = subprocess.run(
+        ["bash", "-c", stubs + resolve], cwd=tmp_path,
+        env={**os.environ, "C300X_DEVICE_SYSROOT": str(sysroot),
+             "RELEASE_TAG": "v2.3.0", "GITHUB_OUTPUT": str(output)},
+        capture_output=True, text=True,
+    )
+    assert not (tmp_path / "unexpected-download").exists()
+    assert result.returncode == (0 if has_sysroot else 1)
+    if has_sysroot:
+        assert output.read_text() == "asset_source=build\nreuse_args=\nreused_from=\n"
+    else:
+        assert not output.exists()
 
-    assert "Waiting for same-tag release assets" in changed_inputs_block
-    assert "--pattern ha-bticino-c300x.zip" in changed_inputs_block
-    assert "--pattern SHA256SUMS" in changed_inputs_block
-    assert "--pattern build-metadata.json" in changed_inputs_block
-    assert "--pattern sbom.spdx.json" in changed_inputs_block
-    assert "sha256sum -c SHA256SUMS" in changed_inputs_block
-    assert 'cp .release/reuse-current/ha-bticino-c300x.zip "$RELEASE_ZIP"' in (
-        changed_inputs_block
-    )
-    assert 'cp .release/reuse-current/build-metadata.json "$RELEASE_METADATA"' in (
-        changed_inputs_block
-    )
-    assert 'echo "asset_source=current-release" >> "$GITHUB_OUTPUT"' in (
-        changed_inputs_block
-    )
-    assert "--reuse-agent-from-release-zip .release/reuse-current" not in (
-        changed_inputs_block
-    )
-    assert (
-        "if: steps.reusable-agent.outputs.asset_source == 'build'"
-        in workflow
-    )
+
+def test_release_workflow_binds_agent_before_attestation():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    steps = workflow["jobs"]["publish"]["steps"]
+    names = [step.get("name") for step in steps]
+    binding = names.index("Bind packaged agent to selected build output")
+    assert names.index("Build HACS release zip") < binding
+    assert binding < names.index("Generate release metadata")
+    assert binding < names.index("Generate artifact attestation")
+    assert "--agent-binary native_agent/build/armhf/c300x-agent-native" in steps[binding]["run"]
+    assert "--build-lock native_agent/build-lock.json" in steps[binding]["run"]
+    assert "asset_source=current-release" not in json.dumps(workflow)
+
+
+def test_release_builder_cleans_before_source_build(tmp_path, monkeypatch):
+    builder = _load_release_builder()
+    binary = tmp_path / "agent"
+    binary.write_bytes(b"stale output")
+    calls = []
+    monkeypatch.setattr(builder, "AGENT_BINARY", binary)
+    monkeypatch.setattr(builder, "_release_sysroot", lambda: tmp_path)
+    monkeypatch.setattr(builder, "_run", lambda args, **kwargs: calls.append(args))
+    monkeypatch.setattr(builder, "_prepare_package", lambda version: None)
+    monkeypatch.setattr(builder, "_write_zip", lambda output: None)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT)])
+    assert builder.main() == 0
+    assert calls == [
+        ["make", "-C", str(ROOT / "native_agent"), "clean"],
+        ["make", "-C", str(ROOT / "native_agent"), "armhf", "armhf-abi-check"],
+    ]
 
 
 @pytest.mark.parametrize("document", ["README.md", "docs/quickstart.md"])

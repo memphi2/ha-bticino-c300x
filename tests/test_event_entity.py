@@ -12,6 +12,7 @@ import pytest
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from homeassistant.const import EntityCategory  # noqa: E402
+from homeassistant.components.event import EventEntity  # noqa: E402
 from custom_components.bticino_c300x.agent_contracts import CapabilityPayload  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     DASHBOARD_ENTITY_DOOR_UNLOCK,
@@ -204,8 +205,10 @@ def test_device_event_entity_triggers_stable_event_type_with_readable_attributes
     assert attributes["event"] == "Türöffner gestartet"
     assert attributes["event_value"] == "Türöffner gestartet"
     assert attributes["event_key"] == "door_unlock_started"
-    assert attributes["event_type"] == "Türöffner gestartet"
+    assert "event_type" not in attributes
     assert attributes["event_type_key"] == "door_unlock_started"
+    EventEntity._trigger_event(entity, event_type, attributes)
+    assert entity.state_attributes["event_type"] == "door_unlock_started"
 
 
 def test_doorbell_event_entity_triggers_standard_ring_event() -> None:
@@ -229,10 +232,38 @@ def test_doorbell_event_entity_triggers_standard_ring_event() -> None:
 
     event_type, attributes = entity.triggered_event
     assert event_type == "ring"
+    assert "event_type" not in attributes
+    EventEntity._trigger_event(entity, event_type, attributes)
+    assert entity.state_attributes["event_type"] == "ring"
     assert attributes["event"] == "Türklingel gedrückt"
     assert attributes["event_key"] == "doorbell_pressed"
     assert entity.extra_state_attributes["last_ring_at"] == "2026-05-31T12:00:00+00:00"
     assert entity.extra_state_attributes["video_available"] is True
+
+
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+@pytest.mark.parametrize("device_event", [False, True])
+def test_real_ha_event_processing_preserves_type_in_every_language(
+    monkeypatch: pytest.MonkeyPatch, language: str, device_event: bool,
+) -> None:
+    cls = C300XDeviceAgentEventEntity if device_event else C300XDoorbellEventEntity
+    key = "door_unlock_started" if device_event else "doorbell_pressed"
+    expected = key if device_event else "ring"
+    monkeypatch.setattr(cls, "_trigger_event", EventEntity._trigger_event)
+    entry = _FakeEntry()
+    entity = cls(entry, [key]) if device_event else cls(entry)
+    entity.hass = SimpleNamespace(config=SimpleNamespace(language=language))
+    entity._handle_agent_event(SimpleNamespace(data={
+        "entry_id": entry.entry_id,
+        "event_key": key,
+        "event_type": "Display label must not replace the technical type",
+        "event_at": "2026-11-15T00:00:00Z",
+    }))
+
+    assert entity.state_attributes["event_type"] == expected
+    assert expected in entity.event_types
+    assert entity.state_attributes["event_key"] == key
+    assert entity.state_attributes["event"] != expected
 
 
 def test_event_entities_register_bus_listeners() -> None:

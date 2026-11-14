@@ -100,7 +100,9 @@ class C300XDoorbellEventEntity(C300XEntity, EventEntity):
             dict(event.data),
             _language(getattr(self, "hass", None)),
         )
-        self._trigger_event(DoorbellEventType.RING, self._last_ring_data.copy())
+        attributes = self._last_ring_data.copy()
+        attributes.pop("event_type", None)
+        self._trigger_event(DoorbellEventType.RING, attributes)
         self.async_write_ha_state()
 
 
@@ -209,7 +211,9 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
                 event_data,
                 language,
             )
-            self._trigger_event(event_key, self._last_event_data.copy())
+            attributes = self._last_event_data.copy()
+            attributes.pop("event_type", None)
+            self._trigger_event(event_key, attributes)
         self.async_write_ha_state()
 
 

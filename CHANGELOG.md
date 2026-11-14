@@ -16,6 +16,8 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 
 ### Fixed
 
+- Preserve technical event types such as `ring` on the event entities so
+  type-filtered automations match; keep translated labels in display attributes.
 - Wait briefly when a startup status check temporarily occupies maintenance
   access before an agent update. Preserve patch-state checks before preparing
   the update; upload and apply operations are not blindly retried.

@@ -1369,47 +1369,25 @@ typedef enum {
     RTSP_READ_INTERLEAVED = 2,
 } rtsp_read_result_t;
 
-static int recv_exact_timeout(
-    int fd,
-    unsigned char *buffer,
-    size_t len,
-    int timeout_seconds
-) {
-    size_t used = 0;
-
-    while (used < len) {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(fd, &readfds);
-        struct timeval timeout = {timeout_seconds, 0};
-        int ready = select(fd + 1, &readfds, NULL, NULL, &timeout);
-        if (ready <= 0) {
-            return used > 0 ? -1 : 0;
-        }
-        ssize_t n = recv(fd, buffer + used, len - used, 0);
-        if (n <= 0) {
-            return -1;
-        }
-        used += (size_t)n;
-    }
-    return 1;
-}
-
 static void drain_rtsp_interleaved_payload(
     int fd,
     size_t len,
-    int timeout_seconds
+    int timeout_seconds,
+    long long deadline_ms
 ) {
     unsigned char scratch[256];
     size_t remaining = len;
 
     while (remaining > 0) {
         size_t chunk = remaining < sizeof(scratch) ? remaining : sizeof(scratch);
-        int ok = recv_exact_timeout(fd, scratch, chunk, timeout_seconds);
-        if (ok <= 0) {
+        if (c300x_rtsp_wait_readable(fd, timeout_seconds, deadline_ms) <= 0) {
             return;
         }
-        remaining -= chunk;
+        ssize_t n = recv(fd, scratch, chunk, 0);
+        if (n <= 0) {
+            return;
+        }
+        remaining -= (size_t)n;
     }
 }
 
@@ -1418,6 +1396,8 @@ typedef struct {
     size_t cap;
     size_t start;
     size_t len;
+    /* Monotonic time after which no read waits any longer; 0 means none. */
+    long long deadline_ms;
 } rtsp_read_buffer_t;
 
 static void rtsp_buf_compact(rtsp_read_buffer_t *buf) {
@@ -1435,13 +1415,9 @@ static int rtsp_buf_fill(rtsp_read_buffer_t *buf, int fd, int timeout_seconds) {
     if (buf->len + 1 >= buf->cap) {
         return -1;
     }
-    fd_set readfds;
-    FD_ZERO(&readfds);
-    FD_SET(fd, &readfds);
-    struct timeval timeout = {timeout_seconds, 0};
-    int ready = select(fd + 1, &readfds, NULL, NULL, &timeout);
+    int ready = c300x_rtsp_wait_readable(fd, timeout_seconds, buf->deadline_ms);
     if (ready <= 0) {
-        return ready == 0 ? 0 : -1;
+        return ready;
     }
     ssize_t n = recv(fd, buf->data + buf->len, buf->cap - 1 - buf->len, 0);
     if (n <= 0) {
@@ -1487,7 +1463,7 @@ static void rtsp_buf_discard(
     rtsp_buf_consume(buf, from_buf);
     n -= from_buf;
     if (n > 0) {
-        drain_rtsp_interleaved_payload(fd, n, timeout_seconds);
+        drain_rtsp_interleaved_payload(fd, n, timeout_seconds, buf->deadline_ms);
     }
 }
 
@@ -5948,7 +5924,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     (void)peer;
     char *request = calloc(1, RTSP_BUFFER_SIZE);
     unsigned char *read_buffer_data = malloc(RTSP_BUFFER_SIZE);
-    rtsp_read_buffer_t read_buffer = {read_buffer_data, RTSP_BUFFER_SIZE, 0, 0};
+    rtsp_read_buffer_t read_buffer = {read_buffer_data, RTSP_BUFFER_SIZE, 0, 0, 0};
     unsigned char interleaved[2048];
     char method[16];
     char uri[512];
@@ -6001,6 +5977,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 read_timeout_seconds = remaining_seconds;
             }
         }
+        read_buffer.deadline_ms = ever_authenticated ? 0 : unauth_deadline;
         rtsp_read_result_t read_result = read_rtsp_request_or_interleaved(
             &read_buffer,
             fd,

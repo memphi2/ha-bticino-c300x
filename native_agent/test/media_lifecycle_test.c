@@ -123,6 +123,36 @@ static bool peer_closed(int fd) {
     return recv(fd, &byte, 1, 0) == 0;
 }
 
+/* A request that never ends, sent a byte at a time, must not outlive the
+ * lifetime of a connection that never authenticates. */
+static void unauth_trickle_test(struct c300x_config *config) {
+    int pair[2];
+    pthread_t client;
+    const char *slow = "OPTIONS rtsp://127.0.0.1/doorbell-video RTSP/1.0\r\nCSeq: 1\r\nX-Slow: ";
+    strcpy(config->video_rtsp_username, "user");
+    strcpy(config->video_rtsp_password, "pass");
+    unauth_rejections = 5;
+    unauth_lifetime = 1;
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    assert(pthread_create(&client, NULL, client_worker, &pair[1]) == 0);
+    long long start = c300x_monotonic_ms();
+    bool closed = false;
+    for (size_t i = 0; !closed && c300x_monotonic_ms() - start < 4000; i++) {
+        char byte = i < strlen(slow) ? slow[i] : 'x';
+        if (send(pair[0], &byte, 1, MSG_NOSIGNAL) != 1) {
+            closed = true;
+            break;
+        }
+        struct pollfd peer = {.fd = pair[0], .events = POLLIN};
+        closed = poll(&peer, 1, 300) == 1;
+    }
+    assert(closed);
+    assert(c300x_monotonic_ms() - start < 3500);
+    assert(pthread_join(client, NULL) == 0);
+    close(pair[0]);
+    close(pair[1]);
+}
+
 static void unauth_test(struct c300x_config *config, bool lifetime) {
     int pair[2];
     pthread_t client;
@@ -417,6 +447,8 @@ int main(int argc, char **argv) {
         unauth_test(&config, false);
     } else if (strcmp(argv[1], "unauth_lifetime") == 0) {
         unauth_test(&config, true);
+    } else if (strcmp(argv[1], "unauth_trickle") == 0) {
+        unauth_trickle_test(&config);
     } else if (strcmp(argv[1], "stalled_client") == 0) {
         stalled_client_test();
     } else if (strcmp(argv[1], "sip_join") == 0) {

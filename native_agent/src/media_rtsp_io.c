@@ -100,6 +100,21 @@ int c300x_rtsp_wait_writable(int fd, long long deadline_ms)
     }
 }
 
+int c300x_rtsp_wait_readable(int fd, int timeout_seconds, long long deadline_ms)
+{
+    long long wait_until = c300x_monotonic_ms() + (long long)timeout_seconds * 1000LL;
+    if (deadline_ms > 0 && deadline_ms < wait_until) wait_until = deadline_ms;
+    for (;;) {
+        long long remaining = wait_until - c300x_monotonic_ms();
+        if (remaining <= 0) return 0;
+        struct pollfd pending = {.fd = fd, .events = POLLIN};
+        int result = poll(&pending, 1, remaining > INT_MAX ? INT_MAX : (int)remaining);
+        if (result < 0 && errno == EINTR) continue;
+        if (result <= 0) return result;
+        return 1;
+    }
+}
+
 static ssize_t send_all(int fd, const void *buf, size_t len)
 {
     const char *p = buf;

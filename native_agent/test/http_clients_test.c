@@ -80,13 +80,22 @@ int main(void)
     close(slow[1]);
     close(fast[1]);
     int peers[C300X_HTTP_MAX_CLIENTS];
+    int api_slots = C300X_HTTP_MAX_CLIENTS - C300X_HTTP_UI_RESERVED_SLOTS;
     for (int i = 0; i < C300X_HTTP_MAX_CLIENTS; i++) {
         int pair[2];
         assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
-        assert(c300x_http_clients_add(&clients, pair[0], 1, now));
+        int kind = i < api_slots ? C300X_HTTP_KIND_API : C300X_HTTP_KIND_UI;
+        if (i == api_slots) {
+            int refused[2];
+            assert(socketpair(AF_UNIX, SOCK_STREAM, 0, refused) == 0);
+            assert(!c300x_http_clients_add(&clients, refused[0], C300X_HTTP_KIND_API, now));
+            close(refused[0]);
+            close(refused[1]);
+        }
+        assert(c300x_http_clients_add(&clients, pair[0], kind, now));
         peers[i] = pair[1];
     }
-    assert(!c300x_http_clients_add(&clients, -1, 1, now));
+    assert(!c300x_http_clients_add(&clients, -1, C300X_HTTP_KIND_UI, now));
     c300x_http_clients_close(&clients);
     for (int i = 0; i < C300X_HTTP_MAX_CLIENTS; i++) {
         char byte;

@@ -96,8 +96,8 @@
 #define C300X_LARGE_RESPONSE_SIZE 32768
 #define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
 enum listener_kind {
-    LISTENER_API = 1,
-    LISTENER_UI = 2
+    LISTENER_API = C300X_HTTP_KIND_API,
+    LISTENER_UI = C300X_HTTP_KIND_UI
 };
 
 struct listener {

@@ -26,6 +26,17 @@ void c300x_http_clients_init(struct c300x_http_clients *clients)
 
 int c300x_http_clients_add(struct c300x_http_clients *clients, int fd, int kind, long long now)
 {
+    if (kind != C300X_HTTP_KIND_UI) {
+        int free_slots = 0;
+        for (int i = 0; i < C300X_HTTP_MAX_CLIENTS; i++) {
+            if (clients->slots[i].fd < 0) {
+                free_slots++;
+            }
+        }
+        if (free_slots <= C300X_HTTP_UI_RESERVED_SLOTS) {
+            return 0;
+        }
+    }
     for (int i = 0; i < C300X_HTTP_MAX_CLIENTS; i++) {
         struct c300x_http_client *client = &clients->slots[i];
         if (client->fd >= 0) {

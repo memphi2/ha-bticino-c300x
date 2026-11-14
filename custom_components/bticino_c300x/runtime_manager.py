@@ -37,6 +37,8 @@ from .const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
+    CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
     CONF_MAINTENANCE_TOKEN,
     CONF_SHARED_SECRET,
@@ -440,8 +442,9 @@ def _entry_update_listener(
     """Do not reload for the bookkeeping markers the integration writes itself.
 
     The recovery markers of an active update, and the record that the media
-    user was set up, change no setting. Reloading for the last one ran the
-    setup a second time right after the first successful startup sync.
+    user was set up, and the handled-marker of the Lovelace card hint, change
+    no setting. Reloading for the last two ran the setup a second time, the
+    card hint one when the repair card was merely opened or dismissed.
     """
 
     def settings(current: BticinoC300XConfigEntry) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -449,6 +452,8 @@ def _entry_update_listener(
         data.pop(CONF_AGENT_UPDATE_PAYLOAD_PENDING, None)
         data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
+        data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
+        data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
         return data, dict(current.options)
 
     previous = settings(entry)

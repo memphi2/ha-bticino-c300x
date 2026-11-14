@@ -133,6 +133,9 @@ def test_async_setup_registers_frontend_services_and_websocket(
         "agent_update_qml_pending",
         # Reported state only, written once by the startup sync.
         "homeassistant_media_user_bootstrapped",
+        # Written when the Lovelace card hint is opened or dismissed.
+        "frontend_card_setup_dismissed",
+        "frontend_card_setup_repair_version",
     ],
 )
 def test_payload_recovery_marker_does_not_reload_active_update(marker) -> None:

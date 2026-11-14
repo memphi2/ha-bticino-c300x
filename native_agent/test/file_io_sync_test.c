@@ -37,14 +37,15 @@ int main(int argc, char **argv)
     /* The data reaches the disk before the rename that publishes it. */
     assert(copy_binary_file(source, target, 0600));
     assert(synced == 1);
+    /* A staged upload chunk is not synced: its bundle is verified by hash. */
     assert(write_binary_chunk(target, (const unsigned char *)"chunk", 5, 0, 0600));
-    assert(synced == 2);
+    assert(synced == 1);
 
     /* A failed sync is a failed write: no half-published file. */
     unlink(target);
     fail_sync = 1;
     assert(!copy_binary_file(source, target, 0600));
     assert(access(target, F_OK) != 0 && access(temporary, F_OK) != 0);
-    assert(!write_binary_chunk(target, (const unsigned char *)"chunk", 5, 0, 0600));
+    assert(write_binary_chunk(target, (const unsigned char *)"chunk", 5, 0, 0600));
     return 0;
 }

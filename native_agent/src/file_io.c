@@ -186,10 +186,10 @@ int write_binary_chunk(
     if (fd >= 0) {
         (void)fchmod(fd, mode);
     }
-    if (fflush(file) != 0 || (fd >= 0 && fsync(fd) != 0)) {
-        (void)fclose(file);
-        return 0;
-    }
+    /* No sync here: this is one small chunk of an upload that is staged, and
+     * the staged bundle is checked against its hashes before anything is
+     * installed (the install itself syncs, see copy_binary_file). A sync per
+     * chunk would block the single poll loop hundreds of times per binary. */
     if (fclose(file) != 0) {
         return 0;
     }

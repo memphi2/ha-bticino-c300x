@@ -1538,6 +1538,33 @@ def test_a_failed_capture_leaves_no_partial_clip(
     assert not target.exists()
 
 
+def test_a_failed_capture_keeps_the_previous_clip_it_never_touched(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A fixed output path serves the latest clip: a run that fails before
+    FFmpeg opens it must not take the earlier recording with it."""
+
+    target = tmp_path / "config" / "www" / "c300x" / "latest.mp4"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"previous clip")
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    async def _failing_ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        raise HomeAssistantError("C300X capture failed: input unreachable")
+
+    _capture_fakes(monkeypatch, _failing_ffmpeg)
+
+    with pytest.raises(HomeAssistantError, match="input unreachable"):
+        asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
+
+    assert target.read_bytes() == b"previous clip"
+    assert _capture_workspaces(tmp_path) == []
+
+
 def _talkback_failure_entry(tmp_path: Path) -> tuple[Any, Any, Path]:
     target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
     return (

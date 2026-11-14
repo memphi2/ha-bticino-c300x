@@ -73,8 +73,6 @@ _CAPTURE_FRAME_START_SECONDS = 1.0
 _CAPTURE_FRAME_END_MARGIN_SECONDS = 0.2
 DEFAULT_RING_CAPTURE_METADATA_GLOB = "/config/c300x/*.capture.json"
 
-_LOGGER = logging.getLogger(__name__)
-
 
 async def async_capture_doorbell_ring_call(
     hass: Any,
@@ -149,6 +147,10 @@ async def _async_capture_to_output(
     # fails or is cancelled before that would otherwise sit until it expires and
     # count against the limit of workspaces.
     published = False
+    # FFmpeg opens the clip only once its input works, so a run that fails
+    # earlier must leave the previous clip alone. What the file looked like
+    # before tells the cleanup whether this run touched it.
+    output_before = await asyncio.to_thread(_output_signature, target)
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -219,10 +221,20 @@ async def _async_capture_to_output(
             talkback_task.exception()
         if not published:
             await asyncio.to_thread(shutil.rmtree, work_dir, True)
-            # FFmpeg writes the clip in place, so a failed run leaves a partial
-            # or empty file that a player or automation would pick up.
-            await asyncio.to_thread(_unlink_quietly, target)
+            # FFmpeg writes the clip in place, so a failed run that got as far
+            # as opening it leaves a partial or empty file that a player or
+            # automation would pick up. A clip this run never touched stays.
+            if await asyncio.to_thread(_output_signature, target) != output_before:
+                await asyncio.to_thread(_unlink_quietly, target)
     return metadata
+
+
+def _output_signature(path: Path) -> tuple[int, int, int] | None:
+    try:
+        info = path.stat()
+    except OSError:
+        return None
+    return (info.st_ino, info.st_size, info.st_mtime_ns)
 
 
 def _unlink_quietly(path: Path) -> None:

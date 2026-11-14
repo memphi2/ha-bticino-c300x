@@ -12,7 +12,7 @@ Install integration -> add device -> install/update agent -> check Media readine
 
 You need:
 
-- Home Assistant `2026.7.0` or newer.
+- Home Assistant `2026.10.0` or newer.
 - A BTicino Classe 300X / C300X on firmware `1.7.x`.
 - Root or SSH access on the C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
@@ -30,7 +30,7 @@ SSH-enablement workflow asks for a firmware target, use `1.7.19`.
 2. Find **BTicino C300X**, install it and confirm the community-integration notice.
 3. Follow any restart request before continuing.
 
-### HACS: Home Assistant 2026.7-2026.10
+### HACS: Home Assistant 2026.10
 
 1. Open **HACS**.
 2. Search for **BTicino C300X**.

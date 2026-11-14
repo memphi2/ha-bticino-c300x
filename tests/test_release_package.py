@@ -69,6 +69,22 @@ def _load_release_assets(*, validate_contents=False):
     return module
 
 
+def test_release_metadata_records_resolved_current_ha(monkeypatch):
+    writer = _load_release_assets()
+    monkeypatch.setenv("C300X_VALIDATED_CURRENT_HA_VERSION", "2026.12.2")
+    evidence = writer._lts_evidence(tag="v2.2.0", native_agent_reused_from=None)
+    assert evidence["current_homeassistant"] == "2026.12.2"
+    assert evidence["validated_homeassistant"] == ["2026.10.0", "2026.12.2"]
+
+
+@pytest.mark.parametrize("version", ["", "2026.11.0b1", "2026.9.4", "latest"])
+def test_release_metadata_rejects_invalid_resolved_ha(monkeypatch, version):
+    writer = _load_release_assets()
+    monkeypatch.setenv("C300X_VALIDATED_CURRENT_HA_VERSION", version)
+    with pytest.raises(writer.ReleaseAssetError):
+        writer._lts_evidence(tag="v2.2.0", native_agent_reused_from=None)
+
+
 def _load_release_tag_checker():
     spec = importlib.util.spec_from_file_location("check_release_tag", RELEASE_TAG_SCRIPT)
     assert spec is not None
@@ -493,9 +509,9 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
     assert metadata["lts_evidence"] == {
         "release": tag,
-        "min_homeassistant": "2026.7.0",
-        "current_homeassistant": "2026.10.0",
-        "validated_homeassistant": ["2026.7.0", "2026.10.0"],
+        "min_homeassistant": "2026.10.0",
+        "current_homeassistant": "2026.11.1",
+        "validated_homeassistant": ["2026.10.0", "2026.11.1"],
         "python": "3.14",
         "firmware_target": "1.7.x",
         "native_agent_rebuilt": True,

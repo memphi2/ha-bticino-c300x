@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from check_release_contents import validate_release_contents
 from manifest_version import read_integration_version
+from resolve_ha_version import stable_version
 from sbom_runtime import runtime_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -198,13 +199,19 @@ def _lts_evidence(
     native_agent_reused_from: str | None,
 ) -> dict[str, Any]:
     versions = _project_versions()
+    current_ha = os.environ.get("C300X_VALIDATED_CURRENT_HA_VERSION", versions["current_homeassistant"])
+    try:
+        if stable_version(current_ha) < stable_version(versions["min_homeassistant"]):
+            raise ValueError("Validated HA version is below the supported minimum")
+    except ValueError as err:
+        raise ReleaseAssetError(str(err)) from err
     return {
         "release": tag,
         "min_homeassistant": versions["min_homeassistant"],
-        "current_homeassistant": versions["current_homeassistant"],
+        "current_homeassistant": current_ha,
         "validated_homeassistant": [
             versions["min_homeassistant"],
-            versions["current_homeassistant"],
+            current_ha,
         ],
         "python": versions["python"],
         "firmware_target": versions["c300x_firmware"],

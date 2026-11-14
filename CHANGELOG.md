@@ -167,8 +167,9 @@
   Reapplying an active Display patch restarts the device GUI once.
 - RTSP supports TCP interleaving only. UDP requests are explicitly rejected;
   Home Assistant already uses TCP.
-- Home Assistant 2026.7 remains the minimum. Existing entries and cards can
-  be kept.
+- Requires Home Assistant **2026.10.0** or newer; CI tests that minimum and the
+  latest stable HA release on every run. Update older HA installations before upgrading the integration.
+  Existing entries and cards can be kept.
 
 ## v2.1.3 - 2026-11-13
 

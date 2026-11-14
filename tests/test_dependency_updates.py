@@ -151,6 +151,11 @@ def test_missing_ha_manifest_fails_closed(policy_repo: Path) -> None:
     assert check_dependency_updates(policy_repo)
 
 
+def test_current_target_cannot_be_frozen(policy_repo: Path) -> None:
+    (policy_repo / "requirements/ha-current/requirements.txt").write_text("homeassistant==2026.11.1\n")
+    assert check_dependency_updates(policy_repo)
+
+
 @pytest.mark.parametrize("name", ["validate.yml", "release.yml"])
 def test_ci_must_install_the_monitored_manifest(policy_repo: Path, name: str) -> None:
     def mutate(workflow):

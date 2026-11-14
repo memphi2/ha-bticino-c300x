@@ -9,7 +9,7 @@ authorship proof, patent clearance, or a current vulnerability assessment.
 
 ## Verified Scope
 
-The local `scripts/check_legal_audit.py` gate passed against 691 tracked files.
+The local `scripts/check_legal_audit.py` gate passed against 693 tracked files.
 It checks forbidden payloads and directories, required license/privacy/security
 documents, runtime dependency declarations, reference markers, and the expected
 project artwork hash. It is a policy check, not a source-similarity detector.

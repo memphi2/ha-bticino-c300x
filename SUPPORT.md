@@ -9,8 +9,9 @@
 
 ## Compatibility Baseline
 
-- Minimum Home Assistant: `2026.7.0`
-- Validated Home Assistant: `2026.7.x` and `2026.10.x`
+- Minimum Home Assistant: `2026.10.0`
+- Home Assistant validation baseline: `2026.10.x` and `2026.11.x`
+- CI tests the fixed minimum and resolves the latest stable Home Assistant on every run.
 - Python: `3.14`
 - C300X firmware: `1.7.x`
 

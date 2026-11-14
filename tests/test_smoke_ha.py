@@ -85,7 +85,7 @@ def test_smoke_ha_runtime_check_accepts_supported_minor(
     ) == []
 
 
-@pytest.mark.parametrize("ha_version", ["2026.5.9", "2026.6.9"])
+@pytest.mark.parametrize("ha_version", ["2026.5.9", "2026.6.9", "2026.7.4", "2026.8.3", "2026.9.4"])
 def test_smoke_ha_runtime_check_rejects_unconfigured_minor(
     monkeypatch: Any, ha_version: str
 ) -> None:
@@ -98,7 +98,7 @@ def test_smoke_ha_runtime_check_rejects_unconfigured_minor(
         "entry-1",
     )
 
-    assert failures == [f"HA version {ha_version} does not match 2026.7.*, 2026.10.*"]
+    assert failures == [f"HA version {ha_version} does not match 2026.10.*, 2026.11.*"]
 
 
 def test_smoke_ha_does_not_require_optional_ssh_maintenance_entity() -> None:

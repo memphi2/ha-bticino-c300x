@@ -41,7 +41,7 @@ forwarding controls, messages and optional display pages.
 
 ## Requirements
 
-- Home Assistant `2026.7.0` or newer.
+- Home Assistant `2026.10.0` or newer.
 - BTicino Classe 300X / C300X firmware `1.7.x`.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
@@ -67,7 +67,7 @@ On Home Assistant `2026.11+`:
 
 ### HACS
 
-On Home Assistant `2026.7-2026.10`, find **BTicino C300X** in HACS, download it
+On Home Assistant `2026.10`, find **BTicino C300X** in HACS, download it
 and restart Home Assistant. Then add the integration under
 **Settings > Devices & services**. No custom repository is needed.
 

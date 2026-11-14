@@ -47,6 +47,14 @@ for the user-facing opt-in workflow.
 
 ## Isolated Integration Tests
 
+The HA matrix tests the fixed minimum from `project-versions.json` and the
+latest non-yanked stable release from PyPI on every run. Preview releases are
+excluded. The resolver pins that exact version before installing tools, so a
+dependency conflict fails the job instead of silently testing an older HA.
+The resolved version is logged and passed from release validation into build
+metadata. `current_homeassistant` in the version file is the local validation
+baseline, not a cap on the rolling CI target. Raising the minimum remains manual.
+
 Development hosts and all CI runners use Ubuntu 26.04. Install the native
 TurboJPEG library before running the HA camera tests or typing gate:
 `sudo apt-get install libturbojpeg0`.

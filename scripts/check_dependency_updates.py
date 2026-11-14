@@ -37,7 +37,7 @@ ROOT_EXCLUDES = [
     "requirements/ha-min/**",
 ]
 INSTALL_COMMAND = (
-    'python -m pip install -r "${{ matrix.requirements-ha }}" '
+    'python -m pip install "homeassistant==$HA_VERSION" -r "${{ matrix.requirements-ha }}" '
     '-r "${{ matrix.requirements-lock }}"'
 )
 
@@ -163,9 +163,14 @@ def _check(root: Path) -> list[str]:
     for name, (directory, tools, version_key) in HA_TARGETS.items():
         path = f"requirements/{directory}/requirements.txt"
         requirements = _read_requirements(root / path)
-        if requirements != [Requirement(f"homeassistant=={versions[version_key]}")]:
+        expected_ha = (
+            f"homeassistant>={versions['min_homeassistant']}"
+            if name == "current-ha"
+            else f"homeassistant=={versions[version_key]}"
+        )
+        if requirements != [Requirement(expected_ha)]:
             failures.append(
-                f"{path} must pin only Home Assistant {versions[version_key]} from project-versions.json"
+                f"{path} must contain only {expected_ha} for the configured validation policy"
             )
         expected_matrix.append(
             {
@@ -191,10 +196,19 @@ def _check(root: Path) -> list[str]:
             if step.get("name") == "Install Python validation tools"
         ]
         expected_run = f"{INSTALL_COMMAND}\npython -m pip check"
-        if len(install) != 1 or install[0].get("run", "").strip() != expected_run:
+        if (
+            len(install) != 1
+            or install[0].get("run", "").strip() != expected_run
+            or install[0].get("env") != {"HA_VERSION": "${{ steps.ha-version.outputs.version }}"}
+        ):
             failures.append(
                 f"{name} must install the HA manifest and tool pins together, then run pip check"
             )
+        resolvers = [step for step in job["steps"] if step.get("id") == "ha-version"]
+        if len(resolvers) != 1 or resolvers[0].get("run") != (
+            'python scripts/resolve_ha_version.py "${{ matrix.name }}"'
+        ):
+            failures.append(f"{name} must resolve the exact stable HA version before installation")
     return failures
 
 

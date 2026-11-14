@@ -189,6 +189,7 @@ typedef struct {
     bool media_active;
     bool media_starting;
     bool stop_in_progress;
+    unsigned long media_generation;
     c300x_media_session_guard_t ondemand_guard;
     int listen_fd;
     int client_fd;
@@ -278,6 +279,7 @@ typedef struct {
 
 static bool start_talkback_proxy(media_bridge_t *bridge);
 
+static pthread_mutex_t media_lifecycle_mutex = PTHREAD_MUTEX_INITIALIZER;
 static media_bridge_t g_bridge = {
     .mutex = PTHREAD_MUTEX_INITIALIZER,
     .ready_cond = PTHREAD_COND_INITIALIZER,
@@ -4022,7 +4024,12 @@ static void *ondemand_media_thread(void *arg) {
     return NULL;
 }
 
-static bool send_sip_setup(media_bridge_t *bridge) {
+static void
+send_sip_bye(int fd, const char *from_aor, const char *to_aor,
+    const char *local_ip, uint16_t local_port, const char *transport,
+    const char *to_header, const char *from_tag, const char *call_id, const char *contact_uri);
+
+static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
     char domain[128];
     char domain_hint[128] = "";
     char from_user[128];
@@ -4382,6 +4389,21 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     send_sip_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, 21);
 
     pthread_mutex_lock(&bridge->mutex);
+    if (bridge->media_generation != generation) {
+        pthread_mutex_unlock(&bridge->mutex);
+        secure_zero(audio_key_raw, sizeof(audio_key_raw));
+        secure_zero(video_key_raw, sizeof(video_key_raw));
+        secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
+        secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
+        send_sip_bye(fd, from_aor, to_aor, local_ip, local_port, transport,
+                     to_header, from_tag, call_id, contact_uri);
+        close(fd);
+        close(ondemand_audio_rtp_fd);
+        close(ondemand_audio_rtcp_fd);
+        close(ondemand_video_rtp_fd);
+        close(ondemand_video_rtcp_fd);
+        return false;
+    }
     bridge->sip_fd = fd;
     bridge->sip_stop = false;
     bridge->ondemand_media_stop = false;
@@ -5448,20 +5470,32 @@ static bool create_rtp_socket(media_bridge_t *bridge) {
 
 static bool start_media_session(media_bridge_t *bridge) __attribute__((noinline));
 static void stop_media_session(bool close_client, bool explicit_stop);
+static void stop_media_session_locked(bool close_client, bool explicit_stop);
+
+static bool media_start_cancelled(media_bridge_t *bridge, unsigned long generation) {
+    pthread_mutex_lock(&bridge->mutex);
+    bool cancelled = bridge->media_generation != generation;
+    pthread_mutex_unlock(&bridge->mutex);
+    return cancelled;
+}
 
 static bool start_media_session(media_bridge_t *bridge) {
+    pthread_mutex_lock(&media_lifecycle_mutex);
     pthread_mutex_lock(&bridge->mutex);
     if (
         bridge->stop_in_progress
         || c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)
     ) {
         pthread_mutex_unlock(&bridge->mutex);
+        pthread_mutex_unlock(&media_lifecycle_mutex);
         return false;
     }
     if (bridge->media_active || bridge->media_starting) {
         pthread_mutex_unlock(&bridge->mutex);
+        pthread_mutex_unlock(&media_lifecycle_mutex);
         return true;
     }
+    unsigned long generation = bridge->media_generation;
     reset_backchannel_talkback_locked(bridge);
     bridge->media_starting = true;
     bridge->relay_stop = false;
@@ -5470,34 +5504,36 @@ static bool start_media_session(media_bridge_t *bridge) {
         pthread_mutex_unlock(&bridge->mutex);
         c300x_video_bridge_set_error(bridge->video, "rtp_socket_failed");
         c300x_video_bridge_media_stopped(bridge->video);
+        pthread_mutex_unlock(&media_lifecycle_mutex);
         return false;
     }
     pthread_mutex_unlock(&bridge->mutex);
     c300x_video_bridge_media_starting(bridge->video);
 
-    if (!send_sip_setup(bridge)) {
+    if (!send_sip_setup(bridge, generation)) {
         char sip_error[64];
         snprintf(sip_error, sizeof(sip_error), "ondemand_sip_setup_failed:%s",
                  bridge->ondemand_sip_fail);
         c300x_video_bridge_set_error(bridge->video, sip_error);
-        stop_media_session(false, false);
-        c300x_video_bridge_media_stopped(bridge->video);
-        return false;
+        goto failed;
     }
+    if (media_start_cancelled(bridge, generation)) goto failed;
     if (!start_talkback_proxy(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "talkback_start_failed");
-        stop_media_session(false, false);
-        c300x_video_bridge_media_stopped(bridge->video);
-        return false;
+        goto failed;
     }
+    if (media_start_cancelled(bridge, generation)) goto failed;
     if (!c300x_device_media_takeover(bridge->config)) {
         c300x_video_bridge_set_error(bridge->video, "media_takeover_failed");
-        stop_media_session(false, false);
-        c300x_video_bridge_media_stopped(bridge->video);
-        return false;
+        goto failed;
     }
 
     pthread_mutex_lock(&bridge->mutex);
+    if (bridge->media_generation != generation) {
+        pthread_mutex_unlock(&bridge->mutex);
+        c300x_device_media_stop(bridge->config);
+        goto failed;
+    }
     bridge->media_active = true;
     bridge->media_starting = false;
     bridge->relay_started = pthread_create(&bridge->relay_thread, NULL, rtp_relay_thread, bridge) == 0;
@@ -5506,16 +5542,31 @@ static bool start_media_session(media_bridge_t *bridge) {
 
     if (!started) {
         c300x_video_bridge_set_error(bridge->video, "rtp_relay_start_failed");
-        stop_media_session(false, false);
-        c300x_video_bridge_media_stopped(bridge->video);
-        return false;
+        goto failed;
     }
     c300x_video_bridge_media_started(bridge->video, true);
     c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
+    pthread_mutex_unlock(&media_lifecycle_mutex);
     return true;
+failed:
+    stop_media_session_locked(false, false);
+    c300x_video_bridge_media_stopped(bridge->video);
+    pthread_mutex_unlock(&media_lifecycle_mutex);
+    return false;
 }
 
 static void stop_media_session(bool close_client, bool explicit_stop) {
+    /* Invalidate in-flight setup before waiting for its owned resources. */
+    pthread_mutex_lock(&g_bridge.mutex);
+    g_bridge.media_generation++;
+    c300x_media_session_guard_note_stop(&g_bridge.ondemand_guard, explicit_stop);
+    pthread_mutex_unlock(&g_bridge.mutex);
+    pthread_mutex_lock(&media_lifecycle_mutex);
+    stop_media_session_locked(close_client, explicit_stop);
+    pthread_mutex_unlock(&media_lifecycle_mutex);
+}
+
+static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     int sip_fd = -1;
     char from_aor[256];
     char to_aor[256];

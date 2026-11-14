@@ -21,6 +21,7 @@ def media_binaries(request, tmp_path_factory):
     ]
     for name, dependencies in (
         ("media_lifecycle", sources),
+        ("media_start_stop", sources),
         ("media_rtsp_auth", ["media_rtsp_auth", "media_base64", "string_util"]),
     ):
         result = subprocess.run(
@@ -38,6 +39,12 @@ def media_binaries(request, tmp_path_factory):
 
 def test_rtsp_credential_validation(media_binaries):
     result = subprocess.run([str(media_binaries / "media_rtsp_auth")],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+def test_stop_cancels_inflight_sip_setup(media_binaries):
+    result = subprocess.run([str(media_binaries / "media_start_stop")],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
 

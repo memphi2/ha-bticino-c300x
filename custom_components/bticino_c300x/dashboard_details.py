@@ -14,6 +14,13 @@ _CLIMATE_ACTIVITIES = frozenset({
 })
 
 
+def _one_line(value: Any, limit: int) -> str:
+    """Return one line of text, cut to the limit with three dots."""
+
+    text = " ".join(value.split()) if isinstance(value, str) else ""
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+
+
 def _percentage(value: Any) -> float | None:
     number = finite_number(value)
     return number if number is not None and 0 <= number <= 100 else None
@@ -68,11 +75,13 @@ def entity_details(
         # Play/pause is confirmed on this; its button comes and goes with the
         # features a player reports in each state.
         details["playing"] = state.state == "playing"
-        # What is playing is the reading; without a title the state stands.
-        title = attrs.get("media_title")
-        title = " ".join(title.split()) if isinstance(title, str) else ""
-        if title and state.state in {"playing", "paused", "buffering"}:
-            details.update(value=title[:60])
+        # What is playing is the reading, the artist before the title; without
+        # either the state stands.
+        title = _one_line(attrs.get("media_title"), 60)
+        artist = _one_line(attrs.get("media_artist"), 40)
+        playing = f"{artist} - {title}" if artist and title else title or artist
+        if playing and state.state in {"playing", "paused", "buffering"}:
+            details.update(value=_one_line(playing, 60))
     elif domain in {"sensor", "binary_sensor"}:
         if domain == "sensor" and finite_number(state.state) is not None:
             details.update(

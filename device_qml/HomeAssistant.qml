@@ -160,7 +160,7 @@ Page {
     }
 
     function optionLabel(control, option) {
-        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode") return String(option)
+        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode" || control.command === "effect") return String(option)
         var key = (control.command === "color" ? "color_" : "mode_") + String(option)
         var label = uiText(key)
         return label === key ? String(option) : label

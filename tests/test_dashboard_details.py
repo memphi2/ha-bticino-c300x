@@ -181,3 +181,32 @@ def test_a_text_that_is_cut_to_fit_ends_in_three_dots():
         10,
     )
     assert item["state_label"] == "w" * 57 + "..."
+
+
+@pytest.mark.parametrize(
+    ("attrs", "expected"),
+    [
+        ({"media_title": "Song", "media_artist": "Band"}, "Band - Song"),
+        ({"media_title": "Song"}, "Song"),
+        ({"media_artist": "Band"}, "Band"),
+        ({"media_title": "S" * 80, "media_artist": "B" * 60}, ("B" * 37 + "..." + " - " + "S" * 17)),
+        ({"media_title": 5, "media_artist": None}, "Playing"),
+        ({}, "Playing"),
+    ],
+)
+def test_a_media_player_reads_artist_and_title(attrs, expected):
+    details = entity_details("media_player.room", snapshot("playing", **attrs), "Playing", "C")
+
+    assert details["value"][:60] == details["value"]
+    assert len(details["value"]) <= 60
+    if "S" * 80 in attrs.values():
+        assert details["value"].startswith("B" * 37 + "...")
+    else:
+        assert details["value"] == expected
+
+
+def test_what_is_playing_is_only_read_while_it_plays():
+    details = entity_details(
+        "media_player.room", snapshot("off", media_title="Song", media_artist="Band"), "Off", "C"
+    )
+    assert details["value"] == "Off"

@@ -12,6 +12,7 @@ from homeassistant.components.fan import const as fan_const
 from homeassistant.components.light.const import (
     COLOR_MODES_BRIGHTNESS,
     COLOR_MODES_COLOR,
+    LightEntityFeature,
 )
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.core import HomeAssistant
@@ -250,6 +251,8 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
                     _number("saturation", hs[1], 0, 100, 1, "%"),
                 )
             )
+        if features & LightEntityFeature.EFFECT:
+            controls.append(_choice("effect", attrs.get("effect"), attrs.get("effect_list")))
     elif domain == "cover":
         for command, feature in (
             ("open_cover", CoverEntityFeature.OPEN),
@@ -355,6 +358,14 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
                 "command": "volume_mute", "kind": "boolean",
                 "value": muted if isinstance(muted, bool) else None,
             })
+        if features & MediaPlayerEntityFeature.SHUFFLE_SET:
+            shuffle = attrs.get("shuffle")
+            controls.append({
+                "command": "shuffle", "kind": "boolean",
+                "value": shuffle if isinstance(shuffle, bool) else None,
+            })
+        if features & MediaPlayerEntityFeature.REPEAT_SET:
+            controls.append(_choice("repeat", attrs.get("repeat"), ["off", "all", "one"]))
         if features & MediaPlayerEntityFeature.SELECT_SOURCE:
             controls.append(_choice("source", attrs.get("source"), attrs.get("source_list")))
         if features & MediaPlayerEntityFeature.SELECT_SOUND_MODE:
@@ -416,6 +427,8 @@ async def async_execute_control(
             data[command] = int(value)
         elif command == "color":
             data["hs_color"] = list(COLOR_PRESETS[value][:2])
+        elif command == "effect":
+            data["effect"] = value
         elif command in {"hue", "saturation"}:
             hs = state.attributes.get("hs_color")
             hs = (
@@ -472,6 +485,7 @@ async def async_execute_control(
         service = {
             "volume_level": "volume_set", "volume_mute": "volume_mute",
             "source": "select_source", "sound_mode": "select_sound_mode",
+            "shuffle": "shuffle_set", "repeat": "repeat_set",
         }.get(command, command)
         # Home Assistant's toggle and play/pause services demand both features
         # of their pair; the explicit service for the current state needs only
@@ -484,8 +498,10 @@ async def async_execute_control(
             data["volume_level"] = value / 100
         elif command == "volume_mute":
             data["is_volume_muted"] = value
-        elif command in {"source", "sound_mode"}:
+        elif command in {"source", "sound_mode", "repeat"}:
             data[command] = value
+        elif command == "shuffle":
+            data["shuffle"] = value
     elif domain in {"number", "input_number"}:
         service = "set_value"
         data["value"] = value

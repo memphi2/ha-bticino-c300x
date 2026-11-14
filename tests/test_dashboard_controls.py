@@ -1007,3 +1007,84 @@ def test_media_player_states_are_compared_as_strings():
     assert "MediaPlayerState" not in source
     off = entity_controls("media_player.room", state("standby", supported_features=128 | 256))
     assert [control["command"] for control in off] == ["toggle"]
+
+
+def test_a_media_player_offers_shuffle_and_repeat_where_it_reports_them():
+    controls = {
+        control["command"]: control
+        for control in entity_controls("media_player.room", state(
+            "playing", supported_features=4 | 8 | 32768 | 262144,
+            volume_level=0.5, is_volume_muted=False, shuffle=True, repeat="all",
+        ))
+    }
+    assert list(controls) == ["volume_level", "volume_mute", "shuffle", "repeat"]
+    assert controls["shuffle"] == {"command": "shuffle", "kind": "boolean", "value": True}
+    assert controls["repeat"] == {
+        "command": "repeat", "kind": "choice", "value": "all", "options": ["off", "all", "one"],
+    }
+    # A state that is not reported is unknown, never off.
+    unknown = {
+        control["command"]: control
+        for control in entity_controls("media_player.room", state(
+            "playing", supported_features=32768 | 262144, shuffle="yes", repeat="sometimes",
+        ))
+    }
+    assert unknown["shuffle"]["value"] is None
+    assert unknown["repeat"]["value"] is None
+    # Without the features there is nothing to offer.
+    assert entity_controls("media_player.room", state("playing", supported_features=4)) != []
+    assert not {"shuffle", "repeat"} & {
+        control["command"]
+        for control in entity_controls("media_player.room", state("playing", supported_features=4 | 8))
+    }
+
+
+@pytest.mark.parametrize(("command", "option", "service", "data"), [
+    ("shuffle", "true", "shuffle_set", {"shuffle": True}),
+    ("shuffle", "false", "shuffle_set", {"shuffle": False}),
+    ("repeat", "one", "repeat_set", {"repeat": "one"}),
+])
+def test_shuffle_and_repeat_send_their_explicit_services(command, option, service, data):
+    hass = hass_for(state("playing", supported_features=32768 | 262144, shuffle=False, repeat="off"))
+
+    asyncio.run(async_execute_control(hass, "media_player.room", command, option))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "media_player", service, {"entity_id": "media_player.room", **data}, blocking=True,
+    )
+
+
+def test_repeat_only_accepts_what_it_offers():
+    hass = hass_for(state("playing", supported_features=262144, repeat="off"))
+
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "media_player.room", "repeat", "random"))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_light_with_effects_offers_them_and_sends_the_chosen_one():
+    snapshot = state(
+        "on", supported_color_modes=["onoff"], supported_features=4,
+        effect="Rainbow", effect_list=["Rainbow", "Pulse", ""],
+    )
+    controls = {control["command"]: control for control in entity_controls("light.strip", snapshot)}
+    assert controls["effect"] == {
+        "command": "effect", "kind": "choice", "value": "Rainbow", "options": ["Rainbow", "Pulse"],
+    }
+    # Without the feature, or without effects, there is no picker.
+    assert "effect" not in {
+        control["command"]
+        for control in entity_controls("light.strip", state("on", supported_color_modes=["onoff"], effect_list=["x"]))
+    }
+    assert "effect" not in {
+        control["command"]
+        for control in entity_controls("light.strip", state("on", supported_color_modes=["onoff"], supported_features=4))
+    }
+
+    hass = hass_for(snapshot)
+    asyncio.run(async_execute_control(hass, "light.strip", "effect", "Pulse"))
+    hass.services.async_call.assert_awaited_once_with(
+        "light", "turn_on", {"entity_id": "light.strip", "effect": "Pulse"}, blocking=True,
+    )
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "light.strip", "effect", "Disco"))

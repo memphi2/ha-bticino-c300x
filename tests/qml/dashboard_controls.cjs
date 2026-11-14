@@ -537,6 +537,13 @@ assert.deepEqual(Array.from(Api.dashboardTransportControls({details: {type: "med
     {command: "media_next_track", kind: "button"}, {command: "media_previous_track", kind: "button"}]}), c => c.command),
     ["media_previous_track", "media_next_track"], "the row keeps its fixed order");
 assert.equal(p.optionLabel({command: "source"}, "off"), "off", "a source name is never translated as a mode");
+assert.equal(p.optionLabel({command: "effect"}, "off"), "off", "an effect name is never translated as a mode");
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["shuffle", "repeat", "effect", "mode_all", "mode_one"]) {
+        assert.notEqual(I18n.text(lang, key), key, key + " is translated in " + lang);
+    }
+}
+assert.equal(p.optionLabel({command: "repeat"}, "all"), "All");
 assert.deepEqual(Array.from(Api.dashboardVisibleControls(playerItem, ""), c => c.command),
     ["media_previous_track", "media_play_pause", "media_next_track", "volume_level", "volume_mute", "source"],
     "the power switch lives in the summary, not in the control list");

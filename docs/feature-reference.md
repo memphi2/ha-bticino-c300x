@@ -419,6 +419,9 @@ agent exposes RTSP sources for:
 - on-demand doorstation audio/video,
 - Home Call audio.
 
+These sources support interleaved RTP over RTSP/TCP. UDP transport is not
+supported; external clients must select TCP.
+
 Audio gain options:
 
 - **Doorstation live audio gain** affects on-demand and Ring Call downstream

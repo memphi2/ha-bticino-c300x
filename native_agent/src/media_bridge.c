@@ -101,25 +101,6 @@ static uint16_t load_be16(const unsigned char *in);
 static uint32_t load_be32(const unsigned char *in);
 static void store_be32(unsigned char *out, uint32_t value);
 
-static bool rtsp_peer_ipv4_address(
-    const struct sockaddr_storage *peer,
-    struct in_addr *address
-) {
-    if (peer->ss_family == AF_INET) {
-        const struct sockaddr_in *peer4 = (const struct sockaddr_in *)peer;
-        *address = peer4->sin_addr;
-        return true;
-    }
-    if (peer->ss_family == AF_INET6) {
-        const struct sockaddr_in6 *peer6 = (const struct sockaddr_in6 *)peer;
-        if (IN6_IS_ADDR_V4MAPPED(&peer6->sin6_addr)) {
-            memcpy(address, &peer6->sin6_addr.s6_addr[12], sizeof(*address));
-            return true;
-        }
-    }
-    return false;
-}
-
 static int video_rtp_port(const struct c300x_config *config) {
     return (int)config->video_rtp_port_start + 2;
 }
@@ -1105,63 +1086,6 @@ static ssize_t send_all(int fd, const void *buf, size_t len) {
         left -= (size_t)n;
     }
     return (ssize_t)len;
-}
-
-static ssize_t send_all_pair(
-    int fd,
-    const void *first,
-    size_t first_len,
-    const void *second,
-    size_t second_len
-) {
-    struct iovec iov[2];
-    struct iovec *pending = iov;
-    size_t pending_count = 0;
-    size_t total = first_len + second_len;
-    size_t sent = 0;
-    long long deadline = c300x_monotonic_ms() + 250;
-
-    if (first_len > 0) {
-        iov[pending_count].iov_base = (void *)first;
-        iov[pending_count].iov_len = first_len;
-        pending_count++;
-    }
-    if (second_len > 0) {
-        iov[pending_count].iov_base = (void *)second;
-        iov[pending_count].iov_len = second_len;
-        pending_count++;
-    }
-
-    while (pending_count > 0) {
-        struct msghdr message;
-        ssize_t n;
-        size_t advanced;
-
-        memset(&message, 0, sizeof(message));
-        message.msg_iov = pending;
-        message.msg_iovlen = pending_count;
-
-        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
-        n = sendmsg(fd, &message, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
-            continue;
-        }
-        if (n <= 0) {
-            return n;
-        }
-        sent += (size_t)n;
-        advanced = (size_t)n;
-        while (pending_count > 0 && advanced >= pending[0].iov_len) {
-            advanced -= pending[0].iov_len;
-            pending++;
-            pending_count--;
-        }
-        if (pending_count > 0 && advanced > 0) {
-            pending[0].iov_base = (char *)pending[0].iov_base + advanced;
-            pending[0].iov_len -= advanced;
-        }
-    }
-    return sent == total ? (ssize_t)sent : -1;
 }
 
 static bool copy_checked(char *out, size_t out_len, const char *value) {
@@ -2225,7 +2149,7 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
             frame_header[1] = (unsigned char)target->channel;
             frame_header[2] = (unsigned char)(((unsigned)packet_len >> 8) & 0xff);
             frame_header[3] = (unsigned char)((unsigned)packet_len & 0xff);
-            if (send_all_pair(
+            if (c300x_rtsp_send_pair(
                 target->fd,
                 frame_header,
                 sizeof(frame_header),
@@ -2234,15 +2158,6 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
             ) <= 0) {
                 shutdown(target->fd, SHUT_RDWR);
             }
-        } else {
-            (void)sendto(
-                target->fd,
-                packet,
-                (size_t)packet_len,
-                0,
-                (struct sockaddr *)&target->udp_client,
-                sizeof(target->udp_client)
-            );
         }
     }
 }
@@ -6026,6 +5941,7 @@ void c300x_media_bridge_set_doorstation_audio_gain_tenths(
 }
 
 static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
+    (void)peer;
     char *request = calloc(1, RTSP_BUFFER_SIZE);
     unsigned char *read_buffer_data = malloc(RTSP_BUFFER_SIZE);
     rtsp_read_buffer_t read_buffer = {read_buffer_data, RTSP_BUFFER_SIZE, 0, 0};
@@ -6303,7 +6219,10 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             send_rtsp_response(fd, 200, cseq, headers, sdp);
         } else if (strcmp(method, "SETUP") == 0) {
             bool tcp = strstr(transport, "RTP/AVP/TCP") != NULL;
-            int client_port = parse_client_port(transport);
+            if (!tcp) {
+                send_rtsp_response(fd, 461, cseq, NULL, NULL);
+                continue;
+            }
             int interleaved_channel = parse_interleaved_channel(transport);
             pthread_mutex_lock(&g_bridge.mutex);
             rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
@@ -6321,7 +6240,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             bool is_audio = rtsp_audio_enabled
                 && !is_backchannel
                 && strstr(uri, "streamid=0") != NULL;
-            int server_port = is_audio ? audio_rtp_port(g_bridge.config) : video_rtp_port(g_bridge.config);
             if (interleaved_channel < 0) {
                 interleaved_channel = is_backchannel
                     ? 4
@@ -6349,17 +6267,12 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 slot->video_interleaved_channel = interleaved_channel;
             }
             memset(&slot->udp_client, 0, sizeof(slot->udp_client));
-            if (!tcp && client_port > 0 && rtsp_peer_ipv4_address(peer, &slot->udp_client.sin_addr)) {
-                slot->udp_client.sin_family = AF_INET;
-                slot->udp_client.sin_port = htons((uint16_t)client_port);
-            }
             snprintf(session_id, sizeof(session_id), "%s", slot->session_id);
             sync_legacy_rtsp_client_locked(&g_bridge);
             pthread_mutex_unlock(&g_bridge.mutex);
 
             char headers[512];
-            if (tcp) {
-                snprintf(
+            snprintf(
                     headers,
                     sizeof(headers),
                     "Transport: RTP/AVP/TCP;unicast;interleaved=%d-%d;ssrc=1A2B3C4D\r\nSession: %s;timeout=%d\r\n",
@@ -6368,19 +6281,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     session_id,
                     RTSP_IDLE_TIMEOUT_SECONDS
                 );
-            } else {
-                snprintf(
-                    headers,
-                    sizeof(headers),
-                    "Transport: RTP/AVP;unicast;client_port=%d-%d;server_port=%d-%d;ssrc=1A2B3C4D\r\nSession: %s;timeout=%d\r\n",
-                    client_port,
-                    client_port + 1,
-                    server_port,
-                    server_port + 1,
-                    session_id,
-                    RTSP_IDLE_TIMEOUT_SECONDS
-                );
-            }
             send_rtsp_response(fd, 200, cseq, headers, NULL);
         } else if (strcmp(method, "PLAY") == 0) {
             bool rtsp_audio_enabled = false;

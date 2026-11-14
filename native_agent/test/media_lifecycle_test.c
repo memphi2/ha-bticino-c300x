@@ -167,6 +167,8 @@ static void auth_test(struct c300x_config *config, bool legacy, bool pending_sto
         request(pair[0], "DESCRIBE", auth, 200);
         assert(client_count() == 1);
         char headers[256];
+        snprintf(headers, sizeof(headers), "%sTransport: RTP/AVP;unicast;client_port=5000-5001\r\n", auth);
+        request(pair[0], "SETUP", headers, 461);
         snprintf(headers, sizeof(headers), "%sTransport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n", auth);
         request(pair[0], "SETUP", headers, 200);
         if (!legacy) {

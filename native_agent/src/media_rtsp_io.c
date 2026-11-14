@@ -8,6 +8,37 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
+
+ssize_t c300x_rtsp_send_pair(int fd, const void *first, size_t first_len,
+                            const void *second, size_t second_len)
+{
+    struct iovec iov[2];
+    struct iovec *pending = iov;
+    size_t count = 0, sent = 0;
+    long long deadline = c300x_monotonic_ms() + 250;
+    if (first_len) iov[count++] = (struct iovec){.iov_base = (void *)first, .iov_len = first_len};
+    if (second_len) iov[count++] = (struct iovec){.iov_base = (void *)second, .iov_len = second_len};
+    while (count > 0) {
+        struct msghdr message = {.msg_iov = pending, .msg_iovlen = count};
+        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
+        ssize_t n = sendmsg(fd, &message, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) return n;
+        sent += (size_t)n;
+        size_t advanced = (size_t)n;
+        while (count > 0 && advanced >= pending[0].iov_len) {
+            advanced -= pending[0].iov_len;
+            pending++;
+            count--;
+        }
+        if (count > 0 && advanced > 0) {
+            pending[0].iov_base = (char *)pending[0].iov_base + advanced;
+            pending[0].iov_len -= advanced;
+        }
+    }
+    return sent == first_len + second_len ? (ssize_t)sent : -1;
+}
 
 int parse_client_port(const char *transport)
 {
@@ -86,7 +117,8 @@ void send_rtsp_response(
     const char *headers,
     const char *body
 ) {
-    const char *status_text = status == 200 ? "OK" : (status == 401 ? "Unauthorized" : "Error");
+    const char *status_text = status == 200 ? "OK" :
+        (status == 401 ? "Unauthorized" : (status == 461 ? "Unsupported Transport" : "Error"));
     size_t body_len = body ? strlen(body) : 0;
     char response[4096];
     int n = snprintf(

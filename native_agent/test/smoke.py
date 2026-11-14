@@ -112,7 +112,7 @@ def main() -> int:
         sys.stderr.write(f"missing native agent binary: {binary}\n")
         return 2
     assert_video_timer_preserves_existing_poll_timeout(binary)
-    assert_rtsp_udp_preserves_ipv4_mapped_peers(binary)
+    assert_rtsp_udp_is_rejected(binary)
     assert_overlong_activation_id_is_rejected(binary)
     assert_startup_diagnostics_are_read_only(binary)
     assert_graceful_shutdown_signal_is_handled(binary)
@@ -144,21 +144,19 @@ def assert_video_timer_preserves_existing_poll_timeout(binary: Path) -> None:
         raise AssertionError("video poll timeout must be combined with existing timers")
 
 
-def assert_rtsp_udp_preserves_ipv4_mapped_peers(binary: Path) -> None:
-    """Guard IPv4 UDP clients accepted through the dual-stack RTSP listener."""
+def assert_rtsp_udp_is_rejected(binary: Path) -> None:
+    """Reject unsupported UDP instead of sending RTP over the control socket."""
 
     source = binary.parents[2] / "src" / "media_bridge.c"
     if not source.exists():
         return
     content = source.read_text(encoding="utf-8")
     required = (
-        "rtsp_peer_ipv4_address",
-        "IN6_IS_ADDR_V4MAPPED",
-        "peer6->sin6_addr.s6_addr[12]",
-        "rtsp_peer_ipv4_address(peer, &slot->udp_client.sin_addr)",
+        "if (!tcp)",
+        "send_rtsp_response(fd, 461, cseq, NULL, NULL)",
     )
     if any(item not in content for item in required):
-        raise AssertionError("RTSP UDP peer handling must preserve IPv4-mapped IPv6 clients")
+        raise AssertionError("RTSP must reject unsupported UDP transport")
 
 
 def assert_overlong_activation_id_is_rejected(binary: Path) -> None:

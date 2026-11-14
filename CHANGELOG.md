@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.2.0 - 2026-11-14
 
 ### Fixed
 
@@ -30,6 +30,26 @@
 - Decode JSON escapes consistently in HTTP inputs, saved configuration and
   update manifests. Create temporary configuration files with private
   permissions before writing credentials.
+- Bound mDNS query processing and ignore responses and unrelated queries.
+- Reject duplicate device endpoints before starting installation, preserve
+  customized obsolete blueprints, and resume unfinished display-update steps
+  when retrying an agent update.
+- Refresh message details before deleting the latest item. Extract capture
+  images using the video's actual duration and clear unavailable image aliases.
+- Keep RTSP probe errors scoped to their request and suppress automatic
+  preview retries after failure until a new ring.
+- Cancel in-flight media setup on stop, bound socket-write delays, reclaim
+  completed SIP workers and partially initialized SRTP sessions, and match
+  SDES keys to their own crypto attribute. Run device-media renewal outside
+  the audio worker.
+- Preserve pending configuration during MQTT changes and normalization,
+  retain coalesced MQTT commands until consumed, and round-trip activations
+  without an optional address.
+- Honor custom agent installation paths in maintenance scripts and normalize
+  absent notification action IDs for the device's Qt runtime.
+- Validate release ZIP contents against the checkout, stop local HA installation
+  on copy errors, correlate RTSP capture responses by connection and CSeq, and
+  prevent routing-patch output from overwriting its input.
 
 ### Added
 
@@ -53,6 +73,11 @@
 
 ### Changed
 
+- Native agent **2.2.0** is required for the device-side fixes. Update it through
+  the offered Repair after updating the integration. Reapplying an active
+  Display patch restarts the device GUI once.
+- RTSP accepts TCP interleaving only. Unsupported UDP transport requests now
+  receive an explicit rejection; Home Assistant already uses TCP.
 - Write the display's QML and JavaScript files to the device without comments,
   blank lines and indentation. The installed files are about 30 % smaller
   (roughly 140 kB instead of 200 kB); their behaviour is unchanged. The first

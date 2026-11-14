@@ -188,6 +188,21 @@ class MediaSetupRepairFlow(RepairsFlow):
                 errors={"base": "media_setup_repair_failed"},
                 description_placeholders=placeholders,
             )
+        still_failed = _media_checks_still_failed(readiness, media_readiness(entry), repaired)
+        if still_failed:
+            # The actions ran without an error, but the device still fails
+            # the checks they were for. The issue stays open.
+            _LOGGER.warning(
+                "C300X media setup repair left checks failing: %s",
+                ", ".join(still_failed),
+            )
+            return self.async_show_form(
+                step_id="confirm",
+                errors={"base": "media_setup_repair_failed"},
+                description_placeholders=_media_setup_repair_placeholders(
+                    media_readiness(entry)
+                ),
+            )
         ir.async_delete_issue(
             hass=self.hass,
             domain=DOMAIN,
@@ -233,6 +248,34 @@ async def _async_repair_media_setup(hass: HomeAssistant, entry: Any) -> list[str
             )
         async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
     return repaired
+
+
+_MEDIA_REPAIR_CHECKS = {
+    "agent_update_check": {"capabilities", "rtsp"},
+    "firewall": {"firewall", "talkback_rtp"},
+    "homeassistant_user": {"homeassistant_user", "device_routing"},
+}
+
+
+def _media_checks_still_failed(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    repaired: list[str],
+) -> list[str]:
+    """Return the checks a repair action was run for that still fail.
+
+    A reload for an unreachable agent is not judged: the readiness of the
+    entry is only known after the reload.
+    """
+
+    def failed(readiness: dict[str, Any]) -> set[str]:
+        checks = readiness.get("failed_checks")
+        return {str(check) for check in checks} if isinstance(checks, list) else set()
+
+    targeted: set[str] = set()
+    for action in repaired:
+        targeted |= _MEDIA_REPAIR_CHECKS.get(action, set())
+    return sorted(failed(before) & failed(after) & targeted)
 
 
 def _media_setup_repair_placeholders(readiness: dict[str, Any]) -> dict[str, str]:

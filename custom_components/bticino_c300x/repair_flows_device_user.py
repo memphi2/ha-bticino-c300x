@@ -52,6 +52,12 @@ class DeviceUserRepairFlow(RepairsFlow):
                 errors={"base": "device_user_setup_failed"},
             )
         entry.runtime_data.device_user_status = status
+        if status.get("homeassistant_user_present") is False:
+            # The agent answered, but the device still has no user.
+            return self.async_show_form(
+                step_id="confirm",
+                errors={"base": "device_user_setup_failed"},
+            )
         ir.async_delete_issue(
             hass=self.hass,
             domain=DOMAIN,

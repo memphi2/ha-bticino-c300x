@@ -1441,6 +1441,56 @@ def test_media_setup_repair_runs_confirmed_fixable_actions() -> None:
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "enabled"
 
 
+def test_media_setup_repair_keeps_the_issue_when_the_check_still_fails(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    checks = {
+        "capabilities": {"ok": True},
+        "firewall": {"ok": False, "reason": "ipv4_media_ports_missing"},
+        "rtsp": {"ok": True},
+        "talkback_rtp": {"ok": True},
+        "homeassistant_user": {"ok": True},
+        "device_routing": {"ok": True},
+        "startup": {"ok": True},
+    }
+    api = FakePatchApi()
+    # The firewall action answers without an error, but the device still
+    # fails the check afterwards.
+    api.self_test_status = {"ok": False, "checks": dict(checks)}
+    runtime_data = FakeRuntimeData(
+        api,
+        capabilities={
+            "doorbell_video": {"supported": True},
+            "doorbell_call": {"supported": True},
+        },
+        self_test_status={"ok": False, "checks": dict(checks)},
+    )
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        repairs.ir, "async_delete_issue", lambda **kwargs: deleted.append(kwargs["issue_id"])
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert "apply_firewall" in api.calls
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "media_setup_repair_failed"}
+    assert "firewall" in result["description_placeholders"]["failed_checks"]
+    assert deleted == []
+
+    # Once the device passes the check, the same flow closes the issue.
+    api.self_test_status = {"ok": True, "checks": {**checks, "firewall": {"ok": True}}}
+    result = asyncio.run(flow.async_step_confirm({}))
+    assert result["type"] == "create_entry"
+    assert len(deleted) == 1
+
+
 def test_media_setup_repair_does_not_change_forwarding() -> None:
     api = FakePatchApi()
     runtime_data = FakeRuntimeData(
@@ -1769,6 +1819,35 @@ def test_device_user_repair_flow_reports_agent_failures() -> None:
         "step_id": "confirm",
         "errors": {"base": "device_user_setup_failed"},
     }
+
+
+def test_device_user_repair_keeps_the_issue_when_the_user_is_still_missing(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repair_flows_device_user as device_user_flow
+
+    api = FakePatchApi()
+    api.device_user_status = {"homeassistant_user_present": False}
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    hass = FakeHass(entry)
+    hass.config.location_name = "HA Test"
+    flow = DeviceUserRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        device_user_flow.ir,
+        "async_delete_issue",
+        lambda **kwargs: deleted.append(kwargs["issue_id"]),
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {
+        "type": "form",
+        "step_id": "confirm",
+        "errors": {"base": "device_user_setup_failed"},
+    }
+    assert deleted == []
 
 
 def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:

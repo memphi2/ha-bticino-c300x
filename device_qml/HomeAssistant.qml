@@ -13,7 +13,7 @@ Page {
         else if (selectedItem) selectedItem = null
         else tabView.activateTab(homePage)
     }
-    headerLabel: (notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : uiText("home_assistant")) + trsl.empty
+    headerLabel: (notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
     property variant dashboardPages: []
@@ -1149,17 +1149,6 @@ Page {
                 id: contentColumn
                 width: scroll.width
                 spacing: 10
-
-                UbuntuLightText {
-                    text: pageTitle + trsl.empty
-                    color: "white"
-                    font.pixelSize: 24
-                    width: parent.width
-                    height: pageTitle.length > 0 ? 34 : 0
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
 
                 Item {
                     width: parent.width

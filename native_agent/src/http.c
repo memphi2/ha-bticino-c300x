@@ -94,6 +94,10 @@
 #define C300X_FLEXISIP_INIT_BACKUP "/etc/init.d/flexisipsh_bak"
 #define C300X_FLEXISIP_RESTART_MARKER "/tmp/flexisip_restarted"
 #define C300X_LARGE_RESPONSE_SIZE 32768
+/* Every stored text and voice memo with a text that escapes to six bytes
+ * per byte must fit: the list is not paged. */
+#define C300X_MEMOS_RESPONSE_SIZE \
+    (1024 + (2 * C300X_MAX_VOICEMAIL_MESSAGES * (C300X_MAX_MEMO_TEXT_JSON_LEN + 768)))
 #define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
 enum listener_kind {
     LISTENER_API = C300X_HTTP_KIND_API,
@@ -7657,7 +7661,7 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
 {
     struct voicemail_snapshot *text = calloc(1, sizeof(*text));
     struct voicemail_snapshot *voice = calloc(1, sizeof(*voice));
-    char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
+    char *body = allocate_response_buffer(client_fd, C300X_MEMOS_RESPONSE_SIZE);
     size_t used = 0;
     char newest_at_escaped[C300X_MAX_VOICEMAIL_DATE_LEN * 2];
     const char *newest_at_json = "null";
@@ -7679,7 +7683,7 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
     }
     if (!c300x_appendf(
         body,
-        C300X_LARGE_RESPONSE_SIZE,
+        C300X_MEMOS_RESPONSE_SIZE,
         &used,
         "{\"ok\":true,\"available\":%s,\"total\":%d,\"text_total\":%d,\"voice_total\":%d,\"unread\":%d,\"read\":%d,\"newest_at\":%s%s%s,\"memos\":[",
         (text->available || voice->available) ? "true" : "false",
@@ -7698,9 +7702,9 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
         free(body);
         return;
     }
-    if (!append_memo_entries(body, C300X_LARGE_RESPONSE_SIZE, &used, text, "text", &first)
-        || !append_memo_entries(body, C300X_LARGE_RESPONSE_SIZE, &used, voice, "voice", &first)
-        || !c300x_appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
+    if (!append_memo_entries(body, C300X_MEMOS_RESPONSE_SIZE, &used, text, "text", &first)
+        || !append_memo_entries(body, C300X_MEMOS_RESPONSE_SIZE, &used, voice, "voice", &first)
+        || !c300x_appendf(body, C300X_MEMOS_RESPONSE_SIZE, &used, "]}\n")) {
         send_response_too_large(client_fd);
         free(text);
         free(voice);

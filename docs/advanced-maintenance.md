@@ -28,6 +28,21 @@ firmware, extracted firmware files, APKs or third-party controller code.
 
 ## Updates
 
+### From 2.1.3 to 2.3.0
+
+2.3.0 is the direct stable successor to 2.1.3. It includes the display,
+configuration, media and reliability changes developed since 2.1.3, together
+with visitor images. Do not install the withdrawn 2.2.0 as an intermediate step.
+Keep your existing integration entry, cards and configured pages.
+
+The packaged **2.3.0 agent** is required for visitor images and includes the
+corrected display startup timer. Update it through Repair after installing the
+integration; copying HA files alone does not update the device. **Save images**
+defaults to on, with a 5-second delay and 14-day retention. Review that switch
+and HA media permissions before leaving capture enabled.
+
+### Update Steps
+
 1. Install the integration update offered by Marketplace or HACS and follow any
    Home Assistant restart request.
 2. Run the device-agent update Repair if offered. Supported self-updates use the
@@ -47,32 +62,6 @@ newer**; an integration-only update is insufficient. This correction does not
 require a firmware patch or a GUI change. For availability, validation scope
 and the workaround for older agents, see
 [PCMU reboot troubleshooting](media-troubleshooting.md#device-reboots-after-pcmu-on-demand-video).
-
-## Beta Versions
-
-Betas use versions such as `2.1.0b1`; release candidates use `2.1.0rc1`.
-These are format examples, not a statement that either version is published.
-Prereleases use the same integration, card and packaged agent as stable releases,
-with no separate repository or duplicate config entry.
-
-To test an available prerelease:
-
-1. Back up Home Assistant and read the release's known limitations and agent
-   requirements. Device/media behavior still needs hardware testing.
-2. In Marketplace, enable this repository's **Pre-release** switch. In HACS,
-   open **Redownload**, enable beta versions and select the published version.
-3. Follow the normal [update steps](#updates), including the device-agent Repair
-   if offered. Installing the integration alone does not install its agent.
-
-Stable users do not receive betas automatically. Prereleases are offered only
-after opt-in and while newer than the latest regular release; see the official
-[Marketplace prerelease guidance](https://contributors.home-assistant.io/marketplace/guides/releases/#pre-releases).
-
-To leave the beta channel, disable prereleases. This does not itself downgrade
-an installed beta. Wait for the matching/newer stable version or explicitly
-select a compatible stable release after reading its downgrade guidance. Keep
-the existing integration entry. A Home Assistant backup does not restore the
-device-side agent; follow the selected release's agent requirements separately.
 
 ## Tokens
 

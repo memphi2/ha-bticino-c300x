@@ -83,6 +83,40 @@ independently. Both are shown by default. In YAML, set `show_door_unlock: false`
 or `show_stair_light: false` to hide the corresponding button. This only changes
 that card; the Home Assistant entities and services remain available.
 
+### Visitor Images
+
+The **Save images** switch belongs to the C300X device and is on by default.
+It controls automatic images for doorbell rings and video sessions, regardless
+of whether a Home Assistant dashboard is open. No browser capture is used.
+Under **Configure > Video and audio**, choose the image delay (default **5
+seconds**) and retention (default **14 days**). A call or stream that ends
+before capture may not produce an image.
+
+The agent reads the existing video background only while the firmware media
+process is using it. It does not start or answer a call, change forwarding,
+run FFmpeg, or create image, temporary or status files on the C300X. Conversion
+to JPEG and all persistent storage happen in Home Assistant. Reading a frame
+still has a bounded CPU, RAM and network cost; this is not zero-load capture.
+The bundled agent must be updated for the new snapshot endpoint.
+
+Images are stored beside Ring Captures under the configured HA media root:
+`c300x/snapshots/<device-directory>/`. Each C300X has its own directory and
+archive in **Media > BTicino C300X**. The storage location is not `www` and the
+integration's image endpoint requires camera read permission. HA's standard
+local-media browser also exposes this directory using HA media access rules,
+independently of camera entity permissions. Restrict media access if needed;
+disabling the camera entity does not hide the archive from that browser. The latest
+retained image is used by the camera entity and the card; the card marks it
+with its capture time as an archived image, not live video. Until the first
+successful capture, no preview is shown.
+
+Turning **Save images** off stops new captures and hides these previews,
+without reloading the integration. Existing images remain available in Media
+until they expire. Cleanup also runs while the switch is off. Storage is
+limited to **1,000 images or 128 MiB per device**, whichever is reached first;
+the oldest images are removed first. Retention limits are enforced while HA
+is running and again after startup.
+
 ## Alarmo Display
 
 The optional native Alarmo page stays a subpage in the original blue C300X

@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v2.2.0-0366d6?style=flat-square)](CHANGELOG.md)
+[![Development](https://img.shields.io/badge/development-v2.3.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -23,6 +23,8 @@ forwarding controls, messages and optional display pages.
 ## What You Get
 
 - Doorbell ring events and local camera viewing.
+- Automatic visitor images stored in Home Assistant, with a shared camera/card
+  preview and configurable retention. See [Images](docs/feature-reference.md#visitor-images).
 - Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
   Assistant.
 - Audio-only Home Call from Home Assistant to the C300X display.
@@ -75,14 +77,6 @@ and restart Home Assistant. Then add the integration under
 Both installation methods use the same repository and release archive. Existing
 configuration entries and bundled cards remain unchanged when moving to Marketplace.
 
-### Beta Versions
-
-Beta and release-candidate builds are opt-in. When a prerelease is available,
-enable **Pre-release** for this repository in Marketplace, or beta versions in
-HACS. Stable installations are not switched to beta automatically. The same
-integration ZIP includes the card and device-agent bundle; no second repository
-or integration entry is needed. See [beta updates and returning to stable](docs/advanced-maintenance.md#beta-versions).
-
 ## First Setup
 
 Follow the [Quickstart](docs/quickstart.md) to install or update the device agent,
@@ -123,16 +117,34 @@ depend on enabled options and installed agent capabilities.
 
 ### C300X Display Pages
 
+Control Home Assistant entities from the C300X's native blue interface.
+Pages, tile sizes and names are configurable; controls follow each entity's
+capabilities. [Set up pages and tiles](docs/quickstart.md#9-optional-native-display).
+
+The display examples below are perspective-corrected and AI-localized into
+English from device photographs. They illustrate configured pages, not live data.
+
 <table>
   <tr>
-    <td align="center"><strong>C300X dashboard</strong><br><img src="docs/images/readme/display-c300x-dashboard.jpeg" alt="BTicino C300X dashboard page" width="320"></td>
-    <td align="center"><strong>Alarmo page</strong><br><img src="docs/images/readme/display-alarmo.jpeg" alt="Alarmo page on the BTicino C300X display" width="320"></td>
+    <td align="center"><strong>Home screen</strong><br><img src="docs/images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="360"></td>
+    <td align="center"><strong>Alarmo and optional quick action</strong><br><img src="docs/images/readme/display-alarmo-en.webp" alt="Alarmo modes, PIN keypad and a configured stair-light shortcut" width="360"></td>
   </tr>
   <tr>
-    <td align="center"><strong>Home Assistant weather page</strong><br><img src="docs/images/readme/display-ha-weather.jpeg" alt="Home Assistant weather page on the BTicino C300X display" width="320"></td>
-    <td align="center"><strong>Custom Home Assistant page</strong><br><img src="docs/images/readme/display-custom-ha-page.jpeg" alt="Custom Home Assistant page on the BTicino C300X display" width="320"></td>
+    <td align="center"><strong>Status and sensor tiles</strong><br><img src="docs/images/readme/display-status-en.webp" alt="Status page showing device temperature, CPU use, windows, intrusion, water leak and battery state" width="360"></td>
+    <td align="center"><strong>Light overview</strong><br><img src="docs/images/readme/display-lights-en.webp" alt="Eight configured light tiles with individual state, brightness and on-off controls" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Brightness and color controls</strong><br><img src="docs/images/readme/display-light-detail-en.webp" alt="Bathroom light detail page with brightness slider and eight color presets" width="360"></td>
+    <td align="center"><strong>Media player controls</strong><br><img src="docs/images/readme/display-media-player-en.webp" alt="Living-room media player with current program, pause, volume, mute and shuffle controls" width="360"></td>
   </tr>
 </table>
+
+<details>
+<summary>Weather example (earlier page layout)</summary>
+<p align="center"><img src="docs/images/readme/display-ha-weather-en.webp" alt="Earlier native weather-page layout with a temperature card and Home Assistant status" width="720"></p>
+Current versions place the status information in the header and configure
+weather with the display pages. See the [display reference](docs/feature-reference.md#display-settings).
+</details>
 
 ## Documentation
 

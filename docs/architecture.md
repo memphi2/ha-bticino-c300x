@@ -113,6 +113,23 @@ the authority for call lifecycle.
 
 ## Media Flow
 
+### Retained Visitor Images
+
+`snapshots.py` owns each entry's persisted capture switch, latest-image cache
+and hourly retention cleanup. `snapshot_capture.py` reacts to ring events and
+camera video-window transitions, deduplicates a physical session, and schedules
+one bounded read after the configured delay. It does not open a stream or answer
+a call. Closing a session, disabling capture or unloading invalidates pending
+work. The card and camera still-image method only consume the retained preview.
+
+The agent's authenticated snapshot endpoint checks that the media process is
+using `/dev/fb0`, validates framebuffer geometry and reads it without changing
+display state. It returns a bounded in-memory BMP; no device file is created.
+HA validates and converts it to JPEG in an executor. `snapshot_store.py` owns
+per-entry storage, quota and expiry under the same HA media root as recordings.
+`snapshot_http.py` applies authentication and camera read permissions; Media
+Source exposes retained images without depending on an open frontend.
+
 ```text
 Browser/Card
   -> Home Assistant camera WebRTC provider

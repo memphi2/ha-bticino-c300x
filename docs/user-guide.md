@@ -27,10 +27,16 @@ Most users only need:
 | Fix stream/call/capture problems | [Media troubleshooting](media-troubleshooting.md) |
 | Add notification or capture automations | [Blueprints](blueprints.md) |
 | Set up native display pages, tiles and Alarmo | [Display setup](quickstart.md#9-optional-native-display) |
+| Save visitor images and control retention | [Visitor images](feature-reference.md#visitor-images) |
+| Upgrade directly from 2.1.3 | [Upgrade guide](advanced-maintenance.md#from-213-to-230) |
 | Update, remove or repair the device agent | [Advanced maintenance](advanced-maintenance.md) |
 
 ## Daily Use
 
+- **Save images** enables automatic visitor images independently of an open
+  dashboard. Delay and retention are configured under Video and audio; defaults
+  are 5 seconds and 14 days. Images and their shared camera/card preview are
+  stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
 - Use the **C300X Doorbell Call Card** in **Auto** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.
 - Keep the card's Media Readiness line visible unless you intentionally want to
@@ -50,6 +56,7 @@ Most users only need:
 | --- | --- |
 | Doorbell and Ring Call | C300X Doorbell Call Card, Forwarding select, Doorbell event, Doorbell state, Answer/Hang Up services. |
 | On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`. |
+| Visitor images | Device-wide Save images switch; capture delay and retention in Video and audio; archive in HA Media and last-image previews. |
 | Talkback | Secure browser frontend with microphone permission; HTTPS or Home Assistant Cloud is expected. |
 | Home Call | Auto card, dedicated Home Call mode or `start_home_call` / `stop_home_call`. |
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |

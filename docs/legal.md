@@ -41,6 +41,12 @@ cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
 
 ## No firmware or APK payloads
 
+Documentation display illustrations under `docs/images/readme/` are based on
+maintainer-provided device photographs. The `-en.webp` examples are AI-assisted
+display-only crops, perspective corrections and English localizations, not
+pixel-exact captures or extracted firmware assets. Their values are examples.
+Depicted product interfaces and names do not imply vendor affiliation.
+
 The repository must not contain:
 
 - BTicino/Legrand firmware images or extracted firmware trees.

@@ -1,13 +1,53 @@
 # Changelog
 
-## Unreleased
+## v2.3.0 - Unreleased
+
+The next stable release after 2.1.3 includes the changes listed under the
+withdrawn 2.2.0 below. No intermediate upgrade is required.
+
+### Added
+
+- Automatic visitor images on doorbell rings and video sessions without an open
+  dashboard. A device-wide **Save images** switch controls capture and preview;
+  the default delay is 5 seconds and retention is 14 days. Images appear in HA
+  Media and as the last-image preview in the card and camera entity. The agent
+  reads the existing video framebuffer without extra device filesystem writes;
+  JPEG conversion and storage take place in HA.
 
 ### Fixed
 
+- Wait briefly when a startup status check temporarily occupies maintenance
+  access before an agent update. Preserve patch-state checks before preparing
+  the update; upload and apply operations are not blindly retried.
 - Prevent a display startup crash and repeated device restarts introduced in
   2.2.0. The memo notification retry timer is now owned by the QML page instead
   of being dynamically created from a shared JavaScript library, which crashes
   the device's Qt 4 runtime.
+- Drain pending image work before unloading or replacing the entry, and serve
+  simultaneous latest-image requests without unnecessary disk contention.
+- Keep camera and device selection aligned in the card editor when multiple
+  C300X devices are configured.
+- Preserve legacy device-button registrations when the device is offline and
+  its display-patch status cannot be determined.
+- Abort SSH reinstallation if existing device settings cannot be read reliably
+  instead of replacing them with defaults.
+- Check for newly connected viewers before answering an automatic ring capture
+  and before hanging up during capture cleanup.
+- Cancel obsolete codec refreshes when an entity unloads, and prevent failed
+  preview transitions from retrying indefinitely or clearing a newer stream.
+- Match notification events to the selected device even when it has no camera
+  entity.
+- Reserve RTSP worker capacity before allocating resources; use private codec
+  temporary files and bounded local media command deadlines.
+- Restore invalid agent boot links transactionally and report init failures.
+- Roll back failed GUI file updates and preserve recovery backups when removal
+  cannot verify restoration, including user-label-only patches.
+
+### Release Validation
+
+- Bind the packaged native executable to a reviewed local-build hash and source
+  digest. Validate transferred agent bytes before rebuilding release assets.
+- Include the snapshot image dependency in the runtime SBOM.
 
 ## v2.2.0 - 2026-11-14 (withdrawn)
 

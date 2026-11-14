@@ -20,6 +20,22 @@ Home Assistant may store:
 - Entity state history if the recorder is enabled.
 - Diagnostics generated through Home Assistant.
 - Optional dashboard action configuration supplied by the user.
+- Visitor images in the configured HA media directory. The per-device **Save
+  images** switch is enabled by default. A ring or active video session requests
+  one image after 5 seconds; images expire after 14 days by default. Delay and
+  retention are configurable. Storage is additionally limited to 1,000 images
+  and 128 MiB per device.
+
+Turning **Save images** off prevents new captures and hides previews, but does
+not delete existing images. Retention cleanup runs while the integration is
+loaded, including while the switch is off. Manage copies in backups separately.
+Images are served through authenticated HA endpoints, not a public `www` path.
+The integration's own image endpoint checks camera read permission. Because
+images are also stored in HA's configured media directory, users with access to
+HA's standard local-media browser can access them there independently of camera
+entity permissions. Restrict media access accordingly; camera permission alone
+does not protect this archive. Local filesystem copies and backups remain
+subject to your own access and backup policy.
 
 Diagnostics redact secrets and avoid exposing callback URLs or token values.
 
@@ -44,6 +60,11 @@ The native agent may store:
 
 Message and memo delete actions modify the corresponding local device data by
 design.
+
+Visitor-image capture does not create images or temporary files on the C300X.
+The agent reads the active video framebuffer into bounded memory and transmits
+it to HA. HA performs JPEG conversion and storage. Capture does add bounded
+device CPU, RAM and network activity.
 
 ## Video and Audio
 

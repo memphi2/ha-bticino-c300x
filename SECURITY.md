@@ -69,7 +69,7 @@ Do not treat an absolute credential-bearing stream URL as a complete workaround.
 
 ## Legacy SSH Bootstrap
 
-From 2.1.0b2, first installation and explicit SSH recovery use
+First installation and explicit SSH recovery use
 `asyncssh==2.24.1`. Home Assistant installs it on demand; it is not a mandatory
 manifest requirement or bundled Python package. Paramiko is no longer imported,
 requested or pinned by this project. Its former advisory

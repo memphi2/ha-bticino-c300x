@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from homeassistant.components.repairs import RepairsFlow
@@ -382,6 +383,14 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
                     "qml_patch_status": _runtime_qml_patch_status(entry),
                 },
             )
+        # The issue is also raised for a failed status read, and only entry
+        # setup cleared that record: without this the next issue sync would
+        # raise the issue again although the hook is confirmed.
+        diagnostics = getattr(
+            getattr(entry.runtime_data, "diagnostics", None), "qml_patch_diagnostics", None
+        )
+        if diagnostics is not None:
+            diagnostics.mark_success(datetime.now(UTC))
         ir.async_delete_issue(
             hass=self.hass,
             domain=DOMAIN,
@@ -422,7 +431,9 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         update_state = getattr(entry.runtime_data, "agent_update_state", None)
         placeholders = agent_update_repair_placeholders(update_state, entry.runtime_data)
         if not getattr(update_state, "self_update_repair_supported", False):
-            return await self.async_step_ssh_install(user_input)
+            # Whatever was submitted here was the empty confirm form, not SSH
+            # credentials: show the SSH form, do not run an install with it.
+            return await self.async_step_ssh_install(None)
         if user_input is None:
             return self.async_show_form(
                 step_id="confirm",

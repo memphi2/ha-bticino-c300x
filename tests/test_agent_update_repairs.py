@@ -189,6 +189,7 @@ class FakeRuntimeData:
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
     agent_update_state: Any = None
+    diagnostics: Any = None
 
 
 @dataclass(slots=True)
@@ -2608,3 +2609,41 @@ def test_repair_flows_abort_cleanly_when_the_entry_never_set_up(flow_class) -> N
     assert asyncio.run(flow.async_step_confirm({})) == {
         "type": "abort", "reason": "entry_not_loaded",
     }
+
+
+def test_update_repair_confirm_without_self_update_opens_the_ssh_form_without_an_error() -> None:
+    """The empty confirm form is not a set of SSH credentials."""
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["step_id"] == "ssh_install"
+    assert not result.get("errors")
+
+
+def test_core_qml_hook_repair_clears_the_failed_status_read_that_raised_the_issue() -> None:
+    from custom_components.bticino_c300x.data import C300XOperationDiagnostics
+
+    api = FakePatchApi()
+    api.qml_status = {"available": True, "core_patched": True, "core_state": "patched"}
+    status_read = C300XOperationDiagnostics(last_error="timeout")
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            api,
+            capabilities={"maintenance": {"supported": True, "qml_core_patch": True}},
+            qml_patch_status={"available": True, "core_state": "unknown"},
+            diagnostics=types.SimpleNamespace(qml_patch_diagnostics=status_read),
+        )
+    )
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["type"] == "create_entry"
+    assert status_read.last_error is None

@@ -1512,6 +1512,32 @@ def test_a_failed_capture_removes_its_workspace(
     assert _capture_workspaces(tmp_path) == []
 
 
+def test_a_failed_capture_leaves_no_partial_clip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    def _write_partial(path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"partial")
+
+    async def _half_written_ffmpeg(_url: Any, path: Path, **_kwargs: Any) -> None:
+        await asyncio.to_thread(_write_partial, path)
+        raise HomeAssistantError("ffmpeg failed")
+
+    _capture_fakes(monkeypatch, _half_written_ffmpeg)
+
+    with pytest.raises(HomeAssistantError, match="ffmpeg failed"):
+        asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
+
+    assert not target.exists()
+
+
 def test_a_finished_capture_keeps_its_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

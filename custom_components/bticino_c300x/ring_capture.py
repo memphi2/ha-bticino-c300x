@@ -203,7 +203,15 @@ async def _async_capture_to_output(
                 await talkback_task
         if not published:
             await asyncio.to_thread(shutil.rmtree, work_dir, True)
+            # FFmpeg writes the clip in place, so a failed run leaves a partial
+            # or empty file that a player or automation would pick up.
+            await asyncio.to_thread(_unlink_quietly, target)
     return metadata
+
+
+def _unlink_quietly(path: Path) -> None:
+    with contextlib.suppress(OSError):
+        path.unlink()
 
 
 def _normalized_audio_codec(value: Any) -> str | None:

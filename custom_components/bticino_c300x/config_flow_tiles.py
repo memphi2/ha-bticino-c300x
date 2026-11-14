@@ -62,6 +62,7 @@ TILE_LABELS: dict[str, str] = {
     "name": "Name",
     "secondary": "Secondary line",
     "status_page": "Status page",
+    "untitled_page": "Page without title",
     "alarm_page": "Alarm page",
 }
 _SIZE_FIELDS = ("width", "height")
@@ -172,10 +173,12 @@ def tile_form(
     ordered: list[tuple[str, str]] = []
     # The layout lists the status page first; the display follows the positions.
     for page in sorted(dashboard_page_layout(dashboard_input), key=lambda page: page["order"]):
+        # An entity without a page is shown on a page of its own, without a title.
         page_name = (
             labels["status_page"]
-            # An entity without a page is shown on the status page.
-            if page["name"] in ("", DASHBOARD_STATUS_PAGE)
+            if page["name"] == DASHBOARD_STATUS_PAGE
+            else labels["untitled_page"]
+            if not page["name"]
             else page["name"]
         )
         ordered += [(page_name, entity_id) for entity_id in page["entities"]]

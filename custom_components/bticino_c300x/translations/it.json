@@ -1217,6 +1217,7 @@
         "name": "Nome",
         "secondary": "Riga secondaria",
         "status_page": "Pagina di stato",
+        "untitled_page": "Pagina senza titolo",
         "alarm_page": "Pagina Allarme"
       }
     },

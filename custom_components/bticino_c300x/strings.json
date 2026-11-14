@@ -1199,6 +1199,7 @@
         "name": "Name",
         "secondary": "Secondary line",
         "status_page": "Status page",
+        "untitled_page": "Page without title",
         "alarm_page": "Alarm page"
       }
     },

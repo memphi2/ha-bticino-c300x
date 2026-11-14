@@ -211,7 +211,8 @@ def dashboard_pages_input(
     Home Assistant leaves a field the user emptied out of a section, so a
     missing name or entity list is empty and a missing position is the
     section's own number. A page is used when it has a name or entities; the
-    status page is always used, and a page with entities needs a name. Pages
+    status page is always used, and a page with entities needs a name, except
+    the page without a title that the saved entities already form. Pages
     with the same position keep the order of their sections. The weather of
     the status page is stored with the pages; a post without that section
     keeps the saved weather. Returns the settings and the form errors.
@@ -221,6 +222,15 @@ def dashboard_pages_input(
     pages: list[tuple[int, int, str, list[str]]] = []
     seen_names: set[str] = set()
     seen_entities: set[str] = set()
+    # Entities saved without a page sit on a page without a title. That page
+    # may stay as it is, so saving the form unchanged does not give it a
+    # heading on the display; a name is needed once anything else goes onto it.
+    untitled_entities = {
+        entity_id
+        for page in dashboard_page_layout(dashboard_input)
+        if not page["name"]
+        for entity_id in page["entities"]
+    }
     for slot in range(1, DASHBOARD_PAGE_MAX_COUNT + 1):
         key = page_section_key(slot)
         values = user_input.get(key) or {}
@@ -235,7 +245,7 @@ def dashboard_pages_input(
             continue
         if slot > 1 and not name and not entities:
             continue
-        if not name:
+        if not name and not set(entities) <= untitled_entities:
             errors[key] = "dashboard_page_name_missing"
             continue
         if slot > 1 and name.casefold() == DASHBOARD_STATUS_PAGE.casefold():

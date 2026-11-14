@@ -1266,8 +1266,9 @@ def test_a_few_tiles_are_shown_open():
 
     form = tile_form(settings)
 
-    # Entities from before pages could be set up are on the status page.
-    assert list(form.sections) == ["Status page \u203a One", "Status page \u203a Two"]
+    # Entities without a page are on a page of their own that has no title,
+    # not on the status page (see the payload test for an empty status page).
+    assert list(form.sections) == ["Page without title \u203a One", "Page without title \u203a Two"]
     assert [tile.options for tile in form.schema.schema.values()] == [{"collapsed": False}] * 2
 
 
@@ -1293,3 +1294,53 @@ def test_tile_labels_come_in_the_language_of_home_assistant(monkeypatch):
     assert asyncio.run(async_tile_labels(hass)) == TILE_LABELS
     # Without Home Assistant, as in a unit test, the labels are English.
     assert asyncio.run(async_tile_labels(None)) == TILE_LABELS
+
+
+def _pages_form_as_shown(saved):
+    from custom_components.bticino_c300x.config_flow_dashboard_pages import (
+        PAGE_ENTITIES_FIELD,
+        PAGE_NAME_FIELD,
+        dashboard_page_layout,
+        page_section_key,
+    )
+
+    return {
+        page_section_key(slot): {PAGE_NAME_FIELD: page["name"], PAGE_ENTITIES_FIELD: list(page["entities"])}
+        for slot, page in enumerate(dashboard_page_layout(saved), start=1)
+    }
+
+
+def test_the_untitled_page_of_saved_entities_can_be_saved_unchanged():
+    from custom_components.bticino_c300x.config_flow_dashboard_pages import (
+        dashboard_pages_input,
+    )
+
+    saved = {"dashboard_entities": ["light.a", "sensor.c"]}
+
+    result, errors = dashboard_pages_input(saved, _pages_form_as_shown(saved))
+
+    assert errors == {}
+    assert result["dashboard_entity_display_overrides"]["light.a"]["page"] == ""
+    assert [page["name"] for page in result["dashboard_pages"]] == ["C300X", ""]
+
+
+def test_a_new_entity_on_the_untitled_page_needs_a_name():
+    from custom_components.bticino_c300x.config_flow_dashboard_pages import (
+        PAGE_ENTITIES_FIELD,
+        dashboard_pages_input,
+        page_section_key,
+    )
+
+    saved = {"dashboard_entities": ["light.a"]}
+    posted = _pages_form_as_shown(saved)
+    posted[page_section_key(2)][PAGE_ENTITIES_FIELD] = ["light.a", "light.new"]
+
+    _result, errors = dashboard_pages_input(saved, posted)
+
+    assert errors == {page_section_key(2): "dashboard_page_name_missing"}
+
+
+def test_the_tiles_form_names_the_untitled_page_as_such():
+    form = tile_form({"dashboard_entities": ["light.a"]})
+
+    assert list(form.sections) == ["Page without title › A"]

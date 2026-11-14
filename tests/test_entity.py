@@ -48,10 +48,14 @@ def _entry(available: bool = True) -> SimpleNamespace:
 
 def _run(entity: C300XEntity, entry_id: str = "entry-1") -> list[asyncio.Task]:
     tasks: list[asyncio.Task] = []
+
+    def create_task(coro, name):
+        task = asyncio.ensure_future(coro)
+        tasks.append(task)
+        return task
+
     entity.hass = SimpleNamespace(  # type: ignore[assignment]
-        async_create_background_task=lambda coro, name: tasks.append(
-            asyncio.ensure_future(coro)
-        )
+        async_create_background_task=create_task
     )
 
     async def go() -> None:
@@ -95,3 +99,46 @@ def test_no_read_is_started_for_other_entries_available_entities_or_a_lost_agent
     # An entity without a read of its own has nothing to refresh.
     plain = _PlainEntity(_entry())
     assert _run(plain) == []
+
+
+def test_reconnect_reads_are_coalesced_and_cancelled_on_entity_removal(monkeypatch) -> None:
+    from custom_components.bticino_c300x import entity as entity_module
+
+    async def go() -> None:
+        entity = _ReadingEntity(_entry())
+        started = asyncio.Event()
+        callbacks = []
+        tasks = []
+
+        async def update():
+            entity.reads += 1
+            started.set()
+            await asyncio.Event().wait()
+
+        def create_task(coro, name):
+            task = asyncio.create_task(coro)
+            tasks.append(task)
+            return task
+
+        entity.hass = SimpleNamespace(async_create_background_task=create_task)
+        monkeypatch.setattr(entity, "async_update", update)
+        monkeypatch.setattr(entity, "async_on_remove", callbacks.append)
+        monkeypatch.setattr(entity_module, "async_dispatcher_connect", lambda *_: lambda: None)
+        await entity.async_added_to_hass()
+        entity._handle_c300x_connection_state_changed("entry-1")
+        await started.wait()
+        entity._handle_c300x_connection_state_changed("entry-1")
+        await asyncio.sleep(0)
+        try:
+            assert entity.reads == 1
+            for remove in callbacks:
+                remove()
+            await asyncio.sleep(0)
+            assert tasks[0].cancelled()
+            assert entity.writes == 0
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    asyncio.run(go())

@@ -736,6 +736,7 @@
       "invalid_action_map": "The action allowlist JSON is invalid.",
       "invalid_actions": "The action allowlist JSON is invalid.",
       "invalid_agent_host": "Enter the device agent host.",
+      "invalid_agent_port": "Enter a valid device agent port.",
       "invalid_callback_base_url": "Enter a reachable Home Assistant HTTP or HTTPS base URL, or leave it empty.",
       "invalid_alarm_entity": "Select an alarm control panel entity or leave the field empty.",
       "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",

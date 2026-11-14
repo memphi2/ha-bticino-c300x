@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 
 from homeassistant.const import CONF_NAME
@@ -205,9 +206,30 @@ def _agent_host(value: Any) -> str:
     """Validate the configured device-agent host."""
 
     host = str(value or "").strip()
-    if not host:
+    if not host or any(char.isspace() for char in host) or "/" in host:
+        # Empty, or a URL: the form asks for the address only.
         raise vol.Invalid("invalid agent host")
+    if ":" in host:
+        # Only an IPv6 address has colons. "192.0.2.5:8091" would otherwise be
+        # wrapped in brackets and probed as a host that cannot exist.
+        try:
+            ipaddress.IPv6Address(host.removeprefix("[").removesuffix("]").split("%", 1)[0])
+        except ValueError as err:
+            raise vol.Invalid("invalid agent host") from err
     return host
+
+
+def _agent_port(user_input: dict[str, Any], errors: dict[str, str]) -> int:
+    """Return the device-agent port, reporting one outside 1..65535."""
+
+    try:
+        port = int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
+    except (TypeError, ValueError, OverflowError):
+        port = 0
+    if not 1 <= port <= 65535:
+        errors[CONF_AGENT_PORT] = "invalid_agent_port"
+        return DEFAULT_AGENT_PORT
+    return port
 
 
 def _initial_connection_input(
@@ -227,7 +249,7 @@ def _initial_connection_input(
 
     data: dict[str, Any] = {
         CONF_AGENT_HOST: agent_host,
-        CONF_AGENT_PORT: int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
+        CONF_AGENT_PORT: _agent_port(user_input, errors),
         CONF_CALLBACK_BASE_URL: callback_base_url,
     }
     if include_name:
@@ -276,7 +298,7 @@ def _connection_input(
 
     data: dict[str, Any] = {
         CONF_AGENT_HOST: agent_host,
-        CONF_AGENT_PORT: int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
+        CONF_AGENT_PORT: _agent_port(user_input, errors),
         CONF_AGENT_TOKEN: agent_token,
         CONF_MAINTENANCE_TOKEN: str(
             user_input.get(CONF_MAINTENANCE_TOKEN, "")

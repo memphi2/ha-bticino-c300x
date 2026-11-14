@@ -3146,3 +3146,28 @@ def test_alarmo_has_its_own_step_after_the_activations_and_is_kept_without_the_p
     assert data[CONF_ALARM_PAGE_ENTITY_ID] == "switch.stair_light"
     # The weather belongs to the display and goes with the patch.
     assert data[CONF_WEATHER_ENTITY_ID] == ""
+
+
+@pytest.mark.parametrize(
+    ("host", "port", "errors"),
+    [
+        ("192.0.2.5", 8091, {}),
+        ("c300x.local", 1, {}),
+        ("fe80::1%eth0", 65535, {}),
+        ("[2001:db8::5]", 8091, {}),
+        ("192.0.2.5:8091", 8091, {"agent_host": "invalid_agent_host"}),
+        ("http://c300x", 8091, {"agent_host": "invalid_agent_host"}),
+        ("c300x local", 8091, {"agent_host": "invalid_agent_host"}),
+        ("192.0.2.5", 70000, {"agent_port": "invalid_agent_port"}),
+        ("192.0.2.5", 0, {"agent_port": "invalid_agent_port"}),
+    ],
+)
+def test_connection_input_checks_the_address_and_the_port(host, port, errors) -> None:
+    from custom_components.bticino_c300x.config_flow_input import (
+        _initial_connection_input,
+    )
+
+    values = {"agent_host": host, "agent_port": port}
+
+    assert _initial_connection_input(values)[1] == errors
+    assert _connection_input(values)[1] == errors

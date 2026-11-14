@@ -186,6 +186,10 @@ int write_binary_chunk(
     if (fd >= 0) {
         (void)fchmod(fd, mode);
     }
+    if (fflush(file) != 0 || (fd >= 0 && fsync(fd) != 0)) {
+        (void)fclose(file);
+        return 0;
+    }
     if (fclose(file) != 0) {
         return 0;
     }
@@ -233,6 +237,12 @@ int copy_binary_file(const char *source, const char *target, mode_t mode)
     out_fd = fileno(out);
     if (out_fd >= 0) {
         (void)fchmod(out_fd, mode);
+    }
+    if (fflush(out) != 0 || (out_fd >= 0 && fsync(out_fd) != 0)) {
+        fclose(in);
+        fclose(out);
+        (void)unlink(temporary_path);
+        return 0;
     }
     {
         int close_in = fclose(in);

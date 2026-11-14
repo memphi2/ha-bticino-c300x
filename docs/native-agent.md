@@ -3,7 +3,9 @@
 ## HTTP and Callback Resource Limits
 
 Incoming HTTP requests use at most eight pending buffers, allocated only while
-needed, with a 500 ms total receive deadline. Incomplete clients are polled
+needed, with a 500 ms total receive deadline. Two of the eight are kept for the
+loopback UI listener, so connections to the API port cannot lock the display
+out. Incomplete clients are polled
 without blocking other incoming requests. HTTP parsing rejects incomplete or
 ambiguous message framing.
 
@@ -211,6 +213,14 @@ errors, not power loss or storage failure during rollback. Recovery backups
 left by an interrupted update are not overwritten; inspect and recover that
 installation before trying another update. No update checks or backup writes
 are added to idle operation.
+
+If an update is refused after an interrupted one, look for files named
+`<file>.update-backup` next to the installed agent files, the init script and
+the init link. Each is a hard link to the file as it was before the update.
+When the installed file next to it works, delete the `.update-backup` file;
+when the installed file is missing or broken, move the backup over it first.
+The agent does not do this by itself: it never rewrites system files on its own
+at start-up, and this path cannot be tested without a power cut on a device.
 
 ## Release agent reuse
 

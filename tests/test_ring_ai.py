@@ -351,10 +351,13 @@ def test_read_wyoming_event_rejects_closed_connection() -> None:
         b'{"type":"x","data_length":-1}\n',
         b"x" * 200_000 + b"\n",
         b'{"type":"x","payload_length":50}\nshort',
+        b'{"type":"x","data_length":1e999}\n',
+        b'{"type":"transcript","data":["x"]}\n',
     ],
     ids=[
         "garbage", "not-an-object", "bad-length", "short-data", "bad-data-json",
         "huge-payload", "negative-length", "overlong-line", "short-payload",
+        "infinite-length", "data-not-an-object",
     ],
 )
 def test_read_wyoming_event_reports_protocol_errors(raw: bytes) -> None:
@@ -398,6 +401,33 @@ def test_wyoming_transcribe_has_one_deadline_for_the_whole_answer(
 
     with pytest.raises(HomeAssistantError, match="timed out"):
         asyncio.run(asyncio.wait_for(_run(), timeout=5))
+
+
+def test_wyoming_transcribe_times_out_when_the_server_stops_reading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _StalledWriter(_FakeWyomingWriter):
+        async def drain(self) -> None:
+            await asyncio.sleep(3600)
+
+    async def _open_connection(_host: str, _port: int):
+        return asyncio.StreamReader(), _StalledWriter()
+
+    monkeypatch.setattr(ring_ai_module.asyncio, "open_connection", _open_connection)
+    monkeypatch.setattr(ring_ai_module, "_WYOMING_TIMEOUT_SECONDS", 0.3)
+
+    with pytest.raises(HomeAssistantError, match="timed out"):
+        asyncio.run(
+            asyncio.wait_for(
+                _async_wyoming_transcribe(
+                    "127.0.0.1",
+                    10300,
+                    {"rate": 16000, "width": 2, "channels": 1, "audio": b"a" * 100},
+                    language=None,
+                ),
+                timeout=5,
+            )
+        )
 
 
 def test_wyoming_transcribe_reports_a_dropped_connection(

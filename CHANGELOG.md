@@ -32,6 +32,10 @@
   carry over.
 - The status page, the first page, is left out when it has no weather and no
   tile, and its HA, alarm and time badges with it. Its section explains this.
+- A media player's submenu shows previous, play/pause and next side by side
+  in one row of equal buttons with centred symbols, in place of three
+  full-width bars with a small glyph at the top left. A mute switch has its
+  label level with its box.
 - The display status text sits in the header bar, right of the title, in
   place of a row below the tiles. The tile area gains that row, so four half
   rows fit below the page switcher.

@@ -177,8 +177,10 @@ these settings existed therefore looks the same until a size is chosen.
   capabilities. Preset names come from the entity itself.
 - Media players show what is playing, or their state when nothing is. On a
   tile this is the state line, so another secondary-line choice replaces it.
-  The submenu has previous, play/pause and next, a volume slider, mute, source and
-  sound mode, each only where the player reports the feature. The on/off switch
+  The submenu has previous, play/pause and next side by side in one row of
+  equal buttons (a pair of triangles, a triangle or two bars), then a volume
+  slider, mute, source and sound mode, each only where the player reports the
+  feature. The same symbols are on the tile's buttons. The on/off switch
   and play/pause appear only when the player reports the step its current state
   needs, and send that explicit service: turn on or off, play or pause. A
   media player cannot be chosen as the alarm page's quick entity.

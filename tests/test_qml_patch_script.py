@@ -226,8 +226,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "c7a0837a056449d612e191b1ed24ed2801b76f2f308d93cf1ecfad6f80a13a0c",
-    "js/c300x_ha.js": "75bec040d64654f2898ff5dc64a93aa0bd120198b943d771f81bbd915d45d10b",
+    "HomeAssistant.qml": "36532ee51953ae39b6bf199017b647f350f45d07659cbe3b9fa469e68936f32a",
+    "js/c300x_ha.js": "24fe812b517df4f18834038d13fbf834238bbcbc270a1373ed8b57732ad3f25e",
     "js/c300x_i18n.js": "2ea51304883ac9947206cdd2477a127f3740a0367d590a25db8bcb1e10bbc302",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -854,7 +854,7 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     )
 
     assert home_assistant_qml.count('source: "images/settings/list_btn.svg"') == 0
-    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 5
+    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 6
     assert (
         home_assistant_qml.count(
             '? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"'
@@ -864,12 +864,33 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     for mouse_id in (
         "notificationActionMouse",
         "coverControlMouse",
+        "transportMouse",
         "controlButtonMouse",
         "adjustMouse",
         "notificationBannerMouse",
     ):
         assert f"id: {mouse_id}" in home_assistant_qml
         assert f"{mouse_id}.pressed ?" in home_assistant_qml
+
+
+def test_the_media_player_page_has_one_row_of_transport_buttons() -> None:
+    """Previous, play/pause and next sit side by side, centred, above the rest.
+
+    They used to be three full-width bars with a small glyph at the top left.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Api.dashboardTransportControls(selectedItem)" in home_assistant_qml
+    assert (
+        "property variant detailControls: Api.dashboardListControls("
+        in home_assistant_qml
+    )
+    # A button or switch row centres its label on the row.
+    assert 'verticalAlignment: control.kind === "button" || control.kind === "boolean"' in home_assistant_qml
+    assert home_assistant_qml.isascii()
 
 
 def test_home_assistant_reads_each_piece_of_state_once() -> None:

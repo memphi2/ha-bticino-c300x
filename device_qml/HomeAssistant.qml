@@ -49,7 +49,7 @@ Page {
     property bool detailOpen: selectedItem ? true : false
     property string detailSection: ""
     property variant detailSections: Api.dashboardDetailSections(selectedItem)
-    property variant detailControls: Api.dashboardVisibleControls(selectedItem, detailSection)
+    property variant detailControls: Api.dashboardListControls(selectedItem, detailSection)
     property bool dashboardOnline: false
     property bool dashboardLoading: false
     property bool dashboardRefreshAgain: false
@@ -138,9 +138,9 @@ Page {
         if (control.command === "open_cover") return "\u2191"
         if (control.command === "stop_cover") return "\u25a0"
         if (control.command === "close_cover") return "\u2193"
-        if (control.command === "media_previous_track") return "\u00ab"
-        if (control.command === "media_next_track") return "\u00bb"
-        if (control.command === "media_play_pause") return control.playing === true ? "||" : ">"
+        if (control.command === "media_previous_track") return "\u25c0\u25c0"
+        if (control.command === "media_next_track") return "\u25b6\u25b6"
+        if (control.command === "media_play_pause") return control.playing === true ? "\u25ae\u25ae" : "\u25b6"
         return uiText(control.command)
     }
 
@@ -899,6 +899,31 @@ Page {
                     UbuntuLightText { width: (parent.width - 12) / 2; height: 44; text: modelData.value + " " + modelData.unit; textFormat: Text.PlainText; font.pixelSize: 24; color: "white"; elide: Text.ElideRight }
                 }
             }
+            Row {
+                id: transportRow
+                property variant transport: Api.dashboardTransportControls(selectedItem)
+                visible: transport.length > 0
+                width: parent.width
+                height: visible ? 56 : 0
+                spacing: 8
+                Repeater {
+                    model: transportRow.transport.length
+                    Item {
+                        property variant control: transportRow.transport[index]
+                        width: (transportRow.width - (transportRow.transport.length - 1) * 8) / transportRow.transport.length
+                        height: 56
+                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
+                        Image { anchors.fill: parent; source: transportMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                        UbuntuLightText { anchors.centerIn: parent; text: controlLabel(control); font.pixelSize: 28; color: "white" }
+                        BeepingMouseArea {
+                            id: transportMouse
+                            anchors.fill: parent
+                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
+                            onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
+                        }
+                    }
+                }
+            }
             Repeater {
                 model: detailControls.length
                 Item {
@@ -921,13 +946,15 @@ Page {
                     }
                     UbuntuLightText {
                         visible: !controlRow.paletteTab
-                        width: parent.width
-                        height: 24
+                        width: control.kind === "boolean" ? parent.width - 136 : parent.width
+                        height: control.kind === "button" || control.kind === "boolean" ? 44 : 24
                         text: controlLabel(control) + (control.kind === "number" ? ": " + (sliderMouse.pressed ? numberText(control, preview) : controlValue(control)) : "")
                         textFormat: Text.PlainText
                         font.pixelSize: 18
                         color: "white"
                         elide: Text.ElideRight
+                        horizontalAlignment: control.kind === "button" ? Text.AlignHCenter : Text.AlignLeft
+                        verticalAlignment: control.kind === "button" || control.kind === "boolean" ? Text.AlignVCenter : Text.AlignTop
                     }
                     Row {
                         id: whitePresets

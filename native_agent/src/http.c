@@ -4442,7 +4442,7 @@ static void handle_legacy_mqtt_post(
         }
         *updated = *config;
         updated->mqtt_enabled = 0;
-        if (!c300x_save_config_if_changed(updated, error, sizeof(error), &native_config_changed)) {
+        if (!c300x_save_mqtt_config(config, updated, error, sizeof(error), &native_config_changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
             char body[2048];
             c300x_json_string(error, error_json, sizeof(error_json));
@@ -4550,7 +4550,7 @@ static void handle_mqtt_migrate_legacy_post(
     }
 
     if (!c300x_config_persisted_equal(config, updated)) {
-        if (!c300x_save_config_if_changed(updated, error, sizeof(error), &config_changed)) {
+        if (!c300x_save_mqtt_config(config, updated, error, sizeof(error), &config_changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
             c300x_json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
@@ -4711,7 +4711,7 @@ static void handle_mqtt_post(
     }
     if (!c300x_config_persisted_equal(config, updated)) {
         int changed = 0;
-        if (!c300x_save_config_if_changed(updated, error, sizeof(error), &changed)) {
+        if (!c300x_save_mqtt_config(config, updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
             c300x_json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
@@ -9928,7 +9928,7 @@ static void handle_config_normalize(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
         return;
     }
-    if (!c300x_save_config_if_changed(config, error, sizeof(error), &changed)) {
+    if (!c300x_normalize_config(config, error, sizeof(error), &changed)) {
         c300x_json_string(error, error_json, sizeof(error_json));
         snprintf(
             body,

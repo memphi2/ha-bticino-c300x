@@ -162,6 +162,20 @@ int main(int argc, char **argv)
         assert(strncmp(entry->d_name, "config.json.tmp.", 16) != 0);
     }
     closedir(directory);
+    config->api_port = 19090;
+    assert(c300x_save_config_if_changed(config, error, sizeof(error), &changed));
+    config->api_port = 18090;
+    config->restart_required = 1;
+    assert(c300x_normalize_config(config, error, sizeof(error), &changed));
+    assert(c300x_load_config(config->config_path, loaded, error, sizeof(error)));
+    assert(loaded->api_port == 19090);
+    *loaded = *config;
+    strcpy(loaded->mqtt_username, "updated-user");
+    assert(c300x_save_mqtt_config(config, loaded, error, sizeof(error), &changed));
+    assert(c300x_load_config(config->config_path, loaded, error, sizeof(error)));
+    assert(loaded->api_port == 19090);
+    assert(strcmp(loaded->mqtt_username, "updated-user") == 0);
+    assert(config->api_port == 18090 && config->restart_required);
     free(config);
     free(loaded);
     return 0;

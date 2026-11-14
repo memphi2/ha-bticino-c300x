@@ -2283,6 +2283,47 @@ static int save_config_internal(
     return 1;
 }
 
+int c300x_save_mqtt_config(const struct c300x_config *live, const struct c300x_config *updated,
+                          char *error, size_t error_len, int *changed)
+{
+    if (!live->restart_required) return c300x_save_config_if_changed(updated, error, error_len, changed);
+    struct c300x_config *desired = calloc(1, sizeof(*desired));
+    if (desired == NULL) { set_error(error, error_len, "out_of_memory"); return 0; }
+    int ok = c300x_load_config(live->config_path, desired, error, error_len);
+    if (ok) {
+#define COPY_MQTT_DELTA(field) \
+        if (memcmp(&live->field, &updated->field, sizeof(live->field)) != 0) \
+            memcpy(&desired->field, &updated->field, sizeof(desired->field))
+        COPY_MQTT_DELTA(mqtt_enabled);
+        COPY_MQTT_DELTA(mqtt_host);
+        COPY_MQTT_DELTA(mqtt_port);
+        COPY_MQTT_DELTA(mqtt_username);
+        COPY_MQTT_DELTA(mqtt_password);
+        COPY_MQTT_DELTA(mqtt_client_id);
+        COPY_MQTT_DELTA(mqtt_command_host);
+        COPY_MQTT_DELTA(mqtt_command_port);
+        COPY_MQTT_DELTA(mqtt_command_topic);
+        COPY_MQTT_DELTA(mqtt_event_topic);
+        COPY_MQTT_DELTA(mqtt_json_event_topic);
+        COPY_MQTT_DELTA(mqtt_status_topic);
+        COPY_MQTT_DELTA(mqtt_availability_topic);
+        COPY_MQTT_DELTA(mqtt_qos);
+        COPY_MQTT_DELTA(mqtt_keepalive_seconds);
+        COPY_MQTT_DELTA(mqtt_reconnect_initial_seconds);
+        COPY_MQTT_DELTA(mqtt_reconnect_max_seconds);
+#undef COPY_MQTT_DELTA
+        ok = c300x_save_config_if_changed(desired, error, error_len, changed);
+    }
+    free(desired);
+    return ok;
+}
+
+int c300x_normalize_config(const struct c300x_config *live, char *error, size_t error_len, int *changed)
+{
+    /* An empty MQTT delta preserves every persisted field awaiting restart. */
+    return c300x_save_mqtt_config(live, live, error, error_len, changed);
+}
+
 int c300x_save_config_if_changed(
     const struct c300x_config *config,
     char *error,

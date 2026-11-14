@@ -169,8 +169,9 @@ def test_config_mutation_writes_are_semantic_and_idempotent() -> None:
     assert "c300x_config_persisted_equal(baseline, updated)" in auth_body
     assert "c300x_config_persisted_equal(config, updated)" in mqtt_body
     assert "c300x_save_config_if_changed(updated" in auth_body
-    assert "c300x_save_config_if_changed(updated" in mqtt_body
-    assert "c300x_save_config_if_changed(config" in normalize_body
+    assert "c300x_save_mqtt_config(config, updated" in mqtt_body
+    assert "c300x_normalize_config(config" in normalize_body
+    assert "c300x_save_config_if_changed(desired" in config_text
     assert "if (changed)" in normalize_body
     assert "memcmp(&baseline" not in auth_body
     assert "memcmp(config, updated" not in mqtt_body

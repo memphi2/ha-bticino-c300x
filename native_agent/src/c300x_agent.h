@@ -162,6 +162,9 @@ int c300x_config_set_activation_items_json(
     char *error,
     size_t error_len
 );
+int c300x_save_mqtt_config(const struct c300x_config *live, const struct c300x_config *updated,
+                          char *error, size_t error_len, int *changed);
+int c300x_normalize_config(const struct c300x_config *live, char *error, size_t error_len, int *changed);
 int c300x_save_config_if_changed(
     const struct c300x_config *config,
     char *error,

@@ -207,7 +207,7 @@ these settings existed therefore looks the same until a size is chosen.
   the latch, in one row of equal buttons. Unlocking and opening ask for a
   second tap on the same button, which then reads "Sure?"; locking does not.
   A tap on another button takes over the question. The question stays until
-  the page is left. The display sends the explicit lock, unlock or open
+  the page is left or the screen goes off. The display sends the explicit lock, unlock or open
   service for a lock that was selected on a page, never for another entity.
 - Vacuums are tiles that read what the robot does (cleaning, docked,
   returning, paused, idle, error) and open a detail page with start, pause,

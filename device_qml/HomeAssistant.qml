@@ -94,6 +94,7 @@ Page {
     function aboutToHide() {
         if (pendingEntity) Api.setDashboardFeedback(page, pendingEntity, "state_unconfirmed")
         pageActive = false
+        armedCommand = ""
         runtimeGeneration += 1
         dashboardLoading = false
         dashboardRefreshAgain = false

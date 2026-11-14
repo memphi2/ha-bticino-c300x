@@ -26,6 +26,7 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
+    CONF_AGENT_UPDATE_QML_PENDING,
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -216,6 +217,7 @@ class C300XRuntimeManager:
                 payload_bootstrap_pending=(
                     self.entry.data.get(CONF_AGENT_UPDATE_PAYLOAD_PENDING) is True
                 ),
+                qml_patch_pending=CONF_AGENT_UPDATE_QML_PENDING in self.entry.data,
             )
 
     async def async_register_callbacks(self) -> None:
@@ -440,6 +442,7 @@ def _entry_update_listener(
     def settings(current: BticinoC300XConfigEntry) -> tuple[dict[str, Any], dict[str, Any]]:
         data = dict(current.data)
         data.pop(CONF_AGENT_UPDATE_PAYLOAD_PENDING, None)
+        data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
         return data, dict(current.options)
 
     previous = settings(entry)

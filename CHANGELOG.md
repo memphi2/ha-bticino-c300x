@@ -16,6 +16,8 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 
 ### Fixed
 
+- Keep visitor images when the device display performs a normal framebuffer
+  page flip during capture, instead of discarding the completed snapshot.
 - Convert extracted capture frames explicitly to full color range before JPEG
   encoding instead of relying on automatic ffmpeg format negotiation.
 - Preserve technical event types such as `ring` on the event entities so

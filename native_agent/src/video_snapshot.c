@@ -211,7 +211,15 @@ static int copy_frame(int fd, int owner, dev_t device, unsigned char **data, siz
     if (!owner_active(owner, device)
         || ioctl(fd, FBIOGET_FSCREENINFO, &after_f) < 0
         || ioctl(fd, FBIOGET_VSCREENINFO, &after_v) < 0
-        || memcmp(&f, &after_f, sizeof(f)) || memcmp(&v, &after_v, sizeof(v))) goto done;
+        || !geometry_valid(&after_f, &after_v)
+        || memcmp(&f, &after_f, sizeof(f))) goto done;
+    /* LCD page flips do not invalidate the page already copied. Only accept
+       full-frame vertical flips; all other geometry and format stay fixed. */
+    if (v.yoffset != after_v.yoffset) {
+        if (v.yoffset % v.yres || after_v.yoffset % v.yres) goto done;
+        after_v.yoffset = v.yoffset;
+    }
+    if (memcmp(&v, &after_v, sizeof(v))) goto done;
     *data = bmp; *size = length; bmp = NULL; ok = 1;
 done:
     free(row); free(bmp);

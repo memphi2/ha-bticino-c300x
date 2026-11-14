@@ -19,6 +19,8 @@ static struct fb_var_screeninfo variable;
 static int opens, owner_checks, rows, fail_read, fail_ioctl, change_geometry;
 static int lose_owner, wrong_owner, wrong_device, short_reads, interrupt_reads;
 static int fail_open, fail_stat, close_count;
+static int pan_after_read, change_after_format, change_after_stride;
+static uint32_t after_yoffset;
 static int allocation_count, fail_allocation;
 static long seconds;
 static unsigned char frame[64];
@@ -112,11 +114,20 @@ static int mock_ioctl(int fd, unsigned long command, ...)
     if (fail_ioctl) return -1;
     va_start(args, command);
     void *output = va_arg(args, void *);
-    if (command == FBIOGET_FSCREENINFO) memcpy(output, &fixed, sizeof(fixed));
-    else {
+    if (command == FBIOGET_FSCREENINFO) {
+        memcpy(output, &fixed, sizeof(fixed));
+        if (change_after_stride && rows)
+            ((struct fb_fix_screeninfo *)output)->line_length += 4;
+    } else {
         assert(command == FBIOGET_VSCREENINFO);
         memcpy(output, &variable, sizeof(variable));
         if (change_geometry && rows) ((struct fb_var_screeninfo *)output)->yoffset++;
+        if (pan_after_read && rows)
+            ((struct fb_var_screeninfo *)output)->yoffset = after_yoffset;
+        if (change_after_format && rows) {
+            ((struct fb_var_screeninfo *)output)->red.offset = 0;
+            ((struct fb_var_screeninfo *)output)->blue.offset = 16;
+        }
     }
     va_end(args);
     return 0;
@@ -168,6 +179,8 @@ static void reset(void)
     opens = owner_checks = rows = fail_read = fail_ioctl = change_geometry = 0;
     lose_owner = wrong_owner = wrong_device = short_reads = interrupt_reads = 0;
     fail_open = fail_stat = close_count = attempted = 0;
+    pan_after_read = change_after_format = change_after_stride = 0;
+    after_yoffset = 0;
     allocation_count = fail_allocation = 0;
     seconds = 10;
 }
@@ -180,6 +193,47 @@ static void unavailable(void)
     assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_THROTTLED);
     assert(opens == 1);
 }
+
+static void device_framebuffer(void)
+{
+    reset();
+    variable.xres = variable.xres_virtual = 800;
+    variable.yres = 480; variable.yres_virtual = 1440;
+    variable.xoffset = variable.yoffset = 0;
+    fixed.line_length = 3200; fixed.smem_len = 4608000;
+}
+
+static void normal_page_flips(void)
+{
+    unsigned char *data;
+    size_t size;
+    /* The live C300X failed with identical metadata except yoffset 960 -> 480. */
+    for (uint32_t before = 0; before < 3; before++) {
+        for (uint32_t after = 0; after < 3; after++) {
+            device_framebuffer();
+            variable.yoffset = before * 480;
+            pan_after_read = 1; after_yoffset = after * 480;
+            assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_OK);
+            assert(size == 471606 && rows == 307);
+            free(data);
+        }
+    }
+    device_framebuffer(); pan_after_read = 1; after_yoffset = 1;
+    unavailable();
+    device_framebuffer(); variable.yoffset = 1; pan_after_read = 1; after_yoffset = 480;
+    unavailable();
+    device_framebuffer(); pan_after_read = 1; after_yoffset = 1440;
+    unavailable();
+    device_framebuffer(); pan_after_read = 1; after_yoffset = UINT32_MAX;
+    unavailable();
+    device_framebuffer(); pan_after_read = 1; after_yoffset = 480; change_after_format = 1;
+    unavailable();
+    device_framebuffer(); pan_after_read = 1; after_yoffset = 480; change_after_stride = 1;
+    unavailable();
+    device_framebuffer(); pan_after_read = 1; after_yoffset = 480; lose_owner = 1;
+    unavailable();
+}
+
 int main(void)
 {
     unsigned char *data;
@@ -247,5 +301,6 @@ int main(void)
     assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_THROTTLED);
     assert(opens == 0 && data == NULL && size == 0);
     assert(pthread_mutex_unlock(&capture_lock) == 0);
+    normal_page_flips();
     return 0;
 }

@@ -403,6 +403,16 @@ int main(int argc, char **argv) {
     g_bridge.running = true;
     if (strcmp(argv[1], "serve") == 0) {
         serve_ffprobe(&config, video);
+    } else if (strcmp(argv[1], "interleaved") == 0) {
+        assert(parse_interleaved_channel("RTP/AVP/TCP;unicast;interleaved=0-1") == 0);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;interleaved=4-5") == 4);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;interleaved=254-255") == 254);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;unicast") == -1);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;interleaved=255-256") == -1);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;interleaved=2147483647") == -1);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;interleaved=99999999999999999999") == -1);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;interleaved=-3") == -1);
+        assert(parse_interleaved_channel("RTP/AVP/TCP;interleaved=abc") == -1);
     } else if (strcmp(argv[1], "unauth_rejections") == 0) {
         unauth_test(&config, false);
     } else if (strcmp(argv[1], "unauth_lifetime") == 0) {

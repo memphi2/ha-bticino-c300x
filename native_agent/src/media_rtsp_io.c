@@ -52,10 +52,18 @@ int parse_client_port(const char *transport)
 int parse_interleaved_channel(const char *transport)
 {
     const char *pos = strstr(transport, "interleaved=");
+    char *end = NULL;
+    long value;
     if (pos == NULL) {
         return -1;
     }
-    return atoi(pos + 12);
+    value = strtol(pos + 12, &end, 10);
+    /* The channel is one byte of the frame header and the answer prints the
+     * next one as well: anything else counts as not given. */
+    if (end == pos + 12 || value < 0 || value > 254) {
+        return -1;
+    }
+    return (int)value;
 }
 
 int c300x_rtsp_connection_add(int fds[RTSP_CONNECTION_LIMIT], int fd)

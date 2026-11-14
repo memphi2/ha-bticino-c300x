@@ -309,7 +309,11 @@ static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
 static const char *flexisip_reference_state(void);
 static void handle_setup_page(int client_fd);
-static void handle_auth_config_get(int client_fd, const struct c300x_config *config);
+static void handle_auth_config_get(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct request *request
+);
 static void handle_auth_config_post(
     int client_fd,
     struct c300x_config *config,
@@ -3414,7 +3418,11 @@ static void handle_setup_page(int client_fd)
     }
 }
 
-static void handle_auth_config_get(int client_fd, const struct c300x_config *config)
+static void handle_auth_config_get(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct request *request
+)
 {
     char listen_host[C300X_JSON_QUOTED_LEN(C300X_MAX_HOST_LEN)];
     char ui_listen_host[C300X_JSON_QUOTED_LEN(sizeof(C300X_UI_LISTEN_HOST))];
@@ -3431,7 +3439,9 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
     if (config->api_token[0] != '\0') {
         fnv1a64_fingerprint(config->api_token, api_token_fingerprint, sizeof(api_token_fingerprint));
     }
-    if (config->maintenance_admin_token[0] != '\0') {
+    /* A short hash of the admin token is for the admin; the holder of the lower
+     * API token could guess a short admin token from it offline. */
+    if (config->maintenance_admin_token[0] != '\0' && config_admin_authorized(config, request)) {
         fnv1a64_fingerprint(
             config->maintenance_admin_token,
             maintenance_token_fingerprint,
@@ -3817,7 +3827,7 @@ static void handle_auth_config_post(
             record_agent_write(config, runtime, "config", "auth_config");
         }
     }
-    handle_auth_config_get(client_fd, config);
+    handle_auth_config_get(client_fd, config, request);
     AUTH_CONFIG_POST_RETURN();
 #undef AUTH_CONFIG_POST_RETURN
 }
@@ -9994,7 +10004,7 @@ static void handle_api_request(
                 send_maintenance_unauthorized(client_fd);
                 return;
             }
-            handle_auth_config_get(client_fd, config);
+            handle_auth_config_get(client_fd, config, request);
             return;
         }
         if (strcmp(request->method, "POST") == 0) {

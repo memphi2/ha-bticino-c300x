@@ -122,3 +122,21 @@ def test_decoded_callback_secrets_cannot_inject_headers(lab):
         "callback_url": "http://127.0.0.1:9/events", "token": "x\r\nInjected: yes",
         "events": ["ringer.muted"],
     })[0] == 400
+
+
+@pytest.mark.parametrize("auth_config", [{
+    "maintenance": {"enabled": True, "adminToken": "existing-admin"},
+}], indirect=True)
+def test_only_the_admin_reads_the_fingerprint_of_the_maintenance_token(lab):
+    """The API token is the lower privilege; a short hash of the admin token
+    would let its holder guess a short admin token offline."""
+
+    status, body = request(lab.api, AUTH)
+    assert status == 200
+    assert body["maintenance_token_configured"] is True
+    assert body["maintenance_token_fingerprint"] == ""
+    status, body = request(lab.api, AUTH, headers={HEADER: "existing-admin"})
+    assert status == 200
+    assert body["maintenance_token_fingerprint"].startswith("fnv1a64:")
+    # The API token's own fingerprint is for the holder of that token.
+    assert request(lab.api, AUTH)[1]["api_token_configured"] in (True, False)

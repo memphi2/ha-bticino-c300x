@@ -2977,3 +2977,33 @@ def test_audio_gain_rejects_values_that_are_not_finite(value) -> None:
     assert audio_gain_db("0") == 0.0
     assert audio_gain_db(-20) == -20.0
     assert audio_gain_db("20.0") == 20.0
+
+
+def test_alarmo_is_kept_when_the_display_patch_is_switched_off() -> None:
+    """The alarm commands read the alarm entity without the display.
+
+    Switching the Display patch off used to clear it, and the alarm service
+    then failed with "alarm entity is not configured". What only the display
+    uses, the weather, the entities and the actions, still goes with the patch.
+    """
+
+    data, errors = _feature_input(
+        {
+            CONF_DEVICE_UI_ENABLED: False,
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+            CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+            CONF_DASHBOARD_ENTITIES: ["light.room"],
+        }
+    )
+
+    assert errors == {}
+    assert data[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert data[CONF_ALARM_PAGE_ENTITY_ID] == "switch.stair_light"
+    assert data[CONF_WEATHER_ENTITY_ID] == ""
+    assert data[CONF_DASHBOARD_ENTITIES] == []
+    # A wrong entity is refused with the patch off as well.
+    _data, errors = _feature_input(
+        {CONF_DEVICE_UI_ENABLED: False, CONF_ALARM_ENTITY_ID: "light.hall"}
+    )
+    assert errors == {CONF_ALARM_ENTITY_ID: "invalid_alarm_entity"}

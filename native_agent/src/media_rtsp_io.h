@@ -3,6 +3,9 @@
 
 #define RTSP_CONNECTION_LIMIT 8
 
+/* Absolute monotonic deadline, also bounds interrupted/short writes. */
+int c300x_rtsp_wait_writable(int fd, long long deadline_ms);
+
 /* Caller serializes registry access. Entries contain fd + 1; zero is unused. */
 int c300x_rtsp_connection_add(int fds[RTSP_CONNECTION_LIMIT], int fd);
 void c300x_rtsp_connections_shutdown(const int fds[RTSP_CONNECTION_LIMIT]);

@@ -185,6 +185,36 @@ static void auth_test(struct c300x_config *config, bool legacy, bool pending_sto
 
 static void *stop_worker(void *arg) { c300x_media_home_call_stop(arg); return NULL; }
 
+static void *forward_worker(void *arg) {
+    (void)arg;
+    unsigned char packet[12] = {0x80, 96};
+    forward_rtsp_packet(&g_bridge, packet, sizeof(packet), false);
+    return NULL;
+}
+
+static void stalled_client_test(void) {
+    int slow[2], healthy[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, slow) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, healthy) == 0);
+    int small = 4096;
+    assert(setsockopt(slow[0], SOL_SOCKET, SO_SNDBUF, &small, sizeof(small)) == 0);
+    unsigned char padding[4096] = {0};
+    while (send(slow[0], padding, sizeof(padding), MSG_DONTWAIT | MSG_NOSIGNAL) > 0) {}
+    g_bridge.rtsp_clients[0] = (rtsp_client_slot_t){.active = true, .played = true,
+        .fd = slow[0], .transport_tcp = true};
+    g_bridge.rtsp_clients[1] = (rtsp_client_slot_t){.active = true, .played = true,
+        .fd = healthy[0], .transport_tcp = true};
+    long long start = c300x_monotonic_ms();
+    forward_worker(NULL);
+    assert(c300x_monotonic_ms() - start < 1500);
+    assert(recv(healthy[1], padding, sizeof(padding), MSG_DONTWAIT) == 16);
+    g_bridge.media_active = g_bridge.relay_started = true;
+    assert(pthread_create(&g_bridge.relay_thread, NULL, forward_worker, NULL) == 0);
+    stop_media_session(true, true);
+    assert(c300x_monotonic_ms() - start < 2000);
+    close(slow[0]); close(slow[1]); close(healthy[0]); close(healthy[1]);
+}
+
 static void home_test(struct c300x_config *config, struct c300x_video *video, const char *mode) {
     config->video_enabled = 1;
     bool concurrent = strcmp(mode, "home_concurrent") == 0;
@@ -252,6 +282,8 @@ int main(int argc, char **argv) {
     g_bridge.running = true;
     if (strcmp(argv[1], "serve") == 0) {
         serve_ffprobe(&config, video);
+    } else if (strcmp(argv[1], "stalled_client") == 0) {
+        stalled_client_test();
     } else if (strncmp(argv[1], "home_", 5) == 0) {
         home_test(&config, video, argv[1]);
     } else {

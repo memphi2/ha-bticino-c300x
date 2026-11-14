@@ -1091,8 +1091,11 @@ static void send_srtcp_pli(
 static ssize_t send_all(int fd, const void *buf, size_t len) {
     const char *p = buf;
     size_t left = len;
+    long long deadline = c300x_monotonic_ms() + 2000;
     while (left > 0) {
-        ssize_t n = send(fd, p, left, MSG_NOSIGNAL);
+        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
+        ssize_t n = send(fd, p, left, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
         if (n <= 0) {
             return n;
         }
@@ -1114,6 +1117,7 @@ static ssize_t send_all_pair(
     size_t pending_count = 0;
     size_t total = first_len + second_len;
     size_t sent = 0;
+    long long deadline = c300x_monotonic_ms() + 250;
 
     if (first_len > 0) {
         iov[pending_count].iov_base = (void *)first;
@@ -1135,8 +1139,9 @@ static ssize_t send_all_pair(
         message.msg_iov = pending;
         message.msg_iovlen = pending_count;
 
-        n = sendmsg(fd, &message, MSG_NOSIGNAL);
-        if (n < 0 && errno == EINTR) {
+        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
+        n = sendmsg(fd, &message, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
             continue;
         }
         if (n <= 0) {

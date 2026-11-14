@@ -1,5 +1,9 @@
 #include "media_rtsp_io.h"
+#include "time_util.h"
 
+#include <errno.h>
+#include <limits.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,12 +47,29 @@ void c300x_rtsp_connections_shutdown(const int fds[RTSP_CONNECTION_LIMIT])
     }
 }
 
+int c300x_rtsp_wait_writable(int fd, long long deadline_ms)
+{
+    for (;;) {
+        long long remaining = deadline_ms - c300x_monotonic_ms();
+        if (remaining <= 0) { errno = ETIMEDOUT; return 0; }
+        struct pollfd pending = {.fd = fd, .events = POLLOUT};
+        int result = poll(&pending, 1, remaining > INT_MAX ? INT_MAX : (int)remaining);
+        if (result < 0 && errno == EINTR) continue;
+        if (result <= 0) return 0;
+        return (pending.revents & (POLLERR | POLLHUP | POLLNVAL)) == 0 &&
+               (pending.revents & POLLOUT) != 0;
+    }
+}
+
 static ssize_t send_all(int fd, const void *buf, size_t len)
 {
     const char *p = buf;
     size_t left = len;
+    long long deadline = c300x_monotonic_ms() + 2000;
     while (left > 0) {
-        ssize_t n = send(fd, p, left, MSG_NOSIGNAL);
+        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
+        ssize_t n = send(fd, p, left, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
         if (n <= 0) {
             return n;
         }

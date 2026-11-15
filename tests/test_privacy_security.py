@@ -109,12 +109,18 @@ def test_config_entry_typing_checks_import_symbols_not_name_prefixes(tmp_path, m
     monkeypatch.setattr(check_repo, "ROOT", tmp_path)
     module.write_text(
         "from homeassistant.config_entries import ConfigEntryState\n"
-        "state = config_entries.ConfigEntryState.LOADED\n", encoding="utf-8"
+        "state = config_entries.ConfigEntryState.LOADED\n"
+        "example_text = 'config_entries.ConfigEntry'\n"
+        "def example(state: 'config_entries.ConfigEntryState'): pass\n", encoding="utf-8"
     )
     assert check_repo.check_config_entry_typing() == []
     for source in (
         "from homeassistant.config_entries import (ConfigEntryState, ConfigEntry as Entry)\n",
         "entry = config_entries.ConfigEntry\n",
+        "def example(entry: 'config_entries.ConfigEntry'): pass\n",
+        "def example() -> 'config_entries.ConfigEntry': pass\n",
+        "entries: list['config_entries.ConfigEntry']\n",
+        "type Entry = 'config_entries.ConfigEntry'\n",
     ):
         module.write_text(source, encoding="utf-8")
         assert len(check_repo.check_config_entry_typing()) == 1

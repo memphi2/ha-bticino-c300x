@@ -658,17 +658,40 @@ def check_config_entry_typing() -> list[str]:
             failures.append(
                 f"{relative(path)} must import BticinoC300XConfigEntry from entry_types.py"
             )
-        if any(
-            isinstance(node, ast.Attribute)
-            and node.attr == "ConfigEntry"
-            and isinstance(node.value, ast.Name)
-            and node.value.id == "config_entries"
-            for node in ast.walk(tree)
-        ):
+        if _uses_untyped_config_entry(tree):
             failures.append(
                 f"{relative(path)} must use BticinoC300XConfigEntry for entry annotations"
             )
     return failures
+
+
+def _uses_untyped_config_entry(tree: ast.AST) -> bool:
+    """Inspect exact attributes, including forward-reference annotations."""
+
+    nodes = list(ast.walk(tree))
+    annotations: list[ast.AST] = []
+    for node in nodes:
+        if isinstance(node, ast.arg | ast.AnnAssign) and node.annotation is not None:
+            annotations.append(node.annotation)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.returns is not None:
+            annotations.append(node.returns)
+        elif isinstance(node, ast.TypeAlias):
+            annotations.append(node.value)
+    for annotation in annotations:
+        for node in ast.walk(annotation):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                try:
+                    nodes.extend(ast.walk(ast.parse(node.value, mode="eval")))
+                except SyntaxError:
+                    # Invalid annotations are diagnosed by the typing gate.
+                    continue
+    return any(
+        isinstance(node, ast.Attribute)
+        and node.attr == "ConfigEntry"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "config_entries"
+        for node in nodes
+    )
 
 
 def check_smoke_ha_versions() -> list[str]:

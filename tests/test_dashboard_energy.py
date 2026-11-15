@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from itertools import pairwise
 from types import SimpleNamespace
 
 import pytest
 
 from custom_components.bticino_c300x.dashboard_energy import (
+    COLOR_EXPORT,
+    COLOR_GRID,
+    COLOR_SOLAR,
     ENERGY_VIEWS,
     EnergyDay,
     EnergyMeter,
@@ -16,7 +20,9 @@ from custom_components.bticino_c300x.dashboard_energy import (
     format_number,
     format_power,
     power_watts,
+    source_power_watts,
 )
+from custom_components.bticino_c300x.dashboard_energy_charts import chart_axis
 
 
 def _hours(total: float, hour: int = 12) -> list[float]:
@@ -114,6 +120,7 @@ def test_day_totals_match_home_assistants_own_energy_dashboard() -> None:
     energy = page["energy"]
     assert energy["views"] == [
         {"id": "now", "label": "Jetzt"}, {"id": "today", "label": "Heute"},
+        {"id": "power", "label": "Leistung"},
         {"id": "balance", "label": "Bilanz"},
     ]
     nodes = energy["nodes"]
@@ -195,7 +202,7 @@ def test_a_single_unnamed_grid_meter_is_one_row() -> None:
 
     sums = energy_page(sources, day, {}, currency="EUR")["energy"]["sums"]
 
-    assert sums == [{"label": "Grid total", "value": "2.5 kWh", "color": "#8fd0ff", "cost": "0.75 EUR"}]
+    assert sums == [{"label": "Grid total", "value": "2.5 kWh", "color": COLOR_GRID, "cost": "0.75 EUR"}]
 
 
 def test_export_reduces_use_and_self_consumption() -> None:
@@ -228,7 +235,7 @@ def test_a_late_meter_cannot_make_an_hour_negative() -> None:
 
     assert energy["nodes"]["home"]["lines"] == ["0 kWh"]
     assert energy["balance"][0] == {
-        "label": "Net from grid", "value": "-0.5 kWh", "ratio": 0.0, "color": "#c9a6ff",
+        "label": "Net from grid", "value": "-0.5 kWh", "ratio": 0.0, "color": COLOR_EXPORT,
     }
 
 
@@ -261,15 +268,67 @@ def test_hour_bars_have_no_grid_series_without_a_grid_meter() -> None:
 
     hours = energy_page(sources, day, {})["energy"]["hours"]
 
-    assert [series["color"] for series in hours["series"]] == ["#ff9800"]
+    assert [series["color"] for series in hours["series"]] == [COLOR_SOLAR]
 
 
 @pytest.mark.parametrize(("value", "expected"), [
-    (None, ENERGY_VIEWS), ([], ENERGY_VIEWS), (["today"], ("today",)),
+    (None, ENERGY_VIEWS), ([], ()), (["today"], ("today",)),
     (["balance", "bogus", "now"], ("now", "balance")), ("now", ENERGY_VIEWS),
 ])
 def test_views_keep_display_order_and_default_to_all(value, expected) -> None:
     assert energy_views(value) == expected
+
+
+def test_all_energy_subpages_can_be_switched_off() -> None:
+    sources = energy_sources(SINGLE_GRID_PREFERENCES)
+    assert energy_page(sources, DAY, {}, views=[]) is None
+    assert energy_page(sources, DAY, {}, views=["power"])["energy"]["views"] == [
+        {"id": "power", "label": "Power"},
+    ]
+
+
+@pytest.mark.parametrize(("low", "high"), [
+    (0, 0), (0, 0.19), (0, 20), (-2400, 850), (-12.4, -0.1), (0, 3_000_000),
+])
+def test_chart_axis_has_readable_even_ticks_and_includes_zero(low, high) -> None:
+    axis = chart_axis(low, high, "de", "W")
+    ticks = axis["ticks"]
+    assert 2 <= len(ticks) <= 5
+    assert axis["min"] <= min(low, 0) <= max(high, 0) <= axis["max"]
+    assert ticks[0]["position"] == 0 and ticks[-1]["position"] == 1
+    assert any(tick["value"] == 0 for tick in ticks)
+    assert len({tick["label"] for tick in ticks}) == len(ticks)
+    step = ticks[1]["value"] - ticks[0]["value"]
+    assert all(b["value"] - a["value"] == pytest.approx(step)
+               for a, b in pairwise(ticks))
+
+
+def test_chart_uses_one_unit_for_all_ticks_and_locale_decimal_signs() -> None:
+    axis = chart_axis(-1200, 1200, "de", "W")
+    assert axis["unit"] == "kW"
+    assert [tick["label"] for tick in axis["ticks"]] == ["-2", "-1", "0", "1", "2"]
+    small = chart_axis(0, 0.6, "de", "kWh")
+    assert small["unit"] == "kWh"
+    assert any("," in tick["label"] for tick in small["ticks"])
+    assert chart_axis(0, 2000, "en", "kWh")["unit"] == "MWh"
+
+
+@pytest.mark.parametrize(("low", "high"), [
+    (float("nan"), float("inf")), (-1e308, 1e308), (0, 1.7e308), (0, 5e-324),
+])
+def test_chart_axis_never_emits_nonfinite_numbers(low, high) -> None:
+    import json
+
+    json.dumps(chart_axis(low, high, "en", "W"), allow_nan=False)
+
+
+def test_power_overflow_is_missing_not_a_rendering_error() -> None:
+    assert power_watts(SimpleNamespace(state="1e308", attributes={"unit_of_measurement": "kW"})) is None
+    sources = EnergySources(
+        grid_from=(EnergyMeter("sensor.g"),), solar=(EnergyMeter("sensor.s"),),
+        grid_power=("sensor.gw",), solar_power=("sensor.sw",),
+    )
+    assert source_power_watts(sources, {"sensor.gw": 1e308, "sensor.sw": 1e308})["home"] is None
 
 
 @pytest.mark.parametrize(("state", "unit", "expected"), [

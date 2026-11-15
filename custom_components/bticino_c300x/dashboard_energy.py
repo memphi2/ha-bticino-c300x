@@ -12,25 +12,28 @@ energy leaving it (grid export, battery charging) is negative.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
 from .dashboard_controls import finite_number
+from .dashboard_energy_charts import chart_axis
 from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE, decimal_text
 
 ENERGY_VIEW_NOW = "now"
 ENERGY_VIEW_TODAY = "today"
+ENERGY_VIEW_POWER = "power"
 ENERGY_VIEW_BALANCE = "balance"
-ENERGY_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_BALANCE)
+ENERGY_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_POWER, ENERGY_VIEW_BALANCE)
 ENERGY_PAGE_DEFAULT_POSITION = 2
 
 # Light tones: the display background is a saturated blue.
-COLOR_SOLAR = "#ff9800"
-COLOR_GRID = "#8fd0ff"
-COLOR_EXPORT = "#c9a6ff"
-COLOR_BATTERY = "#4db6ac"
-COLOR_HOME = "#58d68d"
-COLOR_COST = "#b0b8c0"
+COLOR_SOLAR = "#ffe066"
+COLOR_GRID = "#f5f8ff"
+COLOR_EXPORT = "#e0aaff"
+COLOR_BATTERY = "#69f0ae"
+COLOR_HOME = "#ff9a8b"
+COLOR_COST = "#e3e9f1"
 
 # The sums table of the Today view has room for this many rows.
 _MAX_SUM_ROWS = 8
@@ -199,7 +202,8 @@ def power_watts(state: Any) -> float | None:
     attributes = getattr(state, "attributes", None)
     unit = str((attributes or {}).get("unit_of_measurement") or "W").strip()
     factor = _POWER_FACTORS.get(unit)
-    return None if factor is None else value * factor
+    watts = None if factor is None else value * factor
+    return watts if watts is not None and math.isfinite(watts) else None
 
 
 def format_number(value: float, language: str, digits: int | None = None) -> str:
@@ -242,10 +246,10 @@ def _sum_power(entities: tuple[str, ...], power: dict[str, float | None]) -> flo
     total = 0.0
     for entity_id in entities:
         value = power.get(entity_id)
-        if value is None:
+        if value is None or not math.isfinite(value):
             return None
         total += value
-    return total
+    return total if math.isfinite(total) else None
 
 
 def _direction(watts: float | None) -> int:
@@ -257,8 +261,10 @@ def _direction(watts: float | None) -> int:
 
 
 def energy_views(value: Any) -> tuple[str, ...]:
-    """Return the selected views in display order; none selected means all."""
+    """Return selected views in display order, preserving an explicit all-off."""
 
+    if isinstance(value, (list, tuple)) and not value:
+        return ()
     chosen = [view for view in ENERGY_VIEWS if isinstance(value, (list, tuple)) and view in value]
     return tuple(chosen) or ENERGY_VIEWS
 
@@ -282,6 +288,32 @@ def normalize_energy_page(value: Any) -> dict[str, Any]:
     }
 
 
+def source_power_watts(
+    sources: EnergySources, power: dict[str, float | None],
+) -> dict[str, float | None]:
+    """Aggregate live or historical samples with identical coverage rules."""
+
+    has_grid = bool(sources.grid_from or sources.grid_to)
+    has_battery = bool(sources.battery_from or sources.battery_to)
+    grid = _sum_power(sources.grid_power, power) if sources.grid_power_complete else None
+    solar = (_sum_power(sources.solar_power, power)
+             if len(sources.solar_power) >= len(sources.solar) else None)
+    batteries = max(len(sources.battery_from), len(sources.battery_to))
+    battery = (_sum_power(sources.battery_power, power)
+               if len(sources.battery_power) >= batteries else None)
+    values = {key: watts for key, present, watts in (
+        ("grid", has_grid, grid), ("solar", bool(sources.solar), solar),
+        ("battery", has_battery, battery),
+    ) if present}
+    known = [value for value in values.values() if value is not None]
+    total = sum(known)
+    values["home"] = (
+        max(0.0, total) if values and len(known) == len(values) and math.isfinite(total)
+        else None
+    )
+    return values
+
+
 def energy_page(
     sources: EnergySources,
     day: EnergyDay,
@@ -293,7 +325,7 @@ def energy_page(
 ) -> dict[str, Any] | None:
     """Return the display page for one day, or None without any source."""
 
-    if not sources.any:
+    if not sources.any or not energy_views(views):
         return None
     labels = ENERGY_LABELS_BY_LANGUAGE.get(language, ENERGY_LABELS_BY_LANGUAGE["en"])
     shown = energy_views(views)
@@ -310,24 +342,9 @@ def energy_page(
 
     has_grid = bool(sources.grid_from or sources.grid_to)
     has_battery = bool(sources.battery_from or sources.battery_to)
-    grid_power = _sum_power(sources.grid_power, power) if sources.grid_power_complete else None
-    # A kind's power is only known when each of its sources has a sensor.
-    batteries = max(len(sources.battery_from), len(sources.battery_to))
-    solar_power = (
-        _sum_power(sources.solar_power, power)
-        if len(sources.solar_power) >= len(sources.solar) else None
-    )
-    battery_power = (
-        _sum_power(sources.battery_power, power)
-        if len(sources.battery_power) >= batteries else None
-    )
-    # The home's power is only known when every kind of source reports its own.
-    known = [
-        value for present, value in (
-            (has_grid, grid_power), (bool(sources.solar), solar_power), (has_battery, battery_power),
-        ) if present
-    ]
-    home_power = None if any(value is None for value in known) else max(0.0, sum(known))  # type: ignore[arg-type]
+    powers = source_power_watts(sources, power)
+    grid_power, solar_power = powers.get("grid"), powers.get("solar")
+    battery_power, home_power = powers.get("battery"), powers.get("home")
 
     page: dict[str, Any] = {
         "views": [{"id": view, "label": labels[view]} for view in shown],
@@ -374,6 +391,7 @@ def energy_page(
         page["hours"] = {
             "max": round(max(stacked), 3),
             "label": format_energy(max(stacked), language),
+            "axis": chart_axis(0.0, max(stacked), language, "kWh"),
             "series": series,
         }
         page["sums"] = _sum_rows(sources, day, labels, language, currency, {

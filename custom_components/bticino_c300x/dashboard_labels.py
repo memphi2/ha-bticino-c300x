@@ -403,7 +403,8 @@ _WEATHER_TITLE_BY_LANGUAGE = {
 # The texts of the energy page.
 ENERGY_LABELS_BY_LANGUAGE = {
     "en": {
-        "title": "Energy", "now": "Now", "today": "Today", "balance": "Balance",
+        "title": "Energy", "now": "Now", "today": "Today", "power": "Power", "balance": "Balance",
+        "power_interval": "15 min averages", "power_empty": "No power history available",
         "solar": "Solar", "grid": "Grid", "home": "Home", "battery": "Battery",
         "export": "Export", "charge": "Battery charge", "discharge": "Battery discharge",
         "grid_total": "Grid total", "self_use": "Solar used at home",
@@ -411,7 +412,8 @@ ENERGY_LABELS_BY_LANGUAGE = {
         "other_grid": "Other meters",
     },
     "de": {
-        "title": "Energie", "now": "Jetzt", "today": "Heute", "balance": "Bilanz",
+        "title": "Energie", "now": "Jetzt", "today": "Heute", "power": "Leistung", "balance": "Bilanz",
+        "power_interval": "15-Minuten-Mittelwerte", "power_empty": "Kein Leistungsverlauf vorhanden",
         "solar": "PV", "grid": "Netz", "home": "Haus", "battery": "Batterie",
         "export": "Einspeisung", "charge": "Batterie laden", "discharge": "Batterie entladen",
         "grid_total": "Netz gesamt", "self_use": "PV-Eigenverbrauch",
@@ -419,7 +421,8 @@ ENERGY_LABELS_BY_LANGUAGE = {
         "other_grid": "Weitere Zähler",
     },
     "fr": {
-        "title": "Énergie", "now": "Maintenant", "today": "Aujourd'hui", "balance": "Bilan",
+        "title": "Énergie", "now": "Maintenant", "today": "Aujourd'hui", "power": "Puissance", "balance": "Bilan",
+        "power_interval": "Moyennes sur 15 min", "power_empty": "Aucun historique de puissance",
         "solar": "Solaire", "grid": "Réseau", "home": "Maison", "battery": "Batterie",
         "export": "Injection", "charge": "Charge batterie", "discharge": "Décharge batterie",
         "grid_total": "Réseau total", "self_use": "Autoconsommation",
@@ -427,7 +430,8 @@ ENERGY_LABELS_BY_LANGUAGE = {
         "other_grid": "Autres compteurs",
     },
     "it": {
-        "title": "Energia", "now": "Ora", "today": "Oggi", "balance": "Bilancio",
+        "title": "Energia", "now": "Ora", "today": "Oggi", "power": "Potenza", "balance": "Bilancio",
+        "power_interval": "Medie di 15 min", "power_empty": "Nessuno storico della potenza",
         "solar": "Solare", "grid": "Rete", "home": "Casa", "battery": "Batteria",
         "export": "Immissione", "charge": "Carica batteria", "discharge": "Scarica batteria",
         "grid_total": "Rete totale", "self_use": "Autoconsumo",

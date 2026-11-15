@@ -15,7 +15,7 @@ Api.startEventWatch = () => {};
 const I18n = library("c300x_i18n.js");
 const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
-const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
+const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", decimalComma: false, runtimeGeneration: 0,
     feedbackColorsEnabled: true, c300xDisplayPreferences: {load() {}},
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
     interactionActive: false, armedCommand: "", listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
@@ -842,9 +842,18 @@ assert.equal(I18n.text("es", "ha_feedback_colors"), I18n.EN.ha_feedback_colors, 
 const shadowed = keysOf(I18n.EN).filter(key => I18n.CONTROL_LABELS.en[key] || I18n.DETAIL_LABELS.en[key]);
 assert.deepEqual(shadowed, [], "no text is defined twice");
 console.log("Display languages passed");
-p.uiLanguage = "de";
-assert.equal(p.numberText({command: "temperature", unit: "C"}, 21.5), "21,5 C", "numbers follow the display language");
-assert.equal(p.numberText({command: "value"}, 7), "7");
-p.uiLanguage = "en";
-assert.equal(p.numberText({command: "temperature", unit: "C"}, 21.5), "21.5 C");
+// HA's payload selects number formatting independently of the device UI language.
+for (const [language, decimalComma, expected] of [
+    ["en", true, "21,5 C"], ["de", false, "21.5 C"],
+    ["de", true, "21,5 C"], ["fr", true, "21,5 C"],
+    ["it", true, "21,5 C"], ["en", false, "21.5 C"],
+]) {
+    p.uiLanguage = language;
+    Api.dashboard(p.status, p);
+    assert.equal(queue.length, 1);
+    queue.shift().success({...payload("numbers-" + language + "-" + decimalComma), decimalComma});
+    assert.equal(p.decimalComma, decimalComma, "the dashboard applies HA's formatting flag");
+    assert.equal(p.numberText({command: "temperature", unit: "C"}, 21.5), expected);
+    assert.equal(p.numberText({command: "value"}, 7), "7");
+}
 console.log("Number texts passed");

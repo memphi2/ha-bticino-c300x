@@ -19,7 +19,14 @@ from .dashboard_optional_config import (
     MAX_CHECKS,
     optional_page_values,
 )
+from .dashboard_page_order import PAGE_POSITION_MAX
 from .schema_compat import vol
+
+
+def page_position_selector() -> selector.NumberSelector:
+    return selector.NumberSelector(selector.NumberSelectorConfig(
+        min=1, max=PAGE_POSITION_MAX, step=1, mode=selector.NumberSelectorMode.BOX,
+    ))
 
 
 def optional_page_sections(saved: dict[str, Any], posted: dict[str, Any] | None) -> dict[Any, Any]:
@@ -37,6 +44,7 @@ def optional_page_sections(saved: dict[str, Any], posted: dict[str, Any] | None)
         enabled = shown.get("enabled", options["enabled"]) is True
         inner: dict[Any, Any] = {
             vol.Required("enabled", default=enabled): selector.BooleanSelector(),
+            optional_suggested("position", shown.get("position")): page_position_selector(),
         }
         domains = {"calendars": "calendar"} if key == CONF_AGENDA_PAGE else {
             "contacts": "binary_sensor", "lights": "light",
@@ -67,6 +75,8 @@ def optional_pages_input(saved: dict[str, Any], posted: dict[str, Any]) -> dict[
     for key, options in values.items():
         if isinstance(posted.get(key), dict):
             values[key] = {"enabled": options["enabled"], **posted[key]}
+            if not values[key]["enabled"]:
+                values[key].setdefault("position", options["position"])
     return optional_page_values(values)
 
 

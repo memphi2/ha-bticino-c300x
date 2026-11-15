@@ -17,6 +17,9 @@ from .alarm_state import (
 )
 from .capabilities import entry_device_ui_enabled_or_patch_active
 from .const import (
+    CONF_AGENDA_PAGE,
+    CONF_ENERGY_PAGE,
+    CONF_LEAVE_HOME_PAGE,
     DASHBOARD_ACTION_DOMAIN,
     DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
     DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
@@ -78,6 +81,7 @@ from .dashboard_optional_config import (
     configured_agenda_page,
     configured_leave_home_page,
 )
+from .dashboard_page_order import page_layout_slots
 from .dashboard_select_texts import apply_select_texts
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
@@ -269,23 +273,22 @@ async def async_dashboard_payload(
     if not status_enabled:
         pages.pop(_DASHBOARD_DEFAULT_PAGE, None)
     configured = configured_dashboard_pages(entry)
-    ordered = _ordered_dashboard_pages(pages, configured)
-    energy = await async_energy_dashboard_page(hass, entry, language)
-    if energy is not None:
-        # Its position counts as in the pages dialog. That also numbers a
-        # page the display leaves out for lack of content, and a configured
-        # page without any tile, which is not among the pages at all.
-        position = configured_energy_page(entry)["position"]
-        absent = sum(
-            1 for page in configured[:position - 1] if page["name"] not in pages
-        )
-        ordered.insert(max(0, min(position - 1 - absent, len(ordered))), energy)
-    for optional_page in (
-        await async_agenda_dashboard_page(hass, entry, language),
-        leave_home_dashboard_page(hass, entry, language),
-    ):
-        if optional_page is not None:
-            ordered.append(optional_page)
+    special_pages = {
+        CONF_ENERGY_PAGE: await async_energy_dashboard_page(hass, entry, language),
+        CONF_AGENDA_PAGE: await async_agenda_dashboard_page(hass, entry, language),
+        CONF_LEAVE_HOME_PAGE: leave_home_dashboard_page(hass, entry, language),
+    }
+    regular_names = [page["name"] for page in configured]
+    regular_names.extend(name for name in pages if name not in regular_names)
+    ordered = []
+    for kind, name in page_layout_slots(regular_names, {
+        CONF_ENERGY_PAGE: configured_energy_page(entry),
+        CONF_AGENDA_PAGE: configured_agenda_page(entry),
+        CONF_LEAVE_HOME_PAGE: configured_leave_home_page(entry),
+    }):
+        rendered_page = pages.get(name) if kind == "regular" else special_pages.get(name)
+        if rendered_page is not None:
+            ordered.append(rendered_page)
     shown = [
         page for page in ordered
         if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
@@ -306,22 +309,6 @@ async def async_dashboard_payload(
         "notifications": notifications,
         "data": {"pages": [_finalize_dashboard_page(page) for page in shown]},
     })
-
-
-def _ordered_dashboard_pages(
-    pages: dict[str, dict[str, Any]], configured: tuple[dict[str, Any], ...]
-) -> list[dict[str, Any]]:
-    """Return the pages in their configured order.
-
-    Configured pages come first, by position. A page that is not configured,
-    such as one only an action names, follows in the order it first appeared.
-    Without configured pages every page keeps that order, the status page
-    first.
-    """
-
-    ordered = [pages[page["name"]] for page in configured if page["name"] in pages]
-    placed = {id(page) for page in ordered}
-    return ordered + [page for page in pages.values() if id(page) not in placed]
 
 
 def _fit_dashboard_response(

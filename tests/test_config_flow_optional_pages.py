@@ -44,12 +44,17 @@ def test_independent_pages_round_trip_through_form_and_feature_persistence(agend
     shown = dashboard_input_defaults({}, defaults)
     saved, errors = dashboard_pages_input(shown, post_pages_like_home_assistant(dashboard_pages_schema(shown)))
     assert not errors
-    assert optional_page_values(saved) == optional_page_values(settings)
+    expected = optional_page_values(settings)
+    if agenda_enabled:
+        expected["agenda_page"]["position"] = 2
+    if leave_enabled:
+        expected["leave_home_page"]["position"] = 3 if agenda_enabled else 2
+    assert optional_page_values(saved) == expected
     feature, errors = _feature_input(feature_input_defaults({}, {**defaults, **saved}))
     assert not errors
-    assert optional_page_values(feature) == optional_page_values(settings)
+    assert optional_page_values(feature) == expected
     reopened = current_feature_options(SimpleNamespace(data={}, options=feature))
-    assert optional_page_values(reopened) == optional_page_values(settings)
+    assert optional_page_values(reopened) == expected
     assert {"agenda_page", "leave_home_page"} <= _RECONFIGURED_OPTION_KEYS
 
 
@@ -59,12 +64,12 @@ def test_omitted_sections_preserve_settings_but_emptied_pickers_clear():
     assert optional_page_values(saved) == optional_page_values(SETTINGS)
     saved, errors = dashboard_pages_input(SETTINGS, {"agenda_page": {"enabled": True}})
     assert not errors
-    assert saved["agenda_page"] == {"enabled": True, "calendars": []}
-    assert saved["leave_home_page"] == SETTINGS["leave_home_page"]
+    assert saved["agenda_page"] == {"enabled": True, "position": 2, "calendars": []}
+    assert saved["leave_home_page"] == normalize_leave_home_page(SETTINGS["leave_home_page"])
     saved, errors = dashboard_pages_input(SETTINGS, {"leave_home_page": {"enabled": True, "show_alarm": False}})
     assert not errors
-    assert saved["leave_home_page"] == {"enabled": True, "contacts": [], "lights": [], "actions": [], "show_alarm": False}
-    assert saved["agenda_page"] == SETTINGS["agenda_page"]
+    assert saved["leave_home_page"] == {"enabled": True, "position": 3, "contacts": [], "lights": [], "actions": [], "show_alarm": False}
+    assert saved["agenda_page"] == normalize_agenda_page(SETTINGS["agenda_page"])
 
 
 @pytest.mark.parametrize("key,field,prefix,count", [
@@ -94,9 +99,9 @@ def test_invalid_domain_or_id_does_not_expand_scope(key, field, value):
 
 
 def test_stored_values_are_safe_and_bounded_even_without_a_valid_form():
-    assert normalize_agenda_page(None) == {"enabled": False, "calendars": []}
-    assert normalize_leave_home_page("bad") == {"enabled": False, "contacts": [], "lights": [], "actions": [], "show_alarm": False}
-    assert normalize_agenda_page({"enabled": "true", "calendars": ["calendar.a", "light.a", "calendar.a", None]}) == {"enabled": False, "calendars": ["calendar.a"]}
+    assert normalize_agenda_page(None) == {"enabled": False, "position": 10, "calendars": []}
+    assert normalize_leave_home_page("bad") == {"enabled": False, "position": 11, "contacts": [], "lights": [], "actions": [], "show_alarm": False}
+    assert normalize_agenda_page({"enabled": "true", "calendars": ["calendar.a", "light.a", "calendar.a", None]}) == {"enabled": False, "position": 10, "calendars": ["calendar.a"]}
     assert len(normalize_agenda_page({"calendars": [f"calendar.c{i}" for i in range(99)]})["calendars"]) == 8
 
 
@@ -105,7 +110,7 @@ def test_retry_keeps_false_flags_and_cleared_fields():
     retry = post_pages_like_home_assistant(dashboard_pages_schema(SETTINGS, posted))
     saved, errors = dashboard_pages_input(SETTINGS, retry)
     assert not errors
-    assert saved["agenda_page"] == {"enabled": False, "calendars": []}
+    assert saved["agenda_page"] == {"enabled": False, "position": 10, "calendars": []}
     assert saved["leave_home_page"] == normalize_leave_home_page({})
 
 
@@ -120,7 +125,7 @@ def test_all_three_flows_translate_optional_sections(name):
     path = Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x" / name
     catalog = json.loads(path.read_text())
     for flow, step in [("config", "user_dashboard_pages"), ("config", "reconfigure_dashboard_pages"), ("options", "dashboard_pages")]:
-        for key, fields in [("agenda_page", {"enabled", "calendars"}), ("leave_home_page", {"enabled", "contacts", "lights", "actions", "show_alarm"})]:
+        for key, fields in [("agenda_page", {"enabled", "position", "calendars"}), ("leave_home_page", {"enabled", "position", "contacts", "lights", "actions", "show_alarm"})]:
             section = catalog[flow]["step"][step]["sections"][key]
             assert set(section["data"]) == set(section["data_description"]) == fields
             assert section["name"] and section["description"]

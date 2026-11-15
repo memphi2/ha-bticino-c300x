@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .const import CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE
+from .dashboard_page_order import page_position
 from .entry_config import entry_config_value
 from .validation_patterns import HA_ACTION_ID_RE, HA_ENTITY_ID_RE
 
@@ -33,6 +34,7 @@ def selected_ids(value: Any, domain: str | None, limit: int) -> list[str]:
 def normalize_agenda_page(value: Any) -> dict[str, Any]:
     data = value if isinstance(value, dict) else {}
     return {"enabled": data.get("enabled") is True,
+            "position": page_position(data.get("position"), 10),
             "calendars": selected_ids(data.get("calendars"), "calendar", MAX_CALENDARS)}
 
 
@@ -40,6 +42,7 @@ def normalize_leave_home_page(value: Any) -> dict[str, Any]:
     data = value if isinstance(value, dict) else {}
     return {
         "enabled": data.get("enabled") is True,
+        "position": page_position(data.get("position"), 11),
         "contacts": selected_ids(data.get("contacts"), "binary_sensor", MAX_CHECKS),
         "lights": selected_ids(data.get("lights"), "light", MAX_CHECKS),
         "actions": selected_ids(data.get("actions"), None, MAX_ACTIONS),

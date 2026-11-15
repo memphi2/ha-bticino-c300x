@@ -1,9 +1,9 @@
 """Pages step of the display dashboard settings.
 
-The display shows at most ``DASHBOARD_PAGE_MAX_COUNT`` pages. The form has one
+The display has up to ``DASHBOARD_PAGE_MAX_COUNT`` regular pages. The form has one
 section per page: the first is the status page, which carries the badges and
 the weather card, set here as its Weather field; every other page has a name,
-which the display shows as its heading. Each section has a position from 1 to ``DASHBOARD_PAGE_MAX_COUNT``,
+which the display shows as its heading. Each section has a position from 1 to 11,
 which orders the pages, and the entities shown on that page, in the order they
 are picked.
 
@@ -11,19 +11,15 @@ The entities are stored as before: the dashboard entity list in page order
 and the page name of each entity in its display overrides. The page list
 stores each page's name and its position, numbered from 1 in display order.
 
-Directly after the status section comes the energy page, an optional ninth page. It
-has no entities of its own, as it shows Home Assistant's Energy setup; its
-section switches it on, places it among the other pages and selects its
-views. Positions therefore run from 1 to ``DASHBOARD_PAGE_MAX_COUNT + 1``.
-The energy page stores its own position on the display; the other pages
-stay numbered among themselves, and the form shows each with the position it
-has on the display. Where the energy page and another page ask for the same
-position the energy page comes first, so it is the second page by default.
+Energy, Agenda and Leave home are independently enabled extra pages. They
+store absolute display positions; regular pages stay numbered among themselves.
+The shared layout helper converts between these positions for the form and
+the display. Equal requested positions put Energy, Agenda and Leave home
+before regular pages, in that order. Disabled pages retain their settings.
 """
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from homeassistant.data_entry_flow import section
@@ -41,6 +37,9 @@ from .config_flow_optional_pages import (
     optional_page_sections,
     optional_pages_errors,
     optional_pages_input,
+)
+from .config_flow_optional_pages import (
+    page_position_selector as _page_position_selector,
 )
 from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
@@ -61,6 +60,17 @@ from .dashboard_entities import (
     normalize_dashboard_page_name,
     normalize_dashboard_pages,
 )
+from .dashboard_optional_config import optional_page_values
+from .dashboard_page_order import (
+    PAGE_POSITION_MAX as POSITION_MAX,
+)
+from .dashboard_page_order import (
+    page_layout_slots,
+    submitted_special_positions,
+)
+from .dashboard_page_order import (
+    page_position as _page_position,
+)
 from .schema_compat import vol
 
 PAGE_NAME_FIELD = "name"
@@ -70,7 +80,6 @@ PAGE_WEATHER_FIELD = CONF_WEATHER_ENTITY_ID
 PAGE_ENABLED_FIELD = "enabled"
 ENERGY_ENABLED_FIELD = "enabled"
 ENERGY_VIEWS_FIELD = "views"
-POSITION_MAX = DASHBOARD_PAGE_MAX_COUNT + 1
 
 
 def page_section_key(slot: int) -> str:
@@ -107,17 +116,6 @@ def _energy_view_selections(energy: dict[str, Any], posted: Any) -> list[str]:
         view for view in ENERGY_VIEWS
         if posted.get(f"view_{view}", view in views) is True
     ]
-
-
-def _page_position_selector() -> Any:
-    return selector.NumberSelector(
-        selector.NumberSelectorConfig(
-            min=1,
-            max=POSITION_MAX,
-            step=1,
-            mode=selector.NumberSelectorMode.BOX,
-        )
-    )
 
 
 def dashboard_page_layout(dashboard_input: dict[str, Any]) -> list[dict[str, Any]]:
@@ -180,12 +178,12 @@ def dashboard_pages_schema(
 
     layout = dashboard_page_layout(dashboard_input)
     energy = normalize_energy_page(dashboard_input.get(CONF_ENERGY_PAGE))
-    active = energy["enabled"] and bool(energy["views"])
-
-    def display_position(order: int) -> int:
-        # The pages are numbered among themselves; the energy page, when on,
-        # takes one position of the display.
-        return order + 1 if active and order >= energy["position"] else order
+    positions = {
+        name: index for index, (kind, name) in enumerate(page_layout_slots(
+            [page["name"] for page in sorted(layout, key=lambda page: page["order"])],
+            {CONF_ENERGY_PAGE: energy, **optional_page_values(dashboard_input)},
+        ), start=1) if kind == "regular"
+    }
 
     def shown(slot: int, field: str, saved: Any) -> Any:
         if posted is None:
@@ -221,7 +219,7 @@ def dashboard_pages_schema(
             )] = _page_name_selector()
         page_fields[_optional_suggested(
             PAGE_POSITION_FIELD,
-            shown(slot, PAGE_POSITION_FIELD, display_position(page["order"]) if page else None),
+            shown(slot, PAGE_POSITION_FIELD, positions[page["name"]] if page else None),
         )] = _page_position_selector()
         page_fields[_optional_suggested(
             PAGE_ENTITIES_FIELD,
@@ -292,16 +290,6 @@ def dashboard_pages_placeholders(
             name = layout[slot - 1]["name"] if slot <= len(layout) else ""
         placeholders[page_name_placeholder(slot)] = f": {name}" if name else ""
     return placeholders
-
-
-def _page_position(value: Any, default: int) -> int:
-    try:
-        position = float(value)
-    except (TypeError, ValueError):
-        return default
-    if not math.isfinite(position):
-        return default
-    return int(min(float(POSITION_MAX), max(1.0, position)) + 0.5)
 
 
 def dashboard_pages_input(
@@ -388,11 +376,11 @@ def dashboard_pages_input(
         return dashboard_input, errors
 
     pages.sort(key=lambda page: page[:2])
-    active = energy["enabled"] and bool(energy["views"])
-    if isinstance(posted_energy, dict) and active:
-        # Its place on the display: after every page that asked for an
-        # earlier position, before a page that asked for the same one.
-        energy["position"] = 1 + sum(1 for page in pages if page[0] < energy["position"])
+    special_pages = submitted_special_positions(
+        [page[0] for page in pages],
+        {CONF_ENERGY_PAGE: energy, **optional_pages_input(dashboard_input, user_input)},
+        {key for key, value in user_input.items() if isinstance(value, dict)},
+    )
     overrides = normalize_dashboard_entity_display_overrides(
         dashboard_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
     )
@@ -413,7 +401,7 @@ def dashboard_pages_input(
             ordered_entities.append(entity_id)
     return {
         **dashboard_input,
-        **optional_pages_input(dashboard_input, user_input),
+        **special_pages,
         CONF_WEATHER_ENTITY_ID: weather,
         CONF_DASHBOARD_STATUS_PAGE_ENABLED: status_enabled,
         CONF_DASHBOARD_ENTITIES: ordered_entities,
@@ -426,5 +414,4 @@ def dashboard_pages_input(
             {"name": name, "order": position}
             for position, (_, _, name, _) in enumerate(pages, start=1)
         ],
-        CONF_ENERGY_PAGE: energy,
     }, errors

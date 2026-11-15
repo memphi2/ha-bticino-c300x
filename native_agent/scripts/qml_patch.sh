@@ -543,7 +543,10 @@ patch_home_page() {
             print ""
             print "    function handleMessageNotificationEvent(event) {"
             if (dynamic_home_page == "1") {
-                print "        if (event && (event.topic === \"notifications\" || event.topic === \"display_bridge.state\")) refreshDisplayBridgeButtons()"
+                print "        if (event && (event.topic === \"notifications\" || event.topic === \"display_bridge.state\")) {"
+                print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
+                print "            refreshDisplayBridgeButtons()"
+                print "        }"
             }
             print "        if (event && (event.topic === \"memos\" || event.topic === \"answering_machine.messages\")) {"
             print "            refreshMessageNotifications()"

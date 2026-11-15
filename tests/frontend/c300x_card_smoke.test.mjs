@@ -1232,6 +1232,36 @@ test("home-call card ignores notification answer launches for doorbell cards", a
   }
 });
 
+test("the ringback tone plays only on the card that started the Home Call", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?ringback-owner");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const ringing = () => fakeHass({ cameraEntity: {
+    attributes: { friendly_name: "Door", media_primary_action: "hangup", media_state: "home_call_ringing" },
+    state: "streaming",
+  } });
+  const tones = (card) => {
+    const seen = [];
+    card._syncRingbackTone = (active) => seen.push(!!active);
+    return seen;
+  };
+
+  const other = new Card();
+  other.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera" });
+  const otherTones = tones(other);
+  other.hass = ringing();
+  assert.deepEqual([...new Set(otherTones)], [false]);
+
+  const caller = new Card();
+  caller.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera" });
+  const callerTones = tones(caller);
+  caller._lifecycle.activeHomeCallSession = true;
+  caller.hass = ringing();
+  assert.equal(callerTones.at(-1), true);
+  other.disconnectedCallback();
+  caller.disconnectedCallback();
+});
+
 function answerRaceCard(Card) {
   const card = new Card();
   card.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera" });

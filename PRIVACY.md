@@ -22,7 +22,7 @@ Home Assistant may store:
 - Optional dashboard action configuration supplied by the user.
 - Visitor images in the configured HA media directory. The per-device **Save
   images** switch is enabled by default. A ring or active video session requests
-  one image after 5 seconds; images expire after 14 days by default. Delay and
+  one image after 3 seconds; images expire after 14 days by default. Delay and
   retention are configurable. Storage is additionally limited to 1,000 images
   and 128 MiB per device.
 

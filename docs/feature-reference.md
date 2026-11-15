@@ -562,6 +562,13 @@ admin-only. Trusted context-free automations remain supported. See
 
 ### Capture Modes
 
+Stored answering-machine videos, voice memos and Ring Capture MP4 files are
+shared media: any authenticated HA user can play them through the integration's
+media endpoints, regardless of camera entity permissions. This does not grant
+permission to record, delete messages or control the device. The snapshot-image
+endpoint checks camera permission, but files in HA's local-media directory are
+also accessible through HA's own media browser. See [Privacy](../PRIVACY.md).
+
 `capture_doorbell_call` defaults to `capture_mode: ring`. Existing Ring Capture
 automations and blueprints keep their behavior: audio or an announcement answers
 the active Ring Call before recording. To record without ringing the doorbell,

@@ -40,6 +40,20 @@ Context-free HA automations remain trusted. The physical display uses its
 separate authenticated bridge and configured action allowlist, not HA user
 impersonation.
 
+## Stored Media Access
+
+Playback endpoints for answering-machine videos, voice memos and Ring Capture
+MP4 files intentionally allow every authenticated HA user. They do not apply
+camera entity permissions or require an administrator. This shared-media policy
+is separate from the service permissions above: playback does not authorize
+recording, deletion or device control.
+
+The integration's snapshot-image endpoint does check camera read permission.
+However, copies in HA's standard local-media directory follow HA media access
+rules, independently of camera permissions. Neither hiding an entity nor
+denying camera access protects the shared archive. Only provide HA access to
+users trusted to access these recordings; see [PRIVACY.md](PRIVACY.md).
+
 ## Token Handling
 
 Home Assistant stores the configured agent token, maintenance token, webhook id,

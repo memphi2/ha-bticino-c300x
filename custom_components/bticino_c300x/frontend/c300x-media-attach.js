@@ -177,10 +177,7 @@ export class C300XMediaAttachment {
         this._gainNode.connect(this._audioContext.destination);
       }
     } catch (_error) {
-      this._audioContext = null;
-      this._sourceNode = null;
-      this._gainNode = null;
-      this._limiterNode = null;
+      this.detach();
       return false;
     }
     return true;

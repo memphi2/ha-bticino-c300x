@@ -121,7 +121,7 @@ def test_day_totals_match_home_assistants_own_energy_dashboard() -> None:
     assert energy["views"] == [
         {"id": "now", "label": "Jetzt"}, {"id": "today", "label": "Heute"},
         {"id": "power", "label": "Leistung"},
-        {"id": "distribution", "label": "Verteilung"},
+        {"id": "consumers", "label": "Verbraucher"},
         {"id": "balance", "label": "Bilanz"},
     ]
     nodes = energy["nodes"]

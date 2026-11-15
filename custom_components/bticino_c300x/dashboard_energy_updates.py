@@ -24,11 +24,14 @@ from .dashboard_config import configured_energy_page
 from .dashboard_energy import (
     ENERGY_DAY_VIEWS,
     ENERGY_LIVE_VIEWS,
-    ENERGY_VIEW_DISTRIBUTION,
+    ENERGY_VIEW_CONSUMERS,
+    ENERGY_VIEW_NOW,
     ENERGY_VIEW_POWER,
+    EnergySources,
     format_power,
     power_watts,
 )
+from .dashboard_energy_consumers import consumer_power_watts
 from .dashboard_energy_data import (
     ENERGY_STATISTICS_MAX_AGE_SECONDS,
     async_configured_energy_sources,
@@ -51,6 +54,7 @@ class EnergyPageUpdates:
         self._entry = entry
         self._notify = notify
         self._power_entities: frozenset[str] = frozenset()
+        self._sources = EnergySources()
         self._unsub_power: Callable[[], None] | None = None
         self._unsub_tick: Callable[[], None] | None = None
         self._unsub_delayed: Callable[[], None] | None = None
@@ -69,11 +73,9 @@ class EnergyPageUpdates:
         views = self._active_views()
         if self._stopped or not views:
             return False
+        self._sources = sources
         self._shown = sources.any
-        self._track_power(
-            frozenset(sources.power_entities)
-            if any(view in ENERGY_LIVE_VIEWS for view in views) else frozenset()
-        )
+        self._track_power(frozenset(sources.live_power_entities(views)))
         self._unsub_tick = async_track_time_interval(
             self._hass, self._async_tick,
             timedelta(seconds=ENERGY_STATISTICS_MAX_AGE_SECONDS),
@@ -107,9 +109,10 @@ class EnergyPageUpdates:
                 forget_power_history(self._entry.entry_id)
             if not any(view in ENERGY_DAY_VIEWS for view in views):
                 forget_energy_day(self._entry.entry_id)
+            entities = frozenset(self._sources.live_power_entities(views))
+            if entities != self._power_entities:
+                self._track_power(entities)
             if not any(view in ENERGY_LIVE_VIEWS for view in views):
-                if self._power_entities:
-                    self._track_power(frozenset())
                 if self._unsub_delayed is not None:
                     self._unsub_delayed()
                     self._unsub_delayed = None
@@ -135,10 +138,8 @@ class EnergyPageUpdates:
         if self._stopped or not views:
             # Stopped while waiting: nothing is tracked or woken any more.
             return
-        entities = (
-            frozenset(sources.power_entities)
-            if any(view in ENERGY_LIVE_VIEWS for view in views) else frozenset()
-        )
+        self._sources = sources
+        entities = frozenset(sources.live_power_entities(views))
         if entities != self._power_entities:
             self._track_power(entities)
         was_shown, self._shown = self._shown, sources.any
@@ -158,9 +159,17 @@ class EnergyPageUpdates:
         views = self._active_views()
         if not any(view in ENERGY_LIVE_VIEWS for view in views):
             return
-        if self._unsub_delayed is not None or _same_power_text(
-            event, exact=ENERGY_VIEW_DISTRIBUTION in views,
-        ):
+        event_data = getattr(event, "data", {})
+        entity_id = event_data.get("entity_id") if isinstance(event_data, dict) else None
+        if entity_id is not None and entity_id not in self._power_entities:
+            return
+        consumer = ENERGY_VIEW_CONSUMERS in views and any(
+            source.entity_id == entity_id for source in self._sources.consumers
+        )
+        unchanged = _same_power_text(event, exact=consumer)
+        if consumer and ENERGY_VIEW_NOW in views and entity_id in self._sources.power_entities:
+            unchanged = unchanged and _same_power_text(event)
+        if self._unsub_delayed is not None or unchanged:
             return
         wait = ENERGY_POWER_MIN_INTERVAL_SECONDS - (monotonic() - self._last_notify)
         if wait <= 0:
@@ -183,16 +192,21 @@ class EnergyPageUpdates:
 
 
 def _same_power_text(event: Any, *, exact: bool = False) -> bool:
-    """Ignore text-equivalent changes unless a live balance needs exact values."""
+    """Ignore unchanged live values; Consumers ranking needs exact watts."""
 
     data = getattr(event, "data", None)
     if not isinstance(data, dict) or "new_state" not in data:
         return False
-    old = power_watts(data.get("old_state"))
-    new = power_watts(data["new_state"])
+    converter = consumer_power_watts if exact else power_watts
+    old = converter(data.get("old_state"))
+    new = converter(data["new_state"])
     if old is None or new is None:
         return old is None and new is None
     if exact:
+        old_name = (getattr(data.get("old_state"), "attributes", {}) or {}).get("friendly_name")
+        new_name = (getattr(data["new_state"], "attributes", {}) or {}).get("friendly_name")
+        if old_name != new_name:
+            return False
         return old == new
     return format_power(old, "en") == format_power(new, "en")
 

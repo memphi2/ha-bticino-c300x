@@ -53,7 +53,7 @@ def _no_kept_statistics():
     ({"enabled": True, "position": 4, "views": []},
      {"enabled": True, "position": 4, "views": []}),
     ({"enabled": "yes", "position": "x", "views": ["bogus"]},
-     {"enabled": False, "position": 2, "views": list(ENERGY_VIEWS)}),
+     {"enabled": False, "position": 2, "views": []}),
     ({"enabled": True, "position": 0, "views": ["balance", "now"]},
      {"enabled": True, "position": 1, "views": ["now", "balance"]}),
     ({"enabled": True, "position": 9.0}, {**ENERGY_ON, "position": 9}),
@@ -611,7 +611,7 @@ def test_the_tick_reads_fresh_statistics(monkeypatch) -> None:
     assert order == ["expire entry-1", "wake"]
 
 
-def test_now_without_distribution_ignores_power_changes_hidden_by_rounding(monkeypatch) -> None:
+def test_now_without_consumers_ignores_power_changes_hidden_by_rounding(monkeypatch) -> None:
     helpers = _Helpers(monkeypatch)
     monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources",
                         AsyncMock(return_value=SOURCES))

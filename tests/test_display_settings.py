@@ -1184,7 +1184,7 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     # energy page is closed while it is switched off.
     assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 7
     assert [item["name"] for item in fields[1]["schema"]] == [
-        "enabled", "position", "view_now", "view_today", "view_power", "view_distribution", "view_balance",
+        "enabled", "position", "view_now", "view_today", "view_power", "view_consumers", "view_balance",
     ]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "enabled", "weather_entity_id", "position", "entities",
@@ -1420,7 +1420,7 @@ def test_the_tiles_form_names_the_untitled_page_as_such():
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
-@pytest.mark.parametrize("views", [["now", "today"], ["power"], ["distribution"], ["today", "balance"], []])
+@pytest.mark.parametrize("views", [["now", "today"], ["power"], ["consumers"], ["today", "balance"], []])
 def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind, views):
     dashboard = {"device_ui_enabled": True}
     entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
@@ -1432,7 +1432,7 @@ def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind, views):
         "page_2": {"name": "Room", "entities": ["light.one"]},
         "energy_page": {
             "enabled": True,
-            **{f"view_{view}": view in views for view in ("now", "today", "power", "distribution", "balance")},
+            **{f"view_{view}": view in views for view in ("now", "today", "power", "consumers", "balance")},
         },
     })
     form = asyncio.run(pages_step(posted))

@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -383,14 +383,16 @@
           },
           "agenda_page": {
             "name": "Agenda",
-            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
             "data": {
               "enabled": "Afficher l'agenda",
+              "position": "Position",
               "calendars": "Calendriers"
             },
             "data_description": {
-              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
-              "calendars": "Sélectionnez jusqu'à huit calendriers."
+              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
+              "calendars": "Sélectionnez jusqu'à huit calendriers.",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 10."
             }
           },
           "leave_home_page": {
@@ -398,6 +400,7 @@
             "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
             "data": {
               "enabled": "Afficher Quitter la maison",
+              "position": "Position",
               "contacts": "Fenêtres et portes",
               "lights": "Lumières",
               "actions": "Actions",
@@ -408,7 +411,8 @@
               "contacts": "Sélectionnez jusqu'à 24 capteurs de porte/fenêtre.",
               "lights": "Sélectionnez jusqu'à 24 lumières.",
               "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
-              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran."
+              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran.",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 11."
             }
           },
           "energy_page": {
@@ -420,16 +424,16 @@
               "view_now": "Maintenant",
               "view_today": "Aujourd’hui",
               "view_power": "Historique de puissance",
-              "view_distribution": "Répartition de puissance actuelle",
+              "view_consumers": "Consommateurs",
               "view_balance": "Bilan"
             },
             "data_description": {
               "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
-              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 2.",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
-              "view_distribution": "Diagramme Sankey des mesures actuelles en W/kW ; sans totaux journaliers ni requêtes historiques",
+              "view_consumers": "Les dix appareils électriques configurés consommant le plus de puissance actuelle en W ; mesures indisponibles omises, sans historique",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
@@ -437,7 +441,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -548,14 +552,16 @@
           },
           "agenda_page": {
             "name": "Agenda",
-            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
             "data": {
               "enabled": "Afficher l'agenda",
+              "position": "Position",
               "calendars": "Calendriers"
             },
             "data_description": {
-              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
-              "calendars": "Sélectionnez jusqu'à huit calendriers."
+              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
+              "calendars": "Sélectionnez jusqu'à huit calendriers.",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 10."
             }
           },
           "leave_home_page": {
@@ -563,6 +569,7 @@
             "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
             "data": {
               "enabled": "Afficher Quitter la maison",
+              "position": "Position",
               "contacts": "Fenêtres et portes",
               "lights": "Lumières",
               "actions": "Actions",
@@ -573,7 +580,8 @@
               "contacts": "Sélectionnez jusqu'à 24 capteurs de porte/fenêtre.",
               "lights": "Sélectionnez jusqu'à 24 lumières.",
               "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
-              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran."
+              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran.",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 11."
             }
           },
           "energy_page": {
@@ -585,16 +593,16 @@
               "view_now": "Maintenant",
               "view_today": "Aujourd’hui",
               "view_power": "Historique de puissance",
-              "view_distribution": "Répartition de puissance actuelle",
+              "view_consumers": "Consommateurs",
               "view_balance": "Bilan"
             },
             "data_description": {
               "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
-              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 2.",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
-              "view_distribution": "Diagramme Sankey des mesures actuelles en W/kW ; sans totaux journaliers ni requêtes historiques",
+              "view_consumers": "Les dix appareils électriques configurés consommant le plus de puissance actuelle en W ; mesures indisponibles omises, sans historique",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
@@ -789,7 +797,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -900,14 +908,16 @@
           },
           "agenda_page": {
             "name": "Agenda",
-            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
             "data": {
               "enabled": "Afficher l'agenda",
+              "position": "Position",
               "calendars": "Calendriers"
             },
             "data_description": {
-              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
-              "calendars": "Sélectionnez jusqu'à huit calendriers."
+              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
+              "calendars": "Sélectionnez jusqu'à huit calendriers.",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 10."
             }
           },
           "leave_home_page": {
@@ -915,6 +925,7 @@
             "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
             "data": {
               "enabled": "Afficher Quitter la maison",
+              "position": "Position",
               "contacts": "Fenêtres et portes",
               "lights": "Lumières",
               "actions": "Actions",
@@ -925,7 +936,8 @@
               "contacts": "Sélectionnez jusqu'à 24 capteurs de porte/fenêtre.",
               "lights": "Sélectionnez jusqu'à 24 lumières.",
               "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
-              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran."
+              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran.",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 11."
             }
           },
           "energy_page": {
@@ -937,16 +949,16 @@
               "view_now": "Maintenant",
               "view_today": "Aujourd’hui",
               "view_power": "Historique de puissance",
-              "view_distribution": "Répartition de puissance actuelle",
+              "view_consumers": "Consommateurs",
               "view_balance": "Bilan"
             },
             "data_description": {
               "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
-              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 2.",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
-              "view_distribution": "Diagramme Sankey des mesures actuelles en W/kW ; sans totaux journaliers ni requêtes historiques",
+              "view_consumers": "Les dix appareils électriques configurés consommant le plus de puissance actuelle en W ; mesures indisponibles omises, sans historique",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }

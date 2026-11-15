@@ -27,6 +27,7 @@ class C300XTouchToneSwitch(C300XEntity, SwitchEntity):
         super().__init__(entry, "touch_tone")
         self._attr_is_on = None
         self._attr_available = False
+        self._state_generation = 0
 
     def _apply(self, data: Mapping[str, Any]) -> None:
         value = data.get("enabled")
@@ -34,10 +35,16 @@ class C300XTouchToneSwitch(C300XEntity, SwitchEntity):
         self._attr_available = data.get("available") is True and self._attr_is_on is not None
 
     async def async_update(self) -> None:
+        generation = self._state_generation
         try:
-            self._apply(await self._entry.runtime_data.api.async_touch_tone_status())
+            status = await self._entry.runtime_data.api.async_touch_tone_status()
         except C300XAgentApiError:
-            self._attr_available = False
+            if generation == self._state_generation:
+                self._attr_available = False
+        else:
+            # A push or acknowledged write supersedes reads already in flight.
+            if generation == self._state_generation:
+                self._apply(status)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set(True)
@@ -46,17 +53,24 @@ class C300XTouchToneSwitch(C300XEntity, SwitchEntity):
         await self._set(False)
 
     async def _set(self, enabled: bool) -> None:
+        generation = self._state_generation
         try:
-            self._apply(await self._entry.runtime_data.api.async_set_touch_tone(enabled))
+            status = await self._entry.runtime_data.api.async_set_touch_tone(enabled)
         except C300XAgentApiError as err:
-            await self.async_update()
+            if generation == self._state_generation:
+                await self.async_update()
             self.async_write_ha_state()
             raise HomeAssistantError("C300X touch tone could not be confirmed. Check the Display patch.") from err
+        if generation == self._state_generation:
+            self._state_generation += 1
+            self._apply(status)
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self.async_on_remove(self.hass.bus.async_listen(EVENT_AGENT_EVENT_RECEIVED, self._handle_event))
+        # Initial platform reads precede subscription; recover changes in that gap.
+        await self.async_update()
 
     @callback
     def _handle_event(self, event: Any) -> None:
@@ -66,5 +80,6 @@ class C300XTouchToneSwitch(C300XEntity, SwitchEntity):
             return
         data = event.data.get("data")
         if isinstance(data, Mapping):
+            self._state_generation += 1
             self._apply(data)
             self.async_write_ha_state()

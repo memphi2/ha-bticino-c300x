@@ -18,6 +18,7 @@ from custom_components.bticino_c300x.api_errors import (
     C300XAgentApiResponseError,
 )
 from custom_components.bticino_c300x.capabilities import events_for_capabilities
+from custom_components.bticino_c300x.const import EVENT_AGENT_EVENT_RECEIVED
 from custom_components.bticino_c300x.switch import async_setup_entry
 from custom_components.bticino_c300x.switch_display import C300XTouchToneSwitch
 
@@ -103,3 +104,167 @@ def test_setup_adds_switch_and_its_event_only_for_capable_agent():
     assert any(isinstance(entity, C300XTouchToneSwitch) for entity in entities)
     assert "display.touch_tone_changed" in events_for_capabilities(entry.runtime_data.capabilities)
     assert "display.touch_tone_changed" not in events_for_capabilities({})
+
+
+class _EventBus:
+    def __init__(self):
+        self.listeners = []
+
+    def async_listen(self, topic, handler):
+        assert topic == EVENT_AGENT_EVENT_RECEIVED
+        self.listeners.append(handler)
+        return lambda: self.listeners.remove(handler)
+
+    def push(self, entry, *, enabled, available=True):
+        event = SimpleNamespace(data={
+            "entry_id": entry.entry_id,
+            "event_key": "display_touch_tone_changed",
+            "data": {"enabled": enabled, "available": available},
+        })
+        for handler in tuple(self.listeners):
+            handler(event)
+
+
+def test_added_switch_recovers_push_lost_during_other_initial_reads():
+    async def run():
+        entry, _ = make_switch()
+        entry.runtime_data.capabilities = {"touch_tone": True, "ringer": True}
+        current = {"ok": True, "available": True, "enabled": True}
+        api = entry.runtime_data.api
+        api.async_touch_tone_status.side_effect = lambda: dict(current)
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def ringer_status():
+            entered.set()
+            await release.wait()
+            return {"muted": False}
+
+        api.async_ringer_status = AsyncMock(side_effect=ringer_status)
+        bus = _EventBus()
+        hass = SimpleNamespace(bus=bus)
+        entities = []
+        setup = asyncio.create_task(async_setup_entry(hass, entry, entities.extend))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            assert not entities and not bus.listeners
+            assert api.async_touch_tone_status.await_count == 1
+            current["enabled"] = False
+            bus.push(entry, enabled=False)
+        finally:
+            release.set()
+            await setup
+        switch = next(entity for entity in entities if isinstance(entity, C300XTouchToneSwitch))
+        assert switch.is_on is True
+        switch.hass = hass
+        await switch.async_added_to_hass()
+        assert switch.is_on is False and switch.available
+        assert api.async_touch_tone_status.await_count == 2
+        assert len(bus.listeners) == 1
+        assert switch.should_poll is False
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("read_fails", [False, True])
+@pytest.mark.parametrize("push_available", [False, True])
+def test_push_during_added_resync_wins_over_delayed_read(read_fails, push_available):
+    async def run():
+        entry, switch = make_switch()
+        await switch.async_update()
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def status():
+            entered.set()
+            await release.wait()
+            if read_fails:
+                raise C300XAgentApiError("offline")
+            return {"ok": True, "available": True, "enabled": True}
+
+        entry.runtime_data.api.async_touch_tone_status.side_effect = status
+        bus = _EventBus()
+        switch.hass = SimpleNamespace(bus=bus)
+        added = asyncio.create_task(switch.async_added_to_hass())
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            bus.push(entry, enabled=False if push_available else None, available=push_available)
+        finally:
+            release.set()
+            await added
+        assert switch.is_on is (False if push_available else None)
+        assert switch.available is push_available
+
+    asyncio.run(run())
+
+
+def test_added_resync_failure_without_push_marks_switch_unavailable():
+    async def run():
+        entry, switch = make_switch()
+        await switch.async_update()
+        assert switch.available
+        entry.runtime_data.api.async_touch_tone_status.side_effect = C300XAgentApiError("offline")
+        switch.hass = SimpleNamespace(bus=_EventBus())
+        await switch.async_added_to_hass()
+        assert not switch.available
+        assert switch.should_poll is False
+        assert entry.runtime_data.api.async_touch_tone_status.await_count == 2
+
+    asyncio.run(run())
+
+
+def test_confirmed_set_supersedes_an_inflight_status_read():
+    async def run():
+        entry, switch = make_switch()
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def status():
+            entered.set()
+            await release.wait()
+            return {"ok": True, "available": True, "enabled": True}
+
+        entry.runtime_data.api.async_touch_tone_status.side_effect = status
+        read = asyncio.create_task(switch.async_update())
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            await switch.async_turn_off()
+        finally:
+            release.set()
+            await read
+        assert switch.is_on is False and switch.available
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("set_fails", [False, True])
+def test_new_push_wins_over_delayed_set_result(set_fails):
+    async def run():
+        entry, switch = make_switch()
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def set_enabled(enabled):
+            entered.set()
+            await release.wait()
+            if set_fails:
+                raise C300XAgentApiError("confirmation lost")
+            return {"ok": True, "available": True, "enabled": enabled}
+
+        entry.runtime_data.api.async_set_touch_tone.side_effect = set_enabled
+        bus = _EventBus()
+        switch.hass = SimpleNamespace(bus=bus)
+        await switch.async_added_to_hass()
+        entry.runtime_data.api.async_touch_tone_status.reset_mock()
+        entry.runtime_data.api.async_touch_tone_status.side_effect = C300XAgentApiError("offline")
+        setting = asyncio.create_task(switch.async_turn_off())
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            bus.push(entry, enabled=True)
+        finally:
+            release.set()
+            if set_fails:
+                with pytest.raises(HomeAssistantError, match="could not be confirmed"):
+                    await setting
+            else:
+                await setting
+        assert switch.is_on is True and switch.available
+        entry.runtime_data.api.async_touch_tone_status.assert_not_awaited()
+
+    asyncio.run(run())

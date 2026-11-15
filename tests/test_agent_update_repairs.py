@@ -1923,13 +1923,22 @@ def test_device_user_repair_flow_reports_agent_failures() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "status",
+    [
+        {"homeassistant_user_present": False},
+        {"homeassistant_user_present": True, "routes_consistent": False},
+        {"homeassistant_user_present": True, "media_identity_available": False},
+        {"available": False},
+    ],
+)
 def test_device_user_repair_keeps_the_issue_when_the_user_is_still_missing(
-    monkeypatch,
+    monkeypatch, status
 ) -> None:
     import custom_components.bticino_c300x.repair_flows_device_user as device_user_flow
 
     api = FakePatchApi()
-    api.device_user_status = {"homeassistant_user_present": False}
+    api.device_user_status = status
     entry = FakeEntry(runtime_data=FakeRuntimeData(api))
     hass = FakeHass(entry)
     hass.config.location_name = "HA Test"

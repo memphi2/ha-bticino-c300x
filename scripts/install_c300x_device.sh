@@ -175,6 +175,7 @@ scp_cmd \
 
 scp_cmd \
     "$QML_STAGE_DIR/js/c300x_alerts.js" \
+    "$QML_STAGE_DIR/js/c300x_ringer.js" \
     "$QML_STAGE_DIR/js/c300x_energy.js" \
     "$QML_STAGE_DIR/js/c300x_energy_consumers.js" \
     "$QML_STAGE_DIR/js/c300x_ha.js" \

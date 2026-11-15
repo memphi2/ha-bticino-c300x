@@ -49,6 +49,7 @@ DEVICE_SOURCE_FILES = (
     "C300XEnergySums.qml",
     "js/c300x_energy.js",
     "C300XRingerControl.qml",
+    "js/c300x_ringer.js",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
     "js/c300x_memos.js",

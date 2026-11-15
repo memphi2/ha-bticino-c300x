@@ -19,6 +19,7 @@ static const struct c300x_agent_update_file C300X_AGENT_UPDATE_FILES[] = {
     {"device_agent/init/c300x-native-agent", 0700, 0},
     {"device_agent/qml/Alarm.qml", 0644, 0},
     {"device_agent/qml/C300XRingerControl.qml", 0644, 0},
+    {"device_agent/qml/js/c300x_ringer.js", 0644, 0},
     {"device_agent/qml/HomeAssistant.qml", 0644, 0},
     {"device_agent/qml/C300XEnergy.qml", 0644, 0},
     {"device_agent/qml/C300XEnergyConsumers.qml", 0644, 0},

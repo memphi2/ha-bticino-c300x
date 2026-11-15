@@ -12,7 +12,7 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
-CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
+CORE_PATCH_FILES="C300XRingerControl.qml js/c300x_ringer.js EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
 # The display files this integration adds; every list of them derives from here.
 GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
@@ -179,6 +179,7 @@ core_patch_present() {
         && file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
         && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && cmp -s "$SOURCE_DIR/C300XRingerControl.qml" "$GUI_DIR/C300XRingerControl.qml" \
+        && cmp -s "$SOURCE_DIR/js/c300x_ringer.js" "$GUI_DIR/js/c300x_ringer.js" \
         && core_call_end_hooks_present
 }
 
@@ -187,7 +188,8 @@ core_partial_patch_present() {
         || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
         || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()' \
         || file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
-        || [ -f "$GUI_DIR/C300XRingerControl.qml" ]
+        || [ -f "$GUI_DIR/C300XRingerControl.qml" ] \
+        || [ -f "$GUI_DIR/js/c300x_ringer.js" ]
 }
 
 media_user_label_present() {
@@ -1112,6 +1114,7 @@ generate_core_patch_stage() {
     export PATCH_OUTPUT_DIR
     patch_event_manager
     copy_generated_file "C300XRingerControl.qml"
+    copy_generated_file "js/c300x_ringer.js"
     unset PATCH_OUTPUT_DIR
 }
 
@@ -1144,6 +1147,7 @@ generate_full_patch_stage() {
     patch_event_manager
     verify_alert_takeover_hooks "$STAGING_DIR/EventManager.qml"
     copy_generated_file "C300XRingerControl.qml"
+    copy_generated_file "js/c300x_ringer.js"
     patch_home_page
     patch_memo_page
     patch_general_settings
@@ -1461,11 +1465,14 @@ restore_core_changed_count() {
     if [ -e "$GUI_DIR/C300XRingerControl.qml" ]; then
         changed=$((changed + 1))
     fi
+    if [ -e "$GUI_DIR/js/c300x_ringer.js" ]; then
+        changed=$((changed + 1))
+    fi
     printf '%s\n' "$changed"
 }
 
 is_generated_patch_file() {
-    for known_rel in $GENERATED_FEATURE_FILES C300XRingerControl.qml; do
+    for known_rel in $GENERATED_FEATURE_FILES C300XRingerControl.qml js/c300x_ringer.js; do
         if [ "$1" = "$known_rel" ]; then
             return 0
         fi
@@ -1523,6 +1530,8 @@ restore_core_patch_files() {
         restore_file "EventManager.qml"
     fi
     restore_file "C300XRingerControl.qml"
+    restore_file "js/c300x_ringer.js"
+    REMOVE_EMPTY_JS=1
 }
 
 restore_all_changed_count() {

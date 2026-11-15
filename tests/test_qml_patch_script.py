@@ -269,6 +269,7 @@ SOURCE_INSTALLED_FILES = (
     "C300XEnergySums.qml",
     "js/c300x_energy.js",
     "C300XRingerControl.qml",
+    "js/c300x_ringer.js",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
     "js/c300x_memos.js",
@@ -360,12 +361,13 @@ def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
     assert "c300xNotifyMediaClosed()" in (gui_dir / "EventManager.qml").read_text()
     assert not (gui_dir / "Alarm.qml").exists()
     assert not (gui_dir / "HomeAssistant.qml").exists()
-    assert not (gui_dir / "js").exists()
+    assert {path.name for path in (gui_dir / "js").iterdir()} == {"c300x_ringer.js"}
 
     core_restored_status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-restore")
     assert core_restored_status["state"] == "original"
     assert core_restored_status["core_state"] == "original"
-    assert core_restored_status["changed_files"] == 2
+    assert core_restored_status["changed_files"] == 3
+    assert not (gui_dir / "js").exists()
     assert not (gui_dir / "C300XRingerControl.qml").exists()
     assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
 
@@ -452,10 +454,11 @@ def test_qml_core_apply_installs_media_and_ringer_hooks(tmp_path: Path) -> None:
     assert status["patched"] is False
     assert status["core_state"] == "patched"
     assert status["core_patched"] is True
-    assert status["changed_files"] == 2
+    assert status["changed_files"] == 3
     assert (gui_dir / "C300XRingerControl.qml").read_bytes() == (
         SOURCE_DIR / "C300XRingerControl.qml"
     ).read_bytes()
+    assert (gui_dir / "js/c300x_ringer.js").read_bytes() == (SOURCE_DIR / "js/c300x_ringer.js").read_bytes()
     assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
@@ -611,10 +614,27 @@ def test_qml_restore_all_handles_core_only_patch(tmp_path: Path) -> None:
 
     assert status["state"] == "original"
     assert status["core_state"] == "original"
-    assert status["changed_files"] == 2
+    assert status["changed_files"] == 3
     assert not (gui_dir / "C300XRingerControl.qml").exists()
+    assert not (gui_dir / "js").exists()
     assert not (backup_dir / "MainApp.qml").exists()
     assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
+
+
+def test_missing_ringer_helper_marks_core_partial_and_reapply_repairs_it(tmp_path: Path) -> None:
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    backup = tmp_path / "backups"
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "core-apply")
+    helper = gui / "js/c300x_ringer.js"
+    helper.unlink()
+    assert _run_qml_patch(tmp_path, gui, backup, "status")["core_state"] == "partial"
+    repaired = _run_qml_patch(tmp_path, gui, backup, "core-apply")
+    assert repaired["core_state"] == "patched"
+    assert repaired["changed_files"] == 1
+    assert helper.read_bytes() == (SOURCE_DIR / "js/c300x_ringer.js").read_bytes()
+    assert (backup / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
 
 
 def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:

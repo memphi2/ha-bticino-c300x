@@ -51,6 +51,7 @@ INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
 # The display files the agent directory holds; qml_patch.sh installs them.
 DISPLAY_FILES = (
     "C300XRingerControl.qml",
+    "js/c300x_ringer.js",
     "Alarm.qml",
     "HomeAssistant.qml",
     "C300XEnergy.qml",

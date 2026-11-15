@@ -178,6 +178,7 @@ REQUIRED_PATHS = [
     "device_qml/C300XPageNavigation.qml",
     "device_qml/C300XAlerts.qml",
     "device_qml/js/c300x_alerts.js",
+    "device_qml/js/c300x_ringer.js",
     "device_qml/C300XAgenda.qml",
     "device_qml/C300XLeaveHome.qml",
     "device_qml/C300XDetailControl.qml",

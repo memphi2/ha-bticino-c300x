@@ -138,8 +138,6 @@ variables:
   action_scope: "{{ (this.entity_id | default('automation.c300x_ios_ring_call', true)) | replace('.', '_') | upper }}"
   ring_tag: "{{ 'c300x_ios_ring_call_' ~ action_scope | lower }}"
   active_tag: "{{ 'c300x_ios_ring_call_active_' ~ action_scope | lower }}"
-  answer_action: "{{ 'C300X_IOS_RING_ANSWER_' ~ action_scope }}"
-  hangup_action: "{{ 'C300X_IOS_RING_HANGUP_' ~ action_scope }}"
   answer_dashboard_path: >-
     {% set parts = dashboard_path.split('#', 1) %}
     {% set base = parts[0] %}
@@ -158,6 +156,10 @@ condition:
     value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
 
 action:
+  # The script context is available here, after automation variables render.
+  - variables:
+      answer_action: "{{ 'C300X_IOS_RING_ANSWER_' ~ action_scope ~ '_' ~ context.id }}"
+      hangup_action: "{{ 'C300X_IOS_RING_HANGUP_' ~ action_scope ~ '_' ~ context.id }}"
   - service: !input notify_service
     data:
       title: "{{ title }}"

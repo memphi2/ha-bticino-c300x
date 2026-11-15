@@ -179,8 +179,9 @@ the release SBOM records the optional installer dependency separately.
 Incoming HTTP requests have bounded buffers, a total receive deadline and a
 bounded pending-client pool.
 HTTP response bodies may be up to 1200 KiB, the size of the largest visitor
-image, and all queued HTTP output together is limited to the same 1200 KiB, with at most eight waiting connections and a two-second
-send deadline. When that budget is exhausted, further output is rejected rather
+image, and all queued HTTP output together is limited to 1712 KiB, with at most
+eight waiting connections. A queued response ends after two seconds without
+progress and after ten seconds in any case. When that budget is exhausted, further output is rejected rather
 than blocking the device loop or growing the queue.
 Event delivery has one worker and a bounded queue; overflow and failed delivery
 are not reported as successful callbacks. Home

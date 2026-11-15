@@ -18,7 +18,9 @@ struct http_output {
     char *data;
     size_t size;
     size_t sent;
+    /* Without progress until `deadline`, or unfinished at `limit`, it ends. */
     long long deadline;
+    long long limit;
 };
 
 /* Only the agent event loop sends HTTP responses and owns these slots. */
@@ -100,8 +102,10 @@ int c300x_http_write(int fd, const char *data, size_t size)
         return 0;
     }
     memcpy(pending, data + used, size - used);
+    long long queued_at = output_now();
     *slot = (struct http_output){.fd = fd, .data = pending,
-        .size = size - used, .deadline = output_now() + C300X_HTTP_OUTPUT_TIMEOUT_MS};
+        .size = size - used, .deadline = queued_at + C300X_HTTP_OUTPUT_TIMEOUT_MS,
+        .limit = queued_at + C300X_HTTP_OUTPUT_TOTAL_TIMEOUT_MS};
     return 1;
 }
 
@@ -152,6 +156,10 @@ void c300x_http_outputs_handle(const struct pollfd *fds)
             continue;
         }
         output->sent += (size_t)sent;
+        output->deadline = now + C300X_HTTP_OUTPUT_TIMEOUT_MS;
+        if (output->deadline > output->limit) {
+            output->deadline = output->limit;
+        }
         if (output->sent == output->size) {
             clear_output(output, 0);
         }

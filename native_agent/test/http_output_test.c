@@ -68,6 +68,43 @@ static void test_large_response(void)
     free(received);
 }
 
+static void test_progress_extends_the_deadline_up_to_a_total(void)
+{
+    int pair[2];
+    const size_t size = 100000;
+    char *body = calloc(size, 1);
+    struct pollfd fds[C300X_HTTP_MAX_OUTPUTS];
+    struct http_output *slot = NULL;
+    assert(body);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    blocked = 1;
+    assert(c300x_http_write(pair[0], body, size));
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        if (outputs[i].data != NULL) slot = &outputs[i];
+    }
+    assert(slot != NULL);
+    /* A slow link still sends: the two seconds count from the last progress. */
+    slot->deadline = output_now() + 50;
+    blocked = 0;
+    short_writes = 1;
+    c300x_http_outputs_prepare(fds);
+    assert(poll(fds, C300X_HTTP_MAX_OUTPUTS, 10) >= 0);
+    c300x_http_outputs_handle(fds);
+    assert(slot->sent == 7);
+    assert(slot->deadline > output_now() + C300X_HTTP_OUTPUT_TIMEOUT_MS / 2);
+    /* A peer that reads a little now and then cannot hold the slot for ever. */
+    slot->limit = output_now() + 20;
+    c300x_http_outputs_prepare(fds);
+    assert(poll(fds, C300X_HTTP_MAX_OUTPUTS, 10) >= 0);
+    c300x_http_outputs_handle(fds);
+    assert(slot->deadline <= output_now() + 20);
+    short_writes = 0;
+    clear_output(slot, 1);
+    close_agent_socket(pair[0]);
+    close(pair[1]);
+    free(body);
+}
+
 static void test_largest_snapshot_is_accepted(void)
 {
     int pair[2];
@@ -204,5 +241,6 @@ int main(void)
     test_large_response();
     test_queue_memory_budget();
     test_largest_snapshot_is_accepted();
+    test_progress_extends_the_deadline_up_to_a_total();
     return 0;
 }

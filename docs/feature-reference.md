@@ -316,6 +316,11 @@ write files; there is no periodic preference polling. If the agent cannot read
 or save it, the switch is disabled with **Setting unavailable**; reopen General
 to read the actual setting before trying again.
 
+Only the optional Display patch that installs the additional HA/Alarmo pages
+changes General settings. Installing or updating the agent's core media/ringer
+hook alone leaves the page untouched. Turning the Display patch off restores
+General settings while keeping the core media/ringer hook.
+
 The Display patch backs up the original General settings page before changing
 it, keeps the original tone control and restores the page on removal. Unknown
 page layouts or a missing backup of an already patched page abort the operation

@@ -27,6 +27,33 @@ def test_preferences_production_runtime():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.parametrize("action", ["status", "core-apply", "media-user-label-apply"])
+def test_settings_are_untouched_without_optional_display_pages(tmp_path, action):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    settings = gui / SETTINGS
+    settings.chmod(0o640)
+    before = (settings.read_bytes(), settings.stat().st_mode, settings.stat().st_mtime_ns)
+    result = _run_qml_patch(tmp_path, gui, backup, action)
+    assert result["patched"] is False
+    assert (settings.read_bytes(), settings.stat().st_mode, settings.stat().st_mtime_ns) == before
+    assert not (backup / SETTINGS).exists()
+    assert "c300xDisplayPreferences" not in (gui / "MainApp.qml").read_text()
+
+
+def test_disabling_optional_display_restores_settings_but_keeps_media_hooks(tmp_path):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "apply")
+    assert "c300xFeedbackSetting" in (gui / SETTINGS).read_text()
+    result = _run_qml_patch(tmp_path, gui, backup, "restore")
+    assert result["patched"] is False
+    assert result["core_patched"] is True
+    assert (gui / SETTINGS).read_text() == ORIGINAL_GENERAL_SETTINGS
+
+
 def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()

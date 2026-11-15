@@ -7,19 +7,16 @@ Item {
     id: root
     property bool blocked: true
     property bool stopped: false
-    property variant controller: null
     property variant notice: null
-    property variant pendingRequest: null
     property int pollGeneration: 0
     property int resumeAttempts: 5
-    property variant ackRequest: null
     property string acknowledgeLabel: "OK"
     property color accent: !notice || notice.severity === "info" ? "#68baff" : notice.severity === "warning" ? "#f1c40f" : "#ff6b6b"
     onBlockedChanged: updateGuard()
     onVisibleChanged: updateGuard()
 
     function canListen() {
-        return !stopped && !blocked && visible && controller !== null
+        return !stopped && !blocked && visible && !!Alerts.runtimeFor(root)
     }
 
     function updateGuard() {
@@ -33,8 +30,10 @@ Item {
 
     function abortPoll() {
         pollGeneration += 1
-        var request = pendingRequest
-        pendingRequest = null
+        var runtime = Alerts.runtimeFor(root)
+        if (!runtime) return
+        var request = runtime.pendingRequest
+        runtime.pendingRequest = null
         if (request) { request.onreadystatechange = function() {}; request.abort() }
     }
 
@@ -42,7 +41,8 @@ Item {
         abortPoll()
         reconnect.stop()
         resume.stop()
-        if (controller) controller.preempt()
+        var runtime = Alerts.runtimeFor(root)
+        if (runtime) runtime.controller.preempt()
         // Call hooks can run before their guard bindings change, or without a
         // guard transition. Yield once for both bindings and socket teardown.
         resumeAttempts = 5
@@ -50,11 +50,23 @@ Item {
     }
 
     function userInteraction() {
-        if (controller) controller.userInteraction()
+        var runtime = Alerts.runtimeFor(root)
+        if (runtime) runtime.controller.userInteraction()
     }
 
     function acknowledge() {
-        if (controller) controller.acknowledge()
+        var runtime = Alerts.runtimeFor(root)
+        if (runtime) runtime.controller.acknowledge()
+    }
+
+    function screenChanged() {
+        var runtime = Alerts.runtimeFor(root)
+        if (runtime) runtime.controller.screenChanged()
+    }
+
+    function tick() {
+        var runtime = Alerts.runtimeFor(root)
+        if (runtime) runtime.controller.tick()
     }
 
     function soundReady() {
@@ -79,21 +91,22 @@ Item {
     }
 
     function waitForCommand() {
-        if (!canListen() || pendingRequest) return
+        var runtime = Alerts.runtimeFor(root)
+        if (!canListen() || runtime.pendingRequest) return
         reconnect.stop()
         resume.stop()
         var generation = pollGeneration
         var request = new XMLHttpRequest()
-        pendingRequest = request
+        runtime.pendingRequest = request
         request.onreadystatechange = function() {
-            if (!canListen() || generation !== pollGeneration || pendingRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
-            pendingRequest = null
+            if (!canListen() || Alerts.runtimeFor(root) !== runtime || generation !== pollGeneration || runtime.pendingRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
+            runtime.pendingRequest = null
             var valid = false
             if (request.status === 200 && request.responseText.length <= 16384) {
                 try {
                     var command = JSON.parse(request.responseText)
                     valid = !!Alerts.validate(command, new Date().getTime())
-                    if (valid && controller) controller.receive(command)
+                    if (valid) runtime.controller.receive(command)
                 } catch (error) { valid = false }
             }
             if (!canListen() || generation !== pollGeneration) return
@@ -108,7 +121,7 @@ Item {
             request.setRequestHeader("X-C300X-GUI", "alerts-v1")
             request.send()
         } catch (error) {
-            pendingRequest = null
+            runtime.pendingRequest = null
             request.onreadystatechange = function() {}
             request.abort()
             if (canListen() && generation === pollGeneration) reconnect.restart()
@@ -116,13 +129,14 @@ Item {
     }
 
     function sendAcknowledgement(command) {
-        if (stopped) return
+        var runtime = Alerts.runtimeFor(root)
+        if (stopped || !runtime) return
         abortAcknowledgement()
         var request = new XMLHttpRequest()
-        ackRequest = request
+        runtime.ackRequest = request
         request.onreadystatechange = function() {
-            if (stopped || ackRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
-            ackRequest = null
+            if (stopped || Alerts.runtimeFor(root) !== runtime || runtime.ackRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
+            runtime.ackRequest = null
             ackTimeout.stop()
         }
         var option = JSON.stringify({revision: command.revision, action_id: null})
@@ -137,13 +151,16 @@ Item {
 
     function abortAcknowledgement() {
         ackTimeout.stop()
-        var request = ackRequest
-        ackRequest = null
+        var runtime = Alerts.runtimeFor(root)
+        if (!runtime) return
+        var request = runtime.ackRequest
+        runtime.ackRequest = null
         if (request) { request.onreadystatechange = function() {}; request.abort() }
     }
 
     function initialize() {
-        controller = Alerts.createController({
+        if (stopped || Alerts.runtimeFor(root)) return
+        Alerts.attach(root, {
             now: function() { return new Date().getTime() },
             blocked: function() { return root.blocked || root.stopped || !root.visible },
             screen: function() { return global.screenState.state },
@@ -162,20 +179,21 @@ Item {
 
     function shutdown() {
         stopped = true
-        if (controller) controller.destroy()
+        var runtime = Alerts.runtimeFor(root)
+        if (runtime) runtime.controller.destroy()
         effects.stop()
         reconnect.stop()
         resume.stop()
         abortAcknowledgement()
         abortPoll()
-        controller = null
+        Alerts.detach(root)
     }
 
     Connections {
         target: global.screenState
-        onStateChangedInt: if (root.controller) root.controller.screenChanged()
+        onStateChangedInt: root.screenChanged()
     }
-    Timer { id: effects; interval: 250; repeat: true; onTriggered: if (root.controller) root.controller.tick() }
+    Timer { id: effects; interval: 250; repeat: true; onTriggered: root.tick() }
     Timer { id: reconnect; interval: 30000; repeat: false; onTriggered: root.waitForCommand() }
     Timer { id: resume; interval: 100; repeat: false; onTriggered: root.waitForCommand() }
     Timer { id: ackTimeout; interval: 10000; repeat: false; onTriggered: root.abortAcknowledgement() }

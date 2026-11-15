@@ -1,5 +1,28 @@
 .pragma library
 
+// Qt 4 QVariant properties copy JS objects and cannot retain XHR identity or
+// controller closures. Only the QObject owner crosses the QML boundary.
+var runtimes = []
+
+function runtimeFor(owner) {
+    for (var i = 0; i < runtimes.length; i++) {
+        if (runtimes[i].owner === owner) return runtimes[i]
+    }
+    return null
+}
+
+function attach(owner, io) {
+    var runtime = {owner: owner, controller: createController(io), pendingRequest: null, ackRequest: null}
+    runtimes.push(runtime)
+    return runtime
+}
+
+function detach(owner) {
+    for (var i = runtimes.length - 1; i >= 0; i--) {
+        if (runtimes[i].owner === owner) runtimes.splice(i, 1)
+    }
+}
+
 function integer(value, low, high) {
     return typeof value === "number" && isFinite(value) &&
         Math.floor(value) === value && value >= low && value <= high

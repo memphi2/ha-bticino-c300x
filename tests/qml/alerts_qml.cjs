@@ -15,7 +15,7 @@ function timer() {
     return {running: false, starts: 0, restart() { this.running = true; this.starts++; },
         stop() { this.running = false; }};
 }
-function fixture() {
+function fixture(sharedEngine) {
     const requests = [];
     const events = [];
     const audio = {state: 0, audioAccess: false, flag: false,
@@ -42,12 +42,12 @@ function fixture() {
         };
     }
     XHR.DONE = 4;
-    const engine = vm.createContext({});
-    vm.runInContext(js.replace(/^\.pragma library\s*/, ""), engine);
+    const engine = sharedEngine || vm.createContext({});
+    if (!sharedEngine) vm.runInContext(js.replace(/^\.pragma library\s*/, ""), engine);
     const context = vm.createContext({
-        blocked: false, stopped: false, visible: true, controller: null, notice: null,
-        pendingRequest: null, pollGeneration: 0, resumeAttempts: 5,
-        ackRequest: null, XMLHttpRequest: XHR, Alerts: engine,
+        blocked: false, stopped: false, visible: true, notice: null,
+        pollGeneration: 0, resumeAttempts: 5,
+        XMLHttpRequest: XHR, Alerts: engine,
         Date: class extends Date { getTime() { return BASE; } },
         effects: timer(), reconnect: timer(), resume: timer(), ackTimeout: timer(), messageScroll: {contentY: 77},
         ScreenState: {ScreenOff: 0, Normal: 2}, AudioState: {Idle: 0, Beep: 1, RingtoneMute: 4},
@@ -56,10 +56,45 @@ function fixture() {
             beep() { events.push("beep"); if (context.beepThrows) throw Error("beep failed"); }}
     });
     context.root = context;
+    // Node does not implement Qt 4 QVariant conversion. Fail closed if any
+    // runtime handle is ever stored on the QML owner instead of the JS module.
+    for (const name of ["controller", "pendingRequest", "ackRequest"]) {
+        Object.defineProperty(context, name, {
+            get() { throw Error("Qt 4 cannot retain " + name + " in a QML variant"); },
+            set() { throw Error("Qt 4 cannot retain " + name + " in a QML variant"); }
+        });
+    }
     vm.runInContext(methods, context);
-    return {c: context, requests, events, audio,
+    return {c: context, requests, events, audio, engine,
+        get runtime() { return vm.runInContext("Alerts.runtimeFor(root)", context); },
         resume() { assert.equal(context.resume.running, true); context.resume.running = false; context.waitForCommand(); },
         failOpen(value) { failOpen = value; }, failSend(value) { failSend = value; }};
+}
+
+// Lifecycle hooks can fire before Component.onCompleted or after destruction.
+// The .pragma library must retain identities but never retain a dead owner.
+{
+    const f = fixture();
+    assert.equal(f.c.canListen(), false);
+    f.c.updateGuard(); f.c.waitForCommand(); f.c.preempt();
+    f.c.screenChanged(); f.c.tick(); f.c.acknowledge();
+    f.c.sendAcknowledgement(payload);
+    assert.equal(f.requests.length, 0);
+    f.c.initialize();
+    const runtime = f.runtime;
+    f.c.initialize();
+    assert.equal(f.runtime, runtime);
+    assert.equal(f.requests.length, 1, "initialization must be idempotent");
+    const other = fixture(f.engine); other.c.initialize();
+    assert.notEqual(other.runtime, runtime);
+    const otherRequest = other.runtime.pendingRequest;
+    f.c.shutdown(); f.c.shutdown(); f.c.initialize();
+    assert.equal(f.runtime, null);
+    assert.equal(f.engine.runtimes.length, 1);
+    assert.equal(other.runtime.pendingRequest, otherRequest);
+    assert.equal(otherRequest.aborted, false);
+    other.c.shutdown();
+    assert.equal(f.engine.runtimes.length, 0, "destroy must release owner and closures");
 }
 
 // Temporary RAM state is restored even on an exception or synchronous call takeover.
@@ -116,14 +151,14 @@ for (const blocked of ["blocked", "stopped"]) {
 for (const response of [[500, {}], [200, "invalid json"], [200, {...payload, unknown: 1}],
     [200, {...payload, expires: BASE}], [200, "x".repeat(16385)]]) {
     const f = fixture(); f.c.initialize(); f.requests[0].complete(...response);
-    assert.equal(f.requests.length, 1); assert.equal(f.c.pendingRequest, null);
+    assert.equal(f.requests.length, 1); assert.equal(f.runtime.pendingRequest, null);
     assert.equal(f.c.reconnect.running, true); assert.equal(f.c.notice, null);
     f.c.waitForCommand(); assert.equal(f.requests.length, 2); f.c.shutdown();
     assert.equal(f.c.reconnect.running, false);
 }
 for (const fault of ["failOpen", "failSend"]) {
     const f = fixture(); f[fault](true); f.c.initialize();
-    assert.equal(f.c.pendingRequest, null); assert.equal(f.c.reconnect.running, true);
+    assert.equal(f.runtime.pendingRequest, null); assert.equal(f.c.reconnect.running, true);
     assert.equal(f.requests[0].aborted, true); f.c.shutdown();
 }
 for (const guard of ["blocked", "visible"]) {
@@ -132,33 +167,33 @@ for (const guard of ["blocked", "visible"]) {
     f.c[guard] = guard !== "blocked"; f.c.updateGuard();
     assert.equal(f.requests.length, 0, "guard clear yields for socket teardown");
     f.resume(); assert.equal(f.requests.length, 1);
-    const old = f.c.pendingRequest, stale = old.onreadystatechange;
+    const old = f.runtime.pendingRequest, stale = old.onreadystatechange;
     f.c[guard] = guard === "blocked"; f.c.updateGuard();
-    assert.equal(old.aborted, true); assert.equal(f.c.pendingRequest, null);
+    assert.equal(old.aborted, true); assert.equal(f.runtime.pendingRequest, null);
     assert.equal(f.c.resume.running, false); assert.equal(f.c.reconnect.running, false);
     f.c.waitForCommand(); assert.equal(f.requests.length, 1);
     f.c[guard] = guard !== "blocked"; f.c.updateGuard(); f.resume();
-    const current = f.c.pendingRequest;
+    const current = f.runtime.pendingRequest;
     old.status = 200; old.responseText = JSON.stringify(payload); old.readyState = 4;
     stale();
-    assert.equal(f.c.pendingRequest, current, "old callback cannot steal resumed listener");
+    assert.equal(f.runtime.pendingRequest, current, "old callback cannot steal resumed listener");
     assert.equal(f.c.notice, null); assert.equal(f.events.includes("wake"), false);
     assert.equal(f.events.includes("beep"), false);
     current.complete(200, payload); assert.equal(f.c.notice.title, payload.title);
     f.c.shutdown();
 }
 {
-    const f = fixture(); f.c.initialize(); const old = f.c.pendingRequest;
+    const f = fixture(); f.c.initialize(); const old = f.runtime.pendingRequest;
     const stale = old.onreadystatechange;
     f.c.preempt();
     assert.equal(old.aborted, true); assert.equal(f.requests.length, 1);
     f.resume(); assert.equal(f.requests.length, 2, "call hook without guard change resumes once");
     old.status = 200; old.responseText = JSON.stringify(payload); old.readyState = 4;
     stale(); assert.equal(f.c.notice, null);
-    f.c.pendingRequest.complete(409, {});
+    f.runtime.pendingRequest.complete(409, {});
     assert.equal(f.c.reconnect.running, false, "hangup/re-arm race must not deafen for 30 seconds");
     for (let attempt = 0; attempt < 5; attempt++) {
-        f.resume(); f.c.pendingRequest.complete(409, {});
+        f.resume(); f.runtime.pendingRequest.complete(409, {});
     }
     assert.equal(f.c.resume.running, false, "busy retries are bounded");
     assert.equal(f.c.reconnect.running, true);
@@ -166,13 +201,13 @@ for (const guard of ["blocked", "visible"]) {
     assert.equal(f.c.reconnect.running, false);
     f.c.blocked = false; f.c.updateGuard(); f.resume();
     assert.equal(f.c.resumeAttempts, 5);
-    f.c.pendingRequest.complete(200, payload); assert.equal(f.c.notice.title, payload.title);
+    f.runtime.pendingRequest.complete(200, payload); assert.equal(f.c.notice.title, payload.title);
     f.c.shutdown(); assert.equal(f.c.resume.running, false);
 }
 {
     const f = fixture(); f.c.initialize();
     f.audio.onEnable = () => f.c.preempt();
-    f.c.pendingRequest.complete(200, payload);
+    f.runtime.pendingRequest.complete(200, payload);
     assert.equal(f.c.notice, null); assert.equal(f.requests.length, 1,
         "preemption during receive must not immediately re-arm old generation");
     assert.equal(f.c.resume.running, true); f.c.shutdown();
@@ -192,7 +227,7 @@ for (const guard of ["blocked", "visible"]) {
     assert.equal(url.searchParams.get("service"), "toggle");
     assert.equal(url.searchParams.get("entities"), "notification.warning_notice");
     assert.deepEqual(JSON.parse(url.searchParams.get("option")), {revision: payload.revision, action_id: null});
-    assert.equal(f.c.ackTimeout.running, true); assert.equal(f.c.pendingRequest, f.requests[1]);
+    assert.equal(f.c.ackTimeout.running, true); assert.equal(f.runtime.pendingRequest, f.requests[1]);
     ack.complete(500, {}); assert.equal(f.c.ackTimeout.running, false);
     assert.equal(f.c.notice, null, "ack delivery failure must not resume effects");
     const n = f.requests.length; f.c.acknowledge(); assert.equal(f.requests.length, n);
@@ -200,20 +235,25 @@ for (const guard of ["blocked", "visible"]) {
 }
 {
     const f = fixture(); f.c.initialize(); f.c.sendAcknowledgement(payload);
-    const ack = f.c.ackRequest; f.c.abortAcknowledgement(); assert.equal(ack.aborted, true);
-    f.c.sendAcknowledgement(payload); const pendingAck = f.c.ackRequest;
-    const staleGet = f.c.pendingRequest.onreadystatechange;
+    const ack = f.runtime.ackRequest, oldCallback = ack.onreadystatechange;
+    f.c.abortAcknowledgement(); assert.equal(ack.aborted, true);
+    f.c.sendAcknowledgement(payload); const pendingAck = f.runtime.ackRequest;
+    oldCallback();
+    assert.equal(f.runtime.ackRequest, pendingAck, "late acknowledgement cannot clear replacement");
+    assert.equal(f.c.ackTimeout.running, true);
+    const staleGet = f.runtime.pendingRequest.onreadystatechange;
     f.c.shutdown(); assert.equal(pendingAck.aborted, true);
     const n = f.requests.length; staleGet(); f.c.waitForCommand(); f.c.sendAcknowledgement(payload);
     f.c.preempt(); f.c.userInteraction(); f.c.acknowledge();
-    assert.equal(f.requests.length, n); assert.equal(f.c.controller, null);
+    assert.equal(f.requests.length, n); assert.equal(f.runtime, null);
     assert.equal(f.c.effects.running, false); assert.equal(f.c.reconnect.running, false);
 }
 
 assert.match(qml, /property bool blocked: true/);
 assert.match(qml, /onBlockedChanged: updateGuard\(\)/);
 assert.match(qml, /onVisibleChanged: updateGuard\(\)/);
-assert.match(qml, /onStateChangedInt: if \(root.controller\) root.controller.screenChanged\(\)/);
+assert.match(qml, /onStateChangedInt: root.screenChanged\(\)/);
+assert.doesNotMatch(qml, /property\s+(?:variant|var)\s+(?:controller|pendingRequest|ackRequest)\b/);
 assert.match(qml, /id: reconnect; interval: 30000; repeat: false/);
 assert.match(qml, /id: resume; interval: 100; repeat: false/);
 assert.match(qml, /id: ackTimeout; interval: 10000; repeat: false/);
@@ -236,7 +276,7 @@ assert.equal((qml.match(/disableState\(ScreenState.Normal\)/g) || []).length, 1)
     assert.equal(mouse.accepted, false, "underlying item must receive the same press");
     assert.equal(f.c.notice.title, payload.title);
     const calls = f.events.length;
-    for (let i = 0; i < 120; i++) f.c.controller.tick();
+    for (let i = 0; i < 120; i++) f.c.tick();
     assert.equal(f.events.slice(calls).some(e => ["wake", "beep", "release"].includes(e)), false);
     f.c.shutdown();
 }

@@ -211,6 +211,15 @@ action:
         event_data:
           event_key: door_unlock_started
           entry_id: "{{ entry_id }}"
+      # The same unlock as Home Assistant reports it the moment its own unlock
+      # call returns, so the alert does not depend on the device's event
+      # reaching Home Assistant.
+      - id: door_unlock_action
+        platform: event
+        event_type: bticino_c300x_action_received
+        event_data:
+          action_id: door_unlock
+          entry_id: "{{ entry_id }}"
     timeout: "{{ notification_timeout_seconds | int(60) }}"
     continue_on_timeout: true
   - choose:

@@ -167,11 +167,6 @@ condition:
 action:
   - service: !input notify_service
     data:
-      message: command_screen_on
-      data:
-        command: keep_screen_on
-  - service: !input notify_service
-    data:
       title: "{{ title }}"
       message: "{{ message }}"
       data:
@@ -198,6 +193,15 @@ action:
           - action: URI
             title: "{{ open_title }}"
             uri: "{{ dashboard_path }}"
+  # Commands travel as data messages. Without high priority and ttl 0 Android
+  # holds them back while the phone dozes, so each command asks for both.
+  - service: !input notify_service
+    data:
+      message: command_screen_on
+      data:
+        command: keep_screen_on
+        priority: high
+        ttl: 0
   - wait_for_trigger:
       - platform: event
         event_type: mobile_app_notification_action
@@ -216,6 +220,15 @@ action:
         event_data:
           event_key: door_unlock_started
           entry_id: "{{ entry_id }}"
+      # The same unlock as Home Assistant reports it the moment its own unlock
+      # call returns, so the alert does not depend on the device's event
+      # reaching Home Assistant.
+      - id: door_unlock_action
+        platform: event
+        event_type: bticino_c300x_action_received
+        event_data:
+          action_id: door_unlock
+          entry_id: "{{ entry_id }}"
     timeout: "{{ notification_timeout_seconds | int(60) }}"
     continue_on_timeout: true
   - choose:
@@ -233,6 +246,8 @@ action:
               message: clear_notification
               data:
                 tag: "{{ ring_tag }}"
+                priority: high
+                ttl: 0
           - service: !input notify_service
             data:
               title: "{{ title }}"
@@ -260,6 +275,8 @@ action:
               message: command_webview
               data:
                 command: "{{ answer_dashboard_path }}"
+                priority: high
+                ttl: 0
           - wait_for_trigger:
               - platform: event
                 event_type: mobile_app_notification_action
@@ -281,6 +298,8 @@ action:
               message: clear_notification
               data:
                 tag: "{{ active_tag }}"
+                priority: high
+                ttl: 0
       - conditions:
           - condition: template
             value_template: >-
@@ -295,6 +314,8 @@ action:
               message: clear_notification
               data:
                 tag: "{{ ring_tag }}"
+                priority: high
+                ttl: 0
     # Ring timeout, or the door was opened before anyone reacted: clear the
     # alert. On a door unlock the Ring Call itself is deliberately left alone --
     # opening the door does not decide whether someone still wants to talk to
@@ -305,3 +326,5 @@ action:
           message: clear_notification
           data:
             tag: "{{ ring_tag }}"
+            priority: high
+            ttl: 0

@@ -223,8 +223,9 @@ def test_doorbell_notification_derives_camera_from_device() -> None:
 def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None:
     data = _blueprint("doorbell_call_android.yaml")
     inputs = data["blueprint"]["input"]
-    wake_action = data["action"][0]
-    action = data["action"][1]
+    # The ringing notification goes out first; nothing may sit ahead of it.
+    action = data["action"][0]
+    wake_action = data["action"][1]
     notify_data = action["data"]["data"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
     services = [
@@ -313,6 +314,15 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
             "event_type": "bticino_c300x_agent_event_received",
             "event_data": {
                 "event_key": "door_unlock_started",
+                "entry_id": "{{ entry_id }}",
+            },
+        },
+        {
+            "id": "door_unlock_action",
+            "platform": "event",
+            "event_type": "bticino_c300x_action_received",
+            "event_data": {
+                "action_id": "door_unlock",
                 "entry_id": "{{ entry_id }}",
             },
         },
@@ -421,6 +431,15 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
                 "entry_id": "{{ entry_id }}",
             },
         },
+        {
+            "id": "door_unlock_action",
+            "platform": "event",
+            "event_type": "bticino_c300x_action_received",
+            "event_data": {
+                "action_id": "door_unlock",
+                "entry_id": "{{ entry_id }}",
+            },
+        },
     ]
     assert answer_sequence[1] == {
         "service": "bticino_c300x.answer_doorbell_call",
@@ -525,7 +544,25 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
             }
         ], filename
 
-        # No branch matches the door-unlock trigger, so it lands here.
+        # Home Assistant's own unlock is heard directly as well, so the alert
+        # stops even when the device's event arrives late or not at all.
+        assert [
+            trigger
+            for trigger in wait_triggers
+            if trigger.get("id") == "door_unlock_action"
+        ] == [
+            {
+                "id": "door_unlock_action",
+                "platform": "event",
+                "event_type": "bticino_c300x_action_received",
+                "event_data": {
+                    "action_id": "door_unlock",
+                    "entry_id": "{{ entry_id }}",
+                },
+            }
+        ], filename
+
+        # No branch matches a door-unlock trigger, so it lands here.
         assert [step["service"] for step in default_sequence] == [
             "notify_service"
         ], filename
@@ -542,3 +579,44 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
         # The Ring Call keeps running: opening the door does not decide whether
         # someone still wants to talk to the visitor.
         assert "hangup_doorbell_call" not in str(default_sequence), filename
+
+
+def test_android_ring_call_commands_are_sent_as_urgent_messages() -> None:
+    """A command is a data message. Android holds a normal-priority one back
+    while the phone dozes, so the phone keeps ringing after the door opened and
+    the screen wakes late. Every command has to ask for high priority and
+    immediate delivery, like the ringing notification itself."""
+
+    data = _blueprint("doorbell_call_android.yaml")
+    commands = []
+
+    def collect(node: object) -> None:
+        if isinstance(node, dict):
+            payload = node.get("data")
+            if (
+                "service" in node
+                and isinstance(payload, dict)
+                and str(payload.get("message", "")).startswith(
+                    ("command_", "clear_notification")
+                )
+            ):
+                commands.append(payload)
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(data["action"])
+
+    assert sorted(command["message"] for command in commands) == [
+        "clear_notification",
+        "clear_notification",
+        "clear_notification",
+        "clear_notification",
+        "command_screen_on",
+        "command_webview",
+    ]
+    for command in commands:
+        assert command["data"]["priority"] == "high", command["message"]
+        assert command["data"]["ttl"] == 0, command["message"]

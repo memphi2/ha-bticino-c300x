@@ -142,6 +142,7 @@ async def async_status(
             bool(actions)
             or bool(dashboard_entities)
             or configured_weather_entity_id(entry) is not None
+            or bool(configured_energy_page(entry)["enabled"])
             or bool(notification_payload(entry))
         ),
         "preventReturnToHomepage": configured_dashboard_prevent_return(entry),

@@ -2043,6 +2043,18 @@ def test_async_status_hides_display_ui_when_disabled() -> None:
     assert result["actions"] == []
 
 
+def test_async_status_marks_dashboard_available_with_only_the_energy_page() -> None:
+    """The Home Assistant button leads to the energy page even when nothing else is set up."""
+
+    entry = FakeEntry(data={
+        CONF_DEVICE_UI_ENABLED: True,
+        "energy_page": {"enabled": True, "position": 1, "views": ["now"]},
+    })
+    assert run(async_status(FakeHass(), entry))["dashboard_available"] is True
+    entry = FakeEntry(data={CONF_DEVICE_UI_ENABLED: True})
+    assert run(async_status(FakeHass(), entry))["dashboard_available"] is False
+
+
 def test_async_status_marks_dashboard_available_with_weather_entity() -> None:
     hass = FakeHass()
     entry = FakeEntry(

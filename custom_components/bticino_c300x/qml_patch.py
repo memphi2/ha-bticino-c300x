@@ -18,19 +18,17 @@ def _qml_patch_lock(entry: BticinoC300XConfigEntry) -> Lock:
     return entry_lock(entry.entry_id, "qml_patch")
 
 
-async def async_refresh_qml_patch_status(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
-    """Refresh and store the device-reported Display patch status."""
+async def async_refresh_qml_patch_status(
+    entry: BticinoC300XConfigEntry, *, wait_busy: bool = False,
+) -> dict[str, Any]:
+    """Refresh and store the device-reported Display patch status.
 
-    status = await entry.runtime_data.api.async_qml_patch_status()
-    _store_qml_patch_status(entry, status)
-    return status
+    ``wait_busy`` waits while the agent runs another maintenance job.
+    """
 
-
-async def _async_refresh_status_when_free(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
-    """Refresh the patch status, waiting while the agent runs another job."""
-
-    status: dict[str, Any] = await async_retry_update_maintenance_busy(
-        entry.runtime_data.api.async_qml_patch_status
+    read = entry.runtime_data.api.async_qml_patch_status
+    status: dict[str, Any] = await (
+        async_retry_update_maintenance_busy(read) if wait_busy else read()
     )
     _store_qml_patch_status(entry, status)
     return status
@@ -89,10 +87,10 @@ async def async_restore_qml_patches_after_update(
                 transient_state="patching",
                 expected_patched=True,
                 action=lambda: busy_retry(full_patch),
-                refresh=_async_refresh_status_when_free,
+                refresh=lambda entry: async_refresh_qml_patch_status(entry, wait_busy=True),
             )
         await busy_retry(api.async_reload_gui)
-        return await _async_refresh_status_when_free(entry)
+        return await async_refresh_qml_patch_status(entry, wait_busy=True)
 
 
 async def async_apply_qml_core_patch_and_confirm(

@@ -29,6 +29,7 @@ from .api_errors import (
 )
 
 _MAINTENANCE_JOB_TIMEOUT = 15.0
+_UPDATE_REQUEST_TIMEOUT = 20.0
 
 
 class _ApiMaintenanceMixin(_C300XApiCore):
@@ -307,7 +308,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
                 "final": final,
             },
             extra_headers=self._maintenance_headers(),
-            request_timeout=max(self._timeout, 20.0),
+            request_timeout=self._job_timeout(_UPDATE_REQUEST_TIMEOUT),
         )
         return _ok_response(response)
 
@@ -319,7 +320,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/update/apply",
             json_data={"bundle_hash": bundle_hash, "confirm": "update_agent"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=max(self._timeout, 20.0),
+            request_timeout=self._job_timeout(_UPDATE_REQUEST_TIMEOUT),
         )
         return _ok_response(data)
 
@@ -331,7 +332,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/config/actions/normalize",
             json_data={"confirm": "normalize_config"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=max(self._timeout, 20.0),
+            request_timeout=self._job_timeout(_UPDATE_REQUEST_TIMEOUT),
         )
         return _ok_response(data)
 
@@ -350,7 +351,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/device-user/actions/ensure-homeassistant",
             json_data=payload,
             extra_headers=self._maintenance_headers(),
-            request_timeout=max(self._timeout, 20.0),
+            request_timeout=self._job_timeout(_UPDATE_REQUEST_TIMEOUT),
         )
         return normalize_device_user_status(data)
 
@@ -362,7 +363,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/device-user/actions/restore-homeassistant-setup",
             json_data={"confirm": "restore_ha_user_setup"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=max(self._timeout, 20.0),
+            request_timeout=self._job_timeout(_UPDATE_REQUEST_TIMEOUT),
         )
         return normalize_device_user_status(data)
 
@@ -452,14 +453,15 @@ class _ApiMaintenanceMixin(_C300XApiCore):
         )
         return _ok_response(data)
 
-    def _job_timeout(self) -> float:
+    def _job_timeout(self, minimum: float = _MAINTENANCE_JOB_TIMEOUT) -> float:
         """Return the wait for a request the agent answers after running a script.
 
         The agent gives such a script 10 s. Giving up earlier reports a
         failure for work that is still running and finishes on its own.
+        Update requests also write to the device's flash and get longer.
         """
 
-        return max(self._timeout, _MAINTENANCE_JOB_TIMEOUT)
+        return max(self._timeout, minimum)
 
     async def async_reload_gui(self) -> dict[str, Any]:
         """Reload the C300X graphical interface through the maintenance API."""

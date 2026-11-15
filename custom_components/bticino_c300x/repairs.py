@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -963,12 +964,16 @@ async def _async_capture_external_patch_state(
     """Capture active patch state without mutating the device."""
 
     api = entry.runtime_data.api
+
+    async def read(status: Callable[[], Awaitable[dict[str, Any]]]) -> dict[str, Any]:
+        if not require_reliable:
+            return await status()
+        result: dict[str, Any] = await async_retry_update_maintenance_busy(status)
+        return result
+
     qml_status = getattr(entry.runtime_data, "qml_patch_status", {})
     try:
-        qml_status = (
-            await async_retry_update_maintenance_busy(api.async_qml_patch_status)
-            if require_reliable else await api.async_qml_patch_status()
-        )
+        qml_status = await read(api.async_qml_patch_status)
         entry.runtime_data.qml_patch_status = qml_status
     except C300XAgentApiUnsupportedError:
         pass
@@ -980,10 +985,7 @@ async def _async_capture_external_patch_state(
     firewall_patched = False
     firewall_status_known = False
     try:
-        firewall_status = (
-            await async_retry_update_maintenance_busy(api.async_firewall_status)
-            if require_reliable else await api.async_firewall_status()
-        )
+        firewall_status = await read(api.async_firewall_status)
         firewall_patched = firewall_status.get("patched") is True
         firewall_status_known = firewall_status.get("patched") is not None
     except C300XAgentApiUnsupportedError:
@@ -995,10 +997,7 @@ async def _async_capture_external_patch_state(
 
     ipv6_firewall_patched = False
     try:
-        ipv6_firewall_status = (
-            await async_retry_update_maintenance_busy(api.async_ipv6_firewall_status)
-            if require_reliable else await api.async_ipv6_firewall_status()
-        )
+        ipv6_firewall_status = await read(api.async_ipv6_firewall_status)
         ipv6_firewall_patched = ipv6_firewall_status.get("patched") is True
     except C300XAgentApiUnsupportedError:
         pass

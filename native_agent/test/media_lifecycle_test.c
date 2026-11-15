@@ -612,6 +612,18 @@ int main(int argc, char **argv) {
         assert(c300x_rtsp_read_timeout(0, 180, now + 5000) == 5);
         assert(c300x_rtsp_read_timeout(0, 180, now + 400000) == 180);
         assert(c300x_rtsp_read_timeout(0, 180, now - 1) == 0);
+    } else if (strcmp(argv[1], "relay_ports") == 0) {
+        /* The device media service sends to 127.0.0.1; nothing else may. */
+        assert(create_rtp_socket(&g_bridge));
+        int relay_fds[2] = {g_bridge.rtp_fd, g_bridge.audio_rtp_fd};
+        for (int i = 0; i < 2; i++) {
+            struct sockaddr_in bound;
+            socklen_t bound_len = sizeof(bound);
+            assert(getsockname(relay_fds[i], (struct sockaddr *)&bound, &bound_len) == 0);
+            assert(bound.sin_addr.s_addr == htonl(INADDR_LOOPBACK));
+            close(relay_fds[i]);
+        }
+        g_bridge.rtp_fd = g_bridge.audio_rtp_fd = -1;
     } else if (strcmp(argv[1], "talkback_stop_race") == 0) {
         talkback_stop_race_test();
     } else if (strcmp(argv[1], "sip_join") == 0) {

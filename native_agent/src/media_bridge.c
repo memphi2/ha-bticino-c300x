@@ -5370,12 +5370,12 @@ static bool start_talkback_proxy(media_bridge_t *bridge) {
 }
 
 static bool create_rtp_socket(media_bridge_t *bridge) {
-    int video_fd = bind_udp_port(video_rtp_port(bridge->config));
+    int video_fd = bind_udp_loopback_port(video_rtp_port(bridge->config));
     if (video_fd < 0) {
         return false;
     }
     set_socket_receive_buffer(video_fd, MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES);
-    int audio_fd = bind_udp_port(audio_rtp_port(bridge->config));
+    int audio_fd = bind_udp_loopback_port(audio_rtp_port(bridge->config));
     if (audio_fd < 0) {
         close(video_fd);
         return false;

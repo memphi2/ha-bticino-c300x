@@ -94,6 +94,21 @@ def test_json_unicode_roundtrip_and_field_boundaries(lab):
     assert lab.config_path.read_bytes() == before
 
 
+@pytest.mark.parametrize("auth_config", [{
+    "maintenance": {"enabled": True, "adminToken": "existing-admin"},
+}], indirect=True)
+def test_mqtt_settings_the_agent_would_refuse_at_start_are_not_saved(lab):
+    """Enabled MQTT without any topic stops the agent at its next start."""
+
+    before = lab.config_path.read_bytes()
+    status, body = request(lab.api, "/api/v1/maintenance/mqtt", {
+        "enabled": True, "host": "broker.test", "commandTopic": "", "eventTopic": "",
+    }, headers={HEADER: "existing-admin"})
+    assert status == 400
+    assert body["error"] == "mqtt_topic_required"
+    assert lab.config_path.read_bytes() == before
+
+
 @pytest.mark.parametrize("body", [
     b'{"noAuth":trueX}', b'{"apiToken":"bad\\u0000suffix"}',
     b'{"apiToken":"bad\\uD800"}', b'{"noAuth":true}garbage',

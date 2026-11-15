@@ -47,6 +47,9 @@
 
 ### Fixed
 
+- Receive the device's video and audio packets for on-demand video on the
+  loopback interface only; hosts on the local network could send packets into
+  a running stream.
 - Accept UDP event frames in the agent only from the device itself; any host
   on the network could inject device events before. See `SECURITY.md`.
 - Begin a ring's talkback and preview without waiting for a video session
@@ -76,7 +79,12 @@
   microphone twice.
 - Play the Home Call ringback only on the card that started the call.
 - Keep the restarted display GUI running when a Display patch job passes its
-  time limit.
+  time limit, and keep it from holding the agent's video port open, which
+  could leave video dead after the next agent restart.
+- Close the stream on the card at once when Home Assistant ends a session
+  itself, instead of showing a frozen picture until the connection times out.
+- Refuse MQTT settings without any topic; saved, they stopped the agent at its
+  next start.
 - Keep a memo delete button usable after a failed read.
 
 ### Upgrade Notes

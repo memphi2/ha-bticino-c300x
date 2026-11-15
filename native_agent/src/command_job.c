@@ -13,6 +13,11 @@
 
 extern char **environ;
 
+/* A started script, and whatever it starts in turn (the patch script
+ * restarts the GUI), must not keep the agent's sockets open: a listening
+ * media socket held by the GUI blocks the port for the next agent start. */
+#define C300X_COMMAND_INHERITED_FD_LIMIT 256
+
 void c300x_command_job_init(struct c300x_command_job *job)
 {
     memset(job, 0, sizeof(*job));
@@ -63,6 +68,10 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
     error = posix_spawn_file_actions_adddup2(&actions, pipes[1], STDOUT_FILENO);
     error |= posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
     error |= posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    /* Closing a descriptor that is not open is not an error for spawn. */
+    for (int fd = STDERR_FILENO + 1; fd < C300X_COMMAND_INHERITED_FD_LIMIT; fd++) {
+        error |= posix_spawn_file_actions_addclose(&actions, fd);
+    }
     error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
     error |= posix_spawnattr_setpgroup(&attr, 0);
     if (error == 0) {
@@ -210,6 +219,9 @@ int c300x_command_capture(
             close(null_fd);
         }
         close(pipe_fd[1]);
+        for (int fd = STDERR_FILENO + 1; fd < C300X_COMMAND_INHERITED_FD_LIMIT; fd++) {
+            close(fd);
+        }
         execl(program, program, argument, (char *)NULL);
         _exit(127);
     }

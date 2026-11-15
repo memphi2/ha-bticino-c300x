@@ -3964,6 +3964,10 @@ static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const
         *error = "mqtt_command_host_required";
         return 0;
     }
+    if (config->mqtt_enabled && config->mqtt_command_topic[0] == '\0' && config->mqtt_event_topic[0] == '\0') {
+        *error = "mqtt_topic_required";
+        return 0;
+    }
     if (config->mqtt_qos != 0) {
         *error = "mqtt_qos_unsupported";
         return 0;

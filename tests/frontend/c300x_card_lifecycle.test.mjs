@@ -123,3 +123,15 @@ test("lifecycle clearPeer keeps suppression but clears local session state", () 
   assert.equal(lifecycle.passiveAnsweredPreviewStarted, false);
   assert.equal(lifecycle.doorbellAnswered, false);
 });
+
+test("lifecycle keeps the passive preview away from a card that is answering", () => {
+  const args = { mediaState: "ring_active", webrtcRunning: true, transitionActive: false };
+  const lifecycle = new C300XCardLifecycleState();
+  lifecycle.ringPreviewActive = true;
+
+  lifecycle.answeringDoorbell = true;
+  assert.equal(lifecycle.shouldStartPassiveAnsweredPreview(args), false);
+  lifecycle.answeringDoorbell = false;
+  assert.equal(lifecycle.shouldStartPassiveAnsweredPreview({ ...args, answerLaunch: true }), false);
+  assert.equal(lifecycle.shouldStartPassiveAnsweredPreview(args), true);
+});

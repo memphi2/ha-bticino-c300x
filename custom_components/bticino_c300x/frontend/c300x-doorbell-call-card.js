@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=0f5c9c3ae9e35769";
+} from "./c300x-translations.js?v=74eb2b7dc298f45a";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,24 +15,24 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=0f5c9c3ae9e35769";
+} from "./c300x-entity-resolver.js?v=74eb2b7dc298f45a";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=0f5c9c3ae9e35769";
-import { C300XCardActions } from "./c300x-card-actions.js?v=0f5c9c3ae9e35769";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=0f5c9c3ae9e35769";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=0f5c9c3ae9e35769";
+} from "./c300x-card-editor.js?v=74eb2b7dc298f45a";
+import { C300XCardActions } from "./c300x-card-actions.js?v=74eb2b7dc298f45a";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=74eb2b7dc298f45a";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=74eb2b7dc298f45a";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=0f5c9c3ae9e35769";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=0f5c9c3ae9e35769";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=0f5c9c3ae9e35769";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=0f5c9c3ae9e35769";
+} from "./c300x-state-model.js?v=74eb2b7dc298f45a";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=74eb2b7dc298f45a";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=74eb2b7dc298f45a";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=74eb2b7dc298f45a";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -539,6 +539,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       mediaState,
       webrtcRunning: this._webrtc.running,
       transitionActive: !!this._transitionWebrtc,
+      answerLaunch: this._ringAnswerLaunchPending || this._ringAnswerLaunchStarting,
     })) {
       this._startPassiveAnsweredDoorbellPreview();
     }
@@ -797,6 +798,9 @@ class C300XDoorbellCallCard extends HTMLElement {
       if (generation !== this._mediaGeneration) {
         stream.getTracks().forEach((track) => track.stop());
         return;
+      }
+      if (this._micStream && this._micStream !== stream) {
+        this._micStream.getTracks().forEach((track) => track.stop());
       }
       this._micStream = stream;
       this._applyMicMuted();

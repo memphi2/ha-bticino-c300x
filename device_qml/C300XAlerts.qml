@@ -182,6 +182,15 @@ Item {
     Component.onCompleted: initialize()
     Component.onDestruction: shutdown()
 
+    MouseArea {
+        anchors.fill: parent
+        enabled: !!root.notice && !root.blocked
+        onPressed: {
+            root.userInteraction()
+            mouse.accepted = false
+        }
+    }
+
     Rectangle {
         id: panel
         visible: !!root.notice && !root.blocked

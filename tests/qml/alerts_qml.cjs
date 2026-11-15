@@ -223,4 +223,21 @@ assert.match(qml, /Component.onDestruction: shutdown\(\)/);
 assert.equal((qml.match(/textFormat: Text.PlainText/g) || []).length, 4);
 assert.doesNotMatch(qml + js, /ringtoneManager|ForcedNormal|enableState\(ScreenState.ScreenOff\)|beepEnabled\s*=|setVolume|setInterval|Api\./);
 assert.equal((qml.match(/disableState\(ScreenState.Normal\)/g) || []).length, 1);
+
+// Execute the actual outside-panel handler: it must release the lease without
+// accepting the press or dismissing the message.
+{
+    const handler = qml.match(/    MouseArea \{\n        anchors.fill: parent\n        enabled: !!root.notice && !root.blocked\n        onPressed: \{([\s\S]*?)\n        }\n    }/);
+    assert.ok(handler, "full-screen observer is a sibling behind the panel");
+    assert.ok(handler.index < qml.indexOf("id: panel"));
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload);
+    const mouse = {accepted: true}; f.c.mouse = mouse;
+    vm.runInContext(handler[1], f.c);
+    assert.equal(mouse.accepted, false, "underlying item must receive the same press");
+    assert.equal(f.c.notice.title, payload.title);
+    const calls = f.events.length;
+    for (let i = 0; i < 120; i++) f.c.controller.tick();
+    assert.equal(f.events.slice(calls).some(e => ["wake", "beep", "release"].includes(e)), false);
+    f.c.shutdown();
+}
 console.log("Alert QML adapter checks passed (XHR/firmware mocks, not physical confirmation).");

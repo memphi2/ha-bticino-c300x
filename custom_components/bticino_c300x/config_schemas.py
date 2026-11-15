@@ -10,6 +10,7 @@ from homeassistant.helpers.selector import SelectOptionDict
 from .activation_address import (
     normalize_stair_light_part,
 )
+from .camera_media.ha_compat import HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
 from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .config_snapshots import (
@@ -336,9 +337,10 @@ def _media_feature_schema(
             fields[vol.Optional(key, default=snapshots[key])] = selector.NumberSelector(
                 selector.NumberSelectorConfig(min=1, max=maximum, step=1, unit_of_measurement=unit, mode=selector.NumberSelectorMode.BOX)
             )
-        fields[
-            vol.Optional(CONF_NATIVE_TWO_WAY_AUDIO, default=default_native_two_way_audio)
-        ] = bool
+        if HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO:
+            fields[
+                vol.Optional(CONF_NATIVE_TWO_WAY_AUDIO, default=default_native_two_way_audio)
+            ] = bool
         fields[
             vol.Optional(
                 CONF_CREATE_HOMEASSISTANT_USER,

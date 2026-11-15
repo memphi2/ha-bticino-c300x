@@ -117,6 +117,7 @@ partial_patch_present() {
         || file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "HomeAssistant.qml"' \
         || file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
         || file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
+        || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
         || [ -f "$GUI_DIR/Alarm.qml" ] \
         || [ -f "$GUI_DIR/HomeAssistant.qml" ] \
@@ -127,6 +128,7 @@ partial_patch_present() {
 
 home_page_feature_patch_present() {
     file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
+        || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || (
             file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
             && file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \
@@ -450,12 +452,9 @@ patch_home_page() {
             print "    property bool alarmButtonVisible: false"
             print "    property bool haButtonVisible: false"
             print ""
-            print "    function displayBridgeButtonCount() {"
-            print "        return (alarmButtonVisible ? 1 : 0) + (haButtonVisible ? 1 : 0)"
-            print "    }"
-            print ""
             print "    function refreshDisplayBridgeButtons() {"
-            print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable) {"
+            print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable, valid) {"
+            print "            if (!valid) return"
             print "            page.alarmButtonVisible = alarmConfigured"
             print "            page.haButtonVisible = dashboardAvailable"
             print "        })"
@@ -500,10 +499,15 @@ patch_home_page() {
         }
         function print_home_assistant_dynamic_flow_items() {
             print ""
+            print "            Row {"
+            print "                id: displayBridgeButtonRow"
+            print "                width: buttonPrototype.width * 2 + foobar.spacing"
+            print "                height: buttonPrototype.height"
+            print "                spacing: foobar.spacing"
             print "            BasicButton {"
             print "                objectName: \"alarmButton\""
-            print "                visible: page.alarmButtonVisible"
-            print "                function isVisible() { return visible }"
+            print "                opacity: page.alarmButtonVisible ? 1 : 0"
+            print "                enabled: page.alarmButtonVisible"
             print "                style: HomePageButtonStyle {"
             print "                    pressedImage: \"images/function_btn_p.svg\""
             print "                    pressedIcon: \"images/keylock_icon-small_p.svg\""
@@ -516,8 +520,8 @@ patch_home_page() {
             print ""
             print "            BasicButton {"
             print "                objectName: \"haButton\""
-            print "                visible: page.haButtonVisible"
-            print "                function isVisible() { return visible }"
+            print "                opacity: page.haButtonVisible ? 1 : 0"
+            print "                enabled: page.haButtonVisible"
             print "                style: HomePageButtonStyle {"
             print "                    pressedImage: \"images/function_btn_p.svg\""
             print "                    pressedIcon: \"images/call/icon_call-home_p.svg\""
@@ -526,6 +530,7 @@ patch_home_page() {
             print "                    description: \"Home Assistant\""
             print "                }"
             print "                onTouched: tabView.activateTab(haPage)"
+            print "            }"
             print "            }"
         }
         function delta(line, opened, closed, copy) {
@@ -578,14 +583,6 @@ patch_home_page() {
         $0 ~ /function buttonCount\(\)/ {
             in_button_count=1
             print
-            next
-        }
-        in_button_count && dynamic_home_page == "1" && $0 ~ /\+ 2/ {
-            sub(/\+ 2/, "+ 2 + page.displayBridgeButtonCount()")
-            print
-            if ($0 ~ /\}/) {
-                in_button_count=0
-            }
             next
         }
         in_button_count && $0 ~ /^[[:space:]]*\}/ {
@@ -667,11 +664,9 @@ patch_home_page() {
             'function refreshMessageNotifications()' \
             'property alias memoEventRetryTimer: memoRetryTimer' \
             'onTriggered: MemoSync.retryEventWatch()' \
-            'function displayBridgeButtonCount()' \
             'HAConfig.homeButtons' \
-            '+ 2 + page.displayBridgeButtonCount()' \
-            'visible: page.alarmButtonVisible' \
-            'visible: page.haButtonVisible' \
+            'opacity: page.alarmButtonVisible ? 1 : 0' \
+            'opacity: page.haButtonVisible ? 1 : 0' \
             'objectName: "alarmButton"' \
             'objectName: "haButton"' \
             'images/call/icon_call-home.svg'

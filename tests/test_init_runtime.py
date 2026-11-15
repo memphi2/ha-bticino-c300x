@@ -2090,20 +2090,19 @@ def test_migrate_entry_pins_the_home_page_mode_the_device_is_running(
     assert update["options"]["dashboard_dynamic_homepage"] is True
 
 
-def test_display_patch_apply_shares_one_home_page_default() -> None:
-    """The form default and the apply fallback must be the same value."""
+@pytest.mark.parametrize("legacy_options", [{}, {"dashboard_dynamic_homepage": False},
+                                          {"dashboard_dynamic_homepage": True}])
+def test_display_patch_apply_uses_automatic_home_buttons(legacy_options) -> None:
+    """Applying the patch uses automatic visibility without a separate option."""
 
-    from custom_components.bticino_c300x.config_flow_dashboard import (
-        DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
-    )
-    from custom_components.bticino_c300x.const import (
-        DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
-    )
+    from custom_components.bticino_c300x.config_flow_dashboard import dashboard_schema
+    from custom_components.bticino_c300x.qml_patch import _apply_full_patch_action
 
-    assert DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT is DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE
-
-    qml_patch_source = (
-        ROOT / "custom_components" / "bticino_c300x" / "qml_patch.py"
-    ).read_text(encoding="utf-8")
-    assert "DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE," in qml_patch_source
-    assert "CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False" not in qml_patch_source
+    api = SimpleNamespace(async_apply_qml_patch=AsyncMock())
+    entry = SimpleNamespace(options=legacy_options, data={},
+                            runtime_data=SimpleNamespace(api=api))
+    asyncio.run(_apply_full_patch_action(entry)())
+    api.async_apply_qml_patch.assert_awaited_once_with(dynamic_homepage=True)
+    assert "dashboard_dynamic_homepage" not in {
+        getattr(key, "schema", key) for key in dashboard_schema().schema
+    }

@@ -12,6 +12,7 @@ from .action import ActionValidationError, parse_actions_json
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
 )
+from .camera_media.ha_compat import HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
 from .config_audio import audio_gain_db
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
@@ -442,12 +443,7 @@ def _dashboard_feature_input(
         except vol.Invalid:
             # Not a field of the form, where an error would not be shown.
             errors["base"] = "invalid_dashboard_entity_display_overrides"
-        dashboard_dynamic_homepage = bool(
-            user_input.get(
-                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-                _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
-            )
-        )
+        dashboard_dynamic_homepage = True
     return {
         CONF_ALARM_ENTITY_ID: alarm_entity_id,
         CONF_ALARM_PAGE_ENTITY_ID: alarm_page_entity_id,
@@ -560,7 +556,9 @@ def _feature_input(
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: device_activation_stair_light_n,
             CONF_VIDEO_ENABLED: media_enabled,
             CONF_NATIVE_TWO_WAY_AUDIO: (
-                media_enabled and user_input.get(CONF_NATIVE_TWO_WAY_AUDIO, False) is True
+                media_enabled
+                and HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
+                and user_input.get(CONF_NATIVE_TWO_WAY_AUDIO, False) is True
             ),
             CONF_CREATE_HOMEASSISTANT_USER: (
                 bool(

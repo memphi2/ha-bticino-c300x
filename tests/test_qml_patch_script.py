@@ -317,14 +317,14 @@ def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> No
     home_page = (gui_dir / "HomePage.qml").read_text()
     assert 'import "js/c300x_ha.js" as HAConfig' in home_page
     assert 'import "js/c300x_memos.js" as MemoSync' in home_page
-    assert "function displayBridgeButtonCount()" in home_page
     assert "function refreshDisplayBridgeButtons()" in home_page
     assert "HAConfig.homeButtons" in home_page
-    assert "+ 2 + page.displayBridgeButtonCount()" in home_page
+    assert "if (!valid) return" in home_page
     assert "id: homeAssistantButtonRow" not in home_page
-    assert "visible: page.alarmButtonVisible" in home_page
-    assert "visible: page.haButtonVisible" in home_page
-    assert "function isVisible() { return visible }" in home_page
+    assert "opacity: page.alarmButtonVisible ? 1 : 0" in home_page
+    assert "opacity: page.haButtonVisible ? 1 : 0" in home_page
+    assert "enabled: page.alarmButtonVisible" in home_page
+    assert "enabled: page.haButtonVisible" in home_page
     assert home_page.index('objectName: "settingsButton"') < home_page.index(
         'objectName: "alarmButton"'
     )

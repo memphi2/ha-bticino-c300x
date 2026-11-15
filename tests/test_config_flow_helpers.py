@@ -47,6 +47,7 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _weather_entity_id,
 )
 from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
+from custom_components.bticino_c300x import config_schemas  # noqa: E402
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
@@ -713,6 +714,32 @@ def test_initial_feature_input_defaults_video_enabled() -> None:
     assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
+def test_native_camera_audio_requires_2026_11_even_for_saved_true_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from custom_components.bticino_c300x import config_flow_input
+
+    monkeypatch.setattr(config_schemas, "HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO", False)
+    monkeypatch.setattr(config_flow_input, "HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO", False)
+    schema = config_schemas.setup_features_schema(default_video_enabled=True)
+    assert CONF_NATIVE_TWO_WAY_AUDIO not in _schema_key_names(schema)
+    data, errors = _feature_input(
+        {CONF_VIDEO_ENABLED: True, CONF_NATIVE_TWO_WAY_AUDIO: True},
+        default_video_enabled=True,
+    )
+    assert errors == {}
+    assert data[CONF_NATIVE_TWO_WAY_AUDIO] is False
+
+
+def test_native_camera_audio_is_optional_and_off_on_2026_11(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config_schemas, "HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO", True)
+    schema = config_schemas.setup_features_schema(default_video_enabled=True)
+    assert CONF_NATIVE_TWO_WAY_AUDIO in _schema_key_names(schema)
+    assert schema({CONF_VIDEO_ENABLED: True})[CONF_NATIVE_TWO_WAY_AUDIO] is False
+
+
 def test_feature_input_can_disable_homeassistant_user_creation() -> None:
     data, errors = _feature_input(
         {
@@ -835,7 +862,7 @@ def test_feature_input_keeps_selected_gui_features() -> None:
         }
     }
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
-    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
+    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
 
 
 def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:
@@ -1837,7 +1864,6 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
 
     assert _schema_key_names(dashboard_schema) == [
         CONF_DEVICE_UI_ENABLED,
-        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_PREVENT_RETURN,
         CONF_ACTIONS_JSON,
     ]
@@ -2076,9 +2102,8 @@ def test_dashboard_schema_orders_checkbox_options_first() -> None:
 
     keys = [getattr(key, "schema", key) for key in schema.schema]
 
-    assert keys[:3] == [
+    assert keys[:2] == [
         CONF_DEVICE_UI_ENABLED,
-        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_PREVENT_RETURN,
     ]
 
@@ -2142,15 +2167,17 @@ def test_options_features_schema_never_contains_dashboard_fields() -> None:
     assert CONF_DASHBOARD_ENTITIES not in disabled_keys
     assert CONF_ACTIONS_JSON not in disabled_keys
     assert CONF_DASHBOARD_PREVENT_RETURN not in disabled_keys
-    assert enabled_keys[:7] == [
+    expected = [
         CONF_VIDEO_ENABLED,
         "snapshot_delay_seconds",
         "snapshot_retention_days",
-        CONF_NATIVE_TWO_WAY_AUDIO,
         CONF_CREATE_HOMEASSISTANT_USER,
         CONF_DOORSTATION_AUDIO_GAIN_DB,
         CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     ]
+    if config_schemas.HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO:
+        expected.insert(3, CONF_NATIVE_TWO_WAY_AUDIO)
+    assert enabled_keys[:len(expected)] == expected
     assert CONF_DEVICE_ACTIVATION_MODE not in enabled_keys
     assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P not in enabled_keys
     assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N not in enabled_keys
@@ -2746,7 +2773,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert result["data_updates"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result["data_updates"][CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
     assert result["data_updates"][CONF_WEATHER_ENTITY_ID] == "weather.home"
-    assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
+    assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
     assert result["data_updates"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
         "select.forwarding": {
             "secondary": "last_changed",

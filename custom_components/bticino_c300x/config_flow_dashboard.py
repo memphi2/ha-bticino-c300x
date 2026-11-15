@@ -254,10 +254,6 @@ def dashboard_schema(
                 default=default_device_ui_enabled,
             ): bool,
             vol.Optional(
-                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-                default=default_dashboard_dynamic_homepage,
-            ): bool,
-            vol.Optional(
                 CONF_DASHBOARD_PREVENT_RETURN,
                 default=default_dashboard_prevent_return,
             ): bool,

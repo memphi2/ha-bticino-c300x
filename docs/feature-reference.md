@@ -145,21 +145,12 @@ Call are not yet confirmed on hardware.
 
 ## Display Home Page Buttons
 
-**Show home page buttons only when needed** under **Display and Display patch** decides how the
-Alarm and Home Assistant buttons reach the device's home page.
-
-| Setting | Home page |
-| --- | --- |
-| On | Each button is placed on its own and is shown only while it has something to open: Alarm when Alarmo is configured, Home Assistant when a dashboard is available. The firmware arranges them with the stock buttons and wraps to a second row once more than four are visible. |
-| Off | Both buttons sit together in one fixed pair, always visible, next to each other. |
-
-The mode is part of the page the Display patch generates, so changing it
-re-applies the patch and restarts the device GUI once. Saving the options
-without touching the setting changes nothing on the device.
-
-New entries start with the setting on. An entry created before the setting
-existed keeps the fixed pair it has been running, recorded once on upgrade, and
-the form shows that state instead of an unrelated default.
+With the Display patch, the Alarm button appears when an alarm panel is configured;
+the Home Assistant button appears when a display page has configured content.
+Their positions stay reserved, so a change in availability does not rearrange
+the other home-page buttons. A temporary connection failure keeps the last
+confirmed visibility instead of hiding both buttons. Existing installations
+receive this layout the next time the Display patch is applied.
 
 ## Display Device Controls
 

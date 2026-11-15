@@ -38,12 +38,28 @@ class AgendaCache:
     failed: bool = False
     closed: bool = False
     revision: int = 0
+    runtime: Any = None
+    unsubscribers: list[Callable[[], None]] = field(default_factory=list)
 
 
 def _cache(hass: Any, entry: Any) -> AgendaCache:
+    _current_cache(hass, entry)
     caches = hass.data.setdefault(_DATA_KEY, {})
     if entry.entry_id not in caches:
-        cache = caches[entry.entry_id] = AgendaCache()
+        cache = caches[entry.entry_id] = AgendaCache(
+            calendars=tuple(configured_agenda_page(entry)["calendars"]),
+            runtime=getattr(entry, "runtime_data", None),
+        )
+
+        async def updated(_hass: Any, _entry: Any) -> None:
+            # The normal options listener reloads the entry. Retire reads now,
+            # even when that reload is delayed or cannot unload a platform.
+            # HA starts listeners eagerly; do not mutate its list mid-iteration.
+            await asyncio.sleep(0)
+            _cache_active(hass, entry, cache)
+
+        if callable(add_listener := getattr(entry, "add_update_listener", None)):
+            cache.unsubscribers.append(add_listener(updated))
 
         @callback
         def unload() -> None:
@@ -59,8 +75,12 @@ def _close_cache(hass: Any, entry: Any, cache: AgendaCache) -> None:
     cache.closed = True
     cache.notify = None
     cache.events.clear()
+    for unsubscribe in cache.unsubscribers:
+        unsubscribe()
+    cache.unsubscribers.clear()
     if cache.task is not None:
         cache.task.cancel()
+        cache.task = None
     caches = hass.data.get(_DATA_KEY, {})
     if caches.get(entry.entry_id) is cache:
         caches.pop(entry.entry_id)
@@ -69,39 +89,57 @@ def _close_cache(hass: Any, entry: Any, cache: AgendaCache) -> None:
 
 
 def _entry_active(entry: Any) -> bool:
-    return getattr(entry, "state", None) in (None, ConfigEntryState.LOADED, ConfigEntryState.SETUP_IN_PROGRESS)
+    runtime = getattr(entry, "runtime_data", None)
+    return (
+        getattr(entry, "state", None) in (None, ConfigEntryState.LOADED, ConfigEntryState.SETUP_IN_PROGRESS)
+        and not getattr(getattr(runtime, "resources", None), "closed", False)
+    )
+
+
+def _cache_active(hass: Any, entry: Any, cache: AgendaCache) -> bool:
+    settings = configured_agenda_page(entry)
+    if (not cache.closed and _entry_active(entry) and settings["enabled"]
+            and bool(settings["calendars"])
+            and tuple(settings["calendars"]) == cache.calendars
+            and getattr(entry, "runtime_data", None) is cache.runtime
+            and hass.data.get(_DATA_KEY, {}).get(entry.entry_id) is cache):
+        return True
+    _close_cache(hass, entry, cache)
+    return False
+
+
+def _current_cache(hass: Any, entry: Any) -> AgendaCache | None:
+    cache = cast(AgendaCache | None, hass.data.get(_DATA_KEY, {}).get(entry.entry_id))
+    return cache if cache is not None and _cache_active(hass, entry, cache) else None
 
 
 @callback
 def async_setup_agenda_updates(hass: Any, entry: Any, request_update: Callable[[], None]) -> Callable[[], None] | None:
     """Invalidate on HA calendar changes/time; use the existing display push path."""
+    _current_cache(hass, entry)
     settings = configured_agenda_page(entry)
     if not _entry_active(entry) or not settings["enabled"] or not settings["calendars"]:
         return None
     cache = _cache(hass, entry)
+    if cache.notify is not None:
+        return lambda: _close_cache(hass, entry, cache)
     cache.notify = request_update
-    stopped = False
 
     @callback
     def changed(_event: Any) -> None:
-        if stopped or cache.closed:
+        if not _cache_active(hass, entry, cache):
             return
         cache.revision += 1
         cache.expires = None
-        _start_refresh(hass, entry, cache, tuple(settings["calendars"]))
+        _start_refresh(hass, entry, cache, cache.calendars)
 
-    unsubscribers = [
+    cache.unsubscribers.extend([
         async_track_state_change_event(hass, settings["calendars"], changed),
         async_track_time_interval(hass, changed, timedelta(seconds=CACHE_SECONDS)),
-    ]
+    ])
 
     @callback
     def stop() -> None:
-        nonlocal stopped
-        stopped = True
-        for unsubscribe in unsubscribers:
-            unsubscribe()
-        unsubscribers.clear()
         _close_cache(hass, entry, cache)
 
     entry.async_on_unload(stop)
@@ -109,7 +147,7 @@ def async_setup_agenda_updates(hass: Any, entry: Any, request_update: Callable[[
 
 
 def _start_refresh(hass: Any, entry: Any, cache: AgendaCache, calendars: tuple[str, ...]) -> None:
-    if cache.closed or cache.task is not None:
+    if not _cache_active(hass, entry, cache) or cache.task is not None:
         return
     cache.task = entry.async_create_background_task(
         hass, _async_refresh(hass, entry, cache, calendars), "C300X agenda", eager_start=False,
@@ -127,6 +165,8 @@ async def _async_refresh(hass: Any, entry: Any, cache: AgendaCache, calendars: t
         try:
             async with asyncio.timeout(FETCH_TIMEOUT):
                 for entity_id in calendars:
+                    if not _cache_active(hass, entry, cache):
+                        return
                     state = hass.states.get(entity_id)
                     if state is None or state.state in ("unavailable", "unknown"):
                         failed = True
@@ -137,6 +177,8 @@ async def _async_refresh(hass: Any, entry: Any, cache: AgendaCache, calendars: t
                             {"start_date_time": now.isoformat(), "end_date_time": end.isoformat()},
                             target={"entity_id": entity_id}, blocking=True, return_response=True,
                         )
+                        if not _cache_active(hass, entry, cache):
+                            return
                         data = response.get(entity_id) if isinstance(response, dict) else None
                         if not isinstance(data, dict) or not isinstance(data.get("events"), list):
                             failed = True
@@ -149,7 +191,7 @@ async def _async_refresh(hass: Any, entry: Any, cache: AgendaCache, calendars: t
                         failed = True
         except TimeoutError:
             failed = True
-        if cache.closed or not _entry_active(entry):
+        if not _cache_active(hass, entry, cache):
             return
         cache.events, cache.failed, cache.calendars = events, failed, calendars
         cache.expires = dt_util.utcnow() + timedelta(seconds=CACHE_SECONDS) if revision == cache.revision else None
@@ -210,6 +252,7 @@ async def _events(raw: Any, entity_id: str, name: str, now: datetime, end: datet
 
 async def async_agenda_dashboard_page(hass: Any, entry: Any, language: str = "en") -> dict[str, Any] | None:
     """Return the next five ongoing/upcoming events within seven days, or None."""
+    _current_cache(hass, entry)
     settings = configured_agenda_page(entry)
     if not _entry_active(entry) or not settings["enabled"]:
         return None

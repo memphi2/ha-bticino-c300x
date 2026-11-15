@@ -95,8 +95,12 @@ test("an answered call stays answered when its stream does not start", async () 
     _doorstationView: () => ({ action: "answer" }),
     async _startTalkback() {
       calls.push(["talkback"]);
-      // The failure path of the real start clears the peer state.
+      // The failure path of the real start reports the error and closes the
+      // peer: that clears the peer state and ends the media generation.
+      card._error = "WebRTC offer failed";
+      card._mediaGeneration += 1;
       card._lifecycle.doorbellAnswered = false;
+      card._lifecycle.answeringDoorbell = false;
       return false;
     },
   });

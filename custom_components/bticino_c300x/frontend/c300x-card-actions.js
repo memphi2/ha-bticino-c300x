@@ -68,6 +68,7 @@ export class C300XCardActions {
       }
       if (action === "answer") {
         const isCurrent = this._currentAction(true);
+        const sameCard = this._currentAction();
         lifecycle.answeringDoorbell = true;
         try {
           await this.answerDoorbellCall();
@@ -78,10 +79,15 @@ export class C300XCardActions {
           } else {
             const started = await card._startTalkback();
             // The call is answered on the device even when the stream does
-            // not start. A failed start resets the peer state; keep the call
-            // answered so the user can still hang up.
-            if (started === false && isCurrent()) {
+            // not start. A failed start reports its error and closes the
+            // peer, which resets the peer state and ends the media
+            // generation; keep the call answered so the user can still hang
+            // up. A hang-up in the meantime is not such a failure.
+            const startFailed = started === false && sameCard()
+              && !lifecycle.hangupInProgress && (isCurrent() || !!card._error);
+            if (startFailed) {
               lifecycle.doorbellAnswered = true;
+              if (!isCurrent()) card._updateState();
             }
           }
         } catch (err) {

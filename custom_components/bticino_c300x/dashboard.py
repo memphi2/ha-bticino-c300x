@@ -1066,8 +1066,8 @@ def _finalize_dashboard_items(items: Any) -> list[dict[str, Any]]:
 def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
     """Return whether a page has something to show.
 
-    The status badges do not count: with no weather and no tile the page is
-    left out, and so are its badges.
+    The caller handles the independently enabled status page separately;
+    other pages need weather, tiles or energy content.
     """
 
     return any(bool(page.get(key)) for key in ("items", "weather", "energy"))

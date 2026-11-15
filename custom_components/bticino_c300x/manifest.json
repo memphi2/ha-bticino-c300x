@@ -10,7 +10,9 @@
   "categories": [
     "security_safety.doorbells_intercoms"
   ],
-  "codeowners": [],
+  "codeowners": [
+    "@memphi2"
+  ],
   "config_flow": true,
   "dependencies": [
     "frontend",

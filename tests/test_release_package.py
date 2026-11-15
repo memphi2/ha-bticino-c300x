@@ -47,6 +47,15 @@ def _load_release_builder():
     return module
 
 
+def test_manifest_identifies_maintainer_without_claiming_an_official_quality_tier():
+    manifest = json.loads((ROOT / "custom_components/bticino_c300x/manifest.json").read_text())
+    assert manifest["codeowners"] == ["@memphi2"]
+    assert "quality_scale" not in manifest
+    readme = (ROOT / "README.md").read_text()
+    assert "Self%20assessment" in readme
+    assert "](docs/quality-scale.md)" in readme
+
+
 def _load_bundle_stager():
     spec = importlib.util.spec_from_file_location("stage_device_agent_bundle", STAGE_SCRIPT)
     assert spec is not None

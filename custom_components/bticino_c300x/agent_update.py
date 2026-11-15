@@ -258,13 +258,23 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
             "mode": "600",
         },
     )
-    return cast(dict[str, Any], await api.async_apply_agent_update(bundle_hash=bundle_hash))
+    return cast(
+        dict[str, Any],
+        await async_retry_update_maintenance_busy(
+            lambda: api.async_apply_agent_update(bundle_hash=bundle_hash)
+        ),
+    )
 
 
 async def async_retry_update_maintenance_busy(
     action: Callable[[], Awaitable[Any]],
 ) -> Any:
-    """Retry only explicit pre-execution busy rejection, never transport loss."""
+    """Retry only explicit pre-execution busy rejection, never transport loss.
+
+    The agent runs one maintenance job at a time and rejects every other
+    maintenance request while it runs. Home Assistant also asks for patch
+    status on its own, so any step of an update can meet such a job.
+    """
 
     deadline: float | None = None
     while True:
@@ -303,26 +313,23 @@ async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) 
         data = await _async_read_file_bytes(hass, source)
     except OSError as err:
         raise RuntimeError("packaged native-agent bundle file path is invalid") from err
-    if not data:
-        await api.async_upload_agent_update_chunk(
-            path=relative_path,
-            sha256=sha256_hex,
-            mode=mode,
-            offset=0,
-            data=b"",
-            final=True,
+    async def upload(offset: int, chunk: bytes) -> None:
+        await async_retry_update_maintenance_busy(
+            lambda: api.async_upload_agent_update_chunk(
+                path=relative_path,
+                sha256=sha256_hex,
+                mode=mode,
+                offset=offset,
+                data=chunk,
+                final=offset + len(chunk) >= len(data),
+            )
         )
+
+    if not data:
+        await upload(0, b"")
         return
     for offset in range(0, len(data), UPLOAD_CHUNK_SIZE):
-        chunk = data[offset : offset + UPLOAD_CHUNK_SIZE]
-        await api.async_upload_agent_update_chunk(
-            path=relative_path,
-            sha256=sha256_hex,
-            mode=mode,
-            offset=offset,
-            data=chunk,
-            final=offset + len(chunk) >= len(data),
-        )
+        await upload(offset, data[offset : offset + UPLOAD_CHUNK_SIZE])
 
 
 async def _async_read_file_bytes(hass: Any, path: Path) -> bytes:

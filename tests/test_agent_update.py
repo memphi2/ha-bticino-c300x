@@ -318,9 +318,9 @@ class FakeHass:
 
 @pytest.mark.parametrize("failure", [
     "busy_once", "busy_always", "transport", "wrapped_transport", "other_http",
-    "other_conflict", "apply_busy", "upload_busy",
+    "other_conflict", "apply_busy_once", "apply_busy", "upload_busy",
 ])
-def test_update_retries_only_prepare_busy(monkeypatch, failure) -> None:
+def test_update_retries_only_busy_rejections(monkeypatch, failure) -> None:
     from unittest.mock import AsyncMock
 
     from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
@@ -350,6 +350,8 @@ def test_update_retries_only_prepare_busy(monkeypatch, failure) -> None:
     api = FakeUpdateApi()
     monkeypatch.setattr(api, "async_prepare_agent_update", prepare)
     apply = AsyncMock(return_value={"ok": True}, side_effect=busy if failure == "apply_busy" else None)
+    if failure == "apply_busy_once":
+        apply.side_effect = [busy, {"ok": True}]
     monkeypatch.setattr(api, "async_apply_agent_update", apply)
     upload = AsyncMock(side_effect=busy if failure == "upload_busy" else None)
     monkeypatch.setattr(agent_update, "_async_upload_bundle_file", upload)
@@ -363,17 +365,25 @@ def test_update_retries_only_prepare_busy(monkeypatch, failure) -> None:
         assert prepare.await_count == 2
         assert sleeps == [1.0]
         assert upload.await_count == apply.await_count == 1
+    elif failure == "apply_busy_once":
+        # The agent restarts nothing before it admits the apply request, so a
+        # busy rejection there is as safe to wait out as one for prepare.
+        assert asyncio.run(async_apply_packaged_agent_update(FakeHass(), api)) == {"ok": True}
+        assert prepare.await_count == upload.await_count == 1
+        assert apply.await_count == 2
+        assert sleeps == [1.0]
     else:
         with pytest.raises(C300XAgentApiConnectionError) as raised:
             asyncio.run(async_apply_packaged_agent_update(FakeHass(), api))
         assert raised.value is error
-        if failure == "busy_always":
-            assert prepare.await_count == 12
+        if failure in {"busy_always", "apply_busy"}:
+            waited = prepare if failure == "busy_always" else apply
+            assert waited.await_count == 12
             assert sum(sleeps) == agent_update.MAINTENANCE_BUSY_WAIT_SECONDS == 12
         else:
             assert prepare.await_count == 1
             assert sleeps == []
-        assert apply.await_count == (1 if failure == "apply_busy" else 0)
+        assert apply.await_count == (12 if failure == "apply_busy" else 0)
         assert upload.await_count == (1 if failure in {"apply_busy", "upload_busy"} else 0)
 
 
@@ -406,6 +416,38 @@ def test_busy_budget_does_not_cancel_admitted_request(monkeypatch, busy_first) -
     assert asyncio.run(agent_update.async_retry_update_maintenance_busy(action)) == {"ok": True}
     assert calls == ([0.0, 21.0] if busy_first else [0.0])
     assert sleeps == ([1.0] if busy_first else [])
+
+
+def test_upload_waits_out_a_busy_agent_and_resends_the_same_chunk(tmp_path, monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    component = tmp_path / "bticino_c300x"
+    payload = component / "device_agent" / "payload.bin"
+    payload.parent.mkdir(parents=True)
+    data = b"x" * (agent_update.UPLOAD_CHUNK_SIZE + 5)
+    payload.write_bytes(data)
+    monkeypatch.setattr(agent_update, "COMPONENT_DIR", component)
+    monkeypatch.setattr(agent_update.asyncio, "sleep", AsyncMock())
+    busy = C300XAgentApiConnectionError("device agent returned HTTP 409: maintenance_busy")
+    sent = []
+
+    async def upload(**chunk):
+        sent.append((chunk["offset"], len(chunk["data"]), chunk["final"]))
+        if len(sent) == 2:
+            raise busy
+        return {"ok": True}
+
+    api = FakeUpdateApi()
+    monkeypatch.setattr(api, "async_upload_agent_update_chunk", upload)
+
+    asyncio.run(agent_update._async_upload_bundle_file(FakeHass(), api, {
+        "path": "device_agent/payload.bin", "sha256": "0" * 64, "mode": "600",
+    }))
+
+    size = agent_update.UPLOAD_CHUNK_SIZE
+    assert sent == [(0, size, False), (size, 5, True), (size, 5, True)]
 
 
 def test_busy_budget_does_not_admit_retry_after_slow_busy_response(monkeypatch) -> None:

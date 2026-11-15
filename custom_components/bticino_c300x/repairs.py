@@ -547,7 +547,9 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                     )
             changes = _ExternalPatchChanges.from_update_result(update_result)
             if changes.config_schema_changed:
-                await entry.runtime_data.api.async_normalize_agent_config()
+                await async_retry_update_maintenance_busy(
+                    entry.runtime_data.api.async_normalize_agent_config
+                )
                 setup_data = await entry.runtime_data.api.async_validate_setup()
             await _async_restore_external_patch_state(
                 entry,
@@ -768,7 +770,7 @@ async def _async_verify_agent_after_update(
     setup_data = cast(dict[str, Any], await api.async_validate_setup())
     if _agent_setup_matches_bundle(setup_data, target_bundle):
         return setup_data
-    await api.async_restart_agent()
+    await async_retry_update_maintenance_busy(api.async_restart_agent)
     return await _async_wait_for_agent_after_update(
         api,
         initial_delay=_AGENT_UPDATE_RESTART_SETTLE_SECONDS,
@@ -1015,12 +1017,13 @@ async def _async_restore_external_patch_state(
     """Re-apply active external patches only when their patch source changed."""
 
     api = entry.runtime_data.api
+    busy_retry = async_retry_update_maintenance_busy
     if patch_state.firewall_patched and changed.firewall_patch_changed:
-        await api.async_apply_firewall()
+        await busy_retry(api.async_apply_firewall)
     if patch_state.ipv6_firewall_patched and changed.ipv6_firewall_patch_changed:
         with suppress(C300XAgentApiError):
-            await api.async_set_ipv6_firewall_enabled(True)
-        await api.async_apply_ipv6_firewall()
+            await busy_retry(lambda: api.async_set_ipv6_firewall_enabled(True))
+        await busy_retry(api.async_apply_ipv6_firewall)
     if changed.qml_patch_changed or CONF_AGENT_UPDATE_QML_PENDING in entry.data:
         await async_restore_qml_patches_after_update(
             entry,
@@ -1029,7 +1032,7 @@ async def _async_restore_external_patch_state(
             ),
         )
     elif changed.runtime_changed and patch_state.qml_patch_required:
-        await api.async_reload_gui()
+        await busy_retry(api.async_reload_gui)
 
 
 def _ssh_install_schema() -> vol.Schema:

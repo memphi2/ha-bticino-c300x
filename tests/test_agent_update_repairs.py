@@ -2972,3 +2972,54 @@ def test_ssh_install_log_text_names_the_kind_of_the_cause_but_not_its_text() -> 
     assert _install_error_log_text(RuntimeError("invalid_ssh_username")) == (
         "RuntimeError: invalid_ssh_username"
     )
+
+
+@pytest.mark.parametrize(("changes", "expected"), [
+    (
+        {"firewall_patch_changed": True, "ipv6_firewall_patch_changed": True},
+        ["apply_firewall", "set_ipv6_firewall_enabled:True", "apply_ipv6_firewall"],
+    ),
+    ({"runtime_changed": True}, ["reload_gui"]),
+])
+def test_patch_restore_after_update_waits_while_the_agent_is_busy(
+    monkeypatch, changes, expected
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x import agent_update
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    class BusyFirstApi(FakePatchApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.rejected: list[str] = []
+
+        def __getattribute__(self, name: str) -> Any:
+            value = super().__getattribute__(name)
+            if not name.startswith("async_"):
+                return value
+
+            async def busy_first(*args: Any, **kwargs: Any) -> Any:
+                if name not in self.rejected:
+                    self.rejected.append(name)
+                    raise C300XAgentApiConnectionError(
+                        "device agent returned HTTP 409: maintenance_busy"
+                    )
+                return await value(*args, **kwargs)
+
+            return busy_first
+
+    monkeypatch.setattr(agent_update.asyncio, "sleep", AsyncMock())
+    api = BusyFirstApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    state = _ExternalPatchState(
+        qml_patch_required=True, firewall_patched=True,
+        firewall_status_known=True, ipv6_firewall_patched=True,
+    )
+
+    asyncio.run(
+        _async_restore_external_patch_state(entry, state, _ExternalPatchChanges(**changes))
+    )
+
+    assert api.calls == expected
+    assert len(api.rejected) == len(expected)

@@ -25,6 +25,7 @@ from .dashboard_energy import format_power, power_watts
 from .dashboard_energy_data import (
     ENERGY_STATISTICS_MAX_AGE_SECONDS,
     async_configured_energy_sources,
+    expire_energy_day,
     forget_energy_day,
 )
 from .entry_types import BticinoC300XConfigEntry
@@ -101,7 +102,7 @@ class EnergyPageUpdates:
         if not (was_shown or self._shown):
             return
         # The kept day is about as old as this interval: read it anew.
-        forget_energy_day(self._entry.entry_id)
+        expire_energy_day(self._entry.entry_id)
         self._send()
 
     @callback

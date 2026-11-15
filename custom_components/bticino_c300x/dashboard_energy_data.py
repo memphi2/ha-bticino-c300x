@@ -9,7 +9,9 @@ are plain entity states and always current.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from dataclasses import dataclass, field
 from time import monotonic
 from typing import Any
 
@@ -30,14 +32,28 @@ _LOGGER = logging.getLogger(__name__)
 ENERGY_STATISTICS_MAX_AGE_SECONDS = 300.0
 _CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
 
-# entry id -> (read at, local day, statistic ids, day)
-_DAY_CACHE: dict[str, tuple[float, str, frozenset[str], EnergyDay]] = {}
+@dataclass
+class _DayCache:
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    read_at: float = float("-inf")
+    key: tuple[str, frozenset[str]] | None = None
+    day: EnergyDay = field(default_factory=EnergyDay)
+
+
+_DAY_CACHE: dict[str, _DayCache] = {}
 
 
 def forget_energy_day(entry_id: str) -> None:
     """Drop the kept statistics of an entry that is unloaded."""
 
     _DAY_CACHE.pop(entry_id, None)
+
+
+def expire_energy_day(entry_id: str) -> None:
+    """Refresh on the next request, retaining today's fallback after failure."""
+
+    if (cached := _DAY_CACHE.get(entry_id)) is not None:
+        cached.read_at = float("-inf")
 
 
 async def async_configured_energy_sources(
@@ -88,27 +104,20 @@ async def _async_energy_day(
 ) -> EnergyDay:
     from homeassistant.util import dt as dt_util
 
-    start = dt_util.start_of_local_day()
-    statistic_ids = frozenset(sources.energy_stats | sources.cost_stats)
-    cached = _DAY_CACHE.get(entry_id)
-    now = monotonic()
-    if (
-        cached is not None
-        and now - cached[0] < ENERGY_STATISTICS_MAX_AGE_SECONDS
-        and cached[1] == start.isoformat()
-        and cached[2] == statistic_ids
-    ):
-        return cached[3]
-    try:
-        day = await _async_read_energy_day(hass, start, sources)
-    except Exception:  # noqa: BLE001 - the display works without fresh figures
-        _LOGGER.debug("Energy statistics could not be read", exc_info=True)
-        # Yesterday's figures are not shown as today's.
-        if cached is not None and cached[1] == start.isoformat() and cached[2] == statistic_ids:
-            return cached[3]
-        return EnergyDay()
-    _DAY_CACHE[entry_id] = (now, start.isoformat(), statistic_ids, day)
-    return day
+    cached = _DAY_CACHE.setdefault(entry_id, _DayCache())
+    async with cached.lock:
+        start = dt_util.start_of_local_day()
+        key = (start.isoformat(), frozenset(sources.energy_stats | sources.cost_stats))
+        if cached.key == key and monotonic() - cached.read_at < ENERGY_STATISTICS_MAX_AGE_SECONDS:
+            return cached.day
+        try:
+            day = await _async_read_energy_day(hass, start, sources)
+        except Exception:  # noqa: BLE001 - retry at the next statistics interval
+            _LOGGER.debug("Energy statistics could not be read", exc_info=True)
+            day = cached.day if cached.key == key else EnergyDay()
+        cached.key, cached.day, cached.read_at = key, day, monotonic()
+        # Unload can remove this cache while the read is pending. Do not put it back.
+        return day
 
 
 async def _async_read_energy_day(

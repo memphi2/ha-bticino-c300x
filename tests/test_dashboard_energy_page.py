@@ -164,6 +164,73 @@ def test_failed_statistics_read_keeps_today_but_never_shows_another_day(monkeypa
     assert read.await_count == 3
 
 
+def test_failed_statistics_reads_are_cached_until_the_next_interval(monkeypatch) -> None:
+    read = AsyncMock(side_effect=RuntimeError("database busy"))
+    monkeypatch.setattr(dashboard_energy_data, "_async_read_energy_day", read)
+    clock = [1000.0]
+    monkeypatch.setattr(dashboard_energy_data, "monotonic", lambda: clock[0])
+
+    async def scenario() -> None:
+        for _ in range(4):
+            await dashboard_energy_data._async_energy_day(_energy_hass(), "one", SOURCES)
+        assert read.await_count == 1
+        clock[0] += 301
+        await dashboard_energy_data._async_energy_day(_energy_hass(), "one", SOURCES)
+        assert read.await_count == 2
+
+    asyncio.run(scenario())
+
+
+def test_concurrent_energy_reads_share_one_statistics_query(monkeypatch) -> None:
+    async def scenario() -> None:
+        started, release = asyncio.Event(), asyncio.Event()
+        day = EnergyDay(hours={"sensor.grid": [1.0] * 24})
+
+        async def delayed(*_args):
+            started.set()
+            await release.wait()
+            return day
+
+        read = AsyncMock(side_effect=delayed)
+        monkeypatch.setattr(dashboard_energy_data, "_async_read_energy_day", read)
+        first = asyncio.create_task(dashboard_energy_data._async_energy_day(_energy_hass(), "one", SOURCES))
+        await started.wait()
+        second = asyncio.create_task(dashboard_energy_data._async_energy_day(_energy_hass(), "one", SOURCES))
+        await asyncio.sleep(0)
+        release.set()
+        assert await asyncio.gather(first, second) == [day, day]
+        assert read.await_count == 1
+
+    asyncio.run(scenario())
+
+
+def test_expired_statistics_keep_fallback_but_unloaded_reads_do_not_restore_cache(monkeypatch) -> None:
+    async def scenario() -> None:
+        day = EnergyDay(hours={"sensor.grid": [1.0] * 24})
+        read = AsyncMock(return_value=day)
+        monkeypatch.setattr(dashboard_energy_data, "_async_read_energy_day", read)
+        hass = _energy_hass()
+        assert await dashboard_energy_data._async_energy_day(hass, "one", SOURCES) is day
+        dashboard_energy_data.expire_energy_day("one")
+        read.side_effect = RuntimeError("database busy")
+        assert await dashboard_energy_data._async_energy_day(hass, "one", SOURCES) is day
+        assert await dashboard_energy_data._async_energy_day(hass, "one", SOURCES) is day
+        assert read.await_count == 2
+
+        async def unload_while_reading(*_args):
+            dashboard_energy_data.forget_energy_day("one")
+            return day
+
+        dashboard_energy_data.expire_energy_day("one")
+        read.side_effect = unload_while_reading
+        await dashboard_energy_data._async_energy_day(hass, "one", SOURCES)
+        assert "one" not in dashboard_energy_data._DAY_CACHE
+        dashboard_energy_data.expire_energy_day("one")
+        assert "one" not in dashboard_energy_data._DAY_CACHE
+
+    asyncio.run(scenario())
+
+
 def _payload_pages(monkeypatch, energy_setting: Any, position_pages: int = 3) -> list[str]:
     names = ["C300X", "Wohnen", "Keller"][:position_pages]
     states = {f"sensor.s{index}": FakeState("1", attributes={"friendly_name": f"S{index}"})
@@ -521,8 +588,8 @@ def test_the_tick_reads_fresh_statistics(monkeypatch) -> None:
     monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources",
                         AsyncMock(return_value=SOURCES))
     order: list[str] = []
-    monkeypatch.setattr(dashboard_energy_updates, "forget_energy_day",
-                        lambda entry_id: order.append(f"forget {entry_id}"))
+    monkeypatch.setattr(dashboard_energy_updates, "expire_energy_day",
+                        lambda entry_id: order.append(f"expire {entry_id}"))
 
     async def scenario() -> None:
         await dashboard_energy_updates.async_track_energy_page_updates(
@@ -534,7 +601,7 @@ def test_the_tick_reads_fresh_statistics(monkeypatch) -> None:
 
     # The kept day is as old as the tick interval, give or take the delivery
     # delay: without dropping it every second wake-up showed the old figures.
-    assert order == ["forget entry-1", "wake"]
+    assert order == ["expire entry-1", "wake"]
 
 
 def test_a_power_change_the_display_cannot_show_does_not_wake_it(monkeypatch) -> None:

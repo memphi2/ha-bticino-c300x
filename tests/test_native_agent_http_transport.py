@@ -49,6 +49,7 @@ def test_display_callback_http_status_and_response_validation(tmp_path: Path) ->
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections", "-pthread",
             str(ROOT / "native_agent/test/display_http_test.c"),
             str(ROOT / "native_agent/src/http_util.c"),
+            str(ROOT / "native_agent/src/time_util.c"),
             "-o", str(binary),
         ],
         capture_output=True, text=True,

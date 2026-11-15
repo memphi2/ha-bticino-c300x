@@ -762,7 +762,8 @@ def test_a_select_tile_offers_the_first_options_of_its_submenu():
         options={"device_ui_enabled": True, "dashboard_entities": ["select.station"]},
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    tile = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    tile = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "select.station")
     assert len(submenu) < len(long_names)
     assert [option["value"] for option in tile["options"]] == submenu
 
@@ -1186,7 +1187,8 @@ def test_a_lock_is_a_tile_with_a_detail_page_and_only_runs_selected_entities():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "lock.front")
 
     assert item["kind"] == "entity"
     assert item["entity_id"] == "lock.front"
@@ -1281,7 +1283,8 @@ def test_a_vacuum_is_a_tile_with_a_detail_page():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "vacuum.robot")
 
     assert item["kind"] == "entity"
     assert item["glyph"] == "↺"
@@ -1345,7 +1348,8 @@ def test_a_valve_is_a_tile_that_reads_its_position_or_its_state():
             data={}, options={"device_ui_enabled": True, "dashboard_entities": ["valve.water"]}, entry_id="entry",
         )
         payload = asyncio.run(async_dashboard_payload(hass, entry))
-        return next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+        return next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                    if item.get("entity_id") == "valve.water")
 
     with_position = tile(40)
     assert with_position["kind"] == "entity"
@@ -1423,7 +1427,8 @@ def test_a_humidifier_is_a_switch_tile_that_reads_the_room_humidity():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "humidifier.room")
 
     assert item["kind"] == "switch"
     assert item["state"] is True
@@ -1488,7 +1493,8 @@ def test_a_water_heater_is_a_tile_that_reads_the_water_temperature():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "water_heater.boiler")
 
     assert item["kind"] == "entity"
     assert item["glyph"] == "♨"

@@ -431,7 +431,7 @@ def test_slow_provider_never_blocks_dashboard_and_unload_cancels_without_late_pu
 
 def test_malformed_provider_dates_are_skipped(monkeypatch):
     assert agenda._event_time("2026-99-99") is None
-    assert agenda._events(None, "calendar.one", "One", NOW, NOW + timedelta(days=7)) == []
-    assert agenda._events([None, {}], "calendar.one", "One", NOW, NOW + timedelta(days=7)) == []
+    assert asyncio.run(agenda._events(None, "calendar.one", "One", NOW, NOW + timedelta(days=7))) == []
+    assert asyncio.run(agenda._events([None, {}], "calendar.one", "One", NOW, NOW + timedelta(days=7))) == []
     monkeypatch.setattr(agenda.dt_util, "parse_datetime", Mock(side_effect=OverflowError))
     assert agenda._event_time("2026-11-15T99:00:00") is None

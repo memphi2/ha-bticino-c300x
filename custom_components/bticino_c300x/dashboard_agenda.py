@@ -21,6 +21,8 @@ from .dashboard_optional_labels import optional_labels
 
 CACHE_SECONDS = 300
 FETCH_TIMEOUT = 12
+MAX_PROVIDER_EVENTS = 4096
+EVENT_BATCH_SIZE = 64
 _DATA_KEY = "bticino_c300x_agenda"
 
 
@@ -139,8 +141,8 @@ async def _async_refresh(hass: Any, entry: Any, cache: AgendaCache, calendars: t
                         if not isinstance(data, dict) or not isinstance(data.get("events"), list):
                             failed = True
                             continue
-                        events.extend(_events(data["events"], entity_id,
-                                              _text(state.attributes.get("friendly_name", entity_id), 60), now, end))
+                        events.extend(await _events(data["events"], entity_id,
+                                                    _text(state.attributes.get("friendly_name", entity_id), 60), now, end))
                     except Exception:
                         # Calendar providers may raise non-HA exceptions. Cache
                         # failure, but let CancelledError terminate the task.
@@ -159,7 +161,7 @@ async def _async_refresh(hass: Any, entry: Any, cache: AgendaCache, calendars: t
 
 
 def _event_time(value: Any) -> tuple[datetime, bool] | None:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or len(value) > 64:
         return None
     try:
         if len(value) == 10:
@@ -178,14 +180,19 @@ def _event_time(value: Any) -> tuple[datetime, bool] | None:
 
 
 def _text(value: Any, limit: int) -> str:
-    return " ".join(str(value or "").split())[:limit]
+    return " ".join(value[:limit * 8].split())[:limit] if isinstance(value, str) else ""
 
 
-def _events(raw: Any, entity_id: str, name: str, now: datetime, end: datetime) -> list[dict[str, Any]]:
+async def _events(raw: Any, entity_id: str, name: str, now: datetime, end: datetime) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     if not isinstance(raw, list):
         return result
-    for event in raw:
+    if len(raw) > MAX_PROVIDER_EVENTS:
+        # Do not publish a misleading top five from a partially scanned list.
+        raise ValueError("calendar response exceeds event processing budget")
+    for index, event in enumerate(raw):
+        if index % EVENT_BATCH_SIZE == 0:
+            await asyncio.sleep(0)
         if not isinstance(event, dict):
             continue
         start = _event_time(event.get("start"))

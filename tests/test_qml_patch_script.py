@@ -229,6 +229,7 @@ import Components.Styles 1.0
 
 Item {
     anchors.top: parent.top
+    anchors.topMargin: parent.height / 100 * 4
     Column {
         id: buttonColumn
         spacing: 6
@@ -249,7 +250,7 @@ Item {
 """
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "91f97655a23dd3e46a14b5d005018964066c2bf751520c84b6dee6ec013e6d29",
-    "Components/Settings/GeneralsChoice.qml": "6b7758186c430e8623c4f97107fd8a68324c0b99ba9c7d15113da643417a4139",
+    "Components/Settings/GeneralsChoice.qml": "79e530cd5432ada63953783843bda0fdca5907e91e3e184de1e2bac3e5c69252",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",

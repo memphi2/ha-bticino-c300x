@@ -421,9 +421,19 @@ patch_general_settings() {
     # Keep the vendor tone switch; make room for one native-style row below it.
     awk '
         $0 == "import QtQuick 1.1" { imports++ }
+        $0 == "    anchors.topMargin: parent.height / 100 * 4" {
+            print "    anchors.topMargin: 8"
+            top_margins++
+            next
+        }
+        !tone && $0 == "        spacing: 6" {
+            print "        spacing: 4"
+            column_spacing++
+            next
+        }
         $0 == "        id: beepButton" { tone++ }
         tone && $0 == "        anchors.topMargin: 32" {
-            print "        anchors.topMargin: 12"
+            print "        anchors.topMargin: 8"
             margins++
             next
         }
@@ -437,9 +447,9 @@ patch_general_settings() {
             print "        visible: typeof c300xDisplayPreferences !== \"undefined\""
             print "        anchors.horizontalCenter: parent.horizontalCenter"
             print "        anchors.top: beepButton.bottom"
-            print "        anchors.topMargin: 8"
+            print "        anchors.topMargin: 6"
             print "        width: buttonColumn.width"
-            print "        height: 36"
+            print "        height: 44"
             print "        onVisibleChanged: if (visible) c300xDisplayPreferences.load()"
             print "        Component.onCompleted: if (visible) c300xDisplayPreferences.load()"
             print "        UbuntuLightText {"
@@ -473,7 +483,7 @@ patch_general_settings() {
         }
         { print }
         END {
-            if (imports != 1 || tone != 1 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
+            if (imports != 1 || top_margins != 1 || column_spacing != 1 || tone != 1 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
                 print "Unsupported original GeneralsChoice.qml layout" > "/dev/stderr"
                 exit 12
             }

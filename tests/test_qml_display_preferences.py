@@ -69,7 +69,8 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
     patched = settings.read_text()
     assert patched.count("id: c300xFeedbackSetting") == 1
     assert "anchors.top: beepButton.bottom" in patched
-    assert "anchors.topMargin: 12" in patched
+    assert "anchors.topMargin: 8" in patched
+    assert "        spacing: 4" in patched
     assert "checked: global.beepEnabled" in patched
     assert "onTouched: global.beepEnabled = checked" in patched
     assert "Qt.createQmlObject" not in (gui / "MainApp.qml").read_text()
@@ -84,6 +85,7 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
 
 @pytest.mark.parametrize("broken", [
     "onTouched: global.beepEnabled = checked", "id: beepButton", "anchors.topMargin: 32",
+    "anchors.topMargin: parent.height / 100 * 4", "spacing: 6",
 ])
 def test_unknown_settings_layout_aborts_before_touching_gui(tmp_path, broken):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
@@ -93,6 +95,26 @@ def test_unknown_settings_layout_aborts_before_touching_gui(tmp_path, broken):
     before = {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()}
     assert _run_qml_patch_raw(tmp_path, gui, backup, "apply").returncode != 0
     assert {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()} == before
+
+
+def test_settings_fit_original_800_by_480_screen(tmp_path):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "apply")
+    source = (gui / SETTINGS).read_text()
+    assert "    anchors.topMargin: 8" in source
+    assert "        spacing: 4" in source
+    tone = source.split("id: beepButton", 1)[1].split("id: c300xFeedbackSetting", 1)[0]
+    feedback = source.split("id: c300xFeedbackSetting", 1)[1]
+    assert "anchors.topMargin: 8" in tone
+    assert "anchors.topMargin: 6" in feedback
+    assert "height: 44" in feedback
+    # Stock Settings.qml header/section and SVG button dimensions.
+    section_top = 78 + 480 * 0.05
+    button_column_height = 5 * 50 + 4 * 4
+    feedback_bottom = section_top + 8 + button_column_height + 8 + 34.239 + 6 + 44
+    assert feedback_bottom <= 480 - 10
 
 
 def test_missing_original_settings_backup_blocks_restore_and_rebackup(tmp_path):

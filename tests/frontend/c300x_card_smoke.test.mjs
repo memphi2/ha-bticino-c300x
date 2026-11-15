@@ -703,9 +703,15 @@ test("failed old transition does not clear a replacement transition video", asyn
     close() {},
     start: () => new Promise((_, reject) => { rejectStart = reject; }),
   };
+  const oldTrack = { stopped: false, stop() { this.stopped = true; } };
+  const oldMicrophone = { getTracks: () => [oldTrack] };
+  card._micStream = oldMicrophone;
   card._createWebrtcClient = () => oldClient;
-  const pending = card._replaceDoorbellWebrtcStream({ onPromoted() {} });
+  const pending = card._replaceDoorbellWebrtcStream({ microphoneStream: oldMicrophone, onPromoted() {} });
   card.setConfig({ entity: "camera.replacement" });
+  const replacementTrack = { stopped: false, stop() { this.stopped = true; } };
+  const replacementMicrophone = { getTracks: () => [replacementTrack] };
+  card._micStream = replacementMicrophone;
   const replacement = { close() {} };
   const stream = { id: "replacement stream" };
   card._transitionWebrtc = replacement;
@@ -715,6 +721,9 @@ test("failed old transition does not clear a replacement transition video", asyn
     await assert.rejects(pending, /old provider failed/);
     assert.equal(card._transitionWebrtc, replacement);
     assert.equal(card._transitionVideoEl.srcObject, stream);
+    assert.equal(oldTrack.stopped, true);
+    assert.equal(card._micStream, replacementMicrophone);
+    assert.equal(replacementTrack.stopped, false);
   } finally {
     card.disconnectedCallback();
   }
@@ -1319,6 +1328,55 @@ function fakeMicrophones() {
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("failed answered transitions release their microphone and preserve the preview", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?failed-answer-microphone");
+  const Card = registry.get("c300x-doorbell-call-card");
+  for (const failure of ["offer rejection", "provider closure"]) {
+    const { card } = answerRaceCard(Card);
+    const microphones = fakeMicrophones();
+    const preview = card._webrtc;
+    let onClosed;
+    let closes = 0;
+    card._createWebrtcClient = (callbacks) => {
+      onClosed = callbacks.onClosed;
+      return {
+        async start() {
+          if (failure === "offer rejection") throw new Error(failure);
+        },
+        close() { closes++; },
+      };
+    };
+    let answering;
+    try {
+      card.hass = ringHass("ring_preview_active", "answer_ring", async () => {});
+      answering = card._actions.handlePrimaryAction();
+      await tick();
+      microphones.prompts.shift()();
+      await answering;
+      if (failure === "provider closure") {
+        assert.equal(microphones.streams[0].getTracks()[0].stopped, false);
+        const transition = card._transitionWebrtc;
+        onClosed(failure);
+        transition.close();
+      }
+      assert.equal(microphones.streams[0].getTracks()[0].stopped, true, failure);
+      assert.equal(card._micStream, null);
+      assert.equal(card._transitionWebrtc, null);
+      assert.equal(card._webrtc, preview);
+      assert.equal(preview.running, true);
+      assert.equal(card._lifecycle.doorbellAnswered, true);
+      assert.equal(card._error, failure);
+      assert.equal(closes, 1);
+    } finally {
+      card.disconnectedCallback();
+      microphones.prompts.shift()?.();
+      await answering;
+      microphones.restore();
+    }
+  }
+});
 
 test("the ring_active state arriving before the answer result keeps the answering card answered", async () => {
   const registry = installFakeDom();

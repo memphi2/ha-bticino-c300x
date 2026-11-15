@@ -1,7 +1,7 @@
 import {
   c300xRingLifecycleActive,
   c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=798225d5e8760076";
+} from "./c300x-ring-preview-state.js?v=3c01e7a6b41eba76";
 
 const C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS = new Set([
   "agent_cpu_watchdog",

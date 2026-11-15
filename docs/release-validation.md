@@ -110,7 +110,7 @@ Run `npm ci --prefix tests/browser --ignore-scripts` and
 `node tests/browser/smoke.mjs`. Chrome must be installed; `CHROME_BIN` overrides
 its executable path. CI runs this separately from Python tests.
 
-The actual card is rendered at 320, 390 and 1024 pixels in four languages.
+The actual card is rendered at 240, 320, 390 and 1024 pixels in four languages.
 Tests check action bounds/labels, unavailable and pending buttons, door/light
 routing, repeated WebRTC start/stop, microphone muting and detach cleanup.
 A synthetic canvas feeds a real browser-to-browser WebRTC connection; pixel
@@ -143,7 +143,7 @@ device interoperability tests.
 | Two browser Ring preview | Supported preview viewers do not break the answered flow. |
 | Ring capture during a real Ring Call | Omitted `capture_mode` and explicit `ring` preserve the existing answer/record/hangup flow. Capture writes MP4, audio when requested, JPEG frames and JSON metadata to allowed paths. |
 | Ring capture without a Ring Call | With `include_audio: true`, the default `ring` mode fails cleanly and does not silently start an on-demand session. Existing blueprints keep this mode. |
-| On-demand capture from idle | Explicit `capture_mode: on_demand` records without ringing. Test `include_audio: true` and `false`, durations of 1, 5 and 15 seconds, exact response paths and capture-mode metadata with native agent 2.1.0. |
+| On-demand capture from idle | Explicit `capture_mode: on_demand` records without ringing. Test `include_audio: true` and `false`, durations of 1, 5 and 15 seconds, exact response paths and capture-mode metadata with the packaged native agent. |
 | On-demand capture when admission reports busy or unclear ownership | Reported live, Ring, Home Call or external sessions cause rejection before recording begins. |
 | Ring begins during on-demand connection setup (hardware) | Begin an on-demand capture from idle and ring the doorbell during RTSP setup, with audio enabled and disabled. Record whether capture fails or receives Ring video through the existing native route. Verify that capture sends no Ring answer/hangup or global stop and that closing its recording client leaves the Ring intact. Successful metadata retains `capture_mode: on_demand` as the requested mode. |
 | On-demand capture completion, failure and cancellation | Its recording client closes after success, ffmpeg failure or cancellation, including before RTSP startup. Other or replacement sessions remain intact; a subsequent capture can start. |
@@ -259,6 +259,9 @@ The reviewed build lock covers these native and bundle input paths:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/build_hacs_release.py`
+- `scripts/check_agent_abi.py`
+- `scripts/native_build_lock.py`
 
 Changes to these paths invalidate the previous approval. Native code changes
 require rebuilding with a verified `C300X_DEVICE_SYSROOT` and running the

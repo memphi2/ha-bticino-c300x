@@ -45,12 +45,12 @@ incoming Ring Call target but does not gate on-demand media.
 | `talkback_rtp` | Talkback RTP port is not open or not reported ready. | Apply the firewall Repair. IPv6 is optional. |
 | `homeassistant_user` | Dedicated media user is missing. | Run Home Assistant media-user setup. |
 | `device_routing` | Local media-user route files are incomplete. | Run Home Assistant media-user setup. |
-| `callback_url` | The callback URL is unreachable, uses an unsuitable address, or HTTPS is not supported by the installed agent. | Configure a reachable HTTP or HTTPS base URL. HTTPS requires an updated agent with `https_callbacks` and a trusted certificate matching the hostname. |
+| `callback_url` | The callback URL is unreachable, or uses an unsuitable address. | Configure a reachable HTTP or HTTPS base URL. HTTPS requires a trusted certificate matching the hostname. |
 | `startup` | Device-agent startup link is missing. | Run the device-agent update/repair flow. |
 
 ## Ring Call Forwarding Warnings
 
-`forwarding_homeassistant` and `forwarding_unprovisioned` are non-blocking
+`forwarding_homeassistant`, `forwarding_unprovisioned` and `forwarding_unknown` are non-blocking
 warnings. On-demand video and its talkback, as well as Home Call, remain
 available when their own prerequisites pass. Keep **Forwarding** set to
 **Smartphone** when the Door Entry app should receive calls. Select **Home

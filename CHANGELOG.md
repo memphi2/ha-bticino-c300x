@@ -27,7 +27,9 @@
 - Return to the settings menu after an area is saved, so several areas can be
   changed without opening **Configure** again; **Done** closes the menu.
 - Deliver the visitor image from the device in the requested size and encode
-  it once in HA; the capture delay now defaults to **3 seconds** instead of 5.
+  it once in HA. New entries capture after **3 seconds** instead of 5; an
+  existing entry keeps its saved delay, which can be changed under **Visitor
+  Snapshot**.
 - Show select options on display tiles in HA's language, and write decimal
   numbers on every display page with the decimal sign of that language.
 - Keep the card footer's text beside the buttons at every width instead of
@@ -35,8 +37,9 @@
   stays readable in the tooltip; an error or notice uses at most two lines.
 - Align the **Tone buttons** and **HA feedback** rows in the device's
   **Settings → General** with the buttons above them.
-- Record a Ring Capture's audio with the device's own sample rate and channel
-  count, and leave the level untouched at 0 dB gain. The unused
+- Record the audio track of a Ring Capture's MP4 with the device's own sample
+  rate and channel count, and leave its level untouched at 0 dB gain;
+  `latest.raw.wav` stays 16 kHz mono. The unused
   `latest.processed.wav` and its `processed_wav_path` entry are gone; use
   `raw_wav_path` in automations of your own.
 - Pass PCMU talkback to a PCMU device unchanged instead of decoding and
@@ -68,7 +71,6 @@
   device's answer names no mode.
 - Keep **Hang up** on the card for an answered call whose stream did not start.
 - Keep a memo delete button usable after a failed read.
-- Keep the media readiness icon inside the card footer on narrow cards.
 
 ### Upgrade Notes
 

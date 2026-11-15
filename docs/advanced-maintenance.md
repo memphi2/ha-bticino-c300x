@@ -48,7 +48,7 @@ Keep your existing integration entry, cards and configured pages.
 The packaged **2.3.0 agent** is required for visitor images and includes the
 corrected display startup timer. Update it through Repair after installing the
 integration; copying HA files alone does not update the device. **Save images**
-defaults to on, with a 5-second delay and 14-day retention. Review that switch
+defaults to on, with a 3-second delay and 14-day retention. Review that switch
 and HA media permissions before leaving capture enabled.
 
 ### Update Steps
@@ -67,10 +67,9 @@ Keep existing integration entries when updating. The integration archive include
 the agent, its GUI components and the Lovelace card; no separate card repository
 is needed.
 
-The PCMU silence-frame correction in 2.0.0 requires **native agent 2.0.0 or
-newer**; an integration-only update is insufficient. This correction does not
-require a firmware patch or a GUI change. For availability, validation scope
-and the workaround for older agents, see
+The PCMU silence-frame correction is part of the packaged agent; an
+integration-only update is insufficient. It needs no firmware patch or GUI
+change. For the validation scope, see
 [PCMU reboot troubleshooting](media-troubleshooting.md#device-reboots-after-pcmu-on-demand-video).
 
 ## Tokens
@@ -172,8 +171,7 @@ for browser microphone access does not require HTTPS callbacks on the C300X.
 
 Callbacks must use an HTTP or HTTPS URL that the C300X can reach directly.
 HTTPS must be explicitly selected in the callback base URL override. It requires
-an updated agent advertising `https_callbacks_configurable` and a trusted
-certificate matching the URL hostname. Check the device clock and DNS as well.
+a trusted certificate matching the URL hostname. Check the device clock and DNS as well.
 
 Avoid:
 
@@ -183,8 +181,8 @@ Avoid:
 - link-local IPv6 without explicit scope,
 - public or remote-only URLs.
 
-If Home Assistant generates an unsuitable URL, set **Local Home Assistant
-callback base URL** in setup/options. Enter the HTTP or HTTPS base URL, for
+If Home Assistant generates an unsuitable URL, set **Address of Home Assistant for the
+C300X (optional)** in setup or under **Connection to the C300X** in the options. Enter the HTTP or HTTPS base URL, for
 example:
 
 ```text
@@ -205,8 +203,7 @@ Changing HTTP/HTTPS modes writes the internal agent setting only when it changes
 and requires one agent restart. The device and GUI are not rebooted. The agent
 defers the restart while a call, stream or media teardown is active; HA retries
 using its existing callback registration mechanism. Switching back to HTTP and
-restarting releases the TLS libraries. Old agents continue to support HTTP;
-update the agent before selecting HTTPS. Certificate failures never fall back to
+restarting releases the TLS libraries. Certificate failures never fall back to
 unencrypted HTTP.
 
 ## Remove Agent

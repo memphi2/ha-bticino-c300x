@@ -50,11 +50,13 @@ zip under `.release/`.
 The bootstrap installer puts the following files on the C300X:
 
 - `c300x-agent-native`
-- generated `config.json` with generated API and maintenance tokens (a reinstall keeps the sections of an existing file that Home Assistant does not own: MQTT, mDNS, events, voicemail, memos, metrics, video and display bridge)
+- generated `config.json` with generated API and maintenance tokens (a reinstall keeps the sections of an existing file that Home Assistant does not own: MQTT, mDNS, events, answering machine, memos, metrics, video and display bridge)
 - `/etc/init.d/c300x-native-agent` and `/etc/rc5.d/S40c300x-native-agent`
 - display support files under the agent directory
 - `qml_patch.sh`
 - `remove_agent.sh`
+- `bootstrap_firewall.sh`
+- `bundle.json`
 
 It does not silently apply display, firewall, or IPv6 firewall changes during Home
 Assistant startup.
@@ -94,7 +96,7 @@ Key sections:
 - `events`: callback store and timeout
 - `maintenance`: gated SSH/reboot/display-reload commands
 - `systemMetrics`: optional low-frequency push updates for load and temperature
-- `video`: optional local media doorstation media support
+- `video`: optional local doorstation media support
 - `displayBridge`: optional dashboard proxy for QML; `feedbackEnabled` stores
   the local **Settings > General > HA feedback** choice (default true).
   Changing it requires no HA connection or GUI restart and writes configuration
@@ -124,8 +126,8 @@ With HTTPS enabled, the agent advertises `https_callbacks` when the device provi
 TLS 1.2 or newer and verifies both the certificate chain and hostname using
 `/etc/ssl/certs/ca-certificates.crt`. The device clock must be correct. Redirects
 and environment proxies are disabled; HTTPS errors never trigger an HTTP retry.
-An older agent, missing library or unsupported curl build requires an agent or
-device-library update before HTTPS can work. HTTP remains available independently.
+A missing library or unsupported curl build requires a device-library update
+before HTTPS can work. HTTP remains available independently.
 
 HTTPS adds encryption and certificate verification work on the device. Connections
 are not pooled in this implementation. A successful HTTPS delivery does not imply
@@ -171,17 +173,21 @@ Assistant to confirm the new address. A DHCP reservation avoids address changes.
 
 The Display patch and Display reload maintenance paths are intentionally narrow: the
 agent can only run the configured local UI helper with fixed `status`, `apply`,
-`restore`, or `reload` arguments. The patch is a complete Display patch, not just two extra pages: it wires MainApp navigation, transforms the
+`restore`, `core-apply`, `core-restore`, `media-user-label-apply`,
+`media-user-label-restore` or `reload` arguments. The patch is a complete Display patch, not just two extra pages: it wires MainApp navigation, transforms the
 device HomePage for unread memo/video-message badges, transforms the
-device MemoPage for external-delete refresh, installs the project-owned
-Alarmo/Home Assistant pages, and installs the local QML JavaScript bridge.
+device MemoPage for external-delete refresh, adds the HA feedback and touch-tone controls to Settings > General, installs
+the project-owned Alarmo, Home Assistant and energy pages, and installs the
+local QML JavaScript bridge.
 Original display files are backed up under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`; generated agent
 files are not backed up on the device.
 
 The remove-agent maintenance action is explicit and token protected. It first
-restores the Display patch, then restores IPv6 and IPv4 firewall scripts, then
-removes the native-agent init files, agent directory, and agent-owned backups.
+restores all display changes (Display patch, core hook and media-user label),
+then the IPv6 and IPv4 firewall scripts, stops the agent, restores the stock
+audio codec, removes the native-agent init files, agent directory and
+agent-owned backups, and schedules a reboot.
 SSH is started before and after the cleanup and is deliberately not removed. If
 a restore step fails, the script stops before deleting the backups.
 
@@ -208,10 +214,9 @@ arbitrary binaries on its own and does not check for updates in idle.
   file. It keeps temporary local backups for changed files, rolls them back on
   an apply error, and writes bundle metadata only after activation succeeds.
   Existing config is preserved; restart is scheduled only after success.
-- Older agents without self-update support still require the installer/SSH path.
 
-These checks run in the currently installed agent, so updating an older agent
-does not retroactively change its updater. The rollback handles reported apply
+These checks run in the currently installed agent; an update does not change
+the updater that installs it. The rollback handles reported apply
 errors, not power loss or storage failure during rollback. Recovery backups
 left by an interrupted update are not overwritten; inspect and recover that
 installation before trying another update. No update checks or backup writes
@@ -239,6 +244,9 @@ lock for the current source. The lock covers these native and bundle inputs:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/build_hacs_release.py`
+- `scripts/check_agent_abi.py`
+- `scripts/native_build_lock.py`
 
 The release workflow checks the source digest and executable SHA-256 before
 accepting a transferred agent. Native changes require a fresh ARMHF build and

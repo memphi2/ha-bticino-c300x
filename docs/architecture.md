@@ -16,7 +16,8 @@ Path: `custom_components/bticino_c300x/`
 
 Responsibilities:
 
-- Config flow and options flow.
+- Config flow and options flow. The options flow is a settings menu: each area
+  saves when it is submitted and returns to the menu; Done closes it.
 - Capability-gated entities/services.
 - Authenticated API calls to the device agent.
 - Event webhook registration and event-state handling.
@@ -65,7 +66,7 @@ Responsibilities:
 - Local `/api/v1` HTTP API with bearer auth.
 - Push callbacks for ring/lock/call/ringer/forwarding/video-message/memo events.
 - OpenWebNet command execution.
-- Optional local media doorstation media module.
+- Optional local doorstation media module.
 - Optional display bridge endpoint for QML dashboard requests.
 - Explicit maintenance/update actions for device-agent, display, firewall, MQTT
   migration and media-user setup.
@@ -168,7 +169,8 @@ explicit user actions:
 - Home Assistant media-user setup or repair,
 - forwarding, ringer, answering-machine and memo/message commands,
 - Display patch and GUI reload,
-- firewall and MQTT maintenance,
+- firewall, MQTT, audio codec, SSH and reboot maintenance,
+- the display's local HA feedback preference,
 - configured device activation synchronization.
 
 ## Design Constraints

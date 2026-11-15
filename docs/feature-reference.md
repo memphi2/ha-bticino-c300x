@@ -1,21 +1,5 @@
 # Feature Reference
 
-The agent status attribute `agent_restart_count` counts observed changes of the
-agent process instance since this integration entry was loaded. It does not
-count device reboots, and agents without instance metadata cannot contribute to
-it. This replaces the misleading `device_reboot_count` attribute; a lower uptime
-alone is not treated as restart evidence.
-
-Detailed agent diagnostics remain available live, but volatile debug attributes
-(loop counters, descriptor counts and observation timestamps) are excluded from
-Recorder history. Health states, CPU measurements, write counters and watchdog
-triggers retain their normal history behavior. Diagnostic entities remain
-disabled by default.
-
-The diagnostics attribute `media_watchdog_last_percent` records the CPU value
-of the last actual watchdog trigger, not every healthy observation. Use the
-Device CPU sensor for current CPU measurements.
-
 This page is the compact reference for users and maintainers. It describes what
 the integration exposes, where to configure it, and which parts write to the
 C300X only after an explicit user action.
@@ -41,8 +25,9 @@ and saves when it is submitted; the other areas keep their settings. After
 saving, the menu is shown again, so several areas can be changed in one go;
 **Done** closes it. To leave an area without a change, submit it as it is. A new
 setup and a reconfigure walk through the same areas one after the other:
-connection, video and audio, activations, Alarm (Alarmo), display and Display
-patch and, with the patch on, the pages and the tiles. Display
+connection, video and audio, Visitor Snapshot (only with video on),
+activations, Alarm (Alarmo), display and Display patch and, with the patch
+on, the pages and the tiles. Display
 pages and display tiles are offered while the Display patch is on, the tiles
 only once there is an entity on a page or an Alarmo quick action. Every field
 has a help text.
@@ -50,12 +35,16 @@ has a help text.
 | Area | Purpose | Writes to device |
 | --- | --- | --- |
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
-| Media features | Doorstation media, Home Assistant media user, live audio gain, Ring Capture gain. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
-| Device activations | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
+| Video and audio | Door station video and audio, video and audio access on the C300X, live audio level, volume of ring recordings, connection paths for the live picture, talking through the HA camera view. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
+| Visitor Snapshot | Image width and height (688x480), delay (3 s), retention (14 days), date and time in the image (on). Offered only with video on. | No. |
+| Activations: locks, lights, stair light | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
 | Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | No. Stored in Home Assistant; the display asks for it. |
 | Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. | Yes, only when the Display patch is applied/restored. |
 | Display pages and tiles | Weather, entities per page, size, name and secondary line of each tile. | No. Stored in Home Assistant; the display asks for them. |
-| Maintenance controls | SSH, noAuth, mDNS discovery, firewall patches, GUI reload, reboot, agent update/remove. | Yes, only when the corresponding entity, button or Repair is used. |
+
+Maintenance controls (SSH, noAuth, mDNS discovery, firewall patches, GUI
+reload, reboot, agent update/remove) are device entities, not a settings area;
+they write to the device only when the entity, button or Repair is used.
 
 ## Main User Features
 
@@ -65,7 +54,7 @@ has a help text.
 | On-demand camera | Camera entity, C300X Doorbell Call Card, `activate_doorbell_video` / `stop_doorbell_video`. | Uses local RTSP through Home Assistant's WebRTC provider/go2rtc and does not require Home Assistant Ring Call forwarding. |
 | Ring Call preview | C300X Doorbell Call Card. | Multiple browser previews are supported; only the active answered browser should show Answer/Hang Up. |
 | Ring Call answer/hangup | C300X card, mobile blueprints, `answer_doorbell_call`, `hangup_doorbell_call`. | Requires Forwarding set to Home Assistant and media readiness without blocking failures. |
-| Talkback | Browser microphone through the card, or optionally the native HA camera player on HA 2026.11+. | Native HA control is off by default. Enable **Two-way audio in the HA camera player** in the integration options and Two-way audio in HA Labs. Requires WebRTC, HTTPS and microphone permission. Card talkback is unchanged. |
+| Talkback | Browser microphone through the card, or optionally the native HA camera player on HA 2026.11+. | Native HA control is off by default. Enable **Talk through the Home Assistant camera view** under **Configure > Video and audio** and Two-way audio in HA Labs. Requires WebRTC, HTTPS and microphone permission. Card talkback is unchanged. |
 | Home Call | C300X card, Home Call websocket path, `start_home_call`, `stop_home_call`. | Audio-only call from Home Assistant to the C300X display. |
 | Door unlock | Button entity, service, optional dashboard action. | Sends one configured unlock command through the native agent. |
 | Stair light | Button entity, service, optional generated activation. | Manual mode uses P/N parts to generate the stair-light activation address. |
@@ -112,11 +101,11 @@ run FFmpeg, or create image, temporary or status files on the C300X. Encoding
 as JPEG and all persistent storage happen in Home Assistant; the image is
 encoded once and its size is left as the agent delivered it. Reading a frame
 still has a bounded CPU, RAM and network cost; this is not zero-load capture.
-The bundled agent must be updated for the new snapshot endpoint.
+Visitor images need the bundled agent.
 
 Images are stored beside Ring Captures under the configured HA media root:
 `c300x/snapshots/<device-directory>/`. Each C300X has its own directory and
-archive in **Media > BTicino C300X**. The storage location is not `www` and the
+archive in **Media > BTicino C300X Media**. The storage location is not `www` and the
 integration's image endpoint requires camera read permission. HA's standard
 local-media browser also exposes this directory using HA media access rules,
 independently of camera entity permissions. Restrict media access if needed;
@@ -152,11 +141,9 @@ toggle/button helpers. Existing read-only selections are retained, but cannot
 be newly selected as a quick action. Media players are not supported here.
 The selected entity's name is used, including an existing display-name override.
 
-The revised page is part of 2.1.0 and later. Update the bundled agent and
-apply the Display patch to install it. No new background polling or device-file
-history is added. Reconnect attempts run only after a failed event connection
-while the page is active. Device rendering and interruption by a physical Ring
-Call are not yet confirmed on hardware.
+Update the bundled agent and apply the Display patch to install the page. No
+background polling or device-file history is added. Reconnect attempts run
+only after a failed event connection while the page is active.
 
 ## Display Home Page Buttons
 
@@ -164,8 +151,7 @@ With the Display patch, the Alarm button appears when an alarm panel is configur
 the Home Assistant button appears when a display page has configured content.
 Their positions stay reserved, so a change in availability does not rearrange
 the other home-page buttons. A temporary connection failure keeps the last
-confirmed visibility instead of hiding both buttons. Existing installations
-receive this layout the next time the Display patch is applied.
+confirmed visibility instead of hiding both buttons.
 
 ## Display Device Controls
 
@@ -276,6 +262,10 @@ these settings existed therefore looks the same until a size is chosen.
   unrelated attributes and history are not requested or forwarded.
 - Number entities use HA units, bounds and step sizes; select entities show their
   actual options. Sliders send one command on release, not during movement.
+- Numbers on every display page use the decimal sign of Home Assistant's
+  language: a point in English, a comma in German, French and Italian; other
+  languages use the English form. Select options on tiles appear in that
+  language too.
 - A choice, such as a select's options or a player's sources, offers its
   first options: at most 50, and only as many as fit into 2 kB of the answer
   to the display, where a character outside ASCII counts six bytes and an
@@ -295,7 +285,7 @@ reused, preserving the overview position and active input.
 
 Device requests to Home Assistant are serialised on the device. The agent
 forwards them one at a time and refuses a second one while the first is open,
-so the pages queue instead of colliding: waking from standby no longer shows a
+so the pages queue instead of colliding: waking from standby does not show a
 transport error when the home page refreshes its buttons at the same moment a
 page is opened. Pages asking for the same state at the same time are answered
 from one request; commands always keep their own.
@@ -353,8 +343,8 @@ page layouts or a missing backup of an already patched page abort the operation
 instead of replacing the original with a guessed version.
 
 Switch the Display patch on under **Configure > Display and Display patch**;
-the settings menu then offers **Display pages** and **Display tiles**. Choose the weather, Alarmo and the entities with the normal
-HA selectors;
+the settings menu then offers **Display pages** and **Display tiles**. Choose the weather and the entities with the normal
+HA selectors; Alarmo is set under **Alarm (Alarmo)**;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
@@ -502,6 +492,9 @@ feature, the matching entity is not created.
 | `switch` | Ringer mute | Device ringer mute state. |
 | `number` | Ringer volume | C300X `0..10` ringtone volume scale. |
 | `switch` | Answering machine | Device answering-machine enabled state. |
+| `switch` | Save images | Automatic visitor images on or off (on by default). |
+| `switch` | Touch tone | The display's touch-sound setting. |
+| `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |
 | `switch` | Display patch, API firewall patch, IPv6 firewall patch | Explicit device-side patch controls. |
@@ -510,6 +503,22 @@ feature, the matching entity is not created.
 | `button` | Stop doorbell video | Stops an active agent-owned on-demand media session. |
 | `button` | Reboot, restart agent, reload display, remove device agent | Explicit maintenance actions. |
 | `button` | Delete latest video/text/voice memo | Delete actions that require matching capability and patch state. |
+
+The agent status attribute `agent_restart_count` counts observed changes of the
+agent process instance since this integration entry was loaded. It does not
+count device reboots, and agents without instance metadata cannot contribute to
+it. A lower uptime alone is not treated as
+restart evidence.
+
+Detailed agent diagnostics remain available live, but volatile debug attributes
+(loop counters, descriptor counts and observation timestamps) are excluded from
+Recorder history. Health states, CPU measurements, write counters and watchdog
+triggers retain their normal history behavior. Diagnostic entities remain
+disabled by default.
+
+The diagnostics attribute `media_watchdog_last_percent` records the CPU value
+of the last actual watchdog trigger, not every healthy observation. Use the
+Device CPU sensor for current CPU measurements.
 
 ## Service Reference
 
@@ -522,6 +531,8 @@ admin-only. Trusted context-free automations remain supported. See
 
 | Service | Purpose |
 | --- | --- |
+| `bticino_c300x.show_display_notification` | Shows or replaces a notice on the native Home Assistant display page. |
+| `bticino_c300x.dismiss_display_notification` | Removes a display notice by its ID. |
 | `bticino_c300x.run_action` | Runs one allowlisted display/dashboard action by action id. |
 | `bticino_c300x.run_device_activation` | Runs one configured C300X activation by activation id. |
 | `bticino_c300x.alarm_command` | Sends an alarm command to the configured alarm control panel entity. |
@@ -592,9 +603,6 @@ On-demand capture does not answer or hang up a Ring Call. Completion, failure or
 cancellation closes its own recording client. `announcement_path` is supported
 only in `ring` mode and is rejected before starting an on-demand capture.
 
-Use an integration build that includes `capture_mode`. Native agent **2.1.0**
-already provides the required media API; this feature needs no agent update.
-
 ## Device Activations
 
 Device activations are configured from setup, options, or reconfigure. They are
@@ -629,9 +637,9 @@ supported; external clients must select TCP.
 
 Audio gain options:
 
-- **Doorstation live audio gain** affects on-demand and Ring Call downstream
+- **Live audio level (dB)** affects on-demand and Ring Call downstream
   audio. Default is `0 dB`.
-- **Ring capture audio gain** affects Ring Capture WAV/MP4 processing. Default
+- **Volume of ring recordings (dB)** affects Ring Capture WAV/MP4 processing. Default
   is `6 dB`. At `0 dB` the level of the device audio is left unchanged: neither
   the gain nor the limiter that guards it is applied.
 - The allowed range is `-20 dB` to `+20 dB`.

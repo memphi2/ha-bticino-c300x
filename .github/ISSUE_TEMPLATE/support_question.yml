@@ -31,7 +31,7 @@ body:
     id: integration_version
     attributes:
       label: Integration version
-      placeholder: "1.7.7"
+      placeholder: "2.4.0"
     validations:
       required: true
 
@@ -47,7 +47,7 @@ body:
     id: native_agent_version
     attributes:
       label: Native agent version, if relevant
-      placeholder: "1.7.6 / not installed / unknown"
+      placeholder: "2.4.0 / not installed / unknown"
 
   - type: checkboxes
     id: checklist

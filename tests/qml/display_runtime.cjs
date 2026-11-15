@@ -226,6 +226,72 @@ for (const cancellation of ["pause", "generation", "quick-timeout"]) {
 }
 console.log("Queue deadlines, cancellation and fresh alarm reads passed");
 
+// Exercise the vendor lifecycle, not a direct call to our cleanup helper.
+for (const destination of ["homePage", "videocallPage"]) {
+    const r = runtime();
+    const p = methods(dashboardQml, {Api: r.Api, Date: r.clock, I18n: {text: (_, key) => key},
+        uiLanguage: "en", status: {}, runtimeGeneration: 0, commandGeneration: 0,
+        pendingEntity: "", controlFeedback: [], dashboardOnline: true,
+        dashboardLoading: false, dashboardRefreshAgain: false, listScrolling: false,
+        pageActive: false, armedCommand: "", interactionActive: false});
+    p.aboutToShow();
+    r.Api.dashboardControl({entity_id: "cover.shade", domain: "c300x"},
+        {command: "close_cover"}, null, p.status, p);
+    assert.equal(r.Api.forwardQueue.length, 1);
+    p.armedCommand = "unlock";
+    p.interactionActive = true;
+    p.dashboardRefreshAgain = true;
+    const requests = r.sent.slice();
+    const lateCallbacks = requests.map(request => request.onreadystatechange);
+    const oldPage = {item: p, source: "HomeAssistant.qml", visible: true};
+    const nextPage = {visible: false, _pageName: destination};
+    const tabs = {tabs: [oldPage, nextPage], current: nextPage,
+        global: {screenshotActive: false}, console: {log() {}}};
+    const sysroot = process.env.C300X_DEVICE_SYSROOT;
+    if (sysroot) {
+        const skin = path.join(sysroot, "home/bticino/bin/gui/skins/default");
+        for (const [file, name, target] of [["PageLoader.qml", "hidden", oldPage],
+            ["TabView.qml", "_realActivateTab", tabs]]) {
+            const source = fs.readFileSync(path.join(skin, file), "utf8");
+            const method = source.match(new RegExp("^    function " + name + "\\([^]*?^    }", "m"));
+            assert.ok(method, file + " exposes " + name);
+            vm.runInContext(method[0], vm.createContext(target));
+        }
+    } else {
+        oldPage.hidden = () => { if (p.hidden) p.hidden(); };
+        tabs._realActivateTab = () => {
+            oldPage.visible = false;
+            oldPage.hidden();
+            nextPage.visible = true;
+        };
+    }
+    tabs._realActivateTab(nextPage);
+    assert.equal(p.pageActive, false, destination + " invokes dashboard cleanup via hidden()");
+    assert.equal(p.runtimeGeneration, 1);
+    assert.equal(p.armedCommand, "");
+    assert.equal(p.interactionActive, false);
+    assert.equal(p.pendingEntity, "");
+    assert.equal(p.controlInFlight, false);
+    assert.equal(p.dashboardOnline, false);
+    assert.equal(p.dashboardLoading, false);
+    assert.equal(p.dashboardRefreshAgain, false);
+    assert.equal(p.controlFeedback[0].state, "state_unconfirmed");
+    assert.equal(r.Api.eventWatching, false);
+    assert.equal(r.Api.eventRequest, null);
+    assert.equal(r.Api.forwardQueue.length, 0);
+    assert.equal(r.Api.forwardActive, null);
+    assert.ok(requests.every(request => request.aborted));
+    for (const callback of lateCallbacks) callback();
+    r.advance(60000);
+    assert.equal(r.sent.length, requests.length, "hidden dashboard sends no further requests");
+    assert.equal(p.pageActive, false);
+    p.aboutToShow();
+    assert.equal(p.pageActive, true);
+    assert.equal(r.sent.length, requests.length + 2, "reopening starts one read and one event watch");
+    assert.equal(r.Api.eventWatching, true);
+}
+console.log("Dashboard stock hidden lifecycle passed");
+
 // Emulate QML property notifications: rendered feedback is cached until a
 // property changes. Merely advancing Date.now() cannot refresh that binding.
 {

@@ -94,6 +94,10 @@ Page {
         startWatch()
     }
 
+    function hidden() {
+        aboutToHide()
+    }
+
     function aboutToHide() {
         if (pendingEntity) Api.setDashboardFeedback(page, pendingEntity, "state_unconfirmed")
         pageActive = false

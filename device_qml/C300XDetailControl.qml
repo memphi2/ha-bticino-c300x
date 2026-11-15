@@ -1,5 +1,6 @@
 import QtQuick 1.1
 import Components 1.0
+import Components.Styles 1.0
 
 Item {
     id: controlRow

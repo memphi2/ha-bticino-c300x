@@ -74,7 +74,7 @@
 - Share concurrent Energy statistics reads and pause retries after database
   errors. Keep the same day's last available figures during a failed refresh.
 - Fill recent statistics gaps separately for each energy meter. Omit grid and
-  home power when a grid connection lacks power coverage instead of presenting
+  home power when a grid connection or battery lacks power coverage instead of presenting
   a partial sum as the whole home's consumption.
 - Validate the QML patcher's result after SSH installation; a failed GUI reload
   no longer counts as a successful installation.

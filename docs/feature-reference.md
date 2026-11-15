@@ -390,7 +390,7 @@ from there.
 
 | View | Shows |
 | --- | --- |
-| **Now** | One box each for solar, grid, battery and home with today's energy. With complete power-sensor coverage in the Energy setup, the box also shows current power and its flow direction. If a grid connection lacks a power sensor or a required sensor is unavailable, grid and home power are omitted instead of showing a partial total. Tariff meters may share one power sensor. |
+| **Now** | One box each for solar, grid, battery and home with today's energy. With complete power-sensor coverage in the Energy setup, the box also shows current power and its flow direction. If a grid connection or battery lacks a power sensor, or a required sensor is unavailable, that group's power and home power are omitted instead of showing a partial total. Meters may share one power sensor; its reading is counted once. |
 | **Today** | Hourly bars with a labelled energy axis and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Further grid meters are summed as **Other meters**. Values and costs occupy separate columns. |
 | **Power** | Today's power curves for grid, solar, battery and home from the power sensors configured in HA's Energy dashboard. The chart uses 15-minute means of recorded power statistics, a common W/kW scale and a visible zero line. Export and battery charging appear below zero. Missing data leaves gaps rather than fabricated zero readings. |
 | **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |

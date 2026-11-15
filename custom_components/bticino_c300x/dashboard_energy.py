@@ -71,6 +71,7 @@ class EnergySources:
     solar_power: tuple[str, ...] = ()
     battery_power: tuple[str, ...] = ()
     grid_power_complete: bool = True
+    battery_power_complete: bool = True
 
     @property
     def any(self) -> bool:
@@ -149,6 +150,7 @@ def energy_sources(
         "battery_to": [], "grid_power": [], "solar_power": [], "battery_power": [],
     }
     grid_power_complete = True
+    battery_power_complete = True
 
     def meter(stat: Any, cost: Any, name: Any) -> EnergyMeter | None:
         stat_id = _text(stat)
@@ -191,12 +193,18 @@ def energy_sources(
             add("solar", meter(source.get("stat_energy_from"), None, name))
             add("solar_power", _text(source.get("stat_rate")))
         elif kind == "battery":
-            add("battery_from", meter(source.get("stat_energy_from"), None, name))
-            add("battery_to", meter(source.get("stat_energy_to"), None, name))
-            add("battery_power", _text(source.get("stat_rate")))
+            battery_from = meter(source.get("stat_energy_from"), None, name)
+            battery_to = meter(source.get("stat_energy_to"), None, name)
+            battery_power = _text(source.get("stat_rate"))
+            if (battery_from or battery_to) and not battery_power:
+                battery_power_complete = False
+            add("battery_from", battery_from)
+            add("battery_to", battery_to)
+            add("battery_power", battery_power)
     return EnergySources(
         **{key: tuple(values) for key, values in groups.items()},
         grid_power_complete=grid_power_complete,
+        battery_power_complete=battery_power_complete,
     )
 
 
@@ -305,9 +313,8 @@ def source_power_watts(
     grid = _sum_power(sources.grid_power, power) if sources.grid_power_complete else None
     solar = (_sum_power(sources.solar_power, power)
              if len(sources.solar_power) >= len(sources.solar) else None)
-    batteries = max(len(sources.battery_from), len(sources.battery_to))
     battery = (_sum_power(sources.battery_power, power)
-               if len(sources.battery_power) >= batteries else None)
+               if sources.battery_power_complete else None)
     values = {key: watts for key, present, watts in (
         ("grid", has_grid, grid), ("solar", bool(sources.solar), solar),
         ("battery", has_battery, battery),

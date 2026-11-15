@@ -349,11 +349,15 @@ def energy_page(
         page["nodes"] = nodes
 
     if ENERGY_VIEW_TODAY in shown:
-        series = [{"color": COLOR_GRID, "values": [round(value, 3) for value in grid_in]}]
-        if sources.solar:
-            series.append({"color": COLOR_SOLAR, "values": [round(value, 3) for value in solar]})
-        if has_battery:
-            series.append({"color": COLOR_BATTERY, "values": [round(value, 3) for value in discharge]})
+        # A meter correction can make an hour negative; a bar cannot be.
+        series = [
+            {"color": color, "values": [round(max(0.0, value), 3) for value in values]}
+            for present, color, values in (
+                (sources.grid_from, COLOR_GRID, grid_in),
+                (sources.solar, COLOR_SOLAR, solar),
+                (has_battery, COLOR_BATTERY, discharge),
+            ) if present
+        ]
         stacked = [sum(entry["values"][hour] for entry in series) for hour in range(24)]
         page["hours"] = {
             "max": round(max(stacked), 3),

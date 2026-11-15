@@ -15,7 +15,12 @@ Item {
     property variant hours: energy && energy.hours ? energy.hours : ({})
     property variant series: listOf(hours ? hours.series : undefined)
     property real hoursMax: hours && hours.max > 0 ? hours.max : 0
-    property int barsHeight: Math.max(40, Math.floor(bodyHeight * 0.42))
+    property variant nodes: energy && energy.nodes ? energy.nodes : ({})
+    property variant sumRows: listOf(energy ? energy.sums : undefined)
+    property int sumsHeight: sumRows.length > 0 ? Math.ceil(sumRows.length / 2) * 28 - 4 : 0
+    property bool sumCosts: hasCosts()
+    property int barsHeight: Math.max(40, Math.min(Math.floor(bodyHeight * 0.42), bodyHeight - 40 - sumsHeight))
+    property int balanceGap: bodyHeight < 220 ? 4 : 12
 
     function listOf(value) {
         return value && typeof value !== "string" && value.length !== undefined ? value : []
@@ -28,13 +33,22 @@ Item {
         return false
     }
 
+    function hasCosts() {
+        var rows = sumRows
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].cost) return true
+        }
+        return false
+    }
+
     function hasNode(key) {
-        var nodes = energy ? energy.nodes : undefined
-        return nodes && nodes[key] ? true : false
+        var all = nodes
+        return all && all[key] ? true : false
     }
 
     function node(key) {
-        return hasNode(key) ? energy.nodes[key] : ({})
+        var all = nodes
+        return all && all[key] ? all[key] : ({})
     }
 
     function slotX(key) {
@@ -56,8 +70,9 @@ Item {
 
     function stacked(hour, upto) {
         var total = 0
-        for (var i = 0; i <= upto && i < series.length; i++) {
-            var values = listOf(series[i].values)
+        var all = series
+        for (var i = 0; i <= upto && i < all.length; i++) {
+            var values = listOf(all[i].values)
             total += hour < values.length ? Math.max(0, values[hour]) : 0
         }
         return total
@@ -225,13 +240,15 @@ Item {
                     height: bars.height
 
                     Repeater {
-                        model: root.series
+                        model: root.shown === "today" ? root.series : []
 
                         Rectangle {
+                            property int upper: root.barPixels(root.stacked(slot.hour, index))
+                            property int lower: index > 0 ? root.barPixels(root.stacked(slot.hour, index - 1)) : 0
                             x: 3
                             width: slot.width - 6
-                            height: root.barPixels(root.stacked(slot.hour, index)) - root.barPixels(root.stacked(slot.hour, index - 1))
-                            y: slot.height - root.barPixels(root.stacked(slot.hour, index))
+                            height: upper - lower
+                            y: slot.height - upper
                             color: modelData.color
                         }
                     }
@@ -262,7 +279,7 @@ Item {
             property int cellWidth: Math.floor((width - spacing) / 2)
 
             Repeater {
-                model: root.listOf(energy ? energy.sums : undefined)
+                model: root.sumRows
 
                 Item {
                     width: sums.cellWidth
@@ -282,7 +299,7 @@ Item {
                         anchors.right: parent.right
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 78
+                        width: root.sumCosts ? 86 : 0
                         horizontalAlignment: Text.AlignRight
                         text: modelData.cost ? modelData.cost : ""
                         color: "#c7d0d9"
@@ -306,6 +323,7 @@ Item {
                         anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.label
+                        textFormat: Text.PlainText
                         color: "#c7d0d9"
                         font.pixelSize: 16
                         elide: Text.ElideRight
@@ -320,7 +338,7 @@ Item {
         width: parent.width
         height: bodyHeight
         visible: shown === "balance"
-        spacing: 12
+        spacing: root.balanceGap
 
         Repeater {
             model: root.listOf(energy ? energy.balance : undefined)

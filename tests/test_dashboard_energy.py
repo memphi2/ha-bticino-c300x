@@ -228,6 +228,27 @@ def test_a_late_meter_cannot_make_an_hour_negative() -> None:
     }
 
 
+def test_a_meter_correction_cannot_stretch_or_shrink_the_hour_bars() -> None:
+    sources = EnergySources(grid_from=(EnergyMeter("sensor.g"),), solar=(EnergyMeter("sensor.s"),))
+    grid = _hours(2.0, 8)
+    grid[9] = -1.5
+    day = EnergyDay(hours={"sensor.g": grid, "sensor.s": _hours(1.0, 9)})
+
+    hours = energy_page(sources, day, {})["energy"]["hours"]
+
+    assert hours["series"][0]["values"][9] == 0.0
+    assert hours["max"] == 2.0 and hours["label"] == "2 kWh"
+
+
+def test_hour_bars_have_no_grid_series_without_a_grid_meter() -> None:
+    sources = EnergySources(solar=(EnergyMeter("sensor.s"),))
+    day = EnergyDay(hours={"sensor.s": _hours(1.0)})
+
+    hours = energy_page(sources, day, {})["energy"]["hours"]
+
+    assert [series["color"] for series in hours["series"]] == ["#ff9800"]
+
+
 @pytest.mark.parametrize(("value", "expected"), [
     (None, ENERGY_VIEWS), ([], ENERGY_VIEWS), (["today"], ("today",)),
     (["balance", "bogus", "now"], ("now", "balance")), ("now", ENERGY_VIEWS),

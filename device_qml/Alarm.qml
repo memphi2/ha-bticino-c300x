@@ -35,6 +35,7 @@ Page {
     property bool bypassOffered: false
     property string commandFeedback: ""
     property string commandFeedbackColor: "#c7d0d9"
+    property bool feedbackColorsEnabled: c300xDisplayPreferences.feedbackEnabled
     property string activeFeedbackCommand: ""
     property variant alarmPageItem: null
     property bool preventReturnToHomepage: true
@@ -59,6 +60,7 @@ Page {
     }
 
     function aboutToShow() {
+        c300xDisplayPreferences.load()
         pageActive = true
         activeFeedbackCommand = ""
         clearCommandFeedback()
@@ -320,7 +322,7 @@ Page {
     }
 
     function modeFeedbackVisible(command) {
-        return activeFeedbackCommand === command
+        return feedbackColorsEnabled && activeFeedbackCommand === command
     }
 
     function modeFeedbackColor(command) {
@@ -811,16 +813,21 @@ Page {
                     }
                 }
 
-                UbuntuLightText {
+                Item {
                     id: status
-                    textFormat: Text.PlainText
-                    text: ""
-                    color: "#c7d0d9"
-                    font.pixelSize: 16
+                    property string text: ""
+                    property color color: "#c7d0d9"
                     width: parent.width
                     height: 38
                     clip: true
-                    wrapMode: Text.Wrap
+                    UbuntuLightText {
+                        anchors.fill: parent
+                        text: status.text
+                        textFormat: Text.PlainText
+                        color: feedbackColorsEnabled || !alarmOnline ? status.color : "#c7d0d9"
+                        font.pixelSize: 16
+                        wrapMode: Text.Wrap
+                    }
                 }
             }
         }

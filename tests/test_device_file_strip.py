@@ -148,7 +148,7 @@ def test_strip_covers_every_file_the_bundle_stages() -> None:
     assert "device_qml" in stager_source
 
 
-@pytest.mark.parametrize("harness", ["dashboard_controls.cjs", "alarm_controls.cjs"])
+@pytest.mark.parametrize("harness", ["dashboard_controls.cjs", "alarm_controls.cjs", "display_preferences.cjs"])
 def test_stripped_display_code_passes_the_executable_harness(
     tmp_path: Path, harness: str
 ) -> None:

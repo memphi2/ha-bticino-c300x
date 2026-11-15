@@ -10548,13 +10548,52 @@ static void handle_api_request(
     send_json(client_fd, 501, "Not Implemented", "{\"ok\":false,\"error\":\"not_implemented\"}\n");
 }
 
+static void handle_ui_preferences(int client_fd, struct c300x_config *config,
+                                  const struct request *request)
+{
+    if (!client_is_loopback(client_fd)) {
+        send_loopback_required(client_fd);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0) {
+        char header[3];
+        int enabled, changed;
+        char error[C300X_MAX_ERROR_LEN];
+        /* Browsers cannot send this custom header cross-origin without preflight. */
+        if (header_value(request, "origin", header, sizeof(header))
+            || !header_value(request, "x-c300x-ui", header, sizeof(header))
+            || strcmp(header, "1") != 0) {
+            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"ui_header_required\"}\n");
+            return;
+        }
+        if (!c300x_json_bool_field(request->body, "feedback_enabled", &enabled)) {
+            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_feedback_enabled\"}\n");
+            return;
+        }
+        if (!c300x_save_display_feedback(config, enabled, error, sizeof(error), &changed)) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"config_save_failed\"}\n");
+            return;
+        }
+    } else if (strcmp(request->method, "GET") != 0) {
+        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"method_not_allowed\"}\n");
+        return;
+    }
+    send_json(client_fd, 200, "OK", config->display_feedback_enabled
+        ? "{\"ok\":true,\"feedback_enabled\":true}\n"
+        : "{\"ok\":true,\"feedback_enabled\":false}\n");
+}
+
 static int handle_ui_request(
     int client_fd,
-    const struct c300x_config *config,
+    struct c300x_config *config,
     struct agent_runtime *runtime,
     const struct request *request
 )
 {
+    if (strcmp(request->path, "/ui/preferences") == 0) {
+        handle_ui_preferences(client_fd, config, request);
+        return 1;
+    }
     if (strcmp(request->method, "GET") != 0) {
         send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"method_not_allowed\"}\n");
         return 1;

@@ -15,7 +15,9 @@ SOURCE_DIR = ROOT / "device_qml"
 # Synthetic reduced fixtures. These are not stock firmware QML files.
 ORIGINAL_MAIN_APP = "\n".join(
     [
-        "original main",
+        "import QtQuick 1.1",
+        "Item {",
+        "    // original main",
         "            homePage,",
         "            memoPage,",
         "            settingsPage,",
@@ -24,6 +26,7 @@ ORIGINAL_MAIN_APP = "\n".join(
         "        id: settingsPage",
         "        sourceUrl: \"Settings.qml\"",
         "    }",
+        "}",
         "",
     ]
 )
@@ -220,15 +223,40 @@ SOURCE_INSTALLED_FILES = (
     "js/c300x_i18n.js",
     "js/c300x_memos.js",
 )
+ORIGINAL_GENERAL_SETTINGS = """import QtQuick 1.1
+import Components 1.0
+import Components.Styles 1.0
+
+Item {
+    anchors.top: parent.top
+    Column {
+        id: buttonColumn
+        spacing: 6
+    }
+    Row {
+        id: beepButton
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: buttonColumn.bottom
+        anchors.topMargin: 32
+        BasicButton {
+            id: selectorOnOff
+            checkable: true
+            checked: global.beepEnabled
+            onTouched: global.beepEnabled = checked
+        }
+    }
+}
+"""
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "b755ebd730bd5b3f7a70dc301542b21119ef4f5b88463d3bc853314609fbcad2",
+    "MainApp.qml": "72f2b25c3662768cd8dab7aa2da29b49f319635b24c2d38e963d54816049fafe",
+    "Components/Settings/GeneralsChoice.qml": "6b7758186c430e8623c4f97107fd8a68324c0b99ba9c7d15113da643417a4139",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "37270f903ee17d00332445d149921dbb13bffc48574a78772277faae19edfa40",
-    "HomeAssistant.qml": "66f83f36fc45d1b82d7d45e9ccfc320d53873c13a66bfe63fbcdb8e873075270",
-    "js/c300x_ha.js": "1dda5f70fcce7c78284220a97ac822d0bddc777cbf4c52f20bac1a4cff81e42d",
-    "js/c300x_i18n.js": "fc06da394fa0d766a9fed4af79204da37f827aa08880e602184acffd9f304375",
+    "Alarm.qml": "f95b9e0e83d6c63fb8ca4bd3a768952284864d7bf75f048b4cc9f1e327cf27ad",
+    "HomeAssistant.qml": "d5d552d69d734042b764164b5075419c800e6ff55015a87a53222cdba59f4937",
+    "js/c300x_ha.js": "562a47eab137e6aab425c5cadc0101410f720404adfcc854d5f0f4bf8d26d36f",
+    "js/c300x_i18n.js": "cf5b4c49e71846c19671fe1625c348bf26673ef37e42fb5c9164d1e64750b937",
     "js/c300x_memos.js": "4d7c36842de9372c12ad09e2bcdfca8e842518156c53e7da0068de1ab9e86a30",
 }
 
@@ -1298,6 +1326,7 @@ def _write_original_gui(gui_dir: Path) -> None:
     (gui_dir / "MemoPage.qml").write_text(ORIGINAL_MEMO_PAGE)
     (gui_dir / "Components/Settings").mkdir(parents=True, exist_ok=True)
     (gui_dir / "Components/Settings/CallBlockPopup.qml").write_text(ORIGINAL_CALL_BLOCK_POPUP)
+    (gui_dir / "Components/Settings/GeneralsChoice.qml").write_text(ORIGINAL_GENERAL_SETTINGS)
     (gui_dir / "EventManager.qml").write_text(ORIGINAL_EVENT_MANAGER)
 
 

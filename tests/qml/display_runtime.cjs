@@ -64,6 +64,8 @@ function runtime(name = "c300x_ha.js") {
 }
 
 function methods(qml, values) {
+    values.feedbackColorsEnabled = true;
+    values.c300xDisplayPreferences = {load() {}};
     const p = vm.createContext(values);
     p.page = p;
     vm.runInContext([...qml.matchAll(/^    function [\s\S]*?^    }/gm)]

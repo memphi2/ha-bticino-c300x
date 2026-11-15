@@ -46,6 +46,7 @@ struct c300x_config {
     uint16_t ui_port;
     int allow_lan;
     int display_bridge_enabled;
+    int display_feedback_enabled;
     char config_path[C300X_MAX_PATH_LEN];
     char device_model[C300X_MAX_MODEL_LEN];
     char device_firmware[C300X_MAX_VERSION_LEN];
@@ -163,6 +164,8 @@ int c300x_config_set_activation_items_json(
     char *error,
     size_t error_len
 );
+int c300x_save_display_feedback(struct c300x_config *live, int enabled,
+                                char *error, size_t error_len, int *changed);
 int c300x_save_mqtt_config(const struct c300x_config *live, const struct c300x_config *updated,
                           char *error, size_t error_len, int *changed);
 int c300x_normalize_config(const struct c300x_config *live, char *error, size_t error_len, int *changed);

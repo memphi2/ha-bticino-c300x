@@ -1,5 +1,62 @@
 .pragma library
 
+// One GUI-owned request and deadline; no polling and no dynamic Qt objects.
+function loadDisplayPreferences(owner) {
+    if (!owner.ready) requestDisplayPreferences(owner, null)
+}
+
+function saveDisplayPreferences(owner, enabled) {
+    if (!owner.ready || typeof enabled !== "boolean" || enabled === owner.feedbackEnabled) return
+    requestDisplayPreferences(owner, enabled)
+}
+
+function cancelDisplayPreferences(owner) {
+    var request = owner.request
+    owner.request = null
+    owner.deadline.stop()
+    owner.busy = false
+    if (request) {
+        owner.ready = false
+        owner.errorKey = "display_settings_error"
+        request.onreadystatechange = function() {}
+        request.abort()
+    }
+}
+
+function requestDisplayPreferences(owner, enabled) {
+    if (owner.stopped || owner.busy) return
+    var request = new XMLHttpRequest()
+    owner.request = request
+    owner.busy = true
+    owner.errorKey = ""
+    request.onreadystatechange = function() {
+        if (request.readyState !== 4 || owner.stopped || owner.request !== request) return
+        owner.request = null
+        owner.deadline.stop()
+        owner.busy = false
+        var data = null
+        try { data = JSON.parse(request.responseText) } catch (error) {}
+        if (request.status === 200 && data && data.ok === true && typeof data.feedback_enabled === "boolean" && (enabled === null || data.feedback_enabled === enabled)) {
+            owner.feedbackEnabled = data.feedback_enabled
+            owner.ready = true
+        } else {
+            owner.ready = false
+            owner.errorKey = "display_settings_error"
+        }
+    }
+    try {
+        request.open(enabled === null ? "GET" : "POST", "http://127.0.0.1:8090/ui/preferences", true)
+        if (enabled !== null) {
+            request.setRequestHeader("X-C300X-UI", "1")
+            request.setRequestHeader("Content-Type", "application/json")
+        }
+        owner.deadline.restart()
+        request.send(enabled === null ? null : JSON.stringify({feedback_enabled: enabled}))
+    } catch (error) {
+        cancelDisplayPreferences(owner)
+    }
+}
+
 var BASE_URL = "http://127.0.0.1:8090"
 var connections = []
 var dashboardRevision = ""

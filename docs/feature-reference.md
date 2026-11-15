@@ -304,6 +304,23 @@ detail views.
 
 ## Display Settings
 
+On the C300X itself, open **Settings → General**. The original **Tone buttons**
+switch controls touch sounds. Directly below it, **HA feedback colors** turns
+the colored HA action confirmations on or off (on by default). Action texts,
+errors, connection warnings and actual alarm or entity states remain visible.
+This is a local device preference, not another HA integration option.
+
+Changing the feedback setting saves it in the agent configuration, so it survives
+GUI and agent restarts. Reading it and choosing the already saved value do not
+write files; there is no periodic preference polling. If the agent cannot read
+or save it, the switch is disabled with **Setting unavailable**; reopen General
+to read the actual setting before trying again.
+
+The Display patch backs up the original General settings page before changing
+it, keeps the original tone control and restores the page on removal. Unknown
+page layouts or a missing backup of an already patched page abort the operation
+instead of replacing the original with a guessed version.
+
 Switch the Display patch on under **Configure > Display and Display patch**;
 the settings menu then offers **Display pages** and **Display tiles**. Choose the weather, Alarmo and the entities with the normal
 HA selectors;

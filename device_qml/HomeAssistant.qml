@@ -16,6 +16,7 @@ Page {
     headerLabel: headerTitle(notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
+    property bool feedbackColorsEnabled: c300xDisplayPreferences.feedbackEnabled
     property variant dashboardPages: []
     property variant badges: []
     property variant items: []
@@ -88,6 +89,7 @@ Page {
     }
 
     function aboutToShow() {
+        c300xDisplayPreferences.load()
         pageActive = true
         Api.dashboard(status, page)
         startWatch()
@@ -216,6 +218,7 @@ Page {
         // tint it for as long as the entry lives. Only transient states colour
         // the reading.
         if (!dashboardOnline || item.available === false) return "#f1c40f"
+        if (!feedbackColorsEnabled) return "#c7d0d9"
         var key = feedbackKey(item)
         if (key === "action_error") return "#ff6b6b"
         if (key === "sending" || key === "state_unconfirmed") return "#f1c40f"
@@ -224,9 +227,14 @@ Page {
 
     function feedbackColor(item) {
         var key = feedbackKey(item)
+        if (dashboardOnline && !feedbackColorsEnabled) return "#c7d0d9"
         if (!dashboardOnline || key === "state_unconfirmed" || key === "sending") return "#f1c40f"
         if (key === "action_error") return "#ff6b6b"
         return key === "state_confirmed" ? "#58d68d" : "#c7d0d9"
+    }
+
+    function statusColor() {
+        return feedbackColorsEnabled || !dashboardOnline ? status.color : "#c7d0d9"
     }
 
     function scheduleFeedbackExpiry() {
@@ -1137,7 +1145,7 @@ Page {
         height: 36
         text: selectedItem ? feedbackText(selectedItem) : status.text
         textFormat: Text.PlainText
-        color: selectedItem ? feedbackColor(selectedItem) : status.color
+        color: selectedItem ? feedbackColor(selectedItem) : statusColor()
         font.pixelSize: 16
         elide: Text.ElideRight
         wrapMode: Text.Wrap
@@ -1976,18 +1984,24 @@ Page {
         }
     }
 
-    UbuntuLightText {
+    Item {
         id: status
         visible: !detailOpen && !notificationsOpen
         anchors.right: parent.right
         anchors.rightMargin: 40
         anchors.verticalCenter: header.verticalCenter
         width: 190
-        text: ""
-        textFormat: Text.PlainText
-        color: "#c7d0d9"
-        font.pixelSize: 16
-        horizontalAlignment: Text.AlignRight
-        elide: Text.ElideRight
+        height: 22
+        property string text: ""
+        property color color: "#c7d0d9"
+        UbuntuLightText {
+            anchors.fill: parent
+            text: status.text
+            textFormat: Text.PlainText
+            color: statusColor()
+            font.pixelSize: 16
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+        }
     }
 }

@@ -1270,6 +1270,7 @@ requires display bridge support where applicable.
 | `GET` | `/ui/events/next` | Long-poll next QML event. |
 | `GET` | `/ui/media-closed` | Reports device media-close event. |
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
+| `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |
@@ -1278,6 +1279,16 @@ requires display bridge support where applicable.
 
 UI endpoints use the local display bridge and shared secret configured through
 the API listener. They must not expose configured token values.
+
+`GET /ui/preferences` returns `{"ok":true,"feedback_enabled":true}` by default.
+`POST /ui/preferences` accepts a boolean `feedback_enabled`, requires
+`X-C300X-UI: 1` and rejects requests with an `Origin` header. Only the loopback UI
+listener exposes it; browser preflight and other methods are rejected. The
+agent persists changes as `displayBridge.feedbackEnabled`, preserving unrelated
+pending configuration. Reads and unchanged values cause no filesystem writes.
+A failed save leaves the live preference unchanged and returns HTTP 500. QML
+only updates the switch after confirmation; an ambiguous timeout requires a
+fresh read before another write.
 
 The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
 It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight

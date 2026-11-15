@@ -17,9 +17,10 @@ PATCH_FILES = [
     "MainApp.qml", "HomePage.qml", "MemoPage.qml", "Alarm.qml", "HomeAssistant.qml",
     "js/c300x_ha.js", "js/c300x_i18n.js", "js/c300x_memos.js",
     "C300XRingerControl.qml", "EventManager.qml",
+    "Components/Settings/GeneralsChoice.qml",
 ]
 STOCK_FILES = ["MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
-               "Components/Settings/CallBlockPopup.qml"]
+               "Components/Settings/CallBlockPopup.qml", "Components/Settings/GeneralsChoice.qml"]
 
 
 def snapshot(root):
@@ -84,7 +85,7 @@ def test_original_backup_copy_failure_is_not_published_and_retry_is_safe(tmp_pat
     gui.mkdir()
     _write_original_gui(gui)
     before = snapshot(gui)
-    action = "media-user-label-apply" if relative.startswith("Components/") else "apply"
+    action = "media-user-label-apply" if relative.endswith("CallBlockPopup.qml") else "apply"
     result = _run_qml_patch_raw(
         tmp_path, gui, backup, action,
         env_overrides=failing_copy(tmp_path, str(backup / relative) + ".tmp.", prefix=True),

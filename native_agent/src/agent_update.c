@@ -427,9 +427,11 @@ int apply_agent_update_files(
             goto rollback;
         }
     }
-    (void)update_finish_transaction(transaction, 0);
+    /* Installed files stay committed: cleanup may already have deleted backups.
+     * Report finalization failure without rollback or clearing the summary. */
+    int finalized = update_finish_transaction(transaction, 0);
     free(transaction);
-    return 1;
+    return finalized;
 
 rollback:
     if (update_finish_transaction(transaction, 1)) {

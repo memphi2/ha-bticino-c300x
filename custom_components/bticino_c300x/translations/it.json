@@ -671,7 +671,7 @@
       },
       "init": {
         "title": "Impostazioni C300X",
-        "description": "Scegli cosa vuoi modificare. Ogni sezione si salva da sola all'invio; le altre sezioni mantengono le loro impostazioni.",
+        "description": "Scegli cosa vuoi modificare. Ogni sezione si salva da sola all'invio e ti riporta qui; le altre sezioni mantengono le loro impostazioni. Per uscire da una sezione senza modifiche, inviala così com'è.",
         "menu_options": {
           "connection": "Connessione al C300X",
           "features": "Video e audio",
@@ -680,7 +680,8 @@
           "dashboard_alarm": "Allarme (Alarmo)",
           "dashboard": "Display e patch display",
           "dashboard_pages": "Pagine del display",
-          "dashboard_entity_display": "Riquadri del display"
+          "dashboard_entity_display": "Riquadri del display",
+          "done": "Fatto"
         },
         "menu_option_descriptions": {
           "connection": "Indirizzo, chiave di accesso e chiave di manutenzione del C300X, indirizzo di Home Assistant.",
@@ -690,7 +691,8 @@
           "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",
           "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, pulsanti della pagina iniziale, comportamento dopo un'azione e azioni consentite.",
           "dashboard_pages": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
-          "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro."
+          "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro.",
+          "done": "Chiudi le impostazioni. Tutto ciò che è stato inviato è già salvato."
         }
       },
       "dashboard_alarm": {

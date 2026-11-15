@@ -37,7 +37,9 @@ The integration is local-first:
 ## Setup and Options
 
 **Configure** opens a menu of settings areas. Each area is a form of its own
-and saves when it is submitted; the other areas keep their settings. A new
+and saves when it is submitted; the other areas keep their settings. After
+saving, the menu is shown again, so several areas can be changed in one go;
+**Done** closes it. To leave an area without a change, submit it as it is. A new
 setup and a reconfigure walk through the same areas one after the other:
 connection, video and audio, activations, Alarm (Alarmo), display and Display
 patch and, with the patch on, the pages and the tiles. Display

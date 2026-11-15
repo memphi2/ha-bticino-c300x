@@ -24,6 +24,8 @@
   texts, or set them with `select.select_option`, must use these three values.
   The bundled ring blueprints are updated; a copy of them that you changed or
   imported yourself must be imported again.
+- Return to the settings menu after an area is saved, so several areas can be
+  changed without opening **Configure** again; **Done** closes the menu.
 - Deliver the visitor image from the device in the requested size and encode
   it once in HA; the capture delay now defaults to **3 seconds** instead of 5.
 - Show select options on display tiles in HA's language, and write decimal

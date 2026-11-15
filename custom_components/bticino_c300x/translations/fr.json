@@ -671,7 +671,7 @@
       },
       "init": {
         "title": "Réglages C300X",
-        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation ; les autres rubriques conservent leurs réglages.",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène ici ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
         "menu_options": {
           "connection": "Connexion au C300X",
           "features": "Vidéo et audio",
@@ -680,7 +680,8 @@
           "dashboard_alarm": "Alarme (Alarmo)",
           "dashboard": "Écran et patch display",
           "dashboard_pages": "Pages de l'écran",
-          "dashboard_entity_display": "Tuiles de l'écran"
+          "dashboard_entity_display": "Tuiles de l'écran",
+          "done": "Terminé"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
@@ -690,7 +691,8 @@
           "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
           "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
           "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
-          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
+          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."
         }
       },
       "dashboard_alarm": {

@@ -160,17 +160,25 @@ class _OptionsAreas:
         self._entry = entry
 
     def _flow(self):
+        def update_entry(entry, *, options):
+            entry.options = dict(options)
+
         flow = BticinoC300XOptionsFlow(self._entry)
-        flow.async_create_entry = lambda **kwargs: {"type": "finished", "data": kwargs["data"]}
+        flow.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(async_update_entry=update_entry),
+        )
         flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
         flow.add_suggested_values_to_schema = lambda schema, _values: schema
         return flow
 
     async def _area(self, step_id, user_input, next_step_id=None):
         result = await getattr(self._flow(), f"async_step_{step_id}")(user_input)
-        if result["type"] != "finished" or next_step_id is None:
+        if result["type"] != "menu":
             return result
-        self._entry.options = dict(result["data"])
+        # Saved: the entry is updated and the menu is shown again.
+        result = {"type": "finished", "data": dict(self._entry.options)}
+        if next_step_id is None:
+            return result
         menu = (await self._flow().async_step_init())["menu_options"]
         if next_step_id not in menu:
             return result
@@ -538,13 +546,13 @@ def test_the_alarm_area_sets_alarmo_and_its_quick_action(monkeypatch, saved, cha
         post_like_home_assistant(form["data_schema"], changes)
     ))
 
-    assert result["type"] == "finished", result.get("errors")
+    assert result["type"] == "menu", result.get("errors")
     for key, value in stored.items():
-        assert result["data"][key] == value
+        assert entry.options[key] == value
     # What the area does not show stays; the display settings of an entity
     # that is no longer shown go.
-    assert result["data"]["dashboard_entities"] == ["light.room"]
-    overrides = result["data"]["dashboard_entity_display_overrides"]
+    assert entry.options["dashboard_entities"] == ["light.room"]
+    overrides = entry.options["dashboard_entity_display_overrides"]
     assert overrides["light.room"] == {"page": "Room"}
     assert "switch.old" not in overrides
     assert ("switch.porch" in overrides) == (stored.get("alarm_page_entity_id") == "switch.porch")

@@ -671,7 +671,7 @@
       },
       "init": {
         "title": "C300X-Einstellungen",
-        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest; die anderen Bereiche behalten ihre Einstellungen.",
+        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest, und führt hierher zurück; die anderen Bereiche behalten ihre Einstellungen. Um einen Bereich ohne Änderung zu verlassen, sende ihn unverändert ab.",
         "menu_options": {
           "connection": "Verbindung zum C300X",
           "features": "Video und Audio",
@@ -680,7 +680,8 @@
           "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard": "Display und Display-Patch",
           "dashboard_pages": "Display-Seiten",
-          "dashboard_entity_display": "Display-Kacheln"
+          "dashboard_entity_display": "Display-Kacheln",
+          "done": "Fertig"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
@@ -690,7 +691,8 @@
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
           "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
           "dashboard_pages": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
-          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel."
+          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
+          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
         }
       },
       "dashboard_alarm": {

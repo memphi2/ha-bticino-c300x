@@ -2406,29 +2406,85 @@ def test_qml_patch_status_flow_forms_pass_description_placeholders() -> None:
     assert missing_placeholders == []
 
 
-def _options_area(entry, step_id, user_input=None):
-    """Open one area of the options menu on a flow of its own."""
+def _options_flow(entry):
+    """Return an options flow that saves into the given entry."""
+
+    def update_entry(target, *, options):
+        target.options = dict(options)
 
     flow = BticinoC300XOptionsFlow(entry)
+    flow.hass = SimpleNamespace(  # type: ignore[assignment]
+        config_entries=SimpleNamespace(async_update_entry=update_entry),
+    )
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
     flow.async_create_entry = lambda **kwargs: {  # type: ignore[method-assign]
         "type": "create_entry",
         **kwargs,
     }
+    return flow
+
+
+def _options_area(entry, step_id, user_input=None):
+    """Open one area of the options menu on a flow of its own."""
+
+    flow = _options_flow(entry)
     return flow, asyncio.run(getattr(flow, f"async_step_{step_id}")(user_input))
 
 
 def _save_options_area(entry, result) -> None:
-    """Store what an area saved, as Home Assistant does before the next one."""
+    """Check that an area saved: the entry is updated and the menu is back."""
 
-    assert result["type"] == "create_entry", result
-    entry.options = dict(result["data"])
+    assert (result["type"], result["step_id"]) == ("menu", "init"), result
+    result["data"] = dict(entry.options)
 
 
 def _options_menu_of(entry) -> list[str]:
     menu = asyncio.run(BticinoC300XOptionsFlow(entry).async_step_init())
     assert (menu["type"], menu["step_id"]) == ("menu", "init")
-    return list(menu["menu_options"])
+    assert menu["menu_options"][-1] == "done"
+    return list(menu["menu_options"][:-1])
+
+
+def test_options_flow_returns_to_the_menu_after_saving_and_done_closes_it() -> None:
+    """Saving an area stores it at once and shows the menu again.
+
+    So several areas can be changed without opening the dialog again. An
+    area submitted as it is writes nothing, and Done hands back what is
+    saved without changing it.
+    """
+
+    updates: list[dict] = []
+    entry = SimpleNamespace(
+        data={CONF_AGENT_HOST: "agent.local", CONF_AGENT_PORT: 8091, CONF_AGENT_TOKEN: "token"},
+        options={},
+        runtime_data=None,
+    )
+    flow = _options_flow(entry)
+    save = flow.hass.config_entries.async_update_entry
+
+    def counted(target, *, options):
+        updates.append(dict(options))
+        save(target, options=options)
+
+    flow.hass.config_entries.async_update_entry = counted
+    form = asyncio.run(flow.async_step_dashboard_alarm())
+    assert form["step_id"] == "dashboard_alarm"
+    menu = asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"}))
+    assert (menu["type"], menu["step_id"]) == ("menu", "init")
+    assert menu["menu_options"][-1] == "done"
+    assert len(updates) == 1
+    assert entry.options[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+
+    # The same flow opens the next area from what is saved now.
+    asyncio.run(flow.async_step_dashboard_alarm())
+    menu = asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"}))
+    assert (menu["type"], menu["step_id"]) == ("menu", "init")
+    assert len(updates) == 1
+
+    done = asyncio.run(flow.async_step_done())
+    assert done["type"] == "create_entry"
+    assert done["data"] == entry.options
+    assert len(updates) == 1
 
 
 def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
@@ -2640,8 +2696,8 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         result = asyncio.run(
             getattr(flow, f"async_step_{step_id}")(form["data_schema"](shown))
         )
-        assert result["type"] == "create_entry", (step_id, result)
-        assert result["data"] == saved, step_id
+        assert (result["type"], result["step_id"]) == ("menu", "init"), (step_id, result)
+        assert entry.options == saved, step_id
 
 
 def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(

@@ -375,8 +375,9 @@ def test_options_menu_names_and_explains_every_area() -> None:
         steps = _load_json(path)["options"]["step"]
         menu = steps["init"]
         assert menu["title"] and menu["description"], path.name
-        assert set(menu["menu_options"]) == areas, path.name
-        assert set(menu["menu_option_descriptions"]) == areas, path.name
+        # "done" closes the dialog; it is a menu entry without a form.
+        assert set(menu["menu_options"]) == areas | {"done"}, path.name
+        assert set(menu["menu_option_descriptions"]) == areas | {"done"}, path.name
         assert all(menu["menu_options"].values()), path.name
         assert all(menu["menu_option_descriptions"].values()), path.name
         # A menu entry leads to a step of the same name.

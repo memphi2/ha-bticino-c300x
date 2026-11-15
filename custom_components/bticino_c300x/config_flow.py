@@ -120,6 +120,7 @@ from .config_flow_input import (
     _setup_connection_schema,
     _weather_entity_id,
 )
+from .config_flow_options_menu import OptionsMenuSteps
 from .config_flow_snapshot import SnapshotOptionsStep, SnapshotWizardSteps
 from .config_flow_tiles import TileForm as _TileForm
 from .config_flow_tiles import async_tile_entity_fields as _async_tile_entity_fields
@@ -1380,12 +1381,15 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
         return BticinoC300XOptionsFlow(config_entry)
 
 
-class BticinoC300XOptionsFlow(SnapshotOptionsStep, config_entries.OptionsFlow):
+class BticinoC300XOptionsFlow(
+    SnapshotOptionsStep, OptionsMenuSteps, config_entries.OptionsFlow,
+):
     """Handle C300X options.
 
     The flow opens with a menu of the settings areas. Each area is a form of
     its own and saves when it is submitted; the areas that were not opened
-    keep their saved values.
+    keep their saved values. After saving, the menu is shown again, until
+    "done" closes the dialog.
     """
 
     def __init__(self, config_entry: BticinoC300XConfigEntry) -> None:
@@ -1405,7 +1409,7 @@ class BticinoC300XOptionsFlow(SnapshotOptionsStep, config_entries.OptionsFlow):
 
         return self.async_show_menu(
             step_id="init",
-            menu_options=_options_menu(self._config_entry),
+            menu_options=[*_options_menu(self._config_entry), "done"],
         )
 
     def _load_saved(self) -> dict[str, Any]:
@@ -1698,13 +1702,7 @@ class BticinoC300XOptionsFlow(SnapshotOptionsStep, config_entries.OptionsFlow):
                 feature_defaults,
                 errors,
             )
-        return self.async_create_entry(
-            title="",
-            data={
-                **self._connection_options,
-                **feature_data,
-            },
-        )
+        return await self._async_store_options({**self._connection_options, **feature_data})
 
     async def _async_show_options_dashboard_form(
         self,

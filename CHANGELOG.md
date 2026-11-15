@@ -52,6 +52,15 @@
 
 ### Fixed
 
+- Refresh ringer mute and volume after reconnecting, register stored-message
+  deletion services after loading display-patch status, and clear stale
+  missing-Alarmo Repairs when the selection is removed.
+- Release the microphone when answering a preview fails, and close ringback
+  audio resources when a card is removed or reconfigured.
+- Replace bootstrap firewall files and publish their backups atomically,
+  rejecting backups that cannot be verified.
+- Check the firmware ABI before developer uploads and install the complete
+  startup bundle before advertising its new manifest.
 - Release partially initialized browser audio resources when audio gain setup
   fails, keeping direct audio playback available.
 - Share concurrent Energy statistics reads and pause retries after database

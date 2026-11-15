@@ -123,3 +123,31 @@ def test_notifications_remain_available_with_all_energy_subpages_off(monkeypatch
     monkeypatch.setattr(dashboard, "notification_payload", lambda _entry: [{"message": "Hello"}])
     assert run(dashboard.async_status(FakeHass(), entry))["dashboard_available"] is True
     assert run(dashboard.async_dashboard_payload(FakeHass(), entry))["data"]["pages"] == [{"title": ""}]
+
+
+@pytest.mark.parametrize("with_weather", [False, True])
+def test_status_navigation_precedes_tiles_with_or_without_weather(monkeypatch, with_weather) -> None:
+    entry = FakeEntry(data={
+        CONF_DEVICE_UI_ENABLED: True,
+        CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {"sensor.temperature": {"page": "C300X"}},
+    })
+    hass = FakeHass(states=FakeStates({"sensor.temperature": FakeState("21")}))
+    monkeypatch.setattr(dashboard, "async_dashboard_weather_payload", AsyncMock(
+        return_value={"temperature": "20"} if with_weather else None,
+    ))
+    monkeypatch.setattr(dashboard, "async_energy_dashboard_page", AsyncMock(
+        return_value={"title": "Energy", "energy": {"views": [{"id": "now"}]}},
+    ))
+    pages = run(dashboard.async_dashboard_payload(hass, entry))["data"]["pages"]
+    main = next(page for page in pages if page["title"] == "C300X")
+    kinds = [item["kind"] for item in main["items"]]
+    assert kinds[:2] == (["weather", "navigation"] if with_weather else ["navigation", "entity"])
+    assert sum(kind == "navigation" for kind in kinds) == 1
+
+
+def test_single_status_page_has_no_navigation() -> None:
+    entry = FakeEntry(data={CONF_DEVICE_UI_ENABLED: True})
+    pages = run(dashboard.async_dashboard_payload(FakeHass(), entry))["data"]["pages"]
+    assert len(pages) == 1
+    assert not pages[0].get("items")

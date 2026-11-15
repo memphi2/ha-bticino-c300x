@@ -22,6 +22,7 @@ Page {
     property variant items: []
     property variant energy: ({})
     property int currentPageIndex: 0
+    onCurrentPageIndexChanged: scroll.contentY = 0
     property int pageCount: 0
     property bool energyVisible: false
     property bool preventReturnToHomepage: true
@@ -1253,6 +1254,14 @@ Page {
                     property int tileWidth: (width - spacing) / 2
 
                     Component {
+                        id: pageNavigationComponent
+                        C300XPageNavigation {
+                            links: Api.dashboardPageLinks(page)
+                            onSelected: Api.dashboardSelectPage(pageIndex, status, page)
+                        }
+                    }
+
+                    Component {
                         id: weatherTileComponent
 
                 Item {
@@ -1818,6 +1827,7 @@ Page {
                             property bool isChoice: tileItem.kind === "choice"
                             property bool isImage: tileItem.kind === "image"
                             property bool isWeather: tileItem.kind === "weather"
+                            property bool isNavigation: tileItem.kind === "navigation"
                             property bool hasControls: tileItem.controls !== undefined
                             property bool isSensor: tileItem.details !== undefined && (tileItem.details.type === "sensor" || tileItem.details.type === "binary_sensor")
                             // Geometry must test the same keys in the same order as the
@@ -1827,15 +1837,15 @@ Page {
                             property string sizeW: tileItem.tile_width || ""
                             property string sizeH: tileItem.tile_height || ""
                             property bool tall: sizeH === "full" || (sizeH === "" && isSensor)
-                            width: isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
-                            height: isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
+                            width: isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
+                            height: isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10 : isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
 
                             Loader {
                                 anchors.fill: parent
-                                enabled: mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
+                                enabled: mixedTile.isNavigation || mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
                                 opacity: enabled ? 1 : 0.45
                                 property variant tileItem: mixedTile.tileItem
-                                sourceComponent: mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview) : mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview) : (mixedTile.isWeather ? weatherTileComponent : mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
+                                sourceComponent: mixedTile.isNavigation ? pageNavigationComponent : mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview) : mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview) : (mixedTile.isWeather ? weatherTileComponent : mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
                             }
                         }
                     }

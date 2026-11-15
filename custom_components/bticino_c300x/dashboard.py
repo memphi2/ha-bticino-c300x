@@ -276,6 +276,8 @@ async def async_dashboard_payload(
         page for page in ordered
         if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
     ]
+    if status_enabled and len(shown) > 1:
+        main_page["items"].append({"_kind": "navigation", "_order": 1})
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
         shown = [main_page if status_enabled else {

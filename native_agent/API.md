@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `2.4.0`
+- Current packaged agent version: `2.5.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -20,6 +20,7 @@ proxy if a site needs TLS.
 file set (`1` when the field is missing). A bundle's `update_file_set_version`
 declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
 set `3` adds `C300XEnergy.qml`, and set `4` adds `C300XEnergyDistribution.qml`.
+Set `5` adds the 2.5 display navigation and optional-page components.
 When the installed self-updater cannot install the target file set, Home
 Assistant first installs and verifies the new executable, then completes the
 payload once through that updater using the same maintenance token. A matching

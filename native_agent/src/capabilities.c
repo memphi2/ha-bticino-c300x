@@ -45,7 +45,7 @@ int c300x_capabilities_json(
         body_len,
         "{"
         "\"api_version\":\"1\","
-        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":4},"
+        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":5},"
         "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"

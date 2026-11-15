@@ -38,6 +38,7 @@ DEVICE_SOURCE_FILES = (
     "HomeAssistant.qml",
     "C300XEnergy.qml",
     "C300XEnergyDistribution.qml",
+    "C300XPageNavigation.qml",
     "C300XRingerControl.qml",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",

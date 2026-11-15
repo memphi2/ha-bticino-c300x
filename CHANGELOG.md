@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.5.0 - Unreleased
+
+- Direct page buttons below the weather on the status page, including when no
+  weather entity is selected. Navigation reuses the loaded dashboard.
+
 ## v2.4.1 - 2026-11-15
 
 ### Added

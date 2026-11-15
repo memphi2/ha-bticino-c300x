@@ -532,6 +532,24 @@ function dashboardNextPage(statusItem, pageItem) {
     loadDashboardPage(statusItem, pageItem)
 }
 
+function dashboardSelectPage(index, statusItem, pageItem) {
+    if (typeof index !== "number" || index !== Math.floor(index)
+            || index < 0 || index >= pageItem.pageCount) return
+    pageItem.currentPageIndex = index
+    loadDashboardPage(statusItem, pageItem)
+}
+
+function dashboardPageLinks(pageItem) {
+    var pages = listOrEmpty(pageItem.dashboardPages)
+    var links = []
+    for (var i = 0; i < pages.length; i++) {
+        if (i !== pageItem.currentPageIndex) {
+            links.push({index: i, title: pages[i].title || pages[i].name || String(i + 1)})
+        }
+    }
+    return links
+}
+
 function dashboardPreviousPage(statusItem, pageItem) {
     if (pageItem.pageCount <= 1) {
         return
@@ -1124,8 +1142,8 @@ function dashboardMixedItems(source) {
             normalized = dashboardChoices([source[i]])
         } else if (kind === "image") {
             normalized = dashboardImages([source[i]])
-        } else if (kind === "weather") {
-            normalized = [{kind: "weather"}]
+        } else if (kind === "weather" || kind === "navigation") {
+            normalized = [{kind: kind}]
         } else {
             normalized = dashboardItems([source[i]], kind || "entity")
         }

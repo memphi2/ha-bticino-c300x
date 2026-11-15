@@ -87,10 +87,11 @@ def test_compare_agent_bundle_requires_compatible_updater_file_set(
     assert state.update_required
 
 
-@pytest.mark.parametrize("installed_file_set", [None, 1, 2, 3, 4, True, "4"])
+@pytest.mark.parametrize("installed_file_set", [None, 1, 2, 3, 4, 5, True, "5"])
+@pytest.mark.parametrize("target_file_set", [4, 5])
 @pytest.mark.parametrize("matching_hash", [False, True])
 def test_distribution_bundle_requires_new_updater_even_with_matching_hash(
-    installed_file_set: Any, matching_hash: bool,
+    installed_file_set: Any, matching_hash: bool, target_file_set: int,
 ) -> None:
     agent = {"self_update_supported": True, "bundle_hash": "sha256:new" if matching_hash else "sha256:old"}
     if installed_file_set is not None:
@@ -98,11 +99,13 @@ def test_distribution_bundle_requires_new_updater_even_with_matching_hash(
     state = compare_agent_bundle(
         {"version": "2.4.0", "api_version": "1", "agent": agent},
         {"agent_version": "2.4.1", "api_version": "1", "bundle_hash": "sha256:new",
-         "update_file_set_version": 4},
+         "update_file_set_version": target_file_set},
     )
     assert state.update_required
     assert state.self_update_repair_supported
-    assert state.payload_bootstrap_required is not (type(installed_file_set) is int and installed_file_set >= 4)
+    assert state.payload_bootstrap_required is not (
+        type(installed_file_set) is int and installed_file_set >= target_file_set
+    )
 
 
 def test_load_packaged_bundle_metadata_rejects_missing_invalid_and_non_object(

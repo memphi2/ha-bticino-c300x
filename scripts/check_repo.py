@@ -174,6 +174,7 @@ REQUIRED_PATHS = [
     "device_qml/HomeAssistant.qml",
     "device_qml/C300XEnergy.qml",
     "device_qml/C300XEnergyDistribution.qml",
+    "device_qml/C300XPageNavigation.qml",
     "device_qml/js/c300x_ha.js",
     "device_qml/js/c300x_i18n.js",
     "device_qml/js/c300x_memos.js",

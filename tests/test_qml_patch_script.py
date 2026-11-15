@@ -222,6 +222,7 @@ SOURCE_INSTALLED_FILES = (
     "HomeAssistant.qml",
     "C300XEnergy.qml",
     "C300XEnergyDistribution.qml",
+    "C300XPageNavigation.qml",
     "C300XRingerControl.qml",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
@@ -266,10 +267,11 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "bea481bb6384488d8cd369e21984fe046918378b2d45993b5d37bc2e0a6f7992",
+    "HomeAssistant.qml": "4e9115fd507d360e76d7b7db3f07d9f08836af681dd754dd26dd87b2a5a8d638",
     "C300XEnergy.qml": "330622a775f746e607253b40cb4fc2a18029fa4db6cb22eedef8f7fd4b39c7a6",
     "C300XEnergyDistribution.qml": "de645190befd8755de211eaac6d9104f0bc96df424820fcb191f53ff7f00f9fd",
-    "js/c300x_ha.js": "21585924604abd460d45e6e30c70285730f0335ade65afade561cd39a1243d7d",
+    "C300XPageNavigation.qml": "7152e3a1ec13559a27c76fb4f8f0561188b91cd59d1cd7bf2ce4718164b0851c",
+    "js/c300x_ha.js": "0cab445174cf45958672ca163b2dbf711dfeca598045014263b1aef2a640d556",
     "js/c300x_i18n.js": "e8a75ca586851478abcf7c9f915110022d335fcb02b50dbc2d308dfdc0527594",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }
@@ -782,9 +784,10 @@ def test_home_assistant_tile_size_is_configurable_per_entity() -> None:
     height = delegate.split("height: ")[1].split("\n")[0]
     source = delegate.split("sourceComponent: ")[1].split("\n")[0]
     assert width.startswith(
-        'isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth)'
+        'isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth)'
     )
-    assert height.startswith("isSensor || hasControls ? (tall ? 94 : 64)")
+    assert 'isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10' in height
+    assert 'isSensor || hasControls ? (tall ? 94 : 64)' in height
     # Plain switch, button and entity tiles keep 58/64 px unless configured.
     assert height.endswith('(tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))')
     assert "mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview)" in source

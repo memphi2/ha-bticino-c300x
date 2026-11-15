@@ -27,9 +27,8 @@
 - Return to the settings menu after an area is saved, so several areas can be
   changed without opening **Configure** again; **Done** closes the menu.
 - Deliver the visitor image from the device in the requested size and encode
-  it once in HA. New entries capture after **3 seconds** instead of 5; an
-  existing entry keeps its saved delay, which can be changed under **Visitor
-  Snapshot**.
+  it once in HA. The default capture delay is **3 seconds** instead of 5; an
+  entry with a saved delay keeps it. Change it under **Visitor Snapshot**.
 - Show select options on display tiles in HA's language, and write decimal
   numbers on every display page with the decimal sign of that language.
 - Keep the card footer's text beside the buttons at every width instead of

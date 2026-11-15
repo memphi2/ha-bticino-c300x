@@ -80,7 +80,11 @@ restore_qml() {
             && printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
             return 0
         fi
-        if ! C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" restore-all >/dev/null 2>&1; then
+        if ! status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" restore-all 2>/dev/null)" \
+            || ! printf '%s' "$status" | grep -F -q '"ok":true' \
+            || ! printf '%s' "$status" | grep -F -q '"state":"original"' \
+            || ! printf '%s' "$status" | grep -F -q '"core_state":"original"' \
+            || ! printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
             printf 'Failed to restore Display patch; keeping agent files and backups in place\n' >&2
             exit 1
         fi

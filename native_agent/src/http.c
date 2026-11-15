@@ -9396,7 +9396,9 @@ static void start_maintenance_job(
         );
         return;
     }
-    if (!c300x_command_job_start(&runtime->maintenance_job, program, action, dynamic_homepage, 10000)) {
+    /* QML writes may need both a failed start and a restored-GUI restart. */
+    int timeout_ms = !gui_reload && records_write ? 30000 : 10000;
+    if (!c300x_command_job_start(&runtime->maintenance_job, program, action, dynamic_homepage, timeout_ms)) {
         send_json(
             client_fd,
             502,

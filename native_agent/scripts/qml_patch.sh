@@ -248,8 +248,9 @@ reload_gui() {
     fi
     sleep "$GUI_RELOAD_DELAY_SECONDS"
     if ! command -v pidof >/dev/null 2>&1; then
-        return 0
+        return 1
     fi
+    # Process presence only: the firmware exposes no QML readiness handshake here.
     pidof BtClass >/dev/null 2>&1
 }
 
@@ -274,7 +275,9 @@ finish_write_action() {
         cleanup_staging
     fi
     recovery_ok=1
+    restart_previous=0
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
+        restart_previous="${WRITE_RELOAD_ATTEMPTED:-0}"
         for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
             if [ -f "$WRITE_TRANSACTION/$transaction_rel" ]; then
                 if ! mkdir -p "$(dirname "$GUI_DIR/$transaction_rel")" \
@@ -298,6 +301,11 @@ finish_write_action() {
         rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
     fi
     remount_ro || write_rc=1
+    if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
+        if ! reload_gui; then
+            printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
+        fi
+    fi
     return "$write_rc"
 }
 
@@ -310,6 +318,7 @@ run_write_action() {
     WRITE_TRANSACTION=
     WRITE_TRANSACTION_READY=0
     WRITE_TRANSACTION_COMMITTED=0
+    WRITE_RELOAD_ATTEMPTED=0
     REMOVE_EMPTY_JS=0
     trap finish_write_action EXIT
     trap abort_write_action HUP INT TERM
@@ -331,8 +340,22 @@ run_write_action() {
     done
     WRITE_TRANSACTION_READY=1
     "$@"
+    WRITE_RELOAD_ATTEMPTED=1
+    if ! reload_gui; then
+        GUI_RELOAD_FAILED=1
+        finish_write_action
+        return
+    fi
     WRITE_TRANSACTION_COMMITTED=1
     finish_write_action
+}
+
+json_write_status() {
+    if [ "${GUI_RELOAD_FAILED:-0}" = "1" ]; then
+        json_reload_failed
+    else
+        json_status "$changed_count"
+    fi
 }
 
 backup_file() {
@@ -1342,7 +1365,6 @@ apply_core_patch_files() {
     changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_core_patch_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 apply_media_user_label_files() {
@@ -1350,7 +1372,6 @@ apply_media_user_label_files() {
     changed_count="$(apply_stage_changed_count $MEDIA_USER_LABEL_FILES)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_media_user_label_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 apply_feature_patch_files() {
@@ -1358,7 +1379,6 @@ apply_feature_patch_files() {
     changed_count="$(apply_feature_stage_changed_count)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_feature_patch_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 apply_patch_files() {
@@ -1366,7 +1386,6 @@ apply_patch_files() {
     changed_count="$(apply_full_stage_changed_count)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_full_patch_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 restore_file() {
@@ -1524,72 +1543,44 @@ case "$ACTION" in
         json_status
         ;;
     apply)
-        changed_count="$(apply_patch_files)"
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        apply_patch_files
+        json_write_status
         ;;
     core-apply)
-        changed_count="$(apply_core_patch_files)"
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        apply_core_patch_files
+        json_write_status
         ;;
     media-user-label-apply)
-        changed_count="$(apply_media_user_label_files)"
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        apply_media_user_label_files
+        json_write_status
         ;;
     restore)
         changed_count="$(restore_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_patch_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     core-restore)
         changed_count="$(restore_core_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_core_patch_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     media-user-label-restore)
         changed_count="$(restore_media_user_label_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_media_user_label_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     restore-all)
         changed_count="$(restore_all_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_all_patch_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     reload)
         reload_gui

@@ -164,13 +164,16 @@ def test_disconnect_keeps_one_job_and_does_not_reuse_its_client_fd(lab):
     assert response(lab.request())["ok"]
 
 
-def test_timeout_with_closed_stdout_does_not_block_and_reaps_child(lab):
+@pytest.mark.parametrize("path,payload", [(QML, None), (GUI, {"confirm": "reload_gui"})])
+def test_timeout_with_closed_stdout_does_not_block_and_reaps_child(lab, path, payload):
     lab.script("exec 1>&-\nexec sleep 30\n")
-    pending = lab.request()
+    pending = lab.request(path, payload)
     lab.started()
     pid = int((lab.root / "started").read_text())
     assert api_get(lab.port, "/api/v1/health")["ok"]
-    assert response(pending, 502)["state"] == "script_failed"
+    expected = {"error": "reload_failed"} if path == GUI else {"state": "script_failed"}
+    result = response(pending, 502)
+    assert all(result[key] == value for key, value in expected.items())
     wait_until(lambda: not Path(f"/proc/{pid}").exists())
     lab.script('printf \'{"ok":true}\'\n')
     assert response(lab.request())["ok"]

@@ -29,6 +29,7 @@ from .api_errors import (
 )
 
 _MAINTENANCE_JOB_TIMEOUT = 15.0
+_QML_WRITE_JOB_TIMEOUT = 35.0
 _UPDATE_REQUEST_TIMEOUT = 20.0
 
 
@@ -456,8 +457,8 @@ class _ApiMaintenanceMixin(_C300XApiCore):
     def _job_timeout(self, minimum: float = _MAINTENANCE_JOB_TIMEOUT) -> float:
         """Return the wait for a request the agent answers after running a script.
 
-        The agent gives such a script 10 s. Giving up earlier reports a
-        failure for work that is still running and finishes on its own.
+        Allow response overhead beyond the native job deadline: 10 s normally,
+        or 30 s for QML writes including rollback and a GUI restart attempt.
         Update requests also write to the device's flash and get longer.
         """
 
@@ -571,7 +572,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
                 "dynamic_homepage": dynamic_homepage,
             },
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(),
+            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )
         return normalize_qml_patch_status(data)
 
@@ -583,7 +584,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/qml-patch/actions/apply-core",
             json_data={"confirm": "apply_qml_core_patch"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(),
+            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )
         return normalize_qml_patch_status(data)
 
@@ -595,7 +596,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/qml-patch/actions/restore-core",
             json_data={"confirm": "restore_qml_core_patch"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(),
+            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )
         return normalize_qml_patch_status(data)
 
@@ -607,6 +608,6 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/qml-patch/actions/restore",
             json_data={"confirm": "restore_qml_patch"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(),
+            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )
         return normalize_qml_patch_status(data)

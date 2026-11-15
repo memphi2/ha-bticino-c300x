@@ -3757,10 +3757,6 @@ def test_ordinary_message_and_memo_ids_stay_valid(message_id):
 
 @pytest.mark.parametrize("call", [
     lambda api: api.async_qml_patch_status(),
-    lambda api: api.async_apply_qml_patch(dynamic_homepage=True),
-    lambda api: api.async_apply_qml_core_patch(),
-    lambda api: api.async_restore_qml_core_patch(),
-    lambda api: api.async_restore_qml_patch(),
     lambda api: api.async_reload_gui(),
     lambda api: api.async_firewall_status(),
     lambda api: api.async_apply_firewall(),
@@ -3788,3 +3784,29 @@ def test_script_backed_maintenance_requests_outlast_the_agent_script(
     asyncio.run(call(api))
 
     assert session.requests[0]["kwargs"]["timeout"] == expected
+
+
+@pytest.mark.parametrize("method,kwargs,path", [
+    ("async_apply_qml_patch", {"dynamic_homepage": True}, "apply"),
+    ("async_apply_qml_core_patch", {}, "apply-core"),
+    ("async_restore_qml_core_patch", {}, "restore-core"),
+    ("async_restore_qml_patch", {}, "restore"),
+])
+@pytest.mark.parametrize(("configured", "expected"), [(5.0, 35.0), (30.0, 35.0), (60.0, 60.0)])
+def test_qml_write_requests_outlast_native_rollback_deadline(method, kwargs, path, configured, expected):
+    session = _FakeSession('{"ok": true, "patched": true, "state": "patched"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+        timeout=configured,
+    )
+
+    asyncio.run(getattr(api, method)(**kwargs))
+
+    assert len(session.requests) == 1
+    assert session.requests[0]["kwargs"]["timeout"] == expected
+    assert session.requests[0]["args"] == (
+        "POST", f"http://agent.local:8080/api/v1/maintenance/qml-patch/actions/{path}"
+    )

@@ -1244,6 +1244,7 @@ def test_qml_patch_apply_reports_reload_failure_without_patched_state(
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
+    before = {p.relative_to(gui_dir): p.read_bytes() for p in gui_dir.rglob("*") if p.is_file()}
 
     result = _run_qml_patch_raw(
         tmp_path,
@@ -1261,7 +1262,8 @@ def test_qml_patch_apply_reports_reload_failure_without_patched_state(
     status = json.loads(result.stdout)
     assert status["state"] == "reload_failed"
     assert status["patched"] is None
-    _assert_complete_gui_patch(gui_dir)
+    assert {p.relative_to(gui_dir): p.read_bytes() for p in gui_dir.rglob("*") if p.is_file()} == before
+    assert not list(gui_dir.glob(".c300x-qml-transaction.*"))
 
 
 def test_qml_patch_starts_the_gui_outside_its_own_process_group(tmp_path: Path) -> None:

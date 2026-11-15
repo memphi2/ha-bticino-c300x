@@ -9,7 +9,8 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 
 - Add a **Touch tone** configuration switch on the HA device page, synchronized
   with the original C300X setting while the Display patch is active. Wait for
-  GUI confirmation and use push updates without periodic device reads.
+  GUI confirmation and use push updates without periodic device reads. Expose
+  touch-tone status changes through the Device event entity too.
 - Add **HA feedback colors** directly below the original touch-tone switch in
   the C300X's **Settings → General**. Save the choice locally without polling;
   retain error messages and actual alarm states, and fit both controls on the
@@ -40,7 +41,8 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 - Convert extracted capture frames explicitly to full color range before JPEG
   encoding instead of relying on automatic ffmpeg format negotiation.
 - Preserve technical event types such as `ring` on the event entities so
-  type-filtered automations match; keep translated labels in display attributes.
+  type-filtered automations match; use HA's event-attribute translations for
+  readable labels in the interface, including English.
 - Wait briefly when a startup status check temporarily occupies maintenance
   access before an agent update. Preserve patch-state checks before preparing
   the update; upload and apply operations are not blindly retried.

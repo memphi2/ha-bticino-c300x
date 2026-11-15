@@ -11,7 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -58,27 +58,65 @@ async def check_frames(directory: Path) -> None:
 
 
 def check_events() -> None:
+    asyncio.run(_async_check_events())
+
+
+async def _async_check_events() -> None:
+    from homeassistant.helpers import translation
+
+    from custom_components.bticino_c300x.const import DOMAIN
     from custom_components.bticino_c300x.event import (
         C300XDeviceAgentEventEntity,
         C300XDoorbellEventEntity,
+        async_setup_entry,
     )
 
+    integration = ROOT / "custom_components" / DOMAIN
+    metadata = SimpleNamespace(file_path=integration, has_translations=True, name="BTicino C300X")
     entry = SimpleNamespace(entry_id="container-test", title="C300X", data={}, options={},
-                            runtime_data=SimpleNamespace(agent_info={}, capabilities={}))
-    for cls, expected, key in (
-        (C300XDoorbellEventEntity, "ring", "doorbell_pressed"),
-        (C300XDeviceAgentEventEntity, "door_unlock_started", "door_unlock_started"),
-    ):
-        entity = cls(entry) if cls is C300XDoorbellEventEntity else cls(entry, [key])
-        entity.hass = SimpleNamespace(config=SimpleNamespace(language="en"))
-        payload = {"entry_id": entry.entry_id, "event_key": key,
-                   "event_type": "Display label", "event_at": "2026-01-01T00:00:00Z"}
-        # Only state publication is replaced; HA's event processing stays real.
-        with patch.object(entity, "async_write_ha_state"):
-            entity._handle_agent_event(SimpleNamespace(data=payload))
-        if entity.state_attributes["event_type"] != expected:
-            raise RuntimeError(f"{cls.__name__}: technical event type overwritten")
-        write(f"{cls.__name__}: event_type={expected}")
+                            runtime_data=SimpleNamespace(agent_info={}, capabilities={
+                                "doorbell_events": True, "locks": True, "touch_tone": True,
+                            }))
+    for language in ("en", "de", "fr", "it"):
+        hass = Mock(
+            spec=["data", "config", "async_add_executor_job"],
+            data={}, config=SimpleNamespace(language=language, top_level_components={DOMAIN}),
+            async_add_executor_job=asyncio.to_thread,
+        )
+        # Replace discovery only: HA reads the catalogs and builds its real cache.
+        with patch.object(translation, "async_get_integrations",
+                          AsyncMock(return_value={DOMAIN: metadata})):
+            await translation.async_get_translations(hass, language, "entity", {DOMAIN})
+        catalog = json.loads((integration / "translations" / f"{language}.json").read_text())
+        entities = []
+        await async_setup_entry(hass, entry, entities.extend)
+        for index, (cls, expected, key) in enumerate((
+            (C300XDoorbellEventEntity, "ring", "doorbell_pressed"),
+            (C300XDeviceAgentEventEntity, "door_unlock_started", "door_unlock_started"),
+            (C300XDeviceAgentEventEntity, "display_touch_tone_changed", "display_touch_tone_changed"),
+        )):
+            entity = next(entity for entity in entities if isinstance(entity, cls))
+            entity.hass = hass
+            if expected not in entity.event_types:
+                raise RuntimeError(f"{cls.__name__}: event type {expected} not advertised")
+            payload = {"entry_id": entry.entry_id, "event_key": key,
+                       "event_type": "Display label", "event_at": f"2026-01-01T00:00:0{index}Z"}
+            # Only state publication is replaced; HA's event processing stays real.
+            with patch.object(entity, "async_write_ha_state"):
+                entity._handle_agent_event(SimpleNamespace(data=payload))
+            if entity.state_attributes["event_type"] != expected:
+                raise RuntimeError(f"{cls.__name__}: technical event type overwritten")
+            label = translation.async_translate_state_attr(
+                hass, entity.state_attributes["event_type"], "event", DOMAIN,
+                entity.translation_key, entity.device_class, "event_type",
+            )
+            if not label or label == expected:
+                raise RuntimeError(f"{language}/{entity.translation_key}: event type {expected} not translated")
+            catalog_label = catalog["entity"]["event"][entity.translation_key][
+                "state_attributes"]["event_type"]["state"][expected]
+            if label != catalog_label:
+                raise RuntimeError(f"{language}/{entity.translation_key}: wrong event translation {label!r}")
+            write(f"{language}/{cls.__name__}: event_type={expected}, label={label}")
 
 
 def main() -> None:

@@ -112,9 +112,21 @@ def test_agent_event_translations_cover_all_mapped_event_types() -> None:
             "entity",
             "event",
             "agent_event",
+            "state_attributes",
+            "event_type",
             "state",
         )
         assert expected <= set(translated_states)
+        assert all(translated_states[key].strip() and translated_states[key] != key for key in expected)
+
+
+def test_event_labels_translate_the_attribute_not_the_timestamp_state() -> None:
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        events = _load_json(path)["entity"]["event"]
+        for key in ("doorbell_event", "agent_event"):
+            assert "state" not in events[key], (path.name, key)
+        ring = events["doorbell_event"]["state_attributes"]["event_type"]["state"]["ring"]
+        assert ring.strip() and ring != "ring", path.name
 
 
 def test_localized_translation_placeholders_match_base_strings() -> None:

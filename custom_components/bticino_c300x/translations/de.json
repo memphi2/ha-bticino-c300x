@@ -815,36 +815,44 @@
     "event": {
       "doorbell_event": {
         "name": "Klingelereignis",
-        "state": {
-          "ring": "Klingeln"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Klingeln"
+            }
+          }
         }
       },
       "agent_event": {
         "name": "Geräteereignis",
-        "state": {
-          "agent_restarted": "Device-Agent neu gestartet",
-          "answering_machine_messages_changed": "Video-Nachrichten aktualisiert",
-          "call_ended": "Anruf beendet",
-          "call_started": "Anruf gestartet",
-          "door_unlock_ended": "Türöffner beendet",
-          "door_unlock_started": "Türöffner gestartet",
-          "doorbell_media_closed": "Türkamera-Stream beendet",
-          "doorbell_pressed": "Türklingel gedrückt",
-          "doorbell_view_requested": "Türkamera-Ansicht gestartet",
-          "home_call_answered": "Zuhause-Anruf angenommen",
-          "home_call_ended": "Zuhause-Anruf beendet",
-          "home_call_started": "Zuhause-Anruf gestartet",
-          "memos_changed": "Memos aktualisiert",
-          "display_touch_tone_changed": "Tastenton geändert",
-          "ringer_muted": "Klingelton stummgeschaltet",
-          "ringer_unmuted": "Klingelton aktiviert",
-          "ringer_volume_changed": "Klingel-Lautstärke geändert",
-          "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
-          "stair_light_activated": "Treppenlicht aktiviert",
-          "stair_light_released": "Treppenlicht freigegeben",
-          "system_metrics_changed": "Systemwerte aktualisiert",
-          "agent_diagnostics_changed": "Agent-Schreibdiagnose aktualisiert",
-          "activation_executed": "Geräteaktion ausgeführt"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "agent_restarted": "Device-Agent neu gestartet",
+              "answering_machine_messages_changed": "Video-Nachrichten aktualisiert",
+              "call_ended": "Anruf beendet",
+              "call_started": "Anruf gestartet",
+              "door_unlock_ended": "Türöffner beendet",
+              "door_unlock_started": "Türöffner gestartet",
+              "doorbell_media_closed": "Türkamera-Stream beendet",
+              "doorbell_pressed": "Türklingel gedrückt",
+              "doorbell_view_requested": "Türkamera-Ansicht gestartet",
+              "home_call_answered": "Zuhause-Anruf angenommen",
+              "home_call_ended": "Zuhause-Anruf beendet",
+              "home_call_started": "Zuhause-Anruf gestartet",
+              "memos_changed": "Memos aktualisiert",
+              "display_touch_tone_changed": "Tastenton geändert",
+              "ringer_muted": "Klingelton stummgeschaltet",
+              "ringer_unmuted": "Klingelton aktiviert",
+              "ringer_volume_changed": "Klingel-Lautstärke geändert",
+              "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
+              "stair_light_activated": "Treppenlicht aktiviert",
+              "stair_light_released": "Treppenlicht freigegeben",
+              "system_metrics_changed": "Systemwerte aktualisiert",
+              "agent_diagnostics_changed": "Agent-Schreibdiagnose aktualisiert",
+              "activation_executed": "Geräteaktion ausgeführt"
+            }
+          }
         }
       }
     },

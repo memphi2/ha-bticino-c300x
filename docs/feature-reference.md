@@ -316,6 +316,8 @@ device setting and follows changes made on the C300X. HA waits for the GUI's
 confirmed value; without the GUI connection the switch is unavailable. The
 agent uses a sleeping local connection, not periodic device reads, and does
 not write a second copy of this setting to its configuration.
+Touch-tone status updates also appear in **Device event** as **Touch tone
+changed**, with the stable event type `display_touch_tone_changed` for automations.
 
 Changing the feedback setting saves it in the agent configuration, so it survives
 GUI and agent restarts. Reading it and choosing the already saved value do not

@@ -815,36 +815,44 @@
     "event": {
       "doorbell_event": {
         "name": "Doorbell ring event",
-        "state": {
-          "ring": "Ring"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Ring"
+            }
+          }
         }
       },
       "agent_event": {
         "name": "Device event",
-        "state": {
-          "agent_restarted": "Agent restarted",
-          "answering_machine_messages_changed": "Video messages changed",
-          "call_ended": "Call ended",
-          "call_started": "Call started",
-          "door_unlock_ended": "Door unlock ended",
-          "door_unlock_started": "Door unlock started",
-          "doorbell_media_closed": "Doorbell camera stream ended",
-          "doorbell_pressed": "Doorbell pressed",
-          "doorbell_view_requested": "Doorbell view requested",
-          "home_call_answered": "Home call answered",
-          "home_call_ended": "Home call ended",
-          "home_call_started": "Home call started",
-          "memos_changed": "Memos changed",
-          "display_touch_tone_changed": "Touch tone changed",
-          "ringer_muted": "Ringer muted",
-          "ringer_unmuted": "Ringer unmuted",
-          "ringer_volume_changed": "Ringer volume changed",
-          "smartphone_forwarding_changed": "Smartphone forwarding changed",
-          "stair_light_activated": "Stair light activated",
-          "stair_light_released": "Stair light released",
-          "system_metrics_changed": "System metrics updated",
-          "agent_diagnostics_changed": "Agent write diagnostics updated",
-          "activation_executed": "Device activation executed"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "agent_restarted": "Agent restarted",
+              "answering_machine_messages_changed": "Video messages changed",
+              "call_ended": "Call ended",
+              "call_started": "Call started",
+              "door_unlock_ended": "Door unlock ended",
+              "door_unlock_started": "Door unlock started",
+              "doorbell_media_closed": "Doorbell camera stream ended",
+              "doorbell_pressed": "Doorbell pressed",
+              "doorbell_view_requested": "Doorbell view requested",
+              "home_call_answered": "Home call answered",
+              "home_call_ended": "Home call ended",
+              "home_call_started": "Home call started",
+              "memos_changed": "Memos changed",
+              "display_touch_tone_changed": "Touch tone changed",
+              "ringer_muted": "Ringer muted",
+              "ringer_unmuted": "Ringer unmuted",
+              "ringer_volume_changed": "Ringer volume changed",
+              "smartphone_forwarding_changed": "Smartphone forwarding changed",
+              "stair_light_activated": "Stair light activated",
+              "stair_light_released": "Stair light released",
+              "system_metrics_changed": "System metrics updated",
+              "agent_diagnostics_changed": "Agent write diagnostics updated",
+              "activation_executed": "Device activation executed"
+            }
+          }
         }
       }
     },

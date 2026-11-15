@@ -815,36 +815,44 @@
     "event": {
       "doorbell_event": {
         "name": "Événement de sonnette",
-        "state": {
-          "ring": "Sonnerie"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Sonnerie"
+            }
+          }
         }
       },
       "agent_event": {
         "name": "Événement appareil",
-        "state": {
-          "agent_restarted": "Agent appareil redémarré",
-          "answering_machine_messages_changed": "Messages vidéo mis a jour",
-          "call_ended": "Appel terminé",
-          "call_started": "Appel démarré",
-          "door_unlock_ended": "Ouverture porte terminée",
-          "door_unlock_started": "Ouverture porte démarrée",
-          "doorbell_media_closed": "Flux caméra de sonnette terminé",
-          "doorbell_pressed": "Sonnette appuyée",
-          "doorbell_view_requested": "Vue caméra de sonnette demandée",
-          "home_call_answered": "Appel domicile répondu",
-          "home_call_ended": "Appel domicile terminé",
-          "home_call_started": "Appel domicile démarré",
-          "memos_changed": "Mémos mis a jour",
-          "display_touch_tone_changed": "Son des touches modifié",
-          "ringer_muted": "Sonnerie coupée",
-          "ringer_unmuted": "Sonnerie activée",
-          "ringer_volume_changed": "Volume sonnerie modifié",
-          "smartphone_forwarding_changed": "Renvoi smartphone modifié",
-          "stair_light_activated": "Lumière d'escalier activée",
-          "stair_light_released": "Lumière d'escalier relâchée",
-          "system_metrics_changed": "Métriques système mises a jour",
-          "agent_diagnostics_changed": "Diagnostics écritures agent mis a jour",
-          "activation_executed": "Activation appareil exécutée"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "agent_restarted": "Agent appareil redémarré",
+              "answering_machine_messages_changed": "Messages vidéo mis a jour",
+              "call_ended": "Appel terminé",
+              "call_started": "Appel démarré",
+              "door_unlock_ended": "Ouverture porte terminée",
+              "door_unlock_started": "Ouverture porte démarrée",
+              "doorbell_media_closed": "Flux caméra de sonnette terminé",
+              "doorbell_pressed": "Sonnette appuyée",
+              "doorbell_view_requested": "Vue caméra de sonnette demandée",
+              "home_call_answered": "Appel domicile répondu",
+              "home_call_ended": "Appel domicile terminé",
+              "home_call_started": "Appel domicile démarré",
+              "memos_changed": "Mémos mis a jour",
+              "display_touch_tone_changed": "Son des touches modifié",
+              "ringer_muted": "Sonnerie coupée",
+              "ringer_unmuted": "Sonnerie activée",
+              "ringer_volume_changed": "Volume sonnerie modifié",
+              "smartphone_forwarding_changed": "Renvoi smartphone modifié",
+              "stair_light_activated": "Lumière d'escalier activée",
+              "stair_light_released": "Lumière d'escalier relâchée",
+              "system_metrics_changed": "Métriques système mises a jour",
+              "agent_diagnostics_changed": "Diagnostics écritures agent mis a jour",
+              "activation_executed": "Activation appareil exécutée"
+            }
+          }
         }
       }
     },

@@ -1,6 +1,7 @@
 """The official HA image is a required, version-matched runtime gate."""
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -40,8 +41,30 @@ def test_container_gate_rejects_wrong_ha_version_before_running_tools(monkeypatc
         runtime.main()
 
 
-def test_container_gate_preserves_real_ha_event_attributes():
+def test_container_gate_preserves_and_translates_real_ha_event_attributes(capsys):
     runtime.check_events()
+    output = capsys.readouterr().out
+    for language in ("en", "de", "fr", "it"):
+        for cls, key in (
+            ("C300XDoorbellEventEntity", "ring"),
+            ("C300XDeviceAgentEventEntity", "door_unlock_started"),
+            ("C300XDeviceAgentEventEntity", "display_touch_tone_changed"),
+        ):
+            assert f"{language}/{cls}: event_type={key}, label=" in output
+
+
+@pytest.mark.parametrize("entity_key", ["doorbell_event", "agent_event"])
+def test_container_gate_rejects_old_event_translation_layout(tmp_path, monkeypatch, entity_key):
+    translations = tmp_path / "custom_components" / "bticino_c300x" / "translations"
+    translations.mkdir(parents=True)
+    for source in (ROOT / "custom_components" / "bticino_c300x" / "translations").glob("*.json"):
+        catalog = json.loads(source.read_text())
+        event = catalog["entity"]["event"][entity_key]
+        event["state"] = event.pop("state_attributes")["event_type"]["state"]
+        (translations / source.name).write_text(json.dumps(catalog), encoding="utf-8")
+    monkeypatch.setattr(runtime, "ROOT", tmp_path)
+    with pytest.raises(RuntimeError, match="event type .* not translated"):
+        runtime.check_events()
 
 
 def test_container_gate_does_not_hide_native_tool_errors(monkeypatch):

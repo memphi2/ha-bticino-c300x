@@ -59,13 +59,15 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
         }
         .snapshot-label {
           position: absolute;
-          bottom: 8px;
-          left: 8px;
+          top: 8px;
           right: 8px;
+          max-width: calc(100% - 16px);
+          box-sizing: border-box;
           padding: 4px 8px;
           background: rgba(0, 0, 0, 0.75);
           color: white;
           font-size: 12px;
+          text-align: right;
           overflow-wrap: anywhere;
           pointer-events: none;
         }

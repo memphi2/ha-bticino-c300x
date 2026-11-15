@@ -183,7 +183,7 @@ function fakeHass({ cameraEntity, connection } = {}) {
   };
 }
 
-test("snapshot wiring uses device settings, marks archives and hides them during live video", async () => {
+test("snapshot preview shows only its timestamp and hides during live video", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?snapshot-wiring");
   const card = new (registry.get("c300x-doorbell-call-card"))();
@@ -200,8 +200,8 @@ test("snapshot wiring uses device settings, marks archives and hides them during
     const capturedAt = 1800000000;
     card._snapshots.showPreview("blob:archive", capturedAt);
     assert.equal(card._snapshotEl.hidden, false);
-    assert.match(card._snapshotLabelEl.textContent, /Archived image \(not live\)/);
-    assert.ok(card._snapshotLabelEl.textContent.includes(new Date(capturedAt * 1000).toLocaleString("en")));
+    assert.equal(card._snapshotLabelEl.textContent, new Date(capturedAt * 1000).toLocaleString("en"));
+    assert.match(card._snapshotEl.attributes.get("aria-label"), /Archived image \(not live\)/);
     assert.equal(updates.at(-1).entryId, "entry-1");
     assert.equal(updates.at(-1).attributes, attrs);
     card._webrtc = { remoteStream: {}, running: true, close() {} };

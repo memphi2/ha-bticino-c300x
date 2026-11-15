@@ -22,6 +22,7 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
   Media and as the last-image preview in the card and camera entity. The agent
   reads the existing video framebuffer without extra device filesystem writes;
   JPEG conversion and storage take place in HA.
+  The card preview shows its capture date and time in the upper-right corner.
 
 ### Changed
 

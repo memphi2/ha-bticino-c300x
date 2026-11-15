@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=c6b1e2cb6e4b256a";
+} from "./c300x-translations.js?v=047a3dd4cc8ee9b6";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,24 +15,24 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=c6b1e2cb6e4b256a";
+} from "./c300x-entity-resolver.js?v=047a3dd4cc8ee9b6";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=c6b1e2cb6e4b256a";
-import { C300XCardActions } from "./c300x-card-actions.js?v=c6b1e2cb6e4b256a";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=c6b1e2cb6e4b256a";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=c6b1e2cb6e4b256a";
+} from "./c300x-card-editor.js?v=047a3dd4cc8ee9b6";
+import { C300XCardActions } from "./c300x-card-actions.js?v=047a3dd4cc8ee9b6";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=047a3dd4cc8ee9b6";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=047a3dd4cc8ee9b6";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=c6b1e2cb6e4b256a";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=c6b1e2cb6e4b256a";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=c6b1e2cb6e4b256a";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=c6b1e2cb6e4b256a";
+} from "./c300x-state-model.js?v=047a3dd4cc8ee9b6";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=047a3dd4cc8ee9b6";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=047a3dd4cc8ee9b6";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=047a3dd4cc8ee9b6";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -519,8 +519,10 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (this._snapshotEl) {
       this._snapshotEl.hidden = !showSnapshot;
       this._snapshotLabelEl.hidden = !showSnapshot;
-      this._snapshotLabelEl.textContent = this._snapshotUrl
-        ? `${this._label("last_image")} · ${new Date(this._snapshotCapturedAt * 1000).toLocaleString(this._hass?.language)}` : "";
+      const timestamp = this._snapshotUrl
+        ? new Date(this._snapshotCapturedAt * 1000).toLocaleString(this._hass?.language) : "";
+      this._snapshotLabelEl.textContent = timestamp;
+      this._snapshotEl.setAttribute("aria-label", timestamp ? `${this._label("last_image")}: ${timestamp}` : "");
     }
     if (showSnapshot) this._emptyEl.style.display = "none";
     this._updateReadiness();

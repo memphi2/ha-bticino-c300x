@@ -106,9 +106,9 @@ integration's image endpoint requires camera read permission. HA's standard
 local-media browser also exposes this directory using HA media access rules,
 independently of camera entity permissions. Restrict media access if needed;
 disabling the camera entity does not hide the archive from that browser. The latest
-retained image is used by the camera entity and the card; the card marks it
-with its capture time as an archived image, not live video. Until the first
-successful capture, no preview is shown.
+retained image is used by the camera entity and the card. The card shows only
+the capture date and time in the upper-right corner; the preview is a saved
+image, not live video. Until the first successful capture, no preview is shown.
 
 Turning **Save images** off stops new captures and hides these previews,
 without reloading the integration. Existing images remain available in Media

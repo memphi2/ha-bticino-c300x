@@ -607,13 +607,22 @@
             }
           }
         }
+      },
+      "reauth_confirm": {
+        "title": "Aggiorna le chiavi C300X",
+        "description": "Inserisci le chiavi attuali per {name}. Lascia un campo vuoto per mantenere la chiave salvata.",
+        "data": {
+          "agent_token": "Chiave di accesso",
+          "maintenance_token": "Chiave di manutenzione"
+        }
       }
     },
     "abort": {
       "already_configured": "BTicino C300X è già configurato.",
       "reconfigure_successful": "BTicino C300X è stato riconfigurato. Aggiorna la configurazione locale del device agent o del display bridge se hai ruotato le credenziali.",
       "cannot_connect": "Impossibile raggiungere il device agent. Controlla l'indirizzo e che l'agent sia in esecuzione.",
-      "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce."
+      "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce.",
+      "reauth_wrong_device": "L'agente ha un'identità diversa. La voce salvata non è stata modificata."
     },
     "error": {
       "agent_bundle_missing": "Il bundle ARMHF dell'agent non e incluso. Compila/prepara il bundle di release prima di usare l'installer.",
@@ -642,7 +651,10 @@
       "dashboard_entity_on_several_pages": "Un'entità e scelta su più pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
-      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480."
+      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480.",
+      "invalid_auth": "Il C300X ha rifiutato la chiave di accesso. Inserisci la chiave attuale.",
+      "invalid_maintenance_auth": "Il C300X ha rifiutato la chiave di manutenzione. Inserisci la chiave di manutenzione attuale.",
+      "cannot_connect": "Impossibile verificare il C300X. Controlla indirizzo e connessione, poi riprova."
     }
   },
   "options": {
@@ -986,7 +998,10 @@
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
       "required": "Questo campo è obbligatorio.",
-      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480."
+      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480.",
+      "invalid_auth": "Il C300X ha rifiutato la chiave di accesso. Inserisci la chiave attuale.",
+      "invalid_maintenance_auth": "Il C300X ha rifiutato la chiave di manutenzione. Inserisci la chiave di manutenzione attuale.",
+      "cannot_connect": "Impossibile verificare il C300X. Controlla indirizzo e connessione, poi riprova."
     }
   },
   "entity": {

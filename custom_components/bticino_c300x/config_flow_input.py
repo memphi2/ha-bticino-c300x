@@ -151,8 +151,8 @@ def _agent_auth_schema(require_agent_token: bool) -> vol.Schema:
     )
     return vol.Schema(
         {
-            token_key: str,
-            vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): str,
+            token_key: _password_selector(),
+            vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): _password_selector(),
         }
     )
 

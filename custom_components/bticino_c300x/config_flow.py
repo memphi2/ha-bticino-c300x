@@ -11,9 +11,10 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow
 
+from . import config_flow_auth
 from .api import (
     C300XAgentApi,
-    C300XAgentApiConnectionError,
+    C300XAgentApiAuthError,
     C300XAgentApiError,
     C300XAgentApiUnsupportedError,
     build_agent_base_url,
@@ -262,7 +263,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
 )
 
 
-class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
+class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 1
@@ -428,34 +429,6 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
         for entry in self._async_current_entries():
             if _entry_connection_matches_discovery(entry, self._setup_connection):
                 raise AbortFlow("already_configured")
-
-    async def async_step_agent_auth(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Collect agent tokens after a reachable agent has been found."""
-
-        if not self._setup_connection:
-            return await self.async_step_user()
-
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            auth_data, errors = _agent_auth_input(
-                user_input,
-                require_agent_token=self._setup_agent_needs_token,
-            )
-            if not errors:
-                self._setup_connection.update(auth_data)
-                await self._async_adopt_agent_unique_id(
-                    api_token=auth_data[CONF_AGENT_TOKEN]
-                )
-                return await self.async_step_user_features()
-
-        return self.async_show_form(
-            step_id="agent_auth",
-            data_schema=_agent_auth_schema(self._setup_agent_needs_token),
-            errors=errors,
-        )
 
     async def _async_adopt_agent_unique_id(self, *, api_token: str = "") -> None:
         """Use the agent's mDNS identity before creating the config entry."""
@@ -922,6 +895,12 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
     ) -> FlowResult:
         """Create the initial config entry after feature collection."""
 
+        _, errors = await config_flow_auth.async_validate_connection(
+            self.hass, self._setup_connection,
+        )
+        if errors:
+            return self._show_agent_auth(errors)
+
         if self._setup_unique_id is not None:
             self._async_abort_duplicate_setup_flows(self._setup_unique_id)
             await self.async_set_unique_id(
@@ -979,6 +958,10 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
                 include_rotate=True,
                 saved=_current_connection_options(entry),
             )
+            if not errors:
+                _, errors = await config_flow_auth.async_validate_connection(
+                    self.hass, self._reconfigure_connection,
+                )
             if errors:
                 return self.async_show_form(
                     step_id="reconfigure",
@@ -1375,6 +1358,12 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
     ) -> FlowResult:
         """Finish a reconfigure flow after all feature pages."""
 
+        _, errors = await config_flow_auth.async_validate_connection(
+            self.hass, self._reconfigure_connection,
+        )
+        if errors:
+            return self._show_reconfigure_auth(errors)
+
         entry = self._get_reconfigure_entry()
         await self.async_set_unique_id(_reconfigure_unique_id(entry))
         self._abort_if_unique_id_mismatch()
@@ -1470,6 +1459,10 @@ class BticinoC300XOptionsFlow(
                 user_input,
                 saved=_current_connection_options(self._config_entry),
             )
+            if not errors:
+                _, errors = await config_flow_auth.async_validate_connection(
+                    self.hass, connection_options,
+                )
             if not errors:
                 self._connection_options = connection_options
                 return await self._async_save_options(feature_defaults)
@@ -1801,11 +1794,8 @@ async def _async_probe_agent(
 
     try:
         await _async_agent_ready_for_setup(hass, connection, api_token=api_token)
-    except C300XAgentApiConnectionError as err:
-        message = str(err)
-        if "HTTP 401" in message or "HTTP 403" in message:
-            return "auth_required"
-        return "missing"
+    except C300XAgentApiAuthError:
+        return "auth_required"
     except C300XAgentApiError:
         return "missing"
     return "reachable"
@@ -1866,6 +1856,8 @@ async def _async_agent_ready_for_setup(
     setup_data = cast(dict[str, Any], await api.async_validate_setup())
     try:
         await api.async_self_test()
+    except C300XAgentApiAuthError:
+        raise
     except C300XAgentApiUnsupportedError:
         pass
     except C300XAgentApiError:

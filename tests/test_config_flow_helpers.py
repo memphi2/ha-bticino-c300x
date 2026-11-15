@@ -116,6 +116,17 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
 from homeassistant.const import CONF_NAME  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def authenticated_connection_boundary(monkeypatch):
+    """Wizard layout tests assume a reachable agent; auth has separate regressions."""
+    from custom_components.bticino_c300x import config_flow_auth
+
+    async def validate(_hass, _connection):
+        return {}, {}
+
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", validate)
+
+
 def test_probe_agent_requires_event_subscription_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

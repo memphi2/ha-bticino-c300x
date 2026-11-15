@@ -62,6 +62,9 @@
   continuing removal; failed read-only remounts are reported.
 - Check the firmware ABI before developer uploads and install the complete
   startup bundle before advertising its new manifest.
+- Stage SSH-installed init scripts on the destination filesystem and publish
+  the bundle manifest only after activation succeeds. Interrupted repairs no
+  longer damage an existing init script or falsely report an up-to-date bundle.
 - Release partially initialized browser audio resources when audio gain setup
   fails, keeping direct audio playback available.
 - Share concurrent Energy statistics reads and pause retries after database
@@ -73,6 +76,9 @@
   no longer counts as a successful installation.
 - Keep RTSP media on its original connection when socket numbers are reused,
   and serialize complete media frames and responses to prevent interleaving.
+- Avoid closing replacement connections during ring receiver shutdown or
+  stale display-event poll handling. Return bounded, valid JSON errors for
+  oversized malformed ringer replies without increasing response buffers.
 - Bound display callback socket operations with one deadline so a trickling
   HTTP response cannot keep subsequent display commands blocked indefinitely.
 - Scope Android and iOS notification actions to each call's automation run, so

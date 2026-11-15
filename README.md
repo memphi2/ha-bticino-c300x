@@ -137,14 +137,10 @@ English from device photographs. They illustrate configured pages, not live data
     <td align="center"><strong>Brightness and color controls</strong><br><img src="docs/images/readme/display-light-detail-en.webp" alt="Bathroom light detail page with brightness slider and eight color presets" width="360"></td>
     <td align="center"><strong>Media player controls</strong><br><img src="docs/images/readme/display-media-player-en.webp" alt="Living-room media player with current program, pause, volume, mute and shuffle controls" width="360"></td>
   </tr>
+  <tr>
+    <td align="center" colspan="2"><strong>Weather</strong><br><img src="docs/images/readme/display-ha-weather-en.webp" alt="Native C300X weather page with temperature and Home Assistant status, showing an earlier page layout" width="360"><br><small>Earlier page layout</small></td>
+  </tr>
 </table>
-
-<details>
-<summary>Weather example (earlier page layout)</summary>
-<p align="center"><img src="docs/images/readme/display-ha-weather-en.webp" alt="Earlier native weather-page layout with a temperature card and Home Assistant status" width="720"></p>
-Current versions place the status information in the header and configure
-weather with the display pages. See the [display reference](docs/feature-reference.md#display-settings).
-</details>
 
 ## Documentation
 

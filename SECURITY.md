@@ -157,12 +157,12 @@ The following narrowly scoped exceptions remain:
   local MQTT transport model. TLS is not available on this device-side path, so
   MQTT must stay on a trusted local network and must not be exposed externally.
 - UDP device events: the native agent receives the device's OpenWebNet event
-  frames on UDP port 7667 (multicast group 239.255.76.67) on every interface
-  and does not check the sender. These frames carry no authentication on the
-  device itself, and which hosts send them legitimately depends on the
-  installation. A host on the same network can therefore inject events such as
-  a door view request or a closed media session. Keep the C300X on a trusted
-  network segment, or block UDP port 7667 from other hosts at the network.
+  frames on UDP port 7667 (multicast group 239.255.76.67). A capture on a C300X
+  showed every frame sent by the device's own address, so the agent takes
+  frames only from loopback or the device's own addresses and drops the rest.
+  The frames themselves carry no authentication, so a host that can forge the
+  device's source address on the local segment can still inject events. Keep
+  the C300X on a trusted network segment.
 
 These exceptions do not apply to internet-exposed deployments. Do not expose
 SSH, MQTT, native-agent HTTP, RTSP, WebRTC, or Home Assistant callback surfaces

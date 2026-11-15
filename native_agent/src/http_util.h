@@ -1,6 +1,8 @@
 #ifndef C300X_HTTP_UTIL_H
 #define C300X_HTTP_UTIL_H
 
+#include <netinet/in.h>
+
 #include <poll.h>
 #include <stddef.h>
 
@@ -40,6 +42,9 @@ void set_fd_cloexec(int fd);
 void allow_socket_reuse(int fd);
 void close_agent_socket(int fd);
 void c300x_http_send_json(int client_fd, int status, const char *reason, const char *body);
+/* True for a loopback source or one of this host's own IPv4 addresses. The
+ * device's event frames on the UDP event port are sent by its own services. */
+int c300x_udp_source_is_local(const struct sockaddr_in *source);
 
 /* Main-loop HTTP responses only; outbound clients retain send_all_bytes().
  * close_agent_socket() transfers a queued response's fd to the output queue. */

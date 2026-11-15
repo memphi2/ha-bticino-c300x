@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+#include <ifaddrs.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -482,4 +483,27 @@ void c300x_http_send_json(int client_fd, int status, const char *reason, const c
         return;
     }
     (void)c300x_http_write(client_fd, body, body_len);
+}
+
+int c300x_udp_source_is_local(const struct sockaddr_in *source)
+{
+    struct ifaddrs *addresses = NULL;
+    int local = 0;
+
+    if (source == NULL || source->sin_family != AF_INET) {
+        return 0;
+    }
+    if ((ntohl(source->sin_addr.s_addr) >> 24) == 127) {
+        return 1;
+    }
+    if (getifaddrs(&addresses) != 0) {
+        return 0;
+    }
+    for (struct ifaddrs *item = addresses; item != NULL && !local; item = item->ifa_next) {
+        const struct sockaddr_in *own = (const struct sockaddr_in *)item->ifa_addr;
+        local = own != NULL && own->sin_family == AF_INET
+            && own->sin_addr.s_addr == source->sin_addr.s_addr;
+    }
+    freeifaddrs(addresses);
+    return local;
 }

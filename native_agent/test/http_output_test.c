@@ -155,6 +155,24 @@ int main(void)
     }
     assert(c300x_http_outputs_prepare(fds) == -1);
 
+    {
+        /* The UDP event port takes frames only from this host itself. */
+        struct sockaddr_in source = {.sin_family = AF_INET};
+        source.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        assert(c300x_udp_source_is_local(&source));
+        source.sin_addr.s_addr = htonl(0xC0000201U);
+        assert(!c300x_udp_source_is_local(&source));
+        struct ifaddrs *own = NULL;
+        assert(getifaddrs(&own) == 0);
+        for (struct ifaddrs *item = own; item != NULL; item = item->ifa_next) {
+            if (item->ifa_addr != NULL && item->ifa_addr->sa_family == AF_INET) {
+                assert(c300x_udp_source_is_local((const struct sockaddr_in *)item->ifa_addr));
+            }
+        }
+        freeifaddrs(own);
+        assert(!c300x_udp_source_is_local(NULL));
+    }
+
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
     c300x_http_send_json(pair[0], 200, "OK", "{}");
     close_agent_socket(pair[0]);

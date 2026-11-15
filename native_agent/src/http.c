@@ -5579,7 +5579,9 @@ static void handle_udp_event(
 )
 {
     unsigned char buffer[2048];
-    ssize_t received = recv(udp_fd, buffer, sizeof(buffer), 0);
+    struct sockaddr_in source;
+    socklen_t source_len = sizeof(source);
+    ssize_t received = recvfrom(udp_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&source, &source_len);
     int system_end;
     int msg_start;
     int msg_end;
@@ -5589,6 +5591,11 @@ static void handle_udp_event(
     char data[768];
 
     if (received <= 0) {
+        return;
+    }
+    /* Only the device's own services send these frames; a frame from another
+     * host on the network would inject events. */
+    if (source_len < sizeof(source) || !c300x_udp_source_is_local(&source)) {
         return;
     }
     system_end = -1;

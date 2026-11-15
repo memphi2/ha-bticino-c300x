@@ -114,6 +114,7 @@ async def async_status(
     actions = configured_actions(entry)
     dashboard_entities = configured_dashboard_entities(entry)
     status_enabled = configured_status_page_enabled(entry)
+    energy_settings = configured_energy_page(entry)
     overrides = configured_dashboard_entity_display_overrides(entry)
     visible_entities = any(
         status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
@@ -153,7 +154,7 @@ async def async_status(
             visible_actions
             or visible_entities
             or status_enabled
-            or bool(configured_energy_page(entry)["enabled"])
+            or bool(energy_settings["enabled"] and energy_settings["views"])
             or bool(notification_payload(entry))
         ),
         "preventReturnToHomepage": configured_dashboard_prevent_return(entry),

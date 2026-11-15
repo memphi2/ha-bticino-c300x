@@ -16,6 +16,7 @@ from custom_components.bticino_c300x.const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_DEVICE_UI_ENABLED,
+    CONF_ENERGY_PAGE,
     CONF_WEATHER_ENTITY_ID,
 )
 
@@ -99,3 +100,26 @@ def test_notifications_do_not_restore_disabled_status_content(monkeypatch) -> No
     result = run(dashboard.async_dashboard_payload(FakeHass(), entry))
     assert result["data"]["pages"] == [{"title": ""}]
     assert result["notifications"] == [{"message": "Hello"}]
+
+
+@pytest.mark.parametrize("views", [[], ["today"]])
+def test_energy_availability_requires_an_enabled_subpage(views) -> None:
+    entry = FakeEntry(data={
+        CONF_DEVICE_UI_ENABLED: True,
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED: False,
+        CONF_ENERGY_PAGE: {"enabled": True, "views": views},
+    })
+    assert run(dashboard.async_status(FakeHass(), entry))["dashboard_available"] is bool(views)
+    if not views:
+        assert run(dashboard.async_dashboard_payload(FakeHass(), entry))["data"]["pages"] == []
+
+
+def test_notifications_remain_available_with_all_energy_subpages_off(monkeypatch) -> None:
+    entry = FakeEntry(data={
+        CONF_DEVICE_UI_ENABLED: True,
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED: False,
+        CONF_ENERGY_PAGE: {"enabled": True, "views": []},
+    })
+    monkeypatch.setattr(dashboard, "notification_payload", lambda _entry: [{"message": "Hello"}])
+    assert run(dashboard.async_status(FakeHass(), entry))["dashboard_available"] is True
+    assert run(dashboard.async_dashboard_payload(FakeHass(), entry))["data"]["pages"] == [{"title": ""}]

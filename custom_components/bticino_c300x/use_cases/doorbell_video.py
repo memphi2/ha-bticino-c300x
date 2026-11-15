@@ -32,12 +32,15 @@ class DoorbellVideoUseCase:
         """Activate or renew the C300X doorbell video session."""
 
         ensure_doorbell_video_supported(self._entry)
+        runtime = self._entry.runtime_data
+        ensure_current_runtime(self._entry, runtime)
         if audio:
             await async_ensure_doorstation_audio_gain(self._entry, status=status)
+            ensure_current_runtime(self._entry, runtime)
         if before_activate is not None:
             before_activate()
         await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_activate_doorbell_video(audio=audio)
+            runtime.api.async_activate_doorbell_video(audio=audio)
         )
 
     async def stop(self) -> None:

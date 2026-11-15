@@ -40,7 +40,7 @@ def ensure_current_runtime(entry: Any, runtime: Any) -> None:
     """Reject commands whose entry lifetime ended during an awaited operation."""
 
     if (getattr(entry, "runtime_data", None) is not runtime
-            or getattr(runtime.resources, "closed", False)):
+            or getattr(getattr(runtime, "resources", None), "closed", False)):
         raise service_validation_error("agent_command_failed")
 
 

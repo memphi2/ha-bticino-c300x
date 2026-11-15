@@ -9,6 +9,7 @@ from typing import Any
 from .config_audio import audio_gain_db_or_default
 from .const import CONF_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_DOORSTATION_AUDIO_GAIN_DB
 from .entry_config import entry_config_value
+from .use_cases.common import ensure_current_runtime
 from .value_parsing import optional_mapping
 
 _GAIN_EPSILON_DB = 0.05
@@ -49,13 +50,16 @@ async def async_ensure_doorstation_audio_gain(
 ) -> None:
     """Synchronize the native agent runtime gain only when the value is needed."""
 
+    runtime = entry.runtime_data
+    ensure_current_runtime(entry, runtime)
     desired = doorstation_audio_gain_db(entry)
     if abs(desired) < _GAIN_EPSILON_DB:
         desired = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
 
     if status is None:
         with suppress(Exception):
-            status = await entry.runtime_data.api.async_doorbell_video_status()
+            status = await runtime.api.async_doorbell_video_status()
+        ensure_current_runtime(entry, runtime)
 
     current = agent_doorstation_audio_gain_db(status)
     if current is not None and abs(current - desired) < _GAIN_EPSILON_DB:
@@ -63,4 +67,4 @@ async def async_ensure_doorstation_audio_gain(
     if current is None and abs(desired) < _GAIN_EPSILON_DB:
         return
 
-    await entry.runtime_data.api.async_set_doorstation_audio_gain_db(desired)
+    await runtime.api.async_set_doorstation_audio_gain_db(desired)

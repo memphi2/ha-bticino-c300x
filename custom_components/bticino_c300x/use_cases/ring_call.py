@@ -23,10 +23,14 @@ class RingCallUseCase:
         """Answer the active C300X doorbell ring call through the agent."""
 
         ensure_doorbell_call_supported(self._entry)
-        status = await self._entry.runtime_data.api.async_doorbell_video_status()
+        runtime = self._entry.runtime_data
+        ensure_current_runtime(self._entry, runtime)
+        status = await runtime.api.async_doorbell_video_status()
+        ensure_current_runtime(self._entry, runtime)
         await async_ensure_doorstation_audio_gain(self._entry, status=status)
+        ensure_current_runtime(self._entry, runtime)
         await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_answer_doorbell_call()
+            runtime.api.async_answer_doorbell_call()
         )
 
     async def hangup(self) -> None:

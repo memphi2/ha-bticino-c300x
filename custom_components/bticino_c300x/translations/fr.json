@@ -944,12 +944,11 @@
     },
     "select": {
       "smartphone_forwarding_mode": {
-        "name": "Forwarding",
+        "name": "Renvoi d'appel",
         "state": {
           "enabled": "Smartphone",
           "homeassistant": "Home Assistant",
-          "blocked": "Blocked",
-          "unprovisioned": "Unprovisioned"
+          "blocked": "Bloqué"
         }
       },
       "audio_codec": {

@@ -68,7 +68,7 @@ has a help text.
 | Door unlock | Button entity, service, optional dashboard action. | Sends one configured unlock command through the native agent. |
 | Stair light | Button entity, service, optional generated activation. | Manual mode uses P/N parts to generate the stair-light activation address. |
 | Device activations | Button entities, `run_device_activation`. | Supports `lock`, `light`, `stair_light`, `scenario`, and `generic` activation types. |
-| Forwarding | Select entity. | Values are Smartphone, Home Assistant and Blocked. Ring Call answer needs Home Assistant. |
+| Forwarding | Select entity. | Shown as Smartphone, Home Assistant and Blocked, translated like any other entity. Automations use the option values `enabled`, `homeassistant` and `blocked`. Ring Call answer needs Home Assistant. |
 | Ringer mute and volume | Switch and number entity. | Volume uses the C300X display scale `0..10`; `0` is muted. |
 | Answering machine | Switch and video-message sensor/services. | Message delete requires the Display patch. |
 | Text and voice memos | Sensors and memo services. | Text memo write and latest memo playback are service driven. Delete requires the Display patch. |
@@ -496,7 +496,7 @@ feature, the matching entity is not created.
 | `sensor` | Device CPU/load/memory/temperature | Optional low-frequency native-agent metrics. |
 | `sensor` | Video messages, text memos, voice memos | Local device message/memo counters and latest metadata. |
 | `binary_sensor` | Home call active | Whether Home Call is currently active. |
-| `select` | Forwarding | Smartphone, Home Assistant or Blocked forwarding mode. |
+| `select` | Forwarding | Forwarding mode: `enabled` (Smartphone), `homeassistant` or `blocked`. |
 | `switch` | Ringer mute | Device ringer mute state. |
 | `number` | Ringer volume | C300X `0..10` ringtone volume scale. |
 | `switch` | Answering machine | Device answering-machine enabled state. |

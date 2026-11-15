@@ -19,7 +19,6 @@ from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_CONNECTION_STATE_CHANGED,
     SMARTPHONE_FORWARDING_MODES,
-    SMARTPHONE_FORWARDING_STATE_UNPROVISIONED,
 )
 from .entity import C300XEntity, supports_capability
 from .entity import (
@@ -34,29 +33,13 @@ if TYPE_CHECKING:
 
 PARALLEL_UPDATES = 1
 
-# Labels for every state the agent reports, including "unprovisioned" -- a
-# device with no smartphone pairing at all. That one is deliberately not in
-# _FORWARDING_OPTION_LABELS below, so Home Assistant drops it from the entity
-# state (SelectEntity.state returns None for a current_option outside options)
-# and the value is surfaced through extra_state_attributes and media readiness
-# instead. Do not "fix" that by adding it to the options: Home Assistant only
-# rejects an unselectable option while it is absent from the list, so adding it
-# would let a select_option call through to async_select_option, which discards
-# an unsupported mode without a word.
-_FORWARDING_STATE_LABELS = {
-    "enabled": "Smartphone",
-    "homeassistant": "Home Assistant",
-    "blocked": "Blocked",
-    SMARTPHONE_FORWARDING_STATE_UNPROVISIONED: "Unprovisioned",
-}
-_FORWARDING_OPTION_LABELS = {
-    mode: label
-    for mode, label in _FORWARDING_STATE_LABELS.items()
-    if mode in SMARTPHONE_FORWARDING_MODES
-}
-_FORWARDING_MODE_BY_LABEL = {
-    label: mode for mode, label in _FORWARDING_OPTION_LABELS.items()
-}
+# The options are the agent's mode keys; their texts come from the state
+# translations. "unprovisioned" -- a device with no smartphone pairing at
+# all -- is a state the agent reports but not a mode that can be chosen, so
+# it is not an option: the entity state is then unknown and the value is
+# surfaced through extra_state_attributes and media readiness instead. Do
+# not add it to the options: Home Assistant only rejects an unselectable
+# option while it is absent from the list.
 
 
 async def async_setup_entry(
@@ -81,7 +64,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 
     _attr_should_poll = False
     _attr_translation_key = "smartphone_forwarding_mode"
-    _attr_options = list(_FORWARDING_OPTION_LABELS.values())
+    _attr_options = list(SMARTPHONE_FORWARDING_MODES)
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "smartphone_forwarding_mode")
@@ -93,7 +76,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
     def current_option(self) -> str | None:
         """Return the current forwarding mode."""
 
-        return _FORWARDING_STATE_LABELS.get(self._state)
+        return self._state if self._state in SMARTPHONE_FORWARDING_MODES else None
 
     @property
     def extra_state_attributes(self) -> dict[str, str | int | None]:
@@ -104,12 +87,11 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Set the forwarding mode."""
 
-        mode = _FORWARDING_MODE_BY_LABEL.get(option, option)
-        if mode not in SMARTPHONE_FORWARDING_MODES:
+        if option not in SMARTPHONE_FORWARDING_MODES:
             return
         try:
             status = await self._entry.runtime_data.api.async_set_smartphone_forwarding_mode(
-                mode
+                option
             )
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X smartphone forwarding update failed") from err

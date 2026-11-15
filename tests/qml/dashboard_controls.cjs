@@ -149,6 +149,9 @@ p.dashboardOnline = true;
 assert.equal(p.optionLabel({command: "color"}, "red"), "Red");
 assert.equal(p.optionLabel({command: "fan_mode"}, "custom mode"), "custom mode");
 assert.equal(p.optionLabel({command: "preset_mode"}, "auto"), "auto", "custom preset names remain unchanged");
+assert.equal(p.optionLabel({command: "option", labels: ["Smartphone", "Blockiert"]}, "blocked", 1), "Blockiert", "a select shows the text Home Assistant sent for the option");
+assert.equal(p.optionLabel({command: "option", labels: ["Smartphone"]}, "blocked", 1), "blocked", "a missing text falls back to the option");
+assert.equal(p.optionLabel({command: "option"}, "Night", 1), "Night");
 for (const lang of ["en", "de", "fr", "it"]) {
     const modeLabels = {};
     for (const key of Object.keys(I18n.DETAIL_LABELS[lang])) {

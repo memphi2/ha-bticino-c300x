@@ -107,7 +107,7 @@ def test_smartphone_forwarding_select_refreshes_active_status() -> None:
     asyncio.run(entity.async_update())
 
     assert entry.runtime_data.api.active_reads == 1
-    assert entity.current_option == "Blocked"
+    assert entity.current_option == "blocked"
     assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "blocked"
 
@@ -123,7 +123,7 @@ def test_select_setup_adds_supported_entities_after_initial_refresh() -> None:
     entity = added[0][0]
     assert isinstance(entity, C300XSmartphoneForwardingModeSelect)
     assert entry.runtime_data.api.active_reads == 1
-    assert entity.current_option == "Blocked"
+    assert entity.current_option == "blocked"
 
 
 def test_select_setup_skips_unsupported_forwarding_capability() -> None:
@@ -150,10 +150,10 @@ def test_smartphone_forwarding_select_sets_three_state_mode() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
 
-    asyncio.run(entity.async_select_option("Home Assistant"))
+    asyncio.run(entity.async_select_option("homeassistant"))
 
     assert entry.runtime_data.api.selected == ["homeassistant"]
-    assert entity.current_option == "Home Assistant"
+    assert entity.current_option == "homeassistant"
 
 
 def test_smartphone_forwarding_select_ignores_invalid_options() -> None:
@@ -166,27 +166,48 @@ def test_smartphone_forwarding_select_ignores_invalid_options() -> None:
     assert entity.current_option is None
 
 
-def test_smartphone_forwarding_select_shows_unprovisioned_but_does_not_write() -> None:
+def test_smartphone_forwarding_select_reports_unprovisioned_but_does_not_write() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
 
     entity._apply_status({"mode": 3, "state": "unprovisioned"})
-    asyncio.run(entity.async_select_option("Unprovisioned"))
+    asyncio.run(entity.async_select_option("unprovisioned"))
 
-    assert "Unprovisioned" not in entity._attr_options
+    assert entity.options == ["enabled", "homeassistant", "blocked"]
     assert entry.runtime_data.api.selected == []
-    assert entity.current_option == "Unprovisioned"
+    assert entity.current_option is None
     assert entity.extra_state_attributes == {"mode": 3, "state": "unprovisioned"}
 
 
-def test_smartphone_forwarding_select_accepts_raw_mode_for_automation() -> None:
+def test_smartphone_forwarding_select_rejects_the_former_display_texts() -> None:
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_select_option("Blocked"))
+
+    assert entry.runtime_data.api.selected == []
+
+
+def test_every_forwarding_option_has_a_text_in_every_language() -> None:
+    import json
+    from pathlib import Path
+
+    component = Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x"
+    for path in [component / "strings.json", *sorted((component / "translations").glob("*.json"))]:
+        states = json.loads(path.read_text(encoding="utf-8"))["entity"]["select"][
+            "smartphone_forwarding_mode"
+        ]["state"]
+        assert list(states) == ["enabled", "homeassistant", "blocked"], path.name
+
+
+def test_smartphone_forwarding_select_sets_the_smartphone_mode() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
 
     asyncio.run(entity.async_select_option("enabled"))
 
     assert entry.runtime_data.api.selected == ["enabled"]
-    assert entity.current_option == "Smartphone"
+    assert entity.current_option == "enabled"
 
 
 def test_smartphone_forwarding_event_updates_select_state() -> None:
@@ -202,7 +223,7 @@ def test_smartphone_forwarding_event_updates_select_state() -> None:
         )
     )
 
-    assert entity.current_option == "Home Assistant"
+    assert entity.current_option == "homeassistant"
     assert entity.extra_state_attributes == {"mode": 1, "state": "homeassistant"}
 
 
@@ -219,7 +240,7 @@ def test_smartphone_forwarding_event_shows_unprovisioned_state() -> None:
         )
     )
 
-    assert entity.current_option == "Unprovisioned"
+    assert entity.current_option is None
     assert entity.extra_state_attributes == {"mode": 3, "state": "unprovisioned"}
 
 

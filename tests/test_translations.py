@@ -88,13 +88,7 @@ def test_smartphone_forwarding_select_translates_internal_options() -> None:
             "smartphone_forwarding_mode",
             "state",
         )
-        assert {
-            "enabled",
-            "homeassistant",
-            "blocked",
-            "unprovisioned",
-        } <= set(translated_states)
-        assert translated_states["homeassistant"] != "homeassistant"
+        assert set(translated_states) == {"enabled", "homeassistant", "blocked"}
 
 
 def test_agent_event_translations_cover_all_mapped_event_types() -> None:

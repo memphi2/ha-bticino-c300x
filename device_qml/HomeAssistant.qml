@@ -158,7 +158,8 @@ Page {
         return String(shown) + (control.unit ? " " + control.unit : "")
     }
 
-    function optionLabel(control, option) {
+    function optionLabel(control, option, position) {
+        if (control.labels && position < control.labels.length) return String(control.labels[position])
         if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode" || control.command === "effect" || control.command === "fan_speed") return String(option)
         var key = (control.command === "color" ? "color_" : "mode_") + String(option)
         var label = uiText(key)
@@ -1089,7 +1090,7 @@ Page {
                                 }
                                 UbuntuLightText {
                                     anchors.fill: parent; anchors.margins: 6; anchors.leftMargin: control.swatches ? 38 : 6
-                                    text: optionLabel(control, modelData); textFormat: Text.PlainText; font.pixelSize: 16; color: "white"
+                                    text: optionLabel(control, modelData, index); textFormat: Text.PlainText; font.pixelSize: 16; color: "white"
                                     wrapMode: Text.Wrap; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                 }
                                 BeepingMouseArea { anchors.fill: parent; onClicked: Api.dashboardControl(selectedItem, control, modelData, status, page) }

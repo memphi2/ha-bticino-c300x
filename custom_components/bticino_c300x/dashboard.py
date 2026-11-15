@@ -70,6 +70,7 @@ from .dashboard_labels import (
     _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
     _DASHBOARD_STATE_LABELS_EN,
 )
+from .dashboard_select_texts import apply_select_texts
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
 from .entry_types import BticinoC300XConfigEntry
@@ -489,6 +490,8 @@ def _dashboard_item_for_state(
         "number", "input_number", "select", "input_select",
     }:
         item["controls"] = entity_controls(entity_id, state, unit)
+        if domain == "select":
+            apply_select_texts(hass, entity_id, state, item)
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
         if domain == "climate" and state is not None:
             item["current_temperature"] = finite_number(

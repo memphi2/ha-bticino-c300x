@@ -948,8 +948,7 @@
         "state": {
           "enabled": "Smartphone",
           "homeassistant": "Home Assistant",
-          "blocked": "Blocked",
-          "unprovisioned": "Unprovisioned"
+          "blocked": "Blocked"
         }
       },
       "audio_codec": {

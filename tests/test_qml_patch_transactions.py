@@ -9,16 +9,15 @@ import pytest
 from test_qml_patch_script import (
     SCRIPT,
     SOURCE_DIR,
+    SOURCE_INSTALLED_FILES,
     _run_qml_patch_raw,
     _write_original_gui,
 )
 
 PATCH_FILES = [
-    "MainApp.qml", "HomePage.qml", "MemoPage.qml", "Alarm.qml", "HomeAssistant.qml",
-    "C300XEnergy.qml", "js/c300x_ha.js", "js/c300x_i18n.js", "js/c300x_memos.js",
-    "C300XEnergyDistribution.qml",
-    "C300XRingerControl.qml", "EventManager.qml",
+    "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
     "Components/Settings/GeneralsChoice.qml",
+    *SOURCE_INSTALLED_FILES,
 ]
 STOCK_FILES = ["MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
                "Components/Settings/CallBlockPopup.qml", "Components/Settings/GeneralsChoice.qml"]

@@ -15,10 +15,10 @@ STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
 # The display files this integration adds; every list of them derives from here.
-GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyDistribution.qml C300XPageNavigation.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
-OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
+OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
 json_status() {
     changed_files="${1:-}"
@@ -100,6 +100,8 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MainApp.qml" 'alarmPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xDisplayPreferences' \
+        && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xAlerts' \
+        && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && general_settings_patch_present \
         && home_page_feature_patch_present \
         && file_contains "$GUI_DIR/HomePage.qml" 'MemoSync.syncHomeNotifications(page)' \
@@ -111,8 +113,17 @@ full_patch_present() {
         && file_contains "$GUI_DIR/Alarm.qml" 'headerLabel: uiText("alarm")' \
         && file_contains "$GUI_DIR/HomeAssistant.qml" 'Api.dashboard' \
         && [ -f "$GUI_DIR/C300XEnergy.qml" ] \
-        && [ -f "$GUI_DIR/C300XEnergyDistribution.qml" ] \
+        && [ -f "$GUI_DIR/C300XEnergyConsumers.qml" ] \
+        && [ -f "$GUI_DIR/js/c300x_energy_consumers.js" ] \
         && [ -f "$GUI_DIR/C300XPageNavigation.qml" ] \
+        && [ -f "$GUI_DIR/C300XAlerts.qml" ] \
+        && [ -f "$GUI_DIR/js/c300x_alerts.js" ] \
+        && [ -f "$GUI_DIR/C300XAgenda.qml" ] \
+        && [ -f "$GUI_DIR/C300XLeaveHome.qml" ] \
+        && [ -f "$GUI_DIR/C300XDetailControl.qml" ] \
+        && [ -f "$GUI_DIR/C300XEnergyReadout.qml" ] \
+        && [ -f "$GUI_DIR/C300XEnergySums.qml" ] \
+        && [ -f "$GUI_DIR/js/c300x_energy.js" ] \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function homeButtons' \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function loadDisplayPreferences' \
         && file_contains "$GUI_DIR/js/c300x_i18n.js" 'function weather' \
@@ -166,6 +177,7 @@ core_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         && file_contains "$GUI_DIR/EventManager.qml" 'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
         && file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && cmp -s "$SOURCE_DIR/C300XRingerControl.qml" "$GUI_DIR/C300XRingerControl.qml" \
         && core_call_end_hooks_present
 }
@@ -193,6 +205,9 @@ core_call_end_hooks_present() {
     awk '
         $0 == "        onCallEnded: {" {
             count += 1
+            if ((getline next_line) <= 0 || next_line != "            c300xPreemptAlert()") {
+                bad = 1
+            }
             if ((getline next_line) <= 0 || next_line != "            c300xNotifyMediaClosed()") {
                 bad = 1
             }
@@ -954,11 +969,42 @@ patch_event_manager() {
             print "    }"
             print ""
             print "    C300XRingerControl {}"
+            print "    property bool c300xCallActive: typeof intercomModel === \"undefined\" || intercomModel.isVideoCall || intercomModel.isIntercomCall || intercomModel.isSipIntercomCall"
+            print "    property bool c300xRinging: false"
+            print "    function c300xPreemptAlert() {"
+            print "        if (typeof c300xAlerts !== \"undefined\") c300xAlerts.preempt()"
+            print "    }"
+            print "    function c300xAlertUserInteraction() {"
+            print "        if (typeof c300xAlerts !== \"undefined\") c300xAlerts.userInteraction()"
+            print "    }"
             next
         }
-        $0 == "        onCallEnded: {" {
+        /^        on(IncomingCall|CallStarted|CallAnswered|CallEnded|CallTypeChanged): \{$/ {
             print
-            print "            c300xNotifyMediaClosed()"
+            print "            c300xPreemptAlert()"
+            if ($0 == "        onCallEnded: {") print "            c300xNotifyMediaClosed()"
+            next
+        }
+        $0 == "        onRingtoneStarted: {" {
+            print
+            print "            c300xPreemptAlert()"
+            print "            c300xRinging = true"
+            next
+        }
+        $0 == "        onRingtoneFinished: {" {
+            print
+            print "            c300xPreemptAlert()"
+            print "            c300xRinging = false"
+            next
+        }
+        $0 == "        onScreenTurnedOn: {" {
+            print
+            print "            if (c300xCallActive || c300xRinging) c300xPreemptAlert()"
+            next
+        }
+        /^        on(Pressed|Released): \{$/ {
+            print
+            print "            c300xAlertUserInteraction()"
             next
         }
         { print }
@@ -972,6 +1018,31 @@ patch_event_manager() {
         'c300xNotifyMediaClosed()' \
         'onCallEnded:'
     mv "$temp_file" "$event_manager"
+}
+
+verify_alert_takeover_hooks() {
+    # A partial/unknown vendor layout must not install an active alert receiver.
+    awk '
+        /^        on(IncomingCall|CallStarted|CallAnswered|CallEnded|CallTypeChanged|RingtoneStarted|RingtoneFinished): \{$/ {
+            key=$1
+            counts[key]++
+            if ((getline next_line) <= 0 || next_line != "            c300xPreemptAlert()") bad=1
+        }
+        $0 == "        onScreenTurnedOn: {" {
+            screens++
+            if ((getline next_line) <= 0 || next_line != "            if (c300xCallActive || c300xRinging) c300xPreemptAlert()") bad=1
+        }
+        /^        on(Pressed|Released): \{$/ {
+            keys++
+            if ((getline next_line) <= 0 || next_line != "            c300xAlertUserInteraction()") bad=1
+        }
+        END {
+            if (bad || screens != 1 || keys != 2 || counts["onIncomingCall:"] != 2 || counts["onCallAnswered:"] != 2 || counts["onCallEnded:"] != 2 || counts["onCallStarted:"] != 1 || counts["onCallTypeChanged:"] != 1 || counts["onRingtoneStarted:"] != 1 || counts["onRingtoneFinished:"] != 1) exit 12
+        }
+    ' "$1" || {
+        printf 'Unsupported EventManager alert takeover hooks; active GUI unchanged\n' >&2
+        return 1
+    }
 }
 
 remove_obsolete_stock_source_files() {
@@ -1048,6 +1119,7 @@ generate_full_patch_stage() {
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
     patch_event_manager
+    verify_alert_takeover_hooks "$STAGING_DIR/EventManager.qml"
     copy_generated_file "C300XRingerControl.qml"
     patch_home_page
     patch_memo_page
@@ -1158,6 +1230,14 @@ patch_main_app() {
         }
         $0 == "Item {" {
             print
+            print "    C300XAlerts {"
+            print "        id: c300xAlerts"
+            print "        anchors.fill: parent"
+            print "        z: 1000"
+            print "        property variant activePage: tabView.current"
+            print "        onActivePageChanged: userInteraction()"
+            print "        blocked: typeof eventManager === \"undefined\" || eventManager.c300xCallActive === undefined || eventManager.c300xCallActive || eventManager.c300xRinging || !global.guiReadyToReceiveCalls || (activePage !== homePage && activePage !== haPage)"
+            print "    }"
             print "    Item {"
             print "        id: c300xDisplayPreferences"
             print "        property bool feedbackEnabled: true"

@@ -1,8 +1,8 @@
 # Changelog
 
-## v2.3.0 - Unreleased
+## v2.3.0 - 2026-11-15
 
-The next stable release after 2.1.3 includes the changes listed under the
+The direct stable update from 2.1.3 includes the changes listed under the
 withdrawn 2.2.0 below. No intermediate upgrade is required.
 
 ### Added
@@ -13,6 +13,14 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
   Media and as the last-image preview in the card and camera entity. The agent
   reads the existing video framebuffer without extra device filesystem writes;
   JPEG conversion and storage take place in HA.
+
+### Changed
+
+- Show the Alarm and Home Assistant display buttons automatically when their
+  configured content is available, in reserved positions that do not move other
+  buttons. Keep their last confirmed visibility during connection failures.
+- Offer optional native-camera two-way audio only on Home Assistant 2026.11 or
+  newer, disabled by default. Talkback in the bundled card is unchanged.
 
 ### Fixed
 
@@ -43,24 +51,30 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
   and before hanging up during capture cleanup.
 - Cancel obsolete codec refreshes when an entity unloads, and prevent failed
   preview transitions from retrying indefinitely or clearing a newer stream.
+- Reject delayed media start, answer and stop commands after their integration
+  instance has unloaded or been replaced; guard audio-gain preparation too.
 - Match notification events to the selected device even when it has no camera
-  entity.
+  entity, including HA's single-entry and composite device representations.
 - Reserve RTSP worker capacity before allocating resources; use private codec
   temporary files and bounded local media command deadlines.
 - Restore invalid agent boot links transactionally and report init failures.
 - Roll back failed GUI file updates and preserve recovery backups when removal
   cannot verify restoration, including user-label-only patches.
+- Use private temporary workspaces for agent removal, and stop before changing
+  device files if preparing that workspace fails.
 
 ### Release Validation
 
 - Bind the packaged native executable to a reviewed local-build hash and source
   digest. Validate transferred agent bytes before rebuilding release assets.
 - Include the snapshot image dependency in the runtime SBOM.
+- Check recording startup, JPEG color ranges and event types using the official
+  HA containers for the minimum and latest stable versions, not only host tools.
 
 ## v2.2.0 - 2026-11-14 (withdrawn)
 
 Withdrawn because the display update can crash the device GUI and cause
-repeated device restarts. The latest published stable release is 2.1.3.
+repeated device restarts. Skip this version and update directly to 2.3.0.
 
 ### Added
 

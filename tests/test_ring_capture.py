@@ -1036,6 +1036,13 @@ def test_capture_ffmpeg_video_only_disables_audio(
     )
 
     assert "-an" in commands[0]
+    input_options = commands[0][:commands[0].index("-i")]
+    assert input_options.count("-fflags") == 1
+    assert input_options[input_options.index("-fflags") + 1] == "+genpts"
+    assert "nobuffer" not in input_options
+    assert "low_delay" not in input_options
+    assert input_options[input_options.index("-probesize") + 1] == "1048576"
+    assert input_options[input_options.index("-analyzeduration") + 1] == "5000000"
     assert len(commands) == 5
     assert [cmd[-1] for cmd in commands[2:]] == [
         str(tmp_path / "work" / "frame_01.jpg"),

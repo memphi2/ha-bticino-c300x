@@ -71,6 +71,8 @@ RING_CAPTURE_PLAYBACK_MIME_TYPE = "video/mp4"
 _CAPTURE_FRAME_COUNT = 3
 _CAPTURE_FRAME_START_SECONDS = 1.0
 _CAPTURE_FRAME_END_MARGIN_SECONDS = 0.2
+_CAPTURE_PROBE_BYTES = 1024 * 1024
+_CAPTURE_PROBE_MICROSECONDS = 5_000_000
 DEFAULT_RING_CAPTURE_METADATA_GLOB = "/config/c300x/*.capture.json"
 
 
@@ -852,14 +854,12 @@ async def _async_run_ffmpeg(
         "tcp",
         "-timeout",
         "5000000",
-        "-fflags",
-        "nobuffer",
-        "-flags",
-        "low_delay",
+        # A ring can be joined before its next SPS/PPS. Keep the analysed
+        # packets and bound discovery independently of the short recording.
         "-probesize",
-        "32768",
+        str(_CAPTURE_PROBE_BYTES),
         "-analyzeduration",
-        "0",
+        str(_CAPTURE_PROBE_MICROSECONDS),
         "-t",
         str(duration_seconds),
         "-i",

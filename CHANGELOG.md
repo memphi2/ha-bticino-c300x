@@ -16,6 +16,8 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 
 ### Fixed
 
+- Allow a bounded wait for H.264 parameter sets when recording a ring already
+  in progress, preventing MP4 startup failures with missing video dimensions.
 - Keep visitor images when the device display performs a normal framebuffer
   page flip during capture, instead of discarding the completed snapshot.
 - Convert extracted capture frames explicitly to full color range before JPEG

@@ -1177,6 +1177,55 @@ def test_qml_patch_apply_reports_reload_failure_without_patched_state(
     _assert_complete_gui_patch(gui_dir)
 
 
+def test_qml_patch_starts_the_gui_outside_its_own_process_group(tmp_path: Path) -> None:
+    """The restarted GUI must outlive a patch job that is killed for its time limit.
+
+    The agent runs the script in a process group of its own and kills that
+    group when the limit passes. A GUI started inside the group would be
+    killed with it, right after it was restarted.
+    """
+
+    gui_dir = tmp_path / "gui"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    seen = tmp_path / "wrapper-session"
+    wrapper = tmp_path / "gui-wrapper"
+    wrapper.write_text(f'echo "$$ $(ps -o sid= -p $$)" > "{seen}"\n')
+
+    result = _run_qml_patch_raw(
+        tmp_path, gui_dir, tmp_path / "backups", "apply",
+        env_overrides={
+            "C300X_QML_RELOAD_GUI": "1",
+            "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "1",
+            "C300X_QML_GUI_WRAPPER": str(wrapper),
+        },
+    )
+
+    result.check_returncode()
+    pid, session = seen.read_text().split()
+    assert session == pid
+
+
+def test_qml_patch_names_a_missing_display_file_and_leaves_no_staging(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    source_dir = tmp_path / "source"
+    _copy_source_tree(source_dir)
+    (source_dir / "C300XEnergy.qml").unlink()
+    staging = tmp_path / "staging"
+
+    result = _run_qml_patch_raw(
+        tmp_path, gui_dir, tmp_path / "backups", "apply", source_dir=source_dir,
+        env_overrides={"C300X_QML_STAGING_DIR": str(staging)},
+    )
+
+    assert result.returncode != 0
+    assert "C300XEnergy.qml" in result.stderr
+    assert not staging.exists()
+    assert not (gui_dir / "HomeAssistant.qml").exists()
+
+
 def test_qml_patch_remounts_ro_after_write_action(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"

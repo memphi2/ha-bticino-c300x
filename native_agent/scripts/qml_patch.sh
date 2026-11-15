@@ -218,9 +218,15 @@ reload_gui() {
         return 0
     fi
     if [ -f "$GUI_WRAPPER" ]; then
+        # A session of its own: the agent kills this script's process group
+        # when a job passes its time limit, and the GUI must outlive that.
+        gui_session=
+        if command -v setsid >/dev/null 2>&1; then
+            gui_session=setsid
+        fi
         (
             cd "$GUI_ROOT"
-            /bin/sh "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
+            $gui_session /bin/sh "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
         )
     fi
     sleep "$GUI_RELOAD_DELAY_SECONDS"
@@ -247,6 +253,9 @@ remount_ro() {
 finish_write_action() {
     write_rc=$?
     trap - EXIT HUP INT TERM
+    if [ "$write_rc" != "0" ]; then
+        cleanup_staging
+    fi
     recovery_ok=1
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
@@ -359,7 +368,10 @@ install_file() {
     backup_mode="${2:-original}"
     install_src="$SOURCE_DIR/$install_rel"
     install_dest="${PATCH_OUTPUT_DIR:-$GUI_DIR}/$install_rel"
-    [ -f "$install_src" ]
+    if [ ! -f "$install_src" ]; then
+        printf 'Missing display source file: %s\n' "$install_rel" >&2
+        return 1
+    fi
     if [ "$backup_mode" = "original" ]; then
         backup_file "$install_rel"
     fi
@@ -998,6 +1010,7 @@ cleanup_staging() {
 
 generate_core_patch_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
@@ -1014,6 +1027,7 @@ copy_generated_feature_files() {
 
 generate_feature_patch_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR/js"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
@@ -1027,6 +1041,7 @@ generate_feature_patch_stage() {
 
 generate_full_patch_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR/js"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
@@ -1042,6 +1057,7 @@ generate_full_patch_stage() {
 
 generate_media_user_label_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR/Components/Settings"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR

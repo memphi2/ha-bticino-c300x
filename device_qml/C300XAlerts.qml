@@ -10,14 +10,43 @@ Item {
     property variant controller: null
     property variant notice: null
     property variant pendingRequest: null
+    property int pollGeneration: 0
+    property int resumeAttempts: 5
     property variant ackRequest: null
     property string acknowledgeLabel: "OK"
     property color accent: !notice || notice.severity === "info" ? "#68baff" : notice.severity === "warning" ? "#f1c40f" : "#ff6b6b"
-    onBlockedChanged: if (blocked) preempt()
-    onVisibleChanged: if (!visible) preempt()
+    onBlockedChanged: updateGuard()
+    onVisibleChanged: updateGuard()
+
+    function canListen() {
+        return !stopped && !blocked && visible && controller !== null
+    }
+
+    function updateGuard() {
+        if (blocked || !visible) preempt()
+        else if (canListen()) {
+            reconnect.stop()
+            resumeAttempts = 5
+            resume.restart()
+        }
+    }
+
+    function abortPoll() {
+        pollGeneration += 1
+        var request = pendingRequest
+        pendingRequest = null
+        if (request) { request.onreadystatechange = function() {}; request.abort() }
+    }
 
     function preempt() {
+        abortPoll()
+        reconnect.stop()
+        resume.stop()
         if (controller) controller.preempt()
+        // Call hooks can run before their guard bindings change, or without a
+        // guard transition. Yield once for both bindings and socket teardown.
+        resumeAttempts = 5
+        if (canListen()) resume.restart()
     }
 
     function userInteraction() {
@@ -50,11 +79,14 @@ Item {
     }
 
     function waitForCommand() {
-        if (stopped || pendingRequest) return
+        if (!canListen() || pendingRequest) return
+        reconnect.stop()
+        resume.stop()
+        var generation = pollGeneration
         var request = new XMLHttpRequest()
         pendingRequest = request
         request.onreadystatechange = function() {
-            if (stopped || pendingRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
+            if (!canListen() || generation !== pollGeneration || pendingRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
             pendingRequest = null
             var valid = false
             if (request.status === 200 && request.responseText.length <= 16384) {
@@ -64,8 +96,12 @@ Item {
                     if (valid && controller) controller.receive(command)
                 } catch (error) { valid = false }
             }
-            if (valid) waitForCommand()
-            else reconnect.restart()
+            if (!canListen() || generation !== pollGeneration) return
+            if (valid) { resumeAttempts = 5; waitForCommand() }
+            else if (request.status === 409 && resumeAttempts > 0) {
+                resumeAttempts -= 1
+                resume.restart()
+            } else reconnect.restart()
         }
         try {
             request.open("GET", "http://127.0.0.1:8090/ui/alerts/next", true)
@@ -75,7 +111,7 @@ Item {
             pendingRequest = null
             request.onreadystatechange = function() {}
             request.abort()
-            if (!stopped) reconnect.restart()
+            if (canListen() && generation === pollGeneration) reconnect.restart()
         }
     }
 
@@ -129,10 +165,9 @@ Item {
         if (controller) controller.destroy()
         effects.stop()
         reconnect.stop()
+        resume.stop()
         abortAcknowledgement()
-        var request = pendingRequest
-        pendingRequest = null
-        if (request) { request.onreadystatechange = function() {}; request.abort() }
+        abortPoll()
         controller = null
     }
 
@@ -142,6 +177,7 @@ Item {
     }
     Timer { id: effects; interval: 250; repeat: true; onTriggered: if (root.controller) root.controller.tick() }
     Timer { id: reconnect; interval: 30000; repeat: false; onTriggered: root.waitForCommand() }
+    Timer { id: resume; interval: 100; repeat: false; onTriggered: root.waitForCommand() }
     Timer { id: ackTimeout; interval: 10000; repeat: false; onTriggered: root.abortAcknowledgement() }
     Component.onCompleted: initialize()
     Component.onDestruction: shutdown()

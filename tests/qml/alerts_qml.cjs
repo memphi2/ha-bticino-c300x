@@ -46,9 +46,10 @@ function fixture() {
     vm.runInContext(js.replace(/^\.pragma library\s*/, ""), engine);
     const context = vm.createContext({
         blocked: false, stopped: false, visible: true, controller: null, notice: null,
-        pendingRequest: null, ackRequest: null, XMLHttpRequest: XHR, Alerts: engine,
+        pendingRequest: null, pollGeneration: 0, resumeAttempts: 5,
+        ackRequest: null, XMLHttpRequest: XHR, Alerts: engine,
         Date: class extends Date { getTime() { return BASE; } },
-        effects: timer(), reconnect: timer(), ackTimeout: timer(), messageScroll: {contentY: 77},
+        effects: timer(), reconnect: timer(), resume: timer(), ackTimeout: timer(), messageScroll: {contentY: 77},
         ScreenState: {ScreenOff: 0, Normal: 2}, AudioState: {Idle: 0, Beep: 1, RingtoneMute: 4},
         global: {audioState: audio, screenState: {state: 2, screensaverInterval: 20000,
             simulateClick() { events.push("wake"); }, disableState() { events.push("release"); }},
@@ -57,6 +58,7 @@ function fixture() {
     context.root = context;
     vm.runInContext(methods, context);
     return {c: context, requests, events, audio,
+        resume() { assert.equal(context.resume.running, true); context.resume.running = false; context.waitForCommand(); },
         failOpen(value) { failOpen = value; }, failSend(value) { failSend = value; }};
 }
 
@@ -111,7 +113,7 @@ for (const blocked of ["blocked", "stopped"]) {
     assert.equal(f.events.slice(calls).filter(e => e === "beep").length, 0, "no replay after preempt");
     f.c.shutdown(); assert.ok(f.requests.at(-1).aborted);
 }
-for (const response of [[500, {}], [409, {}], [200, "invalid json"], [200, {...payload, unknown: 1}],
+for (const response of [[500, {}], [200, "invalid json"], [200, {...payload, unknown: 1}],
     [200, {...payload, expires: BASE}], [200, "x".repeat(16385)]]) {
     const f = fixture(); f.c.initialize(); f.requests[0].complete(...response);
     assert.equal(f.requests.length, 1); assert.equal(f.c.pendingRequest, null);
@@ -124,12 +126,56 @@ for (const fault of ["failOpen", "failSend"]) {
     assert.equal(f.c.pendingRequest, null); assert.equal(f.c.reconnect.running, true);
     assert.equal(f.requests[0].aborted, true); f.c.shutdown();
 }
-{
-    const f = fixture(); f.c.blocked = true; f.c.initialize(); f.requests[0].complete(200, payload);
-    assert.equal(f.requests.length, 2); assert.equal(f.c.notice, null);
-    assert.equal(f.events.includes("wake"), false); assert.equal(f.events.includes("beep"), false);
-    f.c.blocked = false; f.requests[1].complete(200, payload); assert.equal(f.c.notice, null);
+for (const guard of ["blocked", "visible"]) {
+    const f = fixture(); f.c[guard] = guard === "blocked"; f.c.initialize();
+    assert.equal(f.requests.length, 0, "no initial listener on protected or hidden page");
+    f.c[guard] = guard !== "blocked"; f.c.updateGuard();
+    assert.equal(f.requests.length, 0, "guard clear yields for socket teardown");
+    f.resume(); assert.equal(f.requests.length, 1);
+    const old = f.c.pendingRequest, stale = old.onreadystatechange;
+    f.c[guard] = guard === "blocked"; f.c.updateGuard();
+    assert.equal(old.aborted, true); assert.equal(f.c.pendingRequest, null);
+    assert.equal(f.c.resume.running, false); assert.equal(f.c.reconnect.running, false);
+    f.c.waitForCommand(); assert.equal(f.requests.length, 1);
+    f.c[guard] = guard !== "blocked"; f.c.updateGuard(); f.resume();
+    const current = f.c.pendingRequest;
+    old.status = 200; old.responseText = JSON.stringify(payload); old.readyState = 4;
+    stale();
+    assert.equal(f.c.pendingRequest, current, "old callback cannot steal resumed listener");
+    assert.equal(f.c.notice, null); assert.equal(f.events.includes("wake"), false);
+    assert.equal(f.events.includes("beep"), false);
+    current.complete(200, payload); assert.equal(f.c.notice.title, payload.title);
     f.c.shutdown();
+}
+{
+    const f = fixture(); f.c.initialize(); const old = f.c.pendingRequest;
+    const stale = old.onreadystatechange;
+    f.c.preempt();
+    assert.equal(old.aborted, true); assert.equal(f.requests.length, 1);
+    f.resume(); assert.equal(f.requests.length, 2, "call hook without guard change resumes once");
+    old.status = 200; old.responseText = JSON.stringify(payload); old.readyState = 4;
+    stale(); assert.equal(f.c.notice, null);
+    f.c.pendingRequest.complete(409, {});
+    assert.equal(f.c.reconnect.running, false, "hangup/re-arm race must not deafen for 30 seconds");
+    for (let attempt = 0; attempt < 5; attempt++) {
+        f.resume(); f.c.pendingRequest.complete(409, {});
+    }
+    assert.equal(f.c.resume.running, false, "busy retries are bounded");
+    assert.equal(f.c.reconnect.running, true);
+    f.c.blocked = true; f.c.updateGuard();
+    assert.equal(f.c.reconnect.running, false);
+    f.c.blocked = false; f.c.updateGuard(); f.resume();
+    assert.equal(f.c.resumeAttempts, 5);
+    f.c.pendingRequest.complete(200, payload); assert.equal(f.c.notice.title, payload.title);
+    f.c.shutdown(); assert.equal(f.c.resume.running, false);
+}
+{
+    const f = fixture(); f.c.initialize();
+    f.audio.onEnable = () => f.c.preempt();
+    f.c.pendingRequest.complete(200, payload);
+    assert.equal(f.c.notice, null); assert.equal(f.requests.length, 1,
+        "preemption during receive must not immediately re-arm old generation");
+    assert.equal(f.c.resume.running, true); f.c.shutdown();
 }
 {
     const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload);
@@ -165,9 +211,11 @@ for (const fault of ["failOpen", "failSend"]) {
 }
 
 assert.match(qml, /property bool blocked: true/);
-assert.match(qml, /onBlockedChanged: if \(blocked\) preempt\(\)/);
+assert.match(qml, /onBlockedChanged: updateGuard\(\)/);
+assert.match(qml, /onVisibleChanged: updateGuard\(\)/);
 assert.match(qml, /onStateChangedInt: if \(root.controller\) root.controller.screenChanged\(\)/);
 assert.match(qml, /id: reconnect; interval: 30000; repeat: false/);
+assert.match(qml, /id: resume; interval: 100; repeat: false/);
 assert.match(qml, /id: ackTimeout; interval: 10000; repeat: false/);
 assert.match(qml, /onPressed: root.userInteraction\(\)/);
 assert.match(qml, /onClicked: root.acknowledge\(\)/);

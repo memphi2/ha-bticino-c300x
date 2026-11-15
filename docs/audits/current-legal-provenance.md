@@ -1,9 +1,9 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-14. Integration and native agent `2.3.0`, prepared as
-the direct stable successor to `v2.1.3`, with display additions, visitor images
-and review corrections. This report covers the local source tree, not a newly
-published release.
+Source review: 2026-11-15. Integration and native agent `2.4.0`, the successor
+to `v2.3.0`, adding the optional display energy page and configurable visitor
+images. This report covers the local source tree, not a newly published
+release.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.
@@ -67,7 +67,9 @@ protect that archive. Retention and storage limits are documented separately
 from backup retention.
 
 The English display examples are edited from maintainer-provided photographs,
-with AI-assisted perspective correction and localization. They are illustrative
+with AI-assisted perspective correction and localization;
+`display-energy-en.webp` is a Qt-rendered preview of the project's own energy
+page with synthetic values and a mock frame, without vendor assets. They are illustrative
 documentation assets, not extracted firmware files or exact runtime captures.
 
 ## Not Verified Here

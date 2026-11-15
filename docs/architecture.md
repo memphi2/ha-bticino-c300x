@@ -16,7 +16,8 @@ Path: `custom_components/bticino_c300x/`
 
 Responsibilities:
 
-- Config flow and options flow.
+- Config flow and options flow. The options flow is a settings menu: each area
+  saves when it is submitted and returns to the menu; Done closes it.
 - Capability-gated entities/services.
 - Authenticated API calls to the device agent.
 - Event webhook registration and event-state handling.
@@ -28,6 +29,18 @@ Display requests use `dashboard.py` to assemble read-only payloads. User command
 go through `executor.py`, also used by the existing service use cases. Both use
 `dashboard_config.py` for the configured allowlist and `alarm_state.py` for alarm
 readiness and code policy; neither shared module imports the command executor.
+
+The optional energy page uses pure formatters in `dashboard_energy.py` and
+`dashboard_energy_charts.py`. `dashboard_energy_data.py` reads HA's Energy setup
+and daily recorder statistics; `dashboard_energy_power.py` aggregates recorded
+power into 15-minute curves. These reads share bounded, five-minute caches in
+HA RAM, only while their views are enabled. Shared daily data is retained when
+another enabled view still needs it; disabling all views releases both caches
+and stops new reads. Nothing is recorded or stored additionally on the C300X.
+`dashboard_energy_updates.py` owns subscriptions and the existing five-minute
+refresh; only the Now view subscribes to live power changes, throttled to ten
+seconds. Unloading releases these resources. `C300XEnergy.qml` draws the page
+only while open and creates curve segments only for the visible Power view.
 
 Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
 agent API. `resources` owns its tasks, subscriptions and media preparation
@@ -57,7 +70,7 @@ Responsibilities:
 - Local `/api/v1` HTTP API with bearer auth.
 - Push callbacks for ring/lock/call/ringer/forwarding/video-message/memo events.
 - OpenWebNet command execution.
-- Optional local media doorstation media module.
+- Optional local doorstation media module.
 - Optional display bridge endpoint for QML dashboard requests.
 - Explicit maintenance/update actions for device-agent, display, firewall, MQTT
   migration and media-user setup.
@@ -126,9 +139,13 @@ The agent's authenticated snapshot endpoint checks that the media process is
 using `/dev/fb0`, validates framebuffer geometry and reads it without changing
 display state. A normal full-frame vertical page flip during the read is
 accepted; changes to the framebuffer layout, pixel format or media ownership
-still reject the image. It returns a bounded in-memory BMP; no device file is
-created.
-HA validates and converts it to JPEG in an executor. `snapshot_store.py` owns
+still reject the image. It returns a bounded in-memory BMP in exactly the
+width and height the request names (at most the 800x480 display), mixing
+neighbouring columns when the image is narrower than the display; no device
+file is created.
+HA requests the configured size, validates the image, optionally writes the
+capture time into it and encodes it as JPEG once in an executor, without
+rescaling it. The store checks the JPEG and keeps it as it is. `snapshot_store.py` owns
 per-entry storage, quota and expiry under the same HA media root as recordings.
 `snapshot_http.py` applies authentication and camera read permissions; Media
 Source exposes retained images without depending on an open frontend.
@@ -156,7 +173,8 @@ explicit user actions:
 - Home Assistant media-user setup or repair,
 - forwarding, ringer, answering-machine and memo/message commands,
 - Display patch and GUI reload,
-- firewall and MQTT maintenance,
+- firewall, MQTT, audio codec, SSH and reboot maintenance,
+- the display's local HA feedback preference,
 - configured device activation synchronization.
 
 ## Design Constraints

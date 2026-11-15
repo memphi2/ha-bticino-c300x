@@ -22,10 +22,22 @@ REMOVE_WORK="$(mktemp -d "${TMPDIR:-/tmp}/c300x-remove-agent.XXXXXX")" || {
     printf 'Cannot create private removal workspace; keeping agent files and backups in place\n' >&2
     exit 1
 }
+RESTORE_STAGE=""
+ROOT_WRITABLE=0
 cleanup_workspace() {
     cleanup_status=$?
+    cleanup_failed=0
     trap - EXIT HUP INT TERM
-    rm -rf "$REMOVE_WORK"
+    if [ -n "$RESTORE_STAGE" ]; then
+        rm -rf "$RESTORE_STAGE" || cleanup_failed=1
+    fi
+    if [ "$ROOT_WRITABLE" = 1 ]; then
+        mount -o remount,ro / >/dev/null 2>&1 || cleanup_failed=1
+    fi
+    rm -rf "$REMOVE_WORK" || cleanup_failed=1
+    if [ "$cleanup_status" = 0 ]; then
+        cleanup_status=$cleanup_failed
+    fi
     exit "$cleanup_status"
 }
 trap cleanup_workspace EXIT
@@ -47,11 +59,13 @@ start_ssh() {
 }
 
 remount_root_rw() {
-    mount -o remount,rw / >/dev/null 2>&1 || true
+    mount -o remount,rw / >/dev/null 2>&1 || return 1
+    ROOT_WRITABLE=1
 }
 
 remount_root_ro() {
-    mount -o remount,ro / >/dev/null 2>&1 || true
+    mount -o remount,ro / >/dev/null 2>&1 || return 1
+    ROOT_WRITABLE=0
 }
 
 restore_qml() {
@@ -73,6 +87,33 @@ restore_qml() {
     fi
 }
 
+replace_firewall_file() {
+    restore_source="$1"
+    restore_target="$2"
+    if [ -L "$restore_target" ] || { [ -e "$restore_target" ] && [ ! -f "$restore_target" ]; }; then
+        return 1
+    fi
+    # A private sibling directory keeps staging on the destination filesystem.
+    RESTORE_STAGE="$(mktemp -d "${restore_target}.c300x-restore.XXXXXX")" || return 1
+    restore_rc=0
+    if [ -f "$restore_target" ]; then
+        cp -p "$restore_target" "$RESTORE_STAGE/file" || restore_rc=1
+    else
+        : > "$RESTORE_STAGE/file" && chmod 755 "$RESTORE_STAGE/file" || restore_rc=1
+    fi
+    if [ "$restore_rc" = 0 ]; then
+        cat "$restore_source" > "$RESTORE_STAGE/file" &&
+            cmp -s "$restore_source" "$RESTORE_STAGE/file" &&
+            mv -f "$RESTORE_STAGE/file" "$restore_target" || restore_rc=1
+    fi
+    if rm -rf "$RESTORE_STAGE"; then
+        RESTORE_STAGE=""
+    else
+        restore_rc=1
+    fi
+    return "$restore_rc"
+}
+
 remove_managed_block() {
     target="$1"
     begin="$2"
@@ -88,7 +129,7 @@ remove_managed_block() {
         rm -f "$tmp"
         return 1
     fi
-    if ! cat "$tmp" > "$target"; then
+    if ! replace_firewall_file "$tmp" "$target"; then
         rm -f "$tmp"
         return 1
     fi
@@ -101,13 +142,12 @@ restore_file_or_remove_block() {
     begin="$3"
     end="$4"
 
-    remount_root_rw
+    remount_root_rw || return 1
     if [ -f "$backup" ]; then
-        if ! cp "$backup" "$target"; then
+        if ! replace_firewall_file "$backup" "$target"; then
             remount_root_ro
             return 1
         fi
-        chmod 755 "$target" >/dev/null 2>&1 || true
     else
         if ! remove_managed_block "$target" "$begin" "$end"; then
             remount_root_ro
@@ -118,9 +158,13 @@ restore_file_or_remove_block() {
 }
 
 remove_startup() {
-    remount_root_rw
-    rm -f "$INIT_LINK" "$INIT_SCRIPT"
-    remount_root_ro
+    remount_root_rw || return 1
+    startup_rc=0
+    rm -f "$INIT_LINK" "$INIT_SCRIPT" || startup_rc=$?
+    remount_root_ro || {
+        if [ "$startup_rc" = 0 ]; then startup_rc=1; fi
+    }
+    return "$startup_rc"
 }
 
 stop_agent() {
@@ -154,7 +198,10 @@ if ! restore_file_or_remove_block "$IPTABLES" "$IPTABLES_BACKUP" "# c300x-native
 fi
 stop_agent
 restore_media_patches
-remove_startup
+if ! remove_startup; then
+    printf 'Failed to remove startup files; keeping agent files and backups in place\n' >&2
+    exit 1
+fi
 rm -rf "$AGENT_DIR" "$BACKUP_ROOT"
 start_ssh
 schedule_reboot

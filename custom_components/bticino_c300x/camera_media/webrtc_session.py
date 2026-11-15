@@ -56,10 +56,6 @@ class _OwnedSession:
     def requires_explicit_stop(self) -> bool:
         return owner_requires_explicit_stop(self.owner)
 
-    @property
-    def is_doorbell_media(self) -> bool:
-        return owner_is_doorbell_media(self.owner)
-
 
 @dataclass
 class ProviderWebRTCStreamContext(_OwnedSession):

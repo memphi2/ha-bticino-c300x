@@ -1,6 +1,8 @@
 #ifndef C300X_HTTP_UTIL_H
 #define C300X_HTTP_UTIL_H
 
+#include <netinet/in.h>
+
 #include <poll.h>
 #include <stddef.h>
 
@@ -40,14 +42,24 @@ void set_fd_cloexec(int fd);
 void allow_socket_reuse(int fd);
 void close_agent_socket(int fd);
 void c300x_http_send_json(int client_fd, int status, const char *reason, const char *body);
+/* True for a loopback source or one of this host's own IPv4 addresses. The
+ * device's event frames on the UDP event port are sent by its own services. */
+int c300x_udp_source_is_local(const struct sockaddr_in *source);
 
 /* Main-loop HTTP responses only; outbound clients retain send_all_bytes().
  * close_agent_socket() transfers a queued response's fd to the output queue. */
 #define C300X_HTTP_MAX_OUTPUTS 8
-#define C300X_HTTP_OUTPUT_LIMIT (512 * 1024)
-/* Preserve the former eight-times-64-KiB total despite larger memo lists. */
-#define C300X_HTTP_OUTPUT_QUEUE_LIMIT (512 * 1024)
+/* One response may be the largest visitor snapshot (800x480 BMP, about
+ * 1.1 MiB); Home Assistant reads at most the same 1200 KiB. All queued
+ * responses together may hold one such image and, as before the image grew,
+ * 512 KiB of other answers such as a memo list. */
+#define C300X_HTTP_OUTPUT_LIMIT (1200 * 1024)
+#define C300X_HTTP_OUTPUT_QUEUE_LIMIT (C300X_HTTP_OUTPUT_LIMIT + 512 * 1024)
+/* A queued response ends after this time without progress, and in any case
+ * after the total: an image of 1.1 MiB needs more than two seconds on a
+ * weak link. */
 #define C300X_HTTP_OUTPUT_TIMEOUT_MS 2000
+#define C300X_HTTP_OUTPUT_TOTAL_TIMEOUT_MS 10000
 int c300x_http_write(int fd, const char *data, size_t size);
 int c300x_http_outputs_prepare(struct pollfd *fds);
 void c300x_http_outputs_handle(const struct pollfd *fds);

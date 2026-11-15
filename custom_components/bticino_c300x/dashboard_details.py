@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .dashboard_controls import finite_number
+from .dashboard_labels import decimal_text
 
 DETAIL_DOMAINS = frozenset({
     "light", "cover", "climate", "fan", "sensor", "binary_sensor", "media_player",
@@ -31,7 +32,7 @@ def _percentage(value: Any) -> float | None:
     return number if number is not None and 0 <= number <= 100 else None
 
 
-def _display_number(value: Any, precision: Any = None) -> str:
+def _display_number(value: Any, language: str, precision: Any = None) -> str:
     number = finite_number(value)
     if number is None:
         return "?"
@@ -39,11 +40,12 @@ def _display_number(value: Any, precision: Any = None) -> str:
         display = f"{number:.{precision}f}"
     else:
         display = value.strip() if isinstance(value, str) else f"{number:.12g}"
-    return display if len(display) <= 60 else f"{number:.6g}"
+    return decimal_text(display if len(display) <= 60 else f"{number:.6g}", language)
 
 
 def entity_details(
     entity_id: str, state: Any, state_label: str, temperature_unit: str,
+    language: str = "en",
 ) -> dict[str, Any]:
     """Expose bounded display values, never arbitrary entity attributes."""
     domain = entity_id.split(".", 1)[0]
@@ -57,13 +59,13 @@ def entity_details(
     if domain == "cover":
         position = _percentage(attrs.get("current_position"))
         details.update(
-            position=position, value=_display_number(position), unit="%", label="position",
+            position=position, value=_display_number(position, language), unit="%", label="position",
             activity=state.state if state.state in {"opening", "closing", "open", "closed"} else "",
         )
     elif domain == "climate":
         activity = attrs.get("hvac_action")
         details.update(
-            value=_display_number(attrs.get("current_temperature")),
+            value=_display_number(attrs.get("current_temperature"), language),
             unit=temperature_unit, label="current_temperature",
             activity=activity if isinstance(activity, str) and activity in _CLIMATE_ACTIVITIES else "unknown",
         )
@@ -75,7 +77,7 @@ def entity_details(
         if value is not None and 0 <= value <= (255 if domain == "light" else 100) and state.state == "on":
             if domain == "light":
                 value = round(max(0, min(255, value)) * 100 / 255)
-            details.update(value=_display_number(value), unit="%", label="brightness" if domain == "light" else "percentage")
+            details.update(value=_display_number(value, language), unit="%", label="brightness" if domain == "light" else "percentage")
     elif domain == "lock":
         details["activity"] = state.state if state.state in _LOCK_ACTIVITIES else ""
     elif domain == "vacuum":
@@ -84,10 +86,10 @@ def entity_details(
         # The reading is the humidity in the room; the target is a control.
         humidity = _percentage(attrs.get("current_humidity"))
         if humidity is not None:
-            details.update(value=_display_number(humidity), unit="%", label="humidity")
+            details.update(value=_display_number(humidity, language), unit="%", label="humidity")
     elif domain == "water_heater":
         details.update(
-            value=_display_number(attrs.get("current_temperature")),
+            value=_display_number(attrs.get("current_temperature"), language),
             unit=temperature_unit, label="current_temperature",
         )
     elif domain == "valve":
@@ -96,7 +98,7 @@ def entity_details(
         details.update(activity=activity)
         # A valve without a position reads its state, not an unknown number.
         if position is not None:
-            details.update(position=position, value=_display_number(position), unit="%", label="position")
+            details.update(position=position, value=_display_number(position, language), unit="%", label="position")
     elif domain == "media_player":
         # Play/pause is confirmed on this; its button comes and goes with the
         # features a player reports in each state.
@@ -111,7 +113,7 @@ def entity_details(
     elif domain in {"sensor", "binary_sensor"}:
         if domain == "sensor" and finite_number(state.state) is not None:
             details.update(
-                value=_display_number(state.state, attrs.get("suggested_display_precision")),
+                value=_display_number(state.state, language, attrs.get("suggested_display_precision")),
                 unit=str(attrs.get("unit_of_measurement") or "")[:20],
             )
         for attribute, label, unit, maximum in (
@@ -123,5 +125,5 @@ def entity_details(
                 continue
             value = finite_number(attrs.get(attribute))
             if value is not None and value >= 0 and (maximum is None or value <= maximum):
-                details["fields"].append({"label": label, "value": _display_number(value), "unit": unit})
+                details["fields"].append({"label": label, "value": _display_number(value, language), "unit": unit})
     return details

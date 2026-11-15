@@ -35,6 +35,7 @@ from custom_components.bticino_c300x.ring_capture import (
     _async_run_ffmpeg_command,
     _async_talkback_codec_is_pcmu,
     _async_wait_rtsp_ready,
+    _cached_talkback_codec,
     _capture_audio_gain_db,
     _capture_frame_offsets,
     _capture_media_dirs,
@@ -45,13 +46,11 @@ from custom_components.bticino_c300x.ring_capture import (
     _resolve_root,
     _rtsp_url_from_status,
     _safe_c300x_path,
-    _talkback_codec_is_pcmu,
     _validate_duration,
     async_capture_doorbell_ring_call,
     raise_if_ring_capture_blocked,
     ring_capture_media_items,
     ring_capture_media_path,
-    ring_capture_media_source_id,
     ring_capture_media_url,
 )
 from custom_components.bticino_c300x.ring_talkback import (
@@ -337,9 +336,6 @@ def test_ring_capture_media_items_list_local_mp4s(tmp_path: Path) -> None:
     assert ring_capture_media_path(hass, "../bad.mp4") is None
     assert ring_capture_media_url(newer.name) == (
         "/api/bticino_c300x/ring-captures/doorbell_20260719_100001.mp4"
-    )
-    assert ring_capture_media_source_id(newer.name) == (
-        "media-source://bticino_c300x/capture/doorbell_20260719_100001.mp4"
     )
 
 
@@ -721,9 +717,8 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
     assert metadata["raw_wav_path"] == str(
         work_dir / "latest.raw.wav"
     )
-    assert metadata["processed_wav_path"] == str(
-        work_dir / "latest.processed.wav"
-    )
+    # The recording's audio is not decoded a second time into another file.
+    assert "processed_wav_path" not in metadata
     assert metadata["frames"] == [
         str(work_dir / "frame_01.jpg"),
         str(work_dir / "frame_02.jpg"),
@@ -942,20 +937,24 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
 
     command = commands[0]
     audio_filter = command[command.index("-af") + 1]
-    assert "aresample=48000" in audio_filter
-    assert "pan=stereo" in audio_filter
+    # The device audio is neither resampled to another rate nor spread over
+    # two channels; only the codec changes, because MP4 needs AAC.
+    assert audio_filter.startswith("aresample=async=1:first_pts=0")
+    assert "48000" not in audio_filter
+    assert "pan=" not in audio_filter
     assert "dynaudnorm=" not in audio_filter
     assert "alimiter=" in audio_filter
     assert "volume=6dB" in audio_filter
     assert "volume=30dB" not in audio_filter
-    assert command[command.index("-ac") + 1] == "2"
-    assert command[command.index("-ar") + 1] == "48000"
-    assert command[command.index("-b:a") + 1] == "128k"
+    mp4_audio = command[command.index("-af"):command.index("-movflags")]
+    assert "-ac" not in mp4_audio and "-ar" not in mp4_audio
+    assert mp4_audio[mp4_audio.index("-c:a") + 1] == "aac"
+    assert mp4_audio[mp4_audio.index("-b:a") + 1] == "48k"
     assert str(tmp_path / "work" / "latest.raw.wav") in command
-    assert commands[1][-1] == str(tmp_path / "work" / "latest.processed.wav")
-    assert len(commands) == 6
-    assert commands[2][0] == "ffprobe"
-    frame_commands = commands[3:]
+    assert not any("latest.processed.wav" in part for cmd in commands for part in cmd)
+    assert len(commands) == 5
+    assert commands[1][0] == "ffprobe"
+    frame_commands = commands[2:]
     assert [cmd[-1] for cmd in frame_commands] == [
         str(tmp_path / "work" / "frame_01.jpg"),
         str(tmp_path / "work" / "frame_02.jpg"),
@@ -1002,6 +1001,23 @@ def test_capture_ffmpeg_audio_uses_configured_gain(
 
     audio_filter = commands[0][commands[0].index("-af") + 1]
     assert "volume=-4.5dB" in audio_filter
+    assert "alimiter=" in audio_filter
+
+    # At 0 dB the level is not touched at all: no volume step and no limiter.
+    commands.clear()
+    asyncio.run(
+        _async_run_ffmpeg(
+            "rtsp://192.0.2.10:6554/doorbell",
+            tmp_path / "clip.mp4",
+            work_dir=tmp_path / "work",
+            duration_seconds=4,
+            include_audio=True,
+            audio_gain_db=0,
+        )
+    )
+    audio_filter = commands[0][commands[0].index("-af") + 1]
+    assert "volume=" not in audio_filter
+    assert "alimiter" not in audio_filter
 
 
 def test_capture_ffmpeg_video_only_disables_audio(
@@ -1349,21 +1365,11 @@ def _entry_with_codec(codec: str | None) -> Any:
     )
 
 
-def test_talkback_codec_is_pcmu_reads_runtime_event_state() -> None:
-    # Reads the durable codec the select mirrors into runtime state -- not the
-    # entity's live state, which goes unavailable during an agent blip.
-    assert _talkback_codec_is_pcmu(_entry_with_codec("pcmu")) is True
-    assert _talkback_codec_is_pcmu(_entry_with_codec("speex")) is False
-    assert _talkback_codec_is_pcmu(_entry_with_codec("unknown")) is False
-    assert _talkback_codec_is_pcmu(_entry_with_codec(None)) is False
-
-
-def test_talkback_codec_is_pcmu_defaults_false_when_runtime_state_missing() -> None:
-    # The sync helper is cache-only for callers that cannot refresh.
-    assert (
-        _talkback_codec_is_pcmu(types.SimpleNamespace(runtime_data=object())) is False
-    )
-    assert _talkback_codec_is_pcmu(object()) is False
+def test_cached_talkback_codec_survives_missing_runtime_state() -> None:
+    assert _cached_talkback_codec(types.SimpleNamespace(runtime_data=object())) is None
+    assert _cached_talkback_codec(object()) is None
+    assert _cached_talkback_codec(_entry_with_codec("pcmu")) == "pcmu"
+    assert _cached_talkback_codec(_entry_with_codec(None)) is None
 
 
 def test_talkback_codec_is_pcmu_reads_native_status_before_cache() -> None:

@@ -22,7 +22,7 @@ Home Assistant may store:
 - Optional dashboard action configuration supplied by the user.
 - Visitor images in the configured HA media directory. The per-device **Save
   images** switch is enabled by default. A ring or active video session requests
-  one image after 5 seconds; images expire after 14 days by default. Delay and
+  one image after 3 seconds; images expire after 14 days by default. Delay and
   retention are configurable. Storage is additionally limited to 1,000 images
   and 128 MiB per device.
 
@@ -67,6 +67,15 @@ it to HA. HA performs JPEG conversion and storage. Capture does add bounded
 device CPU, RAM and network activity.
 
 ## Video and Audio
+
+Stored answering-machine videos, voice memos and local Ring Capture MP4 files
+can be played by any authenticated Home Assistant user through the integration's
+media endpoints. This is intentional shared-media access: those endpoints do
+not require administrator status or check camera entity permissions. Hiding a
+camera or denying its entity permission does not restrict these recordings.
+Only grant HA access to users trusted to view this shared archive. Playback
+does not grant permission to delete messages or start recordings; those
+services have separate authorization checks.
 
 Doorbell camera handling is local to the device, the native agent, and Home
 Assistant. Users should still treat video/audio streams and Home Assistant

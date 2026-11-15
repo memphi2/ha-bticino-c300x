@@ -15,7 +15,7 @@ Api.startEventWatch = () => {};
 const I18n = library("c300x_i18n.js");
 const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
-const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
+const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", decimalComma: false, runtimeGeneration: 0,
     feedbackColorsEnabled: true, c300xDisplayPreferences: {load() {}},
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
     interactionActive: false, armedCommand: "", listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
@@ -149,6 +149,9 @@ p.dashboardOnline = true;
 assert.equal(p.optionLabel({command: "color"}, "red"), "Red");
 assert.equal(p.optionLabel({command: "fan_mode"}, "custom mode"), "custom mode");
 assert.equal(p.optionLabel({command: "preset_mode"}, "auto"), "auto", "custom preset names remain unchanged");
+assert.equal(p.optionLabel({command: "option", labels: ["Smartphone", "Blockiert"]}, "blocked", 1), "Blockiert", "a select shows the text Home Assistant sent for the option");
+assert.equal(p.optionLabel({command: "option", labels: ["Smartphone"]}, "blocked", 1), "blocked", "a missing text falls back to the option");
+assert.equal(p.optionLabel({command: "option"}, "Night", 1), "Night");
 for (const lang of ["en", "de", "fr", "it"]) {
     const modeLabels = {};
     for (const key of Object.keys(I18n.DETAIL_LABELS[lang])) {
@@ -803,3 +806,54 @@ assert.equal(p.controlLastStep({min: 0, max: 100, step: 33.333333}), 3, "a fan k
 assert.equal(p.controlLastStep({min: 0, max: 1, step: 0.3}), 3, "a range off the grid ends at its last whole step");
 p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
 console.log("Fractional ranges passed");
+p.dashboardPages = [{items: [], energy: {views: [{id: "now", label: "Now"}], nodes: {home: {label: "Home"}}}}, {items: [sw("switch.a")]},
+    {items: [], energy: {nodes: {}}}];
+p.currentPageIndex = 0; p.pageCount = 3;
+Api.loadDashboardPage(p.status, p);
+assert.equal(p.energyVisible, true, "a page with energy views shows the energy file");
+assert.equal(p.energy.views[0].id, "now");
+p.currentPageIndex = 1;
+Api.loadDashboardPage(p.status, p);
+assert.equal(p.energyVisible, false, "an ordinary page unloads the energy file");
+assert.equal(JSON.stringify(p.energy), "{}");
+p.currentPageIndex = 2;
+Api.loadDashboardPage(p.status, p);
+assert.equal(p.energyVisible, false, "energy data without views is not shown");
+p.dashboardPages = []; p.items = []; p.currentPageIndex = 0;
+console.log("Energy page hand-over passed");
+const displayLanguages = ["de", "en", "fr", "it"];
+const keysOf = value => Object.keys(value).sort();
+for (const name of ["CONTROL_LABELS", "DETAIL_LABELS"]) {
+    assert.deepEqual(keysOf(I18n[name]), displayLanguages, name + " covers every display language");
+    for (const lang of displayLanguages) {
+        assert.deepEqual(keysOf(I18n[name][lang]), keysOf(I18n[name].en), name + " is complete in " + lang);
+    }
+}
+for (const [lang, catalog, weather] of [["de", I18n.DE, I18n.WEATHER_DE], ["fr", I18n.FR, I18n.WEATHER_FR], ["it", I18n.IT, I18n.WEATHER_IT]]) {
+    assert.deepEqual(keysOf(catalog), keysOf(I18n.EN), "the display texts are complete in " + lang);
+    assert.deepEqual(keysOf(weather), keysOf(I18n.WEATHER_EN), "the weather texts are complete in " + lang);
+    for (const key of keysOf(I18n.EN)) {
+        assert.ok(String(catalog[key]).length > 0, key + " has a text in " + lang);
+        assert.ok(I18n.text(lang, key).length > 0);
+    }
+}
+assert.notEqual(I18n.text("de", "ha_feedback_colors"), I18n.text("en", "ha_feedback_colors"));
+assert.equal(I18n.text("es", "ha_feedback_colors"), I18n.EN.ha_feedback_colors, "a language without texts shows English");
+const shadowed = keysOf(I18n.EN).filter(key => I18n.CONTROL_LABELS.en[key] || I18n.DETAIL_LABELS.en[key]);
+assert.deepEqual(shadowed, [], "no text is defined twice");
+console.log("Display languages passed");
+// HA's payload selects number formatting independently of the device UI language.
+for (const [language, decimalComma, expected] of [
+    ["en", true, "21,5 C"], ["de", false, "21.5 C"],
+    ["de", true, "21,5 C"], ["fr", true, "21,5 C"],
+    ["it", true, "21,5 C"], ["en", false, "21.5 C"],
+]) {
+    p.uiLanguage = language;
+    Api.dashboard(p.status, p);
+    assert.equal(queue.length, 1);
+    queue.shift().success({...payload("numbers-" + language + "-" + decimalComma), decimalComma});
+    assert.equal(p.decimalComma, decimalComma, "the dashboard applies HA's formatting flag");
+    assert.equal(p.numberText({command: "temperature", unit: "C"}, 21.5), expected);
+    assert.equal(p.numberText({command: "value"}, 7), "7");
+}
+console.log("Number texts passed");

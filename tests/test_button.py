@@ -1410,7 +1410,10 @@ def test_delete_latest_text_memo_button_translates_refresh_failure() -> None:
         try:
             await entity.async_press()
         except HOME_ASSISTANT_ERROR:
-            assert entity.available is False
+            assert entity.available is True
+            task = entry.runtime_data.resources.memos_refresh_task
+            assert task is not None
+            task.cancel()
         else:
             raise AssertionError("memo refresh failure was not translated")
 
@@ -1479,7 +1482,10 @@ def test_delete_latest_video_message_button_translates_refresh_failure() -> None
         try:
             await entity.async_press()
         except HOME_ASSISTANT_ERROR:
-            assert entity.available is False
+            assert entity.available is True
+            task = entry.runtime_data.resources.answering_machine_messages_refresh_task
+            assert task is not None
+            task.cancel()
         else:
             raise AssertionError("video-message refresh failure was not translated")
 
@@ -2025,7 +2031,12 @@ def test_delete_button_recovers_after_a_failed_read_when_the_store_reads_again()
         entity.hass = _FakeHass()
         with pytest.raises(HOME_ASSISTANT_ERROR):
             await entity.async_press()
-        assert entity.available is False
+        # A failed read on press does not lock the button: nothing would
+        # unlock it, as no poll runs and no signal is sent. The background
+        # refresh is scheduled instead.
+        assert entity.available is True
+        assert entry.runtime_data.resources.memos_refresh_task is not None
+        entry.runtime_data.resources.memos_refresh_task.cancel()
 
         # A later refresh by anyone stores a readable payload and signals it.
         entry.runtime_data.memos = {

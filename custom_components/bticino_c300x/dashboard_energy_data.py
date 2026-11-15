@@ -1,0 +1,265 @@
+"""Reads today's energy figures from Home Assistant for the display page.
+
+The meter values come from the recorder's statistics, as they do for Home
+Assistant's own Energy dashboard. Statistics change every five minutes at
+most, so one read is kept for that long: the display asks for its pages on
+every event, and each ask must not cost a database query. The power values
+are plain entity states and always current.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
+from datetime import datetime
+from time import monotonic
+from typing import TYPE_CHECKING, Any, Literal
+
+from homeassistant.core import HomeAssistant
+
+from .dashboard_config import configured_energy_page
+from .dashboard_energy import (
+    ENERGY_VIEW_BALANCE,
+    ENERGY_VIEW_NOW,
+    ENERGY_VIEW_POWER,
+    ENERGY_VIEW_TODAY,
+    EnergyDay,
+    EnergySources,
+    energy_page,
+    energy_sources,
+    power_watts,
+)
+from .dashboard_energy_power import (
+    async_power_history,
+    forget_power_history,
+    power_history_payload,
+)
+from .entry_types import BticinoC300XConfigEntry
+
+if TYPE_CHECKING:
+    from homeassistant.components.recorder.statistics import StatisticsRow
+
+_LOGGER = logging.getLogger(__name__)
+
+ENERGY_STATISTICS_MAX_AGE_SECONDS = 300.0
+_CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
+
+@dataclass
+class _DayCache:
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    read_at: float = float("-inf")
+    key: tuple[str, frozenset[str]] | None = None
+    day: EnergyDay = field(default_factory=EnergyDay)
+
+
+_DAY_CACHE: dict[str, _DayCache] = {}
+
+
+def forget_energy_day(entry_id: str) -> None:
+    """Drop the kept statistics of an entry that is unloaded."""
+
+    _DAY_CACHE.pop(entry_id, None)
+
+
+def expire_energy_day(entry_id: str) -> None:
+    """Refresh on the next request, retaining today's fallback after failure."""
+
+    if (cached := _DAY_CACHE.get(entry_id)) is not None:
+        cached.read_at = float("-inf")
+
+
+def _active_energy_views(entry: BticinoC300XConfigEntry) -> list[str]:
+    """Keep only active view resources, even before an options reload runs."""
+
+    settings = configured_energy_page(entry)
+    views: list[str] = settings["views"] if settings["enabled"] else []
+    if not any(view != ENERGY_VIEW_POWER for view in views):
+        forget_energy_day(entry.entry_id)
+    if ENERGY_VIEW_POWER not in views:
+        forget_power_history(entry.entry_id)
+    return views
+
+
+async def async_configured_energy_sources(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry,
+) -> EnergySources:
+    """Return the sources of the energy page, none while the page is off."""
+
+    if not _active_energy_views(entry):
+        return EnergySources()
+    if "energy" not in getattr(getattr(hass, "config", None), "components", ()):
+        return EnergySources()
+    try:
+        from homeassistant.components.energy.data import async_get_manager
+
+        manager = await async_get_manager(hass)
+    except Exception:  # noqa: BLE001 - the display works without the page
+        _LOGGER.debug("Home Assistant's Energy setup could not be read", exc_info=True)
+        return EnergySources()
+    energy_data = hass.data.get("energy")
+    cost_sensors = energy_data.get("cost_sensors") if isinstance(energy_data, dict) else None
+    return energy_sources(manager.data, cost_sensors)
+
+
+async def async_energy_dashboard_page(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, language: str,
+) -> dict[str, Any] | None:
+    """Return the energy page of the display, or None when there is none."""
+
+    views = _active_energy_views(entry)
+    if not views:
+        return None
+    runtime = getattr(entry, "runtime_data", None)
+
+    def still_active() -> bool:
+        # An in-flight response must not start its next read after unload/reload.
+        return (
+            getattr(entry, "runtime_data", None) is runtime
+            and not getattr(getattr(runtime, "resources", None), "closed", False)
+            and _active_energy_views(entry) == views
+        )
+
+    if not still_active():
+        return None
+    sources = await async_configured_energy_sources(hass, entry)
+    if not still_active():
+        return None
+    if not sources.any:
+        forget_energy_day(entry.entry_id)
+        forget_power_history(entry.entry_id)
+        return None
+    day_sources = sources
+    if ENERGY_VIEW_TODAY not in views and ENERGY_VIEW_BALANCE not in views and sources.cost_stats:
+        day_sources = replace(
+            sources,
+            grid_from=tuple(replace(meter, cost_stat=None) for meter in sources.grid_from),
+            grid_to=tuple(replace(meter, cost_stat=None) for meter in sources.grid_to),
+        )
+    day = (
+        await _async_energy_day(hass, entry.entry_id, day_sources, still_active)
+        if any(view != ENERGY_VIEW_POWER for view in views) else EnergyDay()
+    )
+    if not still_active():
+        return None
+    power = {
+        entity_id: power_watts(hass.states.get(entity_id))
+        for entity_id in sources.power_entities
+    } if ENERGY_VIEW_NOW in views else {}
+    currency = str(getattr(hass.config, "currency", "") or "")
+    page = energy_page(
+        sources, day, power,
+        language=language,
+        views=views,
+        currency=_CURRENCY_SYMBOLS.get(currency, currency),
+    )
+    if page is not None and ENERGY_VIEW_POWER in views:
+        history = await async_power_history(hass, entry, sources)
+        if history is not None:
+            page["energy"]["power"] = power_history_payload(sources, history, language)
+    return page if still_active() else None
+
+
+async def _async_energy_day(
+    hass: HomeAssistant, entry_id: str, sources: EnergySources,
+    active: Callable[[], bool] | None = None,
+) -> EnergyDay:
+    from homeassistant.util import dt as dt_util
+
+    if active is not None and not active():
+        return EnergyDay()
+    cached = _DAY_CACHE.setdefault(entry_id, _DayCache())
+
+    def can_read() -> bool:
+        return _DAY_CACHE.get(entry_id) is cached and (active is None or active())
+
+    async with cached.lock:
+        if not can_read():
+            return EnergyDay()
+        start = dt_util.start_of_local_day()
+        key = (start.isoformat(), frozenset(sources.energy_stats | sources.cost_stats))
+        if cached.key == key and monotonic() - cached.read_at < ENERGY_STATISTICS_MAX_AGE_SECONDS:
+            return cached.day
+        try:
+            day = await _async_read_energy_day(hass, start, sources, can_read)
+        except Exception:  # noqa: BLE001 - retry at the next statistics interval
+            _LOGGER.debug("Energy statistics could not be read", exc_info=True)
+            day = cached.day if cached.key == key else EnergyDay()
+        if not can_read():
+            return EnergyDay()
+        cached.key, cached.day, cached.read_at = key, day, monotonic()
+        # Unload can remove this cache while the read is pending. Do not put it back.
+        return day
+
+
+async def _async_read_energy_day(
+    hass: HomeAssistant, start: datetime, sources: EnergySources,
+    active: Callable[[], bool] | None = None,
+) -> EnergyDay:
+    from homeassistant.components.recorder.statistics import statistics_during_period
+    from homeassistant.helpers.recorder import get_instance
+    from homeassistant.util import dt as dt_util
+
+    statistic_ids = sources.energy_stats | sources.cost_stats
+    recorder = get_instance(hass)
+
+    async def read(
+        since: datetime, period: Literal["hour", "5minute"],
+    ) -> dict[str, list[StatisticsRow]]:
+        # A submitted SQL job may finish; a retired request must not submit another.
+        if active is not None and not active():
+            return {}
+        return await recorder.async_add_executor_job(
+            statistics_during_period,
+            hass, since, None, statistic_ids, period, {"energy": "kWh"}, {"change"},
+        )
+
+    hourly = await read(start, "hour")
+    # The running hour has no hourly statistic yet; its five-minute ones
+    # bring the figures up to date.
+    covered = {
+        statistic_id: max(
+            (float(row["end"]) for row in hourly.get(statistic_id, ()) if row.get("end") is not None),
+            default=start.timestamp(),
+        )
+        for statistic_id in statistic_ids
+    }
+    recent = await read(dt_util.utc_from_timestamp(min(covered.values(), default=start.timestamp())), "5minute")
+    # Each meter can lag behind independently. Fill its own uncovered tail,
+    # without counting another meter's already summarized intervals twice.
+    recent = {
+        statistic_id: [
+            row for row in rows
+            if row.get("start") is not None
+            and float(row["start"]) >= covered.get(statistic_id, start.timestamp())
+        ]
+        for statistic_id, rows in recent.items()
+    }
+    return energy_day_from_statistics(
+        sources, (hourly, recent),
+        lambda timestamp: dt_util.as_local(dt_util.utc_from_timestamp(timestamp)).hour,
+    )
+
+
+def energy_day_from_statistics(
+    sources: EnergySources,
+    results: tuple[dict[str, list[StatisticsRow]], ...],
+    local_hour: Any,
+) -> EnergyDay:
+    """Sort the changes of each statistic into the local hours of the day."""
+
+    costs = sources.cost_stats
+    day = EnergyDay()
+    for result in results:
+        for statistic_id, rows in result.items():
+            for row in rows:
+                change = row.get("change")
+                if change is None or row.get("start") is None:
+                    continue
+                if statistic_id in costs:
+                    day.costs[statistic_id] = day.costs.get(statistic_id, 0.0) + float(change)
+                    continue
+                hours = day.hours.setdefault(statistic_id, [0.0] * 24)
+                hours[int(local_hour(float(row["start"]))) % 24] += float(change)
+    return day

@@ -113,7 +113,9 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "build_ring_sdp(sdp_early" in ring_invite_body
     assert "build_ring_sdp(sdp_answer" in ring_invite_body
     assert "bridge->ring_srtp_state = srtp_ready ? &srtp : NULL;" in ring_invite_body
-    assert "start_call_talkback(bridge)" in ring_invite_body
+    assert "start_talkback_proxy(bridge)" in ring_invite_body
+    # The ring must not wait for a session start that holds the lifecycle lock.
+    assert "media_lifecycle_mutex" not in ring_invite_body
     # Ring answer is codec-configurable: the audio m-line payload is %s
     # (speex "96" by default, PCMU "0" opt-in), the speex rtpmap+fmtp are one
     # literal, and PCMU has its own rtpmap.
@@ -325,7 +327,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "sdp = home_call_audio" in rtsp_body
     assert "request_home_call_media_if_active" in rtsp_body
     assert "wait_for_ring_session_active(&g_bridge, 1500)" in rtsp_body
-    assert "send_rtsp_response(fd, 503, cseq, NULL, NULL);" in rtsp_body
+    assert "send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);" in rtsp_body
     assert "if (!ring_session && !home_call_session) {" in rtsp_body
     assert "c300x_media_session_stop_in_progress(g_bridge.video)" in rtsp_body
     assert "c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)" in rtsp_body
@@ -478,7 +480,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "c300x_device_media_start" not in home_call_body
     assert "c300x_device_media_takeover" not in home_call_body
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
-    assert "start_call_talkback(bridge)" in home_call_thread
+    assert "start_talkback_proxy(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread
     assert "DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in drain_home_call_body
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
@@ -512,15 +514,23 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
     assert media_bridge.count('"a=sendonly\\r\\n"') == 3
     assert 'dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL)' in speex_body
     assert "speex_encode_int" in speex_body
-    assert "c300x_pcma_decode(sample)" in pcm_body
-    assert "c300x_pcmu_decode(sample)" in pcm_body
+    # The per-sample G.711 handling lives in its own module; a PCMU device
+    # gets PCMU input copied, everything else is decoded for the encoder.
+    talkback_g711 = (ROOT / "native_agent" / "src" / "talkback_g711.c").read_text(
+        encoding="utf-8"
+    )
+    assert "c300x_talkback_g711_store(" in pcm_body
+    assert "payload + offset, take, pcma, pcmu && !pcma" in pcm_body
+    assert "c300x_talkback_g711_pcmu(" in pcm_body
+    assert "c300x_pcma_decode(input[index])" in talkback_g711
+    assert ": copy ? input[index] : c300x_pcmu_decode(input[index]);" in talkback_g711
     assert "int16_t c300x_pcma_decode(" in media_audio
     assert "int16_t c300x_pcmu_decode(" in media_audio
     assert "while (offset < payload_len)" in pcm_body
     assert "RTSP_BACKCHANNEL_FRAME_SAMPLES - bridge->talkback_pcm_count" in pcm_body
     assert "bridge->talkback_pcm_seq_initialized" in pcm_body
     assert "bridge->talkback_pcm_next_seq = (uint16_t)(sequence + 1);" in pcm_body
-    assert "bridge->talkback_pcm_buffer[bridge->talkback_pcm_count + index]" in pcm_body
+    assert "bridge->talkback_pcm_buffer + bridge->talkback_pcm_count" in pcm_body
     assert "bridge->talkback_pcm_count = 0;" in pcm_body
     assert "queue_talkback_payload_locked(" in pcm_body
     assert "send_queued_talkback_payload_locked(" in media_bridge
@@ -623,8 +633,8 @@ def test_native_agent_ondemand_rtsp_client_receives_media_after_play_response() 
     assert play_body.index("slot->played = false;") < play_body.index(
         "start_media_session(&g_bridge)"
     )
-    assert "send_rtsp_response(fd, 200, cseq, headers, NULL);" in play_body
-    assert play_body.index("send_rtsp_response(fd, 200, cseq, headers, NULL);") < (
+    assert "send_rtsp_response(writer, fd, 200, cseq, headers, NULL);" in play_body
+    assert play_body.index("send_rtsp_response(writer, fd, 200, cseq, headers, NULL);") < (
         play_body.rindex("slot->played = true;")
     )
 
@@ -999,7 +1009,7 @@ def test_native_agent_explicit_ondemand_stop_parks_persistent_rtsp_source() -> N
     assert "slot->fd = fd;" in register_body
     assert "c300x_rtsp_client_slots_active_count" in logical_count_body
     assert "slot->fd == fd" in rtsp_clients_header
-    assert "if (!slot->active || slot->fd < 0 || slot->parked || !slot->played)" in send_targets_body
+    assert "if (!slot->active || slot->fd < 0 || slot->parked || !slot->played || slot->writer == NULL)" in send_targets_body
     assert "(void)park_rtsp_clients_locked(bridge);" in stop_helper_body
     assert "*drain_clients = true;" in stop_helper_body
     assert "int evicted_clients = 0;" in rtsp_body
@@ -1239,7 +1249,7 @@ def test_native_agent_rtsp_answers_instead_of_closing_on_missing_client_slot() -
 
     assert len(slot_missing_blocks) == 3
     for block in slot_missing_blocks:
-        assert "send_rtsp_response(fd, 503, cseq, NULL, NULL);" in block
+        assert "send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);" in block
 
     # Each path records its own reason. A rejected registration never reaches
     # this loop (453 + close before the first request), so reaching DESCRIBE

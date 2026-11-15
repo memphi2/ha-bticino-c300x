@@ -252,8 +252,14 @@ void c300x_ui_events_handle_pollfds(
     int index;
 
     for (index = 0; index < poll_count; index++) {
+        int slot = poll_slots[index];
+        /* Earlier request handling can replace a waiter after poll(). */
+        if (slot < 0 || slot >= C300X_UI_EVENT_MAX_WAITERS
+            || events->waiters[slot].fd != poll_fds[index].fd) {
+            continue;
+        }
         if ((poll_fds[index].revents & (POLLIN | C300X_SOCKET_CLOSED_REVENTS)) != 0) {
-            close_waiter(events, (size_t)poll_slots[index], 0, send_json_fn, ctx);
+            close_waiter(events, (size_t)slot, 0, send_json_fn, ctx);
         }
     }
 }

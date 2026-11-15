@@ -119,6 +119,24 @@ int main(int argc, char **argv)
     struct c300x_config *loaded = calloc(1, sizeof(*loaded));
     assert(config && loaded);
     c300x_default_config(config);
+    {
+        /* The API setter refuses what the loader would refuse at the next
+         * start: duplicate ids and a lock without any way to press it. */
+        char set_error_text[256];
+        assert(!c300x_config_set_activation_items_json(config,
+            "[{\"id\":\"a\",\"name\":\"A\",\"pressCommand\":\"*1*1*11##\"},"
+            "{\"id\":\"a\",\"name\":\"B\",\"pressCommand\":\"*1*1*12##\"}]",
+            set_error_text, sizeof(set_error_text)));
+        assert(strcmp(set_error_text, "activations item ids must be unique") == 0);
+        assert(!c300x_config_set_activation_items_json(config,
+            "[{\"id\":\"a\",\"name\":\"A\",\"type\":\"lock\"}]",
+            set_error_text, sizeof(set_error_text)));
+        assert(strstr(set_error_text, "lock activations need") != NULL);
+        assert(c300x_config_set_activation_items_json(config,
+            "[{\"id\":\"a\",\"name\":\"A\",\"type\":\"lock\",\"pressCommand\":\"*1*1*11##\"}]",
+            set_error_text, sizeof(set_error_text)));
+        c300x_default_config(config);
+    }
     const char *activation = "{\"id\":\"command-only\",\"name\":\"Custom\",\"pressCommand\":\"*1*1*11##\"}";
     char activation_error[256];
     assert(parse_activation_item(activation, activation + strlen(activation),

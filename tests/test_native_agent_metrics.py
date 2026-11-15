@@ -572,6 +572,9 @@ def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
     assert "note_smartphone_forwarding_changed(runtime, code)" in event_body
     assert "return 0;" in note_body
     assert "runtime->smartphone_forwarding_mode_code == code" in note_body
+    # A first reading that arrives as a device event is reported: only a
+    # known, equal mode is "not changed".
+    assert "runtime->smartphone_forwarding_mode_known\n        && " in note_body
     assert "c300x_video_set_ring_forwarding_enabled" not in remember_body
     assert '\\"smartphone_forwarding\\":%s' in state_body
     assert "refresh_smartphone_forwarding_mode(config, runtime)" in text

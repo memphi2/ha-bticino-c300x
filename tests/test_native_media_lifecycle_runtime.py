@@ -17,12 +17,14 @@ def media_binaries(request, tmp_path_factory):
     sources = [
         "config", "json_parse", "json_util", "string_util", "time_util", "video_rtsp", "sha256", "audio_codec",
         "media_audio", "media_sip", "media_sip_io", "media_base64", "media_session_guard",
-        "media_rtsp_auth", "media_rtsp_io",
+        "media_rtsp_auth", "media_rtsp_io", "talkback_g711",
     ]
     for name, dependencies in (
         ("media_lifecycle", sources),
         ("media_start_stop", sources),
         ("media_rtsp_auth", ["media_rtsp_auth", "media_base64", "string_util"]),
+        ("media_rtsp_writer", ["time_util"]),
+        ("media_ring_stop", []),
     ):
         result = subprocess.run(
             ["cc", "-std=c11", "-O2", "-g", "-Wall", "-Wextra", "-Werror",
@@ -43,6 +45,21 @@ def test_rtsp_credential_validation(media_binaries):
     assert result.returncode == 0, result.stderr
 
 
+def test_ring_receiver_stop_ownership(media_binaries):
+    result = subprocess.run([str(media_binaries / "media_ring_stop")],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("case", [
+    "response_after_rtp", "rtp_after_response", "audio_after_video", "framing", "timeouts", "partial_failure",
+])
+def test_rtsp_writer(media_binaries, case):
+    result = subprocess.run([str(media_binaries / "media_rtsp_writer"), case],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
 def test_stop_cancels_inflight_sip_setup(media_binaries):
     result = subprocess.run([str(media_binaries / "media_start_stop")],
                             capture_output=True, text=True, timeout=10)
@@ -50,7 +67,7 @@ def test_stop_cancels_inflight_sip_setup(media_binaries):
 
 
 @pytest.mark.parametrize("case", [
-    "admission", "auth", "legacy", "pending_stop", "home_stop", "home_restart", "home_concurrent", "stalled_client", "interleaved", "unauth_rejections", "unauth_lifetime", "unauth_trickle", "talkback_stop_race", "read_timeout", "sip_join", "sip_renew",
+    "admission", "auth", "legacy", "pending_stop", "home_stop", "home_restart", "home_concurrent", "stalled_client", "target_ownership", "interleaved", "unauth_rejections", "unauth_lifetime", "unauth_trickle", "talkback_stop_race", "relay_ports", "read_timeout", "sip_join", "sip_renew",
 ])
 def test_media_lifecycle(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_lifecycle"), case],

@@ -299,8 +299,8 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     assert entry.runtime_data.agent_update_state == {"available": False}
     assert calls == [
         "repair-sync",
-        "services",
         "qml",
+        "services",
         # After "qml": the cleanup asks whether the Display patch is active, and
         # that status is only loaded by the platform-gate step.
         "remove-stale",
@@ -312,6 +312,63 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         "repair-sync",
     ]
     assert entry.added_listeners
+
+
+@pytest.mark.parametrize("patched", [True, False])
+def test_setup_registers_delete_services_from_loaded_patch_status(
+    monkeypatch: pytest.MonkeyPatch,
+    snapshot_runtime_boundary,
+    patched: bool,
+) -> None:
+    from custom_components.bticino_c300x import repair_issues, services
+
+    entry = _entry(options={CONF_DEVICE_UI_ENABLED: True})
+    entry.add_update_listener = lambda callback: lambda: None
+    entry.async_on_unload = lambda callback: None
+    registered: set[tuple[str, str]] = set()
+    hass = SimpleNamespace(
+        data={},
+        config_entries=SimpleNamespace(async_entries=lambda domain: [entry]),
+        services=SimpleNamespace(
+            async_register=lambda domain, name, *args, **kwargs: registered.add((domain, name)),
+            async_remove=lambda domain, name: registered.discard((domain, name)),
+        ),
+    )
+    api = SimpleNamespace(
+        async_qml_patch_status=AsyncMock(
+            return_value={"available": True, "patched": patched}
+        )
+    )
+    manager = runtime_manager.C300XRuntimeManager(hass, entry)
+    manager.capabilities = {
+        "maintenance": {"supported": True, "qml_status": True},
+        "memos": {"supported": True, "delete": True},
+        "answering_machine": {
+            "supported": True,
+            "messages": {"supported": True, "delete": True},
+        },
+    }
+    manager.unregister_webhook = lambda: None
+    manager.unregister_event_webhook = lambda: None
+    monkeypatch.setattr(manager, "_build_agent_api", lambda: api)
+    for method in (
+        "async_validate_agent", "async_register_callbacks",
+        "async_sync_activation_state", "async_forward_platforms",
+    ):
+        monkeypatch.setattr(manager, method, AsyncMock())
+    monkeypatch.setattr(manager, "async_schedule_startup_sync", lambda: None)
+    monkeypatch.setattr(runtime_manager, "_async_remove_stale_gui_dependent_entities", lambda *_: None)
+    monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", lambda *_: None)
+    monkeypatch.setattr(services, "async_dispatcher_connect", lambda *_: lambda: None)
+
+    assert asyncio.run(manager._async_prepare_runtime()) is True
+
+    api.async_qml_patch_status.assert_awaited_once()
+    assert entry.runtime_data.qml_patch_status["patched"] is patched
+    for service in (
+        "delete_latest_video_message", "delete_latest_text_memo", "delete_latest_voice_memo",
+    ):
+        assert ((DOMAIN, service) in registered) is patched
 
 
 def test_setup_entry_rejects_missing_required_fields() -> None:
@@ -1345,6 +1402,152 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     state_callbacks[-1](SimpleNamespace(data={"entity_id": "binary_sensor.front_door", "old_state": old, "new_state": old}))
     assert len(calls) == before + 5, "Alarmo keeps its full event path"
     unsubscribe()
+
+
+@pytest.mark.parametrize("status_enabled", [None, False, True])
+@pytest.mark.parametrize(
+    ("entity_id", "hidden_only"),
+    [
+        ("weather.home", True),
+        ("light.hidden", True),
+        ("switch.hidden_action", True),
+        ("light.visible", False),
+        ("light.untitled", False),
+        ("switch.untitled_action", False),
+        ("light.shared_tile", False),
+        ("switch.shared_actions", False),
+        ("weather.shared", False),
+    ],
+)
+def test_display_bridge_tracking_filters_hidden_status_sources(
+    monkeypatch: pytest.MonkeyPatch,
+    status_enabled: bool | None,
+    entity_id: str,
+    hidden_only: bool,
+) -> None:
+    from homeassistant.helpers import dispatcher
+
+    callbacks: list[Any] = []
+    notifications: list[str] = []
+    monkeypatch.setattr(
+        dispatcher, "async_dispatcher_connect", lambda *_args: lambda: None
+    )
+    monkeypatch.setattr(
+        runtime_manager, "_async_schedule_display_bridge_notify",
+        lambda *_args: notifications.append("notify"),
+    )
+
+    def action(source: str, page: str) -> dict[str, Any]:
+        return {
+            "domain": "script", "service": "turn_on",
+            "target": {"entity_id": "script.example"},
+            "dashboard": {"state_entity_id": source, "page": page},
+        }
+
+    entry = _entry(options={
+        CONF_DEVICE_UI_ENABLED: True,
+        "weather_entity_id": entity_id if entity_id.startswith("weather.") else "weather.home",
+        "dashboard_entities": ["light.hidden", "light.visible", "light.untitled", "light.shared_tile"],
+        "dashboard_entity_display_overrides": {
+            "light.hidden": {"page": "C300X"},
+            "light.visible": {"page": "Room"},
+            "light.shared_tile": {"page": "C300X"},
+        },
+        "actions": {
+            "hidden": action("switch.hidden_action", "C300X"),
+            "untitled": action("switch.untitled_action", ""),
+            "shared_tile": action("light.shared_tile", "Room"),
+            "hidden_visible_tile": action("light.visible", "C300X"),
+            "shared_hidden": action("switch.shared_actions", "C300X"),
+            "shared_visible": action("switch.shared_actions", "Room"),
+            "shared_weather": action("weather.shared", "Room"),
+        },
+    })
+    if status_enabled is not None:
+        entry.options["dashboard_status_page_enabled"] = status_enabled
+    hass = SimpleNamespace(
+        data={},
+        bus=SimpleNamespace(
+            async_listen=lambda _event, callback: callbacks.append(callback) or (lambda: None)
+        ),
+    )
+    unsubscribe = runtime_manager._async_track_display_bridge_updates(hass, entry)
+    event = SimpleNamespace(data={
+        "entity_id": entity_id,
+        "old_state": SimpleNamespace(state="off", attributes={}),
+        "new_state": SimpleNamespace(state="on", attributes={}),
+    })
+    callbacks[0](event)
+    assert notifications == ([] if status_enabled is False and hidden_only else ["notify"])
+    unsubscribe()
+    if status_enabled is False:
+        notifications.clear()
+        entry.options["dashboard_status_page_enabled"] = True
+        unsubscribe = runtime_manager._async_track_display_bridge_updates(hass, entry)
+        callbacks[-1](event)
+        assert notifications == ["notify"]
+        unsubscribe()
+
+
+def test_hidden_status_tracking_preserves_alarm_union_and_cleanup(monkeypatch) -> None:
+    from homeassistant.helpers import dispatcher
+
+    callbacks: list[Any] = []
+    alarmo_callbacks: list[Any] = []
+    notifications: list[str] = []
+    unsubs: list[str] = []
+    monkeypatch.setattr(
+        dispatcher, "async_dispatcher_connect",
+        lambda _hass, _signal, callback: alarmo_callbacks.append(callback)
+        or (lambda: unsubs.append("alarmo")),
+    )
+    monkeypatch.setattr(
+        runtime_manager, "_async_schedule_display_bridge_notify",
+        lambda *_args: notifications.append("notify"),
+    )
+    entry = _entry(options={
+        CONF_DEVICE_UI_ENABLED: True,
+        CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+        "dashboard_status_page_enabled": False,
+        "alarm_page_entity_id": "light.quick",
+        "dashboard_entities": ["light.quick", "binary_sensor.door", "binary_sensor.added"],
+        "dashboard_entity_display_overrides": {
+            entity_id: {"page": "C300X"}
+            for entity_id in ("light.quick", "binary_sensor.door", "binary_sensor.added")
+        },
+    })
+    sensors = {"binary_sensor.door": {}}
+    hass = SimpleNamespace(
+        data={"alarmo": {"sensor_handler": SimpleNamespace(_config=sensors)}},
+        bus=SimpleNamespace(
+            async_listen=lambda _event, callback: callbacks.append(callback)
+            or (lambda: unsubs.append("state"))
+        ),
+    )
+    unsubscribe = runtime_manager._async_track_display_bridge_updates(hass, entry)
+
+    def change(entity_id: str) -> None:
+        callbacks[0](SimpleNamespace(data={
+            "entity_id": entity_id,
+            "old_state": SimpleNamespace(state="off", attributes={}),
+            "new_state": SimpleNamespace(state="on", attributes={}),
+        }))
+
+    for entity_id in ("alarm_control_panel.home", "light.quick", "binary_sensor.door"):
+        change(entity_id)
+    assert len(notifications) == 3
+    change("binary_sensor.added")
+    assert len(notifications) == 3
+    sensors["binary_sensor.added"] = {}
+    alarmo_callbacks[0]()
+    change("binary_sensor.added")
+    assert len(notifications) == 5
+    sensors.pop("binary_sensor.door")
+    alarmo_callbacks[0]()
+    change("binary_sensor.door")
+    assert len(notifications) == 6
+    unsubscribe()
+    assert unsubs == ["state", "alarmo"]
 
 
 def test_display_bridge_tracking_skips_when_disabled_or_unconfigured() -> None:

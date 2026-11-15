@@ -44,7 +44,7 @@ test("media attachment prepares playback without throwing on autoplay rejection"
   assert.equal(mediaElement.playCalls, 1);
 });
 
-function installAudioContextMock({ resumeState = "running", compressor = true } = {}) {
+function installAudioContextMock({ resumeState = "running", compressor = true, failSource = false } = {}) {
   const created = [];
 
   class MockSourceNode {
@@ -86,6 +86,7 @@ function installAudioContextMock({ resumeState = "running", compressor = true } 
     }
 
     createMediaStreamSource(stream) {
+      if (failSource) throw new Error("Audio source unavailable");
       this.stream = stream;
       return this.source;
     }
@@ -154,6 +155,25 @@ test("gain of 0 dB stays passthrough: no Web Audio graph, element audible", () =
     attachment.play();
 
     assert.equal(audio.created.length, 0);
+    assert.equal(mediaElement.muted, false);
+  } finally {
+    audio.restore();
+  }
+});
+
+test("failed audio graph creation closes each partial context and keeps passthrough", async () => {
+  const audio = installAudioContextMock({ failSource: true });
+  try {
+    const mediaElement = fakeMediaElement();
+    const attachment = new C300XMediaAttachment(mediaElement, streamWithAudio(), {
+      getGainDb: () => 6,
+    });
+    await attachment.play();
+    await attachment.refreshGain();
+    attachment.detach();
+
+    assert.equal(audio.created.length, 2);
+    assert.deepEqual(audio.created.map((context) => context.closes), [1, 1]);
     assert.equal(mediaElement.muted, false);
   } finally {
     audio.restore();

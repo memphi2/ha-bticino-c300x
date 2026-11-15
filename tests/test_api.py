@@ -166,23 +166,25 @@ class _RaisingSession:
 def test_snapshot_endpoint_is_authenticated_bounded_and_read_only() -> None:
     session = _FakeSession(response_body=b"BM-frame", content_type="image/bmp")
     api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
-    assert asyncio.run(api.async_doorbell_snapshot()) == (b"BM-frame", "image/bmp")
+    assert asyncio.run(api.async_doorbell_snapshot(688, 480)) == (b"BM-frame", "image/bmp")
+    # The agent is asked for the exact image size; nothing rescales it later.
     assert session.requests[0]["args"] == (
-        "GET", "http://agent.local:8080/api/v1/video/doorbell/snapshot"
+        "GET",
+        "http://agent.local:8080/api/v1/video/doorbell/snapshot?width=688&height=480",
     )
     assert len(session.requests) == 1
 
 
-@pytest.mark.parametrize("content_length", [None, 512 * 1024 + 1])
+@pytest.mark.parametrize("content_length", [None, 1200 * 1024 + 1])
 def test_snapshot_endpoint_rejects_oversized_response(content_length) -> None:
     session = _FakeSession(
-        response_body=b"x" * (512 * 1024 + 1),
+        response_body=b"x" * (1200 * 1024 + 1),
         content_type="image/bmp",
         response_content_length=content_length,
     )
     api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
     with pytest.raises(C300XAgentApiResponseError, match="too large"):
-        asyncio.run(api.async_doorbell_snapshot())
+        asyncio.run(api.async_doorbell_snapshot(688, 480))
 
 
 def test_build_agent_base_url_defaults_to_http() -> None:
@@ -3302,12 +3304,10 @@ def test_normalize_smartphone_forwarding_from_unprovisioned_agent_response() -> 
     }
 
 
-def test_normalize_smartphone_forwarding_accepts_unknown_agent_response() -> None:
-    assert normalize_smartphone_forwarding({"mode": None, "state": "unknown", "raw": "*#*1##"}) == {
-        "mode": None,
-        "state": "unknown",
-        "raw": "*#*1##",
-    }
+def test_normalize_smartphone_forwarding_accepts_the_agents_own_unknown_answer() -> None:
+    body = {"ok": True, "mode": None, "status": "unknown", "raw": "*#*0##"}
+
+    assert normalize_smartphone_forwarding(body) == {"mode": None, "state": "unknown", "raw": body}
 
 
 def test_normalize_smartphone_forwarding_accepts_boolean_agent_state() -> None:
@@ -3753,3 +3753,38 @@ def test_an_id_of_only_dots_is_never_a_message_or_memo_id(dots):
 def test_ordinary_message_and_memo_ids_stay_valid(message_id):
     assert normalize_video_message_id(message_id) == message_id
     assert normalize_memo_id(f"voice/{message_id}") == f"voice/{message_id}"
+
+
+@pytest.mark.parametrize("call", [
+    lambda api: api.async_qml_patch_status(),
+    lambda api: api.async_apply_qml_patch(dynamic_homepage=True),
+    lambda api: api.async_apply_qml_core_patch(),
+    lambda api: api.async_restore_qml_core_patch(),
+    lambda api: api.async_restore_qml_patch(),
+    lambda api: api.async_reload_gui(),
+    lambda api: api.async_firewall_status(),
+    lambda api: api.async_apply_firewall(),
+    lambda api: api.async_restore_firewall(),
+    lambda api: api.async_ipv6_firewall_status(),
+    lambda api: api.async_apply_ipv6_firewall(),
+    lambda api: api.async_restore_ipv6_firewall(),
+])
+@pytest.mark.parametrize(("configured", "expected"), [(5.0, 15.0), (30.0, 30.0)])
+def test_script_backed_maintenance_requests_outlast_the_agent_script(
+    call, configured, expected
+) -> None:
+    # The agent answers these after running a script it gives 10 s. With the
+    # 5 s default the request gave up while the script was still running and
+    # an agent update reported a failure that a second try did not show.
+    session = _FakeSession('{"ok": true, "patched": true, "state": "patched"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+        timeout=configured,
+    )
+
+    asyncio.run(call(api))
+
+    assert session.requests[0]["kwargs"]["timeout"] == expected

@@ -15,8 +15,12 @@ from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .config_snapshots import (
     CONF_SNAPSHOT_DELAY,
+    CONF_SNAPSHOT_HEIGHT,
     CONF_SNAPSHOT_RETENTION,
+    CONF_SNAPSHOT_TIMESTAMP,
+    CONF_SNAPSHOT_WIDTH,
     SNAPSHOT_DEFAULTS,
+    SNAPSHOT_NUMBER_RANGES,
 )
 from .const import (
     CONF_AGENT_HOST,
@@ -70,7 +74,6 @@ def setup_features_schema(
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     default_native_two_way_audio: bool = False,
-    default_snapshots: dict[str, Any] | None = None,
 ) -> vol.Schema:
     """Return the initial setup feature schema."""
 
@@ -80,7 +83,6 @@ def setup_features_schema(
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
         default_native_two_way_audio=default_native_two_way_audio,
-        default_snapshots=default_snapshots,
     )
 
 
@@ -196,7 +198,6 @@ def reconfigure_features_schema(
     default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
     default_native_two_way_audio: bool = False,
-    default_snapshots: dict[str, Any] | None = None,
 ) -> vol.Schema:
     """Return the reconfigure feature schema."""
 
@@ -207,7 +208,6 @@ def reconfigure_features_schema(
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
         default_webrtc_ice_policy=default_webrtc_ice_policy,
         default_native_two_way_audio=default_native_two_way_audio,
-        default_snapshots=default_snapshots,
     )
 
 
@@ -315,6 +315,27 @@ def webrtc_ice_policy_selector() -> Any:
     return _translated_select("webrtc_ice_policy", list(WEBRTC_ICE_POLICIES))
 
 
+def snapshot_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the visitor image fields of the wizards' and the settings' step."""
+
+    snapshots = {**SNAPSHOT_DEFAULTS, **(defaults or {})}
+    fields: dict[Any, Any] = {}
+    for key, unit in (
+        (CONF_SNAPSHOT_WIDTH, "px"),
+        (CONF_SNAPSHOT_HEIGHT, "px"),
+        (CONF_SNAPSHOT_DELAY, "s"),
+        (CONF_SNAPSHOT_RETENTION, "d"),
+    ):
+        minimum, maximum = SNAPSHOT_NUMBER_RANGES[key]
+        fields[vol.Optional(key, default=snapshots[key])] = selector.NumberSelector(
+            selector.NumberSelectorConfig(min=minimum, max=maximum, step=1, unit_of_measurement=unit, mode=selector.NumberSelectorMode.BOX)
+        )
+    fields[
+        vol.Optional(CONF_SNAPSHOT_TIMESTAMP, default=snapshots[CONF_SNAPSHOT_TIMESTAMP])
+    ] = bool
+    return vol.Schema(fields)
+
+
 def _media_feature_schema(
     *,
     default_video_enabled: bool,
@@ -323,20 +344,11 @@ def _media_feature_schema(
     default_ring_capture_audio_gain_db: float,
     default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
     default_native_two_way_audio: bool = False,
-    default_snapshots: dict[str, Any] | None = None,
 ) -> vol.Schema:
     fields: dict[Any, Any] = {
         vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
     }
     if default_video_enabled:
-        snapshots = {**SNAPSHOT_DEFAULTS, **(default_snapshots or {})}
-        for key, maximum, unit in (
-            (CONF_SNAPSHOT_DELAY, 300, "s"),
-            (CONF_SNAPSHOT_RETENTION, 365, "d"),
-        ):
-            fields[vol.Optional(key, default=snapshots[key])] = selector.NumberSelector(
-                selector.NumberSelectorConfig(min=1, max=maximum, step=1, unit_of_measurement=unit, mode=selector.NumberSelectorMode.BOX)
-            )
         if HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO:
             fields[
                 vol.Optional(CONF_NATIVE_TWO_WAY_AUDIO, default=default_native_two_way_audio)

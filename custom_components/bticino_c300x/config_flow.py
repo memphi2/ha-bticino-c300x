@@ -120,6 +120,8 @@ from .config_flow_input import (
     _setup_connection_schema,
     _weather_entity_id,
 )
+from .config_flow_options_menu import OptionsMenuSteps
+from .config_flow_snapshot import SnapshotOptionsStep, SnapshotWizardSteps
 from .config_flow_tiles import TileForm as _TileForm
 from .config_flow_tiles import async_tile_entity_fields as _async_tile_entity_fields
 from .config_flow_tiles import async_tile_form as _async_tile_form
@@ -151,12 +153,14 @@ from .const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_ENERGY_PAGE,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
@@ -224,6 +228,8 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
         CONF_DASHBOARD_PAGES,
+        CONF_ENERGY_PAGE,
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED,
         CONF_DASHBOARD_PREVENT_RETURN,
         CONF_DEVICE_ACTIVATION_MODE,
         CONF_DEVICE_ACTIVATIONS,
@@ -243,7 +249,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
 )
 
 
-class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 1
@@ -624,7 +630,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             )
                         ),
                         default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
-                        default_snapshots={key: feature_data[key] for key in SNAPSHOT_DEFAULTS},
                     ),
                     errors=errors,
             )
@@ -633,6 +638,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._setup_device_activations = _activation_items_from_feature_data(
                 feature_data
             )
+            if feature_data[CONF_VIDEO_ENABLED]:
+                # Visitor images exist only with video; the step is skipped without it.
+                return await self.async_step_user_visitor_snapshot()
             return await self.async_step_user_device_activations()
 
         return self.async_show_form(
@@ -931,6 +939,8 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ],
                 CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
                 CONF_DASHBOARD_PAGES: feature_data[CONF_DASHBOARD_PAGES],
+                CONF_ENERGY_PAGE: feature_data[CONF_ENERGY_PAGE],
+                CONF_DASHBOARD_STATUS_PAGE_ENABLED: feature_data[CONF_DASHBOARD_STATUS_PAGE_ENABLED],
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE: feature_data[
                     CONF_DASHBOARD_DYNAMIC_HOMEPAGE
                 ],
@@ -1018,7 +1028,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             )
                         ),
                         default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
-                        default_snapshots={key: feature_data[key] for key in SNAPSHOT_DEFAULTS},
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -1030,6 +1039,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._reconfigure_device_activations = _activation_items_from_feature_data(
                 feature_data
             )
+            if feature_data[CONF_VIDEO_ENABLED]:
+                # Visitor images exist only with video; the step is skipped without it.
+                return await self.async_step_reconfigure_visitor_snapshot()
             return await self.async_step_reconfigure_device_activations()
 
         return self.async_show_form(
@@ -1372,12 +1384,15 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return BticinoC300XOptionsFlow(config_entry)
 
 
-class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
+class BticinoC300XOptionsFlow(
+    SnapshotOptionsStep, OptionsMenuSteps, config_entries.OptionsFlow,
+):
     """Handle C300X options.
 
     The flow opens with a menu of the settings areas. Each area is a form of
     its own and saves when it is submitted; the areas that were not opened
-    keep their saved values.
+    keep their saved values. After saving, the menu is shown again, until
+    "done" closes the dialog.
     """
 
     def __init__(self, config_entry: BticinoC300XConfigEntry) -> None:
@@ -1397,7 +1412,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_menu(
             step_id="init",
-            menu_options=_options_menu(self._config_entry),
+            menu_options=[*_options_menu(self._config_entry), "done"],
         )
 
     def _load_saved(self) -> dict[str, Any]:
@@ -1424,6 +1439,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             )
         if not self._dashboard_options:
             self._dashboard_options = _dashboard_input_defaults({}, feature_defaults)
+        self._note_saved_options()
         return feature_defaults
 
     async def async_step_connection(
@@ -1481,7 +1497,6 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                             )
                         ),
                         native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
-                        snapshots={key: feature_data[key] for key in SNAPSHOT_DEFAULTS},
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -1691,13 +1706,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                 feature_defaults,
                 errors,
             )
-        return self.async_create_entry(
-            title="",
-            data={
-                **self._connection_options,
-                **feature_data,
-            },
-        )
+        return await self._async_store_options({**self._connection_options, **feature_data})
 
     async def _async_show_options_dashboard_form(
         self,

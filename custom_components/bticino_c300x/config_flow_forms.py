@@ -18,7 +18,6 @@ from .const import (
 from .dashboard_entities import (
     ALARM_PAGE_ACTION_DOMAINS,
     ALARM_PAGE_ENTITY_DOMAINS,
-    DASHBOARD_ENTITY_DOMAINS,
     DASHBOARD_TILE_SIZE_AUTO,
     DASHBOARD_TILE_SIZES,
 )
@@ -52,17 +51,6 @@ def weather_entity_selector() -> Any:
     """Return the HA weather entity selector."""
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=WEATHER_DOMAIN),
-    )
-
-
-def dashboard_entity_selector() -> Any:
-    """Return a multi-entity selector for the simple C300X dashboard."""
-
-    return selector.EntitySelector(
-        selector.EntitySelectorConfig(
-            domain=list(DASHBOARD_ENTITY_DOMAINS),
-            multiple=True,
-        ),
     )
 
 

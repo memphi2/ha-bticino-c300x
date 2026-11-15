@@ -41,6 +41,7 @@ from .const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
     SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
+    SIGNAL_FORWARDING_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
 )
 from .device_user import media_user_attributes
@@ -569,6 +570,7 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
         for signal in (
             SIGNAL_AGENT_INFO_CHANGED,
             SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
+            SIGNAL_FORWARDING_CHANGED,
             SIGNAL_SYSTEM_METRICS_CHANGED,
         ):
             self.async_on_remove(

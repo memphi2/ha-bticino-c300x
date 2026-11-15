@@ -12,21 +12,23 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.9.10`
+- Current packaged agent version: `2.4.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
 `agent.self_update_file_set_version` advertises the updater's supported payload
-file set (default `1` for older agents). A bundle's `update_file_set_version`
-declares the minimum required set. Set `2` includes `C300XRingerControl.qml`.
+file set (`1` when the field is missing). A bundle's `update_file_set_version`
+declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
+set `3` adds `C300XEnergy.qml`.
 When the installed self-updater cannot install the target file set, Home
 Assistant first installs and verifies the new executable, then completes the
 payload once through that updater using the same maintenance token. A matching
-manifest hash alone does not make an older updater capable of installing new files.
+manifest hash alone does not make an updater with a lower file set capable of
+installing new files.
 
-Agents older than the endpoint they are asked to call respond with
-`501 Not Implemented` and `{"ok": false, "error": "not_implemented"}`. Home
-Assistant must treat that as unsupported capability, not as a repair signal.
+Unknown `/api/v1` paths respond with `501 Not Implemented` and
+`{"ok": false, "error": "not_implemented"}`. Home Assistant treats that as an
+unsupported capability, not as a repair signal.
 
 ## Listeners
 
@@ -34,8 +36,9 @@ The agent has two HTTP listeners:
 
 - API listener: configured by `listen.host`, `listen.apiPort`, and
   `listen.allowLan`.
-- UI listener: loopback display bridge listener, configured by `listen.uiPort`
-  and `ui_listen_host`. It is intended for QML pages running on the device.
+- UI listener: loopback display bridge listener on `127.0.0.1`, port
+  `listen.uiPort` (reported as `ui_listen_host`/`ui_port`). It is intended for
+  QML pages running on the device.
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).
@@ -98,17 +101,21 @@ Common status codes:
 | Status | Meaning |
 | --- | --- |
 | `200 OK` | Request succeeded. |
-| `201 Created` | Runtime subscription was created. |
-| `202 Accepted` | Runtime event wake-up was accepted. |
+| `201 Created` | Runtime subscription or text memo was created. |
+| `202 Accepted` | Display wake-up accepted, or reboot, agent removal or restart scheduled. |
 | `400 Bad Request` | Invalid body, missing field, invalid id, or missing confirmation token. |
 | `401 Unauthorized` | Normal API token is missing or invalid. |
-| `403 Forbidden` | Maintenance token is missing/invalid, endpoint requires loopback, or module is disabled. |
-| `404 Not Found` | Setup disabled, media item missing, or feature disabled. |
+| `403 Forbidden` | Maintenance token is missing/invalid or maintenance is disabled, the endpoint requires loopback, or a required UI header is missing. |
+| `404 Not Found` | Setup disabled, media item missing, feature disabled, or maintenance module disabled (`maintenance_disabled`). |
+| `405 Method Not Allowed` | Wrong method on a loopback UI route. |
 | `409 Conflict` | Media action conflicts with the current device/media state. |
 | `413 Payload Too Large` | HTTP body exceeded the static parser buffer. |
+| `429 Too Many Requests` | Snapshot requested less than two seconds after the previous one. |
 | `500 Internal Server Error` | Agent-side operation failed. |
-| `501 Not Implemented` | Endpoint is not implemented by this agent version. |
+| `501 Not Implemented` | Unknown endpoint. |
 | `502 Bad Gateway` | Home Assistant callback/display bridge is unavailable. |
+| `503 Service Unavailable` | Resource busy or inactive (transfer slots, system metrics, snapshot source, ringer GUI, display command). |
+| `504 Gateway Timeout` | The GUI did not acknowledge a ringer command within five seconds. |
 
 Request bodies are parsed from JSON. Unknown fields should be ignored unless the
 handler explicitly validates the whole object.
@@ -174,7 +181,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/memos/actions/delete` | API | Deletes selected memos. |
 | `GET` | `/api/v1/video/doorbell` | API | None. |
 | `GET` | `/api/v1/video/doorbell/status` | API | None. |
-| `GET` | `/api/v1/video/doorbell/snapshot` | API | Reads the active video framebuffer into bounded RAM and returns BMP data for HA-side conversion. No file writes, video activation or call answer. |
+| `GET` | `/api/v1/video/doorbell/snapshot` | API | Reads the active video framebuffer into bounded RAM and returns BMP data for HA-side conversion. Optional `width` (64-800) and `height` (64-480), both or neither, give the image size; without them it is the display size scaled to fit 800x480. Any other value answers `400 invalid_snapshot_size`; a request within two seconds of the previous one answers `429 snapshot_throttled`, and no readable video frame answers `503 snapshot_unavailable`. No file writes, video activation or call answer. |
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
@@ -220,6 +227,9 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore-core` | maintenance | Restores core media QML hook. |
 | `POST` | `/api/v1/maintenance/qml-patch/actions/apply` | maintenance | Applies full display QML patch. |
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore` | maintenance | Restores full display QML patch. |
+| `GET` | `/api/v1/maintenance/audio-codec` | maintenance | Reads the device audio codec (speex/PCMU) state. |
+| `POST` | `/api/v1/maintenance/audio-codec/actions/apply` | maintenance | Switches the device to PCMU and reboots after confirmation. |
+| `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Restores the stock speex codec and reboots after confirmation. |
 
 ## Health, Capabilities, State
 
@@ -232,7 +242,7 @@ Side effects: none.
 Response:
 
 ```json
-{"ok": true, "agent": "native-c", "version": "1.9.6"}
+{"ok": true, "agent": "native-c", "version": "2.4.0"}
 ```
 
 ### `GET /api/v1/capabilities`
@@ -261,9 +271,10 @@ Authentication: normal API token.
 
 Side effects: none.
 
-Returns a cached aggregate state. Older Home Assistant code may use this as a
-fallback for smartphone forwarding, ringer, ringer volume, and
-answering-machine status when a dedicated endpoint is not available.
+Returns a cached aggregate state. Home Assistant falls back to it for
+smartphone forwarding when that endpoint is unsupported, and for ringer and
+answering-machine status when the dedicated read fails (for example
+`409 ringer_gui_busy`).
 
 ### `GET /api/v1/diagnostics`
 
@@ -294,7 +305,7 @@ sample or changes the sampling schedule. CPU usage is `null` until two counter
 readings are available. If monitoring is disabled, the endpoint returns HTTP 503
 with `error: "system_metrics_inactive"`.
 
-Agent 1.9.6 adds snapshot metadata to both HTTP and event payloads:
+HTTP and event payloads carry snapshot metadata:
 
 - `instance_id`: random 32-character hexadecimal identifier for this agent run.
 - `sample_sequence`: increasing integer, starting at 1 within each instance.
@@ -309,8 +320,7 @@ next regular sample. Other metrics retain their configured thresholds. Failed
 deliveries remain pending until a subsequent regular sample is acknowledged;
 only the newest snapshot is sent. Home Assistant rejects out-of-order snapshots
 and expires the cache after the heartbeat plus two sample intervals. No periodic
-Home Assistant polling is required. Older agents without metadata remain
-supported, but cannot provide sample-level ordering or sample age.
+Home Assistant polling is required.
 
 ## Self-Test
 
@@ -328,7 +338,7 @@ Response shape:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.9.6",
+  "agent_version": "2.4.0",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -534,7 +544,12 @@ The id is percent-decoded and bounded by `C300X_MAX_ACTIVATION_ID_LEN`.
 
 Authentication: normal API token.
 
-Side effects: reads smartphone-forwarding state.
+Side effects: reads smartphone-forwarding state and switches the agent's Ring
+Call receiver on for `homeassistant`, off otherwise.
+
+Response: `{"ok": true, "mode": "enabled" | "homeassistant" | "blocked" |
+"unprovisioned", "raw": "<device reply>"}`. When the device's reply names no
+mode: `{"ok": true, "mode": null, "status": "unknown", "raw": "..."}`.
 
 ### `POST /api/v1/smartphone-forwarding`
 
@@ -548,7 +563,9 @@ Request fields:
 {"mode": "enabled"}
 ```
 
-Allowed modes are normalized by Home Assistant before the request.
+Accepted modes are `enabled`, `homeassistant` and `blocked`;
+`{"enabled": true|false}` maps to `enabled`/`blocked`. Any other value,
+including `unprovisioned`, returns `400 invalid_smartphone_forwarding_mode`.
 
 The agent writes the requested mode and performs a fresh `*#8**37##` readback.
 Only a valid write response (ACK or forwarding status) followed by the requested
@@ -1069,7 +1086,7 @@ Reads staged update state.
 ```json
 {
   "bundle_hash": "sha256:...",
-  "agent_version": "1.9.6"
+  "agent_version": "2.4.0"
 }
 ```
 
@@ -1219,8 +1236,9 @@ Reads both optional Display patch state and required core media-hook state.
 {"confirm": "apply_qml_core_patch"}
 ```
 
-Applies the minimal EventManager media-close hook required for reliable doorbell
-video ownership tracking.
+Applies the core EventManager hook: the media-close notification required for
+reliable doorbell video ownership tracking and the `C300XRingerControl.qml`
+command channel used by `POST /api/v1/ringer`.
 
 `POST /api/v1/maintenance/qml-patch/actions/restore-core`
 
@@ -1241,7 +1259,9 @@ Restores the core media hook.
 
 Applies the core hook plus the optional Display patch: MainApp navigation,
 HomePage unread memo/video-message badges, MemoPage external-delete refresh,
-Alarmo/Home Assistant pages, and local QML JavaScript bridge.
+the Settings > General HA feedback and touch-tone controls, the Alarmo, Home
+Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
+`C300XEnergy.qml`) and the local QML JavaScript bridge.
 
 `POST /api/v1/maintenance/qml-patch/actions/restore`
 
@@ -1257,10 +1277,23 @@ compare target files byte-for-byte, back up original device files under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`, remount the root
 filesystem writable only for final copy/write work, then remount read-only.
 
+### Audio Codec
+
+`GET /api/v1/maintenance/audio-codec` reads the codec state.
+
+`POST /api/v1/maintenance/audio-codec/actions/apply` with
+`{"confirm": "apply_audio_codec_patch"}` switches to PCMU;
+`POST /api/v1/maintenance/audio-codec/actions/restore` with
+`{"confirm": "restore_audio_codec_patch"}` restores speex. The codec takes
+effect after a reboot. When one is needed, the agent starts SSH and reboots the
+device, unless the request sends `"reboot": false` or reboot maintenance is
+disabled. A failed write returns `500` with `error: "audio_codec_apply_failed"`
+or `"audio_codec_restore_failed"`.
+
 ## Loopback UI API
 
-The UI listener is intended for local QML pages. Existing routes accept only
-GET; the local preference route also accepts a guarded POST. Routes forwarding
+The UI listener is intended for local QML pages. Routes accept only GET, except
+the guarded POST routes `/ui/preferences` and `/ui/touch-tone/state`. Routes forwarding
 requests to Home Assistant require an active display bridge.
 
 | Method | Path | Purpose |
@@ -1317,35 +1350,7 @@ incorrect and missing confirmations cannot complete another command. The API
 request has a monotonic five-second deadline. Diagnostics expose
 `ringer_gui_ready` and `ringer_command_pending`, but never command identifiers.
 
-## Compatibility Matrix
+## Compatibility
 
-| Agent version | Self-test API | Firmware family | Notes |
-| --- | --- | --- | --- |
-| 1.9.10 | 1.1 | 1.7.x | Waits for device events and verified readback after a GUI-confirmed ringer write remains queued; no retry writes or idle polling. |
-| 1.9.9 | 1.1 | 1.7.x | Installs the required ringer GUI component and advertises self-update file set 2. Older self-updaters install the executable first, then finish the payload using the new updater and existing maintenance token. |
-| 1.9.8 (withdrawn) | 1.1 | 1.7.x | Changes are included in 1.9.9: GUI-confirmed ringer mute/unmute, corrected core call-end notification port and opt-in verified HTTPS callbacks. Removes the ineffective teardown settle window, limits cleanup to owned media-service clients, aligns PCMU negotiation and bounds SIP/TCP framing. Ringer and HTTPS operation are confirmed with 1.9.9; the PCMU reboot remains unresolved. |
-| 1.9.7 | 1.1 | 1.7.x | Removes the media teardown drain patch: the audio codec no longer applies or depends on it (hardware testing showed it did not stop the device reboots). Switch to speex before updating; a device still carrying the patch keeps it harmlessly. |
-| 1.9.6 | 1.1 | 1.7.x | Couples PCMU to the verified media teardown patch. Reports literal `device_user_present` as diagnostic information in self-test and device-user status, not a media-readiness prerequisite (#56). |
-| 1.9.5 | 1.1 | 1.7.x | Reports a missing device-side C300X SIP user as its own self-test failure (`device_sip_user_missing`) instead of passing media-identity on a domain fallback. |
-| 1.9.2 | 1.1 | 1.7.x | Names the missing half of the media identity in the self-test and answers rejected RTSP pulls instead of closing the connection unexplained. |
-| 1.9.0 | 1.1 | 1.7.x | Adds the v1.9.0 native media and update-path fixes while reporting the matching packaged agent version. |
-| 1.8.3 | 1.1 | 1.7.x | Keeps the on-demand media-service takeover from closing the device media window during startup. |
-| 1.8.1 | 1.1 | 1.7.x | Adds experimental native audio-codec maintenance actions and keeps parked RTSP clients from consuming live capacity. |
-| 1.7.6 | 1.1 | 1.7.x | Stops explicit doorbell media through the native path before closing local WebRTC sessions. |
-| 1.7.5 | 1.1 | 1.7.x | Keeps self-test and readiness refresh on stable local state after reload. |
-| 1.7.4 | 1.1 | 1.7.x | Keeps media readiness on stable agent-owned checks. |
-| 1.7.0 | 1.1 | 1.7.x | Adds structured additional device activations and activation config synchronization. |
-| 1.6.4 | 1.1 | 1.7.x | Adds configurable live doorstation audio gain for on-demand video and Ring Call audio. |
-| 1.6.1 | 1.1 | 1.7.x | Fixes RTSP backchannel negotiation for provider-based browser talkback. |
-| 1.6.0 | 1.1 | 1.7.x | Adds RTSP backchannel support for provider-based browser talkback. |
-| 1.5.3 | 1.1 | 1.7.x | Adds multi-client doorbell viewing and confirmed C300X UI-scale ringer volume support. |
-| 1.5.0 | 1.1 | 1.7.x | Adds initial ringer volume read/write support. |
-| 1.4.1 | 1.1 | 1.7.x | Adds consolidated doorstation card and Ring Call support. |
-| 1.3.0 | 1.1 | 1.7.x | Adds display watchdog recovery and bundled mobile Ring Call workflow support. |
-| 1.2.3 | 1.1 | 1.7.x | Consolidates display UI actions and dashboard traffic handling. |
-| 1.2.2 | 1.1 | 1.7.x | Bootstraps and requires the dedicated Home Assistant media user for local media identity. |
-| 1.2.1 | 1.1 | 1.7.x | Keeps the Home Assistant media user on the internal route only. |
-| 1.2.0 | 1.1 | 1.7.x | Adds read-only architecture self-test. |
-
-Older agents do not expose `/api/v1/self-test`. Home Assistant must treat that
-as unsupported rather than attempting automatic repair.
+Agent `2.4.0` serves self-test contract `api_version: "1.1"` for firmware family
+`1.7.x`. The release notes list the agent changes of each version.

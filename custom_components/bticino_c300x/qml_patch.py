@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from .agent_update import async_retry_update_maintenance_busy
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 
@@ -17,10 +18,18 @@ def _qml_patch_lock(entry: BticinoC300XConfigEntry) -> Lock:
     return entry_lock(entry.entry_id, "qml_patch")
 
 
-async def async_refresh_qml_patch_status(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
-    """Refresh and store the device-reported Display patch status."""
+async def async_refresh_qml_patch_status(
+    entry: BticinoC300XConfigEntry, *, wait_busy: bool = False,
+) -> dict[str, Any]:
+    """Refresh and store the device-reported Display patch status.
 
-    status = await entry.runtime_data.api.async_qml_patch_status()
+    ``wait_busy`` waits while the agent runs another maintenance job.
+    """
+
+    read = entry.runtime_data.api.async_qml_patch_status
+    status: dict[str, Any] = await (
+        async_retry_update_maintenance_busy(read) if wait_busy else read()
+    )
     _store_qml_patch_status(entry, status)
     return status
 
@@ -65,19 +74,23 @@ async def async_restore_qml_patches_after_update(
     the core apply, the full-patch apply, and the GUI reload.
     """
 
+    api = entry.runtime_data.api
+    busy_retry = async_retry_update_maintenance_busy
     async with _qml_patch_lock(entry):
-        core_status = await entry.runtime_data.api.async_apply_qml_core_patch()
+        core_status = await busy_retry(api.async_apply_qml_core_patch)
         _store_qml_patch_status(entry, core_status)
         if apply_full_patch:
+            full_patch = _apply_full_patch_action(entry)
             await _async_run_qml_patch_action_unlocked(
                 entry,
                 status_changed=None,
                 transient_state="patching",
                 expected_patched=True,
-                action=_apply_full_patch_action(entry),
+                action=lambda: busy_retry(full_patch),
+                refresh=lambda entry: async_refresh_qml_patch_status(entry, wait_busy=True),
             )
-        await entry.runtime_data.api.async_reload_gui()
-        return await async_refresh_qml_patch_status(entry)
+        await busy_retry(api.async_reload_gui)
+        return await async_refresh_qml_patch_status(entry, wait_busy=True)
 
 
 async def async_apply_qml_core_patch_and_confirm(
@@ -172,6 +185,9 @@ async def _async_run_qml_patch_action_unlocked(
     transient_state: str,
     expected_patched: bool,
     action: Callable[[], Awaitable[dict[str, Any]]],
+    refresh: Callable[
+        [BticinoC300XConfigEntry], Awaitable[dict[str, Any]]
+    ] = async_refresh_qml_patch_status,
 ) -> dict[str, Any]:
     """Run one patch mutation; the caller must hold the entry's patch lock."""
 
@@ -188,7 +204,7 @@ async def _async_run_qml_patch_action_unlocked(
         _store_qml_patch_status(entry, action_status)
         _notify_status_changed(status_changed)
         return action_status
-    status = await async_refresh_qml_patch_status(entry)
+    status = await refresh(entry)
     _notify_status_changed(status_changed)
     return status
 

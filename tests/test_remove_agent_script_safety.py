@@ -147,3 +147,185 @@ def test_self_copy_uses_private_workspace_even_with_open_umask(local_device, tmp
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
     assert not list(Path(env["TMPDIR"]).iterdir())
+
+
+def _firewall_fixture(env, family, backed_up):
+    target = Path(env["C300X_IPTABLES6" if family == "ipv6" else "C300X_IPTABLES"])
+    marker = "c300x-native-agent ipv6 firewall" if family == "ipv6" else "c300x-native-agent firewall"
+    original = "#!/bin/sh\n# Firmware rules\niptables -P INPUT DROP\n"
+    target.write_text(original + f"# {marker} begin\n# Agent rules\n# {marker} end\n")
+    target.chmod(0o750)
+    backup = Path(env["C300X_BACKUP_ROOT"], "original/etc/network/if-pre-up.d",
+                  "iptables6" if family == "ipv6" else "iptables")
+    if backed_up:
+        backup.parent.mkdir(parents=True)
+        backup.write_text(original)
+        backup.chmod(0o600)
+    return target, backup, original
+
+
+def _command_double(tmp_path, name, body):
+    command = tmp_path / "commands" / name
+    command.write_text(f'#!/bin/sh\n{body}\nexec "{shutil.which(name)}" "$@"\n')
+    command.chmod(0o700)
+
+
+@pytest.mark.parametrize("family", ["ipv4", "ipv6"])
+@pytest.mark.parametrize("backed_up", [False, True])
+@pytest.mark.parametrize("failure", ["partial_write", "silent_partial", "copy", "rename", "signal", "stage"])
+def test_failed_firewall_restore_keeps_live_file_and_all_recovery_material(
+    local_device, tmp_path, family, backed_up, failure
+):
+    env = local_device
+    target, backup, _original = _firewall_fixture(env, family, backed_up)
+    before = target.read_bytes(), target.stat()
+    env["FAULT_TARGET"] = str(target)
+    if failure in {"partial_write", "silent_partial", "signal"}:
+        outcome = {"partial_write": "exit 1", "silent_partial": "exit 0",
+                   "signal": 'kill -TERM "$PPID"; exit 1'}[failure]
+        _command_double(tmp_path, "cat", f'''
+case "${{1:-}}" in
+    */managed-block|*/original/etc/network/if-pre-up.d/iptables*)
+        for staged in "$FAULT_TARGET".c300x-restore.*; do
+            [ -d "$staged" ] || continue
+            printf '# partial restore\\n'
+            {outcome}
+        done ;;
+esac''')
+    elif failure == "copy":
+        _command_double(tmp_path, "cp", '''
+if [ "${1:-}" = -p ] && [ "${2:-}" = "$FAULT_TARGET" ]; then
+    printf partial > "$3"
+    exit 1
+fi''')
+    elif failure == "rename":
+        _command_double(tmp_path, "mv", '''
+if [ "${3:-}" = "$FAULT_TARGET" ]; then exit 1; fi''')
+    else:
+        _command_double(tmp_path, "mktemp", '''
+case "${2:-}" in "$FAULT_TARGET".c300x-restore.*) exit 1;; esac''')
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == (130 if failure == "signal" else 1), result.stderr
+    assert target.read_bytes() == before[0]
+    assert target.stat().st_mode == before[1].st_mode
+    assert target.stat().st_ino == before[1].st_ino
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+    assert Path(env["C300X_BACKUP_ROOT"]).is_dir()
+    if backed_up:
+        assert backup.read_text() == _original
+    assert Path(env["C300X_INIT_SCRIPT"]).is_file()
+    assert Path(env["C300X_INIT_LINK"]).is_file()
+    calls = Path(env["CALL_LOG"]).read_text().splitlines()
+    assert not {"reboot", "killall", "start-stop-daemon", "media-restore"}.intersection(calls)
+    assert not list(tmp_path.glob("*.c300x-restore.*"))
+    assert not list(Path(env["TMPDIR"]).iterdir())
+
+
+@pytest.mark.parametrize("family", ["ipv4", "ipv6"])
+@pytest.mark.parametrize("backed_up", [False, True])
+def test_successful_firewall_restore_preserves_live_metadata(local_device, tmp_path, family, backed_up):
+    env = local_device
+    target, _backup, original = _firewall_fixture(env, family, backed_up)
+    before = target.stat()
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 0, result.stderr
+    assert target.read_text() == original
+    after = target.stat()
+    assert (after.st_mode, after.st_uid, after.st_gid) == (before.st_mode, before.st_uid, before.st_gid)
+    assert not Path(env["C300X_BACKUP_ROOT"]).exists()
+    assert not Path(env["C300X_AGENT_DIR"]).exists()
+    assert not list(tmp_path.glob("*.c300x-restore.*"))
+
+
+@pytest.mark.parametrize("backed_up", [False, True])
+def test_missing_firewall_is_only_recreated_from_a_backup(local_device, backed_up):
+    env = local_device
+    target, _backup, original = _firewall_fixture(env, "ipv6", backed_up)
+    target.unlink()
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 0, result.stderr
+    assert target.exists() is backed_up
+    if backed_up:
+        assert target.read_text() == original
+        assert target.stat().st_mode & 0o777 == 0o755
+
+
+@pytest.mark.parametrize("backed_up", [False, True])
+def test_symlink_firewall_target_fails_closed(local_device, tmp_path, backed_up):
+    env = local_device
+    target, _backup, _original = _firewall_fixture(env, "ipv6", backed_up)
+    sentinel = tmp_path / "sentinel"
+    target.rename(sentinel)
+    before = sentinel.read_bytes()
+    target.symlink_to(sentinel)
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode != 0
+    assert sentinel.read_bytes() == before
+    assert target.is_symlink()
+    assert Path(env["C300X_BACKUP_ROOT"]).is_dir()
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+    assert "reboot" not in Path(env["CALL_LOG"]).read_text().splitlines()
+
+
+@pytest.mark.parametrize(("phase", "failure"), [
+    (phase, failure)
+    for phase in ("firewall", "startup")
+    for failure in ("rw", "ro_once", "ro_always", "remove")
+    if failure != "remove" or phase == "startup"
+])
+def test_restore_and_startup_failures_block_deletion_and_reboot(local_device, tmp_path, phase, failure):
+    env = local_device
+    marker = Path(env["C300X_BACKUP_ROOT"], "keep")
+    marker.write_text("recovery material\n")
+    env["FAIL_PHASE"] = phase
+    env["FAIL_MODE"] = failure
+    env["RO_FAILED"] = str(tmp_path / "ro-failed")
+    if failure == "remove":
+        _command_double(tmp_path, "rm", '''
+if [ "${2:-}" = "$C300X_INIT_LINK" ]; then exit 73; fi''')
+    mount = tmp_path / "commands/mount"
+    mount.write_text('''#!/bin/sh
+printf 'mount %s\\n' "$*" >> "$CALL_LOG"
+in_phase=0
+if [ "$FAIL_PHASE" = firewall ] || grep -q '^media-restore$' "$CALL_LOG"; then in_phase=1; fi
+if [ "$in_phase" = 1 ]; then
+    case "$FAIL_MODE:$*" in
+        rw:*remount,rw*|ro_always:*remount,ro*) exit 1 ;;
+        ro_once:*remount,ro*)
+            if [ ! -f "$RO_FAILED" ]; then touch "$RO_FAILED"; exit 1; fi ;;
+    esac
+fi
+exit 0
+''')
+    mount.chmod(0o700)
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode != 0
+    assert "keeping agent files and backups" in result.stderr
+    assert marker.read_text() == "recovery material\n"
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+    calls = Path(env["CALL_LOG"]).read_text().splitlines()
+    assert "reboot" not in calls
+    if phase == "firewall":
+        assert "media-restore" not in calls
+        assert Path(env["C300X_INIT_SCRIPT"]).is_file()
+    if failure.startswith("ro_"):
+        assert calls[-2:] == ["mount -o remount,ro /", "mount -o remount,ro /"]
+    if failure in {"rw", "remove"}:
+        assert Path(env["C300X_INIT_SCRIPT"]).is_file()
+        assert Path(env["C300X_INIT_LINK"]).is_file()
+    assert not list(Path(env["TMPDIR"]).iterdir())

@@ -28,16 +28,17 @@ Most users only need:
 | Add notification or capture automations | [Blueprints](blueprints.md) |
 | Set up native display pages, tiles and Alarmo | [Display setup](quickstart.md#9-optional-native-display) |
 | Save visitor images and control retention | [Visitor images](feature-reference.md#visitor-images) |
-| Upgrade directly from 2.1.3 | [Upgrade guide](advanced-maintenance.md#from-213-to-230) |
+| Upgrade from 2.3.0 or 2.1.3 | [Upgrade guide](advanced-maintenance.md#updates) |
 | Update, remove or repair the device agent | [Advanced maintenance](advanced-maintenance.md) |
 
 ## Daily Use
 
 - **Save images** enables automatic visitor images independently of an open
-  dashboard. Delay and retention are configured under Video and audio; defaults
-  are 5 seconds and 14 days. Images and their shared camera/card preview are
+  dashboard. Size, delay, retention and the date and time in the image are
+  configured under **Configure > Visitor Snapshot**; defaults are 688x480,
+  3 seconds, 14 days and date and time on. Images and their shared camera/card preview are
   stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
-- Use the **C300X Doorbell Call Card** in **Auto** mode for live view, Ring Call
+- Use the **C300X Doorbell Call Card** in **Doorstation + Home Call** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.
 - Keep the card's Media Readiness line visible unless you intentionally want to
   hide all readiness status from that card.
@@ -56,12 +57,12 @@ Most users only need:
 | --- | --- |
 | Doorbell and Ring Call | C300X Doorbell Call Card, Forwarding select, Doorbell event, Doorbell state, Answer/Hang Up services. |
 | On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`. |
-| Visitor images | Device-wide Save images switch; capture delay and retention in Video and audio; archive in HA Media and last-image previews. |
+| Visitor images | Device-wide Save images switch; size, capture delay, retention and date and time under Visitor Snapshot; archive in HA Media and last-image previews. |
 | Talkback | Secure browser frontend with microphone permission; HTTPS or Home Assistant Cloud is expected. |
 | Home Call | Auto card, dedicated Home Call mode or `start_home_call` / `stop_home_call`. |
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |
 | Messages and memos | Video-message, text-memo and voice-memo sensors plus playback/write/delete services. |
-| Display pages | Up to eight ordered native pages, weather, configurable tiles and supported entity controls; a separate Alarmo subpage with an optional quick action. |
+| Display pages | Up to eight ordered native pages plus an optional Energy page, weather, configurable tiles and supported entity controls; a separate Alarmo subpage with an optional quick action. |
 | Maintenance | Agent update/remove, SSH/noAuth, firewall, mDNS, GUI reload and reboot controls. |
 
 See [Feature reference](feature-reference.md) for the full entity and service

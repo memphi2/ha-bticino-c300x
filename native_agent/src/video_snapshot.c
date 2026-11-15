@@ -26,7 +26,11 @@
 
 #define SNAPSHOT_MAX_DIMENSION 4096U
 #define SNAPSHOT_MAX_ROW (SNAPSHOT_MAX_DIMENSION * 4U)
-#define SNAPSHOT_MAX_BODY (C300X_HTTP_OUTPUT_LIMIT - 512U)
+#define SNAPSHOT_MAX_WIDTH C300X_SNAPSHOT_MAX_WIDTH
+#define SNAPSHOT_MAX_HEIGHT C300X_SNAPSHOT_MAX_HEIGHT
+#define SNAPSHOT_MAX_BODY (54U + SNAPSHOT_MAX_WIDTH * 3U * SNAPSHOT_MAX_HEIGHT)
+_Static_assert(SNAPSHOT_MAX_BODY + 512U <= C300X_HTTP_OUTPUT_LIMIT,
+               "the largest snapshot must fit one HTTP response");
 
 static pthread_mutex_t capture_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct timespec last_attempt;
@@ -162,7 +166,13 @@ static int read_row(int fd, unsigned char *row, size_t size, off_t offset)
     return 1;
 }
 
-static int copy_frame(int fd, int owner, dev_t device, unsigned char **data, size_t *size)
+static unsigned char blend(uint32_t left, uint32_t right, uint32_t weight)
+{
+    return (unsigned char)(((left & 255U) * (256U - weight) + (right & 255U) * weight) >> 8);
+}
+
+static int copy_frame(int fd, int owner, dev_t device, uint32_t wanted_width,
+                      uint32_t wanted_height, unsigned char **data, size_t *size)
 {
     struct fb_fix_screeninfo f = {0}, after_f = {0};
     struct fb_var_screeninfo v = {0}, after_v = {0};
@@ -173,14 +183,18 @@ static int copy_frame(int fd, int owner, dev_t device, unsigned char **data, siz
     if (ioctl(fd, FBIOGET_FSCREENINFO, &f) < 0
         || ioctl(fd, FBIOGET_VSCREENINFO, &v) < 0 || !geometry_valid(&f, &v)
         || !owner_active(owner, device)) return 0;
-    width = v.xres < 512 ? v.xres : 512;
+    width = v.xres < SNAPSHOT_MAX_WIDTH ? v.xres : SNAPSHOT_MAX_WIDTH;
     height = (uint32_t)((uint64_t)v.yres * width / v.xres);
-    if (height > 307) {
-        height = 307;
+    if (height > SNAPSHOT_MAX_HEIGHT) {
+        height = SNAPSHOT_MAX_HEIGHT;
         width = (uint32_t)((uint64_t)v.xres * height / v.yres);
     }
     if (!width) width = 1;
     if (!height) height = 1;
+    if (wanted_width && wanted_height) {
+        width = wanted_width;
+        height = wanted_height;
+    }
     stride = (width * 3 + 3) & ~3U;
     length = 54 + (size_t)stride * height;
     if (length > SNAPSHOT_MAX_BODY) return 0;
@@ -200,12 +214,19 @@ static int copy_frame(int fd, int owner, dev_t device, unsigned char **data, siz
         unsigned char *output = bmp + 54 + (size_t)(height - y - 1) * stride;
         if (!read_row(fd, row, (size_t)v.xres * 4, offset)) goto done;
         for (uint32_t x = 0; x < width; x++) {
-            size_t source = (size_t)((uint64_t)x * v.xres / width) * 4;
-            uint32_t pixel = (uint32_t)row[source] | (uint32_t)row[source + 1] << 8
-                | (uint32_t)row[source + 2] << 16 | (uint32_t)row[source + 3] << 24;
-            output[x * 3] = (unsigned char)(pixel >> v.blue.offset);
-            output[x * 3 + 1] = (unsigned char)(pixel >> v.green.offset);
-            output[x * 3 + 2] = (unsigned char)(pixel >> v.red.offset);
+            /* Neighbouring columns are mixed so a narrower image does not
+               simply drop columns of the display. */
+            uint64_t position = (uint64_t)x * v.xres * 256U / width;
+            size_t left = (size_t)(position >> 8) * 4;
+            size_t right = (position >> 8) + 1 < v.xres ? left + 4 : left;
+            uint32_t weight = (uint32_t)(position & 255U);
+            uint32_t first = (uint32_t)row[left] | (uint32_t)row[left + 1] << 8
+                | (uint32_t)row[left + 2] << 16 | (uint32_t)row[left + 3] << 24;
+            uint32_t second = (uint32_t)row[right] | (uint32_t)row[right + 1] << 8
+                | (uint32_t)row[right + 2] << 16 | (uint32_t)row[right + 3] << 24;
+            output[x * 3] = blend(first >> v.blue.offset, second >> v.blue.offset, weight);
+            output[x * 3 + 1] = blend(first >> v.green.offset, second >> v.green.offset, weight);
+            output[x * 3 + 2] = blend(first >> v.red.offset, second >> v.red.offset, weight);
         }
     }
     if (!owner_active(owner, device)
@@ -226,13 +247,17 @@ done:
     return ok;
 }
 
-enum c300x_snapshot_result c300x_video_snapshot(unsigned char **data, size_t *size)
+enum c300x_snapshot_result c300x_video_snapshot(
+    unsigned char **data, size_t *size, unsigned int width, unsigned int height)
 {
     struct timespec now;
     SNAPSHOT_STAT info;
     int fd = -1, owner = -1;
     enum c300x_snapshot_result result = C300X_SNAPSHOT_UNAVAILABLE;
     *data = NULL; *size = 0;
+    if ((width || height)
+        && (width < C300X_SNAPSHOT_MIN_SIZE || width > SNAPSHOT_MAX_WIDTH
+            || height < C300X_SNAPSHOT_MIN_SIZE || height > SNAPSHOT_MAX_HEIGHT)) return result;
     if (pthread_mutex_trylock(&capture_lock) != 0) return C300X_SNAPSHOT_THROTTLED;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) goto done;
     if (attempted && (now.tv_sec < last_attempt.tv_sec + 2
@@ -244,7 +269,7 @@ enum c300x_snapshot_result c300x_video_snapshot(unsigned char **data, size_t *si
     fd = open("/dev/fb0", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0 || snapshot_fstat(fd, &info) != 0 || !S_ISCHR(info.st_mode)) goto done;
     owner = find_owner(info.st_rdev);
-    if (owner >= 0 && copy_frame(fd, owner, info.st_rdev, data, size)) result = C300X_SNAPSHOT_OK;
+    if (owner >= 0 && copy_frame(fd, owner, info.st_rdev, width, height, data, size)) result = C300X_SNAPSHOT_OK;
 done:
     if (owner >= 0) close(owner);
     if (fd >= 0) close(fd);

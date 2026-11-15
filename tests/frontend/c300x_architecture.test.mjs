@@ -39,3 +39,21 @@ test("frontend module ownership keeps orchestration out of the card renderer", (
   assert.equal(template.includes("RTCPeerConnection"), false);
   assert.equal(webrtc.includes("C300XMediaAttachment"), true);
 });
+
+test("the card footer is one row at every width, with the readiness beside the status", () => {
+  const template = source("c300x-card-template.js");
+
+  // Buttons left, text, buttons right: no width may move the text below them.
+  assert.match(template, /grid-template-areas: "controls text devices";/);
+  assert.equal(template.match(/grid-template-areas:/g).length, 1);
+  assert.equal(template.includes('"text text"'), false);
+  // The readiness sits on the status line, not on a line of its own.
+  const statusLine = template.slice(template.indexOf('<div class="status-line">'));
+  assert.ok(statusLine.indexOf('<div class="secondary">') < statusLine.indexOf('<div class="readiness hidden">'));
+  assert.ok(statusLine.indexOf('<div class="readiness hidden">') < statusLine.indexOf("</div>\n          </div>"));
+  // Text that does not fit is cut instead of wrapping the row.
+  for (const rule of [".title", ".secondary", ".readiness-text"]) {
+    const body = template.slice(template.indexOf(`        ${rule} {`));
+    assert.match(body.slice(0, body.indexOf("}")), /text-overflow: ellipsis;/, rule);
+  }
+});

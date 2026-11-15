@@ -153,7 +153,7 @@ def assert_rtsp_udp_is_rejected(binary: Path) -> None:
     content = source.read_text(encoding="utf-8")
     required = (
         "if (!tcp)",
-        "send_rtsp_response(fd, 461, cseq, NULL, NULL)",
+        "send_rtsp_response(writer, fd, 461, cseq, NULL, NULL)",
     )
     if any(item not in content for item in required):
         raise AssertionError("RTSP must reject unsupported UDP transport")

@@ -81,8 +81,11 @@ def test_native_audio_choice_is_retained_on_success_and_validation_error(kind, e
     )
     if kind == "options":
         flow = BticinoC300XOptionsFlow(entry)
+        flow.hass = SimpleNamespace(config_entries=SimpleNamespace(
+            async_update_entry=lambda target, *, options: setattr(target, "options", dict(options)),
+        ))
         step = flow.async_step_features
-        pending = "_feature_options"
+        pending = ""
     else:
         flow = BticinoC300XConfigFlow()
         flow._get_reconfigure_entry = lambda: entry
@@ -94,13 +97,16 @@ def test_native_audio_choice_is_retained_on_success_and_validation_error(kind, e
     result = asyncio.run(step({
         CONF_VIDEO_ENABLED: True,
         CONF_NATIVE_TWO_WAY_AUDIO: enabled,
-        CONF_DOORSTATION_AUDIO_GAIN_DB: 99 if invalid else 0,
+        # A changed level: the options flow writes nothing for an unchanged area.
+        CONF_DOORSTATION_AUDIO_GAIN_DB: 99 if invalid else 1,
     }))
     if invalid:
         assert result["errors"] == {CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain"}
         _assert_form_audio(result["data_schema"], enabled)
     else:
-        assert getattr(flow, pending)[CONF_NATIVE_TWO_WAY_AUDIO] is (
+        # The options flow saves the area at once; the other flows keep it pending.
+        kept = getattr(flow, pending) if pending else entry.options
+        assert kept[CONF_NATIVE_TWO_WAY_AUDIO] is (
             enabled and HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
         )
 

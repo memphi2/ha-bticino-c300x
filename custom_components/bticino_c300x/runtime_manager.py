@@ -174,9 +174,10 @@ class C300XRuntimeManager:
         self.entry.async_on_unload(
             self.entry.add_update_listener(_entry_update_listener(self.entry))
         )
-        await async_setup_services(self.hass)
         await async_setup_snapshots(self.hass, self.entry)
         await self.async_sync_platform_gate_state()
+        # Delete services depend on the patch status loaded by the gate read.
+        await async_setup_services(self.hass)
         # After the gate state, never before: the cleanup asks whether the
         # Display patch is active, and _store_runtime_data has just replaced
         # runtime_data with a fresh object whose qml_patch_status is empty.
@@ -270,7 +271,7 @@ class C300XRuntimeManager:
         """Synchronize startup-only runtime state with the device agent."""
 
         self.entry.runtime_data.resources.unregister_display_bridge_updates = (
-            _async_track_display_bridge_updates(self.hass, self.entry)
+            await _async_track_display_updates(self.hass, self.entry)
         )
         if not self.connection_state.available:
             return
@@ -834,30 +835,6 @@ def _mark_homeassistant_media_user_bootstrapped(
     hass.config_entries.async_update_entry(entry, data=data)
 
 
-async def _async_refresh_device_user_status(
-    entry: BticinoC300XConfigEntry,
-) -> None:
-    """Refresh the dedicated HA media-user status without mutating the device."""
-
-    if not _entry_video_enabled(entry):
-        return
-    capabilities = getattr(entry.runtime_data, "capabilities", {})
-    if not capability_is_supported(capabilities, "device_user"):
-        return
-    try:
-        entry.runtime_data.device_user_status = (
-            await entry.runtime_data.api.async_device_user_status()
-        )
-        entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
-    except C300XAgentApiUnsupportedError:
-        _LOGGER.debug("C300X device agent does not support device-user status")
-    except C300XAgentApiError as err:
-        _LOGGER.warning(
-            "C300X device-user status refresh failed: %s",
-            compact_error_text(err),
-        )
-
-
 async def _async_refresh_self_test(entry: BticinoC300XConfigEntry) -> None:
     """Refresh the read-only device-agent architecture self-test."""
 
@@ -1026,6 +1003,36 @@ async def _async_notify_display_configuration(api: C300XAgentApi) -> None:
         _LOGGER.debug("C300X display configuration notification failed", exc_info=True)
 
 
+async def _async_track_display_updates(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+) -> Any:
+    """Track everything that changes the display pages, the energy page included."""
+
+    unsubscribe = _async_track_display_bridge_updates(hass, entry)
+    if unsubscribe is None:
+        return None
+    from .dashboard_energy_updates import async_track_energy_page_updates
+
+    try:
+        stop_energy = await async_track_energy_page_updates(
+            hass, entry, lambda: _async_schedule_display_bridge_notify(hass, entry),
+        )
+    except BaseException:
+        # The caller never gets the unsubscribe when this is cancelled by an
+        # unload or fails, so the listeners registered above end here.
+        unsubscribe()
+        raise
+    if stop_energy is None:
+        return unsubscribe
+
+    def _unsub_all() -> None:
+        unsubscribe()
+        stop_energy()
+
+    return _unsub_all
+
+
 def _async_track_display_bridge_updates(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
@@ -1041,23 +1048,36 @@ def _async_track_display_bridge_updates(
 
     from .dashboard import _dashboard_state_entity_id
     from .dashboard_config import (
+        _DASHBOARD_DEFAULT_PAGE,
         configured_actions,
         configured_alarm_page_entity_id,
         configured_dashboard_entities,
+        configured_dashboard_entity_display_overrides,
+        configured_status_page_enabled,
         configured_weather_entity_id,
     )
     from .dashboard_updates import dashboard_state_event_changes_display
 
-    selected_entity_ids = set(configured_dashboard_entities(entry))
+    status_enabled = configured_status_page_enabled(entry)
+    overrides = configured_dashboard_entity_display_overrides(entry)
+    selected_entity_ids = {
+        entity_id for entity_id in configured_dashboard_entities(entry)
+        if status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
+    }
     projected_entity_ids = selected_entity_ids.copy()
     alarm_page_entity_id = configured_alarm_page_entity_id(entry)
     if alarm_page_entity_id:
         projected_entity_ids.add(alarm_page_entity_id)
-    unfiltered_entity_ids = {str(alarm_entity_id), configured_weather_entity_id(entry)}
-    for entity_id in (alarm_page_entity_id, configured_weather_entity_id(entry)):
+    weather_entity_id = configured_weather_entity_id(entry) if status_enabled else None
+    unfiltered_entity_ids = {str(alarm_entity_id), weather_entity_id}
+    # Add each visible use independently: a hidden tile may share its source
+    # with an action on another page or the Alarmo quick entity.
+    for entity_id in (alarm_page_entity_id, weather_entity_id):
         if entity_id:
             selected_entity_ids.add(entity_id)
     for action in configured_actions(entry).values():
+        if not status_enabled and action.get("dashboard", {}).get("page") == _DASHBOARD_DEFAULT_PAGE:
+            continue
         entity_id = _dashboard_state_entity_id(action, action.get("dashboard", {}))
         if entity_id:
             selected_entity_ids.add(entity_id)

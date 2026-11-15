@@ -674,6 +674,46 @@ static int parse_activation_items_value(
     return 1;
 }
 
+/* Rules over the whole activation list. The loader and the API setter share
+ * them, so the API cannot save a list the next agent start would refuse. */
+static int activation_items_valid(const struct c300x_config *config, char *error, size_t error_len)
+{
+    for (int index = 0; index < config->activations_count; index++) {
+        const struct c300x_activation *activation = &config->activations[index];
+        int has_command = activation->press_command[0] != '\0';
+        int has_address = activation->address[0] != '\0';
+        int auto_address = strcmp(activation->address_mode, "auto") == 0;
+
+        for (int other = index + 1; other < config->activations_count; other++) {
+            if (strcmp(activation->id, config->activations[other].id) == 0) {
+                set_error(error, error_len, "activations item ids must be unique");
+                return 0;
+            }
+        }
+        if (strcmp(activation->type, "unknown") == 0) {
+            continue;
+        }
+        if (strcmp(activation->type, "lock") == 0 && !has_address && !has_command && !auto_address) {
+            set_error(error, error_len, "lock activations need address, addressMode=auto or pressCommand");
+            return 0;
+        }
+        if ((strcmp(activation->type, "light") == 0 || strcmp(activation->type, "stair_light") == 0)
+            && !has_address
+            && !has_command
+            && !auto_address) {
+            set_error(error, error_len, "light activations need address, addressMode=auto or pressCommand");
+            return 0;
+        }
+        if ((strcmp(activation->type, "generic") == 0 || strcmp(activation->type, "scenario") == 0)
+            && !has_command
+            && !auto_address) {
+            set_error(error, error_len, "generic activations need addressMode=auto or pressCommand");
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int c300x_config_set_activation_items_json(
     struct c300x_config *config,
     const char *items_json,
@@ -693,13 +733,16 @@ int c300x_config_set_activation_items_json(
         set_error(error, error_len, "activations.items must be a valid JSON array");
         return 0;
     }
-    return parse_activation_items_value(
+    if (!parse_activation_items_value(
         items_json,
         document_end,
         config,
         error,
         error_len
-    );
+    )) {
+        return 0;
+    }
+    return activation_items_valid(config, error, error_len);
 }
 
 int c300x_config_listen_valid(const struct c300x_config *config, char *error, size_t error_len) {
@@ -1696,38 +1739,8 @@ int c300x_load_config(
             }
         }
     }
-    for (int index = 0; index < config->activations_count; index++) {
-        const struct c300x_activation *activation = &config->activations[index];
-        int has_command = activation->press_command[0] != '\0';
-        int has_address = activation->address[0] != '\0';
-        int auto_address = strcmp(activation->address_mode, "auto") == 0;
-
-        for (int other = index + 1; other < config->activations_count; other++) {
-            if (strcmp(activation->id, config->activations[other].id) == 0) {
-                set_error(error, error_len, "activations item ids must be unique");
-                return 0;
-            }
-        }
-        if (strcmp(activation->type, "unknown") == 0) {
-            continue;
-        }
-        if (strcmp(activation->type, "lock") == 0 && !has_address && !has_command && !auto_address) {
-            set_error(error, error_len, "lock activations need address, addressMode=auto or pressCommand");
-            return 0;
-        }
-        if ((strcmp(activation->type, "light") == 0 || strcmp(activation->type, "stair_light") == 0)
-            && !has_address
-            && !has_command
-            && !auto_address) {
-            set_error(error, error_len, "light activations need address, addressMode=auto or pressCommand");
-            return 0;
-        }
-        if ((strcmp(activation->type, "generic") == 0 || strcmp(activation->type, "scenario") == 0)
-            && !has_command
-            && !auto_address) {
-            set_error(error, error_len, "generic activations need addressMode=auto or pressCommand");
-            return 0;
-        }
+    if (!activation_items_valid(config, error, error_len)) {
+        return 0;
     }
     if (config->video_rtsp_path[0] == '\0' || config->video_rtsp_video_path[0] == '\0') {
         set_error(error, error_len, "video.rtsp.path and video.rtsp.videoPath must be set");

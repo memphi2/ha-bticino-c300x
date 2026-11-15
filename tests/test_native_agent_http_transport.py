@@ -49,6 +49,7 @@ def test_display_callback_http_status_and_response_validation(tmp_path: Path) ->
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections", "-pthread",
             str(ROOT / "native_agent/test/display_http_test.c"),
             str(ROOT / "native_agent/src/http_util.c"),
+            str(ROOT / "native_agent/src/time_util.c"),
             "-o", str(binary),
         ],
         capture_output=True, text=True,
@@ -56,3 +57,21 @@ def test_display_callback_http_status_and_response_validation(tmp_path: Path) ->
     assert result.returncode == 0, result.stderr
     result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
+
+
+def test_udp_event_frames_are_taken_only_from_this_host() -> None:
+    """A capture on the device showed every event frame sent by its own address.
+
+    A frame from another host on the network would inject device events, so
+    the handler drops it before it parses anything.
+    """
+
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "native_agent/src/http.c").read_text(
+        encoding="utf-8"
+    )
+    handler = source.split("static void handle_udp_event(", 1)[1].split("\n}\n", 1)[0]
+    check = handler.index("c300x_udp_source_is_local(&source)")
+    assert "recvfrom(udp_fd" in handler
+    assert check < handler.index("system_end = -1;")

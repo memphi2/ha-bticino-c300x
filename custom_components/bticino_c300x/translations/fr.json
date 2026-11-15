@@ -52,9 +52,7 @@
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
-          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant",
-          "snapshot_delay_seconds": "Délai de capture (secondes)",
-          "snapshot_retention_days": "Conservation (jours)"
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
@@ -62,9 +60,25 @@
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé.",
-          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 5 secondes par défaut. Aucune carte ouverte requise.",
-          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+        }
+      },
+      "user_visitor_snapshot": {
+        "title": "Instantané visiteur",
+        "description": "Une image du visiteur est enregistrée à chaque sonnerie et au début d'un flux vidéo. Ces réglages s'appliquent à cette image.",
+        "data": {
+          "snapshot_width": "Largeur de l'image (pixels)",
+          "snapshot_height": "Hauteur de l'image (pixels)",
+          "snapshot_delay_seconds": "Délai de capture (secondes)",
+          "snapshot_retention_days": "Conservation (jours)",
+          "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
+        },
+        "data_description": {
+          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
+          "snapshot_height": "480 par défaut, la hauteur du flux vidéo de l'appareil et de l'écran. Plage 64-480.",
+          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
+          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
+          "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
         }
       },
       "user_device_activations": {
@@ -149,9 +163,7 @@
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
-          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant",
-          "snapshot_delay_seconds": "Délai de capture (secondes)",
-          "snapshot_retention_days": "Conservation (jours)"
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
@@ -159,9 +171,25 @@
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé.",
-          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 5 secondes par défaut. Aucune carte ouverte requise.",
-          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+        }
+      },
+      "reconfigure_visitor_snapshot": {
+        "title": "Instantané visiteur",
+        "description": "Une image du visiteur est enregistrée à chaque sonnerie et au début d'un flux vidéo. Ces réglages s'appliquent à cette image.",
+        "data": {
+          "snapshot_width": "Largeur de l'image (pixels)",
+          "snapshot_height": "Hauteur de l'image (pixels)",
+          "snapshot_delay_seconds": "Délai de capture (secondes)",
+          "snapshot_retention_days": "Conservation (jours)",
+          "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
+        },
+        "data_description": {
+          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
+          "snapshot_height": "480 par défaut, la hauteur du flux vidéo de l'appareil et de l'écran. Plage 64-480.",
+          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
+          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
+          "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
         }
       },
       "reconfigure_device_activations": {
@@ -244,17 +272,19 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
-            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
+            "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "enabled": "Afficher la page d'état",
               "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "enabled": "Afficher cette page indépendamment de la météo et des entités. La désactivation conserve ses réglages.",
               "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
@@ -349,23 +379,45 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "energy_page": {
+            "name": "Page énergie",
+            "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
+            "data": {
+              "enabled": "Afficher la page énergie",
+              "position": "Position",
+              "view_now": "Maintenant",
+              "view_today": "Aujourd’hui",
+              "view_power": "Historique de puissance",
+              "view_balance": "Bilan"
+            },
+            "data_description": {
+              "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
+              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
+              "view_today": "Énergie horaire et totaux du jour",
+              "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
+              "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
-            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
+            "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "enabled": "Afficher la page d'état",
               "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "enabled": "Afficher cette page indépendamment de la météo et des entités. La désactivation conserve ses réglages.",
               "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
@@ -460,6 +512,26 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "energy_page": {
+            "name": "Page énergie",
+            "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
+            "data": {
+              "enabled": "Afficher la page énergie",
+              "position": "Position",
+              "view_now": "Maintenant",
+              "view_today": "Aujourd’hui",
+              "view_power": "Historique de puissance",
+              "view_balance": "Bilan"
+            },
+            "data_description": {
+              "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
+              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
+              "view_today": "Énergie horaire et totaux du jour",
+              "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
+              "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
         }
@@ -498,7 +570,7 @@
       "dashboard_entity_on_several_pages": "Une entité est choisie sur plusieurs pages ; gardez-la sur une seule page.",
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
-      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes et 1-365 jours."
+      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480."
     }
   },
   "options": {
@@ -530,9 +602,7 @@
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
-          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant",
-          "snapshot_delay_seconds": "Délai de capture (secondes)",
-          "snapshot_retention_days": "Conservation (jours)"
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
@@ -540,9 +610,25 @@
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé.",
-          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 5 secondes par défaut. Aucune carte ouverte requise.",
-          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+        }
+      },
+      "visitor_snapshot": {
+        "title": "Instantané visiteur",
+        "description": "Une image du visiteur est enregistrée à chaque sonnerie et au début d'un flux vidéo. Ces réglages s'appliquent à cette image.",
+        "data": {
+          "snapshot_width": "Largeur de l'image (pixels)",
+          "snapshot_height": "Hauteur de l'image (pixels)",
+          "snapshot_delay_seconds": "Délai de capture (secondes)",
+          "snapshot_retention_days": "Conservation (jours)",
+          "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
+        },
+        "data_description": {
+          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
+          "snapshot_height": "480 par défaut, la hauteur du flux vidéo de l'appareil et de l'écran. Plage 64-480.",
+          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
+          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
+          "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
         }
       },
       "device_activations": {
@@ -601,24 +687,28 @@
       },
       "init": {
         "title": "Réglages C300X",
-        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation ; les autres rubriques conservent leurs réglages.",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène ici ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
         "menu_options": {
           "connection": "Connexion au C300X",
           "features": "Vidéo et audio",
+          "visitor_snapshot": "Instantané visiteur",
           "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
           "dashboard_alarm": "Alarme (Alarmo)",
           "dashboard": "Écran et patch display",
           "dashboard_pages": "Pages de l'écran",
-          "dashboard_entity_display": "Tuiles de l'écran"
+          "dashboard_entity_display": "Tuiles de l'écran",
+          "done": "Terminé"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
+          "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
           "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
           "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
           "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
-          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
+          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."
         }
       },
       "dashboard_alarm": {
@@ -635,17 +725,19 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
-            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
+            "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "enabled": "Afficher la page d'état",
               "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "enabled": "Afficher cette page indépendamment de la météo et des entités. La désactivation conserve ses réglages.",
               "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
@@ -741,6 +833,26 @@
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
+          },
+          "energy_page": {
+            "name": "Page énergie",
+            "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
+            "data": {
+              "enabled": "Afficher la page énergie",
+              "position": "Position",
+              "view_now": "Maintenant",
+              "view_today": "Aujourd’hui",
+              "view_power": "Historique de puissance",
+              "view_balance": "Bilan"
+            },
+            "data_description": {
+              "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
+              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
+              "view_today": "Énergie horaire et totaux du jour",
+              "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
+              "view_balance": "Autonomie, autoconsommation solaire et coûts"
+            }
           }
         }
       }
@@ -766,7 +878,7 @@
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
       "required": "Ce champ est obligatoire.",
-      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes et 1-365 jours."
+      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480."
     }
   },
   "entity": {
@@ -858,12 +970,11 @@
     },
     "select": {
       "smartphone_forwarding_mode": {
-        "name": "Forwarding",
+        "name": "Renvoi d'appel",
         "state": {
           "enabled": "Smartphone",
           "homeassistant": "Home Assistant",
-          "blocked": "Blocked",
-          "unprovisioned": "Unprovisioned"
+          "blocked": "Bloqué"
         }
       },
       "audio_codec": {
@@ -947,15 +1058,7 @@
         "state": {
           "idle": "Inactif",
           "ringing": "Sonne",
-          "view_requested": "Vue caméra active",
-          "view_requeste": "Vue caméra active",
-          "pressed": "Sonnette appuyée",
-          "ring": "Sonne",
-          "doorbell_pressed": "Sonnette appuyée",
-          "doorbell_view_requested": "Vue caméra active",
-          "doorbell_media_closed": "Flux caméra terminé",
-          "media_closed": "Flux caméra terminé",
-          "closed": "Flux caméra terminé"
+          "view_requested": "Vue caméra active"
         }
       }
     },
@@ -1037,9 +1140,6 @@
     },
     "invalid_alarm_command": {
       "message": "La commande d'alarme est invalide."
-    },
-    "invalid_lock_id": {
-      "message": "L'ID de verrou est invalide."
     },
     "maintenance_action_not_supported": {
       "message": "L'action de maintenance de l'agent C300X n'est pas prise en charge, pas activée, ou aucun token de maintenance n'est configure."

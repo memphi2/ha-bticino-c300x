@@ -1,7 +1,7 @@
 import {
   c300xRingLifecycleActive,
   c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=047a3dd4cc8ee9b6";
+} from "./c300x-ring-preview-state.js?v=0b39bb5c27ddf46e";
 
 const C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS = new Set([
   "agent_cpu_watchdog",
@@ -65,12 +65,16 @@ export class C300XCardLifecycleState {
     );
   }
 
-  shouldStartPassiveAnsweredPreview({ mediaState, webrtcRunning, transitionActive }) {
+  shouldStartPassiveAnsweredPreview({ mediaState, webrtcRunning, transitionActive, answerLaunch }) {
     const hadPreview = this.ringPreviewActive || this.ringPreviewStarted;
+    // A card that is answering itself gets the stream with its microphone;
+    // the receive-only preview is for a call another client answered.
     return (
       mediaState === "ring_active"
       && hadPreview
       && !this.doorbellAnswered
+      && !this.answeringDoorbell
+      && !answerLaunch
       && !this.passiveAnsweredPreviewStarted
       && !this.ringPreviewSuppressed
       && !transitionActive

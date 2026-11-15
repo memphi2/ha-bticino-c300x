@@ -52,9 +52,7 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
-          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
-          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -62,9 +60,25 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
-          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
-          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+        }
+      },
+      "user_visitor_snapshot": {
+        "title": "Besucher-Snapshot",
+        "description": "Bei jedem Klingeln und beim Start eines Videostreams wird ein Bild des Besuchers gespeichert. Diese Einstellungen gelten für dieses Bild.",
+        "data": {
+          "snapshot_width": "Bildbreite (Pixel)",
+          "snapshot_height": "Bildhöhe (Pixel)",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)",
+          "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
+        },
+        "data_description": {
+          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
+          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
+          "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
         }
       },
       "user_device_activations": {
@@ -149,9 +163,7 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
-          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
-          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -159,9 +171,25 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
-          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
-          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+        }
+      },
+      "reconfigure_visitor_snapshot": {
+        "title": "Besucher-Snapshot",
+        "description": "Bei jedem Klingeln und beim Start eines Videostreams wird ein Bild des Besuchers gespeichert. Diese Einstellungen gelten für dieses Bild.",
+        "data": {
+          "snapshot_width": "Bildbreite (Pixel)",
+          "snapshot_height": "Bildhöhe (Pixel)",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)",
+          "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
+        },
+        "data_description": {
+          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
+          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
+          "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
         }
       },
       "reconfigure_device_activations": {
@@ -244,17 +272,19 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer zweite Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
-            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "enabled": "Statusseite anzeigen",
               "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "enabled": "Diese Seite unabhängig von Wetter und Entitäten anzeigen. Ausschalten behält ihre Einstellungen.",
               "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
@@ -349,23 +379,45 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "energy_page": {
+            "name": "Energieseite",
+            "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
+            "data": {
+              "enabled": "Energieseite anzeigen",
+              "position": "Position",
+              "view_now": "Jetzt",
+              "view_today": "Heute",
+              "view_power": "Leistungsverlauf",
+              "view_balance": "Bilanz"
+            },
+            "data_description": {
+              "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
+              "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
+              "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
+              "view_today": "Stündliche Energie und Summen des heutigen Tages",
+              "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
+              "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer zweite Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
-            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "enabled": "Statusseite anzeigen",
               "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "enabled": "Diese Seite unabhängig von Wetter und Entitäten anzeigen. Ausschalten behält ihre Einstellungen.",
               "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
@@ -460,6 +512,26 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "energy_page": {
+            "name": "Energieseite",
+            "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
+            "data": {
+              "enabled": "Energieseite anzeigen",
+              "position": "Position",
+              "view_now": "Jetzt",
+              "view_today": "Heute",
+              "view_power": "Leistungsverlauf",
+              "view_balance": "Bilanz"
+            },
+            "data_description": {
+              "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
+              "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
+              "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
+              "view_today": "Stündliche Energie und Summen des heutigen Tages",
+              "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
+              "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }
         }
@@ -498,7 +570,7 @@
       "dashboard_entity_on_several_pages": "Eine Entität ist auf mehreren Seiten gewählt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden und 1-365 Tage."
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480."
     }
   },
   "options": {
@@ -530,9 +602,7 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
-          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
-          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -540,9 +610,25 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
-          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
-          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+        }
+      },
+      "visitor_snapshot": {
+        "title": "Besucher-Snapshot",
+        "description": "Bei jedem Klingeln und beim Start eines Videostreams wird ein Bild des Besuchers gespeichert. Diese Einstellungen gelten für dieses Bild.",
+        "data": {
+          "snapshot_width": "Bildbreite (Pixel)",
+          "snapshot_height": "Bildhöhe (Pixel)",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)",
+          "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
+        },
+        "data_description": {
+          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
+          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
+          "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
         }
       },
       "device_activations": {
@@ -601,24 +687,28 @@
       },
       "init": {
         "title": "C300X-Einstellungen",
-        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest; die anderen Bereiche behalten ihre Einstellungen.",
+        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest, und führt hierher zurück; die anderen Bereiche behalten ihre Einstellungen. Um einen Bereich ohne Änderung zu verlassen, sende ihn unverändert ab.",
         "menu_options": {
           "connection": "Verbindung zum C300X",
           "features": "Video und Audio",
+          "visitor_snapshot": "Besucher-Snapshot",
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
           "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard": "Display und Display-Patch",
           "dashboard_pages": "Display-Seiten",
-          "dashboard_entity_display": "Display-Kacheln"
+          "dashboard_entity_display": "Display-Kacheln",
+          "done": "Fertig"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
+          "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
           "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
           "dashboard_pages": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
-          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel."
+          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
+          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
         }
       },
       "dashboard_alarm": {
@@ -635,17 +725,19 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer zweite Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
-            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "enabled": "Statusseite anzeigen",
               "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "enabled": "Diese Seite unabhängig von Wetter und Entitäten anzeigen. Ausschalten behält ihre Einstellungen.",
               "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
@@ -741,6 +833,26 @@
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
+          },
+          "energy_page": {
+            "name": "Energieseite",
+            "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
+            "data": {
+              "enabled": "Energieseite anzeigen",
+              "position": "Position",
+              "view_now": "Jetzt",
+              "view_today": "Heute",
+              "view_power": "Leistungsverlauf",
+              "view_balance": "Bilanz"
+            },
+            "data_description": {
+              "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
+              "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
+              "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
+              "view_today": "Stündliche Energie und Summen des heutigen Tages",
+              "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
+              "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
+            }
           }
         }
       }
@@ -766,7 +878,7 @@
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
       "required": "Dieses Feld ist erforderlich.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden und 1-365 Tage."
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480."
     }
   },
   "entity": {
@@ -858,12 +970,11 @@
     },
     "select": {
       "smartphone_forwarding_mode": {
-        "name": "Forwarding",
+        "name": "Weiterleitung",
         "state": {
           "enabled": "Smartphone",
           "homeassistant": "Home Assistant",
-          "blocked": "Blocked",
-          "unprovisioned": "Unprovisioned"
+          "blocked": "Blockiert"
         }
       },
       "audio_codec": {
@@ -947,15 +1058,7 @@
         "state": {
           "idle": "Bereit",
           "ringing": "Klingelt",
-          "view_requested": "Türkamera aktiv",
-          "view_requeste": "Türkamera aktiv",
-          "pressed": "Türklingel gedrückt",
-          "ring": "Klingelt",
-          "doorbell_pressed": "Türklingel gedrückt",
-          "doorbell_view_requested": "Türkamera aktiv",
-          "doorbell_media_closed": "Türkamera beendet",
-          "media_closed": "Türkamera beendet",
-          "closed": "Türkamera beendet"
+          "view_requested": "Türkamera aktiv"
         }
       }
     },
@@ -1037,9 +1140,6 @@
     },
     "invalid_alarm_command": {
       "message": "Der Alarmbefehl ist ungültig."
-    },
-    "invalid_lock_id": {
-      "message": "Die Schloss-ID ist ungültig."
     },
     "maintenance_action_not_supported": {
       "message": "Die C300X-Device-Agent-Maintenance-Aktion wird nicht unterstützt, ist nicht aktiviert oder es ist kein Maintenance-Token konfiguriert."

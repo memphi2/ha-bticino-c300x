@@ -73,15 +73,20 @@ are not stored in the Home Assistant config entry, diagnostics or logs.
 
 Recommended first-run choices:
 
-- Enable **Doorbell camera/video** when you want camera, Ring Call, Home Call or
-  talkback.
-- Keep **Create Home Assistant media user** enabled for media features.
-- Leave **Doorstation live audio gain** at `0 dB` for the first test.
-- Leave **Ring capture audio gain** at its default unless you use Ring Capture.
+- Enable **Door station video and audio** when you want camera, Ring Call,
+  Home Call or talkback.
+- Keep **Set up video and audio access on the C300X** enabled for media
+  features.
+- Leave **Live audio level (dB)** at `0 dB` for the first test.
+- Leave **Volume of ring recordings (dB)** at its default unless you use Ring
+  Capture.
+- With video enabled, the **Visitor Snapshot** step follows; its defaults
+  (688x480, 3 seconds, 14 days, date and time in the image) are fine for a
+  first test.
 - Leave **Additional device activations** empty unless you already know the
   C300X activation addresses you want as Home Assistant buttons.
-- Leave display pages disabled unless you want Home Assistant pages on the
-  C300X display.
+- Leave **Home Assistant pages on the display** off unless you want them on
+  the C300X display.
 - Select Alarmo and weather entities only if you use those display pages.
 - Leave destructive maintenance controls disabled until needed.
 
@@ -111,7 +116,7 @@ After Media Readiness is ready or shows only understood warnings:
 3. Select **C300X Doorbell Call Card**.
 4. Choose the C300X camera entity.
 
-Use one normal card in **Auto** mode for Doorbell, On-demand and Home Call.
+Use one normal card in **Doorstation + Home Call** mode (`mode: auto`) for Doorbell, On-demand and Home Call.
 Use separate Doorbell/Home Call modes only for hand-built special dashboards.
 The card shows the Media Readiness line by default. Disable that line in the
 card editor only if you want a cleaner dashboard.
@@ -128,7 +133,8 @@ cache if the card still looks old.
 Test in this order:
 
 1. **On-demand**: press Stream in the card.
-2. **Home Call**: start and stop a Home Call from the card in **Auto** mode.
+2. **Home Call**: start and stop a Home Call from the card in **Doorstation + Home Call**
+   mode.
 3. **Ring Call**: set **Forwarding** to **Home Assistant**, ring the doorbell,
    then press **Answer** in the card.
 
@@ -139,12 +145,13 @@ another secure browser context with microphone permission.
 
 With video enabled and the matching agent installed, **Save images** is enabled
 by default on the C300X device page. A ring or video session requests one image
-after **5 seconds**, even with every dashboard closed. The agent only reads the
+after **3 seconds**, even with every dashboard closed. The agent only reads the
 existing camera framebuffer; JPEG conversion and storage happen in HA.
 
 - Open **Media > BTicino C300X Media** to browse saved images.
-- Change delay and retention under **Configure > Video and audio**. Retention
-  defaults to **14 days**.
+- Change image size, delay, retention and the date and time in the image
+  under **Configure > Visitor Snapshot**. Retention defaults to **14 days**,
+  the size to 688x480.
 - Turn **Save images** off to stop new captures and hide the shared card/camera
   preview. Existing archives remain until they expire.
 - Images use the configured HA media directory, like recordings. Its normal
@@ -170,6 +177,9 @@ Lovelace card or an embedded HA dashboard.
 2. Open **Display pages**. Choose an optional weather entity, name your pages,
    set their order and select the entities for each. Up to eight pages are
    available, including the status page. Drag entities to reorder their tiles.
+   The second section, below the independently switchable status page, adds the optional
+   [energy page](feature-reference.md#energy-page), which shows Home
+   Assistant's Energy setup.
 3. Open **Display tiles** to set each tile's width, height, name and secondary
    line. Full-height tiles expose supported common controls directly; tap a
    tile with a chevron for its detail controls.

@@ -427,6 +427,7 @@ def test_dashboard_payload_normalization_helpers() -> None:
             "badges": [{"name": "Ready"}],
             "items": finalized_items,
             "weather": {"state": "sunny"},
+            "energy": {"views": []},
             "flow": [{"page": "next"}],
         }
     ) == {
@@ -434,7 +435,7 @@ def test_dashboard_payload_normalization_helpers() -> None:
         "badges": [{"name": "Ready"}],
         "items": finalized_items,
         "weather": {"state": "sunny"},
-        "flow": [{"page": "next"}],
+        "energy": {"views": []},
     }
     assert _finalize_dashboard_page({}) == {"title": ""}
 
@@ -2042,6 +2043,21 @@ def test_async_status_hides_display_ui_when_disabled() -> None:
     assert result["actions"] == []
 
 
+def test_async_status_marks_dashboard_available_with_only_the_energy_page() -> None:
+    """The Home Assistant button leads to the energy page even when nothing else is set up."""
+
+    entry = FakeEntry(data={
+        CONF_DEVICE_UI_ENABLED: True,
+        "energy_page": {"enabled": True, "position": 1, "views": ["now"]},
+    })
+    assert run(async_status(FakeHass(), entry))["dashboard_available"] is True
+    entry = FakeEntry(data={
+        CONF_DEVICE_UI_ENABLED: True,
+        "dashboard_status_page_enabled": False,
+    })
+    assert run(async_status(FakeHass(), entry))["dashboard_available"] is False
+
+
 def test_async_status_marks_dashboard_available_with_weather_entity() -> None:
     hass = FakeHass()
     entry = FakeEntry(
@@ -2225,11 +2241,8 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
     assert result["data"]["pages"][0]["badges"][1] == {"state": "Alarm\nAus"}
 
 
-def test_async_dashboard_payload_leaves_out_an_empty_status_page() -> None:
-    """With no weather and no tile the status page has nothing to show.
-
-    Its badges stay away with it. Messages still need a page to appear on.
-    """
+def test_async_dashboard_payload_keeps_enabled_status_page_without_weather() -> None:
+    """An enabled status page does not depend on weather or tile selection."""
 
     hass = FakeHass(
         states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
@@ -2241,15 +2254,17 @@ def test_async_dashboard_payload_leaves_out_an_empty_status_page() -> None:
         },
     )
 
-    assert run(async_dashboard_payload(hass, entry))["data"]["pages"] == []
+    pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
+    assert [page["title"] for page in pages] == ["C300X"]
+    assert len(pages[0]["badges"]) == 3
 
     entry.options[CONF_DASHBOARD_ENTITIES] = ["sensor.temperature"]
     hass.states.values["sensor.temperature"] = FakeState(
         "21.5", attributes={"friendly_name": "Temperature"}
     )
     pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
-    assert [page["title"] for page in pages] == [""]
-    assert not pages[0].get("badges")
+    assert [page["title"] for page in pages] == ["C300X", ""]
+    assert not pages[1].get("badges")
 
     entry.options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = {
         "sensor.temperature": {"page": "C300X"}
@@ -2848,7 +2863,7 @@ def test_dashboard_weather_private_helpers_cover_truncation() -> None:
     ]
 
     assert _weather_forecast_time_label(None, "hourly") == ""
-    assert _weather_forecast_temperature({}, "C") == ""
+    assert _weather_forecast_temperature({}, "C", "en") == ""
     assert _weather_forecast({}, "en", forecast_items=long_forecast).endswith("...")
 
 
@@ -3016,9 +3031,9 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "kind": "entity",
             "name": "Temperature",
             "state": False,
-            "state_label": "21.5 C",
+            "state_label": "21,5 C",
             "available": True,
-            "details": {"type": "sensor", "value": "21.5", "unit": "C", "label": "", "state_label": "21.5 C", "fields": []},
+            "details": {"type": "sensor", "value": "21,5", "unit": "C", "label": "", "state_label": "21,5 C", "fields": []},
         },
         {
             "domain": "c300x",

@@ -25,6 +25,7 @@ matches a known original. Customized or unrecognized old files are preserved.
 | C300X Ring Call iOS phone alert | Ring an iPhone with critical sound plus Answer, Hang Up and Open actions. |
 | C300X Ring capture | Capture a short MP4 plus local WAV/JPEG files when the doorbell rings. Select the C300X device; the blueprint finds the media-readiness sensor. |
 | C300X Ring capture and Wyoming transcription | Capture and transcribe the latest raw WAV with a local Wyoming Whisper service. Select the C300X device; the blueprint finds the media-readiness sensor. |
+| C300X Calendar display reminder | Show a temporary reminder on the native C300X Home Assistant page before an event of an existing HA calendar. See [Display notifications](feature-reference.md#display-notifications). |
 | C300X strict phrase decision | Evaluate an existing transcription with strict capture freshness and exact phrase matching. Optional unlock stays disabled by default. |
 
 If a blueprint is missing, restart Home Assistant once after updating the
@@ -79,7 +80,7 @@ notify.mobile_app_your_phone
 For capture and transcription, the default paths are:
 
 - MP4 clips: `/media/c300x/`
-- Raw WAV, processed WAV, frames and metadata for each recording:
+- Raw WAV, frames and metadata for each recording:
   `/config/c300x/captures/<capture_id>/`
 - Wyoming result: `analysis/result.json` beside that recording's metadata.
 - Compatibility pointers: `/config/c300x/latest.*` and

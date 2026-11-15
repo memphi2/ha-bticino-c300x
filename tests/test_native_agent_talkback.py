@@ -250,7 +250,7 @@ def test_native_agent_rtsp_response_does_not_send_truncated_stack_buffer() -> No
 
     assert "int n = snprintf(" in response_body
     assert "n > 0 && n < (int)sizeof(response)" in response_body
-    assert "send_all(fd, response, (size_t)n)" in response_body
+    assert "writer_send(writer, fd, response, (size_t)n, NULL, 0, 2000)" in response_body
 
 
 def test_native_agent_rtsp_rejects_incompatible_parallel_paths_before_state_update() -> None:
@@ -274,7 +274,7 @@ def test_native_agent_rtsp_rejects_incompatible_parallel_paths_before_state_upda
         "register_rtsp_client_locked("
     )
     assert "&evicted_clients" in client_body
-    assert "send_rtsp_response(fd, 453" in client_body
+    assert "send_rtsp_response(writer, fd, 453" in client_body
     assert client_body.index("if (!accepted)") < client_body.index(
         "c300x_video_bridge_client_connected"
     )

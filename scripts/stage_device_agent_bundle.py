@@ -28,7 +28,7 @@ COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
 AGENT_BINARY = ROOT / "native_agent" / "build" / "armhf" / "c300x-agent-native"
 AGENT_VERSION_FILE = ROOT / "native_agent" / "VERSION"
 AGENT_API_VERSION = "1"
-AGENT_UPDATE_FILE_SET_VERSION = 2
+AGENT_UPDATE_FILE_SET_VERSION = 3
 ARMHF_STRIP = "arm-linux-gnueabihf-strip"
 FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v2-api-rtsp-talkback"
 IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v2-api-rtsp-talkback"
@@ -276,12 +276,6 @@ def _content_hash(
         digest.update(hashlib.sha256(path.read_bytes()).hexdigest().encode())
         digest.update(b"\0")
     return f"sha256:{digest.hexdigest()}"
-
-
-def _material_hash(material: str) -> str:
-    """Return a stable hash for generated device behavior without a source file."""
-
-    return f"sha256:{hashlib.sha256(material.encode()).hexdigest()}"
 
 
 def _bundle_hash(

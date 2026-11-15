@@ -4,10 +4,15 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include "../src/time_util.h"
 
 static int client_fd;
 static int interrupt_next_read;
 static int read_error;
+static int read_advance_ms, write_advance_ms, fragment_writes, repeat_interrupt;
+static int synthetic_clock;
+static long long clock_offset;
+static long long callback_clock(void) { return synthetic_clock ? clock_offset : c300x_monotonic_ms(); }
 static size_t response_capacity = 512;
 static int callback_socket(int domain, int type, int protocol)
 {
@@ -27,7 +32,8 @@ static int callback_connect(int fd, const struct sockaddr *address, socklen_t le
 
 static ssize_t fragmented_recv(int fd, void *buffer, size_t length, int flags)
 {
-    if (interrupt_next_read) {
+    clock_offset += read_advance_ms;
+    if (interrupt_next_read || repeat_interrupt) {
         interrupt_next_read = 0;
         errno = EINTR;
         return -1;
@@ -40,6 +46,15 @@ static ssize_t fragmented_recv(int fd, void *buffer, size_t length, int flags)
     return received;
 }
 
+static ssize_t fragmented_send(int fd, const void *buffer, size_t length, int flags)
+{
+    clock_offset += write_advance_ms;
+    if (fragment_writes && length > 3) length = 3;
+    return send(fd, buffer, length, flags);
+}
+
+#define c300x_monotonic_ms callback_clock
+#define send fragmented_send
 #define socket callback_socket
 #define connect callback_connect
 #define recv fragmented_recv
@@ -47,6 +62,8 @@ static ssize_t fragmented_recv(int fd, void *buffer, size_t length, int flags)
 #undef recv
 #undef connect
 #undef socket
+#undef send
+#undef c300x_monotonic_ms
 
 int c300x_https_post(
     const char *url, const char *token_header, const char *token, const char *body,
@@ -106,5 +123,32 @@ int main(void)
         response_capacity = length;
         check_response("HTTP/1.1 200 OK\r\n\r\n{\"ok\":true}", 0, NULL);
     }
+    response_capacity = 512;
+    /* Ready bytes and interrupted reads must not restart the total budget. */
+    synthetic_clock = 1;
+    read_advance_ms = 40;
+    long long before = clock_offset;
+    check_response("HTTP/1.1 200 OK\r\n\r\n{}", 0, NULL);
+    assert(clock_offset - before == 120);
+    repeat_interrupt = 1;
+    before = clock_offset;
+    check_response("HTTP/1.1 200 OK\r\n\r\n{}", 0, NULL);
+    assert(clock_offset - before == 120);
+    repeat_interrupt = 0;
+    /* Partial writes and response reads consume one shared deadline. */
+    read_advance_ms = 0;
+    write_advance_ms = 20;
+    fragment_writes = 1;
+    before = clock_offset;
+    check_response("HTTP/1.1 200 OK\r\n\r\n{}", 0, NULL);
+    assert(clock_offset - before == 100);
+    fragment_writes = 0;
+    write_advance_ms = 30;
+    read_advance_ms = 40;
+    before = clock_offset;
+    check_response("HTTP/1.1 200 OK\r\n\r\n{}", 0, NULL);
+    assert(clock_offset - before == 100);
+    write_advance_ms = read_advance_ms = 0;
+    check_response("HTTP/1.1 200 OK\r\n\r\n{}", 1, "{}");
     return 0;
 }

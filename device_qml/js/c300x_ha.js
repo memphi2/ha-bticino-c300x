@@ -292,6 +292,7 @@ function dashboard(statusItem, pageItem) {
         assignDashboardValue(pageItem, "notifications", listOrEmpty(data.notifications))
         if (pageItem.notifications.length === 0) pageItem.notificationsOpen = false
         pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
+        pageItem.decimalComma = data.decimalComma === true
         assignDashboardValue(pageItem, "dashboardPages", pages)
         pageItem.pageCount = pages.length
         if (pageItem.currentPageIndex >= pages.length) {
@@ -1006,21 +1007,12 @@ function assignDashboardValue(target, key, value) {
 
 function loadDashboardPage(statusItem, pageItem) {
     var pageData = currentDashboardPage(pageItem)
-    var flow = pageData.flow || {}
-    var flowItems = listOrEmpty(flow.items)
-    var flowLines = listOrEmpty(flow.lines)
+    var energy = pageData.energy && isList(pageData.energy.views) ? pageData.energy : null
     assignDashboardValue(pageItem, "badges", listOrEmpty(pageData.badges))
     assignDashboardValue(pageItem, "items", dashboardWeatherPlaced(dashboardMixedItems(pageData.items), pageData.weather))
     applyWeather(pageItem, pageData.weather)
-    assignDashboardValue(pageItem, "flowItems", flowItems)
-    assignDashboardValue(pageItem, "flowLines", flowLines)
-    pageItem.flowWidth = positiveNumber(flow.width, 0)
-    pageItem.flowHeight = positiveNumber(flow.height, 0)
-    pageItem.flowColor = flow.color || "transparent"
-    pageItem.flowVisible = flowItems.length > 0 || flowLines.length > 0
-    if (pageItem.flowVisible && pageItem.flowHeight <= 0) {
-        pageItem.flowHeight = 150
-    }
+    assignDashboardValue(pageItem, "energy", energy || {})
+    pageItem.energyVisible = energy !== null
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {
@@ -1066,16 +1058,13 @@ function dashboardPageTitle(pageData) {
 function applyWeather(pageItem, source) {
     if (!source || source.available === undefined) {
         pageItem.weatherVisible = false
-        pageItem.weatherTitle = ""
         pageItem.weatherCondition = ""
         pageItem.weatherConditionKey = ""
         pageItem.weatherTemperature = ""
         pageItem.weatherHumidity = ""
         pageItem.weatherWind = ""
-        pageItem.weatherForecast = ""
         assignDashboardValue(pageItem, "weatherForecast1", {})
         assignDashboardValue(pageItem, "weatherForecast2", {})
-        pageItem.weatherSun = ""
         pageItem.weatherSunrise = ""
         pageItem.weatherSunset = ""
         pageItem.weatherUpdated = ""
@@ -1083,16 +1072,13 @@ function applyWeather(pageItem, source) {
         return
     }
     pageItem.weatherVisible = true
-    pageItem.weatherTitle = source.title || uiText(pageItem, "weather")
     pageItem.weatherConditionKey = source.condition_key || source.condition || "unknown"
     pageItem.weatherCondition = pageItem.uiWeather ? pageItem.uiWeather(pageItem.weatherConditionKey, source.condition || "") : (source.condition || uiText(pageItem, "unknown"))
     pageItem.weatherTemperature = source.temperature || ""
     pageItem.weatherHumidity = source.humidity || ""
     pageItem.weatherWind = source.wind || ""
-    pageItem.weatherForecast = source.forecast || ""
     assignDashboardValue(pageItem, "weatherForecast1", source.forecast_1 || {})
     assignDashboardValue(pageItem, "weatherForecast2", source.forecast_2 || {})
-    pageItem.weatherSun = source.sun || ""
     pageItem.weatherSunrise = source.sunrise || ""
     pageItem.weatherSunset = source.sunset || ""
     pageItem.weatherUpdated = source.updated || ""

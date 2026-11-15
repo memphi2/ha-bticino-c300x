@@ -46,10 +46,13 @@ from .dashboard_config import (
     configured_dashboard_entity_display_overrides,
     configured_dashboard_pages,
     configured_dashboard_prevent_return,
+    configured_energy_page,
+    configured_status_page_enabled,
     configured_weather_entity_id,
 )
 from .dashboard_controls import choice_options, entity_controls, finite_number
 from .dashboard_details import DETAIL_DOMAINS, entity_details
+from .dashboard_energy_data import async_energy_dashboard_page
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
@@ -67,7 +70,9 @@ from .dashboard_labels import (
     _DASHBOARD_ON_STATES,
     _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
     _DASHBOARD_STATE_LABELS_EN,
+    decimal_text,
 )
+from .dashboard_select_texts import apply_select_texts
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
 from .entry_types import BticinoC300XConfigEntry
@@ -108,6 +113,17 @@ async def async_status(
     device_ui_enabled = bool(entry_device_ui_enabled_or_patch_active(entry))
     actions = configured_actions(entry)
     dashboard_entities = configured_dashboard_entities(entry)
+    status_enabled = configured_status_page_enabled(entry)
+    energy_settings = configured_energy_page(entry)
+    overrides = configured_dashboard_entity_display_overrides(entry)
+    visible_entities = any(
+        status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
+        for entity_id in dashboard_entities
+    )
+    visible_actions = any(
+        status_enabled or action.get("dashboard", {}).get("page") != _DASHBOARD_DEFAULT_PAGE
+        for action in actions.values()
+    )
     alarm_entity_id = configured_alarm_entity_id(entry)
     language = _dashboard_language(hass)
     alarm: dict[str, Any] | None = None
@@ -135,9 +151,10 @@ async def async_status(
         "alarm_configured": alarm is not None,
         "dashboard_available": device_ui_enabled
         and (
-            bool(actions)
-            or bool(dashboard_entities)
-            or configured_weather_entity_id(entry) is not None
+            visible_actions
+            or visible_entities
+            or status_enabled
+            or bool(energy_settings["enabled"] and energy_settings["views"])
             or bool(notification_payload(entry))
         ),
         "preventReturnToHomepage": configured_dashboard_prevent_return(entry),
@@ -163,6 +180,7 @@ async def async_dashboard_payload(
     language = _dashboard_language(hass)
     pages: dict[str, dict[str, Any]] = {}
     main_page = _dashboard_page(pages, _DASHBOARD_DEFAULT_PAGE)
+    status_enabled = configured_status_page_enabled(entry)
     badges = [{"state": "HA\nonline", "color": "#58d68d"}]
 
     alarm_entity_id = configured_alarm_entity_id(entry)
@@ -181,7 +199,7 @@ async def async_dashboard_payload(
     badges.append({"state": _dashboard_datetime_label()})
     weather = await async_dashboard_weather_payload(
         hass,
-        configured_weather_entity_id(entry),
+        configured_weather_entity_id(entry) if status_enabled else None,
         language,
     )
     main_page["badges"] = badges
@@ -240,17 +258,35 @@ async def async_dashboard_payload(
         main_page["items"].append({"_kind": "weather", "_order": 0})
 
     notifications = notification_payload(entry)
+    if not status_enabled:
+        pages.pop(_DASHBOARD_DEFAULT_PAGE, None)
+    configured = configured_dashboard_pages(entry)
+    ordered = _ordered_dashboard_pages(pages, configured)
+    energy = await async_energy_dashboard_page(hass, entry, language)
+    if energy is not None:
+        # Its position counts as in the pages dialog. That also numbers a
+        # page the display leaves out for lack of content, and a configured
+        # page without any tile, which is not among the pages at all.
+        position = configured_energy_page(entry)["position"]
+        absent = sum(
+            1 for page in configured[:position - 1] if page["name"] not in pages
+        )
+        ordered.insert(max(0, min(position - 1 - absent, len(ordered))), energy)
     shown = [
-        page
-        for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
-        if _dashboard_page_has_content(page)
+        page for page in ordered
+        if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
     ]
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
-        shown = [main_page]
+        shown = [main_page if status_enabled else {
+            "title": "", "badges": [], "items": [], "weather": None,
+        }]
     return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,
+        # The numbers in the texts follow Home Assistant's language; the
+        # display writes its own numbers the same way.
+        "decimalComma": language != "en",
         "notifications": notifications,
         "data": {"pages": [_finalize_dashboard_page(page) for page in shown]},
     })
@@ -296,14 +332,19 @@ def _fit_dashboard_response(
         # The longest lists go first and the cutting stops as soon as the
         # answer fits, so a thermostat's modes and a select's few options
         # stay whole next to a player's favourites.
-        lists.sort(key=lambda holder: len(json.dumps(holder["options"])), reverse=True)
+        def text_size(holder: dict[str, Any]) -> int:
+            return len(json.dumps(holder["options"])) + len(json.dumps(holder.get("labels", [])))
+
+        lists.sort(key=text_size, reverse=True)
         for limit in _DASHBOARD_CHOICE_TRIM_LIMITS:
             for holder in lists:
                 if len(holder["options"]) <= limit:
                     continue
-                before = len(json.dumps(holder["options"]))
+                before = text_size(holder)
                 holder["options"] = holder["options"][:limit]
-                size -= before - len(json.dumps(holder["options"]))
+                if "labels" in holder:
+                    holder["labels"] = holder["labels"][:limit]
+                size -= before - text_size(holder)
                 if size <= DASHBOARD_RESPONSE_MAX_BYTES:
                     break
             if size <= DASHBOARD_RESPONSE_MAX_BYTES:
@@ -474,6 +515,7 @@ def _dashboard_item_for_state(
     if domain in DETAIL_DOMAINS:
         item["details"] = entity_details(
             entity_id, state, _entity_state_label(state, entity_id=entity_id, language=language), unit,
+            language,
         )
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
     if domain in {
@@ -482,6 +524,8 @@ def _dashboard_item_for_state(
         "number", "input_number", "select", "input_select",
     }:
         item["controls"] = entity_controls(entity_id, state, unit)
+        if domain == "select":
+            apply_select_texts(hass, entity_id, state, item)
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
         if domain == "climate" and state is not None:
             item["current_temperature"] = finite_number(
@@ -774,7 +818,7 @@ def _entity_state_label(
         language, _DASHBOARD_STATE_LABELS_EN
     )
     if unit and state_value.lower() not in labels:
-        label = f"{state_value} {unit}"
+        label = f"{decimal_text(state_value, language)} {unit}"
     if label == "unknown" and fallback:
         return fallback
     return _dashboard_text(label, fallback, 60)
@@ -981,8 +1025,8 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
         finalized["items"] = items
     if isinstance(page.get("weather"), dict):
         finalized["weather"] = page["weather"]
-    if page.get("flow"):
-        finalized["flow"] = page["flow"]
+    if isinstance(page.get("energy"), dict):
+        finalized["energy"] = page["energy"]
     return finalized
 
 
@@ -1023,8 +1067,8 @@ def _finalize_dashboard_items(items: Any) -> list[dict[str, Any]]:
 def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
     """Return whether a page has something to show.
 
-    The status badges do not count: with no weather and no tile the page is
-    left out, and so are its badges.
+    The caller handles the independently enabled status page separately;
+    other pages need weather, tiles or energy content.
     """
 
-    return any(bool(page.get(key)) for key in ("items", "weather", "flow"))
+    return any(bool(page.get(key)) for key in ("items", "weather", "energy"))

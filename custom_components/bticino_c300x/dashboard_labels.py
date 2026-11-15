@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from typing import Any
+
 _DASHBOARD_COLOR_GOOD = "#58d68d"
 _DASHBOARD_COLOR_BAD = "#ff6b6b"
 _DASHBOARD_COLOR_WARNING = "#f1c40f"
@@ -395,4 +398,61 @@ _WEATHER_TITLE_BY_LANGUAGE = {
     "fr": "Meteo",
     "it": "Meteo",
 }
+
+
+# The texts of the energy page.
+ENERGY_LABELS_BY_LANGUAGE = {
+    "en": {
+        "title": "Energy", "now": "Now", "today": "Today", "power": "Power", "balance": "Balance",
+        "power_interval": "15 min averages", "power_empty": "No power history available",
+        "solar": "Solar", "grid": "Grid", "home": "Home", "battery": "Battery",
+        "export": "Export", "charge": "Battery charge", "discharge": "Battery discharge",
+        "grid_total": "Grid total", "self_use": "Solar used at home",
+        "autarky": "Self-sufficiency", "net_grid": "Net from grid", "cost": "Cost today",
+        "other_grid": "Other meters",
+    },
+    "de": {
+        "title": "Energie", "now": "Jetzt", "today": "Heute", "power": "Leistung", "balance": "Bilanz",
+        "power_interval": "15-Minuten-Mittelwerte", "power_empty": "Kein Leistungsverlauf vorhanden",
+        "solar": "PV", "grid": "Netz", "home": "Haus", "battery": "Batterie",
+        "export": "Einspeisung", "charge": "Batterie laden", "discharge": "Batterie entladen",
+        "grid_total": "Netz gesamt", "self_use": "PV-Eigenverbrauch",
+        "autarky": "Autarkiegrad", "net_grid": "Netto vom Netz", "cost": "Kosten heute",
+        "other_grid": "Weitere Zähler",
+    },
+    "fr": {
+        "title": "Énergie", "now": "Maintenant", "today": "Aujourd'hui", "power": "Puissance", "balance": "Bilan",
+        "power_interval": "Moyennes sur 15 min", "power_empty": "Aucun historique de puissance",
+        "solar": "Solaire", "grid": "Réseau", "home": "Maison", "battery": "Batterie",
+        "export": "Injection", "charge": "Charge batterie", "discharge": "Décharge batterie",
+        "grid_total": "Réseau total", "self_use": "Autoconsommation",
+        "autarky": "Autonomie", "net_grid": "Net du réseau", "cost": "Coût du jour",
+        "other_grid": "Autres compteurs",
+    },
+    "it": {
+        "title": "Energia", "now": "Ora", "today": "Oggi", "power": "Potenza", "balance": "Bilancio",
+        "power_interval": "Medie di 15 min", "power_empty": "Nessuno storico della potenza",
+        "solar": "Solare", "grid": "Rete", "home": "Casa", "battery": "Batteria",
+        "export": "Immissione", "charge": "Carica batteria", "discharge": "Scarica batteria",
+        "grid_total": "Rete totale", "self_use": "Autoconsumo",
+        "autarky": "Autosufficienza", "net_grid": "Netto dalla rete", "cost": "Costo di oggi",
+        "other_grid": "Altri contatori",
+    },
+}
+
+
+_DECIMAL_NUMBER = re.compile(r"-?\d+\.\d+")
+
+
+def decimal_text(value: Any, language: str) -> str:
+    """Return a number's text with the decimal sign of the display language.
+
+    English keeps the point; German, French and Italian write a comma. Text
+    that is not a plain decimal number is returned as it is.
+    """
+
+    text = str(value)
+    if language == "en" or not _DECIMAL_NUMBER.fullmatch(text):
+        return text
+    return text.replace(".", ",")
 

@@ -2804,9 +2804,12 @@ static void handle_ui_media_closed(
 )
 {
     if (runtime != NULL) {
+        /* The GUI also emits onCallEnded during on-demand startup. Apply the
+         * same transition guard as UDP before consuming the close event. */
         if (
             runtime->video != NULL
             && !c300x_media_session_stop_in_progress(runtime->video)
+            && !c300x_video_ignore_transient_media_closed(runtime->video)
             && c300x_video_consume_media_closed_event(runtime->video)
         ) {
             dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0);
@@ -3962,6 +3965,10 @@ static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const
     }
     if (config->mqtt_enabled && config->mqtt_command_topic[0] != '\0' && config->mqtt_command_host[0] == '\0') {
         *error = "mqtt_command_host_required";
+        return 0;
+    }
+    if (config->mqtt_enabled && config->mqtt_command_topic[0] == '\0' && config->mqtt_event_topic[0] == '\0') {
+        *error = "mqtt_topic_required";
         return 0;
     }
     if (config->mqtt_qos != 0) {
@@ -5262,11 +5269,9 @@ static int note_smartphone_forwarding_changed(struct agent_runtime *runtime, int
     if (runtime == NULL) {
         return c300x_smartphone_mode_from_code(code) != NULL;
     }
-    if (!runtime->smartphone_forwarding_mode_known) {
-        remember_smartphone_forwarding_mode(runtime, code);
-        return 0;
-    }
-    if (runtime->smartphone_forwarding_mode_code == code) {
+    /* A first reading counts as a change: nobody knows this mode yet. */
+    if (runtime->smartphone_forwarding_mode_known
+        && runtime->smartphone_forwarding_mode_code == code) {
         return 0;
     }
     remember_smartphone_forwarding_mode(runtime, code);
@@ -5579,7 +5584,9 @@ static void handle_udp_event(
 )
 {
     unsigned char buffer[2048];
-    ssize_t received = recv(udp_fd, buffer, sizeof(buffer), 0);
+    struct sockaddr_in source;
+    socklen_t source_len = sizeof(source);
+    ssize_t received = recvfrom(udp_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&source, &source_len);
     int system_end;
     int msg_start;
     int msg_end;
@@ -5589,6 +5596,11 @@ static void handle_udp_event(
     char data[768];
 
     if (received <= 0) {
+        return;
+    }
+    /* Only the device's own services send these frames; a frame from another
+     * host on the network would inject events. */
+    if (source_len < sizeof(source) || !c300x_udp_source_is_local(&source)) {
         return;
     }
     system_end = -1;
@@ -5984,12 +5996,41 @@ static void api_state(
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_doorbell_snapshot(int client_fd)
+static int snapshot_dimension(const char *query, const char *name, unsigned int maximum,
+                              unsigned int *value)
+{
+    char text[16];
+    char *end = NULL;
+    unsigned long parsed;
+    *value = 0;
+    if (!query_param_value(query, name, text, sizeof(text))) {
+        return 1;
+    }
+    /* A longer value is cut to the buffer; only a short one is whole. */
+    parsed = strtoul(text, &end, 10);
+    if (strlen(text) > 4 || text[0] < '0' || text[0] > '9' || *end != '\0'
+        || parsed < C300X_SNAPSHOT_MIN_SIZE || parsed > maximum) {
+        return 0;
+    }
+    *value = (unsigned int)parsed;
+    return 1;
+}
+
+static void handle_doorbell_snapshot(int client_fd, const struct request *request)
 {
     unsigned char *data = NULL;
     size_t size = 0;
     char header[256];
-    enum c300x_snapshot_result result = c300x_video_snapshot(&data, &size);
+    unsigned int width = 0, height = 0;
+    enum c300x_snapshot_result result;
+    if (!snapshot_dimension(request->query, "width", C300X_SNAPSHOT_MAX_WIDTH, &width)
+        || !snapshot_dimension(request->query, "height", C300X_SNAPSHOT_MAX_HEIGHT, &height)
+        || (width == 0) != (height == 0)) {
+        send_json(client_fd, 400, "Bad Request",
+                  "{\"ok\":false,\"error\":\"invalid_snapshot_size\"}\n");
+        return;
+    }
+    result = c300x_video_snapshot(&data, &size, width, height);
     if (result != C300X_SNAPSHOT_OK) {
         send_json(client_fd, result == C300X_SNAPSHOT_THROTTLED ? 429 : 503,
                   result == C300X_SNAPSHOT_THROTTLED ? "Too Many Requests" : "Service Unavailable",
@@ -7190,6 +7231,7 @@ static int handle_ringer_post(
     int has_volume;
     int muted_readback = 0;
     int volume_readback = 0;
+    int written;
 
     muted_reply_json[0] = '\0';
     volume_reply_json[0] = '\0';
@@ -7264,19 +7306,20 @@ static int handle_ringer_post(
         c300x_json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
         c300x_json_string(volume_readback_reply, volume_readback_reply_json, sizeof(volume_readback_reply_json));
         if (!c300x_ringer_volume_from_reply(volume_readback_reply, &volume_readback)) {
-            snprintf(
+            written = snprintf(
                 body,
                 sizeof(body),
                 "{\"ok\":false,\"error\":\"ringer_volume_readback_failed\",\"raw\":%s,\"volume_raw\":%s}\n",
                 volume_reply_json,
                 volume_readback_reply_json
             );
+            if (written < 0 || (size_t)written >= sizeof(body)) goto response_too_large;
             send_json(client_fd, 502, "Bad Gateway", body);
             return 1;
         }
         remember_ringer_volume(runtime, volume_readback);
         if (volume_readback != volume) {
-            snprintf(
+            written = snprintf(
                 body,
                 sizeof(body),
                 "{\"ok\":false,\"error\":\"ringer_volume_not_applied\",\"expected\":%d,\"volume\":%d,\"raw\":%s,\"volume_raw\":%s}\n",
@@ -7285,13 +7328,14 @@ static int handle_ringer_post(
                 volume_reply_json,
                 volume_readback_reply_json
             );
+            if (written < 0 || (size_t)written >= sizeof(body)) goto response_too_large;
             send_json(client_fd, 409, "Conflict", body);
             return 1;
         }
     }
 
     if (has_muted && !has_volume) {
-        snprintf(
+        written = snprintf(
             body,
             sizeof(body),
             "{\"ok\":true,\"muted\":%s,\"raw\":%s}\n",
@@ -7299,7 +7343,7 @@ static int handle_ringer_post(
             muted_reply_json
         );
     } else if (has_volume && !has_muted) {
-        snprintf(
+        written = snprintf(
             body,
             sizeof(body),
             "{\"ok\":true,\"volume\":%d,\"raw\":%s,\"volume_raw\":%s}\n",
@@ -7308,7 +7352,7 @@ static int handle_ringer_post(
             volume_readback_reply_json
         );
     } else {
-        snprintf(
+        written = snprintf(
             body,
             sizeof(body),
             "{\"ok\":true,\"muted\":%s,\"volume\":%d,\"raw\":%s,\"muted_raw\":%s,\"volume_raw\":%s}\n",
@@ -7319,7 +7363,12 @@ static int handle_ringer_post(
             volume_readback_reply_json
         );
     }
+    if (written < 0 || (size_t)written >= sizeof(body)) goto response_too_large;
     send_json(client_fd, 200, "OK", body);
+    return 1;
+
+response_too_large:
+    send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"ringer_response_too_large\"}\n");
     return 1;
 }
 
@@ -10199,7 +10248,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/video/doorbell/snapshot") == 0) {
-        handle_doorbell_snapshot(client_fd);
+        handle_doorbell_snapshot(client_fd, request);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/activate") == 0) {

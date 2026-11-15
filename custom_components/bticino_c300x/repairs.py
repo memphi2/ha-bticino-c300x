@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -509,8 +510,15 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         try:
             patch_state = await _async_capture_external_patch_state(entry, require_reliable=True)
             if getattr(update_state, "payload_bootstrap_required", False):
+                # Between the two passes the display counts as partly
+                # patched, which no longer tells whether the patch was
+                # active. Note that now, in case this flow does not see the
+                # first pass return.
+                pending = {CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
+                if patch_state.qml_patch_required:
+                    pending[CONF_AGENT_UPDATE_QML_PENDING] = True
                 self.hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
+                    entry, data={**entry.data, **pending}
                 )
             update_result = await async_apply_packaged_agent_update(
                 self.hass,
@@ -547,7 +555,9 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                     )
             changes = _ExternalPatchChanges.from_update_result(update_result)
             if changes.config_schema_changed:
-                await entry.runtime_data.api.async_normalize_agent_config()
+                await async_retry_update_maintenance_busy(
+                    entry.runtime_data.api.async_normalize_agent_config
+                )
                 setup_data = await entry.runtime_data.api.async_validate_setup()
             await _async_restore_external_patch_state(
                 entry,
@@ -555,7 +565,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 changes,
             )
             _clear_qml_followup(self.hass, entry)
-            await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
+            await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
             _LOGGER.warning("C300X agent update failed: %s", compact_error_text(err))
@@ -609,52 +619,69 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         try:
             patch_state = await _async_capture_external_patch_state(entry)
             await async_ensure_installer_dependencies(self.hass)
-            install_result = await async_install_device_agent(
-                C300XDeviceInstallRequest(
-                    host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
-                    ssh_username=str(
-                        user_input.get(CONF_BOOTSTRAP_SSH_USERNAME, "")
-                    ).strip(),
-                    ssh_password=str(user_input.get(CONF_BOOTSTRAP_SSH_PASSWORD, "")),
-                    agent_port=int(
-                        entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
+            try:
+                install_result = await async_install_device_agent(
+                    C300XDeviceInstallRequest(
+                        host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
+                        ssh_username=str(
+                            user_input.get(CONF_BOOTSTRAP_SSH_USERNAME, "")
+                        ).strip(),
+                        ssh_password=str(user_input.get(CONF_BOOTSTRAP_SSH_PASSWORD, "")),
+                        agent_port=int(
+                            entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
+                        ),
+                        apply_firewall_patch=(
+                            patch_state.firewall_patched
+                            or not patch_state.firewall_status_known
+                        ),
+                        apply_gui_patch=False,
+                        device_activation_mode=str(
+                            entry_config_value(
+                                entry,
+                                CONF_DEVICE_ACTIVATION_MODE,
+                                DEVICE_ACTIVATION_MODE_AUTO,
+                            )
+                        ),
+                        device_activation_stair_light_p=str(
+                            entry_config_value(
+                                entry,
+                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+                                DEFAULT_STAIR_LIGHT_P,
+                            )
+                        ),
+                        device_activation_stair_light_n=str(
+                            entry_config_value(
+                                entry,
+                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+                                DEFAULT_STAIR_LIGHT_N,
+                            )
+                        ),
+                        device_activations=tuple(
+                            entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, [])
+                            or []
+                        ),
                     ),
-                    apply_firewall_patch=(
-                        patch_state.firewall_patched
-                        or not patch_state.firewall_status_known
+                    api_token=str(entry_config_value(entry, CONF_AGENT_TOKEN, "")),
+                    maintenance_token=str(
+                        entry_config_value(entry, CONF_MAINTENANCE_TOKEN, "")
                     ),
-                    apply_gui_patch=False,
-                    device_activation_mode=str(
-                        entry_config_value(
-                            entry,
-                            CONF_DEVICE_ACTIVATION_MODE,
-                            DEVICE_ACTIVATION_MODE_AUTO,
-                        )
-                    ),
-                    device_activation_stair_light_p=str(
-                        entry_config_value(
-                            entry,
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-                            DEFAULT_STAIR_LIGHT_P,
-                        )
-                    ),
-                    device_activation_stair_light_n=str(
-                        entry_config_value(
-                            entry,
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-                            DEFAULT_STAIR_LIGHT_N,
-                        )
-                    ),
-                    device_activations=tuple(
-                        entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, [])
-                        or []
-                    ),
-                ),
-                api_token=str(entry_config_value(entry, CONF_AGENT_TOKEN, "")),
-                maintenance_token=str(
-                    entry_config_value(entry, CONF_MAINTENANCE_TOKEN, "")
-                ),
-            )
+                )
+            except Exception:
+                # The installer can fail after it changed files on the device,
+                # and their list is lost with the error. A retry then finds
+                # every file unchanged, so remember that all follow-up steps
+                # are still due.
+                every_step = _ExternalPatchChanges(
+                    runtime_changed=True,
+                    qml_patch_changed=True,
+                    firewall_patch_changed=True,
+                    ipv6_firewall_patch_changed=True,
+                    config_schema_changed=True,
+                )
+                if self._ssh_install_followup is not None:
+                    patch_state = self._ssh_install_followup[0].merged(patch_state)
+                self._ssh_install_followup = (patch_state, every_step)
+                raise
             changes = _ExternalPatchChanges.from_install_result(install_result)
             if self._ssh_install_followup is not None:
                 patch_state = self._ssh_install_followup[0].merged(patch_state)
@@ -671,7 +698,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             )
             self._ssh_install_followup = None
             _clear_qml_followup(self.hass, entry)
-            await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
+            await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
             _LOGGER.warning("C300X SSH install failed: %s", _install_error_log_text(err))
@@ -732,6 +759,14 @@ async def _async_wait_for_agent_after_update(
     raise RuntimeError("agent update verification failed")
 
 
+async def _async_migrate_mqtt_after_update(api: Any) -> None:
+    """Run the MQTT migration that ends an update, waiting while the agent is busy."""
+
+    await async_retry_update_maintenance_busy(
+        lambda: async_migrate_legacy_mqtt_if_available(api)
+    )
+
+
 async def _async_verify_agent_after_update(
     hass: HomeAssistant,
     api: Any,
@@ -751,7 +786,7 @@ async def _async_verify_agent_after_update(
     setup_data = cast(dict[str, Any], await api.async_validate_setup())
     if _agent_setup_matches_bundle(setup_data, target_bundle):
         return setup_data
-    await api.async_restart_agent()
+    await async_retry_update_maintenance_busy(api.async_restart_agent)
     return await _async_wait_for_agent_after_update(
         api,
         initial_delay=_AGENT_UPDATE_RESTART_SETTLE_SECONDS,
@@ -936,12 +971,16 @@ async def _async_capture_external_patch_state(
     """Capture active patch state without mutating the device."""
 
     api = entry.runtime_data.api
+
+    async def read(status: Callable[[], Awaitable[dict[str, Any]]]) -> dict[str, Any]:
+        if not require_reliable:
+            return await status()
+        result: dict[str, Any] = await async_retry_update_maintenance_busy(status)
+        return result
+
     qml_status = getattr(entry.runtime_data, "qml_patch_status", {})
     try:
-        qml_status = (
-            await async_retry_update_maintenance_busy(api.async_qml_patch_status)
-            if require_reliable else await api.async_qml_patch_status()
-        )
+        qml_status = await read(api.async_qml_patch_status)
         entry.runtime_data.qml_patch_status = qml_status
     except C300XAgentApiUnsupportedError:
         pass
@@ -953,10 +992,7 @@ async def _async_capture_external_patch_state(
     firewall_patched = False
     firewall_status_known = False
     try:
-        firewall_status = (
-            await async_retry_update_maintenance_busy(api.async_firewall_status)
-            if require_reliable else await api.async_firewall_status()
-        )
+        firewall_status = await read(api.async_firewall_status)
         firewall_patched = firewall_status.get("patched") is True
         firewall_status_known = firewall_status.get("patched") is not None
     except C300XAgentApiUnsupportedError:
@@ -968,10 +1004,7 @@ async def _async_capture_external_patch_state(
 
     ipv6_firewall_patched = False
     try:
-        ipv6_firewall_status = (
-            await async_retry_update_maintenance_busy(api.async_ipv6_firewall_status)
-            if require_reliable else await api.async_ipv6_firewall_status()
-        )
+        ipv6_firewall_status = await read(api.async_ipv6_firewall_status)
         ipv6_firewall_patched = ipv6_firewall_status.get("patched") is True
     except C300XAgentApiUnsupportedError:
         pass
@@ -998,12 +1031,13 @@ async def _async_restore_external_patch_state(
     """Re-apply active external patches only when their patch source changed."""
 
     api = entry.runtime_data.api
+    busy_retry = async_retry_update_maintenance_busy
     if patch_state.firewall_patched and changed.firewall_patch_changed:
-        await api.async_apply_firewall()
+        await busy_retry(api.async_apply_firewall)
     if patch_state.ipv6_firewall_patched and changed.ipv6_firewall_patch_changed:
         with suppress(C300XAgentApiError):
-            await api.async_set_ipv6_firewall_enabled(True)
-        await api.async_apply_ipv6_firewall()
+            await busy_retry(lambda: api.async_set_ipv6_firewall_enabled(True))
+        await busy_retry(api.async_apply_ipv6_firewall)
     if changed.qml_patch_changed or CONF_AGENT_UPDATE_QML_PENDING in entry.data:
         await async_restore_qml_patches_after_update(
             entry,
@@ -1012,7 +1046,7 @@ async def _async_restore_external_patch_state(
             ),
         )
     elif changed.runtime_changed and patch_state.qml_patch_required:
-        await api.async_reload_gui()
+        await busy_retry(api.async_reload_gui)
 
 
 def _ssh_install_schema() -> vol.Schema:

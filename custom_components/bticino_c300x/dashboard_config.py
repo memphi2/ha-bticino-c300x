@@ -17,8 +17,11 @@ from .const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DASHBOARD_STATUS_PAGE_ENABLED,
+    CONF_ENERGY_PAGE,
     CONF_WEATHER_ENTITY_ID,
 )
+from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import (
     DASHBOARD_ENTITY_DOMAIN_SET,
     DashboardPage,
@@ -89,6 +92,12 @@ def configured_weather_entity_id(entry: BticinoC300XConfigEntry) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def configured_status_page_enabled(entry: BticinoC300XConfigEntry) -> bool:
+    """Return the independent visibility of the status page."""
+
+    return entry_config_value(entry, CONF_DASHBOARD_STATUS_PAGE_ENABLED, True) is True
+
+
 def configured_actions(entry: BticinoC300XConfigEntry) -> dict[str, dict[str, Any]]:
     """Return the validated configured action allowlist."""
 
@@ -102,6 +111,12 @@ def configured_dashboard_entities(entry: BticinoC300XConfigEntry) -> tuple[str, 
     """Return selected standard HA entities for the C300X dashboard."""
 
     return _dashboard_entity_ids(entry_config_value(entry, CONF_DASHBOARD_ENTITIES, []))
+
+
+def configured_energy_page(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
+    """Return the settings of the display's energy page."""
+
+    return normalize_energy_page(entry_config_value(entry, CONF_ENERGY_PAGE, {}))
 
 
 def configured_dashboard_pages(entry: BticinoC300XConfigEntry) -> tuple[DashboardPage, ...]:

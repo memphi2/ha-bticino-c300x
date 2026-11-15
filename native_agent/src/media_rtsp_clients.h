@@ -2,7 +2,9 @@
 #define C300X_MEDIA_RTSP_CLIENTS_H
 
 #include "video_rtsp.h"
+#include "media_rtsp_io.h"
 
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -13,6 +15,7 @@
 typedef struct {
     bool active;
     int fd;
+    struct c300x_rtsp_writer *writer; /* Borrowed from the RTSP handler. */
     bool described;
     bool played;
     bool parked;
@@ -29,10 +32,16 @@ typedef struct {
 
 typedef struct {
     int fd;
+    struct c300x_rtsp_writer *writer; /* Retained along with fd. */
     bool transport_tcp;
     int channel;
     struct sockaddr_in udp_client;
 } rtsp_send_target_t;
+
+/* Consume the retained descriptors and writer references, including on failure.
+ * Call outside the slot ownership lock: each connection has its own write budget. */
+void c300x_rtsp_send_targets(const rtsp_send_target_t *targets, size_t count,
+                             const void *packet, size_t packet_len);
 
 static inline int c300x_rtsp_client_slots_physical_count(
     const rtsp_client_slot_t *slots
@@ -135,13 +144,21 @@ static inline size_t c300x_rtsp_client_slots_send_targets(
 
     for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS && count < targets_len; index++) {
         const rtsp_client_slot_t *slot = &slots[index];
-        if (!slot->active || slot->fd < 0 || slot->parked || !slot->played) {
+        if (!slot->active || slot->fd < 0 || slot->parked || !slot->played || slot->writer == NULL) {
             continue;
         }
         if (audio && !slot->audio_enabled) {
             continue;
         }
-        targets[count].fd = slot->fd;
+        /* Retain the socket while the caller still holds the ownership lock.
+         * The forwarding path closes each copy after sending or shutting down. */
+        int retained_fd = fcntl(slot->fd, F_DUPFD_CLOEXEC, 0);
+        if (retained_fd < 0) {
+            continue;
+        }
+        targets[count].fd = retained_fd;
+        c300x_rtsp_writer_retain(slot->writer);
+        targets[count].writer = slot->writer;
         targets[count].transport_tcp = slot->transport_tcp;
         targets[count].channel = audio ? slot->audio_interleaved_channel : slot->video_interleaved_channel;
         targets[count].udp_client = slot->udp_client;

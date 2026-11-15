@@ -52,9 +52,7 @@
           "doorstation_audio_gain_db": "Live audio level (dB)",
           "ring_capture_audio_gain_db": "Volume of ring recordings (dB)",
           "webrtc_ice_policy": "Connection paths for the live picture",
-          "native_two_way_audio": "Talk through the Home Assistant camera view",
-          "snapshot_delay_seconds": "Image delay (seconds)",
-          "snapshot_retention_days": "Keep images (days)"
+          "native_two_way_audio": "Talk through the Home Assistant camera view"
         },
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
@@ -62,9 +60,25 @@
           "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
           "ring_capture_audio_gain_db": "Volume of the sound in recordings made when someone rings. -20 to +20 dB; the default is 6.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
-          "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the C300X card first; this option does not answer it. Talking in the C300X card stays as it is.",
-          "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 5 seconds. No open card is required.",
-          "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first."
+          "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the C300X card first; this option does not answer it. Talking in the C300X card stays as it is."
+        }
+      },
+      "user_visitor_snapshot": {
+        "title": "Visitor Snapshot",
+        "description": "An image of the visitor is saved on every ring and at the start of a video stream. These settings apply to that image.",
+        "data": {
+          "snapshot_width": "Image width (pixels)",
+          "snapshot_height": "Image height (pixels)",
+          "snapshot_delay_seconds": "Image delay (seconds)",
+          "snapshot_retention_days": "Keep images (days)",
+          "snapshot_timestamp": "Write date and time into the image"
+        },
+        "data_description": {
+          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
+          "snapshot_height": "Default 480, the height of the device video stream and of the display. Range 64-480.",
+          "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
+          "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
+          "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
         }
       },
       "user_device_activations": {
@@ -149,9 +163,7 @@
           "doorstation_audio_gain_db": "Live audio level (dB)",
           "ring_capture_audio_gain_db": "Volume of ring recordings (dB)",
           "webrtc_ice_policy": "Connection paths for the live picture",
-          "native_two_way_audio": "Talk through the Home Assistant camera view",
-          "snapshot_delay_seconds": "Image delay (seconds)",
-          "snapshot_retention_days": "Keep images (days)"
+          "native_two_way_audio": "Talk through the Home Assistant camera view"
         },
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
@@ -159,9 +171,25 @@
           "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
           "ring_capture_audio_gain_db": "Volume of the sound in recordings made when someone rings. -20 to +20 dB; the default is 6.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
-          "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the C300X card first; this option does not answer it. Talking in the C300X card stays as it is.",
-          "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 5 seconds. No open card is required.",
-          "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first."
+          "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the C300X card first; this option does not answer it. Talking in the C300X card stays as it is."
+        }
+      },
+      "reconfigure_visitor_snapshot": {
+        "title": "Visitor Snapshot",
+        "description": "An image of the visitor is saved on every ring and at the start of a video stream. These settings apply to that image.",
+        "data": {
+          "snapshot_width": "Image width (pixels)",
+          "snapshot_height": "Image height (pixels)",
+          "snapshot_delay_seconds": "Image delay (seconds)",
+          "snapshot_retention_days": "Keep images (days)",
+          "snapshot_timestamp": "Write date and time into the image"
+        },
+        "data_description": {
+          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
+          "snapshot_height": "Default 480, the height of the device video stream and of the display. Range 64-480.",
+          "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
+          "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
+          "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
         }
       },
       "reconfigure_device_activations": {
@@ -244,17 +272,19 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe second section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
-            "description": "The first page of the Home Assistant area. Its weather card sits at the top, followed by its entities; the weather is set here. With no weather and no entity the page is not shown on the display, and the HA, alarm and time badges stay away with it. Its heading on the display is Home Assistant.",
+            "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
+              "enabled": "Show the status page",
               "weather_entity_id": "Weather",
               "position": "Position",
               "entities": "Entities"
             },
             "data_description": {
+              "enabled": "Show this page independently of weather and entities. Turning it off preserves its settings.",
               "weather_entity_id": "Weather entity for the weather card at the top of this page. Leave empty for no weather card.",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
@@ -349,23 +379,45 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
+            }
+          },
+          "energy_page": {
+            "name": "Energy page",
+            "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
+            "data": {
+              "enabled": "Show the energy page",
+              "position": "Position",
+              "view_now": "Now",
+              "view_today": "Today",
+              "view_power": "Power history",
+              "view_balance": "Balance"
+            },
+            "data_description": {
+              "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
+              "position": "1 = first page; 2 by default, before another page with the same position",
+              "view_now": "Live flow between grid, solar, battery and home",
+              "view_today": "Today's hourly energy and totals",
+              "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
+              "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe second section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
-            "description": "The first page of the Home Assistant area. Its weather card sits at the top, followed by its entities; the weather is set here. With no weather and no entity the page is not shown on the display, and the HA, alarm and time badges stay away with it. Its heading on the display is Home Assistant.",
+            "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
+              "enabled": "Show the status page",
               "weather_entity_id": "Weather",
               "position": "Position",
               "entities": "Entities"
             },
             "data_description": {
+              "enabled": "Show this page independently of weather and entities. Turning it off preserves its settings.",
               "weather_entity_id": "Weather entity for the weather card at the top of this page. Leave empty for no weather card.",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
@@ -460,6 +512,26 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
+            }
+          },
+          "energy_page": {
+            "name": "Energy page",
+            "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
+            "data": {
+              "enabled": "Show the energy page",
+              "position": "Position",
+              "view_now": "Now",
+              "view_today": "Today",
+              "view_power": "Power history",
+              "view_balance": "Balance"
+            },
+            "data_description": {
+              "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
+              "position": "1 = first page; 2 by default, before another page with the same position",
+              "view_now": "Live flow between grid, solar, battery and home",
+              "view_today": "Today's hourly energy and totals",
+              "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
+              "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
         }
@@ -498,7 +570,7 @@
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
-      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds and 1-365 days."
+      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480."
     }
   },
   "options": {
@@ -530,9 +602,7 @@
           "doorstation_audio_gain_db": "Live audio level (dB)",
           "ring_capture_audio_gain_db": "Volume of ring recordings (dB)",
           "webrtc_ice_policy": "Connection paths for the live picture",
-          "native_two_way_audio": "Talk through the Home Assistant camera view",
-          "snapshot_delay_seconds": "Image delay (seconds)",
-          "snapshot_retention_days": "Keep images (days)"
+          "native_two_way_audio": "Talk through the Home Assistant camera view"
         },
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
@@ -540,9 +610,25 @@
           "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
           "ring_capture_audio_gain_db": "Volume of the sound in recordings made when someone rings. -20 to +20 dB; the default is 6.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
-          "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the C300X card first; this option does not answer it. Talking in the C300X card stays as it is.",
-          "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 5 seconds. No open card is required.",
-          "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first."
+          "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the C300X card first; this option does not answer it. Talking in the C300X card stays as it is."
+        }
+      },
+      "visitor_snapshot": {
+        "title": "Visitor Snapshot",
+        "description": "An image of the visitor is saved on every ring and at the start of a video stream. These settings apply to that image.",
+        "data": {
+          "snapshot_width": "Image width (pixels)",
+          "snapshot_height": "Image height (pixels)",
+          "snapshot_delay_seconds": "Image delay (seconds)",
+          "snapshot_retention_days": "Keep images (days)",
+          "snapshot_timestamp": "Write date and time into the image"
+        },
+        "data_description": {
+          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
+          "snapshot_height": "Default 480, the height of the device video stream and of the display. Range 64-480.",
+          "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
+          "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
+          "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
         }
       },
       "device_activations": {
@@ -601,24 +687,28 @@
       },
       "init": {
         "title": "C300X settings",
-        "description": "Choose what to change. Each area saves on its own when you submit it; the other areas keep their settings.",
+        "description": "Choose what to change. Each area saves on its own when you submit it and brings you back here; the other areas keep their settings. To leave an area without a change, submit it as it is.",
         "menu_options": {
           "connection": "Connection to the C300X",
           "features": "Video and audio",
+          "visitor_snapshot": "Visitor Snapshot",
           "device_activations": "Activations: locks, lights, stair light",
           "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard": "Display and Display patch",
           "dashboard_pages": "Display pages",
-          "dashboard_entity_display": "Display tiles"
+          "dashboard_entity_display": "Display tiles",
+          "done": "Done"
         },
         "menu_option_descriptions": {
           "connection": "Address, access key and maintenance key of the C300X, address of Home Assistant.",
           "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
+          "visitor_snapshot": "Size of the saved visitor image, capture delay, retention and the date written into the image.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
           "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
           "dashboard": "Home Assistant pages on the display on or off, home page buttons, behaviour after an action and allowed actions.",
           "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
-          "dashboard_entity_display": "Size, name and secondary line of each tile."
+          "dashboard_entity_display": "Size, name and secondary line of each tile.",
+          "done": "Close the settings. Everything submitted is already saved."
         }
       },
       "dashboard_alarm": {
@@ -635,17 +725,19 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe second section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
-            "description": "The first page of the Home Assistant area. Its weather card sits at the top, followed by its entities; the weather is set here. With no weather and no entity the page is not shown on the display, and the HA, alarm and time badges stay away with it. Its heading on the display is Home Assistant.",
+            "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
+              "enabled": "Show the status page",
               "weather_entity_id": "Weather",
               "position": "Position",
               "entities": "Entities"
             },
             "data_description": {
+              "enabled": "Show this page independently of weather and entities. Turning it off preserves its settings.",
               "weather_entity_id": "Weather entity for the weather card at the top of this page. Leave empty for no weather card.",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
@@ -741,6 +833,26 @@
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
             }
+          },
+          "energy_page": {
+            "name": "Energy page",
+            "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
+            "data": {
+              "enabled": "Show the energy page",
+              "position": "Position",
+              "view_now": "Now",
+              "view_today": "Today",
+              "view_power": "Power history",
+              "view_balance": "Balance"
+            },
+            "data_description": {
+              "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
+              "position": "1 = first page; 2 by default, before another page with the same position",
+              "view_now": "Live flow between grid, solar, battery and home",
+              "view_today": "Today's hourly energy and totals",
+              "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
+              "view_balance": "Self-sufficiency, solar used at home and costs"
+            }
           }
         }
       }
@@ -766,7 +878,7 @@
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
       "required": "This field is required.",
-      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds and 1-365 days."
+      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480."
     }
   },
   "entity": {
@@ -862,8 +974,7 @@
         "state": {
           "enabled": "Smartphone",
           "homeassistant": "Home Assistant",
-          "blocked": "Blocked",
-          "unprovisioned": "Unprovisioned"
+          "blocked": "Blocked"
         }
       },
       "audio_codec": {
@@ -947,15 +1058,7 @@
         "state": {
           "idle": "Idle",
           "ringing": "Ringing",
-          "view_requested": "Camera view active",
-          "view_requeste": "Camera view active",
-          "pressed": "Doorbell pressed",
-          "ring": "Ringing",
-          "doorbell_pressed": "Doorbell pressed",
-          "doorbell_view_requested": "Camera view active",
-          "doorbell_media_closed": "Camera stream ended",
-          "media_closed": "Camera stream ended",
-          "closed": "Camera stream ended"
+          "view_requested": "Camera view active"
         }
       }
     },
@@ -1037,9 +1140,6 @@
     },
     "invalid_alarm_command": {
       "message": "The alarm command is invalid."
-    },
-    "invalid_lock_id": {
-      "message": "The lock ID is invalid."
     },
     "maintenance_action_not_supported": {
       "message": "The C300X device-agent maintenance action is not supported, not enabled, or no maintenance token is configured."

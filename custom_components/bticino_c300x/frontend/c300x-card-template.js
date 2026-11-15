@@ -15,10 +15,13 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           position: relative;
           width: 100%;
           flex: 1 1 auto;
+          aspect-ratio: 688 / 480;
           background: #111;
           min-height: 0;
         }
         video {
+          position: absolute;
+          inset: 0;
           width: 100%;
           height: 100%;
           object-fit: contain;
@@ -57,20 +60,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           object-fit: contain;
           pointer-events: none;
         }
-        .snapshot-label {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-          max-width: calc(100% - 16px);
-          box-sizing: border-box;
-          padding: 4px 8px;
-          background: rgba(0, 0, 0, 0.75);
-          color: white;
-          font-size: 12px;
-          text-align: right;
-          overflow-wrap: anywhere;
-          pointer-events: none;
-        }
         [hidden] { display: none !important; }
         .body {
           min-height: 48px;
@@ -78,7 +67,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           display: grid;
           grid-template-columns: auto minmax(0, 1fr) auto;
           grid-template-areas: "controls text devices";
-          align-items: start;
+          align-items: center;
           flex: 0 0 auto;
           gap: 8px;
         }
@@ -230,11 +219,34 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           text-overflow: ellipsis;
           white-space: nowrap;
         }
+        .status-line {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
         .secondary {
+          flex: 0 1 auto;
+          min-width: 0;
           color: var(--secondary-text-color);
           font-size: 13px;
           line-height: 18px;
-          overflow-wrap: anywhere;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .secondary.error,
+        .secondary.notice {
+          flex: 1 1 auto;
+          min-width: 0;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          white-space: normal;
+          overflow-wrap: break-word;
+        }
+        .status-line:has(.secondary.error, .secondary.notice) .readiness-text {
+          display: none;
         }
         .secondary.error {
           color: var(--error-color);
@@ -246,7 +258,8 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           display: inline-flex;
           align-items: center;
           gap: 4px;
-          margin-top: 2px;
+          flex: 0 100 auto;
+          min-width: 16px;
           min-height: 18px;
           color: var(--secondary-text-color);
           font-size: 12px;
@@ -275,16 +288,26 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
         }
         .readiness-text {
           min-width: 0;
-          overflow-wrap: anywhere;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         @container (max-width: 420px) {
           .body {
-            grid-template-columns: minmax(0, 1fr) auto;
-            grid-template-areas: "controls devices" "text text";
+            padding-inline: 12px;
+            gap: 6px;
           }
-          .title {
-            white-space: normal;
-            overflow-wrap: anywhere;
+          .row-actions,
+          .device-actions {
+            gap: 6px;
+          }
+          .row-action,
+          .home-action,
+          .device-action,
+          .mic-action {
+            width: 36px;
+            height: 36px;
+            --mdc-icon-size: 22px;
           }
         }
         @container (max-width: 280px) {
@@ -312,7 +335,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           <video class="transition-video" playsinline autoplay></video>
           <div class="empty"></div>
           <img class="snapshot-preview" alt="" hidden>
-          <div class="snapshot-label" hidden></div>
         </div>
         <div class="body">
           <div class="row-actions">
@@ -328,10 +350,12 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           </div>
           <div class="entity-text">
             <div class="title"></div>
-            <div class="secondary"></div>
-            <div class="readiness hidden">
-              <ha-icon class="readiness-icon" icon="mdi:check-circle"></ha-icon>
-              <span class="readiness-text"></span>
+            <div class="status-line">
+              <div class="secondary"></div>
+              <div class="readiness hidden">
+                <ha-icon class="readiness-icon" icon="mdi:check-circle"></ha-icon>
+                <span class="readiness-text"></span>
+              </div>
             </div>
           </div>
           <div class="device-actions">

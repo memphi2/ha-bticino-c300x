@@ -1042,13 +1042,18 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             }
         )
     )
-    activation_form = asyncio.run(
+    snapshot_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_VIDEO_ENABLED: True,
                 CONF_CREATE_HOMEASSISTANT_USER: True,
             }
         )
+    )
+    # With video on, the visitor image settings follow as a step of their own.
+    assert snapshot_form["step_id"] == "user_visitor_snapshot"
+    activation_form = asyncio.run(
+        flow.async_step_user_visitor_snapshot(snapshot_form["data_schema"]({}))
     )
     alarm_form = asyncio.run(
         flow.async_step_user_device_activations(
@@ -1572,13 +1577,18 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
             )
         )
     )
-    activation_form = asyncio.run(
+    snapshot_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_DEVICE_UI_ENABLED: False,
                 CONF_VIDEO_ENABLED: True,
             }
         )
+    )
+    # With video on, the visitor image settings follow as a step of their own.
+    assert snapshot_form["step_id"] == "user_visitor_snapshot"
+    activation_form = asyncio.run(
+        flow.async_step_user_visitor_snapshot(snapshot_form["data_schema"]({}))
     )
     feature_form = asyncio.run(
         flow.async_step_user_device_activations(
@@ -1812,13 +1822,18 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     )
 
     asyncio.run(flow._async_adopt_agent_unique_id(api_token="known-token"))
-    activation_form = asyncio.run(
+    snapshot_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_DEVICE_UI_ENABLED: False,
                 CONF_VIDEO_ENABLED: True,
             }
         )
+    )
+    # With video on, the visitor image settings follow as a step of their own.
+    assert snapshot_form["step_id"] == "user_visitor_snapshot"
+    activation_form = asyncio.run(
+        flow.async_step_user_visitor_snapshot(snapshot_form["data_schema"]({}))
     )
     feature_form = asyncio.run(
         flow.async_step_user_device_activations(
@@ -2169,14 +2184,12 @@ def test_options_features_schema_never_contains_dashboard_fields() -> None:
     assert CONF_DASHBOARD_PREVENT_RETURN not in disabled_keys
     expected = [
         CONF_VIDEO_ENABLED,
-        "snapshot_delay_seconds",
-        "snapshot_retention_days",
         CONF_CREATE_HOMEASSISTANT_USER,
         CONF_DOORSTATION_AUDIO_GAIN_DB,
         CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     ]
     if config_schemas.HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO:
-        expected.insert(3, CONF_NATIVE_TWO_WAY_AUDIO)
+        expected.insert(1, CONF_NATIVE_TWO_WAY_AUDIO)
     assert enabled_keys[:len(expected)] == expected
     assert CONF_DEVICE_ACTIVATION_MODE not in enabled_keys
     assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P not in enabled_keys
@@ -2393,29 +2406,116 @@ def test_qml_patch_status_flow_forms_pass_description_placeholders() -> None:
     assert missing_placeholders == []
 
 
-def _options_area(entry, step_id, user_input=None):
-    """Open one area of the options menu on a flow of its own."""
+def _options_flow(entry):
+    """Return an options flow that saves into the given entry."""
+
+    def update_entry(target, *, options):
+        target.options = dict(options)
 
     flow = BticinoC300XOptionsFlow(entry)
+    flow.hass = SimpleNamespace(  # type: ignore[assignment]
+        config_entries=SimpleNamespace(async_update_entry=update_entry),
+    )
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
     flow.async_create_entry = lambda **kwargs: {  # type: ignore[method-assign]
         "type": "create_entry",
         **kwargs,
     }
+    return flow
+
+
+def _options_area(entry, step_id, user_input=None):
+    """Open one area of the options menu on a flow of its own."""
+
+    flow = _options_flow(entry)
     return flow, asyncio.run(getattr(flow, f"async_step_{step_id}")(user_input))
 
 
 def _save_options_area(entry, result) -> None:
-    """Store what an area saved, as Home Assistant does before the next one."""
+    """Check that an area saved: the entry is updated and the menu is back."""
 
-    assert result["type"] == "create_entry", result
-    entry.options = dict(result["data"])
+    assert (result["type"], result["step_id"]) == ("menu", "init"), result
+    result["data"] = dict(entry.options)
 
 
 def _options_menu_of(entry) -> list[str]:
     menu = asyncio.run(BticinoC300XOptionsFlow(entry).async_step_init())
     assert (menu["type"], menu["step_id"]) == ("menu", "init")
-    return list(menu["menu_options"])
+    assert menu["menu_options"][-1] == "done"
+    return list(menu["menu_options"][:-1])
+
+
+def test_options_flow_returns_to_the_menu_after_saving_and_done_closes_it() -> None:
+    """Saving an area stores it at once and shows the menu again.
+
+    So several areas can be changed without opening the dialog again. An
+    area submitted as it is writes nothing, and Done hands back what is
+    saved without changing it.
+    """
+
+    updates: list[dict] = []
+    entry = SimpleNamespace(
+        data={CONF_AGENT_HOST: "agent.local", CONF_AGENT_PORT: 8091, CONF_AGENT_TOKEN: "token"},
+        options={},
+        runtime_data=None,
+    )
+    flow = _options_flow(entry)
+    save = flow.hass.config_entries.async_update_entry
+
+    def counted(target, *, options):
+        updates.append(dict(options))
+        save(target, options=options)
+
+    flow.hass.config_entries.async_update_entry = counted
+    form = asyncio.run(flow.async_step_dashboard_alarm())
+    assert form["step_id"] == "dashboard_alarm"
+    menu = asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"}))
+    assert (menu["type"], menu["step_id"]) == ("menu", "init")
+    assert menu["menu_options"][-1] == "done"
+    assert len(updates) == 1
+    assert entry.options[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+
+    # The same flow opens the next area from what is saved now.
+    asyncio.run(flow.async_step_dashboard_alarm())
+    menu = asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"}))
+    assert (menu["type"], menu["step_id"]) == ("menu", "init")
+    assert len(updates) == 1
+
+    done = asyncio.run(flow.async_step_done())
+    assert done["type"] == "create_entry"
+    assert done["data"] == entry.options
+    assert len(updates) == 1
+
+
+def test_options_flow_unchanged_submit_writes_nothing_on_an_entry_from_an_older_release() -> None:
+    """Leaving an area unchanged does not reload an entry that lacks newer settings.
+
+    An entry saved by an older release has no value for settings added since.
+    Filling them with their defaults is not a change the user made, so it
+    must not be written (a write reloads the entry and ends a running call).
+    """
+
+    updates: list[dict] = []
+    entry = SimpleNamespace(
+        data={CONF_AGENT_HOST: "agent.local", CONF_AGENT_PORT: 8091, CONF_AGENT_TOKEN: "token"},
+        options={CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"},
+        runtime_data=None,
+    )
+    flow = _options_flow(entry)
+    flow.hass.config_entries.async_update_entry = (
+        lambda _target, *, options: updates.append(dict(options))
+    )
+    asyncio.run(flow.async_step_dashboard_alarm())
+    menu = asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"}))
+    assert (menu["type"], menu["step_id"]) == ("menu", "init")
+    assert updates == []
+
+    # A real change is still written, with every setting.
+    asyncio.run(flow.async_step_dashboard_alarm())
+    asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.other"}))
+    assert len(updates) == 1
+    assert updates[0][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.other"
+    assert updates[0][CONF_AGENT_HOST] == "agent.local"
 
 
 def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
@@ -2503,9 +2603,40 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _save_options_area(entry, result)
     # The patch is on: pages can be set up, and there are no tiles yet.
     assert _options_menu_of(entry) == [
-        "connection", "features", "device_activations",
+        "connection", "features", "visitor_snapshot", "device_activations",
         "dashboard_alarm", "dashboard", "dashboard_pages",
     ]
+
+    # Video is on now, so the visitor image has an area of its own. It starts
+    # from the stream's size, a three second delay and the date in the image.
+    _flow, snapshot_form = _options_area(entry, "visitor_snapshot")
+    assert snapshot_form["step_id"] == "visitor_snapshot"
+    assert snapshot_form["data_schema"]({}) == {
+        "snapshot_width": 688,
+        "snapshot_height": 480,
+        "snapshot_delay_seconds": 3,
+        "snapshot_retention_days": 14,
+        "snapshot_timestamp": True,
+    }
+    snapshot_settings = {
+        "snapshot_width": 400,
+        "snapshot_height": 288,
+        "snapshot_delay_seconds": 2,
+        "snapshot_retention_days": 30,
+        "snapshot_timestamp": False,
+    }
+    # A size the display cannot deliver is refused on its own field.
+    _flow, refused = _options_area(
+        entry, "visitor_snapshot", {**snapshot_settings, "snapshot_width": 801}
+    )
+    assert refused["step_id"] == "visitor_snapshot"
+    assert refused["errors"] == {"snapshot_width": "invalid_snapshot_option"}
+    # The form comes back with what was typed, not with the saved values.
+    typed = {str(key): key.default() for key in refused["data_schema"].schema}
+    assert typed == {**snapshot_settings, "snapshot_width": 801}
+    _flow, result = _options_area(entry, "visitor_snapshot", snapshot_settings)
+    _save_options_area(entry, result)
+    assert {key: entry.options[key] for key in snapshot_settings} == snapshot_settings
 
     # The weather is set with the status page.
     _flow, result = _options_area(entry, "dashboard_pages", {
@@ -2521,9 +2652,11 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     })
     _save_options_area(entry, result)
     assert _options_menu_of(entry) == [
-        "connection", "features", "device_activations",
+        "connection", "features", "visitor_snapshot", "device_activations",
         "dashboard_alarm", "dashboard", "dashboard_pages", "dashboard_entity_display",
     ]
+    # The areas saved since then left the visitor image settings alone.
+    assert {key: entry.options[key] for key in snapshot_settings} == snapshot_settings
 
     flow, entity_options_form = _options_area(entry, "dashboard_entity_display")
     assert entity_options_form["step_id"] == "dashboard_entity_display"
@@ -2594,8 +2727,8 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         result = asyncio.run(
             getattr(flow, f"async_step_{step_id}")(form["data_schema"](shown))
         )
-        assert result["type"] == "create_entry", (step_id, result)
-        assert result["data"] == saved, step_id
+        assert (result["type"], result["step_id"]) == ("menu", "init"), (step_id, result)
+        assert entry.options == saved, step_id
 
 
 def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
@@ -2673,13 +2806,18 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             }
         )
     )
-    activation_form = asyncio.run(
+    snapshot_form = asyncio.run(
         flow.async_step_reconfigure_features(
             {
                 CONF_VIDEO_ENABLED: True,
                 CONF_CREATE_HOMEASSISTANT_USER: True,
             }
         )
+    )
+    # With video on, the visitor image settings follow as a step of their own.
+    assert snapshot_form["step_id"] == "reconfigure_visitor_snapshot"
+    activation_form = asyncio.run(
+        flow.async_step_reconfigure_visitor_snapshot(snapshot_form["data_schema"]({}))
     )
     activation_item_form = asyncio.run(
         flow.async_step_reconfigure_device_activations(

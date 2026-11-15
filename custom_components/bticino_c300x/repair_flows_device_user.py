@@ -10,7 +10,11 @@ from homeassistant.helpers import issue_registry as ir
 
 from .api_errors import C300XAgentApiError
 from .const import DOMAIN
-from .device_user import homeassistant_account_label
+from .device_user import (
+    device_user_repair_reason,
+    device_user_status_available,
+    homeassistant_account_label,
+)
 from .repair_issues import DEVICE_USER_REQUIRED_ISSUE, repair_issue_id
 
 
@@ -52,8 +56,12 @@ class DeviceUserRepairFlow(RepairsFlow):
                 errors={"base": "device_user_setup_failed"},
             )
         entry.runtime_data.device_user_status = status
-        if status.get("homeassistant_user_present") is False:
-            # The agent answered, but the device still has no user.
+        if (
+            not device_user_status_available(status)
+            or device_user_repair_reason(status) is not None
+        ):
+            # The agent answered, but the device still fails the check that
+            # raised this issue, or its status could not be read.
             return self.async_show_form(
                 step_id="confirm",
                 errors={"base": "device_user_setup_failed"},

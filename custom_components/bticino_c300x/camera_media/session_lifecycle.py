@@ -44,6 +44,21 @@ def media_stop_scope(resources: Any, owner: str) -> Iterator[None]:
             counts.pop(owner)
 
 
+def closed_notice(reason: str) -> dict[str, Any]:
+    """Return the message that tells the card its session was closed.
+
+    Home Assistant's WebRTC sender calls as_dict() on what it is given, so
+    a plain dict would raise there and never reach the card.
+    """
+
+    return _ClosedNotice(type="closed", reason=reason)
+
+
+class _ClosedNotice(dict[str, Any]):
+    def as_dict(self) -> dict[str, Any]:
+        return dict(self)
+
+
 @dataclass
 class OpeningOffer:
     task: asyncio.Task[Any]
@@ -157,7 +172,7 @@ class CameraWebRTCSessions:
             offer.task.cancel()
             if reason is not None and offer.send_message is not None:
                 with suppress(Exception):
-                    offer.send_message({"type": "closed", "reason": reason})
+                    offer.send_message(closed_notice(reason))
         return offer.task
 
     async def close_after_offer(

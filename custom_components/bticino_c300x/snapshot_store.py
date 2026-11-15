@@ -135,7 +135,11 @@ class SnapshotStore:
 
 
 def normalize_snapshot(content: bytes) -> bytes:
-    """Decode bounded JPEG input and discard EXIF and other client metadata."""
+    """Check that the input is a bounded, decodable JPEG and return it unchanged.
+
+    The capture encodes the image once, without metadata. Encoding it again
+    here would only lose quality.
+    """
 
     if not content or len(content) > MAX_SNAPSHOT_BYTES:
         raise ValueError("Invalid snapshot size")
@@ -144,14 +148,6 @@ def normalize_snapshot(content: bytes) -> bytes:
             if image.format != "JPEG" or image.width * image.height > MAX_SNAPSHOT_PIXELS:
                 raise ValueError("Expected a bounded JPEG image")
             image.load()
-            rgb = image.convert("RGB")
-            rgb.info.clear()
-            rgb.thumbnail((1280, 720))
-            output = BytesIO()
-            rgb.save(output, format="JPEG", quality=85)
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as err:
         raise ValueError("Invalid JPEG image") from err
-    result = output.getvalue()
-    if len(result) > MAX_SNAPSHOT_BYTES:
-        raise ValueError("Snapshot exceeds the storage limit")
-    return result
+    return content

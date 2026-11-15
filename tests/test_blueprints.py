@@ -223,8 +223,10 @@ def test_doorbell_notification_derives_camera_from_device() -> None:
 def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None:
     data = _blueprint("doorbell_call_android.yaml")
     inputs = data["blueprint"]["input"]
-    wake_action = data["action"][0]
+    # Only local action-ID initialization precedes the ringing notification.
+    assert set(data["action"][0]) == {"variables"}
     action = data["action"][1]
+    wake_action = data["action"][2]
     notify_data = action["data"]["data"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
     services = [
@@ -232,8 +234,8 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         for item in data["action"]
         if isinstance(item, dict) and "service" in item
     ]
-    answer_sequence = data["action"][3]["choose"][0]["sequence"]
-    hangup_sequence = data["action"][3]["choose"][1]["sequence"]
+    answer_sequence = data["action"][4]["choose"][0]["sequence"]
+    hangup_sequence = data["action"][4]["choose"][1]["sequence"]
     answer_services = [
         item["service"]
         for item in answer_sequence
@@ -256,16 +258,16 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         == "{{ trigger.event.data.entry_id | default('', true) }}"
     )
     assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
-    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
-    assert "'Blocked' in options" in data["variables"]["forwarding_entity"]
+    assert "'Home Assistant'" not in data["variables"]["forwarding_entity"]
+    assert "'homeassistant' in options and 'blocked' in options" in data["variables"]["forwarding_entity"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert "ring_call_supported" in data["variables"]["media_readiness_entity"]
     assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
     assert "this.entity_id" in data["variables"]["action_scope"]
-    assert data["variables"]["answer_action"].startswith(
+    assert data["action"][0]["variables"]["answer_action"].startswith(
         "{{ 'C300X_ANDROID_RING_ANSWER_'"
     )
-    assert data["variables"]["hangup_action"].startswith(
+    assert data["action"][0]["variables"]["hangup_action"].startswith(
         "{{ 'C300X_ANDROID_RING_HANGUP_'"
     )
     assert "dashboard_path.split('#', 1)" in data["variables"]["answer_dashboard_path"]
@@ -296,7 +298,7 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         },
         {"action": "URI", "title": "{{ open_title }}", "uri": "{{ dashboard_path }}"},
     ]
-    assert data["action"][2]["wait_for_trigger"] == [
+    assert data["action"][3]["wait_for_trigger"] == [
         {
             "platform": "event",
             "event_type": "mobile_app_notification_action",
@@ -313,6 +315,15 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
             "event_type": "bticino_c300x_agent_event_received",
             "event_data": {
                 "event_key": "door_unlock_started",
+                "entry_id": "{{ entry_id }}",
+            },
+        },
+        {
+            "id": "door_unlock_action",
+            "platform": "event",
+            "event_type": "bticino_c300x_action_received",
+            "event_data": {
+                "action_id": "door_unlock",
                 "entry_id": "{{ entry_id }}",
             },
         },
@@ -351,10 +362,10 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
 def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> None:
     data = _blueprint("doorbell_call_ios.yaml")
     inputs = data["blueprint"]["input"]
-    notify_data = data["action"][0]["data"]["data"]
-    wait_triggers = data["action"][1]["wait_for_trigger"]
-    answer_sequence = data["action"][2]["choose"][0]["sequence"]
-    hangup_sequence = data["action"][2]["choose"][1]["sequence"]
+    notify_data = data["action"][1]["data"]["data"]
+    wait_triggers = data["action"][2]["wait_for_trigger"]
+    answer_sequence = data["action"][3]["choose"][0]["sequence"]
+    hangup_sequence = data["action"][3]["choose"][1]["sequence"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
 
     assert inputs["c300x_device"]["selector"] == {
@@ -367,14 +378,14 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
         == "{{ trigger.event.data.entry_id | default('', true) }}"
     )
     assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
-    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
+    assert "'homeassistant' in options and 'blocked' in options" in data["variables"]["forwarding_entity"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
     assert "this.entity_id" in data["variables"]["action_scope"]
-    assert data["variables"]["answer_action"].startswith(
+    assert data["action"][0]["variables"]["answer_action"].startswith(
         "{{ 'C300X_IOS_RING_ANSWER_'"
     )
-    assert data["variables"]["hangup_action"].startswith(
+    assert data["action"][0]["variables"]["hangup_action"].startswith(
         "{{ 'C300X_IOS_RING_HANGUP_'"
     )
     assert "dashboard_path.split('#', 1)" in data["variables"]["answer_dashboard_path"]
@@ -418,6 +429,15 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
             "event_type": "bticino_c300x_agent_event_received",
             "event_data": {
                 "event_key": "door_unlock_started",
+                "entry_id": "{{ entry_id }}",
+            },
+        },
+        {
+            "id": "door_unlock_action",
+            "platform": "event",
+            "event_type": "bticino_c300x_action_received",
+            "event_data": {
+                "action_id": "door_unlock",
                 "entry_id": "{{ entry_id }}",
             },
         },
@@ -503,8 +523,8 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
     blueprint must not make."""
 
     for filename, choose_index in (
-        ("doorbell_call_android.yaml", 3),
-        ("doorbell_call_ios.yaml", 2),
+        ("doorbell_call_android.yaml", 4),
+        ("doorbell_call_ios.yaml", 3),
     ):
         data = _blueprint(filename)
         wait_triggers = data["action"][choose_index - 1]["wait_for_trigger"]
@@ -525,7 +545,25 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
             }
         ], filename
 
-        # No branch matches the door-unlock trigger, so it lands here.
+        # Home Assistant's own unlock is heard directly as well, so the alert
+        # stops even when the device's event arrives late or not at all.
+        assert [
+            trigger
+            for trigger in wait_triggers
+            if trigger.get("id") == "door_unlock_action"
+        ] == [
+            {
+                "id": "door_unlock_action",
+                "platform": "event",
+                "event_type": "bticino_c300x_action_received",
+                "event_data": {
+                    "action_id": "door_unlock",
+                    "entry_id": "{{ entry_id }}",
+                },
+            }
+        ], filename
+
+        # No branch matches a door-unlock trigger, so it lands here.
         assert [step["service"] for step in default_sequence] == [
             "notify_service"
         ], filename
@@ -542,3 +580,126 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
         # The Ring Call keeps running: opening the door does not decide whether
         # someone still wants to talk to the visitor.
         assert "hangup_doorbell_call" not in str(default_sequence), filename
+
+
+def test_android_ring_call_commands_are_sent_as_urgent_messages() -> None:
+    """A command is a data message. Android holds a normal-priority one back
+    while the phone dozes, so the phone keeps ringing after the door opened and
+    the screen wakes late. Every command has to ask for high priority and
+    immediate delivery, like the ringing notification itself."""
+
+    data = _blueprint("doorbell_call_android.yaml")
+    commands = []
+
+    def collect(node: object) -> None:
+        if isinstance(node, dict):
+            payload = node.get("data")
+            if (
+                "service" in node
+                and isinstance(payload, dict)
+                and str(payload.get("message", "")).startswith(
+                    ("command_", "clear_notification")
+                )
+            ):
+                commands.append(payload)
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(data["action"])
+
+    assert sorted(command["message"] for command in commands) == [
+        "clear_notification",
+        "clear_notification",
+        "clear_notification",
+        "clear_notification",
+        "command_screen_on",
+        "command_webview",
+    ]
+    for command in commands:
+        assert command["data"]["priority"] == "high", command["message"]
+        assert command["data"]["ttl"] == 0, command["message"]
+
+
+def test_phone_action_ids_use_real_script_run_contexts(tmp_path):
+    """Delayed actions must miss both notification waits and command branches."""
+    import asyncio
+
+    from homeassistant.core import Context, HomeAssistant, callback
+    from homeassistant.helpers import config_validation as cv
+    from homeassistant.helpers.script import Script
+    from homeassistant.helpers.template import Template
+
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        emitted = []
+
+        @callback
+        def collect(event):
+            emitted.append(dict(event.data))
+
+        unsubscribe = hass.bus.async_listen("c300x_test_action_ids", collect)
+        try:
+            for platform in ("android", "ios"):
+                data = _blueprint(f"doorbell_call_{platform}.yaml")
+                assert "answer_action" not in data["variables"]
+                assert "hangup_action" not in data["variables"]
+                # Execute the production initialization step in HA, not a template
+                # environment that invents context availability before actions.
+                sequence = cv.SCRIPT_SCHEMA([
+                    data["action"][0],
+                    {"event": "c300x_test_action_ids", "event_data": {
+                        "answer_action": "{{ answer_action }}",
+                        "hangup_action": "{{ hangup_action }}",
+                    }},
+                ])
+                script = Script(hass, sequence, f"test_{platform}", "automation")
+                contexts = [Context(), Context()]
+                for context in contexts:
+                    await script.async_run({"action_scope": "AUTOMATION_FRONT_DOOR"}, context)
+                    await hass.async_block_till_done()
+                old, current = emitted[-2:]
+                for key in ("answer_action", "hangup_action"):
+                    assert old[key] != current[key]
+                    assert old[key].endswith(contexts[0].id)
+                    assert current[key].endswith(contexts[1].id)
+
+                waits = []
+                conditions = []
+
+                def collect_contracts(node, waits, conditions):
+                    if isinstance(node, dict):
+                        for trigger in node.get("wait_for_trigger", []):
+                            if trigger.get("event_type") == "mobile_app_notification_action":
+                                waits.append(trigger["event_data"]["action"])
+                        if "value_template" in node:
+                            conditions.append(node["value_template"])
+                        for value in node.values():
+                            collect_contracts(value, waits, conditions)
+                    elif isinstance(node, list):
+                        for value in node:
+                            collect_contracts(value, waits, conditions)
+
+                collect_contracts(data["action"], waits, conditions)
+                assert len(waits) == 3  # Answer, ring Hang Up, active-call Hang Up.
+                expected = [Template(text, hass).async_render(current) for text in waits]
+                assert set(expected) == set(current.values())
+                assert set(expected).isdisjoint(old.values())
+                assert len(conditions) == 3
+                for key in ("answer_action", "hangup_action"):
+                    for actions, accepted in ((old, False), (current, True)):
+                        variables = {**current, "wait": {"trigger": {
+                            "event": {"data": {"action": actions[key]}},
+                        }}}
+                        results = [bool(Template(text, hass).async_render(variables)) for text in conditions]
+                        assert any(results) is accepted
+                # Notification replacement/cleanup still uses stable tags.
+                for key in ("ring_tag", "active_tag"):
+                    template = Template(data["variables"][key], hass)
+                    assert template.async_render({"action_scope": "FRONT", "context": contexts[0]}) == template.async_render({"action_scope": "FRONT", "context": contexts[1]})
+        finally:
+            unsubscribe()
+
+    asyncio.run(run())

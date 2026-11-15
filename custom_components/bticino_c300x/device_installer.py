@@ -48,6 +48,16 @@ _SSH_CONNECT_TIMEOUT = 12.0
 _SSH_COMMAND_TIMEOUT = 30.0
 _REQUIRED_ASYNCSSH_VERSION = "2.24.1"
 INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
+# The display files the agent directory holds; qml_patch.sh installs them.
+DISPLAY_FILES = (
+    "C300XRingerControl.qml",
+    "Alarm.qml",
+    "HomeAssistant.qml",
+    "C300XEnergy.qml",
+    "js/c300x_ha.js",
+    "js/c300x_i18n.js",
+    "js/c300x_memos.js",
+)
 
 
 class C300XDeviceInstallError(Exception):
@@ -168,7 +178,11 @@ def _install_device_agent_sync(
         )
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
+        manifest: _PayloadFile | None = None
         for payload in bundle.payload_files:
+            if payload.remote_path == f"{request.remote_dir}/bundle.json":
+                manifest = payload
+                continue
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)
 
@@ -187,15 +201,15 @@ def _install_device_agent_sync(
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
         _verify_startup_sync(client)
 
-        client.run(
-            f"C300X_QML_SOURCE_DIR={_quote(f'{request.remote_dir}/qml')} "
-            f"{_quote(f'{request.remote_dir}/qml_patch.sh')} core-apply"
-        )
-        if request.apply_gui_patch:
-            client.run(
-                f"C300X_QML_SOURCE_DIR={_quote(f'{request.remote_dir}/qml')} "
-                f"{_quote(f'{request.remote_dir}/qml_patch.sh')} apply"
-            )
+        actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
+        for action in actions:
+            _apply_qml_patch_sync(client, request.remote_dir, action)
+        # Capabilities reads this file on every request. Publish it only after
+        # activation succeeds so an interrupted install still needs repair.
+        if manifest is not None and client.put_file(
+            manifest.source, manifest.remote_path, manifest.mode
+        ):
+            changed_files.append(manifest.remote_path)
     finally:
         client.close()
     return tuple(changed_files)
@@ -270,30 +284,11 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
     bundle_manifest = _optional_existing(COMPONENT_DIR / "device_agent" / "bundle.json")
 
     qml_sources = {
-        "qml/C300XRingerControl.qml": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "C300XRingerControl.qml",
-            REPO_ROOT / "device_qml" / "C300XRingerControl.qml",
-        ),
-        "qml/Alarm.qml": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "Alarm.qml",
-            REPO_ROOT / "device_qml" / "Alarm.qml",
-        ),
-        "qml/HomeAssistant.qml": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "HomeAssistant.qml",
-            REPO_ROOT / "device_qml" / "HomeAssistant.qml",
-        ),
-        "qml/js/c300x_ha.js": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "js" / "c300x_ha.js",
-            REPO_ROOT / "device_qml" / "js" / "c300x_ha.js",
-        ),
-        "qml/js/c300x_i18n.js": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "js" / "c300x_i18n.js",
-            REPO_ROOT / "device_qml" / "js" / "c300x_i18n.js",
-        ),
-        "qml/js/c300x_memos.js": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "js" / "c300x_memos.js",
-            REPO_ROOT / "device_qml" / "js" / "c300x_memos.js",
-        ),
+        f"qml/{name}": _first_existing(
+            COMPONENT_DIR / "device_agent" / "qml" / name,
+            REPO_ROOT / "device_qml" / name,
+        )
+        for name in DISPLAY_FILES
     }
 
     payloads = [
@@ -695,10 +690,17 @@ def _install_startup_script_sync(
             init_content,
         )
     if init_changed or link_changed:
+        # remote_dir can be on another filesystem. Copy beside the live init
+        # first so a failed copy never truncates the script used at boot.
+        init_temp_path = f"{REMOTE_INIT_SCRIPT}.new"
         install_init = (
-            f"chmod 700 {_quote(temp_path)} && "
-            f"mv -f {_quote(temp_path)} {_quote(REMOTE_INIT_SCRIPT)}; "
+            f"rm -f {_quote(init_temp_path)} && "
+            f"cp {_quote(temp_path)} {_quote(init_temp_path)} && "
+            f"chmod 700 {_quote(init_temp_path)} && "
+            f"mv -f {_quote(init_temp_path)} {_quote(REMOTE_INIT_SCRIPT)}; "
             "rc=$?; "
+            f"rm -f {_quote(init_temp_path)} {_quote(temp_path)}; cleanup_rc=$?; "
+            "if [ $rc -eq 0 ]; then rc=$cleanup_rc; fi; "
         ) if init_changed else "rc=0; "
         client.run(
             (
@@ -706,7 +708,8 @@ def _install_startup_script_sync(
                 "if [ $rc -eq 0 ]; then "
                 f"{install_init}"
                 f"if [ $rc -eq 0 ]; then ln -sf {_quote(REMOTE_INIT_SCRIPT)} {_quote(REMOTE_INIT_LINK)}; rc=$?; fi; "
-                "mount -o remount,ro /; fi; exit $rc"
+                "mount -o remount,ro /; ro_rc=$?; "
+                "if [ $rc -eq 0 ]; then rc=$ro_rc; fi; fi; exit $rc"
             ),
         )
         if init_changed:
@@ -836,6 +839,27 @@ def _verify_startup_sync(client: _DeviceSshClient) -> None:
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} status")
     except C300XDeviceInstallError as err:
         raise C300XDeviceInstallError("device_install_verify_failed") from err
+
+
+def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
+    """Require the patcher's reported outcome, not just a successful shell exit."""
+
+    output = client.run(
+        f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
+        f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"
+    )
+    try:
+        result = json.loads(output)
+    except (TypeError, ValueError) as err:
+        raise C300XDeviceInstallError("device_install_verify_failed") from err
+    if (
+        not isinstance(result, dict)
+        or result.get("ok") is not True
+        or result.get("core_patched") is not True
+        or result.get("gui_running") is not True
+        or (action == "apply" and result.get("patched") is not True)
+    ):
+        raise C300XDeviceInstallError("device_install_verify_failed")
 
 
 def _apply_firewall_patch_sync(

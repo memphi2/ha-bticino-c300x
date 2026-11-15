@@ -218,6 +218,7 @@ ORIGINAL_EVENT_MANAGER = "\n".join(
 SOURCE_INSTALLED_FILES = (
     "Alarm.qml",
     "HomeAssistant.qml",
+    "C300XEnergy.qml",
     "C300XRingerControl.qml",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
@@ -239,6 +240,13 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: buttonColumn.bottom
         anchors.topMargin: 32
+        UbuntuLightText {
+            id: textBeep
+        }
+        Item {
+            id: space
+            width: 50
+        }
         BasicButton {
             id: selectorOnOff
             checkable: true
@@ -250,15 +258,16 @@ Item {
 """
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "8a1690531198b53c29c0c828272faca2f5be6af6e1cd55357e12c50305fb9699",
-    "Components/Settings/GeneralsChoice.qml": "79e530cd5432ada63953783843bda0fdca5907e91e3e184de1e2bac3e5c69252",
+    "Components/Settings/GeneralsChoice.qml": "42ac9c6be930fe258a46cb847ec69ce0160ccc75e2d98049c4441e1208b41c87",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "e886ec4fbc9bafb39bf4cae546f4d4d6e1fb25a612f85f7bcd7dc964f10e2431",
-    "HomeAssistant.qml": "f9e8a9e4872eead5bb85170d5fa708c6440296a44a72446fd1a8f337a3c0c127",
-    "js/c300x_ha.js": "d19b4e427a61a2f4ec098bc93339ba86aee2b0d727bbecf7949c56cdc121e6e7",
-    "js/c300x_i18n.js": "b52a364f6f46fd3079dca0d2d2a2b9717d45250cda394a790bf307f2b3d5bd6a",
-    "js/c300x_memos.js": "4d7c36842de9372c12ad09e2bcdfca8e842518156c53e7da0068de1ab9e86a30",
+    "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
+    "HomeAssistant.qml": "bea481bb6384488d8cd369e21984fe046918378b2d45993b5d37bc2e0a6f7992",
+    "C300XEnergy.qml": "adff4d298b0eb63d3fae50beaa01eaa23c2a110a8950374addc1777f2f57e745",
+    "js/c300x_ha.js": "21585924604abd460d45e6e30c70285730f0335ade65afade561cd39a1243d7d",
+    "js/c300x_i18n.js": "e8a75ca586851478abcf7c9f915110022d335fcb02b50dbc2d308dfdc0527594",
+    "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }
 
 
@@ -441,6 +450,57 @@ def test_qml_core_upgrade_corrects_legacy_media_port(tmp_path: Path) -> None:
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")["changed_files"] == 0
     _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-restore")
     assert event_manager.read_text() == ORIGINAL_EVENT_MANAGER
+
+
+def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
+    assert (gui_dir / "C300XEnergy.qml").read_bytes() == (SOURCE_DIR / "C300XEnergy.qml").read_bytes()
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all")["state"] == "original"
+    assert not (gui_dir / "C300XEnergy.qml").exists()
+
+
+def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
+
+    (gui_dir / "C300XEnergy.qml").unlink()
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] != "patched"
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
+    assert (gui_dir / "C300XEnergy.qml").exists()
+
+
+def test_a_leftover_energy_page_file_counts_as_a_partial_patch(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    (gui_dir / "C300XEnergy.qml").write_text("import QtQuick 1.1\nItem {}\n")
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] != "original"
+
+
+def test_the_energy_page_file_is_loaded_only_for_an_energy_page() -> None:
+    page = (SOURCE_DIR / "HomeAssistant.qml").read_text()
+    script = (SOURCE_DIR / "js/c300x_ha.js").read_text()
+    energy = (SOURCE_DIR / "C300XEnergy.qml").read_text()
+
+    assert 'source: energyVisible ? "C300XEnergy.qml" : ""' in page
+    assert "property bool energyVisible: false" in page
+    assert "pageItem.energyVisible = energy !== null" in script
+    assert "flowVisible" not in page and "flowVisible" not in script
+    assert energy.isascii()
+    assert "//" not in energy and "/*" not in energy
+    assert "Canvas" not in energy and "Timer" not in energy
 
 
 def test_qml_restore_all_removes_feature_core_and_media_user_label_patches(tmp_path: Path) -> None:
@@ -1115,6 +1175,55 @@ def test_qml_patch_apply_reports_reload_failure_without_patched_state(
     assert status["state"] == "reload_failed"
     assert status["patched"] is None
     _assert_complete_gui_patch(gui_dir)
+
+
+def test_qml_patch_starts_the_gui_outside_its_own_process_group(tmp_path: Path) -> None:
+    """The restarted GUI must outlive a patch job that is killed for its time limit.
+
+    The agent runs the script in a process group of its own and kills that
+    group when the limit passes. A GUI started inside the group would be
+    killed with it, right after it was restarted.
+    """
+
+    gui_dir = tmp_path / "gui"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    seen = tmp_path / "wrapper-session"
+    wrapper = tmp_path / "gui-wrapper"
+    wrapper.write_text(f'echo "$$ $(ps -o sid= -p $$)" > "{seen}"\n')
+
+    result = _run_qml_patch_raw(
+        tmp_path, gui_dir, tmp_path / "backups", "apply",
+        env_overrides={
+            "C300X_QML_RELOAD_GUI": "1",
+            "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "1",
+            "C300X_QML_GUI_WRAPPER": str(wrapper),
+        },
+    )
+
+    result.check_returncode()
+    pid, session = seen.read_text().split()
+    assert session == pid
+
+
+def test_qml_patch_names_a_missing_display_file_and_leaves_no_staging(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    source_dir = tmp_path / "source"
+    _copy_source_tree(source_dir)
+    (source_dir / "C300XEnergy.qml").unlink()
+    staging = tmp_path / "staging"
+
+    result = _run_qml_patch_raw(
+        tmp_path, gui_dir, tmp_path / "backups", "apply", source_dir=source_dir,
+        env_overrides={"C300X_QML_STAGING_DIR": str(staging)},
+    )
+
+    assert result.returncode != 0
+    assert "C300XEnergy.qml" in result.stderr
+    assert not staging.exists()
+    assert not (gui_dir / "HomeAssistant.qml").exists()
 
 
 def test_qml_patch_remounts_ro_after_write_action(tmp_path: Path) -> None:

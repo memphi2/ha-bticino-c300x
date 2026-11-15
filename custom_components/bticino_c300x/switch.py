@@ -249,6 +249,7 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
 
     _attr_should_poll = False
     _attr_translation_key = "ringer_mute"
+    _refresh_on_reconnect = True
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "ringer_mute")

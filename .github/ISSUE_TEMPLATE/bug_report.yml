@@ -35,8 +35,8 @@ body:
     id: integration_version
     attributes:
       label: Integration version
-      description: "Example: 1.7.7"
-      placeholder: "1.7.7"
+      description: "Example: 2.4.0"
+      placeholder: "2.4.0"
     validations:
       required: true
 
@@ -54,6 +54,7 @@ body:
     attributes:
       label: Installation method
       options:
+        - Home Assistant Marketplace
         - HACS
         - Manual custom_components copy
         - Development checkout
@@ -66,7 +67,7 @@ body:
     attributes:
       label: Native agent version
       description: Check the device diagnostics or agent self-test. Enter "not installed" if media/device-agent features are not used.
-      placeholder: "1.7.6"
+      placeholder: "2.4.0"
     validations:
       required: true
 

@@ -14,7 +14,9 @@ DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
-FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+# The display files this integration adds; every list of them derives from here.
+GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
@@ -108,10 +110,11 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
         && file_contains "$GUI_DIR/Alarm.qml" 'headerLabel: uiText("alarm")' \
         && file_contains "$GUI_DIR/HomeAssistant.qml" 'Api.dashboard' \
+        && [ -f "$GUI_DIR/C300XEnergy.qml" ] \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function homeButtons' \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function loadDisplayPreferences' \
         && file_contains "$GUI_DIR/js/c300x_i18n.js" 'function weather' \
-        && file_contains "$GUI_DIR/js/c300x_memos.js" 'function unreadCountFromPath' \
+        && file_contains "$GUI_DIR/js/c300x_memos.js" 'function syncHomeNotifications' \
         && file_contains "$GUI_DIR/js/c300x_memos.js" 'function syncMemoModel'
 }
 
@@ -124,11 +127,16 @@ partial_patch_present() {
         || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
         || general_settings_partial_present \
-        || [ -f "$GUI_DIR/Alarm.qml" ] \
-        || [ -f "$GUI_DIR/HomeAssistant.qml" ] \
-        || [ -f "$GUI_DIR/js/c300x_ha.js" ] \
-        || [ -f "$GUI_DIR/js/c300x_i18n.js" ] \
-        || [ -f "$GUI_DIR/js/c300x_memos.js" ]
+        || generated_feature_file_present
+}
+
+generated_feature_file_present() {
+    for present_rel in $GENERATED_FEATURE_FILES; do
+        if [ -f "$GUI_DIR/$present_rel" ]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 general_settings_patch_present() {
@@ -210,9 +218,15 @@ reload_gui() {
         return 0
     fi
     if [ -f "$GUI_WRAPPER" ]; then
+        # A session of its own: the agent kills this script's process group
+        # when a job passes its time limit, and the GUI must outlive that.
+        gui_session=
+        if command -v setsid >/dev/null 2>&1; then
+            gui_session=setsid
+        fi
         (
             cd "$GUI_ROOT"
-            /bin/sh "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
+            $gui_session /bin/sh "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
         )
     fi
     sleep "$GUI_RELOAD_DELAY_SECONDS"
@@ -239,6 +253,9 @@ remount_ro() {
 finish_write_action() {
     write_rc=$?
     trap - EXIT HUP INT TERM
+    if [ "$write_rc" != "0" ]; then
+        cleanup_staging
+    fi
     recovery_ok=1
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
@@ -351,7 +368,10 @@ install_file() {
     backup_mode="${2:-original}"
     install_src="$SOURCE_DIR/$install_rel"
     install_dest="${PATCH_OUTPUT_DIR:-$GUI_DIR}/$install_rel"
-    [ -f "$install_src" ]
+    if [ ! -f "$install_src" ]; then
+        printf 'Missing display source file: %s\n' "$install_rel" >&2
+        return 1
+    fi
     if [ "$backup_mode" = "original" ]; then
         backup_file "$install_rel"
     fi
@@ -437,6 +457,12 @@ patch_general_settings() {
             margins++
             next
         }
+        tone && $0 == "            id: space" { spacer = 1; print; next }
+        spacer == 1 && $0 == "            width: 50" {
+            print "            width: Math.max(0, buttonColumn.width - 40 - textBeep.width - selectorOnOff.width)"
+            spacer = 2
+            next
+        }
         $0 == "            checked: global.beepEnabled" { checked++ }
         $0 == "            onTouched: global.beepEnabled = checked" { handler++ }
         $0 == "}" {
@@ -454,17 +480,20 @@ patch_general_settings() {
             print "        Component.onCompleted: if (visible) c300xDisplayPreferences.load()"
             print "        UbuntuLightText {"
             print "            anchors.left: parent.left"
+            print "            anchors.leftMargin: 8"
             print "            anchors.right: c300xFeedbackSwitch.left"
             print "            anchors.rightMargin: 12"
             print "            anchors.verticalCenter: parent.verticalCenter"
             print "            text: c300xFeedbackSetting.visible ? c300xDisplayPreferences.label : \"\""
             print "            color: \"white\""
             print "            font.pixelSize: 18"
+            print "            horizontalAlignment: Text.AlignLeft"
             print "            wrapMode: Text.WordWrap"
             print "        }"
             print "        BasicButton {"
             print "            id: c300xFeedbackSwitch"
             print "            anchors.right: parent.right"
+            print "            anchors.rightMargin: 8"
             print "            anchors.verticalCenter: parent.verticalCenter"
             print "            enabled: c300xFeedbackSetting.visible && c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy"
             print "            opacity: enabled ? 1 : 0.5"
@@ -483,7 +512,7 @@ patch_general_settings() {
         }
         { print }
         END {
-            if (imports != 1 || top_margins != 1 || column_spacing != 1 || tone != 1 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
+            if (imports != 1 || top_margins != 1 || column_spacing != 1 || tone != 1 || spacer != 2 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
                 print "Unsupported original GeneralsChoice.qml layout" > "/dev/stderr"
                 exit 12
             }
@@ -981,6 +1010,7 @@ cleanup_staging() {
 
 generate_core_patch_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
@@ -989,25 +1019,29 @@ generate_core_patch_stage() {
     unset PATCH_OUTPUT_DIR
 }
 
+copy_generated_feature_files() {
+    for copy_rel in $GENERATED_FEATURE_FILES; do
+        copy_generated_file "$copy_rel"
+    done
+}
+
 generate_feature_patch_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR/js"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
     patch_home_page
     patch_memo_page
     patch_general_settings
-    copy_generated_file "Alarm.qml"
-    copy_generated_file "HomeAssistant.qml"
-    copy_generated_file "js/c300x_ha.js"
-    copy_generated_file "js/c300x_i18n.js"
-    copy_generated_file "js/c300x_memos.js"
+    copy_generated_feature_files
     patch_main_app
     unset PATCH_OUTPUT_DIR
 }
 
 generate_full_patch_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR/js"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
@@ -1016,17 +1050,14 @@ generate_full_patch_stage() {
     patch_home_page
     patch_memo_page
     patch_general_settings
-    copy_generated_file "Alarm.qml"
-    copy_generated_file "HomeAssistant.qml"
-    copy_generated_file "js/c300x_ha.js"
-    copy_generated_file "js/c300x_i18n.js"
-    copy_generated_file "js/c300x_memos.js"
+    copy_generated_feature_files
     patch_main_app
     unset PATCH_OUTPUT_DIR
 }
 
 generate_media_user_label_stage() {
     cleanup_staging
+    trap cleanup_staging EXIT
     mkdir -p "$STAGING_DIR/Components/Settings"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
@@ -1298,7 +1329,7 @@ restore_changed_count() {
             changed=$((changed + 1))
         fi
     done
-    for rel in Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js; do
+    for rel in $GENERATED_FEATURE_FILES; do
         if [ -e "$GUI_DIR/$rel" ]; then
             changed=$((changed + 1))
         fi
@@ -1333,14 +1364,12 @@ restore_core_changed_count() {
 }
 
 is_generated_patch_file() {
-    case "$1" in
-        Alarm.qml|HomeAssistant.qml|C300XRingerControl.qml|js/c300x_ha.js|js/c300x_i18n.js|js/c300x_memos.js)
+    for known_rel in $GENERATED_FEATURE_FILES C300XRingerControl.qml; do
+        if [ "$1" = "$known_rel" ]; then
             return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+        fi
+    done
+    return 1
 }
 
 restore_feature_stock_file() {
@@ -1357,11 +1386,9 @@ restore_patch_files() {
     restore_feature_stock_file "MainApp.qml"
     restore_feature_stock_file "HomePage.qml"
     restore_feature_stock_file "MemoPage.qml"
-    restore_file "Alarm.qml"
-    restore_file "HomeAssistant.qml"
-    restore_file "js/c300x_ha.js"
-    restore_file "js/c300x_i18n.js"
-    restore_file "js/c300x_memos.js"
+    for generated_rel in $GENERATED_FEATURE_FILES; do
+        restore_file "$generated_rel"
+    done
     remove_obsolete_gui_files
     REMOVE_EMPTY_JS=1
 }

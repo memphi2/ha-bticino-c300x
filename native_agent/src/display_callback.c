@@ -1,13 +1,56 @@
 #include "display_callback.h"
 #include "http_util.h"
 #include "https_client.h"
+#include "time_util.h"
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+static int display_wait(int fd, short events, long long deadline)
+{
+    for (;;) {
+        long long remaining = deadline - c300x_monotonic_ms();
+        if (remaining <= 0) { errno = ETIMEDOUT; return 0; }
+        struct pollfd pending = {.fd = fd, .events = events};
+        int ready = poll(&pending, 1, remaining > INT_MAX ? INT_MAX : (int)remaining);
+        if (ready < 0 && errno == EINTR) continue;
+        /* HUP/ERR must reach recv/getsockopt so EOF and connect failure are
+         * distinguished. Every retry still consumes the original deadline. */
+        return ready > 0 && !(pending.revents & POLLNVAL);
+    }
+}
+
+static int display_connect(int fd, const struct addrinfo *address, long long deadline)
+{
+    int flags = fcntl(fd, F_GETFL);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0
+        || c300x_monotonic_ms() >= deadline) return 0;
+    if (connect(fd, address->ai_addr, address->ai_addrlen) == 0) return 1;
+    if (errno != EINPROGRESS && errno != EINTR) return 0;
+    if (!display_wait(fd, POLLOUT, deadline)) return 0;
+    int error = 0;
+    socklen_t length = sizeof(error);
+    return getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) == 0 && error == 0;
+}
+
+static int display_send(int fd, const char *data, size_t size, long long deadline)
+{
+    while (size > 0) {
+        if (!display_wait(fd, POLLOUT, deadline)) return 0;
+        ssize_t sent = send(fd, data, size, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (sent < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (sent <= 0) return 0;
+        data += sent;
+        size -= (size_t)sent;
+    }
+    return 1;
+}
 
 int c300x_display_post(
     const char *webhook_url,
@@ -33,7 +76,7 @@ int c300x_display_post(
     if (response_len > 0) {
         response[0] = '\0';
     }
-    if (webhook_url[0] == '\0') {
+    if (webhook_url[0] == '\0' || timeout_ms <= 0) {
         return 0;
     }
     if (!parse_http_url(
@@ -64,6 +107,9 @@ int c300x_display_post(
         return ok;
     }
 
+    /* The platform resolver is synchronous; time spent there also consumes
+     * the budget, but cannot be interrupted by socket deadlines. */
+    long long deadline = c300x_monotonic_ms() + timeout_ms;
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_family = AF_UNSPEC;
@@ -72,13 +118,13 @@ int c300x_display_post(
     }
     http_host_header_value(host, port, host_header, sizeof(host_header));
     for (item = result; item != NULL; item = item->ai_next) {
+        if (c300x_monotonic_ms() >= deadline) break;
         fd = socket(item->ai_family, item->ai_socktype, item->ai_protocol);
         if (fd < 0) {
             continue;
         }
         set_fd_cloexec(fd);
-        set_socket_timeout(fd, timeout_ms);
-        if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
+        if (display_connect(fd, item, deadline)) {
             break;
         }
         close(fd);
@@ -107,12 +153,16 @@ int c300x_display_post(
         shared_secret[0] != '\0' ? "\r\n" : ""
     );
 
-    if (send_all_bytes(fd, header, strlen(header))
-        && send_all_bytes(fd, body, strlen(body))) {
+    if (display_send(fd, header, strlen(header), deadline)
+        && display_send(fd, body, strlen(body), deadline)) {
         size_t received = 0;
         while (received + 1 < response_len) {
-            receive_result = recv(fd, response + received, response_len - received - 1, 0);
-            if (receive_result < 0 && errno == EINTR) {
+            if (!display_wait(fd, POLLIN, deadline)) {
+                receive_result = -1;
+                break;
+            }
+            receive_result = recv(fd, response + received, response_len - received - 1, MSG_DONTWAIT);
+            if (receive_result < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
                 continue;
             }
             if (receive_result <= 0) {

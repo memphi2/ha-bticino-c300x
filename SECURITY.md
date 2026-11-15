@@ -40,6 +40,20 @@ Context-free HA automations remain trusted. The physical display uses its
 separate authenticated bridge and configured action allowlist, not HA user
 impersonation.
 
+## Stored Media Access
+
+Playback endpoints for answering-machine videos, voice memos and Ring Capture
+MP4 files intentionally allow every authenticated HA user. They do not apply
+camera entity permissions or require an administrator. This shared-media policy
+is separate from the service permissions above: playback does not authorize
+recording, deletion or device control.
+
+The integration's snapshot-image endpoint does check camera read permission.
+However, copies in HA's standard local-media directory follow HA media access
+rules, independently of camera permissions. Neither hiding an entity nor
+denying camera access protects the shared archive. Only provide HA access to
+users trusted to access these recordings; see [PRIVACY.md](PRIVACY.md).
+
 ## Token Handling
 
 Home Assistant stores the configured agent token, maintenance token, webhook id,
@@ -156,6 +170,13 @@ The following narrowly scoped exceptions remain:
 - CodeQL `cpp/cleartext-transmission`: the native MQTT bridge uses the device's
   local MQTT transport model. TLS is not available on this device-side path, so
   MQTT must stay on a trusted local network and must not be exposed externally.
+- UDP device events: the native agent receives the device's OpenWebNet event
+  frames on UDP port 7667 (multicast group 239.255.76.67). A capture on a C300X
+  showed every frame sent by the device's own address, so the agent takes
+  frames only from loopback or the device's own addresses and drops the rest.
+  The frames themselves carry no authentication, so a host that can forge the
+  device's source address on the local segment can still inject events. Keep
+  the C300X on a trusted network segment.
 
 These exceptions do not apply to internet-exposed deployments. Do not expose
 SSH, MQTT, native-agent HTTP, RTSP, WebRTC, or Home Assistant callback surfaces
@@ -171,9 +192,10 @@ the release SBOM records the optional installer dependency separately.
 
 Incoming HTTP requests have bounded buffers, a total receive deadline and a
 bounded pending-client pool.
-HTTP response bodies may be up to 512 KiB, but all queued HTTP output together
-is limited to 512 KiB, with at most eight waiting connections and a two-second
-send deadline. When that budget is exhausted, further output is rejected rather
+HTTP response bodies may be up to 1200 KiB, the size of the largest visitor
+image, and all queued HTTP output together is limited to 1712 KiB, with at most
+eight waiting connections. A queued response ends after two seconds without
+progress and after ten seconds in any case. When that budget is exhausted, further output is rejected rather
 than blocking the device loop or growing the queue.
 Event delivery has one worker and a bounded queue; overflow and failed delivery
 are not reported as successful callbacks. Home

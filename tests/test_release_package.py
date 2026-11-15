@@ -755,7 +755,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     paths = {entry["path"] for entry in bundle["files"]}
     assert bundle["integration_version"] == version
     assert bundle["agent_version"] == version
-    assert bundle["update_file_set_version"] == 2
+    assert bundle["update_file_set_version"] == 3
     probe = tmp_path / "update_paths.c"
     probe.write_text(
         '#include <stdio.h>\n#include "agent_update_paths.h"\n'
@@ -795,6 +795,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert modes["device_agent/scripts/bootstrap_firewall.sh"] == "700"
     assert modes["device_agent/qml/Alarm.qml"] == "644"
     assert modes["device_agent/qml/HomeAssistant.qml"] == "644"
+    assert modes["device_agent/qml/C300XEnergy.qml"] == "644"
     assert modes["device_agent/qml/C300XRingerControl.qml"] == "644"
     assert modes["device_agent/qml/js/c300x_ha.js"] == "644"
     assert modes["device_agent/qml/js/c300x_i18n.js"] == "644"

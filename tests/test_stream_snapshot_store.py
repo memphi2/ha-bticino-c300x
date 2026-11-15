@@ -26,10 +26,12 @@ def fake_hass(tmp_path):
     ))
 
 
-def test_normalization_strips_metadata_and_bounds_dimensions():
-    with Image.open(BytesIO(storage.normalize_snapshot(jpeg((1600, 900))))) as image:
-        assert image.size == (1280, 720)
-        assert not image.getexif()
+def test_a_valid_image_is_stored_as_delivered():
+    """The capture encodes the image once. Storing it must not decode and
+    encode it again, which would lose quality and could change its size."""
+
+    content = jpeg((688, 480))
+    assert storage.normalize_snapshot(content) is content
 
 
 @pytest.mark.parametrize("content", [b"", b"not jpeg", b"x" * (storage.MAX_SNAPSHOT_BYTES + 1)])

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
 
 from custom_components.bticino_c300x.entity import C300XEntity
 
@@ -99,6 +102,99 @@ def test_no_read_is_started_for_other_entries_available_entities_or_a_lost_agent
     # An entity without a read of its own has nothing to refresh.
     plain = _PlainEntity(_entry())
     assert _run(plain) == []
+
+
+@pytest.mark.parametrize("kind", ["mute", "volume"])
+@pytest.mark.parametrize("removed", [False, True])
+def test_ringer_refreshes_once_after_connection_loss(monkeypatch, kind, removed) -> None:
+    from custom_components.bticino_c300x import entity as entity_module
+    from custom_components.bticino_c300x.number import C300XRingerVolumeNumber
+    from custom_components.bticino_c300x.switch import C300XRingerMuteSwitch
+
+    async def go() -> None:
+        entry = _entry()
+        api = SimpleNamespace(
+            async_ringer_status=AsyncMock(return_value={"muted": False, "volume": 5})
+        )
+        entry.runtime_data.api = api
+        entity = (
+            C300XRingerMuteSwitch(entry) if kind == "mute"
+            else C300XRingerVolumeNumber(entry)
+        )
+        tasks = []
+        callbacks = []
+        writes = []
+
+        def create_task(coro, name):
+            task = asyncio.create_task(coro)
+            tasks.append(task)
+            return task
+
+        entity.hass = SimpleNamespace(
+            async_create_background_task=create_task,
+            bus=SimpleNamespace(async_listen=lambda *_: lambda: None),
+        )
+        monkeypatch.setattr(entity, "async_on_remove", callbacks.append)
+        monkeypatch.setattr(entity, "async_write_ha_state", lambda: writes.append(True))
+        monkeypatch.setattr(entity_module, "async_dispatcher_connect", lambda *_: lambda: None)
+        await entity.async_update()
+        await entity.async_added_to_hass()
+        entity._handle_c300x_connection_state_changed(entry.entry_id)
+        assert not tasks
+
+        entry.runtime_data.connection_state.available = False
+        entity._handle_c300x_connection_state_changed(entry.entry_id)
+        assert not entity.available
+        assert entity._attr_available is True
+
+        resume = asyncio.Event()
+
+        async def changed_status():
+            await resume.wait()
+            return {"muted": True, "volume": 2}
+
+        api.async_ringer_status.side_effect = changed_status
+        entry.runtime_data.connection_state.available = True
+        entity._handle_c300x_connection_state_changed(entry.entry_id)
+        entity._handle_c300x_connection_state_changed(entry.entry_id)
+        await asyncio.sleep(0)
+        try:
+            assert len(tasks) == 1
+            assert api.async_ringer_status.await_count == 2
+            if removed:
+                writes_before_removal = len(writes)
+                for cancel in callbacks:
+                    cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                assert tasks[0].cancelled()
+                assert len(writes) == writes_before_removal
+            else:
+                resume.set()
+                await asyncio.gather(*tasks)
+                assert entity.available
+                if kind == "mute":
+                    assert entity.is_on is True
+                else:
+                    assert entity.native_value == 2
+                entity._handle_c300x_connection_state_changed(entry.entry_id)
+                assert len(tasks) == 1
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    asyncio.run(go())
+
+
+def test_connection_recovery_does_not_refresh_other_healthy_entities() -> None:
+    entry = _entry()
+    entity = _ReadingEntity(entry)
+    entity._attr_available = True
+    entry.runtime_data.connection_state.available = False
+    assert _run(entity) == []
+    entry.runtime_data.connection_state.available = True
+    assert _run(entity) == []
+    assert entity.reads == 0
 
 
 def test_reconnect_reads_are_coalesced_and_cancelled_on_entity_removal(monkeypatch) -> None:

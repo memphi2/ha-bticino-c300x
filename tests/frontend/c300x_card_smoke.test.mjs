@@ -69,7 +69,6 @@ function installFakeDom() {
           ".media",
           ".empty",
           ".snapshot-preview",
-          ".snapshot-label",
           ".body",
           ".row-action",
           ".action-icon",
@@ -183,7 +182,7 @@ function fakeHass({ cameraEntity, connection } = {}) {
   };
 }
 
-test("snapshot preview shows only its timestamp and hides during live video", async () => {
+test("snapshot preview has an accessible timestamp without an overlay and hides during live video", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?snapshot-wiring");
   const card = new (registry.get("c300x-doorbell-call-card"))();
@@ -200,7 +199,8 @@ test("snapshot preview shows only its timestamp and hides during live video", as
     const capturedAt = 1800000000;
     card._snapshots.showPreview("blob:archive", capturedAt);
     assert.equal(card._snapshotEl.hidden, false);
-    assert.equal(card._snapshotLabelEl.textContent, new Date(capturedAt * 1000).toLocaleString("en"));
+    assert.equal(card._snapshotLabelEl, undefined);
+    assert.ok(card._snapshotEl.attributes.get("aria-label").endsWith(new Date(capturedAt * 1000).toLocaleString("en")));
     assert.match(card._snapshotEl.attributes.get("aria-label"), /Archived image \(not live\)/);
     assert.equal(updates.at(-1).entryId, "entry-1");
     assert.equal(updates.at(-1).attributes, attrs);
@@ -214,7 +214,6 @@ test("snapshot preview shows only its timestamp and hides during live video", as
     attrs.stream_snapshots = false;
     card._updateState();
     assert.equal(card._snapshotEl.hidden, true);
-    assert.equal(card._snapshotLabelEl.hidden, true);
   } finally {
     card.disconnectedCallback();
   }
@@ -311,6 +310,8 @@ test("readiness warnings do not open Repairs while blockers do", async () => {
     "Ring Call requires Home Assistant forwarding",
   );
   assert.equal(readinessElement.attributes.has("role"), false);
+  // A narrow card cuts the readiness text; the tooltip carries it in full.
+  assert.equal(readinessElement.title, "Ring Call requires Home Assistant forwarding");
   readinessElement.dispatch("click");
   assert.deepEqual(paths, []);
 
@@ -578,6 +579,61 @@ test("reconfiguration disposes media, timers and subscriptions before replacing 
   card.disconnectedCallback();
 });
 
+test("card disposal closes ringback contexts and reattachment recreates them", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?ringback-disposal");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  const previousAudioContext = window.AudioContext;
+  const contexts = [];
+  window.AudioContext = class {
+    constructor() {
+      this.state = "running";
+      this.destination = {};
+      this.closes = 0;
+      contexts.push(this);
+    }
+    createGain() {
+      return { gain: { value: 0 }, connect() {}, disconnect() {} };
+    }
+    createOscillator() {
+      return { frequency: { value: 0 }, connect() {}, disconnect() {}, start() {}, stop() {} };
+    }
+    close() {
+      this.closes++;
+      this.state = "closed";
+      return Promise.resolve();
+    }
+  };
+  try {
+    card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+    card._syncRingbackTone(true);
+    card._syncRingbackTone(false);
+    assert.equal(contexts[0].closes, 0, "ordinary stop keeps the context reusable");
+    card._syncRingbackTone(true);
+    assert.equal(contexts.length, 1);
+    card.disconnectedCallback();
+    card.disconnectedCallback();
+    assert.equal(contexts[0].closes, 1);
+    assert.equal(card._ringbackTone._context, null);
+    assert.equal(card._ringbackTone._timer, null);
+    assert.deepEqual(card._ringbackTone._oscillators, []);
+
+    card.connectedCallback();
+    card._syncRingbackTone(true);
+    assert.equal(contexts.length, 2);
+    card.setConfig({ entity: "camera.replacement" });
+    assert.equal(contexts[1].closes, 1);
+    card._syncRingbackTone(true);
+    assert.equal(contexts.length, 3);
+    card.disconnectedCallback();
+    assert.deepEqual(contexts.map((context) => context.closes), [1, 1, 1]);
+  } finally {
+    card.disconnectedCallback();
+    if (previousAudioContext === undefined) delete window.AudioContext;
+    else window.AudioContext = previousAudioContext;
+  }
+});
+
 test("reconfiguration rejects an old subscription resolving after the new one", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-subscription");
@@ -702,9 +758,15 @@ test("failed old transition does not clear a replacement transition video", asyn
     close() {},
     start: () => new Promise((_, reject) => { rejectStart = reject; }),
   };
+  const oldTrack = { stopped: false, stop() { this.stopped = true; } };
+  const oldMicrophone = { getTracks: () => [oldTrack] };
+  card._micStream = oldMicrophone;
   card._createWebrtcClient = () => oldClient;
-  const pending = card._replaceDoorbellWebrtcStream({ onPromoted() {} });
+  const pending = card._replaceDoorbellWebrtcStream({ microphoneStream: oldMicrophone, onPromoted() {} });
   card.setConfig({ entity: "camera.replacement" });
+  const replacementTrack = { stopped: false, stop() { this.stopped = true; } };
+  const replacementMicrophone = { getTracks: () => [replacementTrack] };
+  card._micStream = replacementMicrophone;
   const replacement = { close() {} };
   const stream = { id: "replacement stream" };
   card._transitionWebrtc = replacement;
@@ -714,6 +776,9 @@ test("failed old transition does not clear a replacement transition video", asyn
     await assert.rejects(pending, /old provider failed/);
     assert.equal(card._transitionWebrtc, replacement);
     assert.equal(card._transitionVideoEl.srcObject, stream);
+    assert.equal(oldTrack.stopped, true);
+    assert.equal(card._micStream, replacementMicrophone);
+    assert.equal(replacementTrack.stopped, false);
   } finally {
     card.disconnectedCallback();
   }
@@ -1227,6 +1292,220 @@ test("home-call card ignores notification answer launches for doorbell cards", a
       globalThis.location = previousLocation;
     }
     globalThis.history = previousHistory;
+  }
+});
+
+test("the ringback tone plays only on the card that started the Home Call", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?ringback-owner");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const ringing = () => fakeHass({ cameraEntity: {
+    attributes: { friendly_name: "Door", media_primary_action: "hangup", media_state: "home_call_ringing" },
+    state: "streaming",
+  } });
+  const tones = (card) => {
+    const seen = [];
+    card._syncRingbackTone = (active) => seen.push(!!active);
+    return seen;
+  };
+
+  const other = new Card();
+  other.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera" });
+  const otherTones = tones(other);
+  other.hass = ringing();
+  assert.deepEqual([...new Set(otherTones)], [false]);
+
+  const caller = new Card();
+  caller.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera" });
+  const callerTones = tones(caller);
+  caller._lifecycle.activeHomeCallSession = true;
+  caller.hass = ringing();
+  assert.equal(callerTones.at(-1), true);
+  other.disconnectedCallback();
+  caller.disconnectedCallback();
+});
+
+function answerRaceCard(Card) {
+  const card = new Card();
+  card.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera" });
+  card._lifecycle.ringPreviewActive = true;
+  card._lifecycle.ringPreviewStarted = true;
+  card._lifecycle.lastMediaState = "ring_preview_active";
+  const clients = [];
+  card._createWebrtcClient = ({ onTrack } = {}) => {
+    const client = {
+      pc: null, running: false, remoteStream: null, options: null, onTrack,
+      async start(options) {
+        this.options = options;
+        this.running = true;
+        this.pc = {};
+        this.remoteStream = { getVideoTracks: () => [{}] };
+      },
+      close() { this.running = false; this.pc = null; this.remoteStream = null; },
+      refreshGain() {},
+      retargetMedia() {},
+    };
+    clients.push(client);
+    return client;
+  };
+  card._webrtc = {
+    pc: {}, running: true, remoteStream: { getVideoTracks: () => [{}] },
+    close() { this.running = false; this.pc = null; }, refreshGain() {},
+  };
+  return { card, clients };
+}
+
+function ringHass(mediaState, primaryAction, callService) {
+  const hass = fakeHass({ cameraEntity: {
+    attributes: { friendly_name: "Door", media_primary_action: primaryAction, media_state: mediaState },
+    state: "streaming",
+  } });
+  if (callService) hass.callService = callService;
+  return hass;
+}
+
+function fakeMicrophones() {
+  const streams = [];
+  const prompts = [];
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { mediaDevices: {
+    getUserMedia: () => new Promise((resolve) => prompts.push(() => {
+      const tracks = [{ kind: "audio", enabled: true, stopped: false, stop() { this.stopped = true; } }];
+      const stream = { getTracks: () => tracks, getAudioTracks: () => tracks };
+      streams.push(stream);
+      resolve(stream);
+    })),
+  } } });
+  return { streams, prompts, restore() {
+    if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor);
+    else delete globalThis.navigator;
+  } };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("failed answered transitions release their microphone and preserve the preview", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?failed-answer-microphone");
+  const Card = registry.get("c300x-doorbell-call-card");
+  for (const failure of ["offer rejection", "provider closure"]) {
+    const { card } = answerRaceCard(Card);
+    const microphones = fakeMicrophones();
+    const preview = card._webrtc;
+    let onClosed;
+    let closes = 0;
+    card._createWebrtcClient = (callbacks) => {
+      onClosed = callbacks.onClosed;
+      return {
+        async start() {
+          if (failure === "offer rejection") throw new Error(failure);
+        },
+        close() { closes++; },
+      };
+    };
+    let answering;
+    try {
+      card.hass = ringHass("ring_preview_active", "answer_ring", async () => {});
+      answering = card._actions.handlePrimaryAction();
+      await tick();
+      microphones.prompts.shift()();
+      await answering;
+      if (failure === "provider closure") {
+        assert.equal(microphones.streams[0].getTracks()[0].stopped, false);
+        const transition = card._transitionWebrtc;
+        onClosed(failure);
+        transition.close();
+      }
+      assert.equal(microphones.streams[0].getTracks()[0].stopped, true, failure);
+      assert.equal(card._micStream, null);
+      assert.equal(card._transitionWebrtc, null);
+      assert.equal(card._webrtc, preview);
+      assert.equal(preview.running, true);
+      assert.equal(card._lifecycle.doorbellAnswered, true);
+      assert.equal(card._error, failure);
+      assert.equal(closes, 1);
+    } finally {
+      card.disconnectedCallback();
+      microphones.prompts.shift()?.();
+      await answering;
+      microphones.restore();
+    }
+  }
+});
+
+test("the ring_active state arriving before the answer result keeps the answering card answered", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?answer-button-race");
+  const microphones = fakeMicrophones();
+  try {
+    const { card, clients } = answerRaceCard(registry.get("c300x-doorbell-call-card"));
+    let answered;
+    const callService = (_domain, service) => (service === "answer_doorbell_call"
+      ? new Promise((resolve) => { answered = resolve; }) : Promise.resolve());
+    card.hass = ringHass("ring_preview_active", "answer_ring", callService);
+    const action = card._actions.handlePrimaryAction();
+    await tick();
+    // Home Assistant pushes the new state before the service call returns.
+    card.hass = ringHass("ring_active", "hangup", callService);
+    await tick();
+    assert.equal(clients.length, 0, "no receive-only preview while this card answers");
+    answered();
+    await tick();
+    microphones.prompts.shift()();
+    await tick();
+    assert.equal(clients.length, 1);
+    assert.equal(clients[0].options.microphoneStream, microphones.streams[0]);
+    clients[0].onTrack();
+    await action;
+    await tick();
+    assert.equal(card._lifecycle.doorbellAnswered, true);
+    assert.equal(card._doorstationView().action, "hang_up");
+    assert.equal(card._actionButtonEl.disabled, false);
+    card.disconnectedCallback();
+  } finally {
+    microphones.restore();
+  }
+});
+
+test("a notification answer opens one microphone and no receive-only preview beside it", async () => {
+  const registry = installFakeDom();
+  const previousLocation = globalThis.location;
+  const previousHistory = globalThis.history;
+  globalThis.location = {
+    href: "https://example.test/lovelace/c300x?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+    search: "?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+  };
+  globalThis.history = {
+    state: {},
+    pushState() {},
+    replaceState(_state, _title, url) {
+      globalThis.location.href = `https://example.test${url}`;
+      globalThis.location.search = "";
+    },
+  };
+  const microphones = fakeMicrophones();
+  try {
+    await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?notification-answer-race");
+    const { card, clients } = answerRaceCard(registry.get("c300x-doorbell-call-card"));
+    card.hass = ringHass("ring_active", "hangup");
+    await tick();
+    assert.equal(clients.length, 0, "no receive-only preview while the answer waits for the microphone");
+    microphones.prompts.shift()();
+    await tick();
+    assert.equal(clients.length, 1);
+    assert.equal(clients[0].options.microphoneStream, microphones.streams[0]);
+    clients[0].onTrack();
+    await tick();
+    assert.equal(card._lifecycle.doorbellAnswered, true);
+    assert.equal(microphones.prompts.length + microphones.streams.length, 1, "one microphone request");
+    card.disconnectedCallback();
+    assert.deepEqual(microphones.streams.map((stream) => stream.getTracks()[0].stopped), [true]);
+  } finally {
+    microphones.restore();
+    if (previousLocation === undefined) delete globalThis.location;
+    else globalThis.location = previousLocation;
+    if (previousHistory === undefined) delete globalThis.history;
+    else globalThis.history = previousHistory;
   }
 });
 

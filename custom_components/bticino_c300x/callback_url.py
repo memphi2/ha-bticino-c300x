@@ -156,17 +156,6 @@ def validated_callback_base_url(
         return ""
 
 
-def apply_callback_base_url(callback_url: str, callback_base_url: str) -> str:
-    """Return a callback URL using an optional configured base endpoint."""
-
-    base_url = normalize_callback_base_url(callback_base_url)
-    if not base_url:
-        return callback_url
-    callback = urlsplit(callback_url)
-    base = urlsplit(base_url)
-    return urlunsplit((base.scheme, base.netloc, callback.path, callback.query, ""))
-
-
 def apply_callback_base_path(callback_path: str, callback_base_url: str) -> str:
     """Return a callback URL using a generated webhook path and base endpoint."""
 

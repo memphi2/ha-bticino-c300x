@@ -2,6 +2,7 @@
 static ssize_t limited_send(int fd, const void *data, size_t size, int flags);
 #define send limited_send
 #include "../src/http_util.c"
+#include "../src/video_snapshot.h"
 #undef send
 #include <assert.h>
 #include <fcntl.h>
@@ -67,10 +68,67 @@ static void test_large_response(void)
     free(received);
 }
 
+static void test_progress_extends_the_deadline_up_to_a_total(void)
+{
+    int pair[2];
+    const size_t size = 100000;
+    char *body = calloc(size, 1);
+    struct pollfd fds[C300X_HTTP_MAX_OUTPUTS];
+    struct http_output *slot = NULL;
+    assert(body);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    blocked = 1;
+    assert(c300x_http_write(pair[0], body, size));
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        if (outputs[i].data != NULL) slot = &outputs[i];
+    }
+    assert(slot != NULL);
+    /* A slow link still sends: the two seconds count from the last progress. */
+    slot->deadline = output_now() + 50;
+    blocked = 0;
+    short_writes = 1;
+    c300x_http_outputs_prepare(fds);
+    assert(poll(fds, C300X_HTTP_MAX_OUTPUTS, 10) >= 0);
+    c300x_http_outputs_handle(fds);
+    assert(slot->sent == 7);
+    assert(slot->deadline > output_now() + C300X_HTTP_OUTPUT_TIMEOUT_MS / 2);
+    /* A peer that reads a little now and then cannot hold the slot for ever. */
+    slot->limit = output_now() + 20;
+    c300x_http_outputs_prepare(fds);
+    assert(poll(fds, C300X_HTTP_MAX_OUTPUTS, 10) >= 0);
+    c300x_http_outputs_handle(fds);
+    assert(slot->deadline <= output_now() + 20);
+    short_writes = 0;
+    clear_output(slot, 1);
+    close_agent_socket(pair[0]);
+    close(pair[1]);
+    free(body);
+}
+
+static void test_largest_snapshot_is_accepted(void)
+{
+    int pair[2];
+    const size_t size = 54U + C300X_SNAPSHOT_MAX_WIDTH * 3U * C300X_SNAPSHOT_MAX_HEIGHT;
+    char *body = calloc(size, 1);
+    assert(body);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    blocked = 1;
+    assert(c300x_http_write(pair[0], "HTTP/1.1 200 OK\r\n\r\n", 19));
+    assert(c300x_http_write(pair[0], body, size));
+    assert(output_count() == 1);
+    close_agent_socket(pair[0]);
+    close(pair[1]);
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        if (outputs[i].data != NULL) clear_output(&outputs[i], 1);
+    }
+    free(body);
+    blocked = 0;
+}
+
 static void test_queue_memory_budget(void)
 {
     int first[2], second[2];
-    const size_t size = 300000;
+    const size_t size = C300X_HTTP_OUTPUT_QUEUE_LIMIT / 5 * 3;
     char *body = calloc(size, 1);
     assert(body);
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, first) == 0);
@@ -155,6 +213,24 @@ int main(void)
     }
     assert(c300x_http_outputs_prepare(fds) == -1);
 
+    {
+        /* The UDP event port takes frames only from this host itself. */
+        struct sockaddr_in source = {.sin_family = AF_INET};
+        source.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        assert(c300x_udp_source_is_local(&source));
+        source.sin_addr.s_addr = htonl(0xC0000201U);
+        assert(!c300x_udp_source_is_local(&source));
+        struct ifaddrs *own = NULL;
+        assert(getifaddrs(&own) == 0);
+        for (struct ifaddrs *item = own; item != NULL; item = item->ifa_next) {
+            if (item->ifa_addr != NULL && item->ifa_addr->sa_family == AF_INET) {
+                assert(c300x_udp_source_is_local((const struct sockaddr_in *)item->ifa_addr));
+            }
+        }
+        freeifaddrs(own);
+        assert(!c300x_udp_source_is_local(NULL));
+    }
+
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
     c300x_http_send_json(pair[0], 200, "OK", "{}");
     close_agent_socket(pair[0]);
@@ -164,5 +240,7 @@ int main(void)
     close(pair[1]);
     test_large_response();
     test_queue_memory_budget();
+    test_largest_snapshot_is_accepted();
+    test_progress_extends_the_deadline_up_to_a_total();
     return 0;
 }

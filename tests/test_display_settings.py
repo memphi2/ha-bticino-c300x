@@ -160,17 +160,25 @@ class _OptionsAreas:
         self._entry = entry
 
     def _flow(self):
+        def update_entry(entry, *, options):
+            entry.options = dict(options)
+
         flow = BticinoC300XOptionsFlow(self._entry)
-        flow.async_create_entry = lambda **kwargs: {"type": "finished", "data": kwargs["data"]}
+        flow.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(async_update_entry=update_entry),
+        )
         flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
         flow.add_suggested_values_to_schema = lambda schema, _values: schema
         return flow
 
     async def _area(self, step_id, user_input, next_step_id=None):
         result = await getattr(self._flow(), f"async_step_{step_id}")(user_input)
-        if result["type"] != "finished" or next_step_id is None:
+        if result["type"] != "menu":
             return result
-        self._entry.options = dict(result["data"])
+        # Saved: the entry is updated and the menu is shown again.
+        result = {"type": "finished", "data": dict(self._entry.options)}
+        if next_step_id is None:
+            return result
         menu = (await self._flow().async_step_init())["menu_options"]
         if next_step_id not in menu:
             return result
@@ -472,10 +480,10 @@ def test_the_weather_is_set_with_the_status_page(monkeypatch, flow_kind):
 
     form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
     assert form["step_id"].endswith("dashboard_pages")
-    # The display and patch form has none of it, and the weather is the first
-    # field of the status page, above its entities.
+    # Weather belongs to the status page, below its independent visibility
+    # switch and above its entities.
     assert [str(key) for key in form["data_schema"].schema["page_1"].schema.schema] == [
-        "weather_entity_id", "position", "entities",
+        "enabled", "weather_entity_id", "position", "entities",
     ]
     assert "page_9" not in {str(key) for key in form["data_schema"].schema}
     assert post_pages_like_home_assistant(form["data_schema"])["page_1"]["weather_entity_id"] == "weather.home"
@@ -538,14 +546,19 @@ def test_the_alarm_area_sets_alarmo_and_its_quick_action(monkeypatch, saved, cha
         post_like_home_assistant(form["data_schema"], changes)
     ))
 
-    assert result["type"] == "finished", result.get("errors")
+    assert result["type"] == "menu", result.get("errors")
+    # An area left as it is writes nothing; the entry data still holds it.
+    saved = {**entry.data, **entry.options}
     for key, value in stored.items():
-        assert result["data"][key] == value
+        assert saved[key] == value
     # What the area does not show stays; the display settings of an entity
     # that is no longer shown go.
-    assert result["data"]["dashboard_entities"] == ["light.room"]
-    overrides = result["data"]["dashboard_entity_display_overrides"]
+    assert saved["dashboard_entities"] == ["light.room"]
+    overrides = saved["dashboard_entity_display_overrides"]
     assert overrides["light.room"] == {"page": "Room"}
+    if not changes:
+        assert entry.options == {}
+        return
     assert "switch.old" not in overrides
     assert ("switch.porch" in overrides) == (stored.get("alarm_page_entity_id") == "switch.porch")
 
@@ -732,8 +745,8 @@ def test_pages_and_positions_are_applied_without_changing_capabilities():
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
     pages = {page["title"]: page for page in payload["data"]["pages"]}
-    # The status page has nothing to show here and is left out.
-    assert list(pages) == ["Room", "Outside"]
+    # The enabled status page keeps its badges without weather or tiles.
+    assert list(pages) == ["C300X", "Room", "Outside"]
     assert [item["entity_id"] for item in pages["Room"]["items"]] == [
         "light.two",
         "light.one",
@@ -1157,15 +1170,21 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     fields = convert(schema, custom_serializer=cv.custom_serializer)
 
     assert [(field["name"], field["type"]) for field in fields] == [
-        *((f"page_{slot}", "expandable") for slot in range(1, 9)),
+        ("page_1", "expandable"),
+        ("energy_page", "expandable"),
+        *((f"page_{slot}", "expandable") for slot in range(2, 9)),
     ]
-    # Used pages are open, and so is the first free one to add a page.
-    assert [field["expanded"] for field in fields] == [True, True, True] + [False] * 5
+    # Used pages are open, and so is the first free one to add a page; the
+    # energy page is closed while it is switched off.
+    assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 5
+    assert [item["name"] for item in fields[1]["schema"]] == [
+        "enabled", "position", "view_now", "view_today", "view_power", "view_balance",
+    ]
     assert [item["name"] for item in fields[0]["schema"]] == [
-        "weather_entity_id", "position", "entities",
+        "enabled", "weather_entity_id", "position", "entities",
     ]
-    assert [item["name"] for item in fields[1]["schema"]] == ["name", "position", "entities"]
-    assert fields[1]["schema"][0]["description"] == {"suggested_value": "Room"}
+    assert [item["name"] for item in fields[2]["schema"]] == ["name", "position", "entities"]
+    assert fields[2]["schema"][0]["description"] == {"suggested_value": "Room"}
 
 
 
@@ -1392,3 +1411,49 @@ def test_the_tiles_form_names_the_untitled_page_as_such():
     form = tile_form({"dashboard_entities": ["light.a"]})
 
     assert list(form.sections) == ["Page without title › A"]
+
+
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+@pytest.mark.parametrize("views", [["now", "today"], ["power"], ["today", "balance"], []])
+def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind, views):
+    dashboard = {"device_ui_enabled": True}
+    entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    posted = post_pages_like_home_assistant(form["data_schema"], {
+        "page_1": {"entities": ["sensor.temp"]},
+        "page_2": {"name": "Room", "entities": ["light.one"]},
+        "energy_page": {
+            "enabled": True,
+            **{f"view_{view}": view in views for view in ("now", "today", "power", "balance")},
+        },
+    })
+    form = asyncio.run(pages_step(posted))
+    result = asyncio.run(display_step(post_tiles_like_home_assistant(form["data_schema"])))
+
+    assert result["type"] == "finished", result.get("errors")
+    # Second page by default, ahead of the page that also asked for 2.
+    assert result["data"]["energy_page"] == {
+        "enabled": True, "position": 2, "views": views,
+    }
+    assert result["data"]["dashboard_pages"] == [
+        {"name": "C300X", "order": 1}, {"name": "Room", "order": 2},
+    ]
+
+
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+def test_every_flow_leaves_the_energy_page_off_unless_switched_on(monkeypatch, flow_kind):
+    dashboard = {"device_ui_enabled": True}
+    entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    posted = post_pages_like_home_assistant(form["data_schema"], {
+        "page_1": {"entities": ["sensor.temp"]},
+    })
+    form = asyncio.run(pages_step(posted))
+    result = asyncio.run(display_step(post_tiles_like_home_assistant(form["data_schema"])))
+
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["energy_page"]["enabled"] is False

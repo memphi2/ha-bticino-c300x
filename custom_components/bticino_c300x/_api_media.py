@@ -25,11 +25,16 @@ from .api_errors import (
 class _ApiMediaMixin(_C300XApiCore):
     """Doorbell video, ring/home calls and audio-codec endpoints."""
 
-    async def async_doorbell_snapshot(self) -> tuple[bytes, str]:
-        """Read a bounded in-memory video frame without starting or answering media."""
+    async def async_doorbell_snapshot(self, width: int, height: int) -> tuple[bytes, str]:
+        """Read a bounded in-memory video frame without starting or answering media.
+
+        The agent delivers the image in exactly the given size.
+        """
 
         return await self._request_bytes(
-            "GET", "/api/v1/video/doorbell/snapshot", max_bytes=512 * 1024
+            "GET",
+            f"/api/v1/video/doorbell/snapshot?width={int(width)}&height={int(height)}",
+            max_bytes=1200 * 1024,
         )
 
     async def async_doorbell_video_status(self) -> DoorbellVideoStatus:

@@ -35,16 +35,14 @@ of observation after each stop. The issue is closed following this validation;
 the reporter's exact cold-boot, short-gap and multi-unit setup has not yet been
 retested with the corrected agent.
 
-The fix is included in release 2.0.0. Follow the
-[update instructions](advanced-maintenance.md#updates) and verify that the
-**native agent**, not just the integration, is version 2.0.0 or newer.
-Updating only Home Assistant files does not apply the correction.
+The fix is part of the packaged agent. Follow the
+[update instructions](advanced-maintenance.md#updates) so the device runs it;
+updating only Home Assistant files does not apply the correction.
 
-Until the corrected agent is installed, use **Speex (stock)** in the **Audio
-codec** select as the workaround. Changing the device codec is an explicit
-maintenance operation that reboots the C300X. If the reboot returns with the
-corrected agent, stop repeating the test, return to Speex and reopen issue #55
-with the versions, reproduction steps and sanitized diagnostics.
+If a PCMU stream still reboots the C300X, stop repeating the test, switch the
+**Audio codec** select back to **Speex (stock)** and reopen issue #55 with the
+versions, reproduction steps and sanitized diagnostics. Changing the device
+codec is an explicit maintenance operation that reboots the C300X.
 
 ## Card Shows Stream Instead of Answer
 
@@ -75,8 +73,8 @@ Check:
 ## Talkback or Microphone Does Not Work
 
 The normal HA camera player's microphone is optional and **off by default**.
-In the integration options, enable **Two-way audio in the HA camera player**
-on the features page. This requires Home Assistant 2026.11 or newer,
+In the integration options, enable **Talk through the Home Assistant camera view**
+under **Video and audio**. This requires Home Assistant 2026.11 or newer,
 **Settings > System > Labs > Two-way audio**, a WebRTC stream, HTTPS and browser
 microphone permission. See the [Home Assistant requirements](https://contributors.home-assistant.io/core/entities/camera/#two-way-audio).
 The integration declares support only when this option is enabled and the agent
@@ -107,8 +105,8 @@ endpoint; see [Callback URL](advanced-maintenance.md#callback-url).
 
 Use the integration options before changing automations:
 
-- **Doorstation live audio gain** affects live on-demand and Ring Call audio.
-- **Ring capture audio gain** affects Ring Capture output files.
+- **Live audio level (dB)** affects live on-demand and Ring Call audio.
+- **Volume of ring recordings (dB)** affects Ring Capture output files.
 - Both values accept `-20 dB` to `+20 dB`.
 - Keep live gain at `0 dB` when the default audio level is acceptable; the
   integration then avoids unnecessary runtime gain updates.
@@ -161,7 +159,7 @@ Check:
 3. Keep output paths below `/media/c300x/`, `/config/c300x/` or
    `/config/www/c300x/`.
 4. Check `/media/c300x/` for the MP4 and `/config/c300x/` for `latest.raw.wav`,
-   `latest.processed.wav`, `latest.capture.json`, `frame_01.jpg`,
+   `latest.capture.json`, `frame_01.jpg`,
    `frame_02.jpg` and `frame_03.jpg`.
    These are latest pointers. For automation use the exact paths returned by the
    capture service. Per-recording workspaces expire after one hour on the next

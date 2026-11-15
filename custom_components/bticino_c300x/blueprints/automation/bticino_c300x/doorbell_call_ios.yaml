@@ -99,8 +99,7 @@ variables:
     {% for entity_id in c300x_entities %}
       {% set options = state_attr(entity_id, 'options') or [] %}
       {% if entity_id.startswith('select.')
-            and 'Home Assistant' in options
-            and 'Blocked' in options %}
+            and 'homeassistant' in options and 'blocked' in options %}
         {% set ns.entity = entity_id %}
       {% endif %}
     {% endfor %}
@@ -139,8 +138,6 @@ variables:
   action_scope: "{{ (this.entity_id | default('automation.c300x_ios_ring_call', true)) | replace('.', '_') | upper }}"
   ring_tag: "{{ 'c300x_ios_ring_call_' ~ action_scope | lower }}"
   active_tag: "{{ 'c300x_ios_ring_call_active_' ~ action_scope | lower }}"
-  answer_action: "{{ 'C300X_IOS_RING_ANSWER_' ~ action_scope }}"
-  hangup_action: "{{ 'C300X_IOS_RING_HANGUP_' ~ action_scope }}"
   answer_dashboard_path: >-
     {% set parts = dashboard_path.split('#', 1) %}
     {% set base = parts[0] %}
@@ -154,14 +151,15 @@ condition:
       {{ entry_id and event_camera_entity in c300x_entities }}
   - condition: template
     value_template: >-
-      {{ states(forwarding_entity) == 'Home Assistant'
-         or states(forwarding_entity) == 'homeassistant'
-         or state_attr(forwarding_entity, 'state') == 'homeassistant'
-         or state_attr(forwarding_entity, 'mode') == 'homeassistant' }}
+      {{ state_attr(forwarding_entity, 'state') == 'homeassistant' }}
   - condition: template
     value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
 
 action:
+  # The script context is available here, after automation variables render.
+  - variables:
+      answer_action: "{{ 'C300X_IOS_RING_ANSWER_' ~ action_scope ~ '_' ~ context.id }}"
+      hangup_action: "{{ 'C300X_IOS_RING_HANGUP_' ~ action_scope ~ '_' ~ context.id }}"
   - service: !input notify_service
     data:
       title: "{{ title }}"
@@ -210,6 +208,15 @@ action:
         event_type: bticino_c300x_agent_event_received
         event_data:
           event_key: door_unlock_started
+          entry_id: "{{ entry_id }}"
+      # The same unlock as Home Assistant reports it the moment its own unlock
+      # call returns, so the alert does not depend on the device's event
+      # reaching Home Assistant.
+      - id: door_unlock_action
+        platform: event
+        event_type: bticino_c300x_action_received
+        event_data:
+          action_id: door_unlock
           entry_id: "{{ entry_id }}"
     timeout: "{{ notification_timeout_seconds | int(60) }}"
     continue_on_timeout: true

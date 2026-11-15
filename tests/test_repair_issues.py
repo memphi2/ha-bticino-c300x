@@ -216,6 +216,21 @@ def test_missing_alarm_entity_creates_repair_issue() -> None:
     assert issue["translation_placeholders"]["entity_id"] == "alarm_control_panel.missing"
 
 
+@pytest.mark.parametrize("alarm_override", ["", None, "   ", "alarm_control_panel.home"])
+def test_alarm_option_override_clears_stale_repair(alarm_override) -> None:
+    entry = FakeEntry(data={CONF_ALARM_ENTITY_ID: "alarm_control_panel.removed"})
+    hass = FakeHass(entity_registry=FakeEntityRegistry({"alarm_control_panel.home"}))
+    issue_id = repair_issue_id(MISSING_ALARM_ENTITY_ISSUE, entry.entry_id)
+    async_sync_entry_repair_issues(hass, entry)
+    assert issue_id in CREATED_ISSUES
+
+    entry.options = MappingProxyType({CONF_ALARM_ENTITY_ID: alarm_override})
+    for _ in range(2):
+        async_sync_entry_repair_issues(hass, entry)
+        assert issue_id not in CREATED_ISSUES
+        assert issue_id in DELETED_ISSUES
+
+
 def test_existing_alarm_entity_clears_repair_issue() -> None:
     entry = FakeEntry(data={CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"})
     hass = FakeHass(entity_registry=FakeEntityRegistry({"alarm_control_panel.home"}))

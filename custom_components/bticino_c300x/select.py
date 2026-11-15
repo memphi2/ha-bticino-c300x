@@ -10,16 +10,21 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import C300XAgentApiError
 from .capabilities import entry_maintenance_action_is_advertised
 from .const import (
+    DOMAIN,
     EVENT_AGENT_EVENT_RECEIVED,
+    SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
+    SIGNAL_FORWARDING_CHANGED,
     SMARTPHONE_FORWARDING_MODES,
-    SMARTPHONE_FORWARDING_STATE_UNPROVISIONED,
 )
 from .entity import C300XEntity, supports_capability
 from .entity import (
@@ -34,29 +39,13 @@ if TYPE_CHECKING:
 
 PARALLEL_UPDATES = 1
 
-# Labels for every state the agent reports, including "unprovisioned" -- a
-# device with no smartphone pairing at all. That one is deliberately not in
-# _FORWARDING_OPTION_LABELS below, so Home Assistant drops it from the entity
-# state (SelectEntity.state returns None for a current_option outside options)
-# and the value is surfaced through extra_state_attributes and media readiness
-# instead. Do not "fix" that by adding it to the options: Home Assistant only
-# rejects an unselectable option while it is absent from the list, so adding it
-# would let a select_option call through to async_select_option, which discards
-# an unsupported mode without a word.
-_FORWARDING_STATE_LABELS = {
-    "enabled": "Smartphone",
-    "homeassistant": "Home Assistant",
-    "blocked": "Blocked",
-    SMARTPHONE_FORWARDING_STATE_UNPROVISIONED: "Unprovisioned",
-}
-_FORWARDING_OPTION_LABELS = {
-    mode: label
-    for mode, label in _FORWARDING_STATE_LABELS.items()
-    if mode in SMARTPHONE_FORWARDING_MODES
-}
-_FORWARDING_MODE_BY_LABEL = {
-    label: mode for mode, label in _FORWARDING_OPTION_LABELS.items()
-}
+# The options are the agent's mode keys; their texts come from the state
+# translations. "unprovisioned" -- a device with no smartphone pairing at
+# all -- is a state the agent reports but not a mode that can be chosen, so
+# it is not an option: the entity state is then unknown and the value is
+# surfaced through extra_state_attributes and media readiness instead. Do
+# not add it to the options: Home Assistant only rejects an unselectable
+# option while it is absent from the list.
 
 
 async def async_setup_entry(
@@ -81,7 +70,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 
     _attr_should_poll = False
     _attr_translation_key = "smartphone_forwarding_mode"
-    _attr_options = list(_FORWARDING_OPTION_LABELS.values())
+    _attr_options = list(SMARTPHONE_FORWARDING_MODES)
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "smartphone_forwarding_mode")
@@ -93,7 +82,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
     def current_option(self) -> str | None:
         """Return the current forwarding mode."""
 
-        return _FORWARDING_STATE_LABELS.get(self._state)
+        return self._state if self._state in SMARTPHONE_FORWARDING_MODES else None
 
     @property
     def extra_state_attributes(self) -> dict[str, str | int | None]:
@@ -104,12 +93,11 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Set the forwarding mode."""
 
-        mode = _FORWARDING_MODE_BY_LABEL.get(option, option)
-        if mode not in SMARTPHONE_FORWARDING_MODES:
+        if option not in SMARTPHONE_FORWARDING_MODES:
             return
         try:
             status = await self._entry.runtime_data.api.async_set_smartphone_forwarding_mode(
-                mode
+                option
             )
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X smartphone forwarding update failed") from err
@@ -127,21 +115,30 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         self._apply_status(status)
 
     def _apply_status(self, status: Mapping[str, Any]) -> None:
+        """Take a reading from the agent, whether asked for or pushed."""
+
         mode = status.get("mode")
-        state = status.get("state", "unknown")
+        state = status.get("state")
         self._mode = mode if isinstance(mode, int) else None
         self._state = state if isinstance(state, str) else "unknown"
         # The shared state store holds a real forwarding state or nothing:
         # "unknown" is this class's display sentinel for "no reading", and
-        # readiness must not score it as a real non-Home-Assistant mode.
+        # readiness must not score it as a real non-Home-Assistant mode. It
+        # must not clear a known state either -- the webhook preserves that
+        # on an unparseable push, and the push callback runs synchronously
+        # right afterwards on the very same store.
         forwarding_state = forwarding_state_from_value(self._state)
-        if forwarding_state is not None:
-            # "unknown" means no reading, so it must not clear a known state --
-            # the webhook preserves it on an unparseable push, and this callback
-            # runs synchronously right afterwards on the very same store.
-            self._entry.runtime_data.event_state.smartphone_forwarding_mode = (
-                forwarding_state
-            )
+        event_state = self._entry.runtime_data.event_state
+        if forwarding_state not in (
+            None, getattr(event_state, "smartphone_forwarding_mode", None)
+        ):
+            event_state.smartphone_forwarding_mode = forwarding_state
+            # Media readiness reads the store; a reading that did not come
+            # with a device event would otherwise not reach it.
+            if self.hass is not None:
+                async_dispatcher_send(
+                    self.hass, SIGNAL_FORWARDING_CHANGED, self._entry.entry_id
+                )
         self._attr_available = True
 
     async def async_added_to_hass(self) -> None:
@@ -154,6 +151,26 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
                 self._handle_agent_event,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, SIGNAL_AGENT_INFO_CHANGED, self._handle_agent_restarted
+            )
+        )
+
+    @callback
+    def _handle_agent_restarted(self, entry_id: str) -> None:
+        """Ask again: a restarted agent reads the mode without reporting it.
+
+        The read also lets the agent switch its Ring Call receiver to match.
+        """
+
+        if entry_id != self._entry.entry_id:
+            return
+        self._cancel_reconnect_refresh()
+        self._reconnect_refresh_task = self.hass.async_create_background_task(
+            self._async_refresh_after_reconnect(),
+            f"{DOMAIN}_refresh_after_restart_{self._attr_unique_id}",
+        )
 
     @callback
     def _handle_agent_event(self, event: Event) -> None:
@@ -162,23 +179,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         event_type = agent_event_key(event.data) or ""
         if not event_type.startswith("smartphone_forwarding_"):
             return
-        forwarding = _normalize_smartphone_forwarding_event(event.data)
-        state = forwarding.get("state")
-        mode = forwarding.get("mode")
-        self._state = state if isinstance(state, str) else "unknown"
-        self._mode = mode if isinstance(mode, int) else None
-        # The shared state store holds a real forwarding state or nothing:
-        # "unknown" is this class's display sentinel for "no reading", and
-        # readiness must not score it as a real non-Home-Assistant mode.
-        forwarding_state = forwarding_state_from_value(self._state)
-        if forwarding_state is not None:
-            # "unknown" means no reading, so it must not clear a known state --
-            # the webhook preserves it on an unparseable push, and this callback
-            # runs synchronously right afterwards on the very same store.
-            self._entry.runtime_data.event_state.smartphone_forwarding_mode = (
-                forwarding_state
-            )
-        self._attr_available = True
+        self._apply_status(_normalize_smartphone_forwarding_event(event.data))
         self.async_write_ha_state()
 
 

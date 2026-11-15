@@ -304,6 +304,64 @@ def test_restore_after_update_applies_core_full_patch_and_reloads_gui() -> None:
     assert entry.runtime_data.qml_patch_status_updated_at is not None
 
 
+def test_restore_after_update_waits_while_the_agent_runs_another_job(monkeypatch) -> None:
+    """Home Assistant reads the patch status on its own after the agent restarts.
+
+    The agent runs one maintenance job at a time, so each step of the restore
+    can be rejected as busy; that must not end the update with an error.
+    """
+
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x import agent_update
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    class _BusyFirstApi(_FakeApi):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.rejected: list[str] = []
+
+        def _busy_once(self, step: str) -> None:
+            if step not in self.rejected:
+                self.rejected.append(step)
+                raise C300XAgentApiConnectionError(
+                    "device agent returned HTTP 409: maintenance_busy"
+                )
+
+        async def async_qml_patch_status(self) -> dict[str, Any]:
+            self._busy_once("qml_status")
+            return await super().async_qml_patch_status()
+
+        async def async_apply_qml_patch(self, *, dynamic_homepage: bool = False) -> dict[str, Any]:
+            self._busy_once("apply_qml")
+            return await super().async_apply_qml_patch(dynamic_homepage=dynamic_homepage)
+
+        async def async_apply_qml_core_patch(self) -> dict[str, Any]:
+            self._busy_once("apply_qml_core")
+            return await super().async_apply_qml_core_patch()
+
+        async def async_reload_gui(self) -> dict[str, Any]:
+            self._busy_once("reload_gui")
+            return await super().async_reload_gui()
+
+    monkeypatch.setattr(agent_update.asyncio, "sleep", AsyncMock())
+    api = _BusyFirstApi(
+        status={"available": True, "patched": True, "state": "patched"},
+        apply_status={"patched": True},
+        core_apply_status={"core_patched": True},
+    )
+    entry = _entry(api, {"available": True, "patched": False})
+
+    status = asyncio.run(
+        async_restore_qml_patches_after_update(entry, apply_full_patch=True)
+    )
+
+    assert api.rejected == ["apply_qml_core", "apply_qml", "qml_status", "reload_gui"]
+    assert api.calls == ["apply_qml_core", "apply_qml", "qml_status", "reload_gui", "qml_status"]
+    assert api.dynamic_homepage is True
+    assert status == {"available": True, "patched": True, "state": "patched"}
+
+
 def test_restore_after_update_skips_full_patch_when_not_required() -> None:
     api = _FakeApi(
         status={"available": True, "patched": False, "core_patched": True},

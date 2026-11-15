@@ -14,6 +14,7 @@ from .dashboard_labels import (
     _WEATHER_STATE_LABELS_BY_LANGUAGE,
     _WEATHER_STATE_LABELS_EN,
     _WEATHER_TITLE_BY_LANGUAGE,
+    decimal_text,
 )
 
 dt_util: Any
@@ -86,9 +87,9 @@ def dashboard_weather_payload(
         attributes = {}
     condition = _weather_state_label(state.state, language)
     condition_key = str(state.state or "unknown").lower()
-    temperature = _weather_temperature(attributes)
-    humidity = _weather_humidity(attributes)
-    wind = _weather_wind(attributes)
+    temperature = _weather_temperature(attributes, language)
+    humidity = _weather_humidity(attributes, language)
+    wind = _weather_wind(attributes, language)
     title = _localized_weather_title(language)
     updated = _weather_updated_label(state)
     forecast_entries = _weather_forecast_entries(
@@ -131,28 +132,28 @@ def _weather_state_label(value: Any, language: str) -> str:
     return labels.get(raw, _dashboard_state_label(raw, language))
 
 
-def _weather_temperature(attributes: dict[str, Any]) -> str:
+def _weather_temperature(attributes: dict[str, Any], language: str) -> str:
     value = attributes.get("temperature")
     if value in (None, ""):
         return ""
     unit = str(attributes.get("temperature_unit") or attributes.get("unit_of_measurement") or "C")
-    return f"{value} {unit}"
+    return f"{decimal_text(value, language)} {unit}"
 
 
-def _weather_humidity(attributes: dict[str, Any]) -> str:
+def _weather_humidity(attributes: dict[str, Any], language: str) -> str:
     value = attributes.get("humidity")
     if value in (None, ""):
         return ""
-    return f"{value}%"
+    return f"{decimal_text(value, language)}%"
 
 
-def _weather_wind(attributes: dict[str, Any]) -> str:
+def _weather_wind(attributes: dict[str, Any], language: str) -> str:
     value = attributes.get("wind_speed")
     if value in (None, ""):
         return ""
     unit = str(attributes.get("wind_speed_unit") or "")
     suffix = f" {unit}" if unit else ""
-    return f"{value}{suffix}"
+    return f"{decimal_text(value, language)}{suffix}"
 
 
 async def _async_weather_forecast_items(
@@ -292,7 +293,7 @@ def _weather_forecast(
         if not isinstance(item, dict):
             continue
         condition = _weather_state_label(item.get("condition"), language)
-        temperature = _weather_forecast_temperature(item, unit)
+        temperature = _weather_forecast_temperature(item, unit, language)
         time_label = _weather_time_label(
             item.get("datetime") or item.get("native_datetime") or item.get("time")
         )
@@ -325,7 +326,7 @@ def _weather_forecast_entries(
                 ),
                 "condition": _weather_state_label(condition_key, language),
                 "condition_key": condition_key,
-                "temperature": _weather_forecast_temperature(item, unit),
+                "temperature": _weather_forecast_temperature(item, unit, language),
             }
         )
     while len(entries) < 2:
@@ -352,14 +353,14 @@ def _weather_forecast_items(attributes: dict[str, Any]) -> list[Any]:
     return []
 
 
-def _weather_forecast_temperature(item: dict[str, Any], fallback_unit: str) -> str:
+def _weather_forecast_temperature(item: dict[str, Any], fallback_unit: str, language: str) -> str:
     value = item.get("temperature")
     if value in (None, ""):
         value = item.get("templow")
     if value in (None, ""):
         return ""
     unit = str(item.get("temperature_unit") or item.get("unit_of_measurement") or fallback_unit)
-    return f"{value} {unit}"
+    return f"{decimal_text(value, language)} {unit}"
 
 
 def _weather_sun_text(sunrise: str, sunset: str) -> str:

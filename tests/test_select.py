@@ -107,7 +107,7 @@ def test_smartphone_forwarding_select_refreshes_active_status() -> None:
     asyncio.run(entity.async_update())
 
     assert entry.runtime_data.api.active_reads == 1
-    assert entity.current_option == "Blocked"
+    assert entity.current_option == "blocked"
     assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "blocked"
 
@@ -123,7 +123,7 @@ def test_select_setup_adds_supported_entities_after_initial_refresh() -> None:
     entity = added[0][0]
     assert isinstance(entity, C300XSmartphoneForwardingModeSelect)
     assert entry.runtime_data.api.active_reads == 1
-    assert entity.current_option == "Blocked"
+    assert entity.current_option == "blocked"
 
 
 def test_select_setup_skips_unsupported_forwarding_capability() -> None:
@@ -150,10 +150,10 @@ def test_smartphone_forwarding_select_sets_three_state_mode() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
 
-    asyncio.run(entity.async_select_option("Home Assistant"))
+    asyncio.run(entity.async_select_option("homeassistant"))
 
     assert entry.runtime_data.api.selected == ["homeassistant"]
-    assert entity.current_option == "Home Assistant"
+    assert entity.current_option == "homeassistant"
 
 
 def test_smartphone_forwarding_select_ignores_invalid_options() -> None:
@@ -166,27 +166,48 @@ def test_smartphone_forwarding_select_ignores_invalid_options() -> None:
     assert entity.current_option is None
 
 
-def test_smartphone_forwarding_select_shows_unprovisioned_but_does_not_write() -> None:
+def test_smartphone_forwarding_select_reports_unprovisioned_but_does_not_write() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
 
     entity._apply_status({"mode": 3, "state": "unprovisioned"})
-    asyncio.run(entity.async_select_option("Unprovisioned"))
+    asyncio.run(entity.async_select_option("unprovisioned"))
 
-    assert "Unprovisioned" not in entity._attr_options
+    assert entity.options == ["enabled", "homeassistant", "blocked"]
     assert entry.runtime_data.api.selected == []
-    assert entity.current_option == "Unprovisioned"
+    assert entity.current_option is None
     assert entity.extra_state_attributes == {"mode": 3, "state": "unprovisioned"}
 
 
-def test_smartphone_forwarding_select_accepts_raw_mode_for_automation() -> None:
+def test_smartphone_forwarding_select_rejects_the_former_display_texts() -> None:
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_select_option("Blocked"))
+
+    assert entry.runtime_data.api.selected == []
+
+
+def test_every_forwarding_option_has_a_text_in_every_language() -> None:
+    import json
+    from pathlib import Path
+
+    component = Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x"
+    for path in [component / "strings.json", *sorted((component / "translations").glob("*.json"))]:
+        states = json.loads(path.read_text(encoding="utf-8"))["entity"]["select"][
+            "smartphone_forwarding_mode"
+        ]["state"]
+        assert list(states) == ["enabled", "homeassistant", "blocked"], path.name
+
+
+def test_smartphone_forwarding_select_sets_the_smartphone_mode() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
 
     asyncio.run(entity.async_select_option("enabled"))
 
     assert entry.runtime_data.api.selected == ["enabled"]
-    assert entity.current_option == "Smartphone"
+    assert entity.current_option == "enabled"
 
 
 def test_smartphone_forwarding_event_updates_select_state() -> None:
@@ -202,7 +223,7 @@ def test_smartphone_forwarding_event_updates_select_state() -> None:
         )
     )
 
-    assert entity.current_option == "Home Assistant"
+    assert entity.current_option == "homeassistant"
     assert entity.extra_state_attributes == {"mode": 1, "state": "homeassistant"}
 
 
@@ -219,7 +240,7 @@ def test_smartphone_forwarding_event_shows_unprovisioned_state() -> None:
         )
     )
 
-    assert entity.current_option == "Unprovisioned"
+    assert entity.current_option is None
     assert entity.extra_state_attributes == {"mode": 3, "state": "unprovisioned"}
 
 
@@ -242,7 +263,9 @@ def test_smartphone_forwarding_select_subscribes_to_agent_events() -> None:
     assert listeners == [("bticino_c300x_agent_event_received", entity._handle_agent_event)]
     assert removers[0] == entity._cancel_reconnect_refresh
     assert callable(removers[1])
-    assert removers[2:] == ["unsub"]
+    assert removers[2] == "unsub"
+    # The restart signal of the agent.
+    assert len(removers) == 4 and callable(removers[3])
 
 
 def test_smartphone_forwarding_select_ignores_unrelated_events() -> None:
@@ -603,3 +626,40 @@ def test_smartphone_forwarding_push_without_a_reading_keeps_the_known_state() ->
     # Displayed as unknown, but the shared store keeps the last real reading.
     assert entity._state == "unknown"
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "blocked"
+
+
+def test_smartphone_forwarding_select_reads_again_after_an_agent_restart() -> None:
+    """A restarted agent reads the mode silently; a change made on the device
+    while it was down reaches Home Assistant only when it asks again."""
+
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+    tasks: list[Any] = []
+    written: list[bool] = []
+    entity.hass = SimpleNamespace(  # type: ignore[assignment]
+        async_create_background_task=lambda coro, name: tasks.append(coro),
+    )
+    entity.async_write_ha_state = lambda: written.append(True)  # type: ignore[method-assign]
+
+    entity._handle_agent_restarted("another-entry")
+    assert tasks == []
+    entity._handle_agent_restarted("entry-1")
+    asyncio.run(tasks[0])
+
+    assert entry.runtime_data.api.active_reads == 1
+    assert entity.current_option == "blocked" and written
+
+
+def test_a_forwarding_reading_tells_the_readiness_sensor(monkeypatch) -> None:
+    from custom_components.bticino_c300x import select as select_module
+
+    sent: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(select_module, "async_dispatcher_send", lambda *args: sent.append(args))
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+    entity.hass = "hass"  # type: ignore[assignment]
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_update())
+
+    assert sent == [("hass", "bticino_c300x_forwarding_changed", "entry-1")]

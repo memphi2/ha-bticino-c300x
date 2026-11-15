@@ -110,7 +110,7 @@ Run `npm ci --prefix tests/browser --ignore-scripts` and
 `node tests/browser/smoke.mjs`. Chrome must be installed; `CHROME_BIN` overrides
 its executable path. CI runs this separately from Python tests.
 
-The actual card is rendered at 320, 390 and 1024 pixels in four languages.
+The actual card is rendered at 240, 320, 390 and 1024 pixels in four languages.
 Tests check action bounds/labels, unavailable and pending buttons, door/light
 routing, repeated WebRTC start/stop, microphone muting and detach cleanup.
 A synthetic canvas feeds a real browser-to-browser WebRTC connection; pixel
@@ -118,6 +118,26 @@ checks require decoded video. HA host elements and signaling are fixtures,
 microphone input is Chrome's fake device and no C300X is contacted. Screenshots
 are written to ignored `.artifacts/browser/`. These are not real-HA frontend or
 device interoperability tests.
+
+## Display Layout Checks
+
+The optional `scripts/check_energy_layout.py` renders the production Energy QML
+offscreen in an existing PySide6 environment:
+
+```bash
+/path/to/qt-python scripts/check_energy_layout.py \
+  --fixture-python /path/to/ha-python --check --output .artifacts/energy
+```
+
+It checks four languages, all subpages, normal and reduced heights, tab switching
+and long labels/large values. Screenshots, text bounds and diagnostics stay in
+the ignored artifacts directory. `--revision COMMIT` renders an older QML file
+without changing the checkout. `--stock-skin DIRECTORY` can read local skin
+images; no vendor assets are bundled or uploaded.
+
+Qt Quick 1.1 imports and two vendor components are adapted for the local Qt 6
+renderer. This verifies layout, not Qt 4 firmware or device performance.
+PySide6 is a development-only tool, not an integration dependency.
 
 ## Clean Install Path
 
@@ -143,7 +163,7 @@ device interoperability tests.
 | Two browser Ring preview | Supported preview viewers do not break the answered flow. |
 | Ring capture during a real Ring Call | Omitted `capture_mode` and explicit `ring` preserve the existing answer/record/hangup flow. Capture writes MP4, audio when requested, JPEG frames and JSON metadata to allowed paths. |
 | Ring capture without a Ring Call | With `include_audio: true`, the default `ring` mode fails cleanly and does not silently start an on-demand session. Existing blueprints keep this mode. |
-| On-demand capture from idle | Explicit `capture_mode: on_demand` records without ringing. Test `include_audio: true` and `false`, durations of 1, 5 and 15 seconds, exact response paths and capture-mode metadata with native agent 2.1.0. |
+| On-demand capture from idle | Explicit `capture_mode: on_demand` records without ringing. Test `include_audio: true` and `false`, durations of 1, 5 and 15 seconds, exact response paths and capture-mode metadata with the packaged native agent. |
 | On-demand capture when admission reports busy or unclear ownership | Reported live, Ring, Home Call or external sessions cause rejection before recording begins. |
 | Ring begins during on-demand connection setup (hardware) | Begin an on-demand capture from idle and ring the doorbell during RTSP setup, with audio enabled and disabled. Record whether capture fails or receives Ring video through the existing native route. Verify that capture sends no Ring answer/hangup or global stop and that closing its recording client leaves the Ring intact. Successful metadata retains `capture_mode: on_demand` as the requested mode. |
 | On-demand capture completion, failure and cancellation | Its recording client closes after success, ffmpeg failure or cancellation, including before RTSP startup. Other or replacement sessions remain intact; a subsequent capture can start. |
@@ -183,6 +203,7 @@ If Display patch is enabled:
 - dashboard page keeps configured entity order,
 - alarm page shows clear armed/disarmed and sensor status,
 - weather page shows condition, forecast, sunrise and sunset when available,
+- energy page, when switched on, shows its views and only the sources set up in Home Assistant,
 - button feedback is visible,
 - no sustained device CPU increase remains after GUI reload.
 
@@ -258,6 +279,9 @@ The reviewed build lock covers these native and bundle input paths:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/build_hacs_release.py`
+- `scripts/check_agent_abi.py`
+- `scripts/native_build_lock.py`
 
 Changes to these paths invalidate the previous approval. Native code changes
 require rebuilding with a verified `C300X_DEVICE_SYSROOT` and running the

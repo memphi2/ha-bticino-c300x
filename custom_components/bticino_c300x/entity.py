@@ -35,6 +35,7 @@ class C300XEntity(Entity):
     """Base entity tied to one C300X config entry."""
 
     _attr_has_entity_name = True
+    _refresh_on_reconnect = False
 
     def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
         self._entry = entry
@@ -77,7 +78,14 @@ class C300XEntity(Entity):
         current = _connection_state_available(self._entry)
         if (
             current is not False
-            and getattr(self, "_attr_available", True) is False
+            and (
+                getattr(self, "_attr_available", True) is False
+                or (
+                    self._refresh_on_reconnect
+                    and current is True
+                    and self._last_connection_state_available is False
+                )
+            )
             and hasattr(self, "async_update")
             and (
                 self._reconnect_refresh_task is None
@@ -87,6 +95,7 @@ class C300XEntity(Entity):
             # These entities do not poll and are marked unavailable by their own
             # failed read. The agent answered again, so ask it once more: nothing
             # else would bring them back until the device itself reports a change.
+            # Opted-in entities also recover missed pushes after a connection gap.
             self._reconnect_refresh_task = self.hass.async_create_background_task(
                 self._async_refresh_after_reconnect(),
                 f"{DOMAIN}_refresh_after_reconnect_{self._attr_unique_id}",

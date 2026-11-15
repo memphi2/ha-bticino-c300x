@@ -22,6 +22,7 @@ from .const import (
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 from .device_user import device_user_repair_reason
+from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .media_readiness import media_readiness
 from .media_setup import (
@@ -628,7 +629,7 @@ def _create_issue(
 
 
 def _configured_alarm_entity_id(entry: BticinoC300XConfigEntry) -> str:
-    value = entry.options.get(CONF_ALARM_ENTITY_ID) or entry.data.get(CONF_ALARM_ENTITY_ID)
+    value = entry_config_value(entry, CONF_ALARM_ENTITY_ID, "")
     return value.strip() if isinstance(value, str) else ""
 
 

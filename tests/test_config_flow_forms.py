@@ -19,7 +19,6 @@ def test_actions_json_returns_stable_pretty_json() -> None:
 def test_form_selectors_use_real_home_assistant_types() -> None:
     assert isinstance(forms.alarm_entity_selector(), selector.EntitySelector)
     assert isinstance(forms.weather_entity_selector(), selector.EntitySelector)
-    assert forms.dashboard_entity_selector().config["multiple"] is True
     assert forms.password_selector().config["type"] == selector.TextSelectorType.PASSWORD
     assert forms.actions_json_field().config["multiline"] is True
 
@@ -60,9 +59,6 @@ def test_form_selectors_build_homeassistant_selector_configs(monkeypatch) -> Non
 
     assert forms.alarm_entity_selector() == ("entity", {"entity": {"domain": "alarm_control_panel"}})
     assert forms.weather_entity_selector() == ("entity", {"entity": {"domain": "weather"}})
-    dashboard = forms.dashboard_entity_selector()
-    assert dashboard[0] == "entity"
-    assert dashboard[1]["entity"]["multiple"] is True
     assert forms.password_selector() == (
         "text",
         {"text": {"type": "".join(("pass", "word"))}},

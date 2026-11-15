@@ -1,5 +1,142 @@
 # Changelog
 
+## v2.4.0 - 2026-11-15
+
+### Added
+
+- Add an optional **Energy** page to the display's Home Assistant pages. It
+  uses the sources of HA's Energy dashboard and needs no extra entities. Up to
+  four views can be switched independently: **Now** (flow between solar, grid, battery and
+  home with current power), **Today** (hourly bars and totals per meter with
+  costs), **Power** (today's power curves as 15-minute averages) and **Balance** (solar used at home, self-sufficiency, net grid use
+  and cost). Enable it and set its position under **Display pages**. The page
+  is in German, English, French and Italian.
+- Give Energy charts labelled axes, higher-contrast colours and separate
+  bounded value/cost columns. All subpages can be switched off without losing
+  settings. Power history uses cached HA statistics, not extra device polling
+  or storage.
+- Make the visitor image size configurable up to the display's 800x480
+  (default 688x480, the video size) and optionally write the capture date and
+  time into the image (default on). The settings have their own **Visitor
+  Snapshot** step in setup, reconfiguration and options.
+
+### Changed
+
+- Place the Energy section second in **Display pages**, immediately after the
+  status page. Give the status page its own visibility switch, independent of
+  weather and entities; switching it off preserves its settings.
+- **Breaking:** the **Forwarding** select now uses the states `enabled`,
+  `homeassistant` and `blocked` with translated labels, like other select
+  entities. Automations and scripts of your own that compare the old English
+  texts, or set them with `select.select_option`, must use these three values.
+  The bundled ring blueprints are updated; a copy of them that you changed or
+  imported yourself must be imported again.
+- Return to the settings menu after an area is saved, so several areas can be
+  changed without opening **Configure** again; **Done** closes the menu.
+- Deliver the visitor image from the device in the requested size and encode
+  it once in HA. The default capture delay is **3 seconds** instead of 5; an
+  entry with a saved delay keeps it. Change it under **Visitor Snapshot**.
+- Show select options on display tiles in HA's language, and write decimal
+  numbers on every display page with the decimal sign of that language.
+- Keep the card footer's text beside the buttons at every width instead of
+  moving it below them. Text that does not fit is cut with an ellipsis and
+  stays readable in the tooltip; an error or notice uses at most two lines.
+- Keep the card's image area the same size for snapshots and live video, and
+  remove its duplicate timestamp overlay. The optional timestamp in the saved
+  image remains unchanged.
+- Align the **Tone buttons** and **HA feedback** rows in the device's
+  **Settings → General** with the buttons above them.
+- Record the audio track of a Ring Capture's MP4 with the device's own sample
+  rate and channel count, and leave its level untouched at 0 dB gain;
+  `latest.raw.wav` stays 16 kHz mono. The unused
+  `latest.processed.wav` and its `processed_wav_path` entry are gone; use
+  `raw_wav_path` in automations of your own.
+- Pass PCMU talkback to a PCMU device unchanged instead of decoding and
+  encoding every sample on the device.
+
+### Fixed
+
+- Refresh ringer mute and volume after reconnecting, register stored-message
+  deletion services after loading display-patch status, and clear stale
+  missing-Alarmo Repairs when the selection is removed.
+- Release the microphone when answering a preview fails, and close ringback
+  audio resources when a card is removed or reconfigured.
+- Replace and restore firewall files atomically, rejecting backups that cannot
+  be verified. Failed restores preserve the agent and backups instead of
+  continuing removal; failed read-only remounts are reported.
+- Check the firmware ABI before developer uploads and install the complete
+  startup bundle before advertising its new manifest.
+- Stage SSH-installed init scripts on the destination filesystem and publish
+  the bundle manifest only after activation succeeds. Interrupted repairs no
+  longer damage an existing init script or falsely report an up-to-date bundle.
+- Release partially initialized browser audio resources when audio gain setup
+  fails, keeping direct audio playback available.
+- Share concurrent Energy statistics reads and pause retries after database
+  errors. Keep the same day's last available figures during a failed refresh.
+- Fill recent statistics gaps separately for each energy meter. Omit grid and
+  home power when a grid connection or battery lacks power coverage instead of presenting
+  a partial sum as the whole home's consumption.
+- Validate the QML patcher's result after SSH installation; a failed GUI reload
+  no longer counts as a successful installation.
+- Keep RTSP media on its original connection when socket numbers are reused,
+  and serialize complete media frames and responses to prevent interleaving.
+- Avoid closing replacement connections during ring receiver shutdown or
+  stale display-event poll handling. Return bounded, valid JSON errors for
+  oversized malformed ringer replies without increasing response buffers.
+- Bound display callback socket operations with one deadline so a trickling
+  HTTP response cannot keep subsequent display commands blocked indefinitely.
+- Scope Android and iOS notification actions to each call's automation run, so
+  stale Answer and Hang up actions cannot operate a later call.
+- Stop hidden-only status-page entities and weather from triggering display
+  requests. Shared visible sources and Alarmo updates remain active.
+- Receive the device's video and audio packets for on-demand video on the
+  loopback interface only; hosts on the local network could send packets into
+  a running stream.
+- Accept UDP event frames in the agent only from the device itself; any host
+  on the network could inject device events before. See `SECURITY.md`.
+- Begin a ring's talkback and preview without waiting for a video session
+  that is still starting, which could take up to about 40 seconds.
+- Wait in every agent update step while the agent runs another maintenance
+  job, and give script-backed requests 15 seconds. The repair no longer shows
+  "check maintenance access" for an update that only needed a second try.
+- Reject activation items over the API that the agent would refuse at its
+  next start, so a saved list can no longer keep the agent from coming up.
+- Keep the device user repair open while any of its checks still fails or the
+  status cannot be read.
+- Run every follow-up step when an SSH installation is retried after the
+  installer itself failed.
+- Stop the Android ring alert promptly when the door opens or the call is
+  answered, also on a dozing phone; both ring blueprints also end on HA's own
+  unlock event.
+- Read the smartphone forwarding mode again after the agent restarts, and
+  report a mode the agent first learns from the device. A change made on the
+  display while the agent was down no longer stays unnoticed in HA, and media
+  readiness follows every reading.
+- Show the forwarding select as unknown instead of unavailable when the
+  device's answer names no mode.
+- Keep **Hang up** on the card for an answered call whose stream did not start.
+- Send the microphone when a ring is answered on a card that showed the ring
+  preview. The card could end up with a picture-only stream and a disabled
+  **Busy** button; an answer from a phone notification could open the
+  microphone twice.
+- Play the Home Call ringback only on the card that started the call.
+- Keep the restarted display GUI running when a Display patch job passes its
+  time limit, and keep it from holding the agent's video port open, which
+  could leave video dead after the next agent restart.
+- Close the stream on the card at once when Home Assistant ends a session
+  itself, instead of showing a frozen picture until the connection times out.
+- Ignore the device GUI's transient media-close notification during on-demand
+  startup, so it cannot end the card's stream before the first video frame.
+- Refuse MQTT settings without any topic; saved, they stopped the agent at its
+  next start.
+- Keep a memo delete button usable after a failed read.
+
+### Upgrade Notes
+
+- Update the integration and run the agent update Repair; the packaged agent
+  is **2.4.0**. The update installs the new display file for the Energy page
+  and reapplies an active Display patch, which restarts the GUI once.
+
 ## v2.3.0 - 2026-11-15
 
 The direct stable update from 2.1.3 includes the changes listed under the

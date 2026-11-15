@@ -362,7 +362,10 @@ class C300XDeleteLatestStoredItemButton(C300XEntity, ButtonEntity):
             try:
                 items = await spec.fetch(self._entry, force_refresh=True)
             except C300XAgentApiError as err:
-                self._attr_available = False
+                # Only the read failed. Marking the button unavailable here
+                # would stick: no poll and no signal would end it. The
+                # background refresh records the failure in the store instead.
+                spec.schedule_refresh(self.hass, self._entry)
                 raise HomeAssistantError(spec.refresh_error) from err
             self._attr_available = bool(items.get("available", True))
             item_id = self._latest_item_id()

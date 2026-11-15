@@ -88,13 +88,7 @@ def test_smartphone_forwarding_select_translates_internal_options() -> None:
             "smartphone_forwarding_mode",
             "state",
         )
-        assert {
-            "enabled",
-            "homeassistant",
-            "blocked",
-            "unprovisioned",
-        } <= set(translated_states)
-        assert translated_states["homeassistant"] != "homeassistant"
+        assert set(translated_states) == {"enabled", "homeassistant", "blocked"}
 
 
 def test_agent_event_translations_cover_all_mapped_event_types() -> None:
@@ -375,14 +369,15 @@ def test_options_menu_names_and_explains_every_area() -> None:
 
     areas = {
         "dashboard_pages", "dashboard_alarm", "dashboard_entity_display", "dashboard",
-        "features", "device_activations", "connection",
+        "features", "visitor_snapshot", "device_activations", "connection",
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         steps = _load_json(path)["options"]["step"]
         menu = steps["init"]
         assert menu["title"] and menu["description"], path.name
-        assert set(menu["menu_options"]) == areas, path.name
-        assert set(menu["menu_option_descriptions"]) == areas, path.name
+        # "done" closes the dialog; it is a menu entry without a form.
+        assert set(menu["menu_options"]) == areas | {"done"}, path.name
+        assert set(menu["menu_option_descriptions"]) == areas | {"done"}, path.name
         assert all(menu["menu_options"].values()), path.name
         assert all(menu["menu_option_descriptions"].values()), path.name
         # A menu entry leads to a step of the same name.

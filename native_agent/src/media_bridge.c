@@ -3,6 +3,7 @@
 #include "audio_codec.h"
 #include "device_user.h"
 #include "media_audio.h"
+#include "talkback_g711.h"
 #include "media_base64.h"
 #include "media_bridge.h"
 #include "device_media.h"
@@ -3539,9 +3540,8 @@ static bool forward_pcm_backchannel_packet(
     bool marker_pending;
     uint16_t sequence;
     unsigned int generation;
-    /* PCMU for a PCMU device goes on byte for byte, only cut into frames. */
-    bool copy = payload_type != RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
-        && bridge_audio_codec_is_pcmu(bridge);
+    bool pcma = payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE;
+    bool pcmu = bridge_audio_codec_is_pcmu(bridge);
 
     if (bridge == NULL || packet == NULL || packet_len <= header_len) {
         return true;
@@ -3580,13 +3580,10 @@ static bool forward_pcm_backchannel_packet(
         if (take > payload_len - offset) {
             take = payload_len - offset;
         }
-        for (size_t index = 0; index < take; index++) {
-            unsigned char sample = payload[offset + index];
-            bridge->talkback_pcm_buffer[bridge->talkback_pcm_count + index] =
-                payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
-                    ? c300x_pcma_decode(sample)
-                    : copy ? sample : c300x_pcmu_decode(sample);
-        }
+        c300x_talkback_g711_store(
+            bridge->talkback_pcm_buffer + bridge->talkback_pcm_count,
+            payload + offset, take, pcma, pcmu && !pcma
+        );
         bridge->talkback_pcm_count += take;
         offset += take;
         if (bridge->talkback_pcm_count == RTSP_BACKCHANNEL_FRAME_SAMPLES) {
@@ -3601,12 +3598,10 @@ static bool forward_pcm_backchannel_packet(
         if (!have_frame) {
             continue;
         }
-        if (bridge_audio_codec_is_pcmu(bridge)) {
-            for (size_t index = 0; index < RTSP_BACKCHANNEL_FRAME_SAMPLES; index++) {
-                speex_payload[index] = copy
-                    ? (unsigned char)samples[index]
-                    : c300x_pcmu_encode(samples[index]);
-            }
+        if (pcmu) {
+            c300x_talkback_g711_pcmu(
+                speex_payload, samples, RTSP_BACKCHANNEL_FRAME_SAMPLES, !pcma
+            );
             speex_len = RTSP_BACKCHANNEL_FRAME_SAMPLES;
         } else if (!speex_encode_pcm_frame(
             samples,

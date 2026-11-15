@@ -1,5 +1,6 @@
 #include "../src/media_bridge.c"
 #include "../src/media_audio.c"
+#include "../src/talkback_g711.c"
 
 #include <assert.h>
 

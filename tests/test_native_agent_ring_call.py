@@ -514,15 +514,23 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
     assert media_bridge.count('"a=sendonly\\r\\n"') == 3
     assert 'dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL)' in speex_body
     assert "speex_encode_int" in speex_body
-    assert "c300x_pcma_decode(sample)" in pcm_body
-    assert "c300x_pcmu_decode(sample)" in pcm_body
+    # The per-sample G.711 handling lives in its own module; a PCMU device
+    # gets PCMU input copied, everything else is decoded for the encoder.
+    talkback_g711 = (ROOT / "native_agent" / "src" / "talkback_g711.c").read_text(
+        encoding="utf-8"
+    )
+    assert "c300x_talkback_g711_store(" in pcm_body
+    assert "payload + offset, take, pcma, pcmu && !pcma" in pcm_body
+    assert "c300x_talkback_g711_pcmu(" in pcm_body
+    assert "c300x_pcma_decode(input[index])" in talkback_g711
+    assert ": copy ? input[index] : c300x_pcmu_decode(input[index]);" in talkback_g711
     assert "int16_t c300x_pcma_decode(" in media_audio
     assert "int16_t c300x_pcmu_decode(" in media_audio
     assert "while (offset < payload_len)" in pcm_body
     assert "RTSP_BACKCHANNEL_FRAME_SAMPLES - bridge->talkback_pcm_count" in pcm_body
     assert "bridge->talkback_pcm_seq_initialized" in pcm_body
     assert "bridge->talkback_pcm_next_seq = (uint16_t)(sequence + 1);" in pcm_body
-    assert "bridge->talkback_pcm_buffer[bridge->talkback_pcm_count + index]" in pcm_body
+    assert "bridge->talkback_pcm_buffer + bridge->talkback_pcm_count" in pcm_body
     assert "bridge->talkback_pcm_count = 0;" in pcm_body
     assert "queue_talkback_payload_locked(" in pcm_body
     assert "send_queued_talkback_payload_locked(" in media_bridge

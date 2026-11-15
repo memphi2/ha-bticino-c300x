@@ -525,6 +525,12 @@ def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
     assert "activeHomeCallSession" in source
     assert "doorstationBlockedByHomeCall" not in source
     assert 'class="readiness hidden"' in template_source
+    # The status text gives way itself and the readiness text before it, so
+    # the readiness icon never leaves the text column of a narrow card.
+    status_rule = template_source.split(".secondary {", 1)[1].split("}", 1)[0]
+    assert "flex: 0 1 auto;" in status_rule and "min-width: 0;" in status_rule
+    readiness_rule = template_source.split(".readiness {", 1)[1].split("}", 1)[0]
+    assert "flex: 0 100 auto;" in readiness_rule and "min-width: 16px;" in readiness_rule
     assert '"/config/repairs"' in source
     assert 'this._config?.show_media_readiness !== false' in source
     assert 'show_media_readiness: this._config.show_media_readiness !== false' in editor_source

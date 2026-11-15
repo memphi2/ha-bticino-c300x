@@ -237,8 +237,8 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           min-width: 0;
         }
         .secondary {
-          flex: 0 0 auto;
-          max-width: 100%;
+          flex: 0 1 auto;
+          min-width: 0;
           color: var(--secondary-text-color);
           font-size: 13px;
           line-height: 18px;
@@ -269,7 +269,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           display: inline-flex;
           align-items: center;
           gap: 4px;
-          flex: 0 1 auto;
+          flex: 0 100 auto;
           min-width: 16px;
           min-height: 18px;
           color: var(--secondary-text-color);

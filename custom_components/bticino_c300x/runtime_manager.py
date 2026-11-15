@@ -174,9 +174,10 @@ class C300XRuntimeManager:
         self.entry.async_on_unload(
             self.entry.add_update_listener(_entry_update_listener(self.entry))
         )
-        await async_setup_services(self.hass)
         await async_setup_snapshots(self.hass, self.entry)
         await self.async_sync_platform_gate_state()
+        # Delete services depend on the patch status loaded by the gate read.
+        await async_setup_services(self.hass)
         # After the gate state, never before: the cleanup asks whether the
         # Display patch is active, and _store_runtime_data has just replaced
         # runtime_data with a fresh object whose qml_patch_status is empty.

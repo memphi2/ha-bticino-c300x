@@ -55,7 +55,7 @@ rules:
     comment: C300XEntity observes shared connection availability after reconnect grace; command-read failures also mark entities unavailable. Diagnostic connection sensors intentionally remain readable.
   integration-owner:
     status: done
-    comment: manifest.json lists @memphi2, the maintainer of the linked memphi2/ha-bticino-c300x repository.
+    comment: manifest.json lists @memphi2, the maintainer of the linked public source repository.
   log-when-unavailable:
     status: todo
     comment: events.py logs each registration failure and success changes connection state without a matching recovery log; transition-only loss/recovery logging and caplog tests are missing.

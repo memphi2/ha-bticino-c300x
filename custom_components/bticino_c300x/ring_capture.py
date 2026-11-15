@@ -870,17 +870,17 @@ async def _async_run_ffmpeg(
         "copy",
     ]
     if include_audio:
+        audio_filter = "aresample=48000:async=1:first_pts=0,pan=stereo|c0=c0|c1=c0"
+        if audio_gain_db:
+            # The limiter only catches what the gain may push over full scale;
+            # at 0 dB the level of the device audio is left alone.
+            audio_filter += f",volume={audio_gain_db:g}dB,alimiter=limit=0.95"
         command.extend(
             [
                 "-map",
                 "0:a:0?",
                 "-af",
-                (
-                    "aresample=48000:async=1:first_pts=0,"
-                    "pan=stereo|c0=c0|c1=c0,"
-                    f"volume={audio_gain_db:g}dB,"
-                    "alimiter=limit=0.95"
-                ),
+                audio_filter,
                 "-ac",
                 "2",
                 "-ar",

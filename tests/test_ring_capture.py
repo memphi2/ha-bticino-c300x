@@ -1002,6 +1002,23 @@ def test_capture_ffmpeg_audio_uses_configured_gain(
 
     audio_filter = commands[0][commands[0].index("-af") + 1]
     assert "volume=-4.5dB" in audio_filter
+    assert "alimiter=" in audio_filter
+
+    # At 0 dB the level is not touched at all: no volume step and no limiter.
+    commands.clear()
+    asyncio.run(
+        _async_run_ffmpeg(
+            "rtsp://192.0.2.10:6554/doorbell",
+            tmp_path / "clip.mp4",
+            work_dir=tmp_path / "work",
+            duration_seconds=4,
+            include_audio=True,
+            audio_gain_db=0,
+        )
+    )
+    audio_filter = commands[0][commands[0].index("-af") + 1]
+    assert "volume=" not in audio_filter
+    assert "alimiter" not in audio_filter
 
 
 def test_capture_ffmpeg_video_only_disables_audio(

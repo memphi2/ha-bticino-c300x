@@ -600,7 +600,8 @@ Audio gain options:
 - **Doorstation live audio gain** affects on-demand and Ring Call downstream
   audio. Default is `0 dB`.
 - **Ring capture audio gain** affects Ring Capture WAV/MP4 processing. Default
-  is `6 dB`.
+  is `6 dB`. At `0 dB` the level of the device audio is left unchanged: neither
+  the gain nor the limiter that guards it is applied.
 - The allowed range is `-20 dB` to `+20 dB`.
 - At `0 dB`, live audio stays on the neutral path and the integration avoids
   unnecessary gain updates.

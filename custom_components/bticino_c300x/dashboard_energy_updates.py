@@ -5,7 +5,9 @@ each wake-up, so a change is passed on at most once per
 ``ENERGY_POWER_MIN_INTERVAL_SECONDS``; the last change of a burst is never
 lost. The meter figures come from statistics, which Home Assistant writes
 every five minutes, so one wake-up per such interval keeps them current. The
-same tick notices a changed Energy setup. Without an energy page nothing here
+same tick notices a changed Energy setup, also one that only gets its first
+source after the page was switched on. A power change that leaves the shown
+text as it is wakes nothing. With the energy page switched off nothing here
 runs at all.
 """
 
@@ -18,6 +20,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 
+from .dashboard_config import configured_energy_page
+from .dashboard_energy import format_power, power_watts
 from .dashboard_energy_data import (
     ENERGY_STATISTICS_MAX_AGE_SECONDS,
     async_configured_energy_sources,
@@ -42,15 +46,17 @@ class EnergyPageUpdates:
         self._unsub_tick: Callable[[], None] | None = None
         self._unsub_delayed: Callable[[], None] | None = None
         self._last_notify = 0.0
+        self._shown = False
 
     async def async_start(self) -> bool:
-        """Start tracking; returns False when there is no energy page."""
+        """Start tracking; returns False when the energy page is switched off."""
 
         from homeassistant.helpers.event import async_track_time_interval
 
-        sources = await async_configured_energy_sources(self._hass, self._entry)
-        if not sources.any:
+        if not configured_energy_page(self._entry)["enabled"]:
             return False
+        sources = await async_configured_energy_sources(self._hass, self._entry)
+        self._shown = sources.any
         self._track_power(frozenset(sources.power_entities))
         self._unsub_tick = async_track_time_interval(
             self._hass, self._async_tick,
@@ -86,13 +92,18 @@ class EnergyPageUpdates:
         entities = frozenset(sources.power_entities)
         if entities != self._power_entities:
             self._track_power(entities)
+        was_shown, self._shown = self._shown, sources.any
+        if not (was_shown or self._shown):
+            return
+        # The kept day is about as old as this interval: read it anew.
+        forget_energy_day(self._entry.entry_id)
         self._send()
 
     @callback
-    def _handle_power_change(self, _event: Any) -> None:
+    def _handle_power_change(self, event: Any) -> None:
         from homeassistant.helpers.event import async_call_later
 
-        if self._unsub_delayed is not None:
+        if self._unsub_delayed is not None or _same_power_text(event):
             return
         wait = ENERGY_POWER_MIN_INTERVAL_SECONDS - (monotonic() - self._last_notify)
         if wait <= 0:
@@ -108,6 +119,19 @@ class EnergyPageUpdates:
     def _send(self) -> None:
         self._last_notify = monotonic()
         self._notify()
+
+
+def _same_power_text(event: Any) -> bool:
+    """Return whether a state change leaves the power text of the sensor as it is."""
+
+    data = getattr(event, "data", None)
+    if not isinstance(data, dict) or "new_state" not in data:
+        return False
+    old = power_watts(data.get("old_state"))
+    new = power_watts(data["new_state"])
+    if old is None or new is None:
+        return old is None and new is None
+    return format_power(old, "en") == format_power(new, "en")
 
 
 async def async_track_energy_page_updates(

@@ -417,3 +417,72 @@ def test_nothing_is_tracked_without_an_energy_page(monkeypatch) -> None:
     ))
 
     assert stop is None and helpers.tick is None and helpers.power_callback is None
+
+
+def test_the_tick_runs_before_home_assistant_has_any_energy_source(monkeypatch) -> None:
+    # The page is switched on first and the Energy setup follows later, or the
+    # energy integration loads after this one: no reload must be needed.
+    helpers = _Helpers(monkeypatch)
+    sources = AsyncMock(return_value=EnergySources())
+    monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources", sources)
+    woken: list[int] = []
+
+    async def scenario() -> Any:
+        stop = await dashboard_energy_updates.async_track_energy_page_updates(
+            FakeHass(), _entry(ENERGY_ON), lambda: woken.append(1),
+        )
+        assert stop is not None and helpers.tick is not None
+        await helpers.tick(None)
+        assert woken == [], "no page yet: the display is left alone"
+        sources.return_value = SOURCES
+        await helpers.tick(None)
+        return stop
+
+    asyncio.run(scenario())
+
+    assert woken == [1]
+    assert helpers.tracked == ["sensor.grid_power"]
+
+
+def test_the_tick_reads_fresh_statistics(monkeypatch) -> None:
+    helpers = _Helpers(monkeypatch)
+    monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources",
+                        AsyncMock(return_value=SOURCES))
+    order: list[str] = []
+    monkeypatch.setattr(dashboard_energy_updates, "forget_energy_day",
+                        lambda entry_id: order.append(f"forget {entry_id}"))
+
+    async def scenario() -> None:
+        await dashboard_energy_updates.async_track_energy_page_updates(
+            FakeHass(), _entry(ENERGY_ON), lambda: order.append("wake"),
+        )
+        await helpers.tick(None)
+
+    asyncio.run(scenario())
+
+    # The kept day is as old as the tick interval, give or take the delivery
+    # delay: without dropping it every second wake-up showed the old figures.
+    assert order == ["forget entry-1", "wake"]
+
+
+def test_a_power_change_the_display_cannot_show_does_not_wake_it(monkeypatch) -> None:
+    helpers = _Helpers(monkeypatch)
+    monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources",
+                        AsyncMock(return_value=SOURCES))
+    woken: list[int] = []
+    asyncio.run(dashboard_energy_updates.async_track_energy_page_updates(
+        FakeHass(), _entry(ENERGY_ON), lambda: woken.append(1),
+    ))
+
+    def change(old: str, new: str) -> None:
+        def state(value: str) -> Any:
+            return types.SimpleNamespace(state=value, attributes={"unit_of_measurement": "W"})
+        helpers.power_callback(types.SimpleNamespace(data={"old_state": state(old), "new_state": state(new)}))
+
+    change("850.2", "850.4")
+    change("1234", "1232")
+    change("unavailable", "unknown")
+    assert woken == []
+    change("850.4", "851")
+    assert woken == [1]
+

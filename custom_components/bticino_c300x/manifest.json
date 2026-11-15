@@ -2,8 +2,10 @@
   "domain": "bticino_c300x",
   "name": "BTicino C300X",
   "after_dependencies": [
+    "energy",
     "http",
-    "media_source"
+    "media_source",
+    "recorder"
   ],
   "categories": [
     "security_safety.doorbells_intercoms"

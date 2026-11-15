@@ -480,10 +480,10 @@ def test_the_weather_is_set_with_the_status_page(monkeypatch, flow_kind):
 
     form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
     assert form["step_id"].endswith("dashboard_pages")
-    # The display and patch form has none of it, and the weather is the first
-    # field of the status page, above its entities.
+    # Weather belongs to the status page, below its independent visibility
+    # switch and above its entities.
     assert [str(key) for key in form["data_schema"].schema["page_1"].schema.schema] == [
-        "weather_entity_id", "position", "entities",
+        "enabled", "weather_entity_id", "position", "entities",
     ]
     assert "page_9" not in {str(key) for key in form["data_schema"].schema}
     assert post_pages_like_home_assistant(form["data_schema"])["page_1"]["weather_entity_id"] == "weather.home"
@@ -745,8 +745,8 @@ def test_pages_and_positions_are_applied_without_changing_capabilities():
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
     pages = {page["title"]: page for page in payload["data"]["pages"]}
-    # The status page has nothing to show here and is left out.
-    assert list(pages) == ["Room", "Outside"]
+    # The enabled status page keeps its badges without weather or tiles.
+    assert list(pages) == ["C300X", "Room", "Outside"]
     assert [item["entity_id"] for item in pages["Room"]["items"]] == [
         "light.two",
         "light.one",
@@ -1170,18 +1170,19 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     fields = convert(schema, custom_serializer=cv.custom_serializer)
 
     assert [(field["name"], field["type"]) for field in fields] == [
-        *((f"page_{slot}", "expandable") for slot in range(1, 9)),
+        ("page_1", "expandable"),
         ("energy_page", "expandable"),
+        *((f"page_{slot}", "expandable") for slot in range(2, 9)),
     ]
     # Used pages are open, and so is the first free one to add a page; the
     # energy page is closed while it is switched off.
-    assert [field["expanded"] for field in fields] == [True, True, True] + [False] * 6
-    assert [item["name"] for item in fields[8]["schema"]] == ["enabled", "position", "views"]
+    assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 5
+    assert [item["name"] for item in fields[1]["schema"]] == ["enabled", "position", "views"]
     assert [item["name"] for item in fields[0]["schema"]] == [
-        "weather_entity_id", "position", "entities",
+        "enabled", "weather_entity_id", "position", "entities",
     ]
-    assert [item["name"] for item in fields[1]["schema"]] == ["name", "position", "entities"]
-    assert fields[1]["schema"][0]["description"] == {"suggested_value": "Room"}
+    assert [item["name"] for item in fields[2]["schema"]] == ["name", "position", "entities"]
+    assert fields[2]["schema"][0]["description"] == {"suggested_value": "Room"}
 
 
 

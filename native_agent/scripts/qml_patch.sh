@@ -14,7 +14,9 @@ DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
-FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml Alarm.qml HomeAssistant.qml C300XEnergy.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+# The display files this integration adds; every list of them derives from here.
+GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
@@ -125,12 +127,16 @@ partial_patch_present() {
         || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
         || general_settings_partial_present \
-        || [ -f "$GUI_DIR/Alarm.qml" ] \
-        || [ -f "$GUI_DIR/HomeAssistant.qml" ] \
-        || [ -f "$GUI_DIR/C300XEnergy.qml" ] \
-        || [ -f "$GUI_DIR/js/c300x_ha.js" ] \
-        || [ -f "$GUI_DIR/js/c300x_i18n.js" ] \
-        || [ -f "$GUI_DIR/js/c300x_memos.js" ]
+        || generated_feature_file_present
+}
+
+generated_feature_file_present() {
+    for present_rel in $GENERATED_FEATURE_FILES; do
+        if [ -f "$GUI_DIR/$present_rel" ]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 general_settings_patch_present() {
@@ -1000,6 +1006,12 @@ generate_core_patch_stage() {
     unset PATCH_OUTPUT_DIR
 }
 
+copy_generated_feature_files() {
+    for copy_rel in $GENERATED_FEATURE_FILES; do
+        copy_generated_file "$copy_rel"
+    done
+}
+
 generate_feature_patch_stage() {
     cleanup_staging
     mkdir -p "$STAGING_DIR/js"
@@ -1008,12 +1020,7 @@ generate_feature_patch_stage() {
     patch_home_page
     patch_memo_page
     patch_general_settings
-    copy_generated_file "Alarm.qml"
-    copy_generated_file "HomeAssistant.qml"
-    copy_generated_file "C300XEnergy.qml"
-    copy_generated_file "js/c300x_ha.js"
-    copy_generated_file "js/c300x_i18n.js"
-    copy_generated_file "js/c300x_memos.js"
+    copy_generated_feature_files
     patch_main_app
     unset PATCH_OUTPUT_DIR
 }
@@ -1028,12 +1035,7 @@ generate_full_patch_stage() {
     patch_home_page
     patch_memo_page
     patch_general_settings
-    copy_generated_file "Alarm.qml"
-    copy_generated_file "HomeAssistant.qml"
-    copy_generated_file "C300XEnergy.qml"
-    copy_generated_file "js/c300x_ha.js"
-    copy_generated_file "js/c300x_i18n.js"
-    copy_generated_file "js/c300x_memos.js"
+    copy_generated_feature_files
     patch_main_app
     unset PATCH_OUTPUT_DIR
 }
@@ -1311,7 +1313,7 @@ restore_changed_count() {
             changed=$((changed + 1))
         fi
     done
-    for rel in Alarm.qml HomeAssistant.qml C300XEnergy.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js; do
+    for rel in $GENERATED_FEATURE_FILES; do
         if [ -e "$GUI_DIR/$rel" ]; then
             changed=$((changed + 1))
         fi
@@ -1346,14 +1348,12 @@ restore_core_changed_count() {
 }
 
 is_generated_patch_file() {
-    case "$1" in
-        Alarm.qml|HomeAssistant.qml|C300XEnergy.qml|C300XRingerControl.qml|js/c300x_ha.js|js/c300x_i18n.js|js/c300x_memos.js)
+    for known_rel in $GENERATED_FEATURE_FILES C300XRingerControl.qml; do
+        if [ "$1" = "$known_rel" ]; then
             return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+        fi
+    done
+    return 1
 }
 
 restore_feature_stock_file() {
@@ -1370,12 +1370,9 @@ restore_patch_files() {
     restore_feature_stock_file "MainApp.qml"
     restore_feature_stock_file "HomePage.qml"
     restore_feature_stock_file "MemoPage.qml"
-    restore_file "Alarm.qml"
-    restore_file "HomeAssistant.qml"
-    restore_file "C300XEnergy.qml"
-    restore_file "js/c300x_ha.js"
-    restore_file "js/c300x_i18n.js"
-    restore_file "js/c300x_memos.js"
+    for generated_rel in $GENERATED_FEATURE_FILES; do
+        restore_file "$generated_rel"
+    done
     remove_obsolete_gui_files
     REMOVE_EMPTY_JS=1
 }

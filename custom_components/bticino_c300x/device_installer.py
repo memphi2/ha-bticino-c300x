@@ -48,6 +48,16 @@ _SSH_CONNECT_TIMEOUT = 12.0
 _SSH_COMMAND_TIMEOUT = 30.0
 _REQUIRED_ASYNCSSH_VERSION = "2.24.1"
 INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
+# The display files the agent directory holds; qml_patch.sh installs them.
+DISPLAY_FILES = (
+    "C300XRingerControl.qml",
+    "Alarm.qml",
+    "HomeAssistant.qml",
+    "C300XEnergy.qml",
+    "js/c300x_ha.js",
+    "js/c300x_i18n.js",
+    "js/c300x_memos.js",
+)
 
 
 class C300XDeviceInstallError(Exception):
@@ -270,34 +280,11 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
     bundle_manifest = _optional_existing(COMPONENT_DIR / "device_agent" / "bundle.json")
 
     qml_sources = {
-        "qml/C300XRingerControl.qml": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "C300XRingerControl.qml",
-            REPO_ROOT / "device_qml" / "C300XRingerControl.qml",
-        ),
-        "qml/Alarm.qml": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "Alarm.qml",
-            REPO_ROOT / "device_qml" / "Alarm.qml",
-        ),
-        "qml/HomeAssistant.qml": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "HomeAssistant.qml",
-            REPO_ROOT / "device_qml" / "HomeAssistant.qml",
-        ),
-        "qml/C300XEnergy.qml": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "C300XEnergy.qml",
-            REPO_ROOT / "device_qml" / "C300XEnergy.qml",
-        ),
-        "qml/js/c300x_ha.js": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "js" / "c300x_ha.js",
-            REPO_ROOT / "device_qml" / "js" / "c300x_ha.js",
-        ),
-        "qml/js/c300x_i18n.js": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "js" / "c300x_i18n.js",
-            REPO_ROOT / "device_qml" / "js" / "c300x_i18n.js",
-        ),
-        "qml/js/c300x_memos.js": _first_existing(
-            COMPONENT_DIR / "device_agent" / "qml" / "js" / "c300x_memos.js",
-            REPO_ROOT / "device_qml" / "js" / "c300x_memos.js",
-        ),
+        f"qml/{name}": _first_existing(
+            COMPONENT_DIR / "device_agent" / "qml" / name,
+            REPO_ROOT / "device_qml" / name,
+        )
+        for name in DISPLAY_FILES
     }
 
     payloads = [

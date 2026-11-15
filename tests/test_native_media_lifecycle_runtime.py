@@ -24,6 +24,7 @@ def media_binaries(request, tmp_path_factory):
         ("media_start_stop", sources),
         ("media_rtsp_auth", ["media_rtsp_auth", "media_base64", "string_util"]),
         ("media_rtsp_writer", ["time_util"]),
+        ("media_ring_stop", []),
     ):
         result = subprocess.run(
             ["cc", "-std=c11", "-O2", "-g", "-Wall", "-Wextra", "-Werror",
@@ -40,6 +41,12 @@ def media_binaries(request, tmp_path_factory):
 
 def test_rtsp_credential_validation(media_binaries):
     result = subprocess.run([str(media_binaries / "media_rtsp_auth")],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+def test_ring_receiver_stop_ownership(media_binaries):
+    result = subprocess.run([str(media_binaries / "media_ring_stop")],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
 

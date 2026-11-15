@@ -6645,7 +6645,6 @@ bool c300x_media_ring_receiver_start(const struct c300x_config *config, struct c
 void c300x_media_ring_receiver_stop(struct c300x_video *video) {
     bool started;
     pthread_t ring_thread;
-    int ring_sip_fd;
 
     pthread_mutex_lock(&g_bridge.mutex);
     if (g_bridge.video != video) {
@@ -6654,16 +6653,16 @@ void c300x_media_ring_receiver_stop(struct c300x_video *video) {
     }
     started = g_bridge.ring_started;
     ring_thread = g_bridge.ring_thread;
-    ring_sip_fd = g_bridge.ring_sip_fd;
     g_bridge.ring_stop = true;
     g_bridge.ring_call_stop = true;
     g_bridge.ring_send_bye = true;
+    /* The receiver may close and recycle this fd as soon as we unlock. */
+    if (g_bridge.ring_sip_fd >= 0) {
+        shutdown(g_bridge.ring_sip_fd, SHUT_RDWR);
+    }
     pthread_cond_broadcast(&g_bridge.ready_cond);
     pthread_mutex_unlock(&g_bridge.mutex);
 
-    if (ring_sip_fd >= 0) {
-        shutdown(ring_sip_fd, SHUT_RDWR);
-    }
     if (started && !pthread_equal(ring_thread, pthread_self())) {
         pthread_join(ring_thread, NULL);
     }

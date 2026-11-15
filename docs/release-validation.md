@@ -48,6 +48,17 @@ The resolved version is logged and passed from release validation into build
 metadata. `current_homeassistant` in the version file is the local validation
 baseline, not a cap on the rolling CI target. Raising the minimum remains manual.
 
+Both Validate and Release also run `scripts/check_ha_container_runtime.py` in
+the official HA container for each resolved version. These required checks use
+the image's own ffmpeg/ffprobe and HA event entities, not the Ubuntu host tools.
+They verify JPEG extraction from H.264 clips with unknown, limited and full color
+range, recording startup when H.264 parameter sets arrive after the initial
+packets, and technical event types for automation triggers. The exact HA version
+and image digest are logged. Missing tools or failed checks fail the job.
+Containers run without network access, with a read-only checkout and root
+filesystem, and temporary test files only. These synthetic clips do not replace
+reproduction with a reporter's original failing recording.
+
 Development hosts and all CI runners use Ubuntu 26.04. Install the native
 TurboJPEG library before running the HA camera tests or typing gate:
 `sudo apt-get install libturbojpeg0`.

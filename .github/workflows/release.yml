@@ -69,6 +69,19 @@ jobs:
           sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev libturbojpeg0 pkg-config
       - name: Validation gates
         run: python scripts/check_validate.py
+      - name: Home Assistant container runtime
+        timeout-minutes: 10
+        env:
+          HA_VERSION: ${{ steps.ha-version.outputs.version }}
+        run: |
+          IMAGE="ghcr.io/home-assistant/home-assistant:$HA_VERSION"
+          docker pull "$IMAGE"
+          docker image inspect "$IMAGE" --format '{{json .RepoDigests}}'
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --tmpfs /tmp:rw,nosuid,size=128m \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace \
+            --env PYTHONDONTWRITEBYTECODE=1 --entrypoint python "$IMAGE" \
+            scripts/check_ha_container_runtime.py --expect-ha "$HA_VERSION"
 
   hacs:
     name: release hacs

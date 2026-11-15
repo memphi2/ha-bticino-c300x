@@ -149,6 +149,16 @@ class _ApiMaintenanceMixin(_C300XApiCore):
         )
         return normalize_auth_config_status(data)
 
+    async def async_validate_maintenance_auth(self) -> AuthConfigStatus:
+        """Check admin access without letting a valid bearer mask a wrong key."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/auth",
+            extra_headers={**self._maintenance_headers(), "Authorization": ""},
+        )
+        return normalize_auth_config_status(data)
+
     async def async_set_no_auth_enabled(
         self,
         enabled: bool,

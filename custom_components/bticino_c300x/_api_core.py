@@ -11,6 +11,7 @@ from ._api_normalize import (
     _http_error_text,
 )
 from .api_errors import (
+    C300XAgentApiAuthError,
     C300XAgentApiConnectionError,
     C300XAgentApiResponseError,
     C300XAgentApiUnsupportedError,
@@ -73,12 +74,16 @@ class _C300XApiCore:
                     self._timeout if request_timeout is None else request_timeout,
                 ),
             ) as response:
+                if response.status == 401:
+                    raise C300XAgentApiAuthError()
                 raw = await read_capped_body(
                     response.content,
                     response.content_length,
                     _MAX_JSON_RESPONSE_BYTES,
                 )
                 if raw is None:
+                    if response.status == 403:
+                        self._raise_for_agent_status(403, "", path)
                     raise C300XAgentApiResponseError("device agent response too large")
                 text = _decode_text(raw, response.charset)
                 self._raise_for_agent_status(response.status, text, path)
@@ -115,6 +120,8 @@ class _C300XApiCore:
                 headers=self._auth_headers(extra_headers),
                 timeout=cast(Any, self._timeout),
             ) as response:
+                if response.status == 401:
+                    raise C300XAgentApiAuthError()
                 content = await read_capped_body(
                     response.content,
                     response.content_length,
@@ -123,6 +130,8 @@ class _C300XApiCore:
                     else _MAX_JSON_RESPONSE_BYTES,
                 )
                 if content is None:
+                    if response.status == 403:
+                        self._raise_for_agent_status(403, "", path)
                     raise C300XAgentApiResponseError("device agent response too large")
                 if response.status < 200 or response.status >= 300:
                     self._raise_for_agent_status(
@@ -153,6 +162,23 @@ class _C300XApiCore:
     def _raise_for_agent_status(self, status: int, text: str, path: str) -> None:
         """Map a non-success agent HTTP status to the right client exception."""
 
+        if status == 401:
+            raise C300XAgentApiAuthError()
+        if status == 403:
+            try:
+                payload = json.loads(text)
+            except (ValueError, TypeError):
+                payload = {}
+            code = payload.get("error") if isinstance(payload, dict) else None
+            if code in (
+                "loopback_required", "ui_header_required", "gui_header_required",
+                "ringer_gui_header_required",
+            ):
+                raise C300XAgentApiResponseError("device agent denied this operation")
+            raise C300XAgentApiAuthError(
+                maintenance=code == "maintenance_unauthorized"
+                or path.startswith("/api/v1/maintenance/")
+            )
         if status == 404:
             raise C300XAgentApiUnsupportedError(
                 _http_error_text(

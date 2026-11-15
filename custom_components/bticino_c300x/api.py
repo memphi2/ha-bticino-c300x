@@ -74,6 +74,9 @@ from ._api_normalize import (
     normalize_system_metrics as normalize_system_metrics,
 )
 from .api_errors import (
+    C300XAgentApiAuthError as C300XAgentApiAuthError,
+)
+from .api_errors import (
     C300XAgentApiConnectionError as C300XAgentApiConnectionError,
 )
 from .api_errors import (

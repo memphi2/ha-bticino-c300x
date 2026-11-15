@@ -67,10 +67,12 @@ protect that archive. Retention and storage limits are documented separately
 from backup retention.
 
 The English display examples are edited from maintainer-provided photographs,
-with AI-assisted perspective correction and localization;
-`display-energy-en.webp` is a Qt-rendered preview of the project's own energy
-page with synthetic values and a mock frame, without vendor assets. They are illustrative
-documentation assets, not extracted firmware files or exact runtime captures.
+with AI-assisted perspective correction, color matching and localization.
+`display-energy-en.webp` instead comes from a read-only screen capture on the
+maintainer's C300X on 2026-11-15, before its 2.4.1 update. Its layout and values
+were retained, with English labels and colors matched to the other examples.
+These are illustrative documentation assets, not extracted firmware files or
+pixel-exact runtime captures.
 
 ## Not Verified Here
 

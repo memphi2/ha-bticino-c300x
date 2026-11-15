@@ -107,29 +107,76 @@ Item {
                 id: link
                 property variant info: root.node(modelData)
                 property bool present: root.hasNode(modelData)
+                property color flowColor: info.color ? info.color : "transparent"
                 property bool upright: modelData === "solar" || modelData === "battery"
                 property int flow: present && info.flow ? info.flow : 0
                 property int centerX: Math.floor(root.width / 2)
                 property int centerY: Math.floor(bodyHeight / 2)
+                property int laneWidth: Math.floor((root.width - 3 * boxWidth) / 2) - 12
+                property bool leftLane: modelData === "solar" || modelData === "grid"
                 visible: present
-                x: upright ? centerX - 1 : (modelData === "grid" ? boxWidth : centerX)
-                y: upright ? (modelData === "solar" ? boxHeight : centerY) : centerY - 1
-                width: upright ? 3 : centerX - boxWidth
-                height: upright ? centerY - boxHeight : 3
+                z: upright ? 0 : 1
+                x: leftLane ? boxWidth + 12 : root.width - boxWidth - 12 - laneWidth
+                y: (upright ? root.slotY(modelData) + boxHeight / 2 : centerY) - 1
+                width: laneWidth
+                height: 3
 
                 Rectangle {
-                    anchors.fill: parent
-                    color: link.present ? link.info.color : "transparent"
+                    x: link.upright ? 0 : (modelData === "grid" ? -12 : link.centerX - link.x)
+                    width: link.upright ? link.width : link.centerX - boxWidth
+                    height: 3
+                    color: link.flowColor
+                    opacity: link.flow === 0 ? 0.35 : 1
+                }
+
+                // Side branches leave room below every arrow, even with notifications and tabs.
+                Rectangle {
+                    visible: link.upright
+                    x: modelData === "solar" ? 0 : link.width - 3
+                    y: Math.min(0, link.centerY - 1 - link.y)
+                    width: 3
+                    height: Math.abs(link.centerY - 1 - link.y) + 3
+                    color: link.flowColor
+                    opacity: link.flow === 0 ? 0.35 : 1
+                }
+
+                Rectangle {
+                    visible: link.upright
+                    x: modelData === "solar" ? 0 : link.centerX - link.x
+                    y: link.centerY - 1 - link.y
+                    width: modelData === "solar" ? link.centerX - link.x : link.x + link.width - link.centerX
+                    height: 3
+                    color: link.flowColor
                     opacity: link.flow === 0 ? 0.35 : 1
                 }
 
                 UbuntuLightText {
+                    id: flowArrow
                     visible: link.flow !== 0
                     anchors.centerIn: parent
+                    width: 20
+                    height: 20
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                     text: "\u25B6"
                     font.pixelSize: 18
-                    color: link.present ? link.info.color : "white"
-                    rotation: (modelData === "solar" ? 90 : modelData === "battery" ? 270 : 0) + (link.flow < 0 ? 180 : 0)
+                    color: link.flowColor
+                    rotation: (modelData === "solar" ? 180 : 0) + (link.flow < 0 ? 180 : 0)
+                }
+
+                UbuntuLightText {
+                    id: flowPower
+                    anchors.top: flowArrow.bottom
+                    anchors.topMargin: 2
+                    anchors.horizontalCenter: flowArrow.horizontalCenter
+                    width: link.width - 8
+                    height: 22
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    text: link.present && link.info.power ? link.info.power : ""
+                    color: link.flowColor
+                    font.pixelSize: 17
+                    font.bold: true
                 }
             }
         }
@@ -166,26 +213,11 @@ Item {
                     anchors.top: parent.top
                     anchors.leftMargin: 10
                     anchors.topMargin: 6
-                    width: parent.width - 26 - boxPower.width
+                    width: parent.width - 20
                     text: box.present ? box.info.label : ""
                     color: "#c7d0d9"
                     font.pixelSize: 15
                     elide: Text.ElideRight
-                }
-
-                UbuntuLightText {
-                    id: boxPower
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.rightMargin: 10
-                    anchors.topMargin: 5
-                    width: box.present && box.info.power ? 88 : 0
-                    horizontalAlignment: Text.AlignRight
-                    elide: Text.ElideRight
-                    text: box.present && box.info.power ? box.info.power : ""
-                    color: box.present ? box.info.color : "white"
-                    font.pixelSize: 17
-                    font.bold: true
                 }
 
                 UbuntuLightText {
@@ -589,6 +621,19 @@ Item {
         }
     }
 
+    Loader {
+        id: distributionLoader
+        width: parent.width
+        height: bodyHeight
+        source: shown === "distribution" ? "C300XEnergyDistribution.qml" : ""
+        Binding {
+            target: distributionLoader.item
+            property: "distribution"
+            value: root.energy && root.energy.distribution ? root.energy.distribution : ({})
+            when: distributionLoader.status === Loader.Ready
+        }
+    }
+
     Column {
         id: balanceView
         width: parent.width
@@ -675,7 +720,7 @@ Item {
                     anchors.margins: 6
                     text: modelData.label
                     color: "white"
-                    font.pixelSize: 18
+                    font.pixelSize: root.views.length > 4 ? 16 : 18
                     font.bold: root.shown === modelData.id
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter

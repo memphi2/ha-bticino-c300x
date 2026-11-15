@@ -54,6 +54,7 @@ DISPLAY_FILES = (
     "Alarm.qml",
     "HomeAssistant.qml",
     "C300XEnergy.qml",
+    "C300XEnergyDistribution.qml",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
     "js/c300x_memos.js",

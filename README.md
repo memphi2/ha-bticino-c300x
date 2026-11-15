@@ -2,9 +2,11 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v2.4.0-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.4.1-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+
+Current stable version: **2.4.1**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.
@@ -121,8 +123,9 @@ Control Home Assistant entities from the C300X's native blue interface.
 Pages, tile sizes and names are configurable; controls follow each entity's
 capabilities. [Set up pages and tiles](docs/quickstart.md#9-optional-native-display).
 
-The display examples below are perspective-corrected and AI-localized into
-English from device photographs. They illustrate configured pages, not live data.
+The display examples below come from device photographs and a direct Energy
+screen capture. They are color-adjusted and AI-localized into English; photographs
+are also perspective-corrected. They illustrate configured pages, not live data.
 
 <table>
   <tr>
@@ -139,7 +142,7 @@ English from device photographs. They illustrate configured pages, not live data
   </tr>
   <tr>
     <td align="center"><strong>Weather</strong><br><img src="docs/images/readme/display-ha-weather-en.webp" alt="Native C300X weather page with temperature and Home Assistant status" width="360"></td>
-    <td align="center"><strong>Energy (rendered preview)</strong><br><img src="docs/images/readme/display-energy-en.webp" alt="Energy page with solar, grid, battery and home, current power, today's totals and independently selectable Now, Today, Power and Balance views" width="360"></td>
+    <td align="center"><strong>Energy</strong><br><img src="docs/images/readme/display-energy-en.webp" alt="Energy page captured on a C300X, showing solar, grid, battery and home" width="360"></td>
   </tr>
 </table>
 

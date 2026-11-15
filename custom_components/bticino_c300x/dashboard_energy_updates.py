@@ -22,7 +22,9 @@ from homeassistant.core import HomeAssistant, callback
 
 from .dashboard_config import configured_energy_page
 from .dashboard_energy import (
-    ENERGY_VIEW_NOW,
+    ENERGY_DAY_VIEWS,
+    ENERGY_LIVE_VIEWS,
+    ENERGY_VIEW_DISTRIBUTION,
     ENERGY_VIEW_POWER,
     format_power,
     power_watts,
@@ -69,7 +71,8 @@ class EnergyPageUpdates:
             return False
         self._shown = sources.any
         self._track_power(
-            frozenset(sources.power_entities) if ENERGY_VIEW_NOW in views else frozenset()
+            frozenset(sources.power_entities)
+            if any(view in ENERGY_LIVE_VIEWS for view in views) else frozenset()
         )
         self._unsub_tick = async_track_time_interval(
             self._hass, self._async_tick,
@@ -102,9 +105,9 @@ class EnergyPageUpdates:
         else:
             if ENERGY_VIEW_POWER not in views:
                 forget_power_history(self._entry.entry_id)
-            if not any(view != ENERGY_VIEW_POWER for view in views):
+            if not any(view in ENERGY_DAY_VIEWS for view in views):
                 forget_energy_day(self._entry.entry_id)
-            if ENERGY_VIEW_NOW not in views:
+            if not any(view in ENERGY_LIVE_VIEWS for view in views):
                 if self._power_entities:
                     self._track_power(frozenset())
                 if self._unsub_delayed is not None:
@@ -132,14 +135,17 @@ class EnergyPageUpdates:
         if self._stopped or not views:
             # Stopped while waiting: nothing is tracked or woken any more.
             return
-        entities = frozenset(sources.power_entities) if ENERGY_VIEW_NOW in views else frozenset()
+        entities = (
+            frozenset(sources.power_entities)
+            if any(view in ENERGY_LIVE_VIEWS for view in views) else frozenset()
+        )
         if entities != self._power_entities:
             self._track_power(entities)
         was_shown, self._shown = self._shown, sources.any
         if not (was_shown or self._shown):
             return
         # The kept day is about as old as this interval: read it anew.
-        if any(view != ENERGY_VIEW_POWER for view in views):
+        if any(view in ENERGY_DAY_VIEWS for view in views):
             expire_energy_day(self._entry.entry_id)
         self._send()
 
@@ -147,9 +153,14 @@ class EnergyPageUpdates:
     def _handle_power_change(self, event: Any) -> None:
         from homeassistant.helpers.event import async_call_later
 
-        if self._stopped or ENERGY_VIEW_NOW not in self._active_views():
+        if self._stopped:
             return
-        if self._unsub_delayed is not None or _same_power_text(event):
+        views = self._active_views()
+        if not any(view in ENERGY_LIVE_VIEWS for view in views):
+            return
+        if self._unsub_delayed is not None or _same_power_text(
+            event, exact=ENERGY_VIEW_DISTRIBUTION in views,
+        ):
             return
         wait = ENERGY_POWER_MIN_INTERVAL_SECONDS - (monotonic() - self._last_notify)
         if wait <= 0:
@@ -160,7 +171,7 @@ class EnergyPageUpdates:
     @callback
     def _handle_delayed(self, _now: Any = None) -> None:
         self._unsub_delayed = None
-        if self._stopped or ENERGY_VIEW_NOW not in self._active_views():
+        if self._stopped or not any(view in ENERGY_LIVE_VIEWS for view in self._active_views()):
             return
         self._send()
 
@@ -171,8 +182,8 @@ class EnergyPageUpdates:
         self._notify()
 
 
-def _same_power_text(event: Any) -> bool:
-    """Return whether a state change leaves the power text of the sensor as it is."""
+def _same_power_text(event: Any, *, exact: bool = False) -> bool:
+    """Ignore text-equivalent changes unless a live balance needs exact values."""
 
     data = getattr(event, "data", None)
     if not isinstance(data, dict) or "new_state" not in data:
@@ -181,6 +192,8 @@ def _same_power_text(event: Any) -> bool:
     new = power_watts(data["new_state"])
     if old is None or new is None:
         return old is None and new is None
+    if exact:
+        return old == new
     return format_power(old, "en") == format_power(new, "en")
 
 

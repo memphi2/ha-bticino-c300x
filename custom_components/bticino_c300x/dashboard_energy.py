@@ -23,13 +23,21 @@ from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE, decimal_text
 ENERGY_VIEW_NOW = "now"
 ENERGY_VIEW_TODAY = "today"
 ENERGY_VIEW_POWER = "power"
+ENERGY_VIEW_DISTRIBUTION = "distribution"
 ENERGY_VIEW_BALANCE = "balance"
-ENERGY_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_POWER, ENERGY_VIEW_BALANCE)
+ENERGY_VIEWS = (
+    ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_POWER,
+    ENERGY_VIEW_DISTRIBUTION, ENERGY_VIEW_BALANCE,
+)
+ENERGY_DAY_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_BALANCE)
+ENERGY_LIVE_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_DISTRIBUTION)
 ENERGY_PAGE_DEFAULT_POSITION = 2
 
 # Light tones: the display background is a saturated blue.
 COLOR_SOLAR = "#ffe066"
-COLOR_GRID = "#f5f8ff"
+COLOR_GRID = "#75bfff"
+COLOR_GRID_METERS = (COLOR_GRID, "#48d1d9", "#a5aaff", "#b3e5fc")
+COLOR_GRID_OTHER = "#c4d5e8"
 COLOR_EXPORT = "#e0aaff"
 COLOR_BATTERY = "#69f0ae"
 COLOR_HOME = "#ff9a8b"
@@ -70,8 +78,6 @@ class EnergySources:
     grid_power: tuple[str, ...] = ()
     solar_power: tuple[str, ...] = ()
     battery_power: tuple[str, ...] = ()
-    grid_power_complete: bool = True
-    battery_power_complete: bool = True
 
     @property
     def any(self) -> bool:
@@ -149,8 +155,6 @@ def energy_sources(
         "grid_from": [], "grid_to": [], "solar": [], "battery_from": [],
         "battery_to": [], "grid_power": [], "solar_power": [], "battery_power": [],
     }
-    grid_power_complete = True
-    battery_power_complete = True
 
     def meter(stat: Any, cost: Any, name: Any) -> EnergyMeter | None:
         stat_id = _text(stat)
@@ -182,9 +186,6 @@ def energy_sources(
             for power in source.get("power") or ():
                 if isinstance(power, dict):
                     grid_power.append(_text(power.get("stat_rate")))
-            # Coverage belongs to the connection, not to its tariff meter count.
-            if any(grid_from + grid_to) and not any(grid_power):
-                grid_power_complete = False
             for group, values in (("grid_from", grid_from), ("grid_to", grid_to),
                                   ("grid_power", grid_power)):
                 for value in values:
@@ -196,15 +197,11 @@ def energy_sources(
             battery_from = meter(source.get("stat_energy_from"), None, name)
             battery_to = meter(source.get("stat_energy_to"), None, name)
             battery_power = _text(source.get("stat_rate"))
-            if (battery_from or battery_to) and not battery_power:
-                battery_power_complete = False
             add("battery_from", battery_from)
             add("battery_to", battery_to)
             add("battery_power", battery_power)
     return EnergySources(
         **{key: tuple(values) for key, values in groups.items()},
-        grid_power_complete=grid_power_complete,
-        battery_power_complete=battery_power_complete,
     )
 
 
@@ -254,14 +251,12 @@ def format_power(watts: float, language: str) -> str:
 
 
 def _sum_power(entities: tuple[str, ...], power: dict[str, float | None]) -> float | None:
-    """Return the summed power, or None unless every sensor has a value."""
+    """Sum configured sensors; no sensor means zero, an unknown reading does not."""
 
-    if not entities:
-        return None
     total = 0.0
     for entity_id in entities:
-        value = power.get(entity_id)
-        if value is None or not math.isfinite(value):
+        value = finite_number(power.get(entity_id))
+        if value is None:
             return None
         total += value
     return total if math.isfinite(total) else None
@@ -306,15 +301,13 @@ def normalize_energy_page(value: Any) -> dict[str, Any]:
 def source_power_watts(
     sources: EnergySources, power: dict[str, float | None],
 ) -> dict[str, float | None]:
-    """Aggregate live or historical samples with identical coverage rules."""
+    """Aggregate configured power readings, with unconfigured power at zero."""
 
     has_grid = bool(sources.grid_from or sources.grid_to)
     has_battery = bool(sources.battery_from or sources.battery_to)
-    grid = _sum_power(sources.grid_power, power) if sources.grid_power_complete else None
-    solar = (_sum_power(sources.solar_power, power)
-             if len(sources.solar_power) >= len(sources.solar) else None)
-    battery = (_sum_power(sources.battery_power, power)
-               if sources.battery_power_complete else None)
+    grid = _sum_power(sources.grid_power, power)
+    solar = _sum_power(sources.solar_power, power)
+    battery = _sum_power(sources.battery_power, power)
     values = {key: watts for key, present, watts in (
         ("grid", has_grid, grid), ("solar", bool(sources.solar), solar),
         ("battery", has_battery, battery),
@@ -393,10 +386,9 @@ def energy_page(
 
     if ENERGY_VIEW_TODAY in shown:
         # A meter correction can make an hour negative; a bar cannot be.
-        series: list[_EnergyBarSeries] = [
+        series: list[_EnergyBarSeries] = _grid_bar_series(sources, day) + [
             {"color": color, "values": [round(max(0.0, value), 3) for value in values]}
             for present, color, values in (
-                (sources.grid_from, COLOR_GRID, grid_in),
                 (sources.solar, COLOR_SOLAR, solar),
                 (sources.battery_from, COLOR_BATTERY, discharge),
             ) if present
@@ -435,6 +427,11 @@ def energy_page(
                 "color": COLOR_COST,
             })
         page["balance"] = rows
+
+    if ENERGY_VIEW_DISTRIBUTION in shown:
+        from .dashboard_energy_distribution import power_distribution_payload
+
+        page["distribution"] = power_distribution_payload(sources, power, language)
 
     return {"title": labels["title"], "energy": page}
 
@@ -484,9 +481,6 @@ def _sum_rows(
             entry["cost"] = _format_cost(cost, language, currency)
         return entry
 
-    def meter_cost(meter: EnergyMeter) -> float | None:
-        return day.costs.get(meter.cost_stat) if meter.cost_stat else None
-
     rows: list[dict[str, Any]] = []
     if sources.solar:
         rows.append(row(labels["solar"], totals["solar"], COLOR_SOLAR))
@@ -504,17 +498,54 @@ def _sum_rows(
         if sources.grid_from:
             tail.append(row(labels["grid_total"], totals["in"], COLOR_GRID,
                             sum(spent) if spent else None))
-    named = [meter for meter in sources.grid_from if len(sources.grid_from) > 1 or meter.name]
-    room = _MAX_SUM_ROWS - len(rows) - len(tail)
-    if len(named) > room:
-        # The meters that do not fit are shown as one row, so the sums add up.
-        kept, merged = named[: max(0, room - 1)], named[max(0, room - 1):]
-    else:
-        kept, merged = named, []
-    for meter in kept:
-        rows.append(row(meter.name or meter.stat, day.total(meter), COLOR_GRID, meter_cost(meter)))
-    if merged:
-        costs = _costs(day, merged)
-        rows.append(row(labels["other_grid"], sum(day.total(meter) for meter in merged),
-                        COLOR_GRID, sum(costs) if costs else None))
+    if len(sources.grid_from) > 1 or (sources.grid_from and sources.grid_from[0].name):
+        for meters, color in _grid_groups(sources):
+            label = labels["other_grid"] if len(meters) > 1 else meters[0].name or meters[0].stat
+            costs = _costs(day, meters)
+            rows.append(row(label, sum(day.total(meter) for meter in meters),
+                            color, sum(costs) if costs else None))
     return rows + tail
+
+
+def _grid_groups(sources: EnergySources) -> list[tuple[tuple[EnergyMeter, ...], str]]:
+    """Use the same bounded meter groups for the stack and its table legend."""
+
+    meters = sources.grid_from
+    room = _MAX_SUM_ROWS - sum(bool(group) for group in (
+        sources.solar, sources.battery_from, sources.battery_to, sources.grid_to,
+    )) - int(len(meters) > 1 or bool(meters and not meters[0].name))
+    limit = min(room, len(COLOR_GRID_METERS))
+    keep = limit - 1 if len(meters) > limit else len(meters)
+    groups: list[tuple[tuple[EnergyMeter, ...], str]] = [
+        ((meter,), COLOR_GRID_METERS[index]) for index, meter in enumerate(meters[:keep])
+    ]
+    if len(meters) > keep:
+        groups.append((meters[keep:], COLOR_GRID_OTHER))
+    return groups
+
+
+def _grid_bar_series(sources: EnergySources, day: EnergyDay) -> list[_EnergyBarSeries]:
+    """Allocate the corrected grid total, independent of visual grouping."""
+
+    groups = _grid_groups(sources)
+    hours = [day.hourly(meters) for meters, _color in groups]
+    series: list[_EnergyBarSeries] = [
+        {"color": color, "values": [0.0] * 24} for _meters, color in groups
+    ]
+    totals = day.hourly(sources.grid_from)
+    for hour in range(24):
+        units = round(max(0.0, totals[hour]) * 1000)
+        positive = [max(0.0, values[hour]) for values in hours]
+        total = sum(positive)
+        if not units or not total:
+            continue
+        # Corrections reduce the whole stack. Largest remainders preserve its
+        # rounded total without negative segments or added energy from rounding.
+        shares = [units * (value / total) for value in positive]
+        allocated = [math.floor(value) for value in shares]
+        order = sorted(range(len(groups)), key=lambda i: shares[i] - allocated[i], reverse=True)
+        for index in order[:units - sum(allocated)]:
+            allocated[index] += 1
+        for index, value in enumerate(allocated):
+            series[index]["values"][hour] = value / 1000
+    return series

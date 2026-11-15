@@ -126,7 +126,7 @@ def test_page_combines_kept_statistics_with_current_power(monkeypatch) -> None:
     assert page["title"] == "Energie"
     assert [view["id"] for view in page["energy"]["views"]] == ["now", "balance"]
     assert page["energy"]["nodes"]["grid"] == {
-        "label": "Netz", "color": "#f5f8ff", "lines": ["1 kWh"], "power": "400 W", "flow": 1,
+        "label": "Netz", "color": "#75bfff", "lines": ["1 kWh"], "power": "400 W", "flow": 1,
     }
     assert page["energy"]["balance"][-1] == {"label": "Kosten heute", "value": "0,30 €", "color": "#e3e9f1"}
     # The display asks on every event: the statistics are read once per five minutes.
@@ -611,13 +611,13 @@ def test_the_tick_reads_fresh_statistics(monkeypatch) -> None:
     assert order == ["expire entry-1", "wake"]
 
 
-def test_a_power_change_the_display_cannot_show_does_not_wake_it(monkeypatch) -> None:
+def test_now_without_distribution_ignores_power_changes_hidden_by_rounding(monkeypatch) -> None:
     helpers = _Helpers(monkeypatch)
     monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources",
                         AsyncMock(return_value=SOURCES))
     woken: list[int] = []
     asyncio.run(dashboard_energy_updates.async_track_energy_page_updates(
-        FakeHass(), _entry(ENERGY_ON), lambda: woken.append(1),
+        FakeHass(), _entry({**ENERGY_ON, "views": ["now"]}), lambda: woken.append(1),
     ))
 
     def change(old: str, new: str) -> None:

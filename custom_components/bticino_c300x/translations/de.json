@@ -390,6 +390,7 @@
               "view_now": "Jetzt",
               "view_today": "Heute",
               "view_power": "Leistungsverlauf",
+              "view_distribution": "Aktuelle Leistungsverteilung",
               "view_balance": "Bilanz"
             },
             "data_description": {
@@ -398,6 +399,7 @@
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
+              "view_distribution": "Sankey-Diagramm der aktuellen W-/kW-Messwerte; keine Tagesenergiemengen oder Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }
@@ -523,6 +525,7 @@
               "view_now": "Jetzt",
               "view_today": "Heute",
               "view_power": "Leistungsverlauf",
+              "view_distribution": "Aktuelle Leistungsverteilung",
               "view_balance": "Bilanz"
             },
             "data_description": {
@@ -531,6 +534,7 @@
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
+              "view_distribution": "Sankey-Diagramm der aktuellen W-/kW-Messwerte; keine Tagesenergiemengen oder Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }
@@ -843,6 +847,7 @@
               "view_now": "Jetzt",
               "view_today": "Heute",
               "view_power": "Leistungsverlauf",
+              "view_distribution": "Aktuelle Leistungsverteilung",
               "view_balance": "Bilanz"
             },
             "data_description": {
@@ -851,6 +856,7 @@
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
+              "view_distribution": "Sankey-Diagramm der aktuellen W-/kW-Messwerte; keine Tagesenergiemengen oder Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }

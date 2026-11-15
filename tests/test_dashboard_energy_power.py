@@ -154,19 +154,26 @@ def test_presentation_shares_axis_preserves_signs_gaps_and_revision(language):
     assert changed["series"][0]["points"][0] is not None
 
 
-@pytest.mark.parametrize("missing", ["sensor.second", "coverage", "solar"])
-def test_partial_source_coverage_never_fabricates_home_or_group_totals(missing):
+@pytest.mark.parametrize("missing", ["sensor.second", "unconfigured_grid", "unconfigured_solar"])
+def test_unconfigured_power_is_zero_but_configured_missing_history_stays_unknown(missing):
     sources = EnergySources(
-        grid_from=SOURCES.grid_from, grid_power=("sensor.power", "sensor.second"),
-        grid_power_complete=missing != "coverage",
+        grid_from=(*SOURCES.grid_from, EnergyMeter("sensor.grid_energy2")),
+        grid_power=("sensor.power",) if missing == "unconfigured_grid" else ("sensor.power", "sensor.second"),
         solar=(EnergyMeter("sensor.sun_energy"), EnergyMeter("sensor.sun_energy2")),
-        solar_power=("sensor.sun",) if missing == "solar" else ("sensor.sun", "sensor.sun2"),
+        solar_power=("sensor.sun",) if missing == "unconfigured_solar" else ("sensor.sun", "sensor.sun2"),
     )
     readings = {entity_id: rows(values=(100,) * 3) for entity_id in sources.power_entities if entity_id != missing}
     raw = power.power_history_from_statistics(START, START + timedelta(days=1), frozenset(sources.power_entities), readings)
     series = {item["id"]: item for item in power.power_history_payload(sources, raw, "en")["series"]}
-    assert "home" not in series
-    assert ("solar" if missing == "solar" else "grid") not in series
+    if missing == "sensor.second":
+        assert "grid" not in series and "home" not in series
+    else:
+        assert set(series) == {"grid", "solar", "home"}
+        assert all(item["points"][0] is not None for item in series.values())
+    for key, item in series.items():
+        assert "partial" not in item
+        assert item["label"] == ENERGY_LABELS_BY_LANGUAGE["en"][key]
+        assert all(point is None for point in item["points"][1:])
 
 
 def test_dots_only_mark_isolated_points_including_both_ends():

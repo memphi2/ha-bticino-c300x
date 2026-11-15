@@ -2,7 +2,7 @@
 
 ## Supported Release Line
 
-- `2.4.x`: current stable (2.4.0)
+- `2.4.x`: current stable (2.4.1)
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 
 ## Compatibility Baseline

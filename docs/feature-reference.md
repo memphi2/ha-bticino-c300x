@@ -386,18 +386,34 @@ from there.
 | --- | --- |
 | **Show the energy page** | Off by default. |
 | **Position** | 1 to 9, 2 by default. At the same position the energy page comes before the other page. |
-| **Show Now / Today / Power / Balance** | Each subpage has its own switch. With more than one enabled, buttons at the bottom switch between them. Switching all four off hides the Energy page and stops its updates without deleting its settings. |
+| **Show Now / Today / Power / Distribution / Balance** | Each subpage has its own switch. With more than one enabled, buttons at the bottom switch between them. Switching all five off hides the Energy page and stops its updates without deleting its settings. Existing selections are preserved; enable Distribution explicitly for an existing setup. |
 
 | View | Shows |
 | --- | --- |
-| **Now** | One box each for solar, grid, battery and home with today's energy. With complete power-sensor coverage in the Energy setup, the box also shows current power and its flow direction. If a grid connection or battery lacks a power sensor, or a required sensor is unavailable, that group's power and home power are omitted instead of showing a partial total. Meters may share one power sensor; its reading is counted once. |
-| **Today** | Hourly bars with a labelled energy axis and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Further grid meters are summed as **Other meters**. Values and costs occupy separate columns. |
-| **Power** | Today's power curves for grid, solar, battery and home from the power sensors configured in HA's Energy dashboard. The chart uses 15-minute means of recorded power statistics, a common W/kW scale and a visible zero line. Export and battery charging appear below zero. Missing data leaves gaps rather than fabricated zero readings. |
+| **Now** | One box each for solar, grid, battery and home with today's energy. Current W/kW values appear beneath the flow arrows. Sources without a configured power sensor contribute 0 W; configured sensors are summed normally. A configured sensor that becomes unavailable remains unknown rather than 0 W. Meters may share one power sensor; its reading is counted once. |
+| **Today** | Hourly bars with a labelled energy axis and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Grid meters have distinct colored segments matching the table; further meters are grouped as **Other meters** in both places. Values and costs occupy separate columns. |
+| **Power** | Today's power curves for grid, solar, battery and home from the power sensors configured in HA's Energy dashboard. The chart uses 15-minute means of recorded power statistics, a common W/kW scale and a visible zero line. Sources without a configured power sensor contribute zero without suppressing other curves. Export and battery charging appear below zero. Missing statistics from configured sensors leave gaps; no future or otherwise unrecorded samples are invented. |
+| **Distribution** | Sankey diagram of current W/kW measurements, with import, generation and discharge on the left and consumption, export and charging on the right. |
 | **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |
+
+**Distribution** shows current power in **W/kW**, not daily energy in kWh. Its
+Sankey bands link grid import, solar and battery discharge through a common
+junction to home consumption, grid export and battery charging. They do not
+claim which individual source supplies a particular load. Sources without a
+configured power sensor contribute zero, without a partial-coverage label.
+Unavailable or inconsistent readings from configured sensors remain explicit;
+they do not produce fabricated flows. Individual appliances are not broken out
+in this view.
+The new display component requires the 2.4.1 device-agent package.
 
 A kind of source that is not set up in Home Assistant is left out, with its
 box, rows and bars. Without any electricity source the page is not shown. Gas
 and water meters are not part of the page.
+
+Source colors are consistent across views: blue for grid, yellow for solar,
+green for battery, violet for export and coral for home. An energy meter in
+kWh does not provide an instantaneous W/kW measurement: select the appropriate
+power sensors in HA's Energy settings to show those readings.
 
 Home Assistant computes the charts from its recorder statistics; the display
 only draws the result. The daily figures and power history are cached for five
@@ -408,7 +424,10 @@ data. Disabling a view discards data used only by that view; shared daily values
 remain only while another enabled view needs them. All caches live in HA's
 memory, not in additional files. These switches do not change or delete Home
 Assistant's existing recorder history.
-The **Now** view receives changed live power at most every ten seconds.
+The **Now** and **Distribution** views share changed live power at most every ten
+seconds. Distribution alone does not read or cache recorder history or daily
+statistics. Disabling it removes its live subscriptions unless Now still uses
+them.
 No charts are stored on the C300X and no extra device polling is added.
 The display file of the page is loaded only
 while the page is open. Texts follow the language of Home Assistant in German,

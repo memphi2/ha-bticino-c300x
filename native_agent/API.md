@@ -19,7 +19,7 @@ proxy if a site needs TLS.
 `agent.self_update_file_set_version` advertises the updater's supported payload
 file set (`1` when the field is missing). A bundle's `update_file_set_version`
 declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
-set `3` adds `C300XEnergy.qml`.
+set `3` adds `C300XEnergy.qml`, and set `4` adds `C300XEnergyDistribution.qml`.
 When the installed self-updater cannot install the target file set, Home
 Assistant first installs and verifies the new executable, then completes the
 payload once through that updater using the same maintenance token. A matching

@@ -21,9 +21,10 @@ ENERGY_VIEW_BALANCE = "balance"
 ENERGY_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_BALANCE)
 ENERGY_PAGE_DEFAULT_POSITION = 2
 
+# Light tones: the display background is a saturated blue.
 COLOR_SOLAR = "#ff9800"
-COLOR_GRID = "#488fc2"
-COLOR_EXPORT = "#8353d1"
+COLOR_GRID = "#8fd0ff"
+COLOR_EXPORT = "#c9a6ff"
 COLOR_BATTERY = "#4db6ac"
 COLOR_HOME = "#58d68d"
 COLOR_COST = "#b0b8c0"
@@ -436,7 +437,7 @@ def _total_cost(sources: EnergySources, day: EnergyDay) -> float | None:
 
 
 def _format_cost(value: float, language: str, currency: str) -> str:
-    amount = f"{value:.2f}"
+    amount = f"{round(value, 2) + 0.0:.2f}"
     if language != "en":
         amount = amount.replace(".", ",")
     return f"{amount} {currency}".strip()

@@ -803,3 +803,39 @@ assert.equal(p.controlLastStep({min: 0, max: 100, step: 33.333333}), 3, "a fan k
 assert.equal(p.controlLastStep({min: 0, max: 1, step: 0.3}), 3, "a range off the grid ends at its last whole step");
 p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
 console.log("Fractional ranges passed");
+p.dashboardPages = [{items: [], energy: {views: [{id: "now", label: "Now"}], nodes: {home: {label: "Home"}}}}, {items: [sw("switch.a")]},
+    {items: [], energy: {nodes: {}}}];
+p.currentPageIndex = 0; p.pageCount = 3;
+Api.loadDashboardPage(p.status, p);
+assert.equal(p.energyVisible, true, "a page with energy views shows the energy file");
+assert.equal(p.energy.views[0].id, "now");
+p.currentPageIndex = 1;
+Api.loadDashboardPage(p.status, p);
+assert.equal(p.energyVisible, false, "an ordinary page unloads the energy file");
+assert.equal(JSON.stringify(p.energy), "{}");
+p.currentPageIndex = 2;
+Api.loadDashboardPage(p.status, p);
+assert.equal(p.energyVisible, false, "energy data without views is not shown");
+p.dashboardPages = []; p.items = []; p.currentPageIndex = 0;
+console.log("Energy page hand-over passed");
+const displayLanguages = ["de", "en", "fr", "it"];
+const keysOf = value => Object.keys(value).sort();
+for (const name of ["CONTROL_LABELS", "DETAIL_LABELS"]) {
+    assert.deepEqual(keysOf(I18n[name]), displayLanguages, name + " covers every display language");
+    for (const lang of displayLanguages) {
+        assert.deepEqual(keysOf(I18n[name][lang]), keysOf(I18n[name].en), name + " is complete in " + lang);
+    }
+}
+for (const [lang, catalog, weather] of [["de", I18n.DE, I18n.WEATHER_DE], ["fr", I18n.FR, I18n.WEATHER_FR], ["it", I18n.IT, I18n.WEATHER_IT]]) {
+    assert.deepEqual(keysOf(catalog), keysOf(I18n.EN), "the display texts are complete in " + lang);
+    assert.deepEqual(keysOf(weather), keysOf(I18n.WEATHER_EN), "the weather texts are complete in " + lang);
+    for (const key of keysOf(I18n.EN)) {
+        assert.ok(String(catalog[key]).length > 0, key + " has a text in " + lang);
+        assert.ok(I18n.text(lang, key).length > 0);
+    }
+}
+assert.notEqual(I18n.text("de", "ha_feedback_colors"), I18n.text("en", "ha_feedback_colors"));
+assert.equal(I18n.text("es", "ha_feedback_colors"), I18n.EN.ha_feedback_colors, "a language without texts shows English");
+const shadowed = keysOf(I18n.EN).filter(key => I18n.CONTROL_LABELS.en[key] || I18n.DETAIL_LABELS.en[key]);
+assert.deepEqual(shadowed, [], "no text is defined twice");
+console.log("Display languages passed");

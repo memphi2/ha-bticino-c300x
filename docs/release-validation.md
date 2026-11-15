@@ -183,6 +183,7 @@ If Display patch is enabled:
 - dashboard page keeps configured entity order,
 - alarm page shows clear armed/disarmed and sensor status,
 - weather page shows condition, forecast, sunrise and sunset when available,
+- energy page, when switched on, shows its views and only the sources set up in Home Assistant,
 - button feedback is visible,
 - no sustained device CPU increase remains after GUI reload.
 

@@ -20,17 +20,13 @@ Page {
     property variant dashboardPages: []
     property variant badges: []
     property variant items: []
-    property variant flowItems: []
-    property variant flowLines: []
+    property variant energy: ({})
     property int currentPageIndex: 0
     property int pageCount: 0
-    property int flowWidth: 0
-    property int flowHeight: 0
-    property bool flowVisible: false
+    property bool energyVisible: false
     property bool preventReturnToHomepage: true
     property string pageTitle: ""
     property string pageLabel: ""
-    property string flowColor: "transparent"
     property bool weatherVisible: false
     property string weatherTitle: ""
     property string weatherCondition: ""
@@ -1232,83 +1228,19 @@ Page {
                 width: scroll.width
                 spacing: 10
 
-                Item {
+                Loader {
+                    id: energyLoader
                     width: parent.width
-                    height: flowVisible ? safeNumber(flowHeight, 0) : 0
-                    visible: flowVisible
+                    height: energyVisible ? Math.max(0, scroll.height - 20) : 0
+                    visible: energyVisible
+                    source: energyVisible ? "C300XEnergy.qml" : ""
+                }
 
-                    Rectangle {
-                        id: flowWrapper
-                        width: flowWidth > 0 ? flowWidth : parent.width
-                        height: flowHeight > 0 ? flowHeight : parent.height
-                        color: flowColor
-
-                        Repeater {
-                            id: flowLineRepeater
-                            model: flowLines
-
-                            PathView {
-                                id: pathView
-                                visible: true
-                                property variant line: modelData
-                                property variant lineColor: modelData.lineColor || modelData.color || "#58d68d"
-                                model: safeNumber(modelData.numberOfDots, 0)
-                                path: Path {
-                                    startX: safeNumber(pathView.line.startX, 0)
-                                    startY: safeNumber(pathView.line.startY, 0)
-                                    PathQuad {
-                                        x: safeNumber(pathView.line.x, 0)
-                                        y: safeNumber(pathView.line.y, 0)
-                                        controlX: safeNumber(pathView.line.controlX, 0)
-                                        controlY: safeNumber(pathView.line.controlY, 0)
-                                    }
-                                }
-                                delegate: Rectangle {
-                                    width: safeNumber(pathView.line.dotWidth, 2)
-                                    height: safeNumber(pathView.line.dotHeight, 2)
-                                    color: pathView.lineColor
-                                }
-                            }
-                        }
-
-                        Repeater {
-                            model: flowItems
-
-                            Rectangle {
-                                x: safeNumber(modelData.leftMargin, safeNumber(modelData.x, 0))
-                                y: safeNumber(modelData.topMargin, safeNumber(modelData.y, 0))
-                                width: safeNumber(modelData.width, 100)
-                                height: safeNumber(modelData.height, 100)
-                                radius: safeNumber(modelData.radius, 50)
-                                color: modelData.backgroundColor || "transparent"
-                                border.color: modelData.borderColor || "transparent"
-                                border.width: safeNumber(modelData.borderWidth, 2)
-
-                                UbuntuLightText {
-                                    text: (modelData.labelText || modelData.label || "") + trsl.empty
-                                    font.pixelSize: safeNumber(modelData.labelSize, 14)
-                                    font.bold: true
-                                    color: modelData.labelColor || "#8d98a3"
-                                    anchors.top: parent.top
-                                    anchors.topMargin: safeNumber(modelData.labelTopMargin, -20)
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-
-                                UbuntuLightText {
-                                    text: (modelData.state || modelData.text || "") + trsl.empty
-                                    font.pixelSize: safeNumber(modelData.textSize, 16)
-                                    font.bold: modelData.textBold === false ? false : true
-                                    color: modelData.textColor || "white"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 6
-                                    anchors.rightMargin: 6
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-                        }
-                    }
+                Binding {
+                    target: energyLoader.item
+                    property: "energy"
+                    value: page.energy
+                    when: energyLoader.status === Loader.Ready
                 }
 
                 Flow {
@@ -1910,7 +1842,7 @@ Page {
                 }
 
                 UbuntuLightText {
-                    text: items.length === 0 && !flowVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
+                    text: items.length === 0 && !energyVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
                     color: "#f1c40f"
                     font.pixelSize: 18
                     width: parent.width

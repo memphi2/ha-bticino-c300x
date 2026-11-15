@@ -29,6 +29,14 @@ go through `executor.py`, also used by the existing service use cases. Both use
 `dashboard_config.py` for the configured allowlist and `alarm_state.py` for alarm
 readiness and code policy; neither shared module imports the command executor.
 
+The optional energy page is built by three modules: `dashboard_energy.py` turns
+Home Assistant's Energy setup and one day of statistics into the page (pure
+functions, no Home Assistant access), `dashboard_energy_data.py` reads the
+setup and the recorder statistics and caches a day for five minutes, and
+`dashboard_energy_updates.py` wakes the display on power changes (at most every
+ten seconds) and on the five-minute tick. The display draws the result with
+`C300XEnergy.qml`, loaded only while the page is open.
+
 Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
 agent API. `resources` owns its tasks, subscriptions and media preparation
 callbacks; unloading closes this owner and clears the references. `diagnostics`

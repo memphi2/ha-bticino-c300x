@@ -795,6 +795,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert modes["device_agent/scripts/bootstrap_firewall.sh"] == "700"
     assert modes["device_agent/qml/Alarm.qml"] == "644"
     assert modes["device_agent/qml/HomeAssistant.qml"] == "644"
+    assert modes["device_agent/qml/C300XEnergy.qml"] == "644"
     assert modes["device_agent/qml/C300XRingerControl.qml"] == "644"
     assert modes["device_agent/qml/js/c300x_ha.js"] == "644"
     assert modes["device_agent/qml/js/c300x_i18n.js"] == "644"

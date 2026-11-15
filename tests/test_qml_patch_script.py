@@ -218,6 +218,7 @@ ORIGINAL_EVENT_MANAGER = "\n".join(
 SOURCE_INSTALLED_FILES = (
     "Alarm.qml",
     "HomeAssistant.qml",
+    "C300XEnergy.qml",
     "C300XRingerControl.qml",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
@@ -262,9 +263,10 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "e886ec4fbc9bafb39bf4cae546f4d4d6e1fb25a612f85f7bcd7dc964f10e2431",
-    "HomeAssistant.qml": "f9e8a9e4872eead5bb85170d5fa708c6440296a44a72446fd1a8f337a3c0c127",
-    "js/c300x_ha.js": "d19b4e427a61a2f4ec098bc93339ba86aee2b0d727bbecf7949c56cdc121e6e7",
-    "js/c300x_i18n.js": "b52a364f6f46fd3079dca0d2d2a2b9717d45250cda394a790bf307f2b3d5bd6a",
+    "HomeAssistant.qml": "51dfe226f4acca0489ce3637abc7da0e2792483835ae1322fecaec646cfbb240",
+    "C300XEnergy.qml": "57cf1a7397e726d9705f27d4f33939a135dbb0b5f60252d6194741ce902b6724",
+    "js/c300x_ha.js": "a8dba12150e9b2150276a4340f87b0efed6ecb34c8d74900ad9bac4541945af0",
+    "js/c300x_i18n.js": "4e46853fcaa7710858323f12869e366ebd2c2fd96d7e910a116f647537823c9d",
     "js/c300x_memos.js": "4d7c36842de9372c12ad09e2bcdfca8e842518156c53e7da0068de1ab9e86a30",
 }
 
@@ -448,6 +450,59 @@ def test_qml_core_upgrade_corrects_legacy_media_port(tmp_path: Path) -> None:
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")["changed_files"] == 0
     _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-restore")
     assert event_manager.read_text() == ORIGINAL_EVENT_MANAGER
+
+
+def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
+    assert (gui_dir / "C300XEnergy.qml").read_bytes() == (SOURCE_DIR / "C300XEnergy.qml").read_bytes()
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all")["state"] == "original"
+    assert not (gui_dir / "C300XEnergy.qml").exists()
+
+
+def test_qml_patch_works_from_a_source_tree_without_the_energy_page_file(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    source_dir = tmp_path / "source"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    _copy_source_tree(source_dir)
+    (source_dir / "C300XEnergy.qml").unlink()
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", source_dir=source_dir)
+
+    assert status["state"] == "patched"
+    assert not (gui_dir / "C300XEnergy.qml").exists()
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status", source_dir=source_dir)["state"] == "patched"
+
+
+def test_a_leftover_energy_page_file_counts_as_a_partial_patch(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    (gui_dir / "C300XEnergy.qml").write_text("import QtQuick 1.1\nItem {}\n")
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] != "original"
+
+
+def test_the_energy_page_file_is_loaded_only_for_an_energy_page() -> None:
+    page = (SOURCE_DIR / "HomeAssistant.qml").read_text()
+    script = (SOURCE_DIR / "js/c300x_ha.js").read_text()
+    energy = (SOURCE_DIR / "C300XEnergy.qml").read_text()
+
+    assert 'source: energyVisible ? "C300XEnergy.qml" : ""' in page
+    assert "property bool energyVisible: false" in page
+    assert "pageItem.energyVisible = energy !== null" in script
+    assert "flowVisible" not in page and "flowVisible" not in script
+    assert energy.isascii()
+    assert "//" not in energy and "/*" not in energy
+    assert "Canvas" not in energy and "Timer" not in energy
 
 
 def test_qml_restore_all_removes_feature_core_and_media_user_label_patches(tmp_path: Path) -> None:

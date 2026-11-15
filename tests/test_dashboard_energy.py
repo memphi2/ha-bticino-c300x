@@ -191,7 +191,7 @@ def test_a_single_unnamed_grid_meter_is_one_row() -> None:
 
     sums = energy_page(sources, day, {}, currency="EUR")["energy"]["sums"]
 
-    assert sums == [{"label": "Grid total", "value": "2.5 kWh", "color": "#488fc2", "cost": "0.75 EUR"}]
+    assert sums == [{"label": "Grid total", "value": "2.5 kWh", "color": "#8fd0ff", "cost": "0.75 EUR"}]
 
 
 def test_export_reduces_use_and_self_consumption() -> None:
@@ -224,7 +224,7 @@ def test_a_late_meter_cannot_make_an_hour_negative() -> None:
 
     assert energy["nodes"]["home"]["lines"] == ["0 kWh"]
     assert energy["balance"][0] == {
-        "label": "Net from grid", "value": "-0.5 kWh", "ratio": 0.0, "color": "#8353d1",
+        "label": "Net from grid", "value": "-0.5 kWh", "ratio": 0.0, "color": "#c9a6ff",
     }
 
 
@@ -256,3 +256,13 @@ def test_numbers_follow_the_display_language() -> None:
     assert format_power(999.4, "de") == "999 W"
     assert format_power(1234.0, "de") == "1,23 kW"
     assert format_power(12340.0, "en") == "12.3 kW"
+
+
+def test_every_energy_text_exists_in_every_display_language() -> None:
+    from custom_components.bticino_c300x import dashboard_energy
+
+    labels = dashboard_energy._LABELS
+    assert set(labels) == {"de", "en", "fr", "it"}
+    for language, texts in labels.items():
+        assert set(texts) == set(labels["en"]), language
+        assert all(text.strip() for text in texts.values()), language

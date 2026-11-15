@@ -1006,21 +1006,12 @@ function assignDashboardValue(target, key, value) {
 
 function loadDashboardPage(statusItem, pageItem) {
     var pageData = currentDashboardPage(pageItem)
-    var flow = pageData.flow || {}
-    var flowItems = listOrEmpty(flow.items)
-    var flowLines = listOrEmpty(flow.lines)
+    var energy = pageData.energy && isList(pageData.energy.views) ? pageData.energy : null
     assignDashboardValue(pageItem, "badges", listOrEmpty(pageData.badges))
     assignDashboardValue(pageItem, "items", dashboardWeatherPlaced(dashboardMixedItems(pageData.items), pageData.weather))
     applyWeather(pageItem, pageData.weather)
-    assignDashboardValue(pageItem, "flowItems", flowItems)
-    assignDashboardValue(pageItem, "flowLines", flowLines)
-    pageItem.flowWidth = positiveNumber(flow.width, 0)
-    pageItem.flowHeight = positiveNumber(flow.height, 0)
-    pageItem.flowColor = flow.color || "transparent"
-    pageItem.flowVisible = flowItems.length > 0 || flowLines.length > 0
-    if (pageItem.flowVisible && pageItem.flowHeight <= 0) {
-        pageItem.flowHeight = 150
-    }
+    assignDashboardValue(pageItem, "energy", energy || {})
+    pageItem.energyVisible = energy !== null
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {

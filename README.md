@@ -35,7 +35,7 @@ forwarding controls, messages and optional display pages.
 - Stored video messages, voice memos and text memos when the agent reports
   those capabilities.
 - Optional native C300X display with up to eight configurable pages, weather,
-  Alarmo and HA-driven notifications. Control lights, covers, climate, media,
+  an energy page, Alarmo and HA-driven notifications. Control lights, covers, climate, media,
   locks and other supported entities, with configurable tile sizes and labels.
   See [Display setup](docs/quickstart.md#9-optional-native-display).
 - Media readiness diagnostics with guided Repairs for the common setup problems.
@@ -138,7 +138,8 @@ English from device photographs. They illustrate configured pages, not live data
     <td align="center"><strong>Media player controls</strong><br><img src="docs/images/readme/display-media-player-en.webp" alt="Living-room media player with current program, pause, volume, mute and shuffle controls" width="360"></td>
   </tr>
   <tr>
-    <td align="center" colspan="2"><strong>Weather</strong><br><img src="docs/images/readme/display-ha-weather-en.webp" alt="Native C300X weather page with temperature and Home Assistant status, showing an earlier page layout" width="360"><br><small>Earlier page layout</small></td>
+    <td align="center"><strong>Weather</strong><br><img src="docs/images/readme/display-ha-weather-en.webp" alt="Native C300X weather page with temperature and Home Assistant status" width="360"></td>
+    <td align="center"><strong>Energy (rendered preview)</strong><br><img src="docs/images/readme/display-energy-en.webp" alt="Energy page with solar, grid, battery and home boxes, current power, today's totals and the views Now, Today and Balance" width="360"></td>
   </tr>
 </table>
 

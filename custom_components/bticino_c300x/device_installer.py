@@ -282,6 +282,10 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
             COMPONENT_DIR / "device_agent" / "qml" / "HomeAssistant.qml",
             REPO_ROOT / "device_qml" / "HomeAssistant.qml",
         ),
+        "qml/C300XEnergy.qml": _first_existing(
+            COMPONENT_DIR / "device_agent" / "qml" / "C300XEnergy.qml",
+            REPO_ROOT / "device_qml" / "C300XEnergy.qml",
+        ),
         "qml/js/c300x_ha.js": _first_existing(
             COMPONENT_DIR / "device_agent" / "qml" / "js" / "c300x_ha.js",
             REPO_ROOT / "device_qml" / "js" / "c300x_ha.js",

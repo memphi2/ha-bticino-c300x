@@ -15,7 +15,7 @@ from test_qml_patch_script import (
 
 PATCH_FILES = [
     "MainApp.qml", "HomePage.qml", "MemoPage.qml", "Alarm.qml", "HomeAssistant.qml",
-    "js/c300x_ha.js", "js/c300x_i18n.js", "js/c300x_memos.js",
+    "C300XEnergy.qml", "js/c300x_ha.js", "js/c300x_i18n.js", "js/c300x_memos.js",
     "C300XRingerControl.qml", "EventManager.qml",
     "Components/Settings/GeneralsChoice.qml",
 ]

@@ -170,6 +170,9 @@ Lovelace card or an embedded HA dashboard.
 2. Open **Display pages**. Choose an optional weather entity, name your pages,
    set their order and select the entities for each. Up to eight pages are
    available, including the status page. Drag entities to reorder their tiles.
+   The last section adds the optional
+   [energy page](feature-reference.md#energy-page), which shows Home
+   Assistant's Energy setup.
 3. Open **Display tiles** to set each tile's width, height, name and secondary
    line. Full-height tiles expose supported common controls directly; tap a
    tile with a chevron for its detail controls.

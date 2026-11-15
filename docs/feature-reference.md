@@ -364,7 +364,7 @@ its own in the settings menu.
 | Field | Meaning |
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
-| **Position** | Order of the pages, 1 to 8; 1 is the first page. Left empty, the section's number is used; pages with the same position keep the order of their sections. |
+| **Position** | Order of the pages, 1 is the first page (1 to 9 counting the energy page). Left empty, the section's number is used; pages with the same position keep the order of their sections. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
 The first section is the status page: it carries the weather card at its top,
@@ -378,6 +378,36 @@ any capitalization) and each entity can be used once. Page names are limited to
 60 characters; a longer one is cut, and a position is rounded to a whole
 number. Pages that only configured actions use follow the configured pages.
 Sections of used pages are open, and so is the first free one.
+
+### Energy Page
+
+The last section of the pages dialog switches on an optional ninth page that
+shows Home Assistant's own Energy setup (**Settings → Dashboards → Energy**).
+Nothing is configured twice: meters, their names, prices and power sensors come
+from there.
+
+| Field | Meaning |
+| --- | --- |
+| **Show the energy page** | Off by default. |
+| **Position** | 1 to 9, 2 by default. At the same position the energy page comes before the other page. |
+| **Views** | **Now**, **Today**, **Balance**; none selected means all. With more than one, buttons at the bottom of the page switch between them. |
+
+| View | Shows |
+| --- | --- |
+| **Now** | One box each for solar, grid, battery and home with today's energy. With a power sensor set in the Energy setup, the box also shows the current power and the line to it its direction. |
+| **Today** | Hourly bars of today's sources and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Further grid meters are summed as **Other meters**. |
+| **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |
+
+A kind of source that is not set up in Home Assistant is left out, with its
+box, rows and bars. Without any electricity source the page is not shown. Gas
+and water meters are not part of the page.
+
+Home Assistant computes everything from its long-term statistics; the display
+only draws the result. The daily figures are read at most every five minutes.
+A changed power value reaches the display at most every ten seconds, and only
+while a power sensor is set up. The display file of the page is loaded only
+while the page is open. Texts follow the language of Home Assistant in German,
+English, French and Italian; other languages show English.
 
 An entry saved before the pages dialog opens it with its existing pages: the
 status page first, then the others in the order their names first appeared.

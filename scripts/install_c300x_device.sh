@@ -98,6 +98,7 @@ trap 'rm -rf "$QML_STAGE_DIR"' EXIT
 scp_cmd \
     "$QML_STAGE_DIR/Alarm.qml" \
     "$QML_STAGE_DIR/HomeAssistant.qml" \
+    "$QML_STAGE_DIR/C300XEnergy.qml" \
     "$QML_STAGE_DIR/C300XRingerControl.qml" \
     "$REMOTE:$REMOTE_DIR/qml/"
 

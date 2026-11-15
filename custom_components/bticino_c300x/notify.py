@@ -14,6 +14,7 @@ from .capabilities import entry_device_ui_enabled_or_patch_active
 from .const import DOMAIN
 from .display_alerts import async_send_display_alert
 from .entry_types import BticinoC300XConfigEntry
+from .service_authorization import authorized_service
 
 _SERVICES = f"{DOMAIN}_notify_services"
 
@@ -30,7 +31,11 @@ class C300XNotificationService(BaseNotificationService):
         # The legacy base silently omits an explicitly empty title.
         if "title" in service.data and not service.data["title"]:
             raise ServiceValidationError("C300X notification title must not be empty")
-        await super()._async_notify_message_service(service)
+        # Authorize before the legacy base drops the caller's ServiceCall context.
+        await authorized_service(
+            self.hass, "show_display_notification",
+            super()._async_notify_message_service, lambda _call: self.entry,
+        )(service)
 
     async def async_send_message(self, message: str, **kwargs: Any) -> None:
         if self.closed:

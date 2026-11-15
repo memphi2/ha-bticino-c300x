@@ -10,8 +10,13 @@ from unittest.mock import AsyncMock
 import pytest
 from homeassistant import config_entries, loader
 from homeassistant.components.http import HomeAssistantHTTP
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.core import Context, HomeAssistant
+from homeassistant.exceptions import (
+    HomeAssistantError,
+    ServiceValidationError,
+    Unauthorized,
+    UnknownUser,
+)
 
 from custom_components.bticino_c300x import runtime_manager
 from custom_components.bticino_c300x.data import C300XRuntimeResources
@@ -66,6 +71,54 @@ async def send(hass, entry, **kwargs):
         "notify", f"bticino_c300x_{entry.entry_id}",
         {"message": "Test message", **kwargs}, blocking=True,
     )
+
+
+@pytest.mark.parametrize("caller", ["reader", "controller", "unknown"])
+def test_notify_rejects_unprivileged_callers_before_storage_or_delivery(
+    tmp_path, monkeypatch, caller,
+):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, entry):
+            user = None if caller == "unknown" else SimpleNamespace(
+                is_admin=False,
+                permissions=SimpleNamespace(check_entity=lambda *_: caller == "controller"),
+            )
+            hass.auth = SimpleNamespace(async_get_user=AsyncMock(return_value=user))
+            with pytest.raises(UnknownUser if caller == "unknown" else Unauthorized):
+                await hass.services.async_call(
+                    "notify", f"bticino_c300x_{entry.entry_id}",
+                    {"message": "Test", "data": {
+                        "severity": "error", "sound_duration": 300, "wake_duration": 300,
+                    }},
+                    blocking=True, context=Context(user_id=caller),
+                )
+            hass.auth.async_get_user.assert_awaited_once_with(caller)
+            assert entry.runtime_data.display_notifications is None
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("user_id", [None, "admin"])
+def test_notify_preserves_admin_and_context_free_automation_access(
+    tmp_path, monkeypatch, user_id,
+):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, entry):
+            hass.auth = SimpleNamespace(
+                async_get_user=AsyncMock(return_value=SimpleNamespace(is_admin=True)),
+            )
+            await hass.services.async_call(
+                "notify", f"bticino_c300x_{entry.entry_id}",
+                {"message": "Test", "data": {"severity": "warning"}},
+                blocking=True, context=Context(user_id=user_id),
+            )
+            entry.runtime_data.api.async_send_display_alert.assert_awaited_once()
+            assert len(notification_payload(entry)) == 1
+            if user_id is None:
+                hass.auth.async_get_user.assert_not_awaited()
+            else:
+                hass.auth.async_get_user.assert_awaited_once_with(user_id)
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("severity,sound,priority", [("info", 0, "normal"), ("warning", 30, "important"), ("error", 30, "urgent")])

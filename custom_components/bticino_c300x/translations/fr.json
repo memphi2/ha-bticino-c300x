@@ -387,12 +387,18 @@
             "data": {
               "enabled": "Afficher la page énergie",
               "position": "Position",
-              "views": "Vues"
+              "view_now": "Maintenant",
+              "view_today": "Aujourd’hui",
+              "view_power": "Historique de puissance",
+              "view_balance": "Bilan"
             },
             "data_description": {
-              "enabled": "Ajoute la page à l'écran",
+              "enabled": "Affiche la page si au moins une vue est activée ; désactiver toutes les vues la masque sans perdre ces réglages.",
               "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
-              "views": "Les boutons en bas de la page permettent d'en changer ; sans sélection, toutes sont affichées"
+              "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
+              "view_today": "Énergie horaire et totaux du jour",
+              "view_power": "Historique des capteurs de puissance configurés",
+              "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
         }
@@ -514,12 +520,18 @@
             "data": {
               "enabled": "Afficher la page énergie",
               "position": "Position",
-              "views": "Vues"
+              "view_now": "Maintenant",
+              "view_today": "Aujourd’hui",
+              "view_power": "Historique de puissance",
+              "view_balance": "Bilan"
             },
             "data_description": {
-              "enabled": "Ajoute la page à l'écran",
+              "enabled": "Affiche la page si au moins une vue est activée ; désactiver toutes les vues la masque sans perdre ces réglages.",
               "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
-              "views": "Les boutons en bas de la page permettent d'en changer ; sans sélection, toutes sont affichées"
+              "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
+              "view_today": "Énergie horaire et totaux du jour",
+              "view_power": "Historique des capteurs de puissance configurés",
+              "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
         }
@@ -828,12 +840,18 @@
             "data": {
               "enabled": "Afficher la page énergie",
               "position": "Position",
-              "views": "Vues"
+              "view_now": "Maintenant",
+              "view_today": "Aujourd’hui",
+              "view_power": "Historique de puissance",
+              "view_balance": "Bilan"
             },
             "data_description": {
-              "enabled": "Ajoute la page à l'écran",
+              "enabled": "Affiche la page si au moins une vue est activée ; désactiver toutes les vues la masque sans perdre ces réglages.",
               "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
-              "views": "Les boutons en bas de la page permettent d'en changer ; sans sélection, toutes sont affichées"
+              "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
+              "view_today": "Énergie horaire et totaux du jour",
+              "view_power": "Historique des capteurs de puissance configurés",
+              "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
         }
@@ -1384,13 +1402,6 @@
         "drop_link_local": "Sans adresses link-local (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 et IPv6 local (ULA) - recommandé",
         "ipv4_only": "IPv4 uniquement"
-      }
-    },
-    "energy_views": {
-      "options": {
-        "now": "Maintenant : flux entre réseau, solaire, batterie et maison",
-        "today": "Aujourd'hui : barres horaires et totaux",
-        "balance": "Bilan : autonomie, autoconsommation, coût"
       }
     }
   },

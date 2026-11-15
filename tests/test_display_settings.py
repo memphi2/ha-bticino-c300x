@@ -1177,7 +1177,9 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     # Used pages are open, and so is the first free one to add a page; the
     # energy page is closed while it is switched off.
     assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 5
-    assert [item["name"] for item in fields[1]["schema"]] == ["enabled", "position", "views"]
+    assert [item["name"] for item in fields[1]["schema"]] == [
+        "enabled", "position", "view_now", "view_today", "view_power", "view_balance",
+    ]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "enabled", "weather_entity_id", "position", "entities",
     ]
@@ -1412,7 +1414,8 @@ def test_the_tiles_form_names_the_untitled_page_as_such():
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
-def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind):
+@pytest.mark.parametrize("views", [["now", "today"], ["power"], ["today", "balance"], []])
+def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind, views):
     dashboard = {"device_ui_enabled": True}
     entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
     dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
@@ -1421,7 +1424,10 @@ def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind):
     posted = post_pages_like_home_assistant(form["data_schema"], {
         "page_1": {"entities": ["sensor.temp"]},
         "page_2": {"name": "Room", "entities": ["light.one"]},
-        "energy_page": {"enabled": True, "views": ["today", "now"]},
+        "energy_page": {
+            "enabled": True,
+            **{f"view_{view}": view in views for view in ("now", "today", "power", "balance")},
+        },
     })
     form = asyncio.run(pages_step(posted))
     result = asyncio.run(display_step(post_tiles_like_home_assistant(form["data_schema"])))
@@ -1429,7 +1435,7 @@ def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind):
     assert result["type"] == "finished", result.get("errors")
     # Second page by default, ahead of the page that also asked for 2.
     assert result["data"]["energy_page"] == {
-        "enabled": True, "position": 2, "views": ["now", "today"],
+        "enabled": True, "position": 2, "views": views,
     }
     assert result["data"]["dashboard_pages"] == [
         {"name": "C300X", "order": 1}, {"name": "Room", "order": 2},

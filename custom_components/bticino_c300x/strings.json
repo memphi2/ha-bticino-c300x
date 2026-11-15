@@ -387,12 +387,18 @@
             "data": {
               "enabled": "Show the energy page",
               "position": "Position",
-              "views": "Views"
+              "view_now": "Now",
+              "view_today": "Today",
+              "view_power": "Power history",
+              "view_balance": "Balance"
             },
             "data_description": {
-              "enabled": "Adds the page to the display",
+              "enabled": "Show the page when at least one view is enabled; all views off hides it without losing these settings.",
               "position": "1 = first page; 2 by default, before another page with the same position",
-              "views": "Switched with the buttons at the bottom of the page; none selected means all"
+              "view_now": "Live flow between grid, solar, battery and home",
+              "view_today": "Today's hourly energy and totals",
+              "view_power": "History of the configured power sensors",
+              "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
         }
@@ -514,12 +520,18 @@
             "data": {
               "enabled": "Show the energy page",
               "position": "Position",
-              "views": "Views"
+              "view_now": "Now",
+              "view_today": "Today",
+              "view_power": "Power history",
+              "view_balance": "Balance"
             },
             "data_description": {
-              "enabled": "Adds the page to the display",
+              "enabled": "Show the page when at least one view is enabled; all views off hides it without losing these settings.",
               "position": "1 = first page; 2 by default, before another page with the same position",
-              "views": "Switched with the buttons at the bottom of the page; none selected means all"
+              "view_now": "Live flow between grid, solar, battery and home",
+              "view_today": "Today's hourly energy and totals",
+              "view_power": "History of the configured power sensors",
+              "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
         }
@@ -828,12 +840,18 @@
             "data": {
               "enabled": "Show the energy page",
               "position": "Position",
-              "views": "Views"
+              "view_now": "Now",
+              "view_today": "Today",
+              "view_power": "Power history",
+              "view_balance": "Balance"
             },
             "data_description": {
-              "enabled": "Adds the page to the display",
+              "enabled": "Show the page when at least one view is enabled; all views off hides it without losing these settings.",
               "position": "1 = first page; 2 by default, before another page with the same position",
-              "views": "Switched with the buttons at the bottom of the page; none selected means all"
+              "view_now": "Live flow between grid, solar, battery and home",
+              "view_today": "Today's hourly energy and totals",
+              "view_power": "History of the configured power sensors",
+              "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
         }
@@ -1384,13 +1402,6 @@
         "drop_link_local": "Without link-local addresses (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 and local IPv6 (ULA) - recommended",
         "ipv4_only": "IPv4 only"
-      }
-    },
-    "energy_views": {
-      "options": {
-        "now": "Now: flow between grid, solar, battery and home",
-        "today": "Today: hourly bars and sums",
-        "balance": "Balance: self-sufficiency, solar used at home, cost"
       }
     }
   },

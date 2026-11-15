@@ -50,6 +50,8 @@ def _no_kept_statistics():
 @pytest.mark.parametrize(("stored", "expected"), [
     (None, {"enabled": False, "position": 2, "views": list(ENERGY_VIEWS)}),
     ({"enabled": True}, ENERGY_ON),
+    ({"enabled": True, "position": 4, "views": []},
+     {"enabled": True, "position": 4, "views": []}),
     ({"enabled": "yes", "position": "x", "views": ["bogus"]},
      {"enabled": False, "position": 2, "views": list(ENERGY_VIEWS)}),
     ({"enabled": True, "position": 0, "views": ["balance", "now"]},
@@ -124,9 +126,9 @@ def test_page_combines_kept_statistics_with_current_power(monkeypatch) -> None:
     assert page["title"] == "Energie"
     assert [view["id"] for view in page["energy"]["views"]] == ["now", "balance"]
     assert page["energy"]["nodes"]["grid"] == {
-        "label": "Netz", "color": "#8fd0ff", "lines": ["1 kWh"], "power": "400 W", "flow": 1,
+        "label": "Netz", "color": "#f5f8ff", "lines": ["1 kWh"], "power": "400 W", "flow": 1,
     }
-    assert page["energy"]["balance"][-1] == {"label": "Kosten heute", "value": "0,30 €", "color": "#b0b8c0"}
+    assert page["energy"]["balance"][-1] == {"label": "Kosten heute", "value": "0,30 €", "color": "#e3e9f1"}
     # The display asks on every event: the statistics are read once per five minutes.
     hass.states.values["sensor.grid_power"] = FakeState("50")
     clock[0] += 299.0
@@ -388,7 +390,8 @@ def test_pages_form_offers_the_energy_page_switched_off_at_position_two() -> Non
     schema = dashboard_pages_schema(SAVED)
 
     assert _section_defaults(schema, "energy_page") == {
-        "collapsed": True, "enabled": False, "position": 2, "views": list(ENERGY_VIEWS),
+        "collapsed": True, "enabled": False, "position": 2,
+        **{f"view_{view}": True for view in ENERGY_VIEWS},
     }
     assert _section_defaults(schema, "page_2")["position"] == 2
 
@@ -412,7 +415,8 @@ def test_switched_on_the_energy_page_is_second_before_the_page_with_the_same_pos
     schema = dashboard_pages_schema(saved)
     assert _section_defaults(schema, "page_1")["position"] == 1
     assert _section_defaults(schema, "energy_page") == {
-        "collapsed": False, "enabled": True, "position": 2, "views": ["now"],
+        "collapsed": False, "enabled": True, "position": 2,
+        **{f"view_{view}": view == "now" for view in ENERGY_VIEWS},
     }
     assert _section_defaults(schema, "page_2")["position"] == 3
     # Saving that form again changes nothing.

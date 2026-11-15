@@ -387,12 +387,18 @@
             "data": {
               "enabled": "Mostra la pagina energia",
               "position": "Posizione",
-              "views": "Viste"
+              "view_now": "Adesso",
+              "view_today": "Oggi",
+              "view_power": "Storico della potenza",
+              "view_balance": "Bilancio"
             },
             "data_description": {
-              "enabled": "Aggiunge la pagina al display",
+              "enabled": "Mostra la pagina se almeno una vista è attiva; disattivare tutte le viste la nasconde senza perdere queste impostazioni.",
               "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
-              "views": "Si cambiano con i pulsanti in fondo alla pagina; senza selezione valgono tutte"
+              "view_now": "Flusso attuale tra rete, solare, batteria e casa",
+              "view_today": "Energia oraria e totali di oggi",
+              "view_power": "Storico dei sensori di potenza configurati",
+              "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
         }
@@ -514,12 +520,18 @@
             "data": {
               "enabled": "Mostra la pagina energia",
               "position": "Posizione",
-              "views": "Viste"
+              "view_now": "Adesso",
+              "view_today": "Oggi",
+              "view_power": "Storico della potenza",
+              "view_balance": "Bilancio"
             },
             "data_description": {
-              "enabled": "Aggiunge la pagina al display",
+              "enabled": "Mostra la pagina se almeno una vista è attiva; disattivare tutte le viste la nasconde senza perdere queste impostazioni.",
               "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
-              "views": "Si cambiano con i pulsanti in fondo alla pagina; senza selezione valgono tutte"
+              "view_now": "Flusso attuale tra rete, solare, batteria e casa",
+              "view_today": "Energia oraria e totali di oggi",
+              "view_power": "Storico dei sensori di potenza configurati",
+              "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
         }
@@ -828,12 +840,18 @@
             "data": {
               "enabled": "Mostra la pagina energia",
               "position": "Posizione",
-              "views": "Viste"
+              "view_now": "Adesso",
+              "view_today": "Oggi",
+              "view_power": "Storico della potenza",
+              "view_balance": "Bilancio"
             },
             "data_description": {
-              "enabled": "Aggiunge la pagina al display",
+              "enabled": "Mostra la pagina se almeno una vista è attiva; disattivare tutte le viste la nasconde senza perdere queste impostazioni.",
               "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
-              "views": "Si cambiano con i pulsanti in fondo alla pagina; senza selezione valgono tutte"
+              "view_now": "Flusso attuale tra rete, solare, batteria e casa",
+              "view_today": "Energia oraria e totali di oggi",
+              "view_power": "Storico dei sensori di potenza configurati",
+              "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
         }
@@ -1384,13 +1402,6 @@
         "drop_link_local": "Senza indirizzi link-local (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 e IPv6 locale (ULA) - consigliato",
         "ipv4_only": "Solo IPv4"
-      }
-    },
-    "energy_views": {
-      "options": {
-        "now": "Ora: flusso tra rete, solare, batteria e casa",
-        "today": "Oggi: barre orarie e totali",
-        "balance": "Bilancio: autosufficienza, autoconsumo, costo"
       }
     }
   },

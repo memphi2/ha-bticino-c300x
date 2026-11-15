@@ -90,15 +90,18 @@ def _page_entity_selector() -> Any:
     )
 
 
-def _energy_views_selector() -> Any:
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=list(ENERGY_VIEWS),
-            multiple=True,
-            mode=selector.SelectSelectorMode.LIST,
-            translation_key="energy_views",
-        )
-    )
+def _energy_view_selections(energy: dict[str, Any], posted: Any) -> list[str]:
+    """Overlay explicit toggles on saved views, retaining legacy form posts."""
+
+    if not isinstance(posted, dict):
+        return list(energy["views"])
+    views = energy["views"]
+    if ENERGY_VIEWS_FIELD in posted:
+        views = normalize_energy_page({"views": posted[ENERGY_VIEWS_FIELD]})["views"]
+    return [
+        view for view in ENERGY_VIEWS
+        if posted.get(f"view_{view}", view in views) is True
+    ]
 
 
 def _page_position_selector() -> Any:
@@ -172,11 +175,12 @@ def dashboard_pages_schema(
 
     layout = dashboard_page_layout(dashboard_input)
     energy = normalize_energy_page(dashboard_input.get(CONF_ENERGY_PAGE))
+    active = energy["enabled"] and bool(energy["views"])
 
     def display_position(order: int) -> int:
         # The pages are numbered among themselves; the energy page, when on,
         # takes one position of the display.
-        return order + 1 if energy["enabled"] and order >= energy["position"] else order
+        return order + 1 if active and order >= energy["position"] else order
 
     def shown(slot: int, field: str, saved: Any) -> Any:
         if posted is None:
@@ -232,21 +236,28 @@ def dashboard_pages_schema(
         values = posted.get(CONF_ENERGY_PAGE)
         return values.get(field) if isinstance(values, dict) else None
 
+    posted_energy = posted.get(CONF_ENERGY_PAGE) if posted is not None else None
+    selected_views = _energy_view_selections(energy, posted_energy)
+    enabled = (
+        posted_energy.get(ENERGY_ENABLED_FIELD, energy["enabled"]) is True
+        if isinstance(posted_energy, dict) else energy["enabled"]
+    )
     fields[vol.Required(CONF_ENERGY_PAGE)] = section(
         vol.Schema({
             vol.Required(
                 ENERGY_ENABLED_FIELD,
-                default=bool(energy_shown(ENERGY_ENABLED_FIELD, energy["enabled"])),
+                default=enabled,
             ): selector.BooleanSelector(),
             _optional_suggested(
                 PAGE_POSITION_FIELD,
                 energy_shown(PAGE_POSITION_FIELD, min(energy["position"], POSITION_MAX)),
             ): _page_position_selector(),
-            _optional_suggested(
-                ENERGY_VIEWS_FIELD, energy_shown(ENERGY_VIEWS_FIELD, energy["views"]),
-            ): _energy_views_selector(),
+            **{
+                vol.Required(f"view_{view}", default=view in selected_views): selector.BooleanSelector()
+                for view in ENERGY_VIEWS
+            },
         }),
-        {"collapsed": not energy["enabled"]},
+        {"collapsed": not enabled},
     )
     keys = list(fields)
     return vol.Schema({
@@ -355,23 +366,24 @@ def dashboard_pages_input(
         except vol.Invalid:
             errors.setdefault(page_section_key(1), "invalid_weather_entity")
     # A post without the energy section keeps the saved energy page. In a
-    # posted section an emptied position is the default one and an emptied
-    # selection of views means all of them.
+    # posted section an emptied position is the default one. Explicit toggles
+    # override saved selections; switching all off retains the global intent.
     energy = normalize_energy_page(dashboard_input.get(CONF_ENERGY_PAGE))
     posted_energy = user_input.get(CONF_ENERGY_PAGE)
-    if posted_energy is not None:
+    if isinstance(posted_energy, dict):
         energy = normalize_energy_page({
-            "enabled": posted_energy.get(ENERGY_ENABLED_FIELD) is True,
+            "enabled": posted_energy.get(ENERGY_ENABLED_FIELD, energy["enabled"]) is True,
             "position": _page_position(
                 posted_energy.get(PAGE_POSITION_FIELD), normalize_energy_page(None)["position"]
             ),
-            "views": posted_energy.get(ENERGY_VIEWS_FIELD),
+            "views": _energy_view_selections(energy, posted_energy),
         })
     if errors:
         return dashboard_input, errors
 
     pages.sort(key=lambda page: page[:2])
-    if posted_energy is not None and energy["enabled"]:
+    active = energy["enabled"] and bool(energy["views"])
+    if isinstance(posted_energy, dict) and active:
         # Its place on the display: after every page that asked for an
         # earlier position, before a page that asked for the same one.
         energy["position"] = 1 + sum(1 for page in pages if page[0] < energy["position"])

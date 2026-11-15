@@ -79,7 +79,7 @@ notify.mobile_app_your_phone
 For capture and transcription, the default paths are:
 
 - MP4 clips: `/media/c300x/`
-- Raw WAV, processed WAV, frames and metadata for each recording:
+- Raw WAV, frames and metadata for each recording:
   `/config/c300x/captures/<capture_id>/`
 - Wyoming result: `analysis/result.json` beside that recording's metadata.
 - Compatibility pointers: `/config/c300x/latest.*` and

@@ -336,10 +336,6 @@ def _capture_raw_audio_path(work_dir: Path) -> Path:
     return work_dir / "latest.raw.wav"
 
 
-def _capture_processed_audio_path(work_dir: Path) -> Path:
-    return work_dir / "latest.processed.wav"
-
-
 def _capture_frame_path(work_dir: Path, index: int) -> Path:
     return work_dir / f"frame_{index:02d}.jpg"
 
@@ -383,9 +379,6 @@ def _capture_metadata_payload(
     }
     if include_audio:
         payload["raw_wav_path"] = str(_capture_raw_audio_path(work_dir))
-        payload["processed_wav_path"] = str(
-            _capture_processed_audio_path(work_dir)
-        )
     return payload
 
 
@@ -841,7 +834,6 @@ async def _async_run_ffmpeg(
 ) -> None:
     audio_dir = work_dir or target.parent
     raw_audio_target = _capture_raw_audio_path(audio_dir)
-    processed_audio_target = _capture_processed_audio_path(audio_dir)
     command = [
         "ffmpeg",
         "-hide_banner",
@@ -914,8 +906,6 @@ async def _async_run_ffmpeg(
         command_timeout=duration_seconds + 10,
         error_prefix="C300X capture failed",
     )
-    if include_audio:
-        await _async_extract_processed_audio_wav(target, processed_audio_target)
     await _async_extract_capture_frames(
         target,
         audio_dir,
@@ -986,32 +976,6 @@ async def _async_extract_capture_frames(
 
 def _is_nonempty_file(path: Path) -> bool:
     return path.is_file() and path.stat().st_size > 0
-
-
-async def _async_extract_processed_audio_wav(source: Path, target: Path) -> None:
-    await _async_run_ffmpeg_command(
-        [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-i",
-            str(source),
-            "-map",
-            "0:a:0?",
-            "-vn",
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-c:a",
-            "pcm_s16le",
-            str(target),
-        ],
-        command_timeout=10,
-        error_prefix="C300X processed audio extraction failed",
-    )
 
 
 async def _async_run_ffmpeg_command(

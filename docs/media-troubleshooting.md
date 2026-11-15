@@ -161,7 +161,7 @@ Check:
 3. Keep output paths below `/media/c300x/`, `/config/c300x/` or
    `/config/www/c300x/`.
 4. Check `/media/c300x/` for the MP4 and `/config/c300x/` for `latest.raw.wav`,
-   `latest.processed.wav`, `latest.capture.json`, `frame_01.jpg`,
+   `latest.capture.json`, `frame_01.jpg`,
    `frame_02.jpg` and `frame_03.jpg`.
    These are latest pointers. For automation use the exact paths returned by the
    capture service. Per-recording workspaces expire after one hour on the next

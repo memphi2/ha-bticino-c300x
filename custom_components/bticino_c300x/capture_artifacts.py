@@ -59,6 +59,8 @@ def prepare_capture_directory(root: Path, capture_id: str) -> Path:
 
 def publish_capture_aliases(root: Path, work_dir: Path) -> None:
     """Keep legacy latest paths as pointers; publish metadata last."""
+    # latest.processed.wav is no longer written; it stays listed so that a
+    # pointer left by an earlier version is removed.
     names = (
         "latest.raw.wav", "latest.processed.wav",
         "frame_01.jpg", "frame_02.jpg", "frame_03.jpg", "latest.capture.json",

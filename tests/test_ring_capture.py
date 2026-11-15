@@ -721,9 +721,8 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
     assert metadata["raw_wav_path"] == str(
         work_dir / "latest.raw.wav"
     )
-    assert metadata["processed_wav_path"] == str(
-        work_dir / "latest.processed.wav"
-    )
+    # The recording's audio is not decoded a second time into another file.
+    assert "processed_wav_path" not in metadata
     assert metadata["frames"] == [
         str(work_dir / "frame_01.jpg"),
         str(work_dir / "frame_02.jpg"),
@@ -952,10 +951,10 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     assert command[command.index("-ar") + 1] == "48000"
     assert command[command.index("-b:a") + 1] == "128k"
     assert str(tmp_path / "work" / "latest.raw.wav") in command
-    assert commands[1][-1] == str(tmp_path / "work" / "latest.processed.wav")
-    assert len(commands) == 6
-    assert commands[2][0] == "ffprobe"
-    frame_commands = commands[3:]
+    assert not any("latest.processed.wav" in part for cmd in commands for part in cmd)
+    assert len(commands) == 5
+    assert commands[1][0] == "ffprobe"
+    frame_commands = commands[2:]
     assert [cmd[-1] for cmd in frame_commands] == [
         str(tmp_path / "work" / "frame_01.jpg"),
         str(tmp_path / "work" / "frame_02.jpg"),

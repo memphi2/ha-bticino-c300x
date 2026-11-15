@@ -60,7 +60,7 @@ def test_power_fixtures_use_backend_aggregation_and_one_isolated_dot(monkeypatch
             points = series["points"]
             assert len(points) == 96
             assert all(point is None or isinstance(point, float) for point in points)
-            assert series["dots"] == [{"x": round(42.5 / 96, 6), "y": points[42]}]
+            assert series["dots"] == [42]
             assert points[42] is not None
             assert all(points[index] is None for index in (40, 41, 43, 44))
             assert points[39] is not None and points[45] is not None

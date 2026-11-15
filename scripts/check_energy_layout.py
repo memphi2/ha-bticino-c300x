@@ -259,7 +259,7 @@ def render(args, fixtures: list[dict]) -> dict:
                 issues.append({"kind": "power_points_not_scalars", "series": entry["id"]})
                 continue
             dot = {"x": round((probe["isolated_index"] + 0.5) / len(points), 6), "y": point}
-            if point is None or entry.get("dots") != [dot]:
+            if point is None or entry.get("dots") != [probe["isolated_index"]]:
                 issues.append({"kind": "power_isolated_contract", "series": entry["id"]})
                 continue
             x = round(origin.x() + dot["x"] * plot.width())

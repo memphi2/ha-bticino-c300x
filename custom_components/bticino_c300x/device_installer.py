@@ -178,7 +178,11 @@ def _install_device_agent_sync(
         )
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
+        manifest: _PayloadFile | None = None
         for payload in bundle.payload_files:
+            if payload.remote_path == f"{request.remote_dir}/bundle.json":
+                manifest = payload
+                continue
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)
 
@@ -200,6 +204,12 @@ def _install_device_agent_sync(
         actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
         for action in actions:
             _apply_qml_patch_sync(client, request.remote_dir, action)
+        # Capabilities reads this file on every request. Publish it only after
+        # activation succeeds so an interrupted install still needs repair.
+        if manifest is not None and client.put_file(
+            manifest.source, manifest.remote_path, manifest.mode
+        ):
+            changed_files.append(manifest.remote_path)
     finally:
         client.close()
     return tuple(changed_files)

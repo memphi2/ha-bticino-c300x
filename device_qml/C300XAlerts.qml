@@ -2,6 +2,7 @@ import QtQuick 1.1
 import BtObjects 2.0
 import BtClass 1.0
 import "js/c300x_alerts.js" as Alerts
+import "js/c300x_i18n.js" as I18n
 
 Item {
     id: root
@@ -10,10 +11,19 @@ Item {
     property variant notice: null
     property int pollGeneration: 0
     property int resumeAttempts: 5
-    property string acknowledgeLabel: "OK"
+    property string uiLanguage: trsl.language
+    property string acknowledgeLabel: uiText("dismiss_notification")
     property color accent: !notice || notice.severity === "info" ? "#68baff" : notice.severity === "warning" ? "#f1c40f" : "#ff6b6b"
     onBlockedChanged: updateGuard()
     onVisibleChanged: updateGuard()
+
+    function uiText(key) {
+        return I18n.text(uiLanguage, key)
+    }
+
+    function severityText() {
+        return notice ? (notice.severity === "info" ? "i  " : "!  ") + uiText("alert_" + notice.severity) : ""
+    }
 
     function canListen() {
         return !stopped && !blocked && visible && !!Alerts.runtimeFor(root)
@@ -224,7 +234,7 @@ Item {
         Text {
             id: severityLabel
             x: 16; y: 10; width: parent.width - 32; height: 30
-            text: !root.notice ? "" : root.notice.severity === "info" ? "i  Info" : root.notice.severity === "warning" ? "!  Warning" : "!  Error"
+            text: root.severityText()
             textFormat: Text.PlainText
             font.pixelSize: 20
             color: root.accent

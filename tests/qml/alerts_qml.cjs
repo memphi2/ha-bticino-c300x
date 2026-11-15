@@ -4,6 +4,9 @@ const path = require("node:path");
 const vm = require("node:vm");
 const qml = fs.readFileSync(path.join(__dirname, "../../device_qml/C300XAlerts.qml"), "utf8");
 const js = fs.readFileSync(path.join(__dirname, "../../device_qml/js/c300x_alerts.js"), "utf8");
+const i18n = vm.createContext({});
+vm.runInContext(fs.readFileSync(path.join(__dirname, "../../device_qml/js/c300x_i18n.js"), "utf8")
+    .replace(/^\.pragma library\s*/, ""), i18n);
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const BASE = 1800000000000;
 const payload = {id: "1".repeat(32), notification_id: "warning_notice", revision: "2".repeat(32),
@@ -47,7 +50,7 @@ function fixture(sharedEngine) {
     const context = vm.createContext({
         blocked: false, stopped: false, visible: true, notice: null,
         pollGeneration: 0, resumeAttempts: 5,
-        XMLHttpRequest: XHR, Alerts: engine,
+        XMLHttpRequest: XHR, Alerts: engine, I18n: i18n, uiLanguage: "en",
         Date: class extends Date { getTime() { return BASE; } },
         effects: timer(), reconnect: timer(), resume: timer(), ackTimeout: timer(), messageScroll: {contentY: 77},
         ScreenState: {ScreenOff: 0, Normal: 2}, AudioState: {Idle: 0, Beep: 1, RingtoneMute: 4},
@@ -69,6 +72,29 @@ function fixture(sharedEngine) {
         get runtime() { return vm.runInContext("Alerts.runtimeFor(root)", context); },
         resume() { assert.equal(context.resume.running, true); context.resume.running = false; context.waitForCommand(); },
         failOpen(value) { failOpen = value; }, failSend(value) { failSend = value; }};
+}
+
+{
+    const f = fixture();
+    const translations = {
+        de: ["Info", "Warnung", "Fehler", "Gelesen"],
+        en: ["Info", "Warning", "Error", "Mark read"],
+        it: ["Informazione", "Avviso", "Errore", "Letto"],
+        fr: ["Information", "Avertissement", "Erreur", "Lu"]
+    };
+    for (const [language, labels] of Object.entries(translations)) {
+        f.c.uiLanguage = language;
+        for (const [index, severity] of ["info", "warning", "error"].entries()) {
+            f.c.notice = {...payload, severity};
+            assert.equal(f.c.severityText(), (index === 0 ? "i  " : "!  ") + labels[index]);
+        }
+        assert.equal(f.c.uiText("dismiss_notification"), labels[3]);
+    }
+    f.c.notice = null;
+    assert.equal(f.c.severityText(), "");
+    assert.match(qml, /property string uiLanguage: trsl.language/);
+    assert.match(qml, /property string acknowledgeLabel: uiText\("dismiss_notification"\)/);
+    assert.match(qml, /text: root.severityText\(\)/);
 }
 
 // Lifecycle hooks can fire before Component.onCompleted or after destruction.

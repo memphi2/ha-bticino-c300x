@@ -20,6 +20,7 @@ def test_native_alert_logic(script: str) -> None:
 
 
 @pytest.mark.parametrize("mode,fault,error", [
+    ("localization", "none", None),
     ("transport", "none", None),
     ("touch", "none", None),
     ("touch", "missing_observer", "user-owned Normal must survive alert expiry"),

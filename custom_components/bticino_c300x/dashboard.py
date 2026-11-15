@@ -47,6 +47,7 @@ from .dashboard_config import (
     configured_dashboard_pages,
     configured_dashboard_prevent_return,
     configured_energy_page,
+    configured_status_page_enabled,
     configured_weather_entity_id,
 )
 from .dashboard_controls import choice_options, entity_controls, finite_number
@@ -112,6 +113,16 @@ async def async_status(
     device_ui_enabled = bool(entry_device_ui_enabled_or_patch_active(entry))
     actions = configured_actions(entry)
     dashboard_entities = configured_dashboard_entities(entry)
+    status_enabled = configured_status_page_enabled(entry)
+    overrides = configured_dashboard_entity_display_overrides(entry)
+    visible_entities = any(
+        status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
+        for entity_id in dashboard_entities
+    )
+    visible_actions = any(
+        status_enabled or action.get("dashboard", {}).get("page") != _DASHBOARD_DEFAULT_PAGE
+        for action in actions.values()
+    )
     alarm_entity_id = configured_alarm_entity_id(entry)
     language = _dashboard_language(hass)
     alarm: dict[str, Any] | None = None
@@ -139,9 +150,9 @@ async def async_status(
         "alarm_configured": alarm is not None,
         "dashboard_available": device_ui_enabled
         and (
-            bool(actions)
-            or bool(dashboard_entities)
-            or configured_weather_entity_id(entry) is not None
+            visible_actions
+            or visible_entities
+            or status_enabled
             or bool(configured_energy_page(entry)["enabled"])
             or bool(notification_payload(entry))
         ),
@@ -168,6 +179,7 @@ async def async_dashboard_payload(
     language = _dashboard_language(hass)
     pages: dict[str, dict[str, Any]] = {}
     main_page = _dashboard_page(pages, _DASHBOARD_DEFAULT_PAGE)
+    status_enabled = configured_status_page_enabled(entry)
     badges = [{"state": "HA\nonline", "color": "#58d68d"}]
 
     alarm_entity_id = configured_alarm_entity_id(entry)
@@ -186,7 +198,7 @@ async def async_dashboard_payload(
     badges.append({"state": _dashboard_datetime_label()})
     weather = await async_dashboard_weather_payload(
         hass,
-        configured_weather_entity_id(entry),
+        configured_weather_entity_id(entry) if status_enabled else None,
         language,
     )
     main_page["badges"] = badges
@@ -245,6 +257,8 @@ async def async_dashboard_payload(
         main_page["items"].append({"_kind": "weather", "_order": 0})
 
     notifications = notification_payload(entry)
+    if not status_enabled:
+        pages.pop(_DASHBOARD_DEFAULT_PAGE, None)
     configured = configured_dashboard_pages(entry)
     ordered = _ordered_dashboard_pages(pages, configured)
     energy = await async_energy_dashboard_page(hass, entry, language)
@@ -257,10 +271,15 @@ async def async_dashboard_payload(
             1 for page in configured[:position - 1] if page["name"] not in pages
         )
         ordered.insert(max(0, min(position - 1 - absent, len(ordered))), energy)
-    shown = [page for page in ordered if _dashboard_page_has_content(page)]
+    shown = [
+        page for page in ordered
+        if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
+    ]
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
-        shown = [main_page]
+        shown = [main_page if status_enabled else {
+            "title": "", "badges": [], "items": [], "weather": None,
+        }]
     return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,

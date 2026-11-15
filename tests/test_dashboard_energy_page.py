@@ -264,7 +264,7 @@ def test_energy_page_takes_its_position_among_the_shown_pages(monkeypatch, posit
 
 
 def test_energy_page_position_counts_a_page_the_display_leaves_out(monkeypatch) -> None:
-    # The status page is configured first but has nothing to show. The form
+    # The status page is configured first but switched off. The form
     # numbers it all the same, so position 3 means "after Wohnen".
     names = ["C300X", "Wohnen", "Keller"]
     states = {f"sensor.s{index}": FakeState("1", attributes={"friendly_name": f"S{index}"})
@@ -273,6 +273,7 @@ def test_energy_page_position_counts_a_page_the_display_leaves_out(monkeypatch) 
         {**ENERGY_ON, "position": 3},
         **{
             CONF_DASHBOARD_ENTITIES: list(states),
+            "dashboard_status_page_enabled": False,
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
                 "sensor.s1": {"page": "Wohnen"}, "sensor.s2": {"page": "Keller"},
             },
@@ -345,7 +346,9 @@ def test_energy_page_reaches_the_display_as_its_own_page(monkeypatch) -> None:
         return_value={"title": "Energie", "energy": {"views": [{"id": "now", "label": "Jetzt"}]}}
     ))
 
-    result = run(dashboard.async_dashboard_payload(FakeHass(), _entry(ENERGY_ON)))
+    result = run(dashboard.async_dashboard_payload(
+        FakeHass(), _entry(ENERGY_ON, dashboard_status_page_enabled=False)
+    ))
 
     # No other page has content: the energy page alone is shown.
     assert result["data"]["pages"] == [

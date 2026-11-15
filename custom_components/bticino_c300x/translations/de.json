@@ -272,17 +272,19 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer letzte Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer zweite Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
-            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "enabled": "Statusseite anzeigen",
               "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "enabled": "Diese Seite unabhängig von Wetter und Entitäten anzeigen. Ausschalten behält ihre Einstellungen.",
               "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
@@ -397,17 +399,19 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer letzte Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer zweite Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
-            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "enabled": "Statusseite anzeigen",
               "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "enabled": "Diese Seite unabhängig von Wetter und Entitäten anzeigen. Ausschalten behält ihre Einstellungen.",
               "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
@@ -709,17 +713,19 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer letzte Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer zweite Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
-            "description": "Die erste Seite des Home-Assistant-Bereichs. Oben liegt ihre Wetterkarte, darunter ihre Entitäten; das Wetter stellst du hier ein. Ohne Wetter und ohne Entität wird die Seite auf dem Display nicht angezeigt, und die Anzeigen für HA, Alarm und Uhrzeit bleiben mit ihr weg. Ihre Überschrift auf dem Display ist Home Assistant.",
+            "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
+              "enabled": "Statusseite anzeigen",
               "weather_entity_id": "Wetter",
               "position": "Position",
               "entities": "Entitäten"
             },
             "data_description": {
+              "enabled": "Diese Seite unabhängig von Wetter und Entitäten anzeigen. Ausschalten behält ihre Einstellungen.",
               "weather_entity_id": "Wetter-Entität für die Wetterkarte oben auf dieser Seite. Leer lassen für keine Wetterkarte.",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"

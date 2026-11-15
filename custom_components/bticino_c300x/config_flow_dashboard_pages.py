@@ -11,7 +11,7 @@ The entities are stored as before: the dashboard entity list in page order
 and the page name of each entity in its display overrides. The page list
 stores each page's name and its position, numbered from 1 in display order.
 
-After the page sections comes the energy page, an optional ninth page. It
+Directly after the status section comes the energy page, an optional ninth page. It
 has no entities of its own, as it shows Home Assistant's Energy setup; its
 section switches it on, places it among the other pages and selects its
 views. Positions therefore run from 1 to ``DASHBOARD_PAGE_MAX_COUNT + 1``.
@@ -42,6 +42,7 @@ from .const import (
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
+    CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_ENERGY_PAGE,
     CONF_WEATHER_ENTITY_ID,
 )
@@ -61,6 +62,7 @@ PAGE_NAME_FIELD = "name"
 PAGE_POSITION_FIELD = "position"
 PAGE_ENTITIES_FIELD = "entities"
 PAGE_WEATHER_FIELD = CONF_WEATHER_ENTITY_ID
+PAGE_ENABLED_FIELD = "enabled"
 ENERGY_ENABLED_FIELD = "enabled"
 ENERGY_VIEWS_FIELD = "views"
 POSITION_MAX = DASHBOARD_PAGE_MAX_COUNT + 1
@@ -192,6 +194,13 @@ def dashboard_pages_schema(
             free_section_shown = True
         page_fields: dict[Any, Any] = {}
         if slot == 1:
+            page_fields[vol.Required(
+                PAGE_ENABLED_FIELD,
+                default=bool(shown(
+                    slot, PAGE_ENABLED_FIELD,
+                    dashboard_input.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True),
+                )),
+            )] = selector.BooleanSelector()
             page_fields[_optional_suggested(
                 PAGE_WEATHER_FIELD,
                 shown(slot, PAGE_WEATHER_FIELD, dashboard_input.get(CONF_WEATHER_ENTITY_ID)),
@@ -239,7 +248,10 @@ def dashboard_pages_schema(
         }),
         {"collapsed": not energy["enabled"]},
     )
-    return vol.Schema(fields)
+    keys = list(fields)
+    return vol.Schema({
+        key: fields[key] for key in [keys[0], keys[-1], *keys[1:-1]]
+    })
 
 
 def dashboard_pages_placeholders(
@@ -335,7 +347,9 @@ def dashboard_pages_input(
         pages.append((_page_position(values.get(PAGE_POSITION_FIELD), slot), slot, name, entities))
     weather = str(dashboard_input.get(CONF_WEATHER_ENTITY_ID) or "")
     status = user_input.get(page_section_key(1))
+    status_enabled = dashboard_input.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True) is True
     if status is not None:
+        status_enabled = status.get(PAGE_ENABLED_FIELD, status_enabled) is True
         try:
             weather = _weather_entity_id(status.get(PAGE_WEATHER_FIELD, ""))
         except vol.Invalid:
@@ -382,6 +396,7 @@ def dashboard_pages_input(
     return {
         **dashboard_input,
         CONF_WEATHER_ENTITY_ID: weather,
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED: status_enabled,
         CONF_DASHBOARD_ENTITIES: ordered_entities,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
             entity_id: options

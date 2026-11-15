@@ -56,6 +56,7 @@ from .const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
@@ -452,6 +453,9 @@ def _dashboard_feature_input(
         CONF_WEATHER_ENTITY_ID: weather_entity_id,
         CONF_DASHBOARD_ENTITIES: dashboard_entities,
         CONF_DASHBOARD_PAGES: dashboard_pages,
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED: user_input.get(
+            CONF_DASHBOARD_STATUS_PAGE_ENABLED, True
+        ) is True,
         CONF_ENERGY_PAGE: normalize_energy_page(
             user_input.get(CONF_ENERGY_PAGE) if device_ui_enabled else None
         ),
@@ -550,6 +554,7 @@ def _feature_input(
             CONF_DASHBOARD_ENTITIES: dashboard[CONF_DASHBOARD_ENTITIES],
             CONF_DASHBOARD_PAGES: dashboard[CONF_DASHBOARD_PAGES],
             CONF_ENERGY_PAGE: dashboard[CONF_ENERGY_PAGE],
+            CONF_DASHBOARD_STATUS_PAGE_ENABLED: dashboard[CONF_DASHBOARD_STATUS_PAGE_ENABLED],
             CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard[
                 CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES

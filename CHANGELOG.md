@@ -18,6 +18,9 @@
 
 ### Changed
 
+- Place the Energy section second in **Display pages**, immediately after the
+  status page. Give the status page its own visibility switch, independent of
+  weather and entities; switching it off preserves its settings.
 - **Breaking:** the **Forwarding** select now uses the states `enabled`,
   `homeassistant` and `blocked` with translated labels, like other select
   entities. Automations and scripts of your own that compare the old English

@@ -272,17 +272,19 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa dernière section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
-            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
+            "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "enabled": "Afficher la page d'état",
               "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "enabled": "Afficher cette page indépendamment de la météo et des entités. La désactivation conserve ses réglages.",
               "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
@@ -397,17 +399,19 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa dernière section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
-            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
+            "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "enabled": "Afficher la page d'état",
               "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "enabled": "Afficher cette page indépendamment de la météo et des entités. La désactivation conserve ses réglages.",
               "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
@@ -709,17 +713,19 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa dernière section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa deuxième section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
-            "description": "La première page de l'espace Home Assistant. Sa carte météo est en haut, suivie de ses entités ; la météo se règle ici. Sans météo ni entité, la page n'est pas affichée sur l'écran et les indicateurs HA, alarme et heure disparaissent avec elle. Son titre sur l'écran est Home Assistant.",
+            "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
+              "enabled": "Afficher la page d'état",
               "weather_entity_id": "Météo",
               "position": "Position",
               "entities": "Entités"
             },
             "data_description": {
+              "enabled": "Afficher cette page indépendamment de la météo et des entités. La désactivation conserve ses réglages.",
               "weather_entity_id": "Entité météo pour la carte météo en haut de cette page. Laissez vide pour ne pas afficher de carte météo.",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"

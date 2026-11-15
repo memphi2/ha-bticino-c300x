@@ -2051,7 +2051,10 @@ def test_async_status_marks_dashboard_available_with_only_the_energy_page() -> N
         "energy_page": {"enabled": True, "position": 1, "views": ["now"]},
     })
     assert run(async_status(FakeHass(), entry))["dashboard_available"] is True
-    entry = FakeEntry(data={CONF_DEVICE_UI_ENABLED: True})
+    entry = FakeEntry(data={
+        CONF_DEVICE_UI_ENABLED: True,
+        "dashboard_status_page_enabled": False,
+    })
     assert run(async_status(FakeHass(), entry))["dashboard_available"] is False
 
 
@@ -2238,11 +2241,8 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
     assert result["data"]["pages"][0]["badges"][1] == {"state": "Alarm\nAus"}
 
 
-def test_async_dashboard_payload_leaves_out_an_empty_status_page() -> None:
-    """With no weather and no tile the status page has nothing to show.
-
-    Its badges stay away with it. Messages still need a page to appear on.
-    """
+def test_async_dashboard_payload_keeps_enabled_status_page_without_weather() -> None:
+    """An enabled status page does not depend on weather or tile selection."""
 
     hass = FakeHass(
         states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
@@ -2254,15 +2254,17 @@ def test_async_dashboard_payload_leaves_out_an_empty_status_page() -> None:
         },
     )
 
-    assert run(async_dashboard_payload(hass, entry))["data"]["pages"] == []
+    pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
+    assert [page["title"] for page in pages] == ["C300X"]
+    assert len(pages[0]["badges"]) == 3
 
     entry.options[CONF_DASHBOARD_ENTITIES] = ["sensor.temperature"]
     hass.states.values["sensor.temperature"] = FakeState(
         "21.5", attributes={"friendly_name": "Temperature"}
     )
     pages = run(async_dashboard_payload(hass, entry))["data"]["pages"]
-    assert [page["title"] for page in pages] == [""]
-    assert not pages[0].get("badges")
+    assert [page["title"] for page in pages] == ["C300X", ""]
+    assert not pages[1].get("badges")
 
     entry.options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = {
         "sensor.temperature": {"page": "C300X"}

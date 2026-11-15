@@ -45,6 +45,7 @@ from .const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
@@ -226,6 +227,9 @@ def current_feature_options(
         CONF_ENERGY_PAGE: normalize_energy_page(
             _config_default(config_entry, CONF_ENERGY_PAGE, {})
         ),
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED: _config_default(
+            config_entry, CONF_DASHBOARD_STATUS_PAGE_ENABLED, True
+        ) is True,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: _dashboard_entity_display_overrides(
             _config_default(config_entry, CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
         ),
@@ -418,6 +422,7 @@ def feature_input_defaults(
     data.setdefault(CONF_DASHBOARD_ENTITIES, defaults.get(CONF_DASHBOARD_ENTITIES, []))
     data.setdefault(CONF_DASHBOARD_PAGES, defaults.get(CONF_DASHBOARD_PAGES, []))
     data.setdefault(CONF_ENERGY_PAGE, defaults.get(CONF_ENERGY_PAGE, {}))
+    data.setdefault(CONF_DASHBOARD_STATUS_PAGE_ENABLED, defaults.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True))
     data.setdefault(
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         defaults.get(

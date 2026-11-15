@@ -37,6 +37,7 @@ from .const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_DEVICE_UI_ENABLED,
     CONF_ENERGY_PAGE,
     CONF_WEATHER_ENTITY_ID,
@@ -406,6 +407,10 @@ def dashboard_input_defaults(
     data.setdefault(
         CONF_ENERGY_PAGE,
         {} if defaults is None else defaults.get(CONF_ENERGY_PAGE, {}),
+    )
+    data.setdefault(
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED,
+        True if defaults is None else defaults.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True),
     )
     data.setdefault(
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,

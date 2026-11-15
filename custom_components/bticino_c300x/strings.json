@@ -272,17 +272,19 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe last section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe second section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
-            "description": "The first page of the Home Assistant area. Its weather card sits at the top, followed by its entities; the weather is set here. With no weather and no entity the page is not shown on the display, and the HA, alarm and time badges stay away with it. Its heading on the display is Home Assistant.",
+            "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
+              "enabled": "Show the status page",
               "weather_entity_id": "Weather",
               "position": "Position",
               "entities": "Entities"
             },
             "data_description": {
+              "enabled": "Show this page independently of weather and entities. Turning it off preserves its settings.",
               "weather_entity_id": "Weather entity for the weather card at the top of this page. Leave empty for no weather card.",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
@@ -397,17 +399,19 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe last section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe second section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
-            "description": "The first page of the Home Assistant area. Its weather card sits at the top, followed by its entities; the weather is set here. With no weather and no entity the page is not shown on the display, and the HA, alarm and time badges stay away with it. Its heading on the display is Home Assistant.",
+            "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
+              "enabled": "Show the status page",
               "weather_entity_id": "Weather",
               "position": "Position",
               "entities": "Entities"
             },
             "data_description": {
+              "enabled": "Show this page independently of weather and entities. Turning it off preserves its settings.",
               "weather_entity_id": "Weather entity for the weather card at the top of this page. Leave empty for no weather card.",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
@@ -709,17 +713,19 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe last section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe second section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
-            "description": "The first page of the Home Assistant area. Its weather card sits at the top, followed by its entities; the weather is set here. With no weather and no entity the page is not shown on the display, and the HA, alarm and time badges stay away with it. Its heading on the display is Home Assistant.",
+            "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
+              "enabled": "Show the status page",
               "weather_entity_id": "Weather",
               "position": "Position",
               "entities": "Entities"
             },
             "data_description": {
+              "enabled": "Show this page independently of weather and entities. Turning it off preserves its settings.",
               "weather_entity_id": "Weather entity for the weather card at the top of this page. Leave empty for no weather card.",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"

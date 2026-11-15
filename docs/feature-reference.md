@@ -363,9 +363,11 @@ its own in the settings menu.
 
 The first section is the status page: it carries the weather card at its top,
 set in its **Weather** field, then its entities, and its heading on the display
-stays Home Assistant. Its HA, alarm and time badges show only while the page
-does: with no weather and no entity the page is left out, and the badges with
-it. Messages still get this page when it is the only one that can show them. Its internal name is `C300X`, which another page cannot use. Like
+stays Home Assistant. **Show the status page** switches the entire page on or
+off, independently of its optional weather card and entities. When enabled
+(the default), it also appears with only its HA, alarm and time badges.
+Disabling it keeps its settings. Messages still get a neutral page if no
+other page is visible. Its internal name is `C300X`, which another page cannot use. Like
 any other page it can be moved with its position. A section without a name and
 entities stays unused; a page with entities needs a name. Each page name (in
 any capitalization) and each entity can be used once. Page names are limited to
@@ -375,7 +377,7 @@ Sections of used pages are open, and so is the first free one.
 
 ### Energy Page
 
-The last section of the pages dialog switches on an optional ninth page that
+The second section, directly below the status page, switches on an optional ninth page that
 shows Home Assistant's own Energy setup (**Settings → Dashboards → Energy**).
 Nothing is configured twice: meters, their names, prices and power sensors come
 from there.

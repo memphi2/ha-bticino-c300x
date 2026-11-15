@@ -272,17 +272,19 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nL'ultima sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nLa seconda sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
         "sections": {
           "page_1": {
             "name": "Pagina 1: Pagina di stato",
-            "description": "La prima pagina dell'area Home Assistant. In alto c'è la sua scheda meteo, poi le sue entità; il meteo si imposta qui. Senza meteo e senza entità la pagina non viene mostrata sul display e gli indicatori HA, allarme e ora spariscono con lei. Il suo titolo sul display è Home Assistant.",
+            "description": "La pagina di stato Home Assistant mostra gli indicatori HA, allarme e ora. Attivala o disattivala indipendentemente dalla scheda meteo facoltativa e dalle entità. Il titolo sul display è Home Assistant.",
             "data": {
+              "enabled": "Mostra la pagina di stato",
               "weather_entity_id": "Meteo",
               "position": "Posizione",
               "entities": "Entità"
             },
             "data_description": {
+              "enabled": "Mostra questa pagina indipendentemente dal meteo e dalle entità. Disattivarla conserva le impostazioni.",
               "weather_entity_id": "Entità meteo per la scheda meteo in alto in questa pagina. Lascia vuoto per non mostrare la scheda meteo.",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
@@ -397,17 +399,19 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nL'ultima sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nLa seconda sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
         "sections": {
           "page_1": {
             "name": "Pagina 1: Pagina di stato",
-            "description": "La prima pagina dell'area Home Assistant. In alto c'è la sua scheda meteo, poi le sue entità; il meteo si imposta qui. Senza meteo e senza entità la pagina non viene mostrata sul display e gli indicatori HA, allarme e ora spariscono con lei. Il suo titolo sul display è Home Assistant.",
+            "description": "La pagina di stato Home Assistant mostra gli indicatori HA, allarme e ora. Attivala o disattivala indipendentemente dalla scheda meteo facoltativa e dalle entità. Il titolo sul display è Home Assistant.",
             "data": {
+              "enabled": "Mostra la pagina di stato",
               "weather_entity_id": "Meteo",
               "position": "Posizione",
               "entities": "Entità"
             },
             "data_description": {
+              "enabled": "Mostra questa pagina indipendentemente dal meteo e dalle entità. Disattivarla conserva le impostazioni.",
               "weather_entity_id": "Entità meteo per la scheda meteo in alto in questa pagina. Lascia vuoto per non mostrare la scheda meteo.",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
@@ -709,17 +713,19 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nL'ultima sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nLa seconda sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
         "sections": {
           "page_1": {
             "name": "Pagina 1: Pagina di stato",
-            "description": "La prima pagina dell'area Home Assistant. In alto c'è la sua scheda meteo, poi le sue entità; il meteo si imposta qui. Senza meteo e senza entità la pagina non viene mostrata sul display e gli indicatori HA, allarme e ora spariscono con lei. Il suo titolo sul display è Home Assistant.",
+            "description": "La pagina di stato Home Assistant mostra gli indicatori HA, allarme e ora. Attivala o disattivala indipendentemente dalla scheda meteo facoltativa e dalle entità. Il titolo sul display è Home Assistant.",
             "data": {
+              "enabled": "Mostra la pagina di stato",
               "weather_entity_id": "Meteo",
               "position": "Posizione",
               "entities": "Entità"
             },
             "data_description": {
+              "enabled": "Mostra questa pagina indipendentemente dal meteo e dalle entità. Disattivarla conserva le impostazioni.",
               "weather_entity_id": "Entità meteo per la scheda meteo in alto in questa pagina. Lascia vuoto per non mostrare la scheda meteo.",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"

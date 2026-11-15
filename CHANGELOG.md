@@ -25,6 +25,17 @@
   warning and error 30 seconds each. Effects only on safe Home/HA screens, never
   queued for a later wake, and never a fire-alarm substitute. One POST, with
   transport acceptance distinct from physical-effect confirmation.
+- Preserve the previous display files when a GUI restart fails, and report
+  update cleanup or read-only remount failures instead of claiming success.
+- Keep display requests and cleanup compatible with the device's Qt 4 runtime;
+  failed notification acknowledgements remain visible and can be retried.
+- Restrict Notify calls to administrators and trusted automations. Ignore stale
+  webhook and card completions after their runtime or call has been replaced.
+- Preserve dashboard configuration when a Lovelace repair cannot read it.
+  Bound calendar work and display payloads, and stop calendar resources when
+  their page is disabled or reconfigured.
+- Document the HA quality scale as a per-rule self-assessment, not an awarded
+  tier, with explicit remaining gaps and removal and connection guidance.
 - Requires matching 2.5.0 agent and display bundle. Local tests and strict
   simulations are not hardware proof; Notify hardware validation is pending.
   This version remains unreleased.

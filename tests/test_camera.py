@@ -546,7 +546,7 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
 
     assert attrs == {
         "stream_snapshots": False,
-        "snapshot_delay_seconds": 5,
+        "snapshot_delay_seconds": 3,
         "snapshot_retention_days": 14,
         "snapshot_latest": None,
         "snapshot_captured_at": None,

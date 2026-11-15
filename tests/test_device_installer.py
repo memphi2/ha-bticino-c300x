@@ -292,6 +292,11 @@ def test_bootstrap_install_uses_python_ssh_client(
                 return json.dumps({"missing": True})
             if command == f"readlink {device_installer.REMOTE_INIT_LINK}":
                 return f"{device_installer.REMOTE_INIT_SCRIPT}\n"
+            if "qml_patch.sh " in command:
+                return json.dumps({
+                    "ok": True, "core_patched": True, "gui_running": True,
+                    "patched": command.endswith(" apply"),
+                })
             return ""
 
         def put_file(
@@ -1236,6 +1241,11 @@ def test_install_reads_remote_config_and_writes_merged_result(
                 return json.dumps({"content": old})
             if input_data and b"api-token" in input_data:
                 self.writes.append(input_data)
+            if "qml_patch.sh " in command:
+                return json.dumps({
+                    "ok": True, "core_patched": True, "gui_running": True,
+                    "patched": False,
+                })
             return ""
 
         def put_file(self, source: Path, remote_path: str, mode: str | None = None) -> bool:

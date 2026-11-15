@@ -197,15 +197,9 @@ def _install_device_agent_sync(
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
         _verify_startup_sync(client)
 
-        client.run(
-            f"C300X_QML_SOURCE_DIR={_quote(f'{request.remote_dir}/qml')} "
-            f"{_quote(f'{request.remote_dir}/qml_patch.sh')} core-apply"
-        )
-        if request.apply_gui_patch:
-            client.run(
-                f"C300X_QML_SOURCE_DIR={_quote(f'{request.remote_dir}/qml')} "
-                f"{_quote(f'{request.remote_dir}/qml_patch.sh')} apply"
-            )
+        actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
+        for action in actions:
+            _apply_qml_patch_sync(client, request.remote_dir, action)
     finally:
         client.close()
     return tuple(changed_files)
@@ -827,6 +821,27 @@ def _verify_startup_sync(client: _DeviceSshClient) -> None:
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} status")
     except C300XDeviceInstallError as err:
         raise C300XDeviceInstallError("device_install_verify_failed") from err
+
+
+def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
+    """Require the patcher's reported outcome, not just a successful shell exit."""
+
+    output = client.run(
+        f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
+        f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"
+    )
+    try:
+        result = json.loads(output)
+    except (TypeError, ValueError) as err:
+        raise C300XDeviceInstallError("device_install_verify_failed") from err
+    if (
+        not isinstance(result, dict)
+        or result.get("ok") is not True
+        or result.get("core_patched") is not True
+        or result.get("gui_running") is not True
+        or (action == "apply" and result.get("patched") is not True)
+    ):
+        raise C300XDeviceInstallError("device_install_verify_failed")
 
 
 def _apply_firewall_patch_sync(

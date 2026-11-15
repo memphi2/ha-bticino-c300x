@@ -259,9 +259,11 @@ def test_numbers_follow_the_display_language() -> None:
 
 
 def test_every_energy_text_exists_in_every_display_language() -> None:
-    from custom_components.bticino_c300x import dashboard_energy
+    from custom_components.bticino_c300x.dashboard_labels import (
+        ENERGY_LABELS_BY_LANGUAGE,
+    )
 
-    labels = dashboard_energy._LABELS
+    labels = ENERGY_LABELS_BY_LANGUAGE
     assert set(labels) == {"de", "en", "fr", "it"}
     for language, texts in labels.items():
         assert set(texts) == set(labels["en"]), language

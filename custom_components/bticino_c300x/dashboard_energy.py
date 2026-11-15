@@ -15,7 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .dashboard_labels import decimal_text
+from .dashboard_controls import finite_number
+from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE, decimal_text
 
 ENERGY_VIEW_NOW = "now"
 ENERGY_VIEW_TODAY = "today"
@@ -33,41 +34,6 @@ COLOR_COST = "#b0b8c0"
 
 # The sums table of the Today view has room for this many rows.
 _MAX_SUM_ROWS = 8
-
-_LABELS = {
-    "en": {
-        "title": "Energy", "now": "Now", "today": "Today", "balance": "Balance",
-        "solar": "Solar", "grid": "Grid", "home": "Home", "battery": "Battery",
-        "export": "Export", "charge": "Battery charge", "discharge": "Battery discharge",
-        "grid_total": "Grid total", "self_use": "Solar used at home",
-        "autarky": "Self-sufficiency", "net_grid": "Net from grid", "cost": "Cost today",
-        "other_grid": "Other meters",
-    },
-    "de": {
-        "title": "Energie", "now": "Jetzt", "today": "Heute", "balance": "Bilanz",
-        "solar": "PV", "grid": "Netz", "home": "Haus", "battery": "Batterie",
-        "export": "Einspeisung", "charge": "Batterie laden", "discharge": "Batterie entladen",
-        "grid_total": "Netz gesamt", "self_use": "PV-Eigenverbrauch",
-        "autarky": "Autarkiegrad", "net_grid": "Netto vom Netz", "cost": "Kosten heute",
-        "other_grid": "Weitere Zähler",
-    },
-    "fr": {
-        "title": "Énergie", "now": "Maintenant", "today": "Aujourd'hui", "balance": "Bilan",
-        "solar": "Solaire", "grid": "Réseau", "home": "Maison", "battery": "Batterie",
-        "export": "Injection", "charge": "Charge batterie", "discharge": "Décharge batterie",
-        "grid_total": "Réseau total", "self_use": "Autoconsommation",
-        "autarky": "Autonomie", "net_grid": "Net du réseau", "cost": "Coût du jour",
-        "other_grid": "Autres compteurs",
-    },
-    "it": {
-        "title": "Energia", "now": "Ora", "today": "Oggi", "balance": "Bilancio",
-        "solar": "Solare", "grid": "Rete", "home": "Casa", "battery": "Batteria",
-        "export": "Immissione", "charge": "Carica batteria", "discharge": "Scarica batteria",
-        "grid_total": "Rete totale", "self_use": "Autoconsumo",
-        "autarky": "Autosufficienza", "net_grid": "Netto dalla rete", "cost": "Costo di oggi",
-        "other_grid": "Altri contatori",
-    },
-}
 
 # Spelled as Home Assistant spells them: "mW" and "MW" differ only in case.
 _POWER_FACTORS = {"mW": 0.001, "W": 1.0, "kW": 1000.0, "MW": 1_000_000.0, "GW": 1_000_000_000.0}
@@ -215,11 +181,8 @@ def energy_sources(
 def power_watts(state: Any) -> float | None:
     """Return a power sensor's state in watts, or None when it has none."""
 
-    try:
-        value = float(getattr(state, "state", None))
-    except (TypeError, ValueError):
-        return None
-    if value != value or value in (float("inf"), float("-inf")):
+    value = finite_number(getattr(state, "state", None))
+    if value is None:
         return None
     attributes = getattr(state, "attributes", None)
     unit = str((attributes or {}).get("unit_of_measurement") or "W").strip()
@@ -320,7 +283,7 @@ def energy_page(
 
     if not sources.any:
         return None
-    labels = _LABELS.get(language, _LABELS["en"])
+    labels = ENERGY_LABELS_BY_LANGUAGE.get(language, ENERGY_LABELS_BY_LANGUAGE["en"])
     shown = energy_views(views)
 
     grid_in = day.hourly(sources.grid_from)
@@ -442,9 +405,14 @@ def _total_cost(sources: EnergySources, day: EnergyDay) -> float | None:
 
     if not sources.cost_stats:
         return None
-    spent = sum(day.costs.get(meter.cost_stat, 0.0) for meter in sources.grid_from if meter.cost_stat)
-    earned = sum(day.costs.get(meter.cost_stat, 0.0) for meter in sources.grid_to if meter.cost_stat)
-    return spent - earned
+    return sum(_costs(day, sources.grid_from)) - sum(_costs(day, sources.grid_to))
+
+
+def _costs(day: EnergyDay, meters: tuple[EnergyMeter, ...] | list[EnergyMeter]) -> list[float]:
+    """Return the known costs of some meters; a meter without a price has none."""
+
+    return [day.costs[meter.cost_stat] for meter in meters
+            if meter.cost_stat and meter.cost_stat in day.costs]
 
 
 def _format_cost(value: float, language: str, currency: str) -> str:
@@ -479,14 +447,12 @@ def _sum_rows(
     if sources.battery_to:
         rows.append(row(labels["charge"], -totals["charge"], COLOR_BATTERY))
     if sources.grid_to:
-        earned = [day.costs[meter.cost_stat] for meter in sources.grid_to
-                  if meter.cost_stat and meter.cost_stat in day.costs]
+        earned = _costs(day, sources.grid_to)
         rows.append(row(labels["export"], -totals["out"], COLOR_EXPORT,
                         -sum(earned) if earned else None))
     tail: list[dict[str, Any]] = []
     if len(sources.grid_from) != 1 or not sources.grid_from[0].name:
-        spent = [day.costs[meter.cost_stat] for meter in sources.grid_from
-                 if meter.cost_stat and meter.cost_stat in day.costs]
+        spent = _costs(day, sources.grid_from)
         if sources.grid_from:
             tail.append(row(labels["grid_total"], totals["in"], COLOR_GRID,
                             sum(spent) if spent else None))
@@ -500,7 +466,7 @@ def _sum_rows(
     for meter in kept:
         rows.append(row(meter.name or meter.stat, day.total(meter), COLOR_GRID, meter_cost(meter)))
     if merged:
-        costs = [value for value in map(meter_cost, merged) if value is not None]
+        costs = _costs(day, merged)
         rows.append(row(labels["other_grid"], sum(day.total(meter) for meter in merged),
                         COLOR_GRID, sum(costs) if costs else None))
     return rows + tail

@@ -61,7 +61,6 @@ PAGE_NAME_FIELD = "name"
 PAGE_POSITION_FIELD = "position"
 PAGE_ENTITIES_FIELD = "entities"
 PAGE_WEATHER_FIELD = CONF_WEATHER_ENTITY_ID
-ENERGY_SECTION = CONF_ENERGY_PAGE
 ENERGY_ENABLED_FIELD = "enabled"
 ENERGY_VIEWS_FIELD = "views"
 POSITION_MAX = DASHBOARD_PAGE_MAX_COUNT + 1
@@ -221,10 +220,10 @@ def dashboard_pages_schema(
     def energy_shown(field: str, saved: Any) -> Any:
         if posted is None:
             return saved
-        values = posted.get(ENERGY_SECTION)
+        values = posted.get(CONF_ENERGY_PAGE)
         return values.get(field) if isinstance(values, dict) else None
 
-    fields[vol.Required(ENERGY_SECTION)] = section(
+    fields[vol.Required(CONF_ENERGY_PAGE)] = section(
         vol.Schema({
             vol.Required(
                 ENERGY_ENABLED_FIELD,
@@ -345,7 +344,7 @@ def dashboard_pages_input(
     # posted section an emptied position is the default one and an emptied
     # selection of views means all of them.
     energy = normalize_energy_page(dashboard_input.get(CONF_ENERGY_PAGE))
-    posted_energy = user_input.get(ENERGY_SECTION)
+    posted_energy = user_input.get(CONF_ENERGY_PAGE)
     if posted_energy is not None:
         energy = normalize_energy_page({
             "enabled": posted_energy.get(ENERGY_ENABLED_FIELD) is True,

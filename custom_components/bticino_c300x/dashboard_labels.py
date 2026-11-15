@@ -400,6 +400,43 @@ _WEATHER_TITLE_BY_LANGUAGE = {
 }
 
 
+# The texts of the energy page.
+ENERGY_LABELS_BY_LANGUAGE = {
+    "en": {
+        "title": "Energy", "now": "Now", "today": "Today", "balance": "Balance",
+        "solar": "Solar", "grid": "Grid", "home": "Home", "battery": "Battery",
+        "export": "Export", "charge": "Battery charge", "discharge": "Battery discharge",
+        "grid_total": "Grid total", "self_use": "Solar used at home",
+        "autarky": "Self-sufficiency", "net_grid": "Net from grid", "cost": "Cost today",
+        "other_grid": "Other meters",
+    },
+    "de": {
+        "title": "Energie", "now": "Jetzt", "today": "Heute", "balance": "Bilanz",
+        "solar": "PV", "grid": "Netz", "home": "Haus", "battery": "Batterie",
+        "export": "Einspeisung", "charge": "Batterie laden", "discharge": "Batterie entladen",
+        "grid_total": "Netz gesamt", "self_use": "PV-Eigenverbrauch",
+        "autarky": "Autarkiegrad", "net_grid": "Netto vom Netz", "cost": "Kosten heute",
+        "other_grid": "Weitere Zähler",
+    },
+    "fr": {
+        "title": "Énergie", "now": "Maintenant", "today": "Aujourd'hui", "balance": "Bilan",
+        "solar": "Solaire", "grid": "Réseau", "home": "Maison", "battery": "Batterie",
+        "export": "Injection", "charge": "Charge batterie", "discharge": "Décharge batterie",
+        "grid_total": "Réseau total", "self_use": "Autoconsommation",
+        "autarky": "Autonomie", "net_grid": "Net du réseau", "cost": "Coût du jour",
+        "other_grid": "Autres compteurs",
+    },
+    "it": {
+        "title": "Energia", "now": "Ora", "today": "Oggi", "balance": "Bilancio",
+        "solar": "Solare", "grid": "Rete", "home": "Casa", "battery": "Batteria",
+        "export": "Immissione", "charge": "Carica batteria", "discharge": "Scarica batteria",
+        "grid_total": "Rete totale", "self_use": "Autoconsumo",
+        "autarky": "Autosufficienza", "net_grid": "Netto dalla rete", "cost": "Costo di oggi",
+        "other_grid": "Altri contatori",
+    },
+}
+
+
 _DECIMAL_NUMBER = re.compile(r"-?\d+\.\d+")
 
 

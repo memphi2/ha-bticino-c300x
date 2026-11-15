@@ -48,6 +48,7 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
 
     _attr_should_poll = False
     _attr_translation_key = "ringer_volume"
+    _refresh_on_reconnect = True
     _attr_native_min_value = _RINGER_VOLUME_MIN
     _attr_native_max_value = _RINGER_VOLUME_MAX
     _attr_native_step = _RINGER_VOLUME_STEP

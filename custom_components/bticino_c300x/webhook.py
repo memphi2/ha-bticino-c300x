@@ -47,6 +47,7 @@ from .dashboard import (
     async_dashboard_payload,
     async_status,
 )
+from .dashboard_response import display_json_dumps
 from .data import C300XEventState
 from .doorbell_state import raw_doorbell_state_value
 from .entity import entry_config_value
@@ -212,7 +213,8 @@ async def _async_handle_webhook(
 
     try:
         return web.json_response(
-            await handler(_DisplayBridgeContext(hass, entry, payload))
+            await handler(_DisplayBridgeContext(hass, entry, payload)),
+            dumps=display_json_dumps,
         )
     except KeyError:
         return _json_error("unknown_action", status=404)

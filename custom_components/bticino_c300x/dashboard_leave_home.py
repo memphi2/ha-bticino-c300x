@@ -32,6 +32,7 @@ def leave_home_dashboard_page(hass: Any, entry: Any, language: str = "en") -> di
         return None
     labels = optional_labels(language)
     checks: list[dict[str, Any]] = []
+    attention_count = 0
     for kind in ("contacts", "lights"):
         for entity_id in settings[kind]:
             state = hass.states.get(entity_id)
@@ -43,11 +44,10 @@ def leave_home_dashboard_page(hass: Any, entry: Any, language: str = "en") -> di
             label = "unavailable" if not available else (
                 ("open" if raw == "on" else "closed") if kind == "contacts" else raw
             )
+            attention_count += not available or raw == "on"
             checks.append({
-                "entity_id": entity_id, "kind": kind,
                 "name": _text(state.attributes.get("friendly_name", entity_id) if state else entity_id),
-                "state": raw if available else "unavailable", "state_label": labels[label],
-                "attention": not available or raw == "on",
+                "state_label": labels[label],
                 "color": "#ffd166" if not available else "#ff6b6b" if raw == "on" else "#58d68d",
             })
     allowlist = configured_actions(entry)
@@ -81,5 +81,5 @@ def leave_home_dashboard_page(hass: Any, entry: Any, language: str = "en") -> di
         "checks": checks, "actions": actions, "alarm": alarm,
         "empty_text": labels["no_checks"],
         "confirm_label": labels["confirm"], "cancel_label": labels["cancel"],
-        "attention_count": sum(check["attention"] for check in checks),
+        "attention_count": attention_count,
     }}

@@ -204,7 +204,8 @@ def test_unknown_alarm_readiness_and_wrong_contact_class_fail_closed():
         "alarm_control_panel.home": State("alarm_control_panel.home", "disarmed"),
     })
     result = leave.leave_home_dashboard_page(hass, entry)["leave_home"]
-    assert result["checks"][0]["state"] == "unavailable"
+    assert result["checks"][0]["state_label"] == "Unavailable"
+    assert result["checks"][0]["color"] == "#ffd166"
     assert result["alarm"]["ready"] is None
     assert result["alarm"]["state_label"] == "Unknown"
 

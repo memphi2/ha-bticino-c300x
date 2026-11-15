@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 from typing import Any, cast
@@ -82,6 +81,11 @@ from .dashboard_optional_config import (
     configured_leave_home_page,
 )
 from .dashboard_page_order import page_layout_slots
+from .dashboard_response import (
+    DASHBOARD_RESPONSE_MAX_BYTES,
+    dashboard_response_size,
+    display_json_size,
+)
 from .dashboard_select_texts import apply_select_texts
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
@@ -89,10 +93,6 @@ from .entry_types import BticinoC300XConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
-# The agent reads the display's answer, headers included, into one 32 KiB
-# buffer, and an answer that does not fit shows every page as Home Assistant
-# unavailable. The rest of the buffer is left for the headers.
-DASHBOARD_RESPONSE_MAX_BYTES = 30 * 1024
 _DASHBOARD_CHOICE_TRIM_LIMITS = (25, 12, 6, 3, 1)
 _OVERSIZED_DASHBOARDS: set[str] = set()
 
@@ -321,7 +321,7 @@ def _fit_dashboard_response(
     all of which the executor still accepts.
     """
 
-    size = len(json.dumps(payload))
+    size = dashboard_response_size(payload)
     if size > DASHBOARD_RESPONSE_MAX_BYTES:
         lists = [
             holder
@@ -336,7 +336,7 @@ def _fit_dashboard_response(
         # answer fits, so a thermostat's modes and a select's few options
         # stay whole next to a player's favourites.
         def text_size(holder: dict[str, Any]) -> int:
-            return len(json.dumps(holder["options"])) + len(json.dumps(holder.get("labels", [])))
+            return display_json_size(holder["options"]) + display_json_size(holder.get("labels", []))
 
         lists.sort(key=text_size, reverse=True)
         for limit in _DASHBOARD_CHOICE_TRIM_LIMITS:
@@ -352,7 +352,7 @@ def _fit_dashboard_response(
                     break
             if size <= DASHBOARD_RESPONSE_MAX_BYTES:
                 break
-        size = len(json.dumps(payload))
+        size = dashboard_response_size(payload)
     if size <= DASHBOARD_RESPONSE_MAX_BYTES:
         _OVERSIZED_DASHBOARDS.discard(entry.entry_id)
         return payload
@@ -360,13 +360,13 @@ def _fit_dashboard_response(
         _OVERSIZED_DASHBOARDS.add(entry.entry_id)
         _LOGGER.warning(
             "The display dashboard of %s takes %d bytes, more than the %d the "
-            "device can read, so the display shows Home Assistant as "
-            "unavailable; remove entities, actions or messages from it",
+            "device can read; returning dashboard_too_large instead of an "
+            "incomplete dashboard. Reduce configured display content",
             entry.title,
             size,
             DASHBOARD_RESPONSE_MAX_BYTES,
         )
-    return payload
+    raise ValueError("dashboard_too_large")
 
 
 def _dashboard_alarm_state(state: Any, language: str) -> str:

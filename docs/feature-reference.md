@@ -301,6 +301,12 @@ after the last thing happened to it, so a tile returns to showing its plain
 reading. Errors remain at the affected control; an uncertain transport result is
 not automatically retried. During a connection outage the
 last snapshot stays visible, explicitly marked as stale, with actions disabled.
+Dashboard responses use compact UTF-8 within the device's fixed response budget.
+If the combined configured content still cannot fit, HA logs the size and
+returns `dashboard_too_large`; the display stays offline/stale rather than
+showing an incomplete set of checks or fabricated history. Reduce the selected
+display content before retrying. Check states, actions and history values are
+not silently dropped to fit.
 Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling
 only runs while the page is active. Display changes require the matching bundled

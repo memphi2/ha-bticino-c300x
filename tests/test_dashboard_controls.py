@@ -31,6 +31,7 @@ from custom_components.bticino_c300x.dashboard_controls import (
     entity_controls,
     finite_number,
 )
+from custom_components.bticino_c300x.dashboard_response import display_json_dumps
 from custom_components.bticino_c300x.executor import async_execute_dashboard_action
 
 
@@ -802,9 +803,9 @@ def _agent_response_buffer():
 
 
 def _sent_bytes(payload):
-    """Return the body the webhook sends: aiohttp's json_response default."""
+    """Return the compact UTF-8 body sent by the webhook."""
 
-    return len(web.json_response({**payload, "revision": "0" * 16}).body)
+    return len(web.json_response({**payload, "revision": "0" * 16}, dumps=display_json_dumps).body)
 
 
 def _choice_lists(payload):
@@ -906,13 +907,14 @@ def test_a_dashboard_too_large_without_lists_is_logged_once(caplog):
     many = {f"light.l{n}": _light(n) for n in range(40)}
     caplog.set_level(logging.WARNING, logger="custom_components.bticino_c300x.dashboard")
     for _ in range(2):
-        payload = _dashboard(many)
-    assert len(payload["data"]["pages"][-1]["items"]) == 40
+        with pytest.raises(ValueError, match="^dashboard_too_large$"):
+            _dashboard(many)
     warnings = [record for record in caplog.records if "display dashboard" in record.getMessage()]
     assert len(warnings) == 1
     _dashboard({"light.l0": _light(0)})
     caplog.clear()
-    _dashboard(many)
+    with pytest.raises(ValueError, match="^dashboard_too_large$"):
+        _dashboard(many)
     assert [record for record in caplog.records if "display dashboard" in record.getMessage()]
 
 

@@ -14,6 +14,8 @@ No firmware assets are bundled. --stock-skin optionally reads local images;
 otherwise generated blue button backgrounds and the system font are used.
 --fixtures accepts a JSON list of {name, language, title, energy} objects, so new
 backend view contracts can be exercised without changing this renderer.
+Default power fixtures pass synthetic recorder intervals through production
+aggregation and formatting. Raster probes check scalar curves, gaps and dots.
 """
 
 from __future__ import annotations
@@ -44,7 +46,7 @@ def make_fixtures() -> list[dict]:
         energy_sources,
     )
     from custom_components.bticino_c300x.dashboard_energy_power import (
-        PowerHistory,
+        power_history_from_statistics,
         power_history_payload,
     )
 
@@ -84,14 +86,22 @@ def make_fixtures() -> list[dict]:
             assert page is not None
             assert len(page["energy"]["sums"]) == 8
             start = datetime(2026, 11, 15, tzinfo=UTC)
-            history = PowerHistory(start, start + timedelta(days=1), {
-                entity: tuple(None if 40 <= i < 45 else
-                              (value * (0.5 + math.sin(i / 12)) if entity == "battery_power"
-                               else value * (0.7 + math.sin(i / 12) * 0.5))
-                              for i in range(96)) for entity, value in powers.items()
-            })
+            # Missing five-minute intervals go through the real quarter-hour
+            # aggregator. Bucket 42 is isolated between two gaps on each side.
+            statistics = {
+                entity: [{"start": start.timestamp() + i * 900 + part * 300,
+                          "end": start.timestamp() + i * 900 + (part + 1) * 300,
+                          "mean": value * ((0.5 if entity == "battery_power" else 0.7)
+                                           + math.sin(i / 12) * (1 if entity == "battery_power" else 0.5))}
+                         for i in range(96) if not 40 <= i < 45 or i == 42
+                         for part in range(3)] for entity, value in powers.items()
+            }
+            history = power_history_from_statistics(
+                start, start + timedelta(days=1), frozenset(powers), statistics,
+            )
             page["energy"]["power"] = power_history_payload(sources, history, language)
-            fixtures.append({"name": scenario, "language": language, **page})
+            fixtures.append({"name": scenario, "language": language, **page,
+                             "power_probe": {"isolated_index": 42, "gap_indices": [40, 41, 43, 44]}})
     return fixtures
 
 
@@ -210,6 +220,75 @@ def render(args, fixtures: list[dict]) -> dict:
         visit(root, "energy")
         return result
 
+    def power_pixels(component, frame, shot, fixture):
+        """Check actual rasterized dots/gaps against the backend coordinates."""
+        if not fixture.get("power_probe"):
+            return [], {}
+
+        def named(item, name):
+            context = QQmlEngine.contextForObject(item)
+            if context and context.nameForObject(item) == name:
+                return item
+            for child in item.childItems():
+                found = named(child, name)
+                if found is not None:
+                    return found
+            return None
+
+        plot = named(component, "powerPlot")
+        if plot is None:
+            return [{"kind": "power_plot_missing"}], {}
+        series = fixture["energy"]["power"]["series"]
+        colors = [QColor(entry["color"]) for entry in series]
+        origin = plot.mapToItem(frame, QPointF(0, 0))
+        probe = fixture["power_probe"]
+        checks = {"dots": [], "gaps": [], "segments": []}
+        issues = []
+
+        def matches(x, y, color):
+            if not 0 <= x < shot.width() or not 0 <= y < shot.height():
+                return False
+            actual = shot.pixelColor(x, y)
+            return max(abs(actual.red() - color.red()), abs(actual.green() - color.green()),
+                       abs(actual.blue() - color.blue())) <= 35
+
+        for entry, color in zip(series, colors, strict=True):
+            points = entry["points"]
+            point = points[probe["isolated_index"]]
+            if any(value is not None and not isinstance(value, (float, int)) for value in points):
+                issues.append({"kind": "power_points_not_scalars", "series": entry["id"]})
+                continue
+            dot = {"x": round((probe["isolated_index"] + 0.5) / len(points), 6), "y": point}
+            if point is None or entry.get("dots") != [dot]:
+                issues.append({"kind": "power_isolated_contract", "series": entry["id"]})
+                continue
+            x = round(origin.x() + dot["x"] * plot.width())
+            y = round(origin.y() + (1 - dot["y"]) * plot.height())
+            visible = any(matches(x + dx, y + dy, color) for dx in range(-2, 3) for dy in range(-2, 3))
+            checks["dots"].append({"series": entry["id"], "center": [x, y], "visible": visible})
+            if not visible:
+                issues.append({"kind": "power_dot_missing", "series": entry["id"]})
+            # A dot alone must not let a broken scalar curve renderer pass.
+            adjacent = next(i for i in range(len(points) - 1)
+                            if points[i] is not None and points[i + 1] is not None)
+            x = round(origin.x() + (adjacent + 1) / len(points) * plot.width())
+            y = round(origin.y() + (1 - (points[adjacent] + points[adjacent + 1]) / 2) * plot.height())
+            visible = any(matches(x + dx, y + dy, color) for dx in range(-2, 3) for dy in range(-2, 3))
+            checks["segments"].append({"series": entry["id"], "center": [x, y], "visible": visible})
+            if not visible:
+                issues.append({"kind": "power_segment_missing", "series": entry["id"]})
+        for index in probe["gap_indices"]:
+            if any(entry["points"][index] is not None for entry in series):
+                issues.append({"kind": "power_gap_contract", "index": index})
+                continue
+            x = round(origin.x() + (index + 0.5) / len(series[0]["points"]) * plot.width())
+            painted = any(matches(x, y, color) for color in colors
+                          for y in range(math.ceil(origin.y()) + 2, math.floor(origin.y() + plot.height()) - 2))
+            checks["gaps"].append({"index": index, "x": x, "clear": not painted})
+            if painted:
+                issues.append({"kind": "power_gap_bridged", "index": index})
+        return issues, checks
+
     try:
         with tempfile.TemporaryDirectory(prefix="c300x-energy-layout-") as temp:
             directory = Path(temp)
@@ -309,6 +388,10 @@ Rectangle {
                                 raise RuntimeError("Offscreen framebuffer is missing or not 800x480")
                             texts = text_bounds(component)
                             issues = layout_issues(texts, [0, 0, 728, height])
+                            power_checks = {}
+                            if view["id"] == "power":
+                                power_issues, power_checks = power_pixels(component, frame, shot, fixture)
+                                issues.extend(power_issues)
                             body_texts = [item for item in texts if item["ink"][1] < height - tab_height - 8]
                             if not body_texts:
                                 issues.append({"kind": "blank_view"})
@@ -334,6 +417,7 @@ Rectangle {
                                                     "tabs": tabs, "texts": texts, "issues": issues,
                                                     "sampled_colors": len(pixels),
                                                     "body_texts": len(body_texts),
+                                                    "power_pixels": power_checks,
                                                     "warnings": messages[start_messages:],
                                                     "screenshot": str(output)})
                             sys.stdout.write(f"{name}: {len(texts)} texts, {len(issues)} issues\n")

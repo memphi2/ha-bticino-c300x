@@ -1,6 +1,7 @@
 """Current-power Sankey uses unconfigured zero and preserves configured unknowns."""
 
 import json
+import math
 from dataclasses import replace
 from itertools import product
 
@@ -157,6 +158,49 @@ def test_export_and_charging_larger_than_supply_never_clamp_home_to_zero():
     assert nodes(result)["export"]["watts"] == 800
     assert nodes(result)["charge"]["watts"] == 300
     assert_incomplete(payload(grid=-0.001, solar=0, battery=0))
+
+
+@pytest.mark.parametrize(("solar", "export", "charge"), [
+    (0.3, 0.1, 0.2), (3.3, 1.1, 2.2), (3000.6, 1000.2, 2000.4),
+])
+def test_fractional_balanced_flows_allow_roundoff_without_negative_home(solar, export, charge):
+    assert export + charge > solar  # The reproduced binary rounding deficit.
+    result = payload(grid=-export, solar=solar, battery=-charge)
+    assert result["complete"] is True and result["status"] == ""
+    home = nodes(result)["home"]
+    assert home["watts"] == 0 and math.copysign(1, home["watts"]) == 1
+    assert home["value"] == "0 W" and home["size"] == 0
+    assert nodes(result)["export"]["watts"] == export
+    assert nodes(result)["charge"]["watts"] == charge
+    for side in ("left", "right"):
+        assert all(0 <= item["start"] <= 1 and 0 <= item["size"] <= 1 for item in result[side])
+        assert sum(item["size"] for item in result[side]) == pytest.approx(1, rel=0, abs=math.ulp(1))
+    json.dumps(result, allow_nan=False)
+
+
+@pytest.mark.parametrize("supplied", [1e-200, 1e-12, 1.0, 1e12, 1e300])
+def test_balance_tolerance_accepts_only_one_ulp(supplied):
+    one_step = math.nextafter(supplied, math.inf)
+    result = payload(grid=-one_step, solar=supplied, battery=0)
+    assert result["complete"] is True
+    assert nodes(result)["home"]["watts"] == 0
+    assert_incomplete(payload(grid=-math.nextafter(one_step, math.inf), solar=supplied, battery=0))
+
+
+@pytest.mark.parametrize(("supplied", "removed"), [
+    (0, math.ulp(0)), (0, 1e-12), (1e-12, 1e-12 + 1e-15),
+    (1.0, 1.0 + 1e-12), (1e12, 1e12 + 0.001), (1e300, 1e300 + 1e290),
+])
+def test_real_deficits_are_not_hidden_by_absolute_or_relative_tolerance(supplied, removed):
+    assert removed > supplied
+    assert_incomplete(payload(grid=-removed, solar=supplied, battery=0))
+
+
+@pytest.mark.parametrize(("grid", "solar", "battery"), [
+    (1e308, 1e308, 0), (-1e308, 1e308, -1e308),
+])
+def test_overflowing_flow_totals_cannot_be_accepted_as_roundoff(grid, solar, battery):
+    assert_incomplete(payload(grid=grid, solar=solar, battery=battery))
 
 
 def test_overflow_does_not_emit_nonfinite_values_or_bands():

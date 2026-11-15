@@ -55,7 +55,10 @@ def power_distribution_payload(
     complete = (
         bool(values) and len(known) == len(values)
         and math.isfinite(supplied) and math.isfinite(removed)
-        and supplied >= removed
+        # Permit one rounding step, never a fixed or relative watt allowance.
+        and (supplied >= removed or (
+            supplied > 0 and removed - supplied <= math.ulp(max(supplied, removed))
+        ))
     )
 
     def node(key: str, watts: float | None, color: str) -> _Node:
@@ -66,7 +69,7 @@ def power_distribution_payload(
         }
 
     left: list[_Node] = []
-    right = [node("home", supplied - removed if complete else None, COLOR_HOME)]
+    right = [node("home", max(0.0, supplied - removed) if complete else None, COLOR_HOME)]
     for key, sink, color in (
         ("grid", "export", COLOR_GRID),
         ("solar", "", COLOR_SOLAR),

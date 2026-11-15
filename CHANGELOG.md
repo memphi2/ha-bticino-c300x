@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.5.0 - Unreleased
+
+Development started from v2.4.0. No functional changes yet.
+
 ## v2.4.0 - 2026-11-15
 
 ### Added

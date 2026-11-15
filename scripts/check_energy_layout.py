@@ -82,7 +82,7 @@ def make_fixtures() -> list[dict]:
                       "solar_power": scale * 1250, "battery_power": scale * -280}
             page = energy_page(sources, day, powers,
                                language=language, currency="EUR",
-                               views=["now", "today", "balance", "power"])
+                               views=["now", "today", "power", "balance"])
             assert page is not None
             assert len(page["energy"]["sums"]) == 8
             start = datetime(2026, 11, 15, tzinfo=UTC)

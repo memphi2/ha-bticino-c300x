@@ -45,8 +45,10 @@ Documentation display illustrations under `docs/images/readme/` are based on
 maintainer-provided device photographs. The `-en.webp` examples are AI-assisted
 display-only crops, perspective corrections and English localizations, not
 pixel-exact captures or extracted firmware assets. Their values are examples.
-`display-energy-en.webp` is a rendered preview of the project's own energy
-page, not a device photograph.
+`display-energy-en.webp` is a Qt-rendered preview of the project's own energy
+page using synthetic values and an approximate blue frame, not a device
+photograph. Its renderer is `scripts/check_energy_layout.py`; no vendor
+assets were used for this preview.
 Depicted product interfaces and names do not imply vendor affiliation.
 
 The repository must not contain:

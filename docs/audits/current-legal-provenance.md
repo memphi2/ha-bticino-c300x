@@ -68,8 +68,8 @@ from backup retention.
 
 The English display examples are edited from maintainer-provided photographs,
 with AI-assisted perspective correction and localization;
-`display-energy-en.webp` is a rendered preview of the project's own energy
-page. They are illustrative
+`display-energy-en.webp` is a Qt-rendered preview of the project's own energy
+page with synthetic values and a mock frame, without vendor assets. They are illustrative
 documentation assets, not extracted firmware files or exact runtime captures.
 
 ## Not Verified Here

@@ -139,7 +139,7 @@ English from device photographs. They illustrate configured pages, not live data
   </tr>
   <tr>
     <td align="center"><strong>Weather</strong><br><img src="docs/images/readme/display-ha-weather-en.webp" alt="Native C300X weather page with temperature and Home Assistant status" width="360"></td>
-    <td align="center"><strong>Energy (rendered preview)</strong><br><img src="docs/images/readme/display-energy-en.webp" alt="Energy page with solar, grid, battery and home boxes, current power, today's totals and the views Now, Today and Balance" width="360"></td>
+    <td align="center"><strong>Energy (rendered preview)</strong><br><img src="docs/images/readme/display-energy-en.webp" alt="Energy page with solar, grid, battery and home, current power, today's totals and independently selectable Now, Today, Power and Balance views" width="360"></td>
   </tr>
 </table>
 

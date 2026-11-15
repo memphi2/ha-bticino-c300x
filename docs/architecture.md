@@ -30,13 +30,17 @@ go through `executor.py`, also used by the existing service use cases. Both use
 `dashboard_config.py` for the configured allowlist and `alarm_state.py` for alarm
 readiness and code policy; neither shared module imports the command executor.
 
-The optional energy page is built by three modules: `dashboard_energy.py` turns
-Home Assistant's Energy setup and one day of statistics into the page (pure
-functions, no Home Assistant access), `dashboard_energy_data.py` reads the
-setup and the recorder statistics and caches a day for five minutes, and
-`dashboard_energy_updates.py` wakes the display on power changes (at most every
-ten seconds) and on the five-minute tick. The display draws the result with
-`C300XEnergy.qml`, loaded only while the page is open.
+The optional energy page uses pure formatters in `dashboard_energy.py` and
+`dashboard_energy_charts.py`. `dashboard_energy_data.py` reads HA's Energy setup
+and daily recorder statistics; `dashboard_energy_power.py` aggregates recorded
+power into 15-minute curves. These reads share bounded, five-minute caches in
+HA RAM, only while their views are enabled. Shared daily data is retained when
+another enabled view still needs it; disabling all views releases both caches
+and stops new reads. Nothing is recorded or stored additionally on the C300X.
+`dashboard_energy_updates.py` owns subscriptions and the existing five-minute
+refresh; only the Now view subscribes to live power changes, throttled to ten
+seconds. Unloading releases these resources. `C300XEnergy.qml` draws the page
+only while open and creates curve segments only for the visible Power view.
 
 Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
 agent API. `resources` owns its tasks, subscriptions and media preparation

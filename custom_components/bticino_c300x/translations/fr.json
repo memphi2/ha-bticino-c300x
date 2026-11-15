@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa dernière section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -377,13 +377,27 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "energy_page": {
+            "name": "Page énergie",
+            "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
+            "data": {
+              "enabled": "Afficher la page énergie",
+              "position": "Position",
+              "views": "Vues"
+            },
+            "data_description": {
+              "enabled": "Ajoute la page à l'écran",
+              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "views": "Les boutons en bas de la page permettent d'en changer ; sans sélection, toutes sont affichées"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa dernière section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -488,6 +502,20 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "energy_page": {
+            "name": "Page énergie",
+            "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
+            "data": {
+              "enabled": "Afficher la page énergie",
+              "position": "Position",
+              "views": "Vues"
+            },
+            "data_description": {
+              "enabled": "Ajoute la page à l'écran",
+              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "views": "Les boutons en bas de la page permettent d'en changer ; sans sélection, toutes sont affichées"
             }
           }
         }
@@ -679,7 +707,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nLa dernière section est la **page énergie** facultative, une neuvième page qui affiche la configuration Énergie de Home Assistant ; avec elle, les positions vont de 1 à 9.",
         "sections": {
           "page_1": {
             "name": "Page 1 : Page d'état",
@@ -784,6 +812,20 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "energy_page": {
+            "name": "Page énergie",
+            "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
+            "data": {
+              "enabled": "Afficher la page énergie",
+              "position": "Position",
+              "views": "Vues"
+            },
+            "data_description": {
+              "enabled": "Ajoute la page à l'écran",
+              "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
+              "views": "Les boutons en bas de la page permettent d'en changer ; sans sélection, toutes sont affichées"
             }
           }
         }
@@ -1346,6 +1388,13 @@
         "drop_link_local": "Sans adresses link-local (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 et IPv6 local (ULA) - recommandé",
         "ipv4_only": "IPv4 uniquement"
+      }
+    },
+    "energy_views": {
+      "options": {
+        "now": "Maintenant : flux entre réseau, solaire, batterie et maison",
+        "today": "Aujourd'hui : barres horaires et totaux",
+        "balance": "Bilan : autonomie, autoconsommation, coût"
       }
     }
   },

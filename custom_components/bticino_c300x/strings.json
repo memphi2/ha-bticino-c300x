@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe last section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
@@ -377,13 +377,27 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
+            }
+          },
+          "energy_page": {
+            "name": "Energy page",
+            "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
+            "data": {
+              "enabled": "Show the energy page",
+              "position": "Position",
+              "views": "Views"
+            },
+            "data_description": {
+              "enabled": "Adds the page to the display",
+              "position": "1 = first page; 2 by default, before another page with the same position",
+              "views": "Switched with the buttons at the bottom of the page; none selected means all"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe last section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
@@ -488,6 +502,20 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
+            }
+          },
+          "energy_page": {
+            "name": "Energy page",
+            "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
+            "data": {
+              "enabled": "Show the energy page",
+              "position": "Position",
+              "views": "Views"
+            },
+            "data_description": {
+              "enabled": "Adds the page to the display",
+              "position": "1 = first page; 2 by default, before another page with the same position",
+              "views": "Switched with the buttons at the bottom of the page; none selected means all"
             }
           }
         }
@@ -679,7 +707,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nThe last section is the optional **energy page**, a ninth page that shows Home Assistant's Energy setup; with it, positions run from 1 to 9.",
         "sections": {
           "page_1": {
             "name": "Page 1: Status page",
@@ -784,6 +812,20 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
+            }
+          },
+          "energy_page": {
+            "name": "Energy page",
+            "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
+            "data": {
+              "enabled": "Show the energy page",
+              "position": "Position",
+              "views": "Views"
+            },
+            "data_description": {
+              "enabled": "Adds the page to the display",
+              "position": "1 = first page; 2 by default, before another page with the same position",
+              "views": "Switched with the buttons at the bottom of the page; none selected means all"
             }
           }
         }
@@ -1346,6 +1388,13 @@
         "drop_link_local": "Without link-local addresses (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 and local IPv6 (ULA) - recommended",
         "ipv4_only": "IPv4 only"
+      }
+    },
+    "energy_views": {
+      "options": {
+        "now": "Now: flow between grid, solar, battery and home",
+        "today": "Today: hourly bars and sums",
+        "balance": "Balance: self-sufficiency, solar used at home, cost"
       }
     }
   },

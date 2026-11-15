@@ -19,6 +19,7 @@ ENERGY_VIEW_NOW = "now"
 ENERGY_VIEW_TODAY = "today"
 ENERGY_VIEW_BALANCE = "balance"
 ENERGY_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_BALANCE)
+ENERGY_PAGE_DEFAULT_POSITION = 2
 
 COLOR_SOLAR = "#ff9800"
 COLOR_GRID = "#488fc2"
@@ -281,6 +282,25 @@ def energy_views(value: Any) -> tuple[str, ...]:
 
     chosen = [view for view in ENERGY_VIEWS if isinstance(value, (list, tuple)) and view in value]
     return tuple(chosen) or ENERGY_VIEWS
+
+
+def normalize_energy_page(value: Any) -> dict[str, Any]:
+    """Return the stored settings of the energy page, complete and valid.
+
+    The page is off unless switched on. Its position counts among all pages
+    of the display, 1 being the first; the default puts it second.
+    """
+
+    data = value if isinstance(value, dict) else {}
+    try:
+        position = int(float(data.get("position", ENERGY_PAGE_DEFAULT_POSITION)))
+    except (TypeError, ValueError, OverflowError):
+        position = ENERGY_PAGE_DEFAULT_POSITION
+    return {
+        "enabled": data.get("enabled") is True,
+        "position": max(1, position),
+        "views": list(energy_views(data.get("views"))),
+    }
 
 
 def energy_page(

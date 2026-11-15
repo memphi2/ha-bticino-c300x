@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer letzte Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
@@ -377,13 +377,27 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "energy_page": {
+            "name": "Energieseite",
+            "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
+            "data": {
+              "enabled": "Energieseite anzeigen",
+              "position": "Position",
+              "views": "Ansichten"
+            },
+            "data_description": {
+              "enabled": "Nimmt die Seite ins Display auf",
+              "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
+              "views": "Gewechselt wird mit den Schaltflächen am unteren Seitenrand; ohne Auswahl gelten alle"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer letzte Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
@@ -488,6 +502,20 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "energy_page": {
+            "name": "Energieseite",
+            "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
+            "data": {
+              "enabled": "Energieseite anzeigen",
+              "position": "Position",
+              "views": "Ansichten"
+            },
+            "data_description": {
+              "enabled": "Nimmt die Seite ins Display auf",
+              "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
+              "views": "Gewechselt wird mit den Schaltflächen am unteren Seitenrand; ohne Auswahl gelten alle"
             }
           }
         }
@@ -679,7 +707,7 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nDer letzte Abschnitt ist die optionale **Energieseite**, eine neunte Seite mit der Energie-Einrichtung von Home Assistant; mit ihr reichen die Positionen von 1 bis 9.",
         "sections": {
           "page_1": {
             "name": "Seite 1: Statusseite",
@@ -784,6 +812,20 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "energy_page": {
+            "name": "Energieseite",
+            "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
+            "data": {
+              "enabled": "Energieseite anzeigen",
+              "position": "Position",
+              "views": "Ansichten"
+            },
+            "data_description": {
+              "enabled": "Nimmt die Seite ins Display auf",
+              "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
+              "views": "Gewechselt wird mit den Schaltflächen am unteren Seitenrand; ohne Auswahl gelten alle"
             }
           }
         }
@@ -1346,6 +1388,13 @@
         "drop_link_local": "Ohne Link-Local-Adressen (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 und lokales IPv6 (ULA) - empfohlen",
         "ipv4_only": "Nur IPv4"
+      }
+    },
+    "energy_views": {
+      "options": {
+        "now": "Jetzt: Fluss zwischen Netz, PV, Batterie und Haus",
+        "today": "Heute: Stundenbalken und Summen",
+        "balance": "Bilanz: Autarkie, PV-Eigenverbrauch, Kosten"
       }
     }
   },

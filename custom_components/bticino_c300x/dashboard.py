@@ -46,10 +46,12 @@ from .dashboard_config import (
     configured_dashboard_entity_display_overrides,
     configured_dashboard_pages,
     configured_dashboard_prevent_return,
+    configured_energy_page,
     configured_weather_entity_id,
 )
 from .dashboard_controls import choice_options, entity_controls, finite_number
 from .dashboard_details import DETAIL_DOMAINS, entity_details
+from .dashboard_energy_data import async_energy_dashboard_page
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
@@ -245,6 +247,11 @@ async def async_dashboard_payload(
         for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
         if _dashboard_page_has_content(page)
     ]
+    energy = await async_energy_dashboard_page(hass, entry, language)
+    if energy is not None:
+        # Its position counts among the pages the display really shows.
+        position = configured_energy_page(entry)["position"]
+        shown.insert(min(position - 1, len(shown)), energy)
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
         shown = [main_page]
@@ -981,8 +988,8 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
         finalized["items"] = items
     if isinstance(page.get("weather"), dict):
         finalized["weather"] = page["weather"]
-    if page.get("flow"):
-        finalized["flow"] = page["flow"]
+    if isinstance(page.get("energy"), dict):
+        finalized["energy"] = page["energy"]
     return finalized
 
 
@@ -1027,4 +1034,4 @@ def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
     left out, and so are its badges.
     """
 
-    return any(bool(page.get(key)) for key in ("items", "weather", "flow"))
+    return any(bool(page.get(key)) for key in ("items", "weather", "energy"))

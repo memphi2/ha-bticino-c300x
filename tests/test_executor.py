@@ -427,6 +427,7 @@ def test_dashboard_payload_normalization_helpers() -> None:
             "badges": [{"name": "Ready"}],
             "items": finalized_items,
             "weather": {"state": "sunny"},
+            "energy": {"views": []},
             "flow": [{"page": "next"}],
         }
     ) == {
@@ -434,7 +435,7 @@ def test_dashboard_payload_normalization_helpers() -> None:
         "badges": [{"name": "Ready"}],
         "items": finalized_items,
         "weather": {"state": "sunny"},
-        "flow": [{"page": "next"}],
+        "energy": {"views": []},
     }
     assert _finalize_dashboard_page({}) == {"title": ""}
 

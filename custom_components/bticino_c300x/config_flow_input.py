@@ -62,6 +62,7 @@ from .const import (
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_ENERGY_PAGE,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
@@ -85,6 +86,7 @@ from .const import (
     WEATHER_DOMAIN,
     WEBRTC_ICE_POLICIES,
 )
+from .dashboard_energy import normalize_energy_page
 from .device_activations import (
     DeviceActivationConfigError,
     normalize_device_activations,
@@ -450,6 +452,9 @@ def _dashboard_feature_input(
         CONF_WEATHER_ENTITY_ID: weather_entity_id,
         CONF_DASHBOARD_ENTITIES: dashboard_entities,
         CONF_DASHBOARD_PAGES: dashboard_pages,
+        CONF_ENERGY_PAGE: normalize_energy_page(
+            user_input.get(CONF_ENERGY_PAGE) if device_ui_enabled else None
+        ),
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard_dynamic_homepage,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard_entity_display_overrides,
         CONF_ACTIONS: actions,
@@ -544,6 +549,7 @@ def _feature_input(
             CONF_WEATHER_ENTITY_ID: dashboard[CONF_WEATHER_ENTITY_ID],
             CONF_DASHBOARD_ENTITIES: dashboard[CONF_DASHBOARD_ENTITIES],
             CONF_DASHBOARD_PAGES: dashboard[CONF_DASHBOARD_PAGES],
+            CONF_ENERGY_PAGE: dashboard[CONF_ENERGY_PAGE],
             CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard[
                 CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES

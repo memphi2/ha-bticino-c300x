@@ -270,7 +270,7 @@ class C300XRuntimeManager:
         """Synchronize startup-only runtime state with the device agent."""
 
         self.entry.runtime_data.resources.unregister_display_bridge_updates = (
-            _async_track_display_bridge_updates(self.hass, self.entry)
+            await _async_track_display_updates(self.hass, self.entry)
         )
         if not self.connection_state.available:
             return
@@ -1024,6 +1024,30 @@ async def _async_notify_display_configuration(api: C300XAgentApi) -> None:
         await api.async_notify_display_bridge_event("display_bridge.state")
     except C300XAgentApiError:
         _LOGGER.debug("C300X display configuration notification failed", exc_info=True)
+
+
+async def _async_track_display_updates(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+) -> Any:
+    """Track everything that changes the display pages, the energy page included."""
+
+    unsubscribe = _async_track_display_bridge_updates(hass, entry)
+    if unsubscribe is None:
+        return None
+    from .dashboard_energy_updates import async_track_energy_page_updates
+
+    stop_energy = await async_track_energy_page_updates(
+        hass, entry, lambda: _async_schedule_display_bridge_notify(hass, entry),
+    )
+    if stop_energy is None:
+        return unsubscribe
+
+    def _unsub_all() -> None:
+        unsubscribe()
+        stop_energy()
+
+    return _unsub_all
 
 
 def _async_track_display_bridge_updates(

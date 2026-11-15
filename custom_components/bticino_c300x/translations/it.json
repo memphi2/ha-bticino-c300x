@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nL'ultima sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
         "sections": {
           "page_1": {
             "name": "Pagina 1: Pagina di stato",
@@ -377,13 +377,27 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "energy_page": {
+            "name": "Pagina energia",
+            "description": "Una pagina aggiuntiva facoltativa. Mostra la configurazione Energia di Home Assistant (Impostazioni > Plance > Energia): contatori di rete, solare e batteria, i loro sensori di potenza, nomi e prezzi. Un tipo di sorgente non configurato lì viene omesso; senza alcuna sorgente la pagina non viene mostrata.",
+            "data": {
+              "enabled": "Mostra la pagina energia",
+              "position": "Posizione",
+              "views": "Viste"
+            },
+            "data_description": {
+              "enabled": "Aggiunge la pagina al display",
+              "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
+              "views": "Si cambiano con i pulsanti in fondo alla pagina; senza selezione valgono tutte"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nL'ultima sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
         "sections": {
           "page_1": {
             "name": "Pagina 1: Pagina di stato",
@@ -488,6 +502,20 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "energy_page": {
+            "name": "Pagina energia",
+            "description": "Una pagina aggiuntiva facoltativa. Mostra la configurazione Energia di Home Assistant (Impostazioni > Plance > Energia): contatori di rete, solare e batteria, i loro sensori di potenza, nomi e prezzi. Un tipo di sorgente non configurato lì viene omesso; senza alcuna sorgente la pagina non viene mostrata.",
+            "data": {
+              "enabled": "Mostra la pagina energia",
+              "position": "Posizione",
+              "views": "Viste"
+            },
+            "data_description": {
+              "enabled": "Aggiunge la pagina al display",
+              "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
+              "views": "Si cambiano con i pulsanti in fondo alla pagina; senza selezione valgono tutte"
             }
           }
         }
@@ -679,7 +707,7 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nL'ultima sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
         "sections": {
           "page_1": {
             "name": "Pagina 1: Pagina di stato",
@@ -784,6 +812,20 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "energy_page": {
+            "name": "Pagina energia",
+            "description": "Una pagina aggiuntiva facoltativa. Mostra la configurazione Energia di Home Assistant (Impostazioni > Plance > Energia): contatori di rete, solare e batteria, i loro sensori di potenza, nomi e prezzi. Un tipo di sorgente non configurato lì viene omesso; senza alcuna sorgente la pagina non viene mostrata.",
+            "data": {
+              "enabled": "Mostra la pagina energia",
+              "position": "Posizione",
+              "views": "Viste"
+            },
+            "data_description": {
+              "enabled": "Aggiunge la pagina al display",
+              "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
+              "views": "Si cambiano con i pulsanti in fondo alla pagina; senza selezione valgono tutte"
             }
           }
         }
@@ -1346,6 +1388,13 @@
         "drop_link_local": "Senza indirizzi link-local (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 e IPv6 locale (ULA) - consigliato",
         "ipv4_only": "Solo IPv4"
+      }
+    },
+    "energy_views": {
+      "options": {
+        "now": "Ora: flusso tra rete, solare, batteria e casa",
+        "today": "Oggi: barre orarie e totali",
+        "balance": "Bilancio: autosufficienza, autoconsumo, costo"
       }
     }
   },

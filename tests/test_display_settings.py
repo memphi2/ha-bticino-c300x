@@ -1158,9 +1158,12 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
 
     assert [(field["name"], field["type"]) for field in fields] == [
         *((f"page_{slot}", "expandable") for slot in range(1, 9)),
+        ("energy_page", "expandable"),
     ]
-    # Used pages are open, and so is the first free one to add a page.
-    assert [field["expanded"] for field in fields] == [True, True, True] + [False] * 5
+    # Used pages are open, and so is the first free one to add a page; the
+    # energy page is closed while it is switched off.
+    assert [field["expanded"] for field in fields] == [True, True, True] + [False] * 6
+    assert [item["name"] for item in fields[8]["schema"]] == ["enabled", "position", "views"]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "weather_entity_id", "position", "entities",
     ]
@@ -1392,3 +1395,45 @@ def test_the_tiles_form_names_the_untitled_page_as_such():
     form = tile_form({"dashboard_entities": ["light.a"]})
 
     assert list(form.sections) == ["Page without title › A"]
+
+
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind):
+    dashboard = {"device_ui_enabled": True}
+    entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    posted = post_pages_like_home_assistant(form["data_schema"], {
+        "page_1": {"entities": ["sensor.temp"]},
+        "page_2": {"name": "Room", "entities": ["light.one"]},
+        "energy_page": {"enabled": True, "views": ["today", "now"]},
+    })
+    form = asyncio.run(pages_step(posted))
+    result = asyncio.run(display_step(post_tiles_like_home_assistant(form["data_schema"])))
+
+    assert result["type"] == "finished", result.get("errors")
+    # Second page by default, ahead of the page that also asked for 2.
+    assert result["data"]["energy_page"] == {
+        "enabled": True, "position": 2, "views": ["now", "today"],
+    }
+    assert result["data"]["dashboard_pages"] == [
+        {"name": "C300X", "order": 1}, {"name": "Room", "order": 2},
+    ]
+
+
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+def test_every_flow_leaves_the_energy_page_off_unless_switched_on(monkeypatch, flow_kind):
+    dashboard = {"device_ui_enabled": True}
+    entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    posted = post_pages_like_home_assistant(form["data_schema"], {
+        "page_1": {"entities": ["sensor.temp"]},
+    })
+    form = asyncio.run(pages_step(posted))
+    result = asyncio.run(display_step(post_tiles_like_home_assistant(form["data_schema"])))
+
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["energy_page"]["enabled"] is False

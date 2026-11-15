@@ -307,18 +307,29 @@ Item {
 }
 """
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "8a1690531198b53c29c0c828272faca2f5be6af6e1cd55357e12c50305fb9699",
+    "MainApp.qml": "5db95b56810c7eda043c082c4e20ea2f306315ac4c2893fd8cd87b46e2acb279",
     "Components/Settings/GeneralsChoice.qml": "42ac9c6be930fe258a46cb847ec69ce0160ccc75e2d98049c4441e1208b41c87",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
-    "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
+    "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "4e9115fd507d360e76d7b7db3f07d9f08836af681dd754dd26dd87b2a5a8d638",
-    "C300XEnergy.qml": "330622a775f746e607253b40cb4fc2a18029fa4db6cb22eedef8f7fd4b39c7a6",
-    "C300XEnergyConsumers.qml": "de645190befd8755de211eaac6d9104f0bc96df424820fcb191f53ff7f00f9fd",
+    "HomeAssistant.qml": "d719a16053d053501c6c94a2c1a1d7a0f6cd6bdfaa014875c2309e9798e94996",
+    "C300XEnergy.qml": "b66ebad088c787161c745f8b651b8b3671a0336077ff156ae1db2149cfa7b22b",
+    "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
+    "C300XAgenda.qml": "9bc5d2ff2d69250033323a4bc4696df85268ad761ed5b8446b56bf0325143711",
+    "C300XAlerts.qml": "4efc1cabf6bc07120b82a19cc8ee4a6dbaaa195ac369ee57b1043b4b7fd005bb",
+    "C300XDetailControl.qml": "142c08d1a9b77b0f4fa6b55a4386be7dcc19f972ccab30ed6c037f60e0b85aeb",
+    "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
+    "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
+    "C300XLeaveHome.qml": "80cbba3535e7f3dee8dcb45a731ac9a7554c312e612ea5d096faffa735293f5d",
     "C300XPageNavigation.qml": "7152e3a1ec13559a27c76fb4f8f0561188b91cd59d1cd7bf2ce4718164b0851c",
-    "js/c300x_ha.js": "0cab445174cf45958672ca163b2dbf711dfeca598045014263b1aef2a640d556",
-    "js/c300x_i18n.js": "e8a75ca586851478abcf7c9f915110022d335fcb02b50dbc2d308dfdc0527594",
+    "C300XRingerControl.qml": "7e30781b7a43dcff6ab090d6dcc87c479b2284f073a98c314827ce23774310d9",
+    "js/c300x_alerts.js": "a06a136e24ba269ee49110d7586c5fb97deda137371e2f8a52a93696ec3ff3d1",
+    "js/c300x_energy.js": "d5f632b155df83a0738b9c76be528b9827d59f38386ba903b85142cf3ce21901",
+    "js/c300x_energy_consumers.js": "fb33ae30340a78c6b95efe04d5be19acf1df11e648895a96bff3a1f78742d3fc",
+    "js/c300x_ringer.js": "17c510ed56828affcd8eefc7a34068f2f34fe843b125f7c1167585252e5c3133",
+    "js/c300x_ha.js": "17a3499d6be78996ab312739f45eb3f089e97bf23d73d0e244cc63f9094a0865",
+    "js/c300x_i18n.js": "4e66685179ad1ba40cc93591426635f7dec03cc5fcccdcce166b94e4944eb883",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }
 
@@ -646,6 +657,10 @@ def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
     status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
 
     assert status["state"] == "patched"
+    assert set(PATCH_OUTPUT_SHA256) == set(SOURCE_INSTALLED_FILES) | {
+        "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
+        "Components/Settings/GeneralsChoice.qml",
+    }
     assert {
         relative_path: _sha256(gui_dir / relative_path)
         for relative_path in PATCH_OUTPUT_SHA256

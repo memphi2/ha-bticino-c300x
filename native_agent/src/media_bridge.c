@@ -3539,6 +3539,9 @@ static bool forward_pcm_backchannel_packet(
     bool marker_pending;
     uint16_t sequence;
     unsigned int generation;
+    /* PCMU for a PCMU device goes on byte for byte, only cut into frames. */
+    bool copy = payload_type != RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
+        && bridge_audio_codec_is_pcmu(bridge);
 
     if (bridge == NULL || packet == NULL || packet_len <= header_len) {
         return true;
@@ -3582,7 +3585,7 @@ static bool forward_pcm_backchannel_packet(
             bridge->talkback_pcm_buffer[bridge->talkback_pcm_count + index] =
                 payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
                     ? c300x_pcma_decode(sample)
-                    : c300x_pcmu_decode(sample);
+                    : copy ? sample : c300x_pcmu_decode(sample);
         }
         bridge->talkback_pcm_count += take;
         offset += take;
@@ -3600,7 +3603,9 @@ static bool forward_pcm_backchannel_packet(
         }
         if (bridge_audio_codec_is_pcmu(bridge)) {
             for (size_t index = 0; index < RTSP_BACKCHANNEL_FRAME_SAMPLES; index++) {
-                speex_payload[index] = c300x_pcmu_encode(samples[index]);
+                speex_payload[index] = copy
+                    ? (unsigned char)samples[index]
+                    : c300x_pcmu_encode(samples[index]);
             }
             speex_len = RTSP_BACKCHANNEL_FRAME_SAMPLES;
         } else if (!speex_encode_pcm_frame(

@@ -2,6 +2,7 @@
 static ssize_t limited_send(int fd, const void *data, size_t size, int flags);
 #define send limited_send
 #include "../src/http_util.c"
+#include "../src/video_snapshot.h"
 #undef send
 #include <assert.h>
 #include <fcntl.h>
@@ -67,10 +68,30 @@ static void test_large_response(void)
     free(received);
 }
 
+static void test_largest_snapshot_is_accepted(void)
+{
+    int pair[2];
+    const size_t size = 54U + C300X_SNAPSHOT_MAX_WIDTH * 3U * C300X_SNAPSHOT_MAX_HEIGHT;
+    char *body = calloc(size, 1);
+    assert(body);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    blocked = 1;
+    assert(c300x_http_write(pair[0], "HTTP/1.1 200 OK\r\n\r\n", 19));
+    assert(c300x_http_write(pair[0], body, size));
+    assert(output_count() == 1);
+    close_agent_socket(pair[0]);
+    close(pair[1]);
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        if (outputs[i].data != NULL) clear_output(&outputs[i], 1);
+    }
+    free(body);
+    blocked = 0;
+}
+
 static void test_queue_memory_budget(void)
 {
     int first[2], second[2];
-    const size_t size = 300000;
+    const size_t size = C300X_HTTP_OUTPUT_QUEUE_LIMIT / 5 * 3;
     char *body = calloc(size, 1);
     assert(body);
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, first) == 0);
@@ -182,5 +203,6 @@ int main(void)
     close(pair[1]);
     test_large_response();
     test_queue_memory_budget();
+    test_largest_snapshot_is_accepted();
     return 0;
 }

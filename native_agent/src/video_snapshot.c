@@ -29,6 +29,8 @@
 #define SNAPSHOT_MAX_WIDTH C300X_SNAPSHOT_MAX_WIDTH
 #define SNAPSHOT_MAX_HEIGHT C300X_SNAPSHOT_MAX_HEIGHT
 #define SNAPSHOT_MAX_BODY (54U + SNAPSHOT_MAX_WIDTH * 3U * SNAPSHOT_MAX_HEIGHT)
+_Static_assert(SNAPSHOT_MAX_BODY + 512U <= C300X_HTTP_OUTPUT_LIMIT,
+               "the largest snapshot must fit one HTTP response");
 
 static pthread_mutex_t capture_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct timespec last_attempt;

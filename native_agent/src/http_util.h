@@ -49,9 +49,11 @@ int c300x_udp_source_is_local(const struct sockaddr_in *source);
 /* Main-loop HTTP responses only; outbound clients retain send_all_bytes().
  * close_agent_socket() transfers a queued response's fd to the output queue. */
 #define C300X_HTTP_MAX_OUTPUTS 8
-#define C300X_HTTP_OUTPUT_LIMIT (512 * 1024)
-/* Preserve the former eight-times-64-KiB total despite larger memo lists. */
-#define C300X_HTTP_OUTPUT_QUEUE_LIMIT (512 * 1024)
+/* One response may be the largest visitor snapshot (800x480 BMP, about
+ * 1.1 MiB); Home Assistant reads at most the same 1200 KiB. All queued
+ * responses together stay within that one budget. */
+#define C300X_HTTP_OUTPUT_LIMIT (1200 * 1024)
+#define C300X_HTTP_OUTPUT_QUEUE_LIMIT C300X_HTTP_OUTPUT_LIMIT
 #define C300X_HTTP_OUTPUT_TIMEOUT_MS 2000
 int c300x_http_write(int fd, const char *data, size_t size);
 int c300x_http_outputs_prepare(struct pollfd *fds);

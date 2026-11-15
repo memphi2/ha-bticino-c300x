@@ -10,6 +10,9 @@ static int tracked_join(pthread_t, void **);
 static long long test_clock(void);
 static void *tracked_calloc(size_t, size_t);
 static void *tracked_malloc(size_t);
+struct c300x_video;
+static void tracked_rtp_packet(struct c300x_video *);
+#define c300x_video_bridge_rtp_packet tracked_rtp_packet
 #define calloc tracked_calloc
 #define malloc tracked_malloc
 #define c300x_monotonic_ms test_clock
@@ -28,6 +31,13 @@ static int unauth_lifetime = 30;
 #undef c300x_monotonic_ms
 #undef calloc
 #undef malloc
+#undef c300x_video_bridge_rtp_packet
+extern void c300x_video_bridge_rtp_packet(struct c300x_video *);
+static void (*after_target_snapshot)(void);
+static void tracked_rtp_packet(struct c300x_video *video) {
+    if (after_target_snapshot) after_target_snapshot();
+    c300x_video_bridge_rtp_packet(video);
+}
 extern long long c300x_monotonic_ms(void);
 
 static atomic_int allocation_failure, allocations, rtsp_creates;
@@ -456,6 +466,56 @@ static void *forward_worker(void *arg) {
     return NULL;
 }
 
+static int replaced_fd, replacement_fd, replaced_connection;
+static void replace_forward_target(void) {
+    /* This is the disconnect/accept interleaving after the ownership lock
+     * has been released, but before the relay writes its first packet. */
+    pthread_mutex_lock(&g_bridge.mutex);
+    assert(unregister_rtsp_client_locked(&g_bridge, 0, replaced_fd));
+    pthread_mutex_unlock(&g_bridge.mutex);
+    release_rtsp_client(&g_bridge, replaced_fd, replaced_connection);
+    assert(dup2(replacement_fd, replaced_fd) == replaced_fd);
+}
+
+static int open_test_fds(void) {
+    int count = 0;
+    for (int fd = 0; fd < 256; fd++) if (fcntl(fd, F_GETFD) >= 0) count++;
+    return count;
+}
+
+static void target_ownership_test(void) {
+    for (int disconnected = 0; disconnected < 2; disconnected++) {
+        int original[2], replacement[2];
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, original) == 0);
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, replacement) == 0);
+        replaced_fd = original[0];
+        replacement_fd = replacement[0];
+        replaced_connection = reserve_rtsp_client(&g_bridge, replaced_fd);
+        assert(replaced_connection >= 0);
+        g_bridge.rtsp_clients[0] = (rtsp_client_slot_t){.active = true,
+            .played = true, .fd = replaced_fd, .transport_tcp = true};
+        if (disconnected) close(original[1]);
+        int before = open_test_fds();
+        after_target_snapshot = replace_forward_target;
+        forward_worker(NULL);
+        after_target_snapshot = NULL;
+        assert(open_test_fds() == before);
+        unsigned char packet[32];
+        assert(recv(replacement[1], packet, sizeof(packet), MSG_DONTWAIT) == -1);
+        assert(errno == EAGAIN || errno == EWOULDBLOCK);
+        assert(send(replaced_fd, "x", 1, MSG_NOSIGNAL) == 1);
+        assert(recv(replacement[1], packet, sizeof(packet), 0) == 1);
+        if (!disconnected) {
+            assert(recv(original[1], packet, sizeof(packet), MSG_DONTWAIT) == 16);
+            assert(packet[0] == '$' && packet[4] == 0x80);
+            close(original[1]);
+        }
+        close(replaced_fd);
+        close(replacement[0]);
+        close(replacement[1]);
+    }
+}
+
 static void stalled_client_test(void) {
     int slow[2], healthy[2];
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, slow) == 0);
@@ -603,6 +663,8 @@ int main(int argc, char **argv) {
         unauth_trickle_test(&config);
     } else if (strcmp(argv[1], "stalled_client") == 0) {
         stalled_client_test();
+    } else if (strcmp(argv[1], "target_ownership") == 0) {
+        target_ownership_test();
     } else if (strcmp(argv[1], "read_timeout") == 0) {
         extern long long c300x_monotonic_ms(void);
         long long now = c300x_monotonic_ms();

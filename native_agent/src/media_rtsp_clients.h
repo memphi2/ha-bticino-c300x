@@ -3,6 +3,7 @@
 
 #include "video_rtsp.h"
 
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -141,7 +142,13 @@ static inline size_t c300x_rtsp_client_slots_send_targets(
         if (audio && !slot->audio_enabled) {
             continue;
         }
-        targets[count].fd = slot->fd;
+        /* Retain the socket while the caller still holds the ownership lock.
+         * The forwarding path closes each copy after sending or shutting down. */
+        int retained_fd = fcntl(slot->fd, F_DUPFD_CLOEXEC, 0);
+        if (retained_fd < 0) {
+            continue;
+        }
+        targets[count].fd = retained_fd;
         targets[count].transport_tcp = slot->transport_tcp;
         targets[count].channel = audio ? slot->audio_interleaved_channel : slot->video_interleaved_channel;
         targets[count].udp_client = slot->udp_client;

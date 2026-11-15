@@ -2147,6 +2147,7 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
                 shutdown(target->fd, SHUT_RDWR);
             }
         }
+        close(target->fd);
     }
 }
 

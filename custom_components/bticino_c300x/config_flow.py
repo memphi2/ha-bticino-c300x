@@ -105,6 +105,17 @@ from .config_flow_features import (
 from .config_flow_forms import (
     actions_json as _actions_json,
 )
+from .config_flow_identity import (
+    entry_connection_matches_discovery as _entry_connection_matches_discovery,
+)
+from .config_flow_identity import (
+    entry_uses_manual_setup_unique_id as _entry_uses_manual_setup_unique_id,
+)
+from .config_flow_identity import manual_setup_unique_id as _manual_setup_unique_id
+from .config_flow_identity import reconfigure_unique_id as _reconfigure_unique_id
+from .config_flow_identity import (
+    stable_unique_id_from_setup_data as _stable_unique_id_from_setup_data,
+)
 from .config_flow_input import (
     _actions_json_errors,
     _agent_auth_input,
@@ -1780,52 +1791,6 @@ class BticinoC300XOptionsFlow(
         )
 
 
-def _reconfigure_unique_id(entry: BticinoC300XConfigEntry) -> str:
-    """Return the existing entry unique id for reconfigure flows."""
-
-    return str(getattr(entry, "unique_id", None) or DOMAIN)
-
-
-def _manual_setup_unique_id(connection: dict[str, Any]) -> str:
-    """Return a deterministic unique id for manual setup flows."""
-
-    host = _normalize_discovery_host(str(connection.get(CONF_AGENT_HOST, "")))
-    port = int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
-    return f"{DOMAIN}:{host}:{port}" if host else DOMAIN
-
-
-def _entry_uses_manual_setup_unique_id(
-    config_entry: BticinoC300XConfigEntry,
-) -> bool:
-    """Return true when an existing entry still uses the host-based setup ID."""
-
-    unique_id = str(getattr(config_entry, "unique_id", "") or "")
-    return unique_id == DOMAIN or unique_id.startswith(f"{DOMAIN}:")
-
-
-def _entry_connection_matches_discovery(
-    config_entry: BticinoC300XConfigEntry,
-    connection: dict[str, Any],
-) -> bool:
-    """Return true when host and port already match the discovery endpoint."""
-
-    entry_host = _normalize_discovery_host(
-        str(_config_default(config_entry, CONF_AGENT_HOST, "") or "")
-    )
-    discovery_host = _normalize_discovery_host(str(connection.get(CONF_AGENT_HOST, "")))
-    if not entry_host or entry_host != discovery_host:
-        return False
-    return int(
-        _config_default(config_entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
-    ) == int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
-
-
-def _normalize_discovery_host(host: str) -> str:
-    """Normalize a host name for local discovery comparisons."""
-
-    return host.strip().lower().rstrip(".")
-
-
 async def _async_probe_agent(
     hass: Any,
     connection: dict[str, Any],
@@ -1907,15 +1872,6 @@ async def _async_agent_ready_for_setup(
         pass
     await api.async_list_event_subscriptions()
     return setup_data
-
-
-def _stable_unique_id_from_setup_data(setup_data: dict[str, Any]) -> str | None:
-    """Return the normalized config-entry unique ID from agent setup data."""
-
-    from .discovery import discovery_unique_id
-
-    device_id = setup_data.get("device_id")
-    return discovery_unique_id({"id": device_id}) if device_id else None
 
 
 def _clear_reconfigured_option_overrides(

@@ -228,11 +228,13 @@ the signed identity aligned with the actual release sources using the
 
 `build-metadata.json` records the supported Home Assistant range, Python
 version, C300X firmware target, native-agent version, agent reuse status and the
-validated release jobs. For fresh native-agent builds it also records
-`native_agent_sysroot` evidence from `C300X_DEVICE_SYSROOT`: no local path, only
-availability, content hashes for the relevant ARMHF sysroot libraries and a
-combined fingerprint. Treat that file as the release evidence for why the asset
-was considered LTS-compatible at build time.
+validated release jobs. Its `native_agent_sysroot` section describes the
+environment generating that metadata: availability, hashes of relevant ARMHF
+libraries and a combined fingerprint, without local paths. Hosted packaging
+has no private sysroot, so those fields report unavailable even when the agent
+was built and ABI-checked locally. The local-build handoff does not transfer
+compiler or sysroot provenance; the reviewed build lock binds executable bytes
+to approved source inputs, not independently attested build conditions.
 
 After downloading a release, verify both signed claims with a current GitHub
 CLI:
@@ -245,7 +247,7 @@ gh attestation verify ha-bticino-c300x.zip \
   --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-Agent binary reuse is allowed only if none of these paths changed:
+The reviewed build lock covers these native and bundle input paths:
 
 - `native_agent/src`
 - `native_agent/scripts`
@@ -257,9 +259,11 @@ Agent binary reuse is allowed only if none of these paths changed:
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
 
-If any path above changed, do not release with a reused native-agent binary.
-Build with a verified `C300X_DEVICE_SYSROOT`, run the ABI/stack gates, and keep
-the resulting sysroot evidence in `build-metadata.json`.
+Changes to these paths invalidate the previous approval. Native code changes
+require rebuilding with a verified `C300X_DEVICE_SYSROOT` and running the
+ABI/stack gates. Display-content-only changes may retain the executable, but
+still require a rebuilt bundle and renewed source-bound approval. Retain local
+build/ABI evidence separately; hosted `build-metadata.json` does not inherit it.
 
 ### Reviewed Local Native Build
 

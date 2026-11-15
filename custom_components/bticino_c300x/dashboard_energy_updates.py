@@ -47,6 +47,7 @@ class EnergyPageUpdates:
         self._unsub_delayed: Callable[[], None] | None = None
         self._last_notify = 0.0
         self._shown = False
+        self._stopped = False
 
     async def async_start(self) -> bool:
         """Start tracking; returns False when the energy page is switched off."""
@@ -68,6 +69,7 @@ class EnergyPageUpdates:
     def stop(self) -> None:
         """Stop tracking and drop the kept statistics."""
 
+        self._stopped = True
         for name in ("_unsub_power", "_unsub_tick", "_unsub_delayed"):
             unsubscribe = getattr(self, name)
             setattr(self, name, None)
@@ -89,6 +91,9 @@ class EnergyPageUpdates:
 
     async def _async_tick(self, _now: Any = None) -> None:
         sources = await async_configured_energy_sources(self._hass, self._entry)
+        if self._stopped:
+            # Stopped while waiting: nothing is tracked or woken any more.
+            return
         entities = frozenset(sources.power_entities)
         if entities != self._power_entities:
             self._track_power(entities)

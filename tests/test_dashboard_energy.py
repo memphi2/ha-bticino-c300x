@@ -240,6 +240,17 @@ def test_a_meter_correction_cannot_stretch_or_shrink_the_hour_bars() -> None:
     assert hours["max"] == 2.0 and hours["label"] == "2 kWh"
 
 
+def test_a_battery_that_only_charges_has_no_series_in_the_hour_bars() -> None:
+    sources = EnergySources(
+        grid_from=(EnergyMeter("sensor.g"),), battery_to=(EnergyMeter("sensor.c"),),
+    )
+    day = EnergyDay(hours={"sensor.g": [1.0] + [0.0] * 23, "sensor.c": [0.5] + [0.0] * 23})
+
+    hours = energy_page(sources, day, {})["energy"]["hours"]
+
+    assert len(hours["series"]) == 1
+
+
 def test_hour_bars_have_no_grid_series_without_a_grid_meter() -> None:
     sources = EnergySources(solar=(EnergyMeter("sensor.s"),))
     day = EnergyDay(hours={"sensor.s": _hours(1.0)})

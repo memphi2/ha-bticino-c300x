@@ -115,11 +115,10 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         self._apply_status(status)
 
     def _apply_status(self, status: Mapping[str, Any]) -> None:
-        self._set_reading(status.get("state"), status.get("mode"))
-
-    def _set_reading(self, state: Any, mode: Any) -> None:
         """Take a reading from the agent, whether asked for or pushed."""
 
+        mode = status.get("mode")
+        state = status.get("state")
         self._mode = mode if isinstance(mode, int) else None
         self._state = state if isinstance(state, str) else "unknown"
         # The shared state store holds a real forwarding state or nothing:
@@ -130,8 +129,8 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         # right afterwards on the very same store.
         forwarding_state = forwarding_state_from_value(self._state)
         event_state = self._entry.runtime_data.event_state
-        if forwarding_state is not None and forwarding_state != getattr(
-            event_state, "smartphone_forwarding_mode", None
+        if forwarding_state not in (
+            None, getattr(event_state, "smartphone_forwarding_mode", None)
         ):
             event_state.smartphone_forwarding_mode = forwarding_state
             # Media readiness reads the store; a reading that did not come
@@ -180,8 +179,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         event_type = agent_event_key(event.data) or ""
         if not event_type.startswith("smartphone_forwarding_"):
             return
-        forwarding = _normalize_smartphone_forwarding_event(event.data)
-        self._set_reading(forwarding.get("state"), forwarding.get("mode"))
+        self._apply_status(_normalize_smartphone_forwarding_event(event.data))
         self.async_write_ha_state()
 
 

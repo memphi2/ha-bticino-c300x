@@ -454,6 +454,31 @@ def test_statistics_tick_wakes_the_display_and_follows_a_changed_energy_setup(mo
     assert helpers.tracked == ["sensor.new_power"] and helpers.cancelled == ["power"]
 
 
+def test_a_tick_that_finishes_after_the_stop_does_nothing(monkeypatch) -> None:
+    """An unload can land while a tick waits for the energy setup."""
+
+    helpers = _Helpers(monkeypatch)
+    sources = AsyncMock(return_value=SOURCES)
+    monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources", sources)
+    woken: list[int] = []
+
+    async def scenario() -> None:
+        stop = await dashboard_energy_updates.async_track_energy_page_updates(
+            FakeHass(), _entry(ENERGY_ON), lambda: woken.append(1),
+        )
+
+        async def changed_setup(*_args: Any) -> EnergySources:
+            stop()
+            return EnergySources(grid_from=SOURCES.grid_from, grid_power=("sensor.new_power",))
+
+        sources.side_effect = changed_setup
+        await helpers.tick(None)
+
+    asyncio.run(scenario())
+
+    assert woken == [] and "sensor.new_power" not in helpers.tracked
+
+
 def test_nothing_is_tracked_without_an_energy_page(monkeypatch) -> None:
     helpers = _Helpers(monkeypatch)
     monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources",

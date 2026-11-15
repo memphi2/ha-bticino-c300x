@@ -355,7 +355,7 @@ def energy_page(
             for present, color, values in (
                 (sources.grid_from, COLOR_GRID, grid_in),
                 (sources.solar, COLOR_SOLAR, solar),
-                (has_battery, COLOR_BATTERY, discharge),
+                (sources.battery_from, COLOR_BATTERY, discharge),
             ) if present
         ]
         stacked = [sum(entry["values"][hour] for entry in series) for hour in range(24)]

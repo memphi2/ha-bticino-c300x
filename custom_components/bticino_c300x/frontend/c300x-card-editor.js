@@ -1,7 +1,7 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=7e926d3b2245d2bb";
+} from "./c300x-translations.js?v=8fc9b62cac1df34f";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
@@ -9,7 +9,7 @@ import {
   c300xEntryId,
   c300xFirstEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=7e926d3b2245d2bb";
+} from "./c300x-entity-resolver.js?v=8fc9b62cac1df34f";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 
@@ -135,13 +135,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
         },
       ]),
     ];
-    form.computeLabel = (schema) => this._label(
-      {
-        ringback_tone: "ringback_tone",
-        ringback_volume: "ringback_volume",
-        show_media_readiness: "show_media_readiness",
-      }[schema.name] || schema.name,
-    );
+    form.computeLabel = (schema) => this._label(schema.name);
     form.addEventListener("value-changed", (event) => {
       this._setConfig(event.detail.value || {});
     });

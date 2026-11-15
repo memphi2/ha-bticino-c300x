@@ -1033,15 +1033,7 @@
         "state": {
           "idle": "Pronto",
           "ringing": "Suona",
-          "view_requested": "Vista videocitofono attiva",
-          "view_requeste": "Vista videocitofono attiva",
-          "pressed": "Campanello premuto",
-          "ring": "Suona",
-          "doorbell_pressed": "Campanello premuto",
-          "doorbell_view_requested": "Vista videocitofono attiva",
-          "doorbell_media_closed": "Stream videocitofono terminato",
-          "media_closed": "Stream videocitofono terminato",
-          "closed": "Stream videocitofono terminato"
+          "view_requested": "Vista videocitofono attiva"
         }
       }
     },
@@ -1123,9 +1115,6 @@
     },
     "invalid_alarm_command": {
       "message": "Comando allarme non valido."
-    },
-    "invalid_lock_id": {
-      "message": "ID serratura non valido."
     },
     "maintenance_action_not_supported": {
       "message": "L'azione di manutenzione del device agent C300X non è supportata, non è abilitata o non è configurato alcun token di manutenzione."

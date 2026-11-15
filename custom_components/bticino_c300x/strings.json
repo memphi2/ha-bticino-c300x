@@ -1033,15 +1033,7 @@
         "state": {
           "idle": "Idle",
           "ringing": "Ringing",
-          "view_requested": "Camera view active",
-          "view_requeste": "Camera view active",
-          "pressed": "Doorbell pressed",
-          "ring": "Ringing",
-          "doorbell_pressed": "Doorbell pressed",
-          "doorbell_view_requested": "Camera view active",
-          "doorbell_media_closed": "Camera stream ended",
-          "media_closed": "Camera stream ended",
-          "closed": "Camera stream ended"
+          "view_requested": "Camera view active"
         }
       }
     },
@@ -1123,9 +1115,6 @@
     },
     "invalid_alarm_command": {
       "message": "The alarm command is invalid."
-    },
-    "invalid_lock_id": {
-      "message": "The lock ID is invalid."
     },
     "maintenance_action_not_supported": {
       "message": "The C300X device-agent maintenance action is not supported, not enabled, or no maintenance token is configured."

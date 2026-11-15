@@ -520,7 +520,6 @@ Page {
         spacing: 6
 
         Item {
-            id: statePanel
             width: parent.width
             height: 50
 
@@ -573,7 +572,6 @@ Page {
             visible: alarmCommands.length > 0
             spacing: 8
             columns: modeColumnCount()
-            property int commandCount: alarmCommands.length > 0 ? alarmCommands.length : 1
             property int columnCount: modeColumnCount()
             property int cellWidth: (width - (spacing * (columnCount - 1))) / columnCount
 

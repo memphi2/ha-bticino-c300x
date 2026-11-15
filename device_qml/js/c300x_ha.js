@@ -1057,16 +1057,13 @@ function dashboardPageTitle(pageData) {
 function applyWeather(pageItem, source) {
     if (!source || source.available === undefined) {
         pageItem.weatherVisible = false
-        pageItem.weatherTitle = ""
         pageItem.weatherCondition = ""
         pageItem.weatherConditionKey = ""
         pageItem.weatherTemperature = ""
         pageItem.weatherHumidity = ""
         pageItem.weatherWind = ""
-        pageItem.weatherForecast = ""
         assignDashboardValue(pageItem, "weatherForecast1", {})
         assignDashboardValue(pageItem, "weatherForecast2", {})
-        pageItem.weatherSun = ""
         pageItem.weatherSunrise = ""
         pageItem.weatherSunset = ""
         pageItem.weatherUpdated = ""
@@ -1074,16 +1071,13 @@ function applyWeather(pageItem, source) {
         return
     }
     pageItem.weatherVisible = true
-    pageItem.weatherTitle = source.title || uiText(pageItem, "weather")
     pageItem.weatherConditionKey = source.condition_key || source.condition || "unknown"
     pageItem.weatherCondition = pageItem.uiWeather ? pageItem.uiWeather(pageItem.weatherConditionKey, source.condition || "") : (source.condition || uiText(pageItem, "unknown"))
     pageItem.weatherTemperature = source.temperature || ""
     pageItem.weatherHumidity = source.humidity || ""
     pageItem.weatherWind = source.wind || ""
-    pageItem.weatherForecast = source.forecast || ""
     assignDashboardValue(pageItem, "weatherForecast1", source.forecast_1 || {})
     assignDashboardValue(pageItem, "weatherForecast2", source.forecast_2 || {})
-    pageItem.weatherSun = source.sun || ""
     pageItem.weatherSunrise = source.sunrise || ""
     pageItem.weatherSunset = source.sunset || ""
     pageItem.weatherUpdated = source.updated || ""

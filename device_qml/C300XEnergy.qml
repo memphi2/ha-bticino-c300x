@@ -68,7 +68,6 @@ Item {
     }
 
     Item {
-        id: nowView
         width: parent.width
         height: bodyHeight
         visible: shown === "now"
@@ -188,7 +187,6 @@ Item {
     }
 
     Item {
-        id: todayView
         width: parent.width
         height: bodyHeight
         visible: shown === "today"

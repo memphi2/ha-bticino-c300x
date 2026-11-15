@@ -28,16 +28,13 @@ Page {
     property string pageTitle: ""
     property string pageLabel: ""
     property bool weatherVisible: false
-    property string weatherTitle: ""
     property string weatherCondition: ""
     property string weatherConditionKey: ""
     property string weatherTemperature: ""
     property string weatherHumidity: ""
     property string weatherWind: ""
-    property string weatherForecast: ""
     property variant weatherForecast1: ({})
     property variant weatherForecast2: ({})
-    property string weatherSun: ""
     property string weatherSunrise: ""
     property string weatherSunset: ""
     property string weatherUpdated: ""
@@ -487,7 +484,6 @@ Page {
                 fillMode: Image.Stretch
             }
             BeepingMouseArea {
-                id: overviewMouse
                 anchors.fill: parent
                 onClicked: openDetails(tileItem)
             }
@@ -1003,7 +999,6 @@ Page {
                         verticalAlignment: control.kind === "button" || control.kind === "boolean" ? Text.AlignVCenter : Text.AlignTop
                     }
                     Row {
-                        id: whitePresets
                         visible: control.kind === "number" && control.presets !== undefined
                         anchors.top: parent.top; anchors.topMargin: 28
                         width: parent.width; spacing: 8
@@ -1039,7 +1034,6 @@ Page {
                         }
                     }
                     Item {
-                        id: sliderTrack
                         visible: control.kind === "number"
                         anchors.left: parent.left
                         anchors.leftMargin: 140
@@ -1375,7 +1369,6 @@ Page {
                     }
 
                     Rectangle {
-                        id: weatherForecastTile2
                         width: weatherCard.tileWidth
                         height: 92
                         radius: 8

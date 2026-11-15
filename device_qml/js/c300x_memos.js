@@ -65,18 +65,6 @@ function syncHomeNotifications(pageItem, callback) {
     })
 }
 
-function unreadCountFromPath(path, callback) {
-    getJson(path, function(data) {
-        if (callback) {
-            callback(true, unreadCountFromData(data))
-        }
-    }, function() {
-        if (callback) {
-            callback(false, 0)
-        }
-    })
-}
-
 function startEventWatch(callback) {
     eventCallback = callback
     if (eventWatching === true) {
@@ -174,24 +162,6 @@ function syncObjectModel(model, memos, textMemoType) {
             model.remove(itemObject)
         }
     }
-}
-
-function unreadCount(model, textMemoType) {
-    var count = 0
-    if (!model || !model.binder) {
-        return 0
-    }
-    for (var index = 0; index < model.count; index++) {
-        var itemObject = model.binder.getObject(index)
-        if (
-            itemObject
-            && itemObject.type === textMemoType
-            && itemObject.isRead === false
-        ) {
-            count++
-        }
-    }
-    return count
 }
 
 function memoSet(items) {

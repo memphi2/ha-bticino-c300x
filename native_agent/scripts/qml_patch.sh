@@ -117,7 +117,7 @@ full_patch_present() {
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function homeButtons' \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function loadDisplayPreferences' \
         && file_contains "$GUI_DIR/js/c300x_i18n.js" 'function weather' \
-        && file_contains "$GUI_DIR/js/c300x_memos.js" 'function unreadCountFromPath' \
+        && file_contains "$GUI_DIR/js/c300x_memos.js" 'function syncHomeNotifications' \
         && file_contains "$GUI_DIR/js/c300x_memos.js" 'function syncMemoModel'
 }
 

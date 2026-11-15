@@ -1033,15 +1033,7 @@
         "state": {
           "idle": "Bereit",
           "ringing": "Klingelt",
-          "view_requested": "Türkamera aktiv",
-          "view_requeste": "Türkamera aktiv",
-          "pressed": "Türklingel gedrückt",
-          "ring": "Klingelt",
-          "doorbell_pressed": "Türklingel gedrückt",
-          "doorbell_view_requested": "Türkamera aktiv",
-          "doorbell_media_closed": "Türkamera beendet",
-          "media_closed": "Türkamera beendet",
-          "closed": "Türkamera beendet"
+          "view_requested": "Türkamera aktiv"
         }
       }
     },
@@ -1123,9 +1115,6 @@
     },
     "invalid_alarm_command": {
       "message": "Der Alarmbefehl ist ungültig."
-    },
-    "invalid_lock_id": {
-      "message": "Die Schloss-ID ist ungültig."
     },
     "maintenance_action_not_supported": {
       "message": "Die C300X-Device-Agent-Maintenance-Aktion wird nicht unterstützt, ist nicht aktiviert oder es ist kein Maintenance-Token konfiguriert."

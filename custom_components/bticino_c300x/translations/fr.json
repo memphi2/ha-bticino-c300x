@@ -1033,15 +1033,7 @@
         "state": {
           "idle": "Inactif",
           "ringing": "Sonne",
-          "view_requested": "Vue caméra active",
-          "view_requeste": "Vue caméra active",
-          "pressed": "Sonnette appuyée",
-          "ring": "Sonne",
-          "doorbell_pressed": "Sonnette appuyée",
-          "doorbell_view_requested": "Vue caméra active",
-          "doorbell_media_closed": "Flux caméra terminé",
-          "media_closed": "Flux caméra terminé",
-          "closed": "Flux caméra terminé"
+          "view_requested": "Vue caméra active"
         }
       }
     },
@@ -1123,9 +1115,6 @@
     },
     "invalid_alarm_command": {
       "message": "La commande d'alarme est invalide."
-    },
-    "invalid_lock_id": {
-      "message": "L'ID de verrou est invalide."
     },
     "maintenance_action_not_supported": {
       "message": "L'action de maintenance de l'agent C300X n'est pas prise en charge, pas activée, ou aucun token de maintenance n'est configure."

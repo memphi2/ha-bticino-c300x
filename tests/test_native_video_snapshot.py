@@ -38,6 +38,8 @@ def test_snapshot_route_takes_only_a_complete_size_the_display_can_deliver() -> 
     assert "(width == 0) != (height == 0)" in handler
     assert "parsed < C300X_SNAPSHOT_MIN_SIZE || parsed > maximum" in handler
     assert "*end != '\\0'" in handler
+    # A value cut to the buffer must not pass as the number it starts with.
+    assert "char text[16];" in handler and "strlen(text) > 4" in handler
     assert handler.index("invalid_snapshot_size") < handler.index("c300x_video_snapshot(&data, &size, width, height)")
     header = (NATIVE / "src/video_snapshot.h").read_text()
     assert "#define C300X_SNAPSHOT_MAX_WIDTH 800U" in header

@@ -510,8 +510,15 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         try:
             patch_state = await _async_capture_external_patch_state(entry, require_reliable=True)
             if getattr(update_state, "payload_bootstrap_required", False):
+                # Between the two passes the display counts as partly
+                # patched, which no longer tells whether the patch was
+                # active. Note that now, in case this flow does not see the
+                # first pass return.
+                pending = {CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
+                if patch_state.qml_patch_required:
+                    pending[CONF_AGENT_UPDATE_QML_PENDING] = True
                 self.hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
+                    entry, data={**entry.data, **pending}
                 )
             update_result = await async_apply_packaged_agent_update(
                 self.hass,

@@ -101,8 +101,7 @@ variables:
     {% for entity_id in c300x_entities %}
       {% set options = state_attr(entity_id, 'options') or [] %}
       {% if entity_id.startswith('select.')
-            and (('homeassistant' in options and 'blocked' in options)
-                 or ('Home Assistant' in options and 'Blocked' in options)) %}
+            and 'homeassistant' in options and 'blocked' in options %}
         {% set ns.entity = entity_id %}
       {% endif %}
     {% endfor %}

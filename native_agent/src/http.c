@@ -5995,15 +5995,16 @@ static void api_state(
 static int snapshot_dimension(const char *query, const char *name, unsigned int maximum,
                               unsigned int *value)
 {
-    char text[8];
+    char text[16];
     char *end = NULL;
     unsigned long parsed;
     *value = 0;
     if (!query_param_value(query, name, text, sizeof(text))) {
         return 1;
     }
+    /* A longer value is cut to the buffer; only a short one is whole. */
     parsed = strtoul(text, &end, 10);
-    if (text[0] < '0' || text[0] > '9' || *end != '\0'
+    if (strlen(text) > 4 || text[0] < '0' || text[0] > '9' || *end != '\0'
         || parsed < C300X_SNAPSHOT_MIN_SIZE || parsed > maximum) {
         return 0;
     }

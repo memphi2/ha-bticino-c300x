@@ -257,8 +257,7 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         == "{{ trigger.event.data.entry_id | default('', true) }}"
     )
     assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
-    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
-    assert "'Blocked' in options" in data["variables"]["forwarding_entity"]
+    assert "'Home Assistant'" not in data["variables"]["forwarding_entity"]
     assert "'homeassistant' in options and 'blocked' in options" in data["variables"]["forwarding_entity"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert "ring_call_supported" in data["variables"]["media_readiness_entity"]
@@ -378,7 +377,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
         == "{{ trigger.event.data.entry_id | default('', true) }}"
     )
     assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
-    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
+    assert "'homeassistant' in options and 'blocked' in options" in data["variables"]["forwarding_entity"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
     assert "this.entity_id" in data["variables"]["action_scope"]

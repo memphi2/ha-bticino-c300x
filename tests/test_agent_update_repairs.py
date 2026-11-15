@@ -351,6 +351,7 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) ->
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
     entry.runtime_data.agent_update_state = FakeSelfUpdateState()
     entry.runtime_data.agent_update_state.payload_bootstrap_required = bootstrap
+    entry.runtime_data.api.qml_status = {"state": "patched", "patched": True}
     hass = FakeHass(entry)
     flow = DeviceAgentUpdateRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
     calls: list[str] = []
@@ -358,6 +359,9 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) ->
     async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
         if bootstrap:
             assert entry.data["agent_update_payload_pending"] is True
+            # Home Assistant may not live to see the first pass return; the
+            # display patch that is active now is already noted as due.
+            assert entry.data["agent_update_qml_pending"] is True
         calls.append("apply_update")
         return {
             "ok": True, "restart_scheduled": False,

@@ -175,7 +175,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/memos/actions/delete` | API | Deletes selected memos. |
 | `GET` | `/api/v1/video/doorbell` | API | None. |
 | `GET` | `/api/v1/video/doorbell/status` | API | None. |
-| `GET` | `/api/v1/video/doorbell/snapshot` | API | Reads the active video framebuffer into bounded RAM and returns BMP data for HA-side conversion. No file writes, video activation or call answer. |
+| `GET` | `/api/v1/video/doorbell/snapshot` | API | Reads the active video framebuffer into bounded RAM and returns BMP data for HA-side conversion. Optional `width` (64-800) and `height` (64-480), both or neither, give the image size; without them it is the display size. Any other value answers `400 invalid_snapshot_size`. No file writes, video activation or call answer. |
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
@@ -535,7 +535,12 @@ The id is percent-decoded and bounded by `C300X_MAX_ACTIVATION_ID_LEN`.
 
 Authentication: normal API token.
 
-Side effects: reads smartphone-forwarding state.
+Side effects: reads smartphone-forwarding state and switches the agent's Ring
+Call receiver on for `homeassistant`, off otherwise.
+
+Response: `{"ok": true, "mode": "enabled" | "homeassistant" | "blocked" |
+"unprovisioned", "raw": "<device reply>"}`. When the device's reply names no
+mode: `{"ok": true, "mode": null, "status": "unknown", "raw": "..."}`.
 
 ### `POST /api/v1/smartphone-forwarding`
 

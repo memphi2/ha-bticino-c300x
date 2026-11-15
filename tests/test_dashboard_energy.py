@@ -45,6 +45,10 @@ PREFERENCES = {
     ],
 }
 COST_SENSORS = {"sensor.house": "sensor.house_cost"}
+SINGLE_GRID_PREFERENCES = {"energy_sources": [
+    source for source in PREFERENCES["energy_sources"]
+    if source["type"] != "grid" or source.get("stat_rate")
+]}
 DAY = EnergyDay(
     hours={
         "sensor.house": _hours(5.05), "sensor.wallbox": _hours(0.0),
@@ -152,7 +156,7 @@ def test_today_view_has_hourly_bars_and_a_bounded_sums_table() -> None:
 def test_power_sensors_add_live_values_and_directions() -> None:
     power = {"sensor.house_power": 850.0, "sensor.pv_power": 120.0, "sensor.bat_power": -200.0}
 
-    nodes = energy_page(energy_sources(PREFERENCES), DAY, power, language="de")["energy"]["nodes"]
+    nodes = energy_page(energy_sources(SINGLE_GRID_PREFERENCES), DAY, power, language="de")["energy"]["nodes"]
 
     assert (nodes["grid"]["power"], nodes["grid"]["flow"]) == ("850 W", 1)
     assert (nodes["solar"]["power"], nodes["solar"]["flow"]) == ("120 W", 1)
@@ -164,7 +168,7 @@ def test_power_sensors_add_live_values_and_directions() -> None:
 def test_home_power_needs_every_kind_of_source_to_report() -> None:
     power = {"sensor.house_power": 850.0, "sensor.pv_power": None}
 
-    nodes = energy_page(energy_sources(PREFERENCES), DAY, power)["energy"]["nodes"]
+    nodes = energy_page(energy_sources(SINGLE_GRID_PREFERENCES), DAY, power)["energy"]["nodes"]
 
     assert nodes["grid"]["power"] == "850 W"
     assert "power" not in nodes["solar"] and "power" not in nodes["home"]
@@ -332,6 +336,74 @@ def test_a_kind_with_a_source_lacking_its_power_sensor_shows_no_power() -> None:
     assert "power" not in nodes["solar"]
     assert "power" not in nodes["home"]
     assert nodes["grid"]["power"] == "300 W"
+
+
+def test_grid_power_is_unknown_when_a_connection_lacks_its_sensor() -> None:
+    sources = energy_sources(PREFERENCES)
+    power = {"sensor.house_power": 850.0, "sensor.pv_power": 120.0, "sensor.bat_power": -200.0}
+
+    nodes = energy_page(sources, DAY, power)["energy"]["nodes"]
+
+    assert sources.grid_power_complete is False
+    assert "power" not in nodes["grid"] and nodes["grid"]["flow"] == 0
+    assert "power" not in nodes["home"] and nodes["home"]["flow"] == 0
+    assert nodes["grid"]["lines"] == ["25.1 kWh", "0 kWh"]
+    assert nodes["solar"]["power"] == "120 W"
+    assert nodes["battery"]["power"] == "200 W"
+
+
+@pytest.mark.parametrize("missing_direction", ["stat_energy_from", "stat_energy_to"])
+def test_grid_coverage_includes_import_and_export_only_connections(missing_direction) -> None:
+    sources = energy_sources({"energy_sources": [
+        {"type": "grid", "stat_energy_from": "sensor.a", "stat_rate": "sensor.a_power"},
+        {"type": "grid", missing_direction: "sensor.b"},
+    ]})
+
+    nodes = energy_page(sources, EnergyDay(), {"sensor.a_power": 300.0})["energy"]["nodes"]
+
+    assert not sources.grid_power_complete
+    assert "power" not in nodes["grid"] and "power" not in nodes["home"]
+
+
+@pytest.mark.parametrize("second_power", [200.0, None])
+def test_all_configured_grid_power_sensors_must_report(second_power) -> None:
+    sources = energy_sources({"energy_sources": [
+        {"type": "grid", "stat_energy_from": "sensor.a", "stat_rate": "sensor.a_power"},
+        {"type": "grid", "stat_energy_from": "sensor.b", "stat_rate": "sensor.b_power"},
+    ]})
+    power = {"sensor.a_power": 300.0, "sensor.b_power": second_power}
+
+    nodes = energy_page(sources, EnergyDay(), power)["energy"]["nodes"]
+
+    assert sources.grid_power_complete
+    if second_power is None:
+        assert "power" not in nodes["grid"] and "power" not in nodes["home"]
+    else:
+        assert nodes["grid"]["power"] == nodes["home"]["power"] == "500 W"
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_tariff_meters_can_share_one_grid_power_sensor(legacy: bool) -> None:
+    if legacy:
+        grid_sources = [{
+            "type": "grid",
+            "flow_from": [{"stat_energy_from": "sensor.ht"}, {"stat_energy_from": "sensor.nt"}],
+            "flow_to": [{"stat_energy_to": "sensor.export"}],
+            "power": [{"stat_rate": "sensor.power"}, {"stat_rate": "sensor.power"}],
+        }]
+    else:
+        grid_sources = [
+            {"type": "grid", "stat_energy_from": "sensor.ht", "stat_rate": "sensor.power"},
+            {"type": "grid", "stat_energy_from": "sensor.nt", "stat_rate": "sensor.power"},
+        ]
+    sources = energy_sources({"energy_sources": grid_sources})
+
+    nodes = energy_page(sources, EnergyDay(), {"sensor.power": 300.0})["energy"]["nodes"]
+
+    assert sources.grid_power_complete
+    assert len(sources.grid_from) == 2
+    assert sources.grid_power == ("sensor.power",)
+    assert nodes["grid"]["power"] == nodes["home"]["power"] == "300 W"
 
 
 @pytest.mark.parametrize(("value", "language", "expected"), [

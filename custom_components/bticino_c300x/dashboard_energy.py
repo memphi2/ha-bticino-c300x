@@ -60,6 +60,7 @@ class EnergySources:
     grid_power: tuple[str, ...] = ()
     solar_power: tuple[str, ...] = ()
     battery_power: tuple[str, ...] = ()
+    grid_power_complete: bool = True
 
     @property
     def any(self) -> bool:
@@ -137,6 +138,7 @@ def energy_sources(
         "grid_from": [], "grid_to": [], "solar": [], "battery_from": [],
         "battery_to": [], "grid_power": [], "solar_power": [], "battery_power": [],
     }
+    grid_power_complete = True
 
     def meter(stat: Any, cost: Any, name: Any) -> EnergyMeter | None:
         stat_id = _text(stat)
@@ -155,19 +157,26 @@ def energy_sources(
         kind = source.get("type")
         name = source.get("name")
         if kind == "grid":
-            add("grid_from", meter(source.get("stat_energy_from"), source.get("stat_cost"), name))
-            add("grid_to", meter(source.get("stat_energy_to"), source.get("stat_compensation"), name))
-            add("grid_power", _text(source.get("stat_rate")))
+            grid_from = [meter(source.get("stat_energy_from"), source.get("stat_cost"), name)]
+            grid_to = [meter(source.get("stat_energy_to"), source.get("stat_compensation"), name)]
+            grid_power = [_text(source.get("stat_rate"))]
             # Format of Home Assistant before the unified grid connection.
             for flow in source.get("flow_from") or ():
                 if isinstance(flow, dict):
-                    add("grid_from", meter(flow.get("stat_energy_from"), flow.get("stat_cost"), flow.get("name")))
+                    grid_from.append(meter(flow.get("stat_energy_from"), flow.get("stat_cost"), flow.get("name")))
             for flow in source.get("flow_to") or ():
                 if isinstance(flow, dict):
-                    add("grid_to", meter(flow.get("stat_energy_to"), flow.get("stat_compensation"), flow.get("name")))
+                    grid_to.append(meter(flow.get("stat_energy_to"), flow.get("stat_compensation"), flow.get("name")))
             for power in source.get("power") or ():
                 if isinstance(power, dict):
-                    add("grid_power", _text(power.get("stat_rate")))
+                    grid_power.append(_text(power.get("stat_rate")))
+            # Coverage belongs to the connection, not to its tariff meter count.
+            if any(grid_from + grid_to) and not any(grid_power):
+                grid_power_complete = False
+            for group, values in (("grid_from", grid_from), ("grid_to", grid_to),
+                                  ("grid_power", grid_power)):
+                for value in values:
+                    add(group, value)
         elif kind == "solar":
             add("solar", meter(source.get("stat_energy_from"), None, name))
             add("solar_power", _text(source.get("stat_rate")))
@@ -175,7 +184,10 @@ def energy_sources(
             add("battery_from", meter(source.get("stat_energy_from"), None, name))
             add("battery_to", meter(source.get("stat_energy_to"), None, name))
             add("battery_power", _text(source.get("stat_rate")))
-    return EnergySources(**{key: tuple(values) for key, values in groups.items()})
+    return EnergySources(
+        **{key: tuple(values) for key, values in groups.items()},
+        grid_power_complete=grid_power_complete,
+    )
 
 
 def power_watts(state: Any) -> float | None:
@@ -298,7 +310,7 @@ def energy_page(
 
     has_grid = bool(sources.grid_from or sources.grid_to)
     has_battery = bool(sources.battery_from or sources.battery_to)
-    grid_power = _sum_power(sources.grid_power, power)
+    grid_power = _sum_power(sources.grid_power, power) if sources.grid_power_complete else None
     # A kind's power is only known when each of its sources has a sensor.
     batteries = max(len(sources.battery_from), len(sources.battery_to))
     solar_power = (

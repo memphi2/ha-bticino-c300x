@@ -120,6 +120,7 @@ from .config_flow_input import (
     _setup_connection_schema,
     _weather_entity_id,
 )
+from .config_flow_snapshot import SnapshotOptionsStep, SnapshotWizardSteps
 from .config_flow_tiles import TileForm as _TileForm
 from .config_flow_tiles import async_tile_entity_fields as _async_tile_entity_fields
 from .config_flow_tiles import async_tile_form as _async_tile_form
@@ -132,9 +133,7 @@ from .config_schemas import (
 from .config_schemas import (
     setup_features_schema as _setup_features_schema,
 )
-from .config_schemas import snapshot_schema as _snapshot_schema
 from .config_snapshots import SNAPSHOT_DEFAULTS
-from .config_snapshots import snapshot_values as _snapshot_values
 from .const import (
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
@@ -245,7 +244,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
 )
 
 
-class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 1
@@ -648,31 +647,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_user_visitor_snapshot(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Collect the visitor image settings during setup."""
-
-        if not self._setup_feature_data:
-            return await self.async_step_user_features()
-
-        errors: dict[str, str] = {}
-        snapshots = {key: self._setup_feature_data[key] for key in SNAPSHOT_DEFAULTS}
-        if user_input is not None:
-            try:
-                snapshots = _snapshot_values(user_input)
-            except ValueError as err:
-                errors[str(err)] = "invalid_snapshot_option"
-            else:
-                self._setup_feature_data = {**self._setup_feature_data, **snapshots}
-                return await self.async_step_user_device_activations()
-        return self.async_show_form(
-            step_id="user_visitor_snapshot",
-            data_schema=_snapshot_schema(snapshots),
-            errors=errors,
-        )
-
     async def async_step_user_device_activations(
         self,
         user_input: dict[str, Any] | None = None,
@@ -1072,31 +1046,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    async def async_step_reconfigure_visitor_snapshot(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Reconfigure the visitor image settings."""
-
-        if not self._reconfigure_feature_data:
-            return await self.async_step_reconfigure_features()
-
-        errors: dict[str, str] = {}
-        snapshots = {key: self._reconfigure_feature_data[key] for key in SNAPSHOT_DEFAULTS}
-        if user_input is not None:
-            try:
-                snapshots = _snapshot_values(user_input)
-            except ValueError as err:
-                errors[str(err)] = "invalid_snapshot_option"
-            else:
-                self._reconfigure_feature_data = {**self._reconfigure_feature_data, **snapshots}
-                return await self.async_step_reconfigure_device_activations()
-        return self.async_show_form(
-            step_id="reconfigure_visitor_snapshot",
-            data_schema=_snapshot_schema(snapshots),
-            errors=errors,
-        )
-
     async def async_step_reconfigure_device_activations(
         self,
         user_input: dict[str, Any] | None = None,
@@ -1428,7 +1377,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return BticinoC300XOptionsFlow(config_entry)
 
 
-class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
+class BticinoC300XOptionsFlow(SnapshotOptionsStep, config_entries.OptionsFlow):
     """Handle C300X options.
 
     The flow opens with a menu of the settings areas. Each area is a form of
@@ -1555,29 +1504,6 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             description_placeholders=await _async_qml_patch_description_placeholders(
                 self._config_entry
             ),
-        )
-
-    async def async_step_visitor_snapshot(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage the visitor image settings."""
-
-        feature_defaults = self._load_saved()
-        errors: dict[str, str] = {}
-        snapshots = {key: feature_defaults[key] for key in SNAPSHOT_DEFAULTS}
-        if user_input is not None:
-            try:
-                snapshots = _snapshot_values(user_input)
-            except ValueError as err:
-                errors[str(err)] = "invalid_snapshot_option"
-            else:
-                self._feature_options = {**self._feature_options, **snapshots}
-                return await self._async_save_options(feature_defaults)
-        return self.async_show_form(
-            step_id="visitor_snapshot",
-            data_schema=_snapshot_schema(snapshots),
-            errors=errors,
         )
 
     async def async_step_device_activations(

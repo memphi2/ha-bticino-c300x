@@ -84,7 +84,7 @@ scp_cmd() {
 }
 
 if [[ "$UPLOAD_AGENT" == "1" ]]; then
-    make -C "$ROOT_DIR/native_agent" armhf
+    make -C "$ROOT_DIR/native_agent" armhf armhf-abi-check
     "$ROOT_DIR/scripts/stage_device_agent_bundle.py" --skip-build
 fi
 

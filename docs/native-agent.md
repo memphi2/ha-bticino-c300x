@@ -96,7 +96,7 @@ Key sections:
 - `systemMetrics`: optional low-frequency push updates for load and temperature
 - `video`: optional local media doorstation media support
 - `displayBridge`: optional dashboard proxy for QML; `feedbackEnabled` stores
-  the local **Settings > General > HA feedback colors** choice (default true).
+  the local **Settings > General > HA feedback** choice (default true).
   Changing it requires no HA connection or GUI restart and writes configuration
   only when the value changes.
 

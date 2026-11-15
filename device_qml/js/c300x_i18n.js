@@ -1,7 +1,7 @@
 .pragma library
 
 var DE = {
-    "ha_feedback_colors": "HA-Rueckmeldefarben",
+    "ha_feedback_colors": "HA-Rueckmeldungen",
     "display_settings_error": "Einstellung nicht verfuegbar",
     "notifications": "Hinweise",
     "dismiss_notification": "Gelesen",
@@ -65,7 +65,7 @@ var DE = {
 }
 
 var EN = {
-    "ha_feedback_colors": "HA feedback colors",
+    "ha_feedback_colors": "HA feedback",
     "display_settings_error": "Setting unavailable",
     "notifications": "Notifications",
     "dismiss_notification": "Mark read",
@@ -129,7 +129,7 @@ var EN = {
 }
 
 var IT = {
-    "ha_feedback_colors": "Colori conferma HA",
+    "ha_feedback_colors": "Conferme HA",
     "display_settings_error": "Opzione non disponibile",
     "notifications": "Avvisi",
     "dismiss_notification": "Letto",
@@ -193,7 +193,7 @@ var IT = {
 }
 
 var FR = {
-    "ha_feedback_colors": "Couleurs retour HA",
+    "ha_feedback_colors": "Retours HA",
     "display_settings_error": "Reglage indisponible",
     "notifications": "Notifications",
     "dismiss_notification": "Lu",

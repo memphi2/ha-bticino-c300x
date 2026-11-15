@@ -115,6 +115,61 @@ function page(name, values) {
 }
 
 {
+    const {api} = runtime();
+    const p = page("HomeAssistant.qml", {Api: api,
+        I18n: {text: (_, key) => key}, uiLanguage: "en",
+        feedbackColorsEnabled: false, status: {}, selectedItem: null,
+        runtimeGeneration: 0, dashboardLoading: false, dashboardRefreshAgain: false,
+        currentPageIndex: 0, pageCount: 2, dashboardPages: [{items: []}, {items: []}]});
+    const queued = [];
+    p.page = p;
+    api.getJson = (url, success, failure) => queued.push({success, failure});
+    for (const kind of ["initial", "unchanged", "navigation"]) {
+        if (kind === "navigation") {
+            api.dashboardNextPage(p.status, p);
+        } else {
+            api.dashboard(p.status, p);
+            queued.shift().success(kind === "unchanged" ? {not_modified: true}
+                : {data: {pages: [{items: []}, {items: []}]}});
+        }
+        assert.equal(p.status.optionalFeedback, true, kind);
+        assert.notEqual(p.status.text, "", "retain the underlying status");
+        assert.equal(p.statusText(), "", "off hides the routine header message");
+        p.feedbackColorsEnabled = true;
+        assert.equal(p.statusText(), p.status.text, "on restores it without another request");
+        p.feedbackColorsEnabled = false;
+        for (const key of ["action_error", "stale_state", "sending", "state_unconfirmed"]) {
+            api.setStatus(p.status, key, "#c7d0d9");
+            assert.equal(p.statusText(), key, "errors and pending states never depend on color");
+            assert.equal(p.status.optionalFeedback, false);
+        }
+        api.setStatus(p.status, "same text", "#58d68d", true);
+        assert.equal(p.statusText(), "");
+        api.setStatus(p.status, "same text", "#58d68d");
+        assert.equal(p.statusText(), "same text", "reset metadata even for identical text and color");
+    }
+    let onEvent;
+    api.startEventWatch = callback => {onEvent = callback;};
+    p.startWatch();
+    api.setStatus(p.status, "loaded", "#58d68d", true);
+    onEvent({topic: "connection.error"});
+    assert.equal(p.statusText(), "stale_state", "a watch failure resets prior optional feedback");
+    api.dashboard(p.status, p);
+    queued.shift().success({data: {pages: []}});
+    assert.equal(p.statusText(), "no_dashboard_pages", "missing configuration remains visible");
+    api.dashboard(p.status, p);
+    queued.shift().failure("offline");
+    assert.equal(p.statusText(), "stale_state", "fetch failures remain visible");
+    const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
+    assert.match(qml.slice(qml.lastIndexOf("id: status")), /text: statusText\(\)/);
+    assert.match(qml, /text: selectedItem \? feedbackText\(selectedItem\) : status.text/);
+    for (const name of ["HomeAssistant.qml", "Alarm.qml"]) {
+        assert.doesNotMatch(fs.readFileSync(path.join(root, "device_qml", name), "utf8"),
+            /status\.(?:text|color)\s*=/, "all status writes reset the optional marker");
+    }
+}
+
+{
     const {api, owner, requests} = runtime();
     const timer = () => ({running: false, restart() {this.running = true;}, stop() {this.running = false;}});
     Object.assign(owner, {touchToneEnabled: true, applyingTouchTone: false,

@@ -305,9 +305,11 @@ detail views.
 ## Display Settings
 
 On the C300X itself, open **Settings → General**. The original **Tone buttons**
-switch controls touch sounds. Directly below it, **HA feedback colors** turns
-the colored HA action confirmations on or off (on by default). Action texts,
-errors, connection warnings and actual alarm or entity states remain visible.
+switch controls touch sounds. Directly below it, **HA feedback** turns colored
+HA action confirmations and routine messages in the HA page's upper-right
+header, such as "Page loaded", on or off (on by default). Text at the affected
+control, errors, pending actions, connection warnings and actual alarm or entity
+states remain visible.
 This is a local device preference, not another HA integration option.
 
 With the Display patch active, the C300X device page in Home Assistant also

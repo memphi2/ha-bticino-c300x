@@ -1,5 +1,11 @@
 .pragma library
 
+function setStatus(statusItem, text, color, optionalFeedback) {
+    statusItem.optionalFeedback = optionalFeedback === true
+    statusItem.text = text
+    statusItem.color = color
+}
+
 // Qt 4 property variants discard XHR methods and identity. Keep it in JS.
 var displayPreferenceRequest = null
 
@@ -179,8 +185,8 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         if (pageItem.preventReturnToHomepage !== undefined) {
             pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         }
-        statusItem.text = uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected")
-        statusItem.color = pageItem.commandPending ? "#f1c40f" : "#58d68d"
+        setStatus(statusItem, uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected"),
+            pageItem.commandPending ? "#f1c40f" : "#58d68d", !pageItem.commandPending)
         if (data.alarm && data.alarm.state) {
             var previousState = pageItem.alarmRawState
             var previousCommand = pageItem.selectedCommand
@@ -242,8 +248,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         // such as "API error: 503" in a translated interface. The code stays
         // visible because it names the cause exactly, but the sentence around
         // it is the user's language.
-        statusItem.text = statusErrorText(pageItem, error)
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b")
         if (pageItem.setAlarmDelayRemaining) {
             pageItem.setAlarmDelayRemaining(0)
         }
@@ -276,8 +281,7 @@ function dashboard(statusItem, pageItem) {
         }
         pageItem.dashboardOnline = true
         if (data && data.not_modified === true) {
-            statusItem.text = uiText(pageItem, "board_loaded")
-            statusItem.color = "#58d68d"
+            setStatus(statusItem, uiText(pageItem, "board_loaded"), "#58d68d", true)
             finishDashboardRefresh(statusItem, pageItem)
             return
         }
@@ -294,8 +298,8 @@ function dashboard(statusItem, pageItem) {
             pageItem.currentPageIndex = 0
         }
         loadDashboardPage(statusItem, pageItem)
-        statusItem.text = pages.length > 0 ? uiText(pageItem, "board_loaded") : uiText(pageItem, "no_dashboard_pages")
-        statusItem.color = pages.length > 0 ? "#58d68d" : "#f1c40f"
+        setStatus(statusItem, uiText(pageItem, pages.length > 0 ? "board_loaded" : "no_dashboard_pages"),
+            pages.length > 0 ? "#58d68d" : "#f1c40f", pages.length > 0)
         if (pageItem.refreshSelectedItem) pageItem.refreshSelectedItem()
         finishDashboardRefresh(statusItem, pageItem)
     }, function(error) {
@@ -306,8 +310,7 @@ function dashboard(statusItem, pageItem) {
         pageItem.watchFailed = true
         dashboardRevision = ""
         if (!pageItem.controlInFlight) pageItem.pendingEntity = ""
-        statusItem.text = uiText(pageItem, "stale_state")
-        statusItem.color = "#f1c40f"
+        setStatus(statusItem, uiText(pageItem, "stale_state"), "#f1c40f")
     })
 }
 
@@ -487,8 +490,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
         if (!data || data.ok !== true) {
             pageItem.pendingEntity = ""
             setDashboardFeedback(pageItem, item.entity_id, "action_error")
-            statusItem.text = uiText(pageItem, "action_error")
-            statusItem.color = "#ff6b6b"
+            setStatus(statusItem, uiText(pageItem, "action_error"), "#ff6b6b")
             return
         }
         setDashboardFeedback(pageItem, item.entity_id, "action_sent", expected)
@@ -498,8 +500,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
         pageItem.controlInFlight = false
         pageItem.pendingEntity = ""
         setDashboardFeedback(pageItem, item.entity_id, "state_unconfirmed")
-        statusItem.text = uiText(pageItem, "state_unconfirmed")
-        statusItem.color = "#f1c40f"
+        setStatus(statusItem, uiText(pageItem, "state_unconfirmed"), "#f1c40f")
     }, commandScope(pageItem, "commandGeneration"))
 }
 
@@ -543,8 +544,7 @@ function dashboardPreviousPage(statusItem, pageItem) {
 
 function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
     if (!item || !item.entity_id || !item.domain) {
-        statusItem.text = uiText(pageItem, "invalid_action")
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, "invalid_action"), "#ff6b6b")
         return
     }
     if (refreshDashboard !== false) {
@@ -561,8 +561,8 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         if (generation !== pageItem.runtimeGeneration) return
         if (quickGeneration !== pageItem.quickActionGeneration) return
         pageItem.quickActionPending = false
-        statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
-        statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, data.ok ? "action_sent" : "action_error"),
+            data.ok ? "#58d68d" : "#ff6b6b", data.ok === true)
         if (data.ok && pageItem.refreshAlarmStatus) {
             pageItem.refreshAlarmStatus(true)
         }
@@ -570,15 +570,13 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         if (generation !== pageItem.runtimeGeneration) return
         if (quickGeneration !== pageItem.quickActionGeneration) return
         pageItem.quickActionPending = false
-        statusItem.text = statusErrorText(pageItem, error)
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b")
     }, commandScope(pageItem, "quickActionGeneration"))
 }
 
 function dashboardSliderAction(item, direction, statusItem, pageItem) {
     if (!item || !item.entity_id || !direction) {
-        statusItem.text = uiText(pageItem, "invalid_action")
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, "invalid_action"), "#ff6b6b")
         return
     }
     dashboardControl(item, {command: direction}, null, statusItem, pageItem)
@@ -586,8 +584,7 @@ function dashboardSliderAction(item, direction, statusItem, pageItem) {
 
 function dashboardChoiceAction(item, option, statusItem, pageItem) {
     if (!item || !item.entity_id || option === undefined || option === null) {
-        statusItem.text = uiText(pageItem, "invalid_action")
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, "invalid_action"), "#ff6b6b")
         return
     }
     dashboardControl(item, {command: ""}, option, statusItem, pageItem)
@@ -641,8 +638,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         if (pageItem.setCommandFeedback) {
             pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
         } else {
-            statusItem.text = alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem)
-            statusItem.color = "#ff6b6b"
+            setStatus(statusItem, alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem), "#ff6b6b")
         }
         return
     }
@@ -673,8 +669,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
             if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("sending", command, "#f1c40f")
             } else {
-                statusItem.text = uiText(pageItem, "sending")
-                statusItem.color = "#f1c40f"
+                setStatus(statusItem, uiText(pageItem, "sending"), "#f1c40f")
             }
             pageItem.bypassOffered = false
             if (command === "disarm" && pageItem.setAlarmDelayRemaining) {
@@ -723,14 +718,12 @@ function alarmCheck(command, statusItem, pageItem) {
                 if (pageItem.setCommandFeedback) {
                     pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
                 } else {
-                    statusItem.text = uiText(pageItem, "not_ready_to_arm")
-                    statusItem.color = "#ff6b6b"
+                    setStatus(statusItem, uiText(pageItem, "not_ready_to_arm"), "#ff6b6b")
                 }
             } else if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("ready_to_arm", command, "#58d68d")
             } else {
-                statusItem.text = uiText(pageItem, "ready_to_arm")
-                statusItem.color = "#58d68d"
+                setStatus(statusItem, uiText(pageItem, "ready_to_arm"), "#58d68d")
             }
             return
         }
@@ -759,8 +752,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
         if (pageItem.flashCommandButton) {
             pageItem.flashCommandButton(command, "#ff6b6b")
         }
-        statusItem.text = ""
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, "", "#ff6b6b")
         if (pageItem.setCommandFeedback && !pageItem.bypassVisible()) {
             pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
         }
@@ -770,8 +762,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
         if (pageItem.setCommandFeedback) {
             pageItem.setCommandFeedback("invalid_code", command, "#ff6b6b")
         } else {
-            statusItem.text = uiText(pageItem, "invalid_code")
-            statusItem.color = "#ff6b6b"
+            setStatus(statusItem, uiText(pageItem, "invalid_code"), "#ff6b6b")
         }
         return true
     }
@@ -787,8 +778,7 @@ function setErrorFeedback(command, statusItem, pageItem) {
         pageItem.setCommandFeedback("alarm_command_error", command, "#ff6b6b")
         return
     }
-    statusItem.text = uiText(pageItem, "alarm_command_error")
-    statusItem.color = "#ff6b6b"
+    setStatus(statusItem, uiText(pageItem, "alarm_command_error"), "#ff6b6b")
 }
 
 function mergeAlarmCommandDetail(pageItem, command, update) {
@@ -1034,8 +1024,8 @@ function loadDashboardPage(statusItem, pageItem) {
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {
-        statusItem.text = uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + " " + uiText(pageItem, "status_loaded")
-        statusItem.color = "#58d68d"
+        setStatus(statusItem, uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1)
+            + " " + uiText(pageItem, "status_loaded"), "#58d68d", true)
     }
 }
 

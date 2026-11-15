@@ -28,12 +28,13 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   already present on the device and keeps a one-time original backup there.
 - The HA device's **Touch tone** configuration switch uses the original GUI
   setting with confirmed commands and push state, through one sleeping connection.
-- General settings retains the stock touch-tone switch and adds **HA feedback
-  colors** immediately below it. A GUI-owned preference object in the patched
+- General settings retains the stock touch-tone switch and adds **HA feedback**
+  immediately below it. A GUI-owned preference object in the patched
   `MainApp.qml` reads the local agent once; changes are saved only on user input.
   It uses a declarative request deadline, not a polling timer or dynamically
   created QML objects. Alarm states, error text and connection warnings remain
-  visible when action colors are disabled.
+  visible when feedback is disabled. Routine messages such as "Page loaded" in
+  the HA page's upper-right header are hidden; control-specific text is unchanged.
 
 ## Packaging
 

@@ -120,8 +120,7 @@ Page {
             if (event.topic === "connection.error") {
                 watchFailed = true
                 dashboardOnline = false
-                status.text = uiText("stale_state")
-                status.color = "#f1c40f"
+                Api.setStatus(status, uiText("stale_state"), "#f1c40f")
             } else {
                 Api.dashboard(status, page)
             }
@@ -235,6 +234,10 @@ Page {
 
     function statusColor() {
         return feedbackColorsEnabled || !dashboardOnline ? status.color : "#c7d0d9"
+    }
+
+    function statusText() {
+        return feedbackColorsEnabled || !status.optionalFeedback ? status.text : ""
     }
 
     function scheduleFeedbackExpiry() {
@@ -1994,9 +1997,10 @@ Page {
         height: 22
         property string text: ""
         property color color: "#c7d0d9"
+        property bool optionalFeedback: false
         UbuntuLightText {
             anchors.fill: parent
-            text: status.text
+            text: statusText()
             textFormat: Text.PlainText
             color: statusColor()
             font.pixelSize: 16

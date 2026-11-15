@@ -243,10 +243,10 @@ assert.equal(vm.runInContext(expression('visible'), ctx), false);
 assert.equal(vm.runInContext(expression('text'), ctx), '');
 assert.equal(vm.runInContext(expression('enabled'), ctx), false);
 assert.equal(vm.runInContext(expression('checked'), ctx), true);
-ctx.c300xDisplayPreferences = {ready: true, busy: false, feedbackEnabled: false, label: 'HA feedback colors'};
+ctx.c300xDisplayPreferences = {ready: true, busy: false, feedbackEnabled: false, label: 'HA feedback'};
 ctx.c300xFeedbackSetting.visible = vm.runInContext(expression('visible'), ctx);
 assert.equal(ctx.c300xFeedbackSetting.visible, true);
-assert.equal(vm.runInContext(expression('text'), ctx), 'HA feedback colors');
+assert.equal(vm.runInContext(expression('text'), ctx), 'HA feedback');
 assert.equal(vm.runInContext(expression('enabled'), ctx), true);
 assert.equal(vm.runInContext(expression('checked'), ctx), false);
 """, str(gui / SETTINGS)], capture_output=True, text=True, check=False)

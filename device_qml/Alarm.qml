@@ -147,8 +147,7 @@ Page {
         }
         commandFeedbackColor = color
         flashCommandButton(command, color)
-        status.text = commandFeedback
-        status.color = color
+        Api.setStatus(status, commandFeedback, color)
     }
 
     function flashCommandButton(command, color) {
@@ -279,13 +278,11 @@ Page {
     function executeCommand(command, force) {
         if (!alarmOnline || commandPending || !Api.contains(alarmCommands, command)) return
         if (!alarmConfigured) {
-            status.text = uiText("alarm_not_configured")
-            status.color = "#ff6b6b"
+            Api.setStatus(status, uiText("alarm_not_configured"), "#ff6b6b")
             return
         }
         if (alarmCommands.length === 0) {
-            status.text = uiText("no_mode_available")
-            status.color = "#f1c40f"
+            Api.setStatus(status, uiText("no_mode_available"), "#f1c40f")
             return
         }
         refreshCommandReadiness()
@@ -432,8 +429,7 @@ Page {
             Api.dashboardAction(alarmPageItem, status, page, false)
             return
         }
-        status.text = alarmPageItemDetail()
-        status.color = alarmPageItemColor()
+        Api.setStatus(status, alarmPageItemDetail(), alarmPageItemColor())
     }
 
     function stateColor() {
@@ -466,8 +462,7 @@ Page {
             quickActionGeneration += 1
             Api.cancelPageCommands(page, "quickActionGeneration")
             quickActionPending = false
-            status.text = uiText("action_error")
-            status.color = "#ff6b6b"
+            Api.setStatus(status, uiText("action_error"), "#ff6b6b")
             refreshAlarmStatus(true)
         }
     }
@@ -817,6 +812,7 @@ Page {
                     id: status
                     property string text: ""
                     property color color: "#c7d0d9"
+                    property bool optionalFeedback: false
                     width: parent.width
                     height: 38
                     clip: true

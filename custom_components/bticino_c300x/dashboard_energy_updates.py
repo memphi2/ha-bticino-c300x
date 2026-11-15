@@ -21,13 +21,19 @@ from typing import Any
 from homeassistant.core import HomeAssistant, callback
 
 from .dashboard_config import configured_energy_page
-from .dashboard_energy import format_power, power_watts
+from .dashboard_energy import (
+    ENERGY_VIEW_NOW,
+    ENERGY_VIEW_POWER,
+    format_power,
+    power_watts,
+)
 from .dashboard_energy_data import (
     ENERGY_STATISTICS_MAX_AGE_SECONDS,
     async_configured_energy_sources,
     expire_energy_day,
     forget_energy_day,
 )
+from .dashboard_energy_power import forget_power_history
 from .entry_types import BticinoC300XConfigEntry
 
 ENERGY_POWER_MIN_INTERVAL_SECONDS = 10.0
@@ -55,11 +61,16 @@ class EnergyPageUpdates:
 
         from homeassistant.helpers.event import async_track_time_interval
 
-        if not configured_energy_page(self._entry)["enabled"]:
+        if not self._active_views():
             return False
         sources = await async_configured_energy_sources(self._hass, self._entry)
+        views = self._active_views()
+        if self._stopped or not views:
+            return False
         self._shown = sources.any
-        self._track_power(frozenset(sources.power_entities))
+        self._track_power(
+            frozenset(sources.power_entities) if ENERGY_VIEW_NOW in views else frozenset()
+        )
         self._unsub_tick = async_track_time_interval(
             self._hass, self._async_tick,
             timedelta(seconds=ENERGY_STATISTICS_MAX_AGE_SECONDS),
@@ -70,6 +81,8 @@ class EnergyPageUpdates:
     def stop(self) -> None:
         """Stop tracking and drop the kept statistics."""
 
+        if self._stopped:
+            return
         self._stopped = True
         for name in ("_unsub_power", "_unsub_tick", "_unsub_delayed"):
             unsubscribe = getattr(self, name)
@@ -77,6 +90,27 @@ class EnergyPageUpdates:
             if unsubscribe is not None:
                 unsubscribe()
         forget_energy_day(self._entry.entry_id)
+        forget_power_history(self._entry.entry_id)
+
+    def _active_views(self) -> list[str]:
+        if self._stopped:
+            return []
+        settings = configured_energy_page(self._entry)
+        views: list[str] = settings["views"] if settings["enabled"] else []
+        if not views:
+            self.stop()
+        else:
+            if ENERGY_VIEW_POWER not in views:
+                forget_power_history(self._entry.entry_id)
+            if not any(view != ENERGY_VIEW_POWER for view in views):
+                forget_energy_day(self._entry.entry_id)
+            if ENERGY_VIEW_NOW not in views:
+                if self._power_entities:
+                    self._track_power(frozenset())
+                if self._unsub_delayed is not None:
+                    self._unsub_delayed()
+                    self._unsub_delayed = None
+        return views
 
     def _track_power(self, entities: frozenset[str]) -> None:
         from homeassistant.helpers.event import async_track_state_change_event
@@ -91,24 +125,30 @@ class EnergyPageUpdates:
             )
 
     async def _async_tick(self, _now: Any = None) -> None:
+        if self._stopped or not self._active_views():
+            return
         sources = await async_configured_energy_sources(self._hass, self._entry)
-        if self._stopped:
+        views = self._active_views()
+        if self._stopped or not views:
             # Stopped while waiting: nothing is tracked or woken any more.
             return
-        entities = frozenset(sources.power_entities)
+        entities = frozenset(sources.power_entities) if ENERGY_VIEW_NOW in views else frozenset()
         if entities != self._power_entities:
             self._track_power(entities)
         was_shown, self._shown = self._shown, sources.any
         if not (was_shown or self._shown):
             return
         # The kept day is about as old as this interval: read it anew.
-        expire_energy_day(self._entry.entry_id)
+        if any(view != ENERGY_VIEW_POWER for view in views):
+            expire_energy_day(self._entry.entry_id)
         self._send()
 
     @callback
     def _handle_power_change(self, event: Any) -> None:
         from homeassistant.helpers.event import async_call_later
 
+        if self._stopped or ENERGY_VIEW_NOW not in self._active_views():
+            return
         if self._unsub_delayed is not None or _same_power_text(event):
             return
         wait = ENERGY_POWER_MIN_INTERVAL_SECONDS - (monotonic() - self._last_notify)
@@ -120,9 +160,13 @@ class EnergyPageUpdates:
     @callback
     def _handle_delayed(self, _now: Any = None) -> None:
         self._unsub_delayed = None
+        if self._stopped or ENERGY_VIEW_NOW not in self._active_views():
+            return
         self._send()
 
     def _send(self) -> None:
+        if self._stopped:
+            return
         self._last_notify = monotonic()
         self._notify()
 

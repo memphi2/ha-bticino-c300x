@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from time import monotonic
 from typing import Any
 
@@ -19,11 +19,20 @@ from homeassistant.core import HomeAssistant
 
 from .dashboard_config import configured_energy_page
 from .dashboard_energy import (
+    ENERGY_VIEW_BALANCE,
+    ENERGY_VIEW_NOW,
+    ENERGY_VIEW_POWER,
+    ENERGY_VIEW_TODAY,
     EnergyDay,
     EnergySources,
     energy_page,
     energy_sources,
     power_watts,
+)
+from .dashboard_energy_power import (
+    async_power_history,
+    forget_power_history,
+    power_history_payload,
 )
 from .entry_types import BticinoC300XConfigEntry
 
@@ -56,12 +65,24 @@ def expire_energy_day(entry_id: str) -> None:
         cached.read_at = float("-inf")
 
 
+def _active_energy_views(entry: BticinoC300XConfigEntry) -> list[str]:
+    """Keep only active view resources, even before an options reload runs."""
+
+    settings = configured_energy_page(entry)
+    views: list[str] = settings["views"] if settings["enabled"] else []
+    if not any(view != ENERGY_VIEW_POWER for view in views):
+        forget_energy_day(entry.entry_id)
+    if ENERGY_VIEW_POWER not in views:
+        forget_power_history(entry.entry_id)
+    return views
+
+
 async def async_configured_energy_sources(
     hass: HomeAssistant, entry: BticinoC300XConfigEntry,
 ) -> EnergySources:
     """Return the sources of the energy page, none while the page is off."""
 
-    if not configured_energy_page(entry)["enabled"]:
+    if not _active_energy_views(entry):
         return EnergySources()
     if "energy" not in getattr(getattr(hass, "config", None), "components", ()):
         return EnergySources()
@@ -82,21 +103,57 @@ async def async_energy_dashboard_page(
 ) -> dict[str, Any] | None:
     """Return the energy page of the display, or None when there is none."""
 
-    sources = await async_configured_energy_sources(hass, entry)
-    if not sources.any:
+    views = _active_energy_views(entry)
+    if not views:
         return None
-    day = await _async_energy_day(hass, entry.entry_id, sources)
+    runtime = getattr(entry, "runtime_data", None)
+
+    def still_active() -> bool:
+        # An in-flight response must not start its next read after unload/reload.
+        return (
+            getattr(entry, "runtime_data", None) is runtime
+            and not getattr(getattr(runtime, "resources", None), "closed", False)
+            and _active_energy_views(entry) == views
+        )
+
+    if not still_active():
+        return None
+    sources = await async_configured_energy_sources(hass, entry)
+    if not still_active():
+        return None
+    if not sources.any:
+        forget_energy_day(entry.entry_id)
+        forget_power_history(entry.entry_id)
+        return None
+    day_sources = sources
+    if ENERGY_VIEW_TODAY not in views and ENERGY_VIEW_BALANCE not in views and sources.cost_stats:
+        day_sources = replace(
+            sources,
+            grid_from=tuple(replace(meter, cost_stat=None) for meter in sources.grid_from),
+            grid_to=tuple(replace(meter, cost_stat=None) for meter in sources.grid_to),
+        )
+    day = (
+        await _async_energy_day(hass, entry.entry_id, day_sources)
+        if any(view != ENERGY_VIEW_POWER for view in views) else EnergyDay()
+    )
+    if not still_active():
+        return None
     power = {
         entity_id: power_watts(hass.states.get(entity_id))
         for entity_id in sources.power_entities
-    }
+    } if ENERGY_VIEW_NOW in views else {}
     currency = str(getattr(hass.config, "currency", "") or "")
-    return energy_page(
+    page = energy_page(
         sources, day, power,
         language=language,
-        views=configured_energy_page(entry)["views"],
+        views=views,
         currency=_CURRENCY_SYMBOLS.get(currency, currency),
     )
+    if page is not None and ENERGY_VIEW_POWER in views:
+        history = await async_power_history(hass, entry, sources)
+        if history is not None:
+            page["energy"]["power"] = power_history_payload(sources, history, language)
+    return page if still_active() else None
 
 
 async def _async_energy_day(

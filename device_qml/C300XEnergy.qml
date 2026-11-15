@@ -622,15 +622,15 @@ Item {
     }
 
     Loader {
-        id: distributionLoader
+        id: consumersLoader
         width: parent.width
         height: bodyHeight
-        source: shown === "distribution" ? "C300XEnergyDistribution.qml" : ""
+        source: root.visible && shown === "consumers" ? "C300XEnergyConsumers.qml" : ""
         Binding {
-            target: distributionLoader.item
-            property: "distribution"
-            value: root.energy && root.energy.distribution ? root.energy.distribution : ({})
-            when: distributionLoader.status === Loader.Ready
+            target: consumersLoader.item
+            property: "consumers"
+            value: root.energy && root.energy.consumers ? root.energy.consumers : ({})
+            when: consumersLoader.status === Loader.Ready
         }
     }
 

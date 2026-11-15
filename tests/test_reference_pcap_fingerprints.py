@@ -193,7 +193,7 @@ def test_reference_on_demand_fingerprint_matches_native_invite_offer() -> None:
     setup_body = _section(
         media_bridge,
         "static bool send_sip_setup",
-        "static void send_sip_bye",
+        "static void close_home_call_fds_locked",
     )
     offer = fingerprint["offer"]
 
@@ -220,7 +220,7 @@ def test_on_demand_offer_keeps_app_parity_outside_pcmu_mode() -> None:
     setup_body = _section(
         media_bridge,
         "static bool send_sip_setup",
-        "static void send_sip_bye",
+        "static void close_home_call_fds_locked",
     )
     # The captured offer carries 0 (PCMU) and 8 (PCMA) only as bare static
     # payload numbers, without their own rtpmap. The non-PCMU branch of our offer

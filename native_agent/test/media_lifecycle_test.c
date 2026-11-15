@@ -218,7 +218,7 @@ static void request(int fd, const char *method, const char *headers, int status)
     char message[2048], response[8192];
     snprintf(message, sizeof(message), "%s rtsp://127.0.0.1/doorbell-video RTSP/1.0\r\n"
         "CSeq: 42\r\n%s\r\n", method, headers);
-    assert(send_all(fd, message, strlen(message)) > 0);
+    assert(c300x_media_sip_send_all(fd, message, strlen(message)) > 0);
     size_t used = 0;
     response[0] = '\0';
     for (;;) {

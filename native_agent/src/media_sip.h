@@ -6,6 +6,16 @@
 
 #define C300X_MEDIA_SRTP_MASTER_KEY_LEN 30
 
+/* Copy matching header lines in wire order into a caller-owned response.
+ * used is the current output length; lines that do not fit are skipped. */
+void c300x_media_sip_append_headers(
+    char *out,
+    size_t out_len,
+    size_t *used,
+    const char *message,
+    const char *name
+);
+
 void c300x_media_sip_header_value(
     const char *message,
     const char *name,

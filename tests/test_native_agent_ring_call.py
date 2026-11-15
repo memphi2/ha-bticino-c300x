@@ -219,7 +219,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     )
     setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static void send_sip_bye")
+        media_bridge.index("static void close_home_call_fds_locked")
     ]
     start_pos = media_bridge.index(
         "static bool start_media_session(media_bridge_t *bridge) {"
@@ -642,12 +642,10 @@ def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
     media_bridge = _read_media_bridge()
     invite_body = media_bridge[
         media_bridge.index("static bool send_home_call_invite") :
-        media_bridge.index("static void send_home_call_cancel")
+        media_bridge.index("static void drain_home_call_stop_responses")
     ]
-    cancel_body = media_bridge[
-        media_bridge.index("static void send_home_call_cancel") :
-        media_bridge.index("static void *home_call_thread_func")
-    ]
+    dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
+    cancel_body = dialog[dialog.index("void send_home_call_cancel") :]
     home_call_thread = media_bridge[
         media_bridge.index("static void *home_call_thread_func") :
         media_bridge.index("static void *rtp_relay_thread")
@@ -679,13 +677,14 @@ def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
 
 def test_native_agent_home_call_ack_and_bye_match_app_headers() -> None:
     media_bridge = _read_media_bridge()
-    ack_body = media_bridge[
-        media_bridge.index("static void send_sip_ack") :
-        media_bridge.index("static void send_sip_ok_response")
+    dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
+    ack_body = dialog[
+        dialog.index("void send_sip_ack") :
+        dialog.index("void send_sip_ok_response")
     ]
-    bye_body = media_bridge[
-        media_bridge.index("static void send_sip_bye") :
-        media_bridge.index("static void close_home_call_fds_locked")
+    bye_body = dialog[
+        dialog.index("void send_sip_bye") :
+        dialog.index("void send_home_call_cancel")
     ]
     stop_drain_body = media_bridge[
         media_bridge.index("static void drain_home_call_stop_responses") :

@@ -1,4 +1,6 @@
 #include "media_sip_io.h"
+#include "media_rtsp_io.h"
+#include "time_util.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -11,6 +13,23 @@
 
 #define SIP_READ_TIMEOUT (-2)
 #define SIP_READ_KEEPALIVE (-3)
+
+ssize_t c300x_media_sip_send_all(int fd, const void *buf, size_t len) {
+    const char *p = buf;
+    size_t left = len;
+    long long deadline = c300x_monotonic_ms() + 2000;
+    while (left > 0) {
+        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
+        ssize_t n = send(fd, p, left, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) {
+            return n;
+        }
+        p += n;
+        left -= (size_t)n;
+    }
+    return (ssize_t)len;
+}
 
 static long long monotonic_ms(void)
 {

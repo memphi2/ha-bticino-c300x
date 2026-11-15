@@ -339,7 +339,7 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     )
     setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static void send_sip_bye")
+        media_bridge.index("static void close_home_call_fds_locked")
     ]
 
     assert 'FLEXISIP_USERS_FILE "/etc/flexisip/users/users.db.txt"' in device_user
@@ -400,7 +400,7 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     ]
     send_sip_setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static void send_sip_bye")
+        media_bridge.index("static void close_home_call_fds_locked")
     ]
 
     assert 'dlopen("libsrtp.so.1", RTLD_NOW | RTLD_LOCAL)' in media_bridge

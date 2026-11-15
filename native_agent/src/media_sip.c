@@ -7,6 +7,38 @@
 #include <string.h>
 #include <strings.h>
 
+void c300x_media_sip_append_headers(
+    char *out,
+    size_t out_len,
+    size_t *used,
+    const char *message,
+    const char *name
+) {
+    size_t name_len = strlen(name);
+    const char *line = message;
+
+    while (line != NULL && *line != '\0') {
+        const char *line_end = strstr(line, "\r\n");
+        if (line_end == NULL) {
+            line_end = line + strlen(line);
+        }
+        if (strncasecmp(line, name, name_len) == 0) {
+            size_t len = (size_t)(line_end - line);
+            if (*used + len + 2 < out_len) {
+                memcpy(out + *used, line, len);
+                *used += len;
+                memcpy(out + *used, "\r\n", 2);
+                *used += 2;
+                out[*used] = '\0';
+            }
+        }
+        if (*line_end == '\0') {
+            break;
+        }
+        line = line_end + 2;
+    }
+}
+
 static void secure_zero(void *ptr, size_t len)
 {
     volatile unsigned char *p = ptr;

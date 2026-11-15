@@ -14,6 +14,7 @@
 #include "media_session_guard.h"
 #include "media_sip.h"
 #include "media_sip_io.h"
+#include "media_sip_dialog.h"
 #include "sha256.h"
 #include "string_util.h"
 #include "time_util.h"
@@ -42,7 +43,6 @@
 #define RTSP_BUFFER_SIZE 8192
 #define SIP_BUFFER_SIZE 8192
 #define SIP_DOMAIN_FILE "/etc/flexisip/domain-registration.conf"
-#define DEFAULT_SIP_PORT 5060
 #define RTSP_IDLE_TIMEOUT_SECONDS 180
 /* A connection that has not authenticated yet is closed after this many
  * seconds in total, however often it sends something, and after this many
@@ -71,7 +71,6 @@
 #define MEDIA_VIDEO_RELAY_DRAIN_BURST 64
 #define MEDIA_RENEW_SECONDS 20
 #define MEDIA_SIP_KEEPALIVE_SECONDS 10
-#define MEDIA_SIP_USER_AGENT "VctLinphoneService/1.17.3"
 #define MEDIA_INSTANCE_UUID_LEN 37
 #define MEDIA_INSTANCE_UUID_NAMESPACE "ha-bticino-c300x:sip-instance:"
 #define HOME_CALL_AUDIO_RTP_PORT 45544
@@ -1086,23 +1085,6 @@ static void send_srtcp_pli(
     uint32_t media_ssrc
 );
 
-static ssize_t send_all(int fd, const void *buf, size_t len) {
-    const char *p = buf;
-    size_t left = len;
-    long long deadline = c300x_monotonic_ms() + 2000;
-    while (left > 0) {
-        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
-        ssize_t n = send(fd, p, left, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-        if (n <= 0) {
-            return n;
-        }
-        p += n;
-        left -= (size_t)n;
-    }
-    return (ssize_t)len;
-}
-
 static bool copy_checked(char *out, size_t out_len, const char *value) {
     if (out == NULL || out_len == 0 || value == NULL) {
         return false;
@@ -1197,38 +1179,6 @@ static int connect_sip_socket(const struct c300x_config *config) {
         return -1;
     }
     return fd;
-}
-
-static void append_all_headers(
-    char *out,
-    size_t out_len,
-    size_t *used,
-    const char *message,
-    const char *name
-) {
-    size_t name_len = strlen(name);
-    const char *line = message;
-
-    while (line != NULL && *line != '\0') {
-        const char *line_end = strstr(line, "\r\n");
-        if (line_end == NULL) {
-            line_end = line + strlen(line);
-        }
-        if (strncasecmp(line, name, name_len) == 0) {
-            size_t len = (size_t)(line_end - line);
-            if (*used + len + 2 < out_len) {
-                memcpy(out + *used, line, len);
-                *used += len;
-                memcpy(out + *used, "\r\n", 2);
-                *used += 2;
-                out[*used] = '\0';
-            }
-        }
-        if (*line_end == '\0') {
-            break;
-        }
-        line = line_end + 2;
-    }
 }
 
 static bool wait_for_rtsp_clients_to_drain(media_bridge_t *bridge, int timeout_ms) {
@@ -1560,106 +1510,6 @@ static void secure_zero(void *ptr, size_t len) {
     }
 }
 
-static void send_sip_ack(
-    int fd,
-    const char *from_aor,
-    const char *to_aor,
-    const char *local_ip,
-    uint16_t local_port,
-    const char *transport,
-    const char *to_header,
-    const char *from_tag,
-    const char *call_id,
-    const char *contact_uri,
-    int cseq
-) {
-    if (
-        fd < 0
-        || from_aor[0] == '\0'
-        || to_aor[0] == '\0'
-        || local_ip[0] == '\0'
-        || transport[0] == '\0'
-        || to_header[0] == '\0'
-        || from_tag[0] == '\0'
-        || call_id[0] == '\0'
-    ) {
-        return;
-    }
-    char fallback_uri[512];
-    const char *request_uri = contact_uri != NULL && contact_uri[0] != '\0' ? contact_uri : fallback_uri;
-    if (contact_uri == NULL || contact_uri[0] == '\0') {
-        if (snprintf(fallback_uri, sizeof(fallback_uri), "sip:%s", to_aor) >= (int)sizeof(fallback_uri)) {
-            return;
-        }
-    }
-    char request[1024];
-    int length = snprintf(
-        request,
-        sizeof(request),
-        "ACK %s SIP/2.0\r\n"
-        "Via: SIP/2.0/%s %s:%u;branch=z9hG4bKack%ld;rport\r\n"
-        "Max-Forwards: 70\r\n"
-        "To: %s\r\n"
-        "From: <sip:%s>;tag=%s\r\n"
-        "Call-ID: %s\r\n"
-        "CSeq: %d ACK\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
-        "Content-Length: 0\r\n\r\n",
-        request_uri,
-        transport,
-        local_ip,
-        local_port,
-        (long)time(NULL),
-        to_header,
-        from_aor,
-        from_tag,
-        call_id,
-        cseq
-    );
-    if (length < 0 || length >= (int)sizeof(request)) return;
-    (void)send_all(fd, request, strlen(request));
-}
-
-static void send_sip_ok_response(int fd, const char *message) {
-    char to[512];
-    char from[512];
-    char call_id[128];
-    char cseq[64];
-    char response[4096];
-    size_t used = 0;
-
-    c300x_media_sip_header_value(message, "To:", to, sizeof(to));
-    c300x_media_sip_header_value(message, "From:", from, sizeof(from));
-    c300x_media_sip_header_value(message, "Call-ID:", call_id, sizeof(call_id));
-    c300x_media_sip_header_value(message, "CSeq:", cseq, sizeof(cseq));
-    if (to[0] == '\0' || from[0] == '\0' || call_id[0] == '\0' || cseq[0] == '\0') {
-        return;
-    }
-
-    used += (size_t)snprintf(response + used, sizeof(response) - used, "SIP/2.0 200 OK\r\n");
-    append_all_headers(response, sizeof(response), &used, message, "Via:");
-    if (used >= sizeof(response)) {
-        return;
-    }
-    (void)c300x_appendf(
-        response,
-        sizeof(response),
-        &used,
-        "To: %s\r\n"
-        "From: %s\r\n"
-        "Call-ID: %s\r\n"
-        "CSeq: %s\r\n"
-        "Content-Length: 0\r\n\r\n",
-        to,
-        from,
-        call_id,
-        cseq
-    );
-    if (used < sizeof(response)) {
-        (void)send_all(fd, response, used);
-    }
-}
-
 static bool build_ring_sdp(
     char *out,
     size_t out_len,
@@ -1745,8 +1595,8 @@ static bool send_ring_response(
     }
 
     used += (size_t)snprintf(response + used, sizeof(response) - used, "SIP/2.0 %d %s\r\n", code, reason);
-    append_all_headers(response, sizeof(response), &used, invite, "Via:");
-    append_all_headers(response, sizeof(response), &used, invite, "Record-Route:");
+    c300x_media_sip_append_headers(response, sizeof(response), &used, invite, "Via:");
+    c300x_media_sip_append_headers(response, sizeof(response), &used, invite, "Record-Route:");
     if (used >= sizeof(response)) {
         return false;
     }
@@ -1807,7 +1657,7 @@ static bool send_ring_response(
     if (used >= sizeof(response)) {
         return false;
     }
-    return send_all(fd, response, used) == (ssize_t)used;
+    return c300x_media_sip_send_all(fd, response, used) == (ssize_t)used;
 }
 
 static bool send_ring_registration(
@@ -1857,7 +1707,7 @@ static bool send_ring_registration(
     if (len <= 0 || len >= (int)sizeof(request)) {
         return false;
     }
-    if (send_all(fd, request, (size_t)len) <= 0) {
+    if (c300x_media_sip_send_all(fd, request, (size_t)len) <= 0) {
         return false;
     }
     if (read_message(fd, response, sizeof(response), 3) <= 0) {
@@ -1884,50 +1734,6 @@ static void send_ring_unregister(
     int cseq
 ) {
     (void)send_ring_registration(bridge, fd, domain, from_aor, cseq, 0);
-}
-
-static void send_ring_bye(
-    int fd,
-    const char *invite,
-    const char *to_tag,
-    const char *remote_contact_uri
-) {
-    char to[512];
-    char from[512];
-    char call_id[128];
-    char tagged_to[640];
-    char request[2048];
-    const char *request_uri = remote_contact_uri != NULL && remote_contact_uri[0] != '\0'
-        ? remote_contact_uri
-        : "sip:c300x@127.0.0.1:5060";
-
-    c300x_media_sip_header_value(invite, "To:", to, sizeof(to));
-    c300x_media_sip_header_value(invite, "From:", from, sizeof(from));
-    c300x_media_sip_header_value(invite, "Call-ID:", call_id, sizeof(call_id));
-    c300x_media_sip_make_tagged_to(to, to_tag, tagged_to, sizeof(tagged_to));
-    if (tagged_to[0] == '\0' || from[0] == '\0' || call_id[0] == '\0') {
-        return;
-    }
-    snprintf(
-        request,
-        sizeof(request),
-        "BYE %s SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:%d;branch=z9hG4bKringbye%ld;rport\r\n"
-        "Max-Forwards: 70\r\n"
-        "From: %s\r\n"
-        "To: %s\r\n"
-        "Call-ID: %s\r\n"
-        "CSeq: 111 BYE\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
-        "Content-Length: 0\r\n\r\n",
-        request_uri,
-        DEFAULT_SIP_PORT,
-        (long)time(NULL),
-        tagged_to,
-        from,
-        call_id
-    );
-    (void)send_all(fd, request, strlen(request));
 }
 
 static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *packet, int packet_len, bool audio) {
@@ -2503,7 +2309,7 @@ static void ring_media_loop(
             break;
         }
         if (now >= next_sip_keepalive) {
-            (void)send_all(sip_fd, "\r\n\r\n", 4);
+            (void)c300x_media_sip_send_all(sip_fd, "\r\n\r\n", 4);
             next_sip_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
         }
         if (answered && (next_stun == 0 || now >= next_stun)) {
@@ -2798,7 +2604,7 @@ static void *ring_receiver_thread(void *arg) {
 
             long long now = c300x_monotonic_ms();
             if (now >= next_keepalive) {
-                (void)send_all(fd, "\r\n\r\n", 4);
+                (void)c300x_media_sip_send_all(fd, "\r\n\r\n", 4);
                 next_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
             }
             if (now >= next_register) {
@@ -2879,7 +2685,7 @@ static void *sip_monitor_thread(void *arg) {
 
         long long now = c300x_monotonic_ms();
         if (now >= next_sip_keepalive) {
-            (void)send_all(fd, "\r\n\r\n", 4);
+            (void)c300x_media_sip_send_all(fd, "\r\n\r\n", 4);
             next_sip_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
         }
         if (now >= next_device_media_renew) {
@@ -3730,11 +3536,6 @@ static void *ondemand_media_thread(void *arg) {
     return NULL;
 }
 
-static void
-send_sip_bye(int fd, const char *from_aor, const char *to_aor,
-    const char *local_ip, uint16_t local_port, const char *transport,
-    const char *to_header, const char *from_tag, const char *call_id, const char *contact_uri);
-
 static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
     char domain[128];
     char domain_hint[128] = "";
@@ -3883,7 +3684,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         transport,
         instance_uuid
     );
-    if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) <= 0) {
+    if (c300x_media_sip_send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) <= 0) {
         snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "register_io");
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
@@ -4020,7 +3821,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         strlen(sdp),
         sdp
     );
-    if (send_all(fd, request, strlen(request)) <= 0) {
+    if (c300x_media_sip_send_all(fd, request, strlen(request)) <= 0) {
         snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "invite_io");
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
@@ -4148,63 +3949,6 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
     secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
     secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
     return monitor_started && ondemand_media_started;
-}
-
-static void send_sip_bye(
-    int fd,
-    const char *from_aor,
-    const char *to_aor,
-    const char *local_ip,
-    uint16_t local_port,
-    const char *transport,
-    const char *to_header,
-    const char *from_tag,
-    const char *call_id,
-    const char *contact_uri
-) {
-    if (
-        fd < 0
-        || from_aor[0] == '\0'
-        || to_aor[0] == '\0'
-        || local_ip[0] == '\0'
-        || transport[0] == '\0'
-        || to_header[0] == '\0'
-        || from_tag[0] == '\0'
-        || call_id[0] == '\0'
-    ) {
-        return;
-    }
-    char fallback_uri[512];
-    const char *request_uri = contact_uri != NULL && contact_uri[0] != '\0' ? contact_uri : fallback_uri;
-    if (contact_uri == NULL || contact_uri[0] == '\0') {
-        if (snprintf(fallback_uri, sizeof(fallback_uri), "sip:%s", to_aor) >= (int)sizeof(fallback_uri)) {
-            return;
-        }
-    }
-    char request[1024];
-    snprintf(
-        request,
-        sizeof(request),
-        "BYE %s SIP/2.0\r\n"
-        "Via: SIP/2.0/%s %s:%u;branch=z9hG4bKbye%ld;rport\r\n"
-        "Max-Forwards: 70\r\n"
-        "To: %s\r\n"
-        "From: <sip:%s>;tag=%s\r\n"
-        "Call-ID: %s\r\n"
-        "CSeq: 22 BYE\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
-        "Content-Length: 0\r\n\r\n",
-        request_uri,
-        transport,
-        local_ip,
-        local_port,
-        (long)time(NULL),
-        to_header,
-        from_aor,
-        from_tag,
-        call_id
-    );
-    (void)send_all(fd, request, strlen(request));
 }
 
 static void close_home_call_fds_locked(media_bridge_t *bridge) {
@@ -4457,7 +4201,7 @@ static bool send_home_call_register(
     if (len <= 0 || len >= (int)sizeof(request)) {
         return false;
     }
-    if (send_all(fd, request, (size_t)len) <= 0) {
+    if (c300x_media_sip_send_all(fd, request, (size_t)len) <= 0) {
         return false;
     }
     if (read_message(fd, response, sizeof(response), 3) <= 0) {
@@ -4516,59 +4260,7 @@ static bool send_home_call_invite(
     if (len <= 0 || len >= (int)sizeof(request)) {
         return false;
     }
-    return send_all(fd, request, (size_t)len) == len;
-}
-
-static void send_home_call_cancel(
-    int fd,
-    const char *to_aor,
-    const char *from_aor,
-    const char *from_tag,
-    const char *call_id,
-    const char *invite_branch,
-    const char *local_ip,
-    uint16_t local_port,
-    const char *transport
-) {
-    char request[2048];
-    int len;
-
-    if (
-        fd < 0
-        || to_aor[0] == '\0'
-        || from_aor[0] == '\0'
-        || from_tag[0] == '\0'
-        || call_id[0] == '\0'
-        || invite_branch[0] == '\0'
-        || local_ip[0] == '\0'
-        || transport[0] == '\0'
-    ) {
-        return;
-    }
-    len = snprintf(
-        request,
-        sizeof(request),
-        "CANCEL sip:%s SIP/2.0\r\n"
-        "Via: SIP/2.0/%s %s:%u;branch=%s;rport\r\n"
-        "Max-Forwards: 70\r\n"
-        "To: <sip:%s>\r\n"
-        "From: <sip:%s>;tag=%s\r\n"
-        "Call-ID: %s\r\n"
-        "CSeq: 21 CANCEL\r\n"
-        "Content-Length: 0\r\n\r\n",
-        to_aor,
-        transport,
-        local_ip,
-        local_port,
-        invite_branch,
-        to_aor,
-        from_aor,
-        from_tag,
-        call_id
-    );
-    if (len > 0 && len < (int)sizeof(request)) {
-        (void)send_all(fd, request, (size_t)len);
-    }
+    return c300x_media_sip_send_all(fd, request, (size_t)len) == len;
 }
 
 static void drain_home_call_stop_responses(
@@ -4917,7 +4609,7 @@ static void *home_call_thread_func(void *arg) {
             next_rtcp = now + 1000;
         }
         if (next_sip_keepalive == 0 || now >= next_sip_keepalive) {
-            (void)send_all(fd, "\r\n\r\n", 4);
+            (void)c300x_media_sip_send_all(fd, "\r\n\r\n", 4);
             next_sip_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
         }
     }

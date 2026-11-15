@@ -10,7 +10,7 @@ static const char bye[] = "BYE sip:device@example.test SIP/2.0\r\nContent-Length
 
 static void put(int fd, const char *text)
 {
-    assert(send_all(fd, text, strlen(text)) == (ssize_t)strlen(text));
+    assert(c300x_media_sip_send_all(fd, text, strlen(text)) == (ssize_t)strlen(text));
 }
 
 static void expect(int fd, const char *text)
@@ -65,7 +65,7 @@ static void *write_fragments(void *arg)
         if (count > writer->step) {
             count = writer->step;
         }
-        assert(send_all(writer->fd, writer->text + offset, count) == (ssize_t)count);
+        assert(c300x_media_sip_send_all(writer->fd, writer->text + offset, count) == (ssize_t)count);
     }
     return NULL;
 }
@@ -79,7 +79,7 @@ static void fragmented(void)
         int fds[2];
         pthread_t writer;
         pair(fds, SOCK_STREAM);
-        assert(send_all(fds[0], input, split) == (ssize_t)split);
+        assert(c300x_media_sip_send_all(fds[0], input, split) == (ssize_t)split);
         writer_t args = {fds[0], input + split, strlen(input), 1000000};
         assert(pthread_create(&writer, NULL, write_fragments, &args) == 0);
         expect(fds[1], message);
@@ -356,7 +356,7 @@ static void binary_body(void)
     const char message[] = "SIP/2.0 200 OK\r\nContent-Length: 3\r\n\r\na\0b";
     char buffer[512];
     pair(fds, SOCK_STREAM);
-    assert(send_all(fds[0], message, sizeof(message) - 1) == (ssize_t)sizeof(message) - 1);
+    assert(c300x_media_sip_send_all(fds[0], message, sizeof(message) - 1) == (ssize_t)sizeof(message) - 1);
     put(fds[0], trying);
     int count = c300x_media_sip_read_message(fds[1], buffer, sizeof(buffer), 100);
     assert(count == sizeof(message) - 1);

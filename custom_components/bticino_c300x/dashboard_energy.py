@@ -334,8 +334,16 @@ def energy_page(
     has_grid = bool(sources.grid_from or sources.grid_to)
     has_battery = bool(sources.battery_from or sources.battery_to)
     grid_power = _sum_power(sources.grid_power, power)
-    solar_power = _sum_power(sources.solar_power, power)
-    battery_power = _sum_power(sources.battery_power, power)
+    # A kind's power is only known when each of its sources has a sensor.
+    batteries = max(len(sources.battery_from), len(sources.battery_to))
+    solar_power = (
+        _sum_power(sources.solar_power, power)
+        if len(sources.solar_power) >= len(sources.solar) else None
+    )
+    battery_power = (
+        _sum_power(sources.battery_power, power)
+        if len(sources.battery_power) >= batteries else None
+    )
     # The home's power is only known when every kind of source reports its own.
     known = [
         value for present, value in (

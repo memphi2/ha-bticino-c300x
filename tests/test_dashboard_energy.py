@@ -282,3 +282,19 @@ def test_power_just_below_a_kilowatt_does_not_read_1000_w() -> None:
     assert format_power(999.6, "de") == "1 kW"
     assert format_power(-999.6, "en") == "-1 kW"
     assert format_power(999.4, "de") == "999 W"
+
+
+def test_a_kind_with_a_source_lacking_its_power_sensor_shows_no_power() -> None:
+    preferences = {"energy_sources": [
+        {"type": "grid", "stat_energy_from": "sensor.house", "stat_rate": "sensor.house_power"},
+        {"type": "solar", "stat_energy_from": "sensor.roof", "stat_rate": "sensor.roof_power"},
+        {"type": "solar", "stat_energy_from": "sensor.balcony"},
+    ]}
+    power = {"sensor.house_power": 300.0, "sensor.roof_power": 500.0}
+
+    nodes = energy_page(energy_sources(preferences), EnergyDay(), power, language="en")["energy"]["nodes"]
+
+    # One inverter's power is not the solar power, and the home's would be too low.
+    assert "power" not in nodes["solar"]
+    assert "power" not in nodes["home"]
+    assert nodes["grid"]["power"] == "300 W"

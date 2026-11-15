@@ -579,6 +579,61 @@ test("reconfiguration disposes media, timers and subscriptions before replacing 
   card.disconnectedCallback();
 });
 
+test("card disposal closes ringback contexts and reattachment recreates them", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?ringback-disposal");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  const previousAudioContext = window.AudioContext;
+  const contexts = [];
+  window.AudioContext = class {
+    constructor() {
+      this.state = "running";
+      this.destination = {};
+      this.closes = 0;
+      contexts.push(this);
+    }
+    createGain() {
+      return { gain: { value: 0 }, connect() {}, disconnect() {} };
+    }
+    createOscillator() {
+      return { frequency: { value: 0 }, connect() {}, disconnect() {}, start() {}, stop() {} };
+    }
+    close() {
+      this.closes++;
+      this.state = "closed";
+      return Promise.resolve();
+    }
+  };
+  try {
+    card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+    card._syncRingbackTone(true);
+    card._syncRingbackTone(false);
+    assert.equal(contexts[0].closes, 0, "ordinary stop keeps the context reusable");
+    card._syncRingbackTone(true);
+    assert.equal(contexts.length, 1);
+    card.disconnectedCallback();
+    card.disconnectedCallback();
+    assert.equal(contexts[0].closes, 1);
+    assert.equal(card._ringbackTone._context, null);
+    assert.equal(card._ringbackTone._timer, null);
+    assert.deepEqual(card._ringbackTone._oscillators, []);
+
+    card.connectedCallback();
+    card._syncRingbackTone(true);
+    assert.equal(contexts.length, 2);
+    card.setConfig({ entity: "camera.replacement" });
+    assert.equal(contexts[1].closes, 1);
+    card._syncRingbackTone(true);
+    assert.equal(contexts.length, 3);
+    card.disconnectedCallback();
+    assert.deepEqual(contexts.map((context) => context.closes), [1, 1, 1]);
+  } finally {
+    card.disconnectedCallback();
+    if (previousAudioContext === undefined) delete window.AudioContext;
+    else window.AudioContext = previousAudioContext;
+  }
+});
+
 test("reconfiguration rejects an old subscription resolving after the new one", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-subscription");

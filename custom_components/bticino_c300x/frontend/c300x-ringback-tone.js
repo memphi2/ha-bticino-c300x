@@ -47,6 +47,13 @@ export class C300XRingbackTone {
     this._stopOscillators();
   }
 
+  dispose() {
+    this.stop();
+    const context = this._context;
+    this._context = null;
+    context?.close().catch(() => undefined);
+  }
+
   _playPulse() {
     if (!this._active || !this._context) {
       return;

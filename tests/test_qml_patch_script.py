@@ -347,6 +347,7 @@ def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> No
     assert 'import "js/c300x_ha.js" as HAConfig' in home_page
     assert 'import "js/c300x_memos.js" as MemoSync' in home_page
     assert "function refreshDisplayBridgeButtons()" in home_page
+    assert 'event.topic === "display_bridge.state"' in home_page
     assert "HAConfig.homeButtons" in home_page
     assert "if (!valid) return" in home_page
     assert "id: homeAssistantButtonRow" not in home_page

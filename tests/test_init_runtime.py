@@ -793,12 +793,14 @@ def test_configure_display_bridge_registers_and_clears_callback(
     asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == [(True, "https://ha.local/webhook-id", "secret")]
+    assert api.notifications == ["display_bridge.state"]
     assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
     entry.options[CONF_DEVICE_UI_ENABLED] = False
     api = _DisplayBridgeApi({"configured": True})
     asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
     assert api.configured == [(False, "", "")]
+    assert api.notifications == []
 
 
 def test_configure_display_bridge_skips_matching_registration(
@@ -837,7 +839,17 @@ def test_configure_display_bridge_skips_matching_registration(
     asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == []
+    assert api.notifications == ["display_bridge.state"]
     assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
+
+
+def test_display_configuration_notify_failure_is_nonfatal() -> None:
+    class Api:
+        async def async_notify_display_bridge_event(self, topic):
+            assert topic == "display_bridge.state"
+            raise api_errors.C300XAgentApiError("offline")
+
+    asyncio.run(runtime_manager._async_notify_display_configuration(Api()))
 
 
 def test_configure_display_bridge_records_agent_failures(
@@ -1761,6 +1773,10 @@ class _DisplayBridgeApi:
         self._status = status
         self._error = error
         self.configured: list[tuple[bool, str, str]] = []
+        self.notifications: list[str] = []
+
+    async def async_notify_display_bridge_event(self, topic: str) -> None:
+        self.notifications.append(topic)
 
     async def async_display_bridge_status(self) -> dict[str, Any]:
         if self._error is not None:

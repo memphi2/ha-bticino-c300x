@@ -991,6 +991,7 @@ async def _async_configure_display_bridge(
             )
             if configured and status.get("callback_hash") == expected_hash:
                 diagnostics.mark_success(datetime.now(UTC))
+                await _async_notify_display_configuration(api)
                 return
         elif not configured:
             diagnostics.mark_success(datetime.now(UTC))
@@ -1001,6 +1002,8 @@ async def _async_configure_display_bridge(
             shared_secret=shared_secret,
         )
         diagnostics.mark_success(datetime.now(UTC))
+        if enabled:
+            await _async_notify_display_configuration(api)
     except C300XAgentApiUnsupportedError:
         diagnostics.mark_failure(
             "device-agent endpoint is not available",
@@ -1013,6 +1016,14 @@ async def _async_configure_display_bridge(
         diagnostics.mark_failure(error, datetime.now(UTC))
         if enabled:
             _LOGGER.warning("C300X display bridge registration failed: %s", error)
+
+
+async def _async_notify_display_configuration(api: C300XAgentApi) -> None:
+    """Refresh visible pages once after setup/options reload, even with the same URL."""
+    try:
+        await api.async_notify_display_bridge_event("display_bridge.state")
+    except C300XAgentApiError:
+        _LOGGER.debug("C300X display configuration notification failed", exc_info=True)
 
 
 def _async_track_display_bridge_updates(

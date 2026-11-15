@@ -9,7 +9,6 @@ from custom_components.bticino_c300x.memos import (
     memo_kind_counts,
     memo_kind_items,
     memo_kind_label,
-    memo_state_text,
     memo_text_was_state_truncated,
     voice_memo_media_source_id,
     voice_memo_media_url,
@@ -148,11 +147,7 @@ def test_voice_memo_titles_and_invalid_ids() -> None:
         voice_memo_media_url("entry", "bad")
 
 
-def test_memo_state_text_is_stable() -> None:
-    assert memo_state_text(None) is None
-    assert memo_state_text("") is None
-    assert memo_state_text("short") == "short"
+def test_memo_text_truncation_is_reported() -> None:
     long_text = "x" * (MAX_MEMO_STATE_LENGTH + 1)
-    assert memo_state_text(long_text) == f"{'x' * (MAX_MEMO_STATE_LENGTH - 3)}..."
     assert memo_text_was_state_truncated(long_text) is True
     assert memo_text_was_state_truncated("short") is False

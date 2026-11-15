@@ -834,30 +834,6 @@ def _mark_homeassistant_media_user_bootstrapped(
     hass.config_entries.async_update_entry(entry, data=data)
 
 
-async def _async_refresh_device_user_status(
-    entry: BticinoC300XConfigEntry,
-) -> None:
-    """Refresh the dedicated HA media-user status without mutating the device."""
-
-    if not _entry_video_enabled(entry):
-        return
-    capabilities = getattr(entry.runtime_data, "capabilities", {})
-    if not capability_is_supported(capabilities, "device_user"):
-        return
-    try:
-        entry.runtime_data.device_user_status = (
-            await entry.runtime_data.api.async_device_user_status()
-        )
-        entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
-    except C300XAgentApiUnsupportedError:
-        _LOGGER.debug("C300X device agent does not support device-user status")
-    except C300XAgentApiError as err:
-        _LOGGER.warning(
-            "C300X device-user status refresh failed: %s",
-            compact_error_text(err),
-        )
-
-
 async def _async_refresh_self_test(entry: BticinoC300XConfigEntry) -> None:
     """Refresh the read-only device-agent architecture self-test."""
 

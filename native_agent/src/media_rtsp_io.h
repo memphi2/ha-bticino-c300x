@@ -23,7 +23,6 @@ ssize_t c300x_rtsp_send_pair(int fd, const void *first, size_t first_len,
 int c300x_rtsp_connection_add(int fds[RTSP_CONNECTION_LIMIT], int fd);
 void c300x_rtsp_connections_shutdown(const int fds[RTSP_CONNECTION_LIMIT]);
 
-int parse_client_port(const char *transport);
 int parse_interleaved_channel(const char *transport);
 
 void send_rtsp_response(

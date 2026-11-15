@@ -288,18 +288,6 @@ def _cached_talkback_codec(entry: Any) -> str | None:
         return None
 
 
-def _talkback_codec_is_pcmu(entry: Any) -> bool:
-    """Return True when the device's last-known running codec is PCMU.
-
-    The audio_codec select publishes the resolved device codec into shared
-    This legacy helper is intentionally cache-only; capture paths use
-    _async_talkback_codec_is_pcmu so an unresolved cache is refreshed before
-    talkback starts.
-    """
-
-    return _cached_talkback_codec(entry) == "pcmu"
-
-
 async def _async_talkback_codec_is_pcmu(
     entry: Any,
     status: Mapping[str, Any],
@@ -477,14 +465,6 @@ def ring_capture_media_url(file_name: str) -> str:
     from urllib.parse import quote
 
     return f"/api/{DOMAIN}/ring-captures/{quote(file_name, safe='')}"
-
-
-def ring_capture_media_source_id(file_name: str) -> str:
-    """Return the Home Assistant media-source id for a ring-capture MP4."""
-
-    from urllib.parse import quote
-
-    return f"media-source://{DOMAIN}/capture/{quote(file_name, safe='')}"
 
 
 def ring_capture_media_items(hass: Any) -> list[dict[str, Any]]:

@@ -35,6 +35,7 @@ from custom_components.bticino_c300x.ring_capture import (
     _async_run_ffmpeg_command,
     _async_talkback_codec_is_pcmu,
     _async_wait_rtsp_ready,
+    _cached_talkback_codec,
     _capture_audio_gain_db,
     _capture_frame_offsets,
     _capture_media_dirs,
@@ -45,13 +46,11 @@ from custom_components.bticino_c300x.ring_capture import (
     _resolve_root,
     _rtsp_url_from_status,
     _safe_c300x_path,
-    _talkback_codec_is_pcmu,
     _validate_duration,
     async_capture_doorbell_ring_call,
     raise_if_ring_capture_blocked,
     ring_capture_media_items,
     ring_capture_media_path,
-    ring_capture_media_source_id,
     ring_capture_media_url,
 )
 from custom_components.bticino_c300x.ring_talkback import (
@@ -337,9 +336,6 @@ def test_ring_capture_media_items_list_local_mp4s(tmp_path: Path) -> None:
     assert ring_capture_media_path(hass, "../bad.mp4") is None
     assert ring_capture_media_url(newer.name) == (
         "/api/bticino_c300x/ring-captures/doorbell_20260719_100001.mp4"
-    )
-    assert ring_capture_media_source_id(newer.name) == (
-        "media-source://bticino_c300x/capture/doorbell_20260719_100001.mp4"
     )
 
 
@@ -1369,21 +1365,11 @@ def _entry_with_codec(codec: str | None) -> Any:
     )
 
 
-def test_talkback_codec_is_pcmu_reads_runtime_event_state() -> None:
-    # Reads the durable codec the select mirrors into runtime state -- not the
-    # entity's live state, which goes unavailable during an agent blip.
-    assert _talkback_codec_is_pcmu(_entry_with_codec("pcmu")) is True
-    assert _talkback_codec_is_pcmu(_entry_with_codec("speex")) is False
-    assert _talkback_codec_is_pcmu(_entry_with_codec("unknown")) is False
-    assert _talkback_codec_is_pcmu(_entry_with_codec(None)) is False
-
-
-def test_talkback_codec_is_pcmu_defaults_false_when_runtime_state_missing() -> None:
-    # The sync helper is cache-only for callers that cannot refresh.
-    assert (
-        _talkback_codec_is_pcmu(types.SimpleNamespace(runtime_data=object())) is False
-    )
-    assert _talkback_codec_is_pcmu(object()) is False
+def test_cached_talkback_codec_survives_missing_runtime_state() -> None:
+    assert _cached_talkback_codec(types.SimpleNamespace(runtime_data=object())) is None
+    assert _cached_talkback_codec(object()) is None
+    assert _cached_talkback_codec(_entry_with_codec("pcmu")) == "pcmu"
+    assert _cached_talkback_codec(_entry_with_codec(None)) is None
 
 
 def test_talkback_codec_is_pcmu_reads_native_status_before_cache() -> None:

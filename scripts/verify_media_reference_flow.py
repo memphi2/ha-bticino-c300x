@@ -1347,13 +1347,6 @@ def _first_openwebnet_reply_after(packets: list[Packet], start: Packet) -> Packe
     return None
 
 
-def _openwebnet_reply(packet: Packet | None) -> str | None:
-    if packet is None:
-        return None
-    match = re.search(r"\*#\*[01]##", packet.text)
-    return match.group(0) if match else None
-
-
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 

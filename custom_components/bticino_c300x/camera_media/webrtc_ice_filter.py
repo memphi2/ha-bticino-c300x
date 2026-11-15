@@ -297,20 +297,6 @@ def filter_webrtc_message(
     return _replace_answer_sdp(obj, field, filtered_sdp)
 
 
-def filter_candidate_for_entry(
-    obj: Any,
-    entry: Any,
-    *,
-    logger: logging.Logger | None = None,
-    direction: str = "",
-) -> bool:
-    """``filter_candidate`` using the policy configured on ``entry``."""
-
-    return filter_candidate(
-        obj, entry_ice_policy(entry), logger=logger, direction=direction
-    )
-
-
 def filter_webrtc_message_for_entry(
     obj: Any,
     entry: Any,

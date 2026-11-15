@@ -40,15 +40,6 @@ ssize_t c300x_rtsp_send_pair(int fd, const void *first, size_t first_len,
     return sent == first_len + second_len ? (ssize_t)sent : -1;
 }
 
-int parse_client_port(const char *transport)
-{
-    const char *pos = strstr(transport, "client_port=");
-    if (pos == NULL) {
-        return 0;
-    }
-    return atoi(pos + 12);
-}
-
 int parse_interleaved_channel(const char *transport)
 {
     const char *pos = strstr(transport, "interleaved=");

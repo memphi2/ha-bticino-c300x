@@ -185,16 +185,6 @@ def _voice_memo_entry_name(memo_id: str) -> str:
     return memo_id.split("/", 1)[1]
 
 
-def memo_state_text(value: Any) -> str | None:
-    """Return memo text constrained to Home Assistant's state limit."""
-
-    if not isinstance(value, str) or value == "":
-        return None
-    if len(value) <= MAX_MEMO_STATE_LENGTH:
-        return value
-    return f"{value[: MAX_MEMO_STATE_LENGTH - 3]}..."
-
-
 def memo_text_was_state_truncated(value: Any) -> bool:
     """Return true when the memo text had to be shortened for entity state."""
 

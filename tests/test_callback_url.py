@@ -18,7 +18,6 @@ from custom_components.bticino_c300x.callback_url import (
     _source_ip_is_usable,
     _replace_url_host,
     apply_callback_base_path,
-    apply_callback_base_url,
     async_generate_agent_callback_url,
     async_rewrite_link_local_callback_url,
     async_suggest_callback_base_url,
@@ -112,16 +111,6 @@ def test_normalize_callback_base_url_accepts_missing_port() -> None:
 def test_normalize_callback_base_url_rejects_unusable_targets(value: str) -> None:
     with pytest.raises(ValueError):
         normalize_callback_base_url(value)
-
-
-def test_apply_callback_base_url_preserves_generated_webhook_path() -> None:
-    assert (
-        apply_callback_base_url(
-            "http://homeassistant.local:8123/api/webhook/display-hook?x=1",
-            "http://192.0.2.10:8123",
-        )
-        == "http://192.0.2.10:8123/api/webhook/display-hook?x=1"
-    )
 
 
 def test_https_callback_preserves_scheme_name_and_port() -> None:

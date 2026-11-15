@@ -278,12 +278,6 @@ def _content_hash(
     return f"sha256:{digest.hexdigest()}"
 
 
-def _material_hash(material: str) -> str:
-    """Return a stable hash for generated device behavior without a source file."""
-
-    return f"sha256:{hashlib.sha256(material.encode()).hexdigest()}"
-
-
 def _bundle_hash(
     *,
     agent_version: str,

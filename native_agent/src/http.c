@@ -7231,6 +7231,7 @@ static int handle_ringer_post(
     int has_volume;
     int muted_readback = 0;
     int volume_readback = 0;
+    int written;
 
     muted_reply_json[0] = '\0';
     volume_reply_json[0] = '\0';
@@ -7305,19 +7306,20 @@ static int handle_ringer_post(
         c300x_json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
         c300x_json_string(volume_readback_reply, volume_readback_reply_json, sizeof(volume_readback_reply_json));
         if (!c300x_ringer_volume_from_reply(volume_readback_reply, &volume_readback)) {
-            snprintf(
+            written = snprintf(
                 body,
                 sizeof(body),
                 "{\"ok\":false,\"error\":\"ringer_volume_readback_failed\",\"raw\":%s,\"volume_raw\":%s}\n",
                 volume_reply_json,
                 volume_readback_reply_json
             );
+            if (written < 0 || (size_t)written >= sizeof(body)) goto response_too_large;
             send_json(client_fd, 502, "Bad Gateway", body);
             return 1;
         }
         remember_ringer_volume(runtime, volume_readback);
         if (volume_readback != volume) {
-            snprintf(
+            written = snprintf(
                 body,
                 sizeof(body),
                 "{\"ok\":false,\"error\":\"ringer_volume_not_applied\",\"expected\":%d,\"volume\":%d,\"raw\":%s,\"volume_raw\":%s}\n",
@@ -7326,13 +7328,14 @@ static int handle_ringer_post(
                 volume_reply_json,
                 volume_readback_reply_json
             );
+            if (written < 0 || (size_t)written >= sizeof(body)) goto response_too_large;
             send_json(client_fd, 409, "Conflict", body);
             return 1;
         }
     }
 
     if (has_muted && !has_volume) {
-        snprintf(
+        written = snprintf(
             body,
             sizeof(body),
             "{\"ok\":true,\"muted\":%s,\"raw\":%s}\n",
@@ -7340,7 +7343,7 @@ static int handle_ringer_post(
             muted_reply_json
         );
     } else if (has_volume && !has_muted) {
-        snprintf(
+        written = snprintf(
             body,
             sizeof(body),
             "{\"ok\":true,\"volume\":%d,\"raw\":%s,\"volume_raw\":%s}\n",
@@ -7349,7 +7352,7 @@ static int handle_ringer_post(
             volume_readback_reply_json
         );
     } else {
-        snprintf(
+        written = snprintf(
             body,
             sizeof(body),
             "{\"ok\":true,\"muted\":%s,\"volume\":%d,\"raw\":%s,\"muted_raw\":%s,\"volume_raw\":%s}\n",
@@ -7360,7 +7363,12 @@ static int handle_ringer_post(
             volume_readback_reply_json
         );
     }
+    if (written < 0 || (size_t)written >= sizeof(body)) goto response_too_large;
     send_json(client_fd, 200, "OK", body);
+    return 1;
+
+response_too_large:
+    send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"ringer_response_too_large\"}\n");
     return 1;
 }
 

@@ -15,8 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
     for init_changed in (False, True)
     for failure, status in (("none", 0), ("rw", 21), ("ro", 22), ("link", 23), ("link_ro", 23))
 ] + [
+    (True, "copy", 27), (True, "copy_ro", 27),
     (True, "chmod", 24), (True, "chmod_ro", 24),
     (True, "move", 25), (True, "move_ro", 25),
+    (True, "cleanup", 26), (True, "cleanup_ro", 26),
 ])
 def test_startup_failures_propagate_and_stop_install(
     monkeypatch: pytest.MonkeyPatch, init_changed: bool,
@@ -42,8 +44,15 @@ mount() {
     esac
 }
 ln() { printf 'link\\n'; case "$failure" in link*) return 23;; esac; }
+cp() { printf 'copy\\n'; case "$failure" in copy*) return 27;; esac; }
 chmod() { printf 'chmod\\n'; case "$failure" in chmod*) return 24;; esac; }
 mv() { printf 'move\\n'; case "$failure" in move*) return 25;; esac; }
+rm() {
+    if [ "$#" -gt 2 ]; then
+        printf 'cleanup\\n'
+        case "$failure" in cleanup*) return 26;; esac
+    fi
+}
 '''
                 result = subprocess.run(
                     ["sh", "-c", f"failure={failure}\n" + doubles + command],
@@ -92,10 +101,13 @@ mv() { printf 'move\\n'; case "$failure" in move*) return 25;; esac; }
     expected_operations = ["rw"]
     if failure != "rw":
         if init_changed:
-            expected_operations.append("chmod")
-            if not failure.startswith("chmod"):
-                expected_operations.append("move")
-        if not failure.startswith(("chmod", "move")):
+            expected_operations.append("copy")
+            if not failure.startswith("copy"):
+                expected_operations.append("chmod")
+                if not failure.startswith("chmod"):
+                    expected_operations.append("move")
+            expected_operations.append("cleanup")
+        if not failure.startswith(("copy", "chmod", "move", "cleanup")):
             expected_operations.append("link")
         expected_operations.append("ro")
     assert operations == expected_operations

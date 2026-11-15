@@ -680,10 +680,17 @@ def _install_startup_script_sync(
             init_content,
         )
     if init_changed or link_changed:
+        # remote_dir can be on another filesystem. Copy beside the live init
+        # first so a failed copy never truncates the script used at boot.
+        init_temp_path = f"{REMOTE_INIT_SCRIPT}.new"
         install_init = (
-            f"chmod 700 {_quote(temp_path)} && "
-            f"mv -f {_quote(temp_path)} {_quote(REMOTE_INIT_SCRIPT)}; "
+            f"rm -f {_quote(init_temp_path)} && "
+            f"cp {_quote(temp_path)} {_quote(init_temp_path)} && "
+            f"chmod 700 {_quote(init_temp_path)} && "
+            f"mv -f {_quote(init_temp_path)} {_quote(REMOTE_INIT_SCRIPT)}; "
             "rc=$?; "
+            f"rm -f {_quote(init_temp_path)} {_quote(temp_path)}; cleanup_rc=$?; "
+            "if [ $rc -eq 0 ]; then rc=$cleanup_rc; fi; "
         ) if init_changed else "rc=0; "
         client.run(
             (

@@ -36,9 +36,17 @@ validate_port talkback "$TALKBACK_RTP_PORT"
 TMP="/tmp/c300x-firewall.$$"
 BASE="/tmp/c300x-firewall-base.$$"
 ORIGINAL="/tmp/c300x-firewall-original.$$"
+LIVE_TMP=""
+ROOT_RW=0
 
 cleanup() {
     rm -f "$TMP" "$BASE" "$ORIGINAL"
+    if [ -n "$LIVE_TMP" ]; then
+        rm -f "$LIVE_TMP"
+    fi
+    if [ "$ROOT_RW" -eq 1 ]; then
+        mount -o remount,ro /
+    fi
 }
 trap cleanup EXIT
 
@@ -95,12 +103,18 @@ if ! cmp -s "$IPTABLES" "$TMP"; then
         changed_files=$((changed_files + 1))
     fi
     mount -o remount,rw /
+    ROOT_RW=1
+    LIVE_TMP="$(mktemp "${IPTABLES}.c300x.XXXXXX")"
     write_rc=0
-    cat "$TMP" > "$IPTABLES" || write_rc=$?
-    if [ "$write_rc" -eq 0 ]; then
-        chmod 755 "$IPTABLES" >/dev/null 2>&1 || true
-    fi
+    # Keep the live startup script intact until all bytes and metadata are ready.
+    cp -p "$IPTABLES" "$LIVE_TMP" &&
+        cat "$TMP" > "$LIVE_TMP" &&
+        cmp -s "$TMP" "$LIVE_TMP" &&
+        mv -f "$LIVE_TMP" "$IPTABLES" || write_rc=$?
+    rm -f "$LIVE_TMP"
+    LIVE_TMP=""
     mount -o remount,ro /
+    ROOT_RW=0
     if [ "$write_rc" -ne 0 ]; then
         exit "$write_rc"
     fi

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from time import monotonic
 from typing import Any
@@ -133,7 +134,7 @@ async def async_energy_dashboard_page(
             grid_to=tuple(replace(meter, cost_stat=None) for meter in sources.grid_to),
         )
     day = (
-        await _async_energy_day(hass, entry.entry_id, day_sources)
+        await _async_energy_day(hass, entry.entry_id, day_sources, still_active)
         if any(view != ENERGY_VIEW_POWER for view in views) else EnergyDay()
     )
     if not still_active():
@@ -158,20 +159,31 @@ async def async_energy_dashboard_page(
 
 async def _async_energy_day(
     hass: HomeAssistant, entry_id: str, sources: EnergySources,
+    active: Callable[[], bool] | None = None,
 ) -> EnergyDay:
     from homeassistant.util import dt as dt_util
 
+    if active is not None and not active():
+        return EnergyDay()
     cached = _DAY_CACHE.setdefault(entry_id, _DayCache())
+
+    def can_read() -> bool:
+        return _DAY_CACHE.get(entry_id) is cached and (active is None or active())
+
     async with cached.lock:
+        if not can_read():
+            return EnergyDay()
         start = dt_util.start_of_local_day()
         key = (start.isoformat(), frozenset(sources.energy_stats | sources.cost_stats))
         if cached.key == key and monotonic() - cached.read_at < ENERGY_STATISTICS_MAX_AGE_SECONDS:
             return cached.day
         try:
-            day = await _async_read_energy_day(hass, start, sources)
+            day = await _async_read_energy_day(hass, start, sources, can_read)
         except Exception:  # noqa: BLE001 - retry at the next statistics interval
             _LOGGER.debug("Energy statistics could not be read", exc_info=True)
             day = cached.day if cached.key == key else EnergyDay()
+        if not can_read():
+            return EnergyDay()
         cached.key, cached.day, cached.read_at = key, day, monotonic()
         # Unload can remove this cache while the read is pending. Do not put it back.
         return day
@@ -179,6 +191,7 @@ async def _async_energy_day(
 
 async def _async_read_energy_day(
     hass: HomeAssistant, start: Any, sources: EnergySources,
+    active: Callable[[], bool] | None = None,
 ) -> EnergyDay:
     from homeassistant.components.recorder import get_instance
     from homeassistant.components.recorder.statistics import statistics_during_period
@@ -188,6 +201,9 @@ async def _async_read_energy_day(
     recorder = get_instance(hass)
 
     async def read(since: Any, period: str) -> dict[str, list[dict[str, Any]]]:
+        # A submitted SQL job may finish; a retired request must not submit another.
+        if active is not None and not active():
+            return {}
         return await recorder.async_add_executor_job(  # type: ignore[no-any-return]
             statistics_during_period,
             hass, since, None, statistic_ids, period, {"energy": "kWh"}, {"change"},

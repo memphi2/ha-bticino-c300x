@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from time import monotonic
@@ -77,6 +77,7 @@ async def async_power_history(
     """Coalesce requests and failures for five minutes, only for a selected view."""
 
     settings = configured_energy_page(entry)
+    runtime = getattr(entry, "runtime_data", None)
     if not settings["enabled"] or ENERGY_VIEW_POWER not in settings["views"]:
         forget_power_history(entry.entry_id)
         return None
@@ -92,20 +93,41 @@ async def async_power_history(
         forget_power_history(entry.entry_id)
         cached = _PowerCache(key, PowerHistory(start, end))
         _POWER_CACHE[entry.entry_id] = cached
+
+    def can_read() -> bool:
+        current = configured_energy_page(entry)
+        valid = (
+            _POWER_CACHE.get(entry.entry_id) is cached
+            and getattr(entry, "runtime_data", None) is runtime
+            and not getattr(getattr(runtime, "resources", None), "closed", False)
+            and current["enabled"] and ENERGY_VIEW_POWER in current["views"]
+        )
+        if not valid and _POWER_CACHE.get(entry.entry_id) is cached:
+            # Do not cancel this task itself or evict a replacement runtime's cache.
+            _POWER_CACHE.pop(entry.entry_id)
+        return valid
+
     if cached.task is None and monotonic() - cached.read_at >= POWER_HISTORY_MAX_AGE_SECONDS:
-        cached.task = asyncio.create_task(_async_read_and_cache(hass, cached))
+        cached.task = asyncio.create_task(_async_read_and_cache(hass, cached, can_read))
     if cached.task is not None:
         # A cancelled HTTP request must not cancel the other request's read.
         return await asyncio.shield(cached.task)
     return cached.history
 
 
-async def _async_read_and_cache(hass: HomeAssistant, cached: _PowerCache) -> PowerHistory:
+async def _async_read_and_cache(
+    hass: HomeAssistant, cached: _PowerCache, can_read: Callable[[], bool],
+) -> PowerHistory:
     try:
-        cached.history = await _async_read_power_history(hass, *cached.key)
+        if not can_read():
+            return cached.history
+        history = await _async_read_power_history(hass, *cached.key)
+        if can_read():
+            cached.history = history
     except Exception:  # noqa: BLE001 - keep same-day data and back off on recorder failure
         _LOGGER.debug("Power history could not be read", exc_info=True)
     finally:
+        can_read()
         cached.read_at = monotonic()
         cached.task = None
     # The cache object may have been removed during the read; never reinsert it.

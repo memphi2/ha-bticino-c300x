@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import stat
 import subprocess
+from pathlib import Path
 
 import pytest
-
 
 SCRIPT = Path(__file__).resolve().parents[1] / "native_agent/scripts/bootstrap_firewall.sh"
 ORIGINAL = "#!/bin/sh\n# Firmware rules\niptables -P INPUT DROP\n"

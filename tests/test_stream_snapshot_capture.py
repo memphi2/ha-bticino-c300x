@@ -68,15 +68,15 @@ def test_capture_time_is_written_into_the_image_only_when_asked():
     stamped = capture.framebuffer_jpeg(bmp(), "image/bmp", "2026-11-15 14:32:07")
     with Image.open(BytesIO(plain)) as image:
         corner = image.convert("RGB").crop((488, 440, 688, 480))
-        assert len(set(corner.getdata())) < 8
+        assert len(set(corner.get_flattened_data())) < 8
     with Image.open(BytesIO(stamped)) as image:
         assert image.size == (688, 480)
         rgb = image.convert("RGB")
         # White text with a dark outline in the lower right corner only.
-        corner = list(rgb.crop((488, 440, 688, 480)).getdata())
+        corner = list(rgb.crop((488, 440, 688, 480)).get_flattened_data())
         assert any(min(pixel) > 200 for pixel in corner)
         assert any(max(pixel) < 60 for pixel in corner)
-        assert len(set(rgb.crop((0, 0, 200, 40)).getdata())) < 8
+        assert len(set(rgb.crop((0, 0, 200, 40)).get_flattened_data())) < 8
 
 
 def test_the_agent_is_asked_for_the_configured_size_and_the_stamp_follows_the_option(

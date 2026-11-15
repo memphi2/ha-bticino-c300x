@@ -342,4 +342,3 @@ def test_one_helper_sets_the_decimal_sign_of_the_display_language(value, languag
     from custom_components.bticino_c300x.dashboard_labels import decimal_text
 
     assert decimal_text(value, language) == expected
-

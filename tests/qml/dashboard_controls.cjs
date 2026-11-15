@@ -848,4 +848,3 @@ assert.equal(p.numberText({command: "value"}, 7), "7");
 p.uiLanguage = "en";
 assert.equal(p.numberText({command: "temperature", unit: "C"}, 21.5), "21.5 C");
 console.log("Number texts passed");
-

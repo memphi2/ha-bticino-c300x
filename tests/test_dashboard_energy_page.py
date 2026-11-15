@@ -624,4 +624,3 @@ def test_a_power_change_the_display_cannot_show_does_not_wake_it(monkeypatch) ->
     assert woken == []
     change("850.4", "851")
     assert woken == [1]
-

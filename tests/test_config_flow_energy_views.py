@@ -1,11 +1,11 @@
 """Independent Energy view switches keep the existing stored list contract."""
 
-from itertools import product
 import json
+from itertools import product
 from pathlib import Path
 
-from homeassistant.helpers import selector
 import pytest
+from homeassistant.helpers import selector
 from test_display_settings import post_pages_like_home_assistant
 
 from custom_components.bticino_c300x.config_flow_dashboard_pages import (
@@ -71,7 +71,7 @@ def test_opening_and_saving_keeps_exact_saved_selections(views):
 @pytest.mark.parametrize("flags", list(product((False, True), repeat=4)))
 def test_each_toggle_survives_post_save_and_reopen(flags):
     settings = {"energy_page": {"enabled": True, "views": list(VIEWS)}}
-    toggles = dict(zip(FIELDS, flags))
+    toggles = dict(zip(FIELDS, flags, strict=True))
     posted = post_pages_like_home_assistant(dashboard_pages_schema(settings), {
         "energy_page": toggles,
     })
@@ -80,7 +80,9 @@ def test_each_toggle_survives_post_save_and_reopen(flags):
     saved, errors = dashboard_pages_input(settings, posted)
 
     assert not errors
-    assert saved["energy_page"]["views"] == [view for view, on in zip(VIEWS, flags) if on]
+    assert saved["energy_page"]["views"] == [
+        view for view, on in zip(VIEWS, flags, strict=True) if on
+    ]
     assert _defaults(dashboard_pages_schema(saved)) == {"enabled": True, **toggles}
 
 

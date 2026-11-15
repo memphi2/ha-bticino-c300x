@@ -27,8 +27,8 @@ def test_every_agent_initiated_reboot_starts_ssh_first() -> None:
 
 
 def test_config_admin_does_not_bypass_maintenance_gate_with_no_auth() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    body = text.rsplit("static int config_admin_authorized", maxsplit=1)[1].split(
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
+    body = text.rsplit("int config_admin_authorized", maxsplit=1)[1].split(
         "\n}\n",
         maxsplit=1,
     )[0]
@@ -40,8 +40,8 @@ def test_config_admin_does_not_bypass_maintenance_gate_with_no_auth() -> None:
 
 
 def test_maintenance_can_explicitly_allow_no_auth_bootstrap() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    body = text.rsplit("static int maintenance_authorized", maxsplit=1)[1].split(
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
+    body = text.rsplit("int maintenance_authorized", maxsplit=1)[1].split(
         "\n}\n",
         maxsplit=1,
     )[0]
@@ -50,9 +50,9 @@ def test_maintenance_can_explicitly_allow_no_auth_bootstrap() -> None:
 
 
 def test_empty_api_token_never_accepts_empty_bearer_header() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
     body = text.rsplit("static int has_valid_bearer", maxsplit=1)[1].split(
-        "static int api_request_authorized",
+        "int api_request_authorized",
         maxsplit=1,
     )[0]
 
@@ -61,10 +61,11 @@ def test_empty_api_token_never_accepts_empty_bearer_header() -> None:
 
 
 def test_auth_config_read_remains_available_in_no_auth_bootstrap() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    read_body = text.rsplit("static int auth_config_read_authorized", maxsplit=1)[
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
+    read_body = text.rsplit("int auth_config_read_authorized", maxsplit=1)[
         1
     ].split("\n}\n", maxsplit=1)[0]
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     route_body = text.split(
         'if (strcmp(request->path, "/api/v1/maintenance/auth") == 0) {',
         maxsplit=1,

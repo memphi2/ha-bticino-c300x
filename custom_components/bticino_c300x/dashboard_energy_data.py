@@ -139,11 +139,24 @@ async def _async_read_energy_day(
     hourly = await read(start, "hour")
     # The running hour has no hourly statistic yet; its five-minute ones
     # bring the figures up to date.
-    covered = max(
-        (float(row["end"]) for rows in hourly.values() for row in rows if row.get("end") is not None),
-        default=start.timestamp(),
-    )
-    recent = await read(dt_util.utc_from_timestamp(covered), "5minute")
+    covered = {
+        statistic_id: max(
+            (float(row["end"]) for row in hourly.get(statistic_id, ()) if row.get("end") is not None),
+            default=start.timestamp(),
+        )
+        for statistic_id in statistic_ids
+    }
+    recent = await read(dt_util.utc_from_timestamp(min(covered.values(), default=start.timestamp())), "5minute")
+    # Each meter can lag behind independently. Fill its own uncovered tail,
+    # without counting another meter's already summarized intervals twice.
+    recent = {
+        statistic_id: [
+            row for row in rows
+            if row.get("start") is not None
+            and float(row["start"]) >= covered.get(statistic_id, start.timestamp())
+        ]
+        for statistic_id, rows in recent.items()
+    }
     return energy_day_from_statistics(
         sources, (hourly, recent),
         lambda timestamp: dt_util.as_local(dt_util.utc_from_timestamp(timestamp)).hour,

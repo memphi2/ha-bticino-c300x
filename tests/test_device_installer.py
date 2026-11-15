@@ -937,7 +937,10 @@ def test_startup_script_update_preserves_init_move_failure_status(
     assert "mv -f" in update_command
     assert "if [ $rc -eq 0 ]; then ln -sf" in update_command
     assert "fi; rc=$?" not in update_command
-    assert update_command.endswith("mount -o remount,ro /; fi; exit $rc")
+    assert update_command.endswith(
+        "mount -o remount,ro /; ro_rc=$?; "
+        "if [ $rc -eq 0 ]; then rc=$ro_rc; fi; fi; exit $rc"
+    )
 
 
 def test_startup_script_keeps_matching_rc_link_unchanged(tmp_path: Path) -> None:

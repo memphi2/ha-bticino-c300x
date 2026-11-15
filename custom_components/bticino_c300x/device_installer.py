@@ -691,7 +691,8 @@ def _install_startup_script_sync(
                 "if [ $rc -eq 0 ]; then "
                 f"{install_init}"
                 f"if [ $rc -eq 0 ]; then ln -sf {_quote(REMOTE_INIT_SCRIPT)} {_quote(REMOTE_INIT_LINK)}; rc=$?; fi; "
-                "mount -o remount,ro /; fi; exit $rc"
+                "mount -o remount,ro /; ro_rc=$?; "
+                "if [ $rc -eq 0 ]; then rc=$ro_rc; fi; fi; exit $rc"
             ),
         )
         if init_changed:

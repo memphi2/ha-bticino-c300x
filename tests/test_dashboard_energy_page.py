@@ -611,13 +611,13 @@ def test_the_tick_reads_fresh_statistics(monkeypatch) -> None:
     assert order == ["expire entry-1", "wake"]
 
 
-def test_a_power_change_the_display_cannot_show_does_not_wake_it(monkeypatch) -> None:
+def test_now_without_distribution_ignores_power_changes_hidden_by_rounding(monkeypatch) -> None:
     helpers = _Helpers(monkeypatch)
     monkeypatch.setattr(dashboard_energy_updates, "async_configured_energy_sources",
                         AsyncMock(return_value=SOURCES))
     woken: list[int] = []
     asyncio.run(dashboard_energy_updates.async_track_energy_page_updates(
-        FakeHass(), _entry(ENERGY_ON), lambda: woken.append(1),
+        FakeHass(), _entry({**ENERGY_ON, "views": ["now"]}), lambda: woken.append(1),
     ))
 
     def change(old: str, new: str) -> None:

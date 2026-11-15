@@ -269,6 +269,48 @@ def test_switch_from_now_to_distribution_keeps_live_subscription_and_pending_wak
     assert env.wakes == [100, 110]
 
 
+@pytest.mark.parametrize("views", [["distribution"], ["now", "distribution"]])
+def test_distribution_refreshes_balance_changes_hidden_by_rounded_sensor_text(env, views):
+    from custom_components.bticino_c300x.dashboard_energy_distribution import (
+        power_distribution_payload,
+    )
+
+    env.entry.options["energy_page"]["views"] = views
+    sources = EnergySources(
+        grid_from=SOURCES.grid_from, grid_power=("sensor.power",),
+        solar=(EnergyMeter("sensor.solar_energy"),), solar_power=("sensor.solar",),
+    )
+    before = {"sensor.power": -1000, "sensor.solar": 1000}
+    after = {**before, "sensor.power": -1001}
+    assert power_distribution_payload(sources, before, "en")["complete"] is True
+    assert power_distribution_payload(sources, after, "en")["complete"] is False
+    def state(value):
+        return SimpleNamespace(state=str(value), attributes={"unit_of_measurement": "W"})
+
+    event = SimpleNamespace(data={"old_state": state(-1000), "new_state": state(-1001)})
+    assert updates._same_power_text(event)
+    asyncio.run(env.updates.async_start())
+    changed = env.tracked[0][1]
+    changed(event)
+    assert env.wakes == [100]
+    env.clock = 103
+    changed(SimpleNamespace(data={"old_state": state(-1001), "new_state": state(-1000)}))
+    assert env.delayed[0][0] == 7
+    env.clock = 110
+    env.delayed[0][1]()
+    assert env.wakes == [100, 110]
+
+
+@pytest.mark.parametrize(("old", "new"), [(1000, 1000), (None, None)])
+def test_distribution_ignores_unchanged_values(env, old, new):
+    def state(value):
+        return SimpleNamespace(state=str(value), attributes={"unit_of_measurement": "W"})
+
+    asyncio.run(env.updates.async_start())
+    env.tracked[0][1](SimpleNamespace(data={"old_state": state(old), "new_state": state(new)}))
+    assert env.wakes == env.delayed == []
+
+
 @pytest.mark.parametrize("views", [["today"], ["power"], []])
 def test_removing_last_live_view_cancels_subscription_and_delayed_wake(env, views):
     asyncio.run(env.updates.async_start())

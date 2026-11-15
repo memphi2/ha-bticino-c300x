@@ -24,6 +24,7 @@ from .dashboard_config import configured_energy_page
 from .dashboard_energy import (
     ENERGY_DAY_VIEWS,
     ENERGY_LIVE_VIEWS,
+    ENERGY_VIEW_DISTRIBUTION,
     ENERGY_VIEW_POWER,
     format_power,
     power_watts,
@@ -152,9 +153,14 @@ class EnergyPageUpdates:
     def _handle_power_change(self, event: Any) -> None:
         from homeassistant.helpers.event import async_call_later
 
-        if self._stopped or not any(view in ENERGY_LIVE_VIEWS for view in self._active_views()):
+        if self._stopped:
             return
-        if self._unsub_delayed is not None or _same_power_text(event):
+        views = self._active_views()
+        if not any(view in ENERGY_LIVE_VIEWS for view in views):
+            return
+        if self._unsub_delayed is not None or _same_power_text(
+            event, exact=ENERGY_VIEW_DISTRIBUTION in views,
+        ):
             return
         wait = ENERGY_POWER_MIN_INTERVAL_SECONDS - (monotonic() - self._last_notify)
         if wait <= 0:
@@ -176,8 +182,8 @@ class EnergyPageUpdates:
         self._notify()
 
 
-def _same_power_text(event: Any) -> bool:
-    """Return whether a state change leaves the power text of the sensor as it is."""
+def _same_power_text(event: Any, *, exact: bool = False) -> bool:
+    """Ignore text-equivalent changes unless a live balance needs exact values."""
 
     data = getattr(event, "data", None)
     if not isinstance(data, dict) or "new_state" not in data:
@@ -186,6 +192,8 @@ def _same_power_text(event: Any) -> bool:
     new = power_watts(data["new_state"])
     if old is None or new is None:
         return old is None and new is None
+    if exact:
+        return old == new
     return format_power(old, "en") == format_power(new, "en")
 
 

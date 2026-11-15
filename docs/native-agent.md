@@ -95,7 +95,10 @@ Key sections:
 - `maintenance`: gated SSH/reboot/display-reload commands
 - `systemMetrics`: optional low-frequency push updates for load and temperature
 - `video`: optional local media doorstation media support
-- `displayBridge`: optional dashboard proxy for QML
+- `displayBridge`: optional dashboard proxy for QML; `feedbackEnabled` stores
+  the local **Settings > General > HA feedback colors** choice (default true).
+  Changing it requires no HA connection or GUI restart and writes configuration
+  only when the value changes.
 
 Callback URLs for event subscriptions and the display bridge support HTTP and
 HTTPS. Use a Home Assistant endpoint reachable from the C300X. For HTTPS, keep

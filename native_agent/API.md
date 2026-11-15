@@ -1258,8 +1258,9 @@ filesystem writable only for final copy/write work, then remount read-only.
 
 ## Loopback UI API
 
-The UI listener is intended for local QML pages. It rejects non-GET methods and
-requires display bridge support where applicable.
+The UI listener is intended for local QML pages. Existing routes accept only
+GET; the local preference route also accepts a guarded POST. Routes forwarding
+requests to Home Assistant require an active display bridge.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -1277,8 +1278,9 @@ requires display bridge support where applicable.
 | `GET` | `/ui/action` | Execute configured display action. |
 | `GET` | `/ui/alarm/command` | Execute configured alarm command. |
 
-UI endpoints use the local display bridge and shared secret configured through
-the API listener. They must not expose configured token values.
+Home Assistant proxy endpoints use the display bridge and shared secret
+configured through the API listener. Local metadata, preferences and core GUI
+hooks do not require that registration. No route exposes configured token values.
 
 `GET /ui/preferences` returns `{"ok":true,"feedback_enabled":true}` by default.
 `POST /ui/preferences` accepts a boolean `feedback_enabled`, requires

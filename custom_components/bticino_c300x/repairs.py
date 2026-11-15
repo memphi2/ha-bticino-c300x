@@ -609,52 +609,69 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         try:
             patch_state = await _async_capture_external_patch_state(entry)
             await async_ensure_installer_dependencies(self.hass)
-            install_result = await async_install_device_agent(
-                C300XDeviceInstallRequest(
-                    host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
-                    ssh_username=str(
-                        user_input.get(CONF_BOOTSTRAP_SSH_USERNAME, "")
-                    ).strip(),
-                    ssh_password=str(user_input.get(CONF_BOOTSTRAP_SSH_PASSWORD, "")),
-                    agent_port=int(
-                        entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
+            try:
+                install_result = await async_install_device_agent(
+                    C300XDeviceInstallRequest(
+                        host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
+                        ssh_username=str(
+                            user_input.get(CONF_BOOTSTRAP_SSH_USERNAME, "")
+                        ).strip(),
+                        ssh_password=str(user_input.get(CONF_BOOTSTRAP_SSH_PASSWORD, "")),
+                        agent_port=int(
+                            entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
+                        ),
+                        apply_firewall_patch=(
+                            patch_state.firewall_patched
+                            or not patch_state.firewall_status_known
+                        ),
+                        apply_gui_patch=False,
+                        device_activation_mode=str(
+                            entry_config_value(
+                                entry,
+                                CONF_DEVICE_ACTIVATION_MODE,
+                                DEVICE_ACTIVATION_MODE_AUTO,
+                            )
+                        ),
+                        device_activation_stair_light_p=str(
+                            entry_config_value(
+                                entry,
+                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+                                DEFAULT_STAIR_LIGHT_P,
+                            )
+                        ),
+                        device_activation_stair_light_n=str(
+                            entry_config_value(
+                                entry,
+                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+                                DEFAULT_STAIR_LIGHT_N,
+                            )
+                        ),
+                        device_activations=tuple(
+                            entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, [])
+                            or []
+                        ),
                     ),
-                    apply_firewall_patch=(
-                        patch_state.firewall_patched
-                        or not patch_state.firewall_status_known
+                    api_token=str(entry_config_value(entry, CONF_AGENT_TOKEN, "")),
+                    maintenance_token=str(
+                        entry_config_value(entry, CONF_MAINTENANCE_TOKEN, "")
                     ),
-                    apply_gui_patch=False,
-                    device_activation_mode=str(
-                        entry_config_value(
-                            entry,
-                            CONF_DEVICE_ACTIVATION_MODE,
-                            DEVICE_ACTIVATION_MODE_AUTO,
-                        )
-                    ),
-                    device_activation_stair_light_p=str(
-                        entry_config_value(
-                            entry,
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-                            DEFAULT_STAIR_LIGHT_P,
-                        )
-                    ),
-                    device_activation_stair_light_n=str(
-                        entry_config_value(
-                            entry,
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-                            DEFAULT_STAIR_LIGHT_N,
-                        )
-                    ),
-                    device_activations=tuple(
-                        entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, [])
-                        or []
-                    ),
-                ),
-                api_token=str(entry_config_value(entry, CONF_AGENT_TOKEN, "")),
-                maintenance_token=str(
-                    entry_config_value(entry, CONF_MAINTENANCE_TOKEN, "")
-                ),
-            )
+                )
+            except Exception:
+                # The installer can fail after it changed files on the device,
+                # and their list is lost with the error. A retry then finds
+                # every file unchanged, so remember that all follow-up steps
+                # are still due.
+                every_step = _ExternalPatchChanges(
+                    runtime_changed=True,
+                    qml_patch_changed=True,
+                    firewall_patch_changed=True,
+                    ipv6_firewall_patch_changed=True,
+                    config_schema_changed=True,
+                )
+                if self._ssh_install_followup is not None:
+                    patch_state = self._ssh_install_followup[0].merged(patch_state)
+                self._ssh_install_followup = (patch_state, every_step)
+                raise
             changes = _ExternalPatchChanges.from_install_result(install_result)
             if self._ssh_install_followup is not None:
                 patch_state = self._ssh_install_followup[0].merged(patch_state)

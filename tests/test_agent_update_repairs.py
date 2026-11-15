@@ -726,6 +726,57 @@ def test_ssh_install_retry_runs_the_follow_up_steps_of_the_first_attempt(
     assert flow._ssh_install_followup is None
 
 
+def test_ssh_install_retry_after_a_failed_installer_runs_every_follow_up_step(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    api = FakePatchApi()
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(api),
+        data={"agent_host": "192.0.2.60", "agent_token": "agent-token"},
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    attempts: list[int] = []
+
+    async def install_agent(*_args: Any, **_kwargs: Any) -> Any:
+        attempts.append(1)
+        if len(attempts) == 1:
+            # The files are on the device, then the restart check fails.
+            raise RuntimeError("startup verification failed")
+        return types.SimpleNamespace(changed_files=())
+
+    async def nothing(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def wait_for_agent(_api: Any) -> dict[str, Any]:
+        return {"version": "1.1.0", "capabilities": {}}
+
+    async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
+        setup_entry.runtime_data.agent_update_state = types.SimpleNamespace(
+            update_required=False
+        )
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(repairs, "async_ensure_installer_dependencies", nothing)
+    monkeypatch.setattr(repairs, "_async_wait_for_agent_after_update", wait_for_agent)
+    monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", nothing)
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+    credentials = {"bootstrap_ssh_username": "root", "bootstrap_ssh_password": "secret"}
+
+    first = asyncio.run(flow.async_step_ssh_install(credentials))
+    assert first["errors"] == {"base": "ssh_install_failed"}
+
+    second = asyncio.run(flow.async_step_ssh_install(credentials))
+    assert second == {"type": "create_entry", "data": {}}
+    assert "apply_firewall" in api.calls
+    assert "apply_ipv6_firewall" in api.calls
+    assert flow._ssh_install_followup is None
+
+
 def test_agent_update_repair_ssh_install_reports_failures(monkeypatch, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 

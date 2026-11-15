@@ -67,7 +67,8 @@ _LABELS = {
     },
 }
 
-_POWER_FACTORS = {"w": 1.0, "kw": 1000.0, "mw": 1_000_000.0, "gw": 1_000_000_000.0}
+# Spelled as Home Assistant spells them: "mW" and "MW" differ only in case.
+_POWER_FACTORS = {"mW": 0.001, "W": 1.0, "kW": 1000.0, "MW": 1_000_000.0, "GW": 1_000_000_000.0}
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,7 +220,7 @@ def power_watts(state: Any) -> float | None:
     if value != value or value in (float("inf"), float("-inf")):
         return None
     attributes = getattr(state, "attributes", None)
-    unit = str((attributes or {}).get("unit_of_measurement") or "W").strip().lower()
+    unit = str((attributes or {}).get("unit_of_measurement") or "W").strip()
     factor = _POWER_FACTORS.get(unit)
     return None if factor is None else value * factor
 
@@ -251,7 +252,7 @@ def format_energy(value: float, language: str) -> str:
 def format_power(watts: float, language: str) -> str:
     """Return a power in W below one kilowatt and in kW above."""
 
-    if abs(watts) < 1000:
+    if abs(round(watts)) < 1000:
         return f"{format_number(round(watts), language, 0)} W"
     return f"{format_number(watts / 1000, language)} kW"
 

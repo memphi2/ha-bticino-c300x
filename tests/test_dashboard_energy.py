@@ -266,3 +266,19 @@ def test_every_energy_text_exists_in_every_display_language() -> None:
     for language, texts in labels.items():
         assert set(texts) == set(labels["en"]), language
         assert all(text.strip() for text in texts.values()), language
+
+
+def test_milliwatts_are_not_read_as_megawatts() -> None:
+    def watts(value: str, unit: str) -> float | None:
+        return power_watts(SimpleNamespace(state=value, attributes={"unit_of_measurement": unit}))
+
+    assert watts("500", "mW") == 0.5
+    assert watts("2", "MW") == 2_000_000.0
+    assert watts("1.5", "kW") == 1500.0
+    assert watts("3", "kw") is None, "an unknown spelling is not guessed"
+
+
+def test_power_just_below_a_kilowatt_does_not_read_1000_w() -> None:
+    assert format_power(999.6, "de") == "1 kW"
+    assert format_power(-999.6, "en") == "-1 kW"
+    assert format_power(999.4, "de") == "999 W"

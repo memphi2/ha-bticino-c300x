@@ -153,9 +153,14 @@ Page {
         return controlValueUnset(control) ? "?" : numberText(control, control.value)
     }
 
+    function localNumber(value) {
+        var text = String(value)
+        return I18n.language(uiLanguage) === "en" ? text : text.replace(".", ",")
+    }
+
     function numberText(control, value) {
         var shown = control.command === "percentage" ? Math.floor(Number(value) + 0.0001) : value
-        return String(shown) + (control.unit ? " " + control.unit : "")
+        return localNumber(shown) + (control.unit ? " " + control.unit : "")
     }
 
     function optionLabel(control, option, position) {
@@ -348,7 +353,7 @@ Page {
         var values = []
         if (item.kind === "switch") values.push(item.state ? uiText("on") : uiText("off"))
         if (item.current_temperature !== undefined && item.current_temperature !== null) {
-            values.push(String(item.current_temperature) + " " + (item.temperature_unit || ""))
+            values.push(localNumber(item.current_temperature) + " " + (item.temperature_unit || ""))
         }
         var controls = item.controls || []
         for (var i = 0; i < controls.length; i++) {

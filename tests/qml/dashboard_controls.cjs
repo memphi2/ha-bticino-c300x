@@ -842,3 +842,10 @@ assert.equal(I18n.text("es", "ha_feedback_colors"), I18n.EN.ha_feedback_colors, 
 const shadowed = keysOf(I18n.EN).filter(key => I18n.CONTROL_LABELS.en[key] || I18n.DETAIL_LABELS.en[key]);
 assert.deepEqual(shadowed, [], "no text is defined twice");
 console.log("Display languages passed");
+p.uiLanguage = "de";
+assert.equal(p.numberText({command: "temperature", unit: "C"}, 21.5), "21,5 C", "numbers follow the display language");
+assert.equal(p.numberText({command: "value"}, 7), "7");
+p.uiLanguage = "en";
+assert.equal(p.numberText({command: "temperature", unit: "C"}, 21.5), "21.5 C");
+console.log("Number texts passed");
+

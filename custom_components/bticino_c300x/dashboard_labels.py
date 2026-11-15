@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from typing import Any
+
 _DASHBOARD_COLOR_GOOD = "#58d68d"
 _DASHBOARD_COLOR_BAD = "#ff6b6b"
 _DASHBOARD_COLOR_WARNING = "#f1c40f"
@@ -395,4 +398,20 @@ _WEATHER_TITLE_BY_LANGUAGE = {
     "fr": "Meteo",
     "it": "Meteo",
 }
+
+
+_DECIMAL_NUMBER = re.compile(r"-?\d+\.\d+")
+
+
+def decimal_text(value: Any, language: str) -> str:
+    """Return a number's text with the decimal sign of the display language.
+
+    English keeps the point; German, French and Italian write a comma. Text
+    that is not a plain decimal number is returned as it is.
+    """
+
+    text = str(value)
+    if language == "en" or not _DECIMAL_NUMBER.fullmatch(text):
+        return text
+    return text.replace(".", ",")
 

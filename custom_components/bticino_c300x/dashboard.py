@@ -69,6 +69,7 @@ from .dashboard_labels import (
     _DASHBOARD_ON_STATES,
     _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
     _DASHBOARD_STATE_LABELS_EN,
+    decimal_text,
 )
 from .dashboard_select_texts import apply_select_texts
 from .dashboard_weather import async_dashboard_weather_payload
@@ -480,6 +481,7 @@ def _dashboard_item_for_state(
     if domain in DETAIL_DOMAINS:
         item["details"] = entity_details(
             entity_id, state, _entity_state_label(state, entity_id=entity_id, language=language), unit,
+            language,
         )
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
     if domain in {
@@ -782,7 +784,7 @@ def _entity_state_label(
         language, _DASHBOARD_STATE_LABELS_EN
     )
     if unit and state_value.lower() not in labels:
-        label = f"{state_value} {unit}"
+        label = f"{decimal_text(state_value, language)} {unit}"
     if label == "unknown" and fallback:
         return fallback
     return _dashboard_text(label, fallback, 60)

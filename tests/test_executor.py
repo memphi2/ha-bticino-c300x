@@ -2849,7 +2849,7 @@ def test_dashboard_weather_private_helpers_cover_truncation() -> None:
     ]
 
     assert _weather_forecast_time_label(None, "hourly") == ""
-    assert _weather_forecast_temperature({}, "C") == ""
+    assert _weather_forecast_temperature({}, "C", "en") == ""
     assert _weather_forecast({}, "en", forecast_items=long_forecast).endswith("...")
 
 
@@ -3017,9 +3017,9 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "kind": "entity",
             "name": "Temperature",
             "state": False,
-            "state_label": "21.5 C",
+            "state_label": "21,5 C",
             "available": True,
-            "details": {"type": "sensor", "value": "21.5", "unit": "C", "label": "", "state_label": "21.5 C", "fields": []},
+            "details": {"type": "sensor", "value": "21,5", "unit": "C", "label": "", "state_label": "21,5 C", "fields": []},
         },
         {
             "domain": "c300x",

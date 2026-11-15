@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .dashboard_labels import decimal_text
+
 ENERGY_VIEW_NOW = "now"
 ENERGY_VIEW_TODAY = "today"
 ENERGY_VIEW_BALANCE = "balance"
@@ -240,7 +242,7 @@ def format_number(value: float, language: str, digits: int | None = None) -> str
         text = text.rstrip("0").rstrip(".")
     if text in ("-0", "-0.0"):
         text = "0"
-    return text if language == "en" else text.replace(".", ",")
+    return decimal_text(text, language)
 
 
 def format_energy(value: float, language: str) -> str:
@@ -446,9 +448,7 @@ def _total_cost(sources: EnergySources, day: EnergyDay) -> float | None:
 
 
 def _format_cost(value: float, language: str, currency: str) -> str:
-    amount = f"{round(value, 2) + 0.0:.2f}"
-    if language != "en":
-        amount = amount.replace(".", ",")
+    amount = decimal_text(f"{round(value, 2) + 0.0:.2f}", language)
     return f"{amount} {currency}".strip()
 
 

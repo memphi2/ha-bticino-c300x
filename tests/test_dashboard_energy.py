@@ -298,3 +298,14 @@ def test_a_kind_with_a_source_lacking_its_power_sensor_shows_no_power() -> None:
     assert "power" not in nodes["solar"]
     assert "power" not in nodes["home"]
     assert nodes["grid"]["power"] == "300 W"
+
+
+@pytest.mark.parametrize(("value", "language", "expected"), [
+    ("21.5", "de", "21,5"), (21.5, "fr", "21,5"), ("-0.25", "it", "-0,25"), ("21.5", "en", "21.5"),
+    (7, "de", "7"), ("1.2.3", "de", "1.2.3"), ("2026-11-15", "de", "2026-11-15"), ("12.5 kW", "de", "12.5 kW"),
+])
+def test_one_helper_sets_the_decimal_sign_of_the_display_language(value, language, expected) -> None:
+    from custom_components.bticino_c300x.dashboard_labels import decimal_text
+
+    assert decimal_text(value, language) == expected
+

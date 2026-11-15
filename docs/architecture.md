@@ -85,10 +85,17 @@ Responsibilities:
 
 QML status/patch scripts and GUI reload run as a single bounded child-process
 job in `command_job.c`. The main poll loop continues serving events and requests;
-it never waits synchronously for these scripts. Jobs have a 10-second deadline,
-bounded output and no extra wakeups while idle. Concurrent maintenance writes
+it never waits synchronously for these scripts. Status and standalone GUI reload
+jobs have a 10-second deadline; QML writes allow 30 seconds for a failed start,
+file rollback and restart of the previous GUI. Output is bounded and there are
+no extra wakeups while idle. Concurrent maintenance writes
 are rejected as busy. A disconnected client does not restart or duplicate its
 job. Other legacy maintenance operations are not yet asynchronous.
+
+QML write transactions retain their previous active files until the GUI process
+start check succeeds. A failed start restores those files before attempting to
+restart the previous GUI. Process presence is not a QML-readiness handshake:
+offline compatibility checks and the pre-merge device test remain necessary.
 
 ### Device QML UI
 

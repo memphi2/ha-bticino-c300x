@@ -1049,7 +1049,9 @@ Validation examples:
 ## Maintenance Actions
 
 QML status/patch and GUI reload keep their HTTP connection open until the script
-finishes, with a 10-second script deadline and without blocking the event loop. Only one
+finishes without blocking the event loop. Status and standalone GUI reload have
+a 10-second script deadline; QML writes allow 30 seconds for rollback and a
+restart of the previous GUI if the initial start check fails. Only one
 such job runs at a time. While it is active, additional script jobs and
 maintenance POST requests return `409` with `error: maintenance_busy` after
 authentication. Retrying must wait for the current job to finish. A client

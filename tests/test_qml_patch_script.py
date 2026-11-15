@@ -239,6 +239,13 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: buttonColumn.bottom
         anchors.topMargin: 32
+        UbuntuLightText {
+            id: textBeep
+        }
+        Item {
+            id: space
+            width: 50
+        }
         BasicButton {
             id: selectorOnOff
             checkable: true
@@ -250,7 +257,7 @@ Item {
 """
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "8a1690531198b53c29c0c828272faca2f5be6af6e1cd55357e12c50305fb9699",
-    "Components/Settings/GeneralsChoice.qml": "79e530cd5432ada63953783843bda0fdca5907e91e3e184de1e2bac3e5c69252",
+    "Components/Settings/GeneralsChoice.qml": "42ac9c6be930fe258a46cb847ec69ce0160ccc75e2d98049c4441e1208b41c87",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",

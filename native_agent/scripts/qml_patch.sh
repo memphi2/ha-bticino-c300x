@@ -437,6 +437,12 @@ patch_general_settings() {
             margins++
             next
         }
+        tone && $0 == "            id: space" { spacer = 1; print; next }
+        spacer == 1 && $0 == "            width: 50" {
+            print "            width: Math.max(0, buttonColumn.width - 40 - textBeep.width - selectorOnOff.width)"
+            spacer = 2
+            next
+        }
         $0 == "            checked: global.beepEnabled" { checked++ }
         $0 == "            onTouched: global.beepEnabled = checked" { handler++ }
         $0 == "}" {
@@ -454,17 +460,20 @@ patch_general_settings() {
             print "        Component.onCompleted: if (visible) c300xDisplayPreferences.load()"
             print "        UbuntuLightText {"
             print "            anchors.left: parent.left"
+            print "            anchors.leftMargin: 8"
             print "            anchors.right: c300xFeedbackSwitch.left"
             print "            anchors.rightMargin: 12"
             print "            anchors.verticalCenter: parent.verticalCenter"
             print "            text: c300xFeedbackSetting.visible ? c300xDisplayPreferences.label : \"\""
             print "            color: \"white\""
             print "            font.pixelSize: 18"
+            print "            horizontalAlignment: Text.AlignLeft"
             print "            wrapMode: Text.WordWrap"
             print "        }"
             print "        BasicButton {"
             print "            id: c300xFeedbackSwitch"
             print "            anchors.right: parent.right"
+            print "            anchors.rightMargin: 8"
             print "            anchors.verticalCenter: parent.verticalCenter"
             print "            enabled: c300xFeedbackSetting.visible && c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy"
             print "            opacity: enabled ? 1 : 0.5"
@@ -483,7 +492,7 @@ patch_general_settings() {
         }
         { print }
         END {
-            if (imports != 1 || top_margins != 1 || column_spacing != 1 || tone != 1 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
+            if (imports != 1 || top_margins != 1 || column_spacing != 1 || tone != 1 || spacer != 2 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
                 print "Unsupported original GeneralsChoice.qml layout" > "/dev/stderr"
                 exit 12
             }

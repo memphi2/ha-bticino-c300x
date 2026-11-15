@@ -162,7 +162,7 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
 
 @pytest.mark.parametrize("broken", [
     "onTouched: global.beepEnabled = checked", "id: beepButton", "anchors.topMargin: 32",
-    "anchors.topMargin: parent.height / 100 * 4", "spacing: 6",
+    "anchors.topMargin: parent.height / 100 * 4", "spacing: 6", "id: space", "width: 50",
 ])
 def test_unknown_settings_layout_aborts_before_touching_gui(tmp_path, broken):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
@@ -192,6 +192,34 @@ def test_settings_fit_original_800_by_480_screen(tmp_path):
     button_column_height = 5 * 50 + 4 * 4
     feedback_bottom = section_top + 8 + button_column_height + 8 + 34.239 + 6 + 44
     assert feedback_bottom <= 480 - 10
+
+
+def test_settings_rows_share_the_button_column_edges(tmp_path):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "apply")
+    source = (gui / SETTINGS).read_text()
+    tone = source.split("id: beepButton", 1)[1].split("id: c300xFeedbackSetting", 1)[0]
+    feedback = source.split("id: c300xFeedbackSetting", 1)[1]
+    # The vendor row is centred as a group; widening its spacer makes the row
+    # column-wide less the 8 px inset the buttons above use on both sides
+    # (12 px row spacing twice + 16 px inset = 40).
+    assert "width: 50" not in tone
+    assert (
+        "width: Math.max(0, buttonColumn.width - 40 - textBeep.width - selectorOnOff.width)"
+        in tone
+    )
+    assert "anchors.horizontalCenter: parent.horizontalCenter" in tone
+    # The added row is column-wide with the same inset: label left, switch right.
+    assert "width: buttonColumn.width" in feedback
+    label = feedback.split("UbuntuLightText {", 1)[1].split("}", 1)[0]
+    switch = feedback.split("id: c300xFeedbackSwitch", 1)[1].split("style:", 1)[0]
+    assert "anchors.left: parent.left" in label
+    assert "anchors.leftMargin: 8" in label
+    assert "horizontalAlignment: Text.AlignLeft" in label
+    assert "anchors.right: parent.right" in switch
+    assert "anchors.rightMargin: 8" in switch
 
 
 def test_missing_original_settings_backup_blocks_restore_and_rebackup(tmp_path):

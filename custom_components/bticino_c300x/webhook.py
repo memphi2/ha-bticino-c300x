@@ -322,6 +322,12 @@ async def _async_handle_agent_event(
         return _json_error("unauthorized", status=401)
 
     payload = await _event_payload(request)
+    # Unregistering the route does not stop requests already reading their body.
+    if (
+        getattr(entry, "runtime_data", None) is not runtime_data
+        or getattr(getattr(runtime_data, "resources", None), "closed", False)
+    ):
+        return _json_error("entry_unloaded", status=503)
     event_type = _normalize_event_type(_event_type_value(payload))
     if not event_type:
         return _json_error("unsupported_event", status=400)

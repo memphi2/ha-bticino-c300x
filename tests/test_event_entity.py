@@ -242,16 +242,21 @@ def test_doorbell_event_entity_triggers_standard_ring_event() -> None:
 
 
 @pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
-@pytest.mark.parametrize("device_event", [False, True])
+@pytest.mark.parametrize("cls,key,expected", [
+    (C300XDoorbellEventEntity, "doorbell_pressed", "ring"),
+    (C300XDeviceAgentEventEntity, "door_unlock_started", "door_unlock_started"),
+    (C300XDeviceAgentEventEntity, "display_touch_tone_changed", "display_touch_tone_changed"),
+])
 def test_real_ha_event_processing_preserves_type_in_every_language(
-    monkeypatch: pytest.MonkeyPatch, language: str, device_event: bool,
+    monkeypatch: pytest.MonkeyPatch, language: str, cls, key: str, expected: str,
 ) -> None:
-    cls = C300XDeviceAgentEventEntity if device_event else C300XDoorbellEventEntity
-    key = "door_unlock_started" if device_event else "doorbell_pressed"
-    expected = key if device_event else "ring"
     monkeypatch.setattr(cls, "_trigger_event", EventEntity._trigger_event)
-    entry = _FakeEntry()
-    entity = cls(entry, [key]) if device_event else cls(entry)
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={
+        "doorbell_events": True, "locks": True, "touch_tone": True,
+    }))
+    added = []
+    asyncio.run(async_setup_entry(None, entry, added.extend))
+    entity = next(entity for entity in added if isinstance(entity, cls))
     entity.hass = SimpleNamespace(config=SimpleNamespace(language=language))
     entity._handle_agent_event(SimpleNamespace(data={
         "entry_id": entry.entry_id,
@@ -264,6 +269,17 @@ def test_real_ha_event_processing_preserves_type_in_every_language(
     assert expected in entity.event_types
     assert entity.state_attributes["event_key"] == key
     assert entity.state_attributes["event"] != expected
+
+
+@pytest.mark.parametrize("supported", [False, True])
+def test_device_event_advertises_touch_tone_only_with_capability(supported):
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={
+        "touch_tone": {"supported": supported},
+    }))
+    added = []
+    asyncio.run(async_setup_entry(None, entry, added.extend))
+    entity = next(entity for entity in added if isinstance(entity, C300XDeviceAgentEventEntity))
+    assert ("display_touch_tone_changed" in entity.event_types) is supported
 
 
 def test_event_entities_register_bus_listeners() -> None:

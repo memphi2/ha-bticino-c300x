@@ -28,7 +28,7 @@ from .event_types import (
 LOCAL_ACTION_EVENT_TYPES = {
     "stair_light": "stair_light_activated",
 }
-EVENT_ENTITY_EXCLUDED_TYPES = {"agent_diagnostics_changed", "system_metrics_changed", "display_touch_tone_changed"}
+EVENT_ENTITY_EXCLUDED_TYPES = {"agent_diagnostics_changed", "system_metrics_changed"}
 EVENT_LABELS: dict[str, dict[str, str]] = {
     "en": {
         "doorbell_pressed": "Doorbell pressed",
@@ -70,7 +70,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "home_call_answered": "Zuhause-Anruf angenommen",
         "home_call_ended": "Zuhause-Anruf beendet",
         "ringer_muted": "Klingelton stummgeschaltet",
-        "display_touch_tone_changed": "Tastenton geaendert",
+        "display_touch_tone_changed": "Tastenton geändert",
         "ringer_unmuted": "Klingelton aktiviert",
         "ringer_volume_changed": "Klingel-Lautstärke geändert",
         "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
@@ -95,7 +95,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "home_call_answered": "Chiamata casa risposta",
         "home_call_ended": "Chiamata casa terminata",
         "ringer_muted": "Suoneria disattivata",
-        "display_touch_tone_changed": "Suono tasti modificato",
+        "display_touch_tone_changed": "Suono dei tasti modificato",
         "ringer_unmuted": "Suoneria attivata",
         "ringer_volume_changed": "Volume suoneria modificato",
         "smartphone_forwarding_changed": "Inoltro smartphone modificato",
@@ -120,7 +120,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "home_call_answered": "Appel domicile repondu",
         "home_call_ended": "Appel domicile termine",
         "ringer_muted": "Sonnerie coupee",
-        "display_touch_tone_changed": "Son des touches modifie",
+        "display_touch_tone_changed": "Son des touches modifié",
         "ringer_unmuted": "Sonnerie activee",
         "ringer_volume_changed": "Volume sonnerie modifie",
         "smartphone_forwarding_changed": "Renvoi smartphone modifie",

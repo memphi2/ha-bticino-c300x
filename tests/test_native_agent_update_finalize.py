@@ -29,11 +29,16 @@ def finalize_binary(request, tmp_path_factory):
     "control", "qml/C300XEnergyDistribution.qml.update-backup",
     "bundle.json.update-backup", "qml/HomeAssistant.qml.update-backup",
     "c300x-agent-native.update-backup",
+    "remount-prepare-rw", "remount-prepare-ro", "remount-install-rw", "remount-install-ro",
+    "remount-finalize-rw", "remount-finalize-ro", "remount-rollback-rw", "remount-rollback-ro",
+    "remount-no-root-change", "remount-link-rw", "remount-link-ro",
 ])
 def test_finalization_cleanup_and_recovery_preserving_retry(finalize_binary, tmp_path, scenario):
     result = subprocess.run([str(finalize_binary), str(tmp_path), scenario],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
-    if scenario != "control":
+    if scenario.startswith("remount-"):
+        assert "root remount" in result.stderr
+    elif scenario != "control":
         assert "backup cleanup" in result.stderr
         assert "recovery files retained" in result.stderr

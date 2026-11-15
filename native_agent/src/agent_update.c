@@ -91,11 +91,14 @@ struct update_transaction {
     int root_touched;
 };
 
-static void update_remount(int writable)
+static int update_remount(int writable)
 {
     int status = system(writable ? "mount -o remount,rw / >/dev/null 2>&1"
                                  : "mount -o remount,ro / >/dev/null 2>&1");
-    (void)status;
+    if (status != 0) {
+        fprintf(stderr, "Agent update root remount %s failed (status %d)\n", writable ? "rw" : "ro", status);
+    }
+    return status == 0;
 }
 
 static int update_backup_target(struct update_transaction *transaction, const char *target)
@@ -126,8 +129,10 @@ static int update_backup_target(struct update_transaction *transaction, const ch
 static int update_finish_transaction(struct update_transaction *transaction, int rollback)
 {
     int ok = 1;
-    if (transaction->root_touched) {
-        update_remount(1);
+    if (transaction->root_touched && !update_remount(1)) {
+        /* Do not consume recovery files when root writes are unavailable. */
+        (void)update_remount(0);
+        return 0;
     }
     for (size_t index = transaction->count; index > 0; index--) {
         struct update_backup *file = &transaction->files[index - 1];
@@ -144,8 +149,9 @@ static int update_finish_transaction(struct update_transaction *transaction, int
             ok = 0;
         }
     }
-    if (transaction->root_touched) {
-        update_remount(0);
+    /* Also confirm read-only state on a retry with no remaining root changes. */
+    if (!update_remount(0)) {
+        ok = 0;
     }
     return ok;
 }
@@ -206,7 +212,9 @@ static int update_prepare_transaction(const struct c300x_config *config, struct 
         }
         if (strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0) {
             transaction->root_touched = 1;
-            update_remount(1);
+            if (!update_remount(1)) {
+                return 0;
+            }
         }
         if (!update_backup_target(transaction, target)) {
             return 0;
@@ -218,15 +226,11 @@ static int update_prepare_transaction(const struct c300x_config *config, struct 
     }
     if (!agent_init_link_matches()) {
         transaction->root_touched = 1;
-        update_remount(1);
-        if (!update_backup_target(transaction, C300X_AGENT_INIT_LINK)) {
+        if (!update_remount(1) || !update_backup_target(transaction, C300X_AGENT_INIT_LINK)) {
             return 0;
         }
     }
-    if (transaction->root_touched) {
-        update_remount(0);
-    }
-    return 1;
+    return !transaction->root_touched || update_remount(0);
 }
 
 int agent_base_dir(const struct c300x_config *config, char *out, size_t out_len)
@@ -781,26 +785,14 @@ static int apply_agent_update_init_script(
         (void)unlink(rendered_path);
         return 1;
     }
-    {
-        int status = system("mount -o remount,rw / >/dev/null 2>&1");
-        (void)status;
-    }
-    if (
-        (content_changed && !copy_binary_file(rendered_path, C300X_AGENT_INIT_SCRIPT, 0700))
-        || !ensure_agent_init_link()
-    ) {
-        (void)unlink(rendered_path);
-        {
-            int status = system("mount -o remount,ro / >/dev/null 2>&1");
-            (void)status;
-        }
+    int ok = update_remount(1)
+        && (!content_changed || copy_binary_file(rendered_path, C300X_AGENT_INIT_SCRIPT, 0700))
+        && ensure_agent_init_link();
+    int readonly_ok = update_remount(0);
+    (void)unlink(rendered_path);
+    if (!ok || !readonly_ok) {
         return 0;
     }
-    {
-        int status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
-    }
-    (void)unlink(rendered_path);
     if (changed != NULL) {
         *changed = 1;
     }
@@ -809,23 +801,17 @@ static int apply_agent_update_init_script(
 
 static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary)
 {
-    int status;
-
     if (agent_init_link_matches()) {
         return 1;
     }
     if (access(C300X_AGENT_INIT_SCRIPT, X_OK) != 0) {
         return 1;
     }
-    status = system("mount -o remount,rw / >/dev/null 2>&1");
-    (void)status;
-    if (!ensure_agent_init_link()) {
-        status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
+    int ok = update_remount(1) && ensure_agent_init_link();
+    int readonly_ok = update_remount(0);
+    if (!ok || !readonly_ok) {
         return 0;
     }
-    status = system("mount -o remount,ro / >/dev/null 2>&1");
-    (void)status;
     if (summary != NULL) {
         summary->changed_files++;
         summary->script_changed = 1;

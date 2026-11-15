@@ -17,8 +17,7 @@ SOURCES = EnergySources(
 
 @pytest.fixture
 def reads(monkeypatch):
-    from homeassistant.components import recorder
-    from homeassistant.helpers import recorder as recorder_helper
+    from homeassistant.helpers import recorder
 
     entry = SimpleNamespace(
         entry_id="read-lifecycle", data={},
@@ -45,7 +44,6 @@ def reads(monkeypatch):
 
     instance = SimpleNamespace(async_add_executor_job=execute)
     monkeypatch.setattr(recorder, "get_instance", lambda _hass: instance)
-    monkeypatch.setattr(recorder_helper, "get_instance", lambda _hass: instance)
     state.sources = AsyncMock(return_value=SOURCES)
     monkeypatch.setattr(data, "async_configured_energy_sources", state.sources)
 

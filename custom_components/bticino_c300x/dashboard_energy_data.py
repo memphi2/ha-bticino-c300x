@@ -13,8 +13,9 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from time import monotonic
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from homeassistant.core import HomeAssistant
 
@@ -36,6 +37,9 @@ from .dashboard_energy_power import (
     power_history_payload,
 )
 from .entry_types import BticinoC300XConfigEntry
+
+if TYPE_CHECKING:
+    from homeassistant.components.recorder.statistics import StatisticsRow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -190,21 +194,23 @@ async def _async_energy_day(
 
 
 async def _async_read_energy_day(
-    hass: HomeAssistant, start: Any, sources: EnergySources,
+    hass: HomeAssistant, start: datetime, sources: EnergySources,
     active: Callable[[], bool] | None = None,
 ) -> EnergyDay:
-    from homeassistant.components.recorder import get_instance
     from homeassistant.components.recorder.statistics import statistics_during_period
+    from homeassistant.helpers.recorder import get_instance
     from homeassistant.util import dt as dt_util
 
     statistic_ids = sources.energy_stats | sources.cost_stats
     recorder = get_instance(hass)
 
-    async def read(since: Any, period: str) -> dict[str, list[dict[str, Any]]]:
+    async def read(
+        since: datetime, period: Literal["hour", "5minute"],
+    ) -> dict[str, list[StatisticsRow]]:
         # A submitted SQL job may finish; a retired request must not submit another.
         if active is not None and not active():
             return {}
-        return await recorder.async_add_executor_job(  # type: ignore[no-any-return]
+        return await recorder.async_add_executor_job(
             statistics_during_period,
             hass, since, None, statistic_ids, period, {"energy": "kWh"}, {"change"},
         )
@@ -238,7 +244,7 @@ async def _async_read_energy_day(
 
 def energy_day_from_statistics(
     sources: EnergySources,
-    results: tuple[dict[str, list[dict[str, Any]]], ...],
+    results: tuple[dict[str, list[StatisticsRow]], ...],
     local_hour: Any,
 ) -> EnergyDay:
     """Sort the changes of each statistic into the local hours of the day."""

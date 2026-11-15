@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 from .dashboard_controls import finite_number
 from .dashboard_energy_charts import chart_axis
@@ -40,6 +40,13 @@ _MAX_SUM_ROWS = 8
 
 # Spelled as Home Assistant spells them: "mW" and "MW" differ only in case.
 _POWER_FACTORS = {"mW": 0.001, "W": 1.0, "kW": 1000.0, "MW": 1_000_000.0, "GW": 1_000_000_000.0}
+
+
+class _EnergyBarSeries(TypedDict):
+    """One colored series of hourly energy values."""
+
+    color: str
+    values: list[float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -379,7 +386,7 @@ def energy_page(
 
     if ENERGY_VIEW_TODAY in shown:
         # A meter correction can make an hour negative; a bar cannot be.
-        series = [
+        series: list[_EnergyBarSeries] = [
             {"color": color, "values": [round(max(0.0, value), 3) for value in values]}
             for present, color, values in (
                 (sources.grid_from, COLOR_GRID, grid_in),

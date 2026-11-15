@@ -9,8 +9,8 @@ from custom_components.bticino_c300x.dashboard_energy import EnergyMeter, Energy
 
 
 def test_short_term_reads_cover_each_meters_own_hourly_boundary(monkeypatch):
-    from homeassistant.components import recorder
     from homeassistant.components.recorder import statistics
+    from homeassistant.helpers import recorder
 
     start = datetime(2026, 11, 15, tzinfo=UTC)
     stamp = start.timestamp()

@@ -33,6 +33,11 @@ ARMHF_STRIP = "arm-linux-gnueabihf-strip"
 FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v2-api-rtsp-talkback"
 IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v2-api-rtsp-talkback"
 CONFIG_SCHEMA_MATERIAL = "c300x-native-agent-config-schema-v1"
+# File-set 4 validates this path before it can install the new updater. It is
+# inert bootstrap input only; file-set 5 never installs it and removes its old
+# installed counterpart transactionally on the second update pass.
+LEGACY_BOOTSTRAP_QML = "device_agent/qml/C300XEnergyDistribution.qml"
+LEGACY_BOOTSTRAP_CONTENT = b"import QtQuick 1.1\nItem {}\n"
 
 
 def main() -> int:
@@ -149,7 +154,10 @@ def stage_bundle(
     _set_file_modes(qml_files, 0o644)
     _set_file_modes(script_files, 0o700)
     _set_file_modes(runtime_files, 0o700)
-    staged_files.extend(_unique_paths(runtime_files + script_files + qml_files))
+    legacy_bootstrap = component_dir / LEGACY_BOOTSTRAP_QML
+    legacy_bootstrap.write_bytes(LEGACY_BOOTSTRAP_CONTENT)
+    legacy_bootstrap.chmod(0o644)
+    staged_files.extend(_unique_paths(runtime_files + script_files + qml_files + [legacy_bootstrap]))
     file_entries = _file_entries(component_dir, staged_files)
     group_hashes = {
         "runtime_hash": _content_hash(component_dir, runtime_files),

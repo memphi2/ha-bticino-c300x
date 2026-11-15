@@ -12,6 +12,8 @@ static char test_init_script[512], test_init_link[512];
 static char fail_target[512];
 static int activation_calls;
 static int fail_link_create, fail_link_unlink;
+static char obsolete_source[512];
+static int fail_obsolete_unlink;
 
 static int test_symlink(const char *target, const char *path)
 {
@@ -24,6 +26,10 @@ static int test_symlink(const char *target, const char *path)
 
 static int test_unlink(const char *path)
 {
+    if (fail_obsolete_unlink && strcmp(path, obsolete_source) == 0) {
+        errno = EACCES;
+        return -1;
+    }
     if (fail_link_unlink && strcmp(path, test_init_link) == 0) {
         errno = EACCES;
         return -1;
@@ -92,6 +98,8 @@ static int fail_activation_once(const struct c300x_config *config, struct agent_
 static void assert_original_bundle(const struct c300x_config *config, int regular_link)
 {
     char path[C300X_MAX_PATH_LEN], content[64], backup[C300X_MAX_PATH_LEN + 24];
+    assert(read_bounded_text_file(obsolete_source, content, sizeof(content), NULL));
+    assert(strcmp(content, "old-distribution") == 0);
     for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[i].path, path, sizeof(path)));
         assert(read_bounded_text_file(path, content, sizeof(content), NULL));
@@ -143,6 +151,7 @@ static void rollback_test(const struct c300x_config *config, const char *manifes
     assert(access(path, F_OK) != 0 && errno == ENOENT);
     fail_target[0] = '\0';
     assert(apply_agent_update_files(config, manifest, "{}", &summary, NULL));
+    assert(access(obsolete_source, F_OK) != 0 && errno == ENOENT);
     assert(summary.manifest_changed && summary.changed_files > 0);
     assert(agent_init_link_matches());
     assert(agent_bundle_manifest_path(config, path, sizeof(path)));
@@ -170,6 +179,7 @@ static void regular_boot_entry_test(const struct c300x_config *config, const cha
     struct stat info;
     assert(snprintf(backup, sizeof(backup), "%s.update-backup", test_init_link) < (int)sizeof(backup));
     for (int failure = 0; failure < 5; failure++) {
+        assert(write_binary_chunk(obsolete_source, (const unsigned char *)"old-distribution", 16, 0, 0640));
         for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
             assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[i].path, path, sizeof(path)));
             assert(write_binary_chunk(path, (const unsigned char *)"original", 8, 0, 0600));
@@ -195,9 +205,50 @@ static void regular_boot_entry_test(const struct c300x_config *config, const cha
         } else {
             assert(ok && summary.script_changed && summary.changed_files > 0);
             assert(agent_init_link_matches());
+            assert(access(obsolete_source, F_OK) != 0 && errno == ENOENT);
         }
         assert(lstat(backup, &info) != 0 && errno == ENOENT);
     }
+}
+
+static void obsolete_source_safety_test(const struct c300x_config *config, const char *manifest)
+{
+    char backup[sizeof(obsolete_source) + 24], other[C300X_MAX_PATH_LEN], content[64];
+    struct agent_update_change_summary summary;
+    struct stat info;
+    assert(snprintf(backup, sizeof(backup), "%s.update-backup", obsolete_source) < (int)sizeof(backup));
+    assert(agent_update_target_path(config, "device_agent/qml/user-file.qml", other, sizeof(other)));
+    assert(write_binary_chunk(other, (const unsigned char *)"user-file", 9, 0, 0600));
+    assert(write_binary_chunk(obsolete_source, (const unsigned char *)"old-distribution", 16, 0, 0640));
+    fail_obsolete_unlink = 1;
+    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    fail_obsolete_unlink = 0;
+    assert(read_bounded_text_file(obsolete_source, content, sizeof(content), NULL));
+    assert(strcmp(content, "old-distribution") == 0);
+    assert(stat(obsolete_source, &info) == 0 && (info.st_mode & 0777) == 0640);
+    assert(access(backup, F_OK) != 0 && errno == ENOENT);
+    assert(summary.changed_files == 0);
+    assert(rename(obsolete_source, backup) == 0);
+    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    assert(read_bounded_text_file(backup, content, sizeof(content), NULL));
+    assert(strcmp(content, "old-distribution") == 0);
+    assert(rename(backup, obsolete_source) == 0);
+    assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    assert(summary.changed_files == 1 && summary.qml_patch_changed);
+    assert(access(obsolete_source, F_OK) != 0 && errno == ENOENT);
+    assert(access(backup, F_OK) != 0 && errno == ENOENT);
+    assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    assert(summary.changed_files == 0);
+    assert(symlink(other, obsolete_source) == 0);
+    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    assert(lstat(obsolete_source, &info) == 0 && S_ISLNK(info.st_mode));
+    assert(unlink(obsolete_source) == 0);
+    assert(mkdir(obsolete_source, 0700) == 0);
+    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    assert(lstat(obsolete_source, &info) == 0 && S_ISDIR(info.st_mode));
+    assert(rmdir(obsolete_source) == 0);
+    assert(read_bounded_text_file(other, content, sizeof(content), NULL));
+    assert(strcmp(content, "user-file") == 0);
 }
 
 static void whole_bundle_preflight_test(struct c300x_config *config)
@@ -222,6 +273,7 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
     assert(agent_update_stage_path(config, "device_agent/bundle.json", path, sizeof(path)));
     assert(write_binary_chunk(path, (const unsigned char *)manifest, strlen(manifest), 0, 0600));
     assert(validate_agent_update_files(config, manifest));
+    assert(write_binary_chunk(obsolete_source, (const unsigned char *)"old-distribution", 16, 0, 0640));
     for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
         const char *content = i + 1 == C300X_AGENT_UPDATE_FILE_COUNT ? manifest : test_content(name);
@@ -231,6 +283,8 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
         assert(summary.changed_files == 0);
         assert(read_bounded_text_file(binary, installed, sizeof(installed), NULL));
         assert(strcmp(installed, "original") == 0);
+        assert(read_bounded_text_file(obsolete_source, installed, sizeof(installed), NULL));
+        assert(strcmp(installed, "old-distribution") == 0);
         if (i + 1 < C300X_AGENT_UPDATE_FILE_COUNT) {
             assert(write_binary_chunk(path, (const unsigned char *)"corrupt", 7, 0, 0600));
             assert(!apply_agent_update_files(config, manifest, "{}", &summary, NULL));
@@ -243,6 +297,7 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
     assert(validate_agent_update_files(config, manifest));
     rollback_test(config, manifest);
     regular_boot_entry_test(config, manifest);
+    obsolete_source_safety_test(config, manifest);
 }
 
 int main(int argc, char **argv)
@@ -261,6 +316,7 @@ int main(int argc, char **argv)
     assert(c300x_join_path(config.config_path, sizeof(config.config_path), argv[1], "config.json"));
     assert(c300x_join_path(test_init_script, sizeof(test_init_script), argv[1], "init-script"));
     assert(c300x_join_path(test_init_link, sizeof(test_init_link), argv[1], "init-link"));
+    assert(c300x_join_path(obsolete_source, sizeof(obsolete_source), argv[1], "qml/C300XEnergyDistribution.qml"));
     /* Set 3 can stage the new QML before the set 4 updater installs it. */
     assert(agent_update_stage_path(&config, "device_agent/qml/C300XEnergyDistribution.qml", stage, sizeof(stage)));
     assert(agent_update_target_path(&config, "device_agent/qml/C300XEnergyDistribution.qml", target, sizeof(target)));

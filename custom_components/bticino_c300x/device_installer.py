@@ -54,8 +54,17 @@ DISPLAY_FILES = (
     "Alarm.qml",
     "HomeAssistant.qml",
     "C300XEnergy.qml",
-    "C300XEnergyDistribution.qml",
+    "C300XEnergyConsumers.qml",
+    "js/c300x_energy_consumers.js",
     "C300XPageNavigation.qml",
+    "C300XAlerts.qml",
+    "js/c300x_alerts.js",
+    "C300XAgenda.qml",
+    "C300XLeaveHome.qml",
+    "C300XDetailControl.qml",
+    "C300XEnergyReadout.qml",
+    "C300XEnergySums.qml",
+    "js/c300x_energy.js",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
     "js/c300x_memos.js",
@@ -212,6 +221,7 @@ def _install_device_agent_sync(
             manifest.source, manifest.remote_path, manifest.mode
         ):
             changed_files.append(manifest.remote_path)
+        _remove_obsolete_display_source_sync(client, request.remote_dir)
     finally:
         client.close()
     return tuple(changed_files)
@@ -841,6 +851,18 @@ def _verify_startup_sync(client: _DeviceSshClient) -> None:
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} status")
     except C300XDeviceInstallError as err:
         raise C300XDeviceInstallError("device_install_verify_failed") from err
+
+
+def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: str) -> None:
+    """Retire only the old generated source, after the install has committed."""
+
+    directory = _quote(f"{remote_dir}/qml")
+    target = _quote(f"{remote_dir}/qml/C300XEnergyDistribution.qml")
+    client.run(
+        f"if [ -L {directory} ] || [ -L {target} ] || "
+        f"{{ [ -e {target} ] && [ ! -f {target} ]; }}; then exit 1; fi; "
+        f"if [ -f {target} ]; then rm -f {target}; fi"
+    )
 
 
 def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:

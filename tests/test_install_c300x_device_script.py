@@ -28,8 +28,13 @@ def _fake_tool(path: Path, name: str) -> None:
         "    sys.exit(int(os.environ['QML_EXIT']))\n"
         "if name == 'sshpass' and 'ssh' in sys.argv "
         "and \"mv -f '\" in sys.argv[-1] and '.bundle.json.new' in sys.argv[-1]:\n"
+        "    if os.environ.get('FAIL_MANIFEST') == '1': sys.exit(1)\n"
         "    with open(os.environ['REMOTE_MANIFEST'], 'w') as manifest:\n"
         "        manifest.write('new manifest\\n')\n"
+        "if name == 'sshpass' and sys.argv[-1].startswith('if [ -L ') "
+        "and 'C300XEnergyDistribution.qml' in sys.argv[-1]:\n"
+        "    if os.environ.get('FAIL_CLEANUP') == '1': sys.exit(1)\n"
+        "    os.unlink(os.environ['REMOTE_OBSOLETE_SOURCE'])\n"
         "if name == 'sshpass' and os.environ.get('FAIL_STARTUP') == '1' "
         "and sys.argv[-1].startswith('sh -s -- '):\n"
         "    sys.exit(1)\n"
@@ -41,6 +46,7 @@ def _run_install(
     tmp_path: Path, *, fail_target: str = "", fail_startup: bool = False,
     remote_dir: str = "/synthetic/agent", apply_qml: bool = False,
     qml_result: str = "", qml_exit: int = 0, upload_agent: bool = True,
+    fail_manifest: bool = False, fail_cleanup: bool = False,
 ):
     tree = tmp_path / "checkout"
     scripts = tree / "scripts"
@@ -57,6 +63,8 @@ def _run_install(
     log = tmp_path / "commands.jsonl"
     manifest = tmp_path / "remote-bundle.json"
     manifest.write_text("old manifest\n")
+    obsolete = tmp_path / "old-distribution.qml"
+    obsolete.write_text("old distribution\n")
     result = subprocess.run(
         ["bash", str(scripts / "install_c300x_device.sh"),
          *(["--agent"] if upload_agent else []), *(["--apply-qml"] if apply_qml else [])],
@@ -69,6 +77,9 @@ def _run_install(
             "QML_RESULT": qml_result,
             "QML_EXIT": str(qml_exit),
             "REMOTE_MANIFEST": str(manifest),
+            "REMOTE_OBSOLETE_SOURCE": str(obsolete),
+            "FAIL_MANIFEST": "1" if fail_manifest else "0",
+            "FAIL_CLEANUP": "1" if fail_cleanup else "0",
             "C300X_HOST": "synthetic.invalid",
             "C300X_USER": "synthetic",
             "C300X_PASSWORD": "synthetic",
@@ -97,7 +108,7 @@ def test_abi_check_precedes_staging_and_remote_mutation(tmp_path):
 
 def test_complete_bundle_is_uploaded_before_publishing_manifest(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
-    from stage_device_agent_bundle import stage_bundle
+    from stage_device_agent_bundle import LEGACY_BOOTSTRAP_QML, stage_bundle
 
     binary = tmp_path / "fake-agent"
     binary.write_bytes(b"synthetic, not executable")
@@ -113,11 +124,15 @@ def test_complete_bundle_is_uploaded_before_publishing_manifest(tmp_path, monkey
         "device_agent/" + arg.split("/device_agent/", 1)[1]
         for call in uploads for arg in call[1:] if "/device_agent/" in arg
     }
-    assert sources == expected | {"device_agent/bundle.json"}
+    # The old-updater tombstone is staging-only, never an SSH-installed source.
+    assert sources == (expected - {LEGACY_BOOTSTRAP_QML}) | {"device_agent/bundle.json"}
+    assert LEGACY_BOOTSTRAP_QML not in sources
     startup = next(i for i, call in enumerate(calls) if call[-1].startswith("sh -s -- "))
     manifest = next(i for i, call in enumerate(calls) if any(arg.endswith("/device_agent/bundle.json") for arg in call))
     assert startup < manifest
-    assert ".bundle.json.new" in calls[-1][-1]
+    assert ".bundle.json.new" in calls[-2][-1]
+    assert "C300XEnergyDistribution.qml" in calls[-1][-1]
+    assert not (tmp_path / "old-distribution.qml").exists()
 
 
 def test_failed_startup_install_never_publishes_bundle_manifest(tmp_path):
@@ -145,6 +160,7 @@ def test_failed_qml_result_preserves_old_manifest(tmp_path, payload):
     assert "Installed" not in result.stdout
     assert not any("bundle.json" in arg for call in calls for arg in call)
     assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"
+    assert (tmp_path / "old-distribution.qml").read_text() == "old distribution\n"
 
 
 def test_qml_transport_failure_preserves_old_manifest(tmp_path):
@@ -155,6 +171,7 @@ def test_qml_transport_failure_preserves_old_manifest(tmp_path):
     assert "Installed" not in result.stdout
     assert not any("bundle.json" in arg for call in calls for arg in call)
     assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"
+    assert (tmp_path / "old-distribution.qml").read_text() == "old distribution\n"
 
 
 def test_verified_qml_result_precedes_manifest_publication(tmp_path):
@@ -179,6 +196,21 @@ def test_qml_only_install_also_validates_result(tmp_path, success):
     assert ("Installed" in result.stdout) is success
     assert not any("bundle.json" in arg for call in calls for arg in call)
     assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"
+    assert (tmp_path / "old-distribution.qml").exists() is not success
+
+
+def test_failed_manifest_retains_old_source(tmp_path):
+    result, calls = _run_install(tmp_path, apply_qml=True, qml_result=json.dumps(QML_SUCCESS), fail_manifest=True)
+    assert result.returncode != 0
+    assert (tmp_path / "old-distribution.qml").read_text() == "old distribution\n"
+    assert not any(call[-1].startswith("if [ -L ") for call in calls)
+
+
+def test_source_cleanup_error_is_not_install_success(tmp_path):
+    result, _calls = _run_install(tmp_path, fail_cleanup=True)
+    assert result.returncode != 0
+    assert "Installed" not in result.stdout
+    assert (tmp_path / "old-distribution.qml").read_text() == "old distribution\n"
 
 
 @pytest.mark.parametrize("remote_dir", ["relative", "/agent/../other", "/agent'bad", "/agent$(bad)"])

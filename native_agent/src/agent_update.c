@@ -86,7 +86,7 @@ struct update_backup {
 };
 
 struct update_transaction {
-    struct update_backup files[C300X_AGENT_UPDATE_FILE_COUNT + 1];
+    struct update_backup files[C300X_AGENT_UPDATE_FILE_COUNT + 2];
     size_t count;
     int root_touched;
 };
@@ -102,7 +102,7 @@ static int update_backup_target(struct update_transaction *transaction, const ch
 {
     C300X_UPDATE_STAT_STRUCT info;
     struct update_backup *file = &transaction->files[transaction->count];
-    if (transaction->count >= C300X_AGENT_UPDATE_FILE_COUNT + 1
+    if (transaction->count >= sizeof(transaction->files) / sizeof(transaction->files[0])
         || snprintf(file->target, sizeof(file->target), "%s", target) >= (int)sizeof(file->target)
         || snprintf(file->backup, sizeof(file->backup), "%s.update-backup", target) >= (int)sizeof(file->backup)) {
         return 0;
@@ -148,6 +148,42 @@ static int update_finish_transaction(struct update_transaction *transaction, int
         update_remount(0);
     }
     return ok;
+}
+
+static int update_remove_obsolete_display_source(
+    const struct c300x_config *config,
+    struct update_transaction *transaction,
+    struct agent_update_change_summary *summary
+)
+{
+    char base[C300X_MAX_PATH_LEN], directory[C300X_MAX_PATH_LEN];
+    char target[C300X_MAX_PATH_LEN], backup[C300X_MAX_PATH_LEN + 24];
+    C300X_UPDATE_STAT_STRUCT info;
+    if (!agent_base_dir(config, base, sizeof(base))
+        || !c300x_join_path(directory, sizeof(directory), base, "qml")
+        || !c300x_join_path(target, sizeof(target), directory, "C300XEnergyDistribution.qml")
+        || snprintf(backup, sizeof(backup), "%s.update-backup", target) >= (int)sizeof(backup)) {
+        return 0;
+    }
+    if (update_lstat(directory, &info) != 0) {
+        return errno == ENOENT;
+    }
+    if (!S_ISDIR(info.st_mode) || update_lstat(backup, &info) == 0 || errno != ENOENT) {
+        return 0;
+    }
+    if (update_lstat(target, &info) != 0) {
+        return errno == ENOENT;
+    }
+    /* Only this retired project file is owned here; never follow a symlink. */
+    if (!S_ISREG(info.st_mode) || !update_backup_target(transaction, target)
+        || unlink(target) != 0) {
+        return 0;
+    }
+    if (summary != NULL) {
+        summary->changed_files++;
+        summary->qml_patch_changed = 1;
+    }
+    return 1;
 }
 
 static int update_prepare_transaction(const struct c300x_config *config, struct update_transaction *transaction)
@@ -362,6 +398,9 @@ int apply_agent_update_files(
             manifest,
             "config_schema_hash"
         );
+    }
+    if (!update_remove_obsolete_display_source(config, transaction, summary)) {
+        goto rollback;
     }
     for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
         if (strcmp(C300X_AGENT_UPDATE_FILES[index].path, "device_agent/bundle.json") == 0) {

@@ -37,3 +37,14 @@ def test_every_list_of_the_display_files_names_the_same_files() -> None:
     } >= expected
     assert {path.relative_to(ROOT / "device_qml").as_posix()
             for path in (ROOT / "device_qml").rglob("*") if path.suffix in {".qml", ".js"}} == expected
+
+
+def test_manual_installer_preserves_javascript_subdirectory() -> None:
+    source = (ROOT / "scripts/install_c300x_device.sh").read_text()
+    groups = re.findall(r'scp_cmd \\\n(.*?)"\$REMOTE:\$REMOTE_DIR/qml/([^\"]*)"', source, re.S)
+    assert len(groups) == 2
+    for body, destination in groups:
+        files = re.findall(r'"\$QML_STAGE_DIR/([^\"]+)"', body)
+        assert files
+        assert all(Path(name).parent == Path(destination or ".")
+                   for name in files)

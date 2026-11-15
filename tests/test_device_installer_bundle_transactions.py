@@ -31,13 +31,14 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     remote_dir = "/synthetic/custom-agent"
     bundle = installer._resolve_bundle(remote_dir)
     manifest_path = f"{remote_dir}/bundle.json"
+    obsolete_path = f"{remote_dir}/qml/C300XEnergyDistribution.qml"
 
     class Client:
         failure: str | None = None
         closed = False
 
         def __init__(self) -> None:
-            self.files = {manifest_path: old_manifest}
+            self.files = {manifest_path: old_manifest, obsolete_path: b"old distribution"}
             self.operations: list[str] = []
             self.writes: list[str] = []
 
@@ -60,7 +61,10 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             return self.write(path, source.read_bytes())
 
         def run(self, command: str) -> str:
-            if command.endswith(" restart"):
+            if command.startswith("if [ -L ") and obsolete_path in command:
+                self.stage("cleanup-source")
+                self.files.pop(obsolete_path, None)
+            elif command.endswith(" restart"):
                 self.stage("restart")
             elif "qml_patch.sh " in command:
                 action = command.rsplit(" ", 1)[1]
@@ -114,6 +118,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return SimpleNamespace(
         client=client, install=install, update_required=update_required,
         manifest_path=manifest_path, old_manifest=old_manifest,
+        obsolete_path=obsolete_path,
     )
 
 
@@ -130,6 +135,7 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
         transaction.install(apply_gui_patch=apply_gui_patch)
     assert client.closed
     assert client.files[transaction.manifest_path] == transaction.old_manifest
+    assert client.files[transaction.obsolete_path] == b"old distribution"
     assert transaction.update_required()
     if failure != "manifest":
         assert "manifest" not in client.operations
@@ -139,7 +145,8 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     changed = transaction.install(apply_gui_patch=apply_gui_patch)
     assert client.closed
     assert changed[-1] == transaction.manifest_path
-    assert client.operations[-1] == "manifest"
+    assert client.operations[-2:] == ["manifest", "cleanup-source"]
+    assert transaction.obsolete_path not in client.files
     assert ("apply" in client.operations) is apply_gui_patch
     assert not transaction.update_required()
     writes = client.writes.copy()
@@ -154,6 +161,7 @@ def test_full_patch_failure_does_not_publish_manifest(transaction) -> None:
         transaction.install(apply_gui_patch=True)
     assert transaction.client.closed
     assert transaction.client.files[transaction.manifest_path] == transaction.old_manifest
+    assert transaction.client.files[transaction.obsolete_path] == b"old distribution"
     assert "manifest" not in transaction.client.operations
     assert transaction.update_required()
     transaction.client.failure = None
@@ -168,8 +176,18 @@ def test_failed_qml_json_retains_manifest(transaction, action) -> None:
         transaction.install(apply_gui_patch=True)
     assert transaction.client.closed
     assert transaction.client.files[transaction.manifest_path] == transaction.old_manifest
+    assert transaction.client.files[transaction.obsolete_path] == b"old distribution"
     assert "manifest" not in transaction.client.operations
     assert transaction.update_required()
+
+
+def test_source_cleanup_failure_is_not_install_success(transaction) -> None:
+    transaction.client.failure = "cleanup-source"
+    with pytest.raises(installer.C300XDeviceInstallError):
+        transaction.install(apply_gui_patch=False)
+    assert transaction.client.closed
+    assert transaction.client.files[transaction.obsolete_path] == b"old distribution"
+    assert transaction.client.operations[-2:] == ["manifest", "cleanup-source"]
 
 
 def test_native_metadata_reader_observes_manifest_commit_without_restart(tmp_path) -> None:

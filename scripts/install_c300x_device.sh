@@ -162,12 +162,21 @@ scp_cmd \
     "$QML_STAGE_DIR/Alarm.qml" \
     "$QML_STAGE_DIR/HomeAssistant.qml" \
     "$QML_STAGE_DIR/C300XEnergy.qml" \
-    "$QML_STAGE_DIR/C300XEnergyDistribution.qml" \
+    "$QML_STAGE_DIR/C300XEnergyConsumers.qml" \
     "$QML_STAGE_DIR/C300XPageNavigation.qml" \
+    "$QML_STAGE_DIR/C300XAlerts.qml" \
+    "$QML_STAGE_DIR/C300XAgenda.qml" \
+    "$QML_STAGE_DIR/C300XLeaveHome.qml" \
+    "$QML_STAGE_DIR/C300XDetailControl.qml" \
+    "$QML_STAGE_DIR/C300XEnergyReadout.qml" \
+    "$QML_STAGE_DIR/C300XEnergySums.qml" \
     "$QML_STAGE_DIR/C300XRingerControl.qml" \
     "$REMOTE:$REMOTE_DIR/qml/"
 
 scp_cmd \
+    "$QML_STAGE_DIR/js/c300x_alerts.js" \
+    "$QML_STAGE_DIR/js/c300x_energy.js" \
+    "$QML_STAGE_DIR/js/c300x_energy_consumers.js" \
     "$QML_STAGE_DIR/js/c300x_ha.js" \
     "$QML_STAGE_DIR/js/c300x_i18n.js" \
     "$QML_STAGE_DIR/js/c300x_memos.js" \
@@ -216,5 +225,8 @@ if [[ "$UPLOAD_AGENT" == "1" ]]; then
     scp_cmd "$PACKAGED_BUNDLE_MANIFEST" "$REMOTE:$remote_bundle_tmp"
     ssh_cmd "chmod 600 '$remote_bundle_tmp' && mv -f '$remote_bundle_tmp' '$REMOTE_DIR/bundle.json'"
 fi
+
+# Retire only this generated source after uploads, optional patch and manifest.
+ssh_cmd "if [ -L '$REMOTE_DIR/qml' ] || [ -L '$REMOTE_DIR/qml/C300XEnergyDistribution.qml' ] || { [ -e '$REMOTE_DIR/qml/C300XEnergyDistribution.qml' ] && [ ! -f '$REMOTE_DIR/qml/C300XEnergyDistribution.qml' ]; }; then exit 1; fi; if [ -f '$REMOTE_DIR/qml/C300XEnergyDistribution.qml' ]; then rm -f '$REMOTE_DIR/qml/C300XEnergyDistribution.qml'; fi"
 
 printf 'Installed C300X device files in %s\n' "$REMOTE_DIR"

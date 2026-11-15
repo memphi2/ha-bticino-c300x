@@ -1,5 +1,79 @@
 # Changelog
 
+## v2.4.0 - 2026-11-15
+
+### Added
+
+- Add an optional **Energy** page to the display's Home Assistant pages. It
+  uses the sources of HA's Energy dashboard and needs no extra entities. Up to
+  three views can be chosen: **Now** (flow between solar, grid, battery and
+  home with current power), **Today** (hourly bars and totals per meter with
+  costs) and **Balance** (solar used at home, self-sufficiency, net grid use
+  and cost). Enable it and set its position under **Display pages**. The page
+  is in German, English, French and Italian.
+- Make the visitor image size configurable up to the display's 800x480
+  (default 688x480, the video size) and optionally write the capture date and
+  time into the image (default on). The settings have their own **Visitor
+  Snapshot** step in setup, reconfiguration and options.
+
+### Changed
+
+- **Breaking:** the **Forwarding** select now uses the states `enabled`,
+  `homeassistant` and `blocked` with translated labels, like other select
+  entities. Automations and scripts of your own that compare the old English
+  texts, or set them with `select.select_option`, must use these three values.
+  The bundled ring blueprints are updated; a copy of them that you changed or
+  imported yourself must be imported again.
+- Deliver the visitor image from the device in the requested size and encode
+  it once in HA; the capture delay now defaults to **3 seconds** instead of 5.
+- Show select options on display tiles in HA's language, and write decimal
+  numbers on every display page with the decimal sign of that language.
+- Keep the card footer's text beside the buttons at every width instead of
+  moving it below them. Text that does not fit is cut with an ellipsis and
+  stays readable in the tooltip; an error or notice uses at most two lines.
+- Align the **Tone buttons** and **HA feedback** rows in the device's
+  **Settings → General** with the buttons above them.
+- Record a Ring Capture's audio with the device's own sample rate and channel
+  count, and leave the level untouched at 0 dB gain. The unused
+  `latest.processed.wav` and its `processed_wav_path` entry are gone; use
+  `raw_wav_path` in automations of your own.
+- Pass PCMU talkback to a PCMU device unchanged instead of decoding and
+  encoding every sample on the device.
+
+### Fixed
+
+- Accept UDP event frames in the agent only from the device itself; any host
+  on the network could inject device events before. See `SECURITY.md`.
+- Begin a ring's talkback and preview without waiting for a video session
+  that is still starting, which could take up to about 40 seconds.
+- Wait in every agent update step while the agent runs another maintenance
+  job, and give script-backed requests 15 seconds. The repair no longer shows
+  "check maintenance access" for an update that only needed a second try.
+- Reject activation items over the API that the agent would refuse at its
+  next start, so a saved list can no longer keep the agent from coming up.
+- Keep the device user repair open while any of its checks still fails or the
+  status cannot be read.
+- Run every follow-up step when an SSH installation is retried after the
+  installer itself failed.
+- Stop the Android ring alert promptly when the door opens or the call is
+  answered, also on a dozing phone; both ring blueprints also end on HA's own
+  unlock event.
+- Read the smartphone forwarding mode again after the agent restarts, and
+  report a mode the agent first learns from the device. A change made on the
+  display while the agent was down no longer stays unnoticed in HA, and media
+  readiness follows every reading.
+- Show the forwarding select as unknown instead of unavailable when the
+  device's answer names no mode.
+- Keep **Hang up** on the card for an answered call whose stream did not start.
+- Keep a memo delete button usable after a failed read.
+- Keep the media readiness icon inside the card footer on narrow cards.
+
+### Upgrade Notes
+
+- Update the integration and run the agent update Repair; the packaged agent
+  is **2.4.0**. The update installs the new display file for the Energy page
+  and reapplies an active Display patch, which restarts the GUI once.
+
 ## v2.3.0 - 2026-11-15
 
 The direct stable update from 2.1.3 includes the changes listed under the

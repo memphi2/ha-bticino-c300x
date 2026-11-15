@@ -28,6 +28,16 @@ firmware, extracted firmware files, APKs or third-party controller code.
 
 ## Updates
 
+### From 2.3.0 to 2.4.0
+
+Install the integration, then run the agent update Repair. The packaged
+**2.4.0 agent** installs the display file of the optional Energy page and
+delivers visitor images in the configured size. Reapplying an active Display
+patch restarts the GUI once. The **Forwarding** select now uses the states
+`enabled`, `homeassistant` and `blocked`; change automations of your own that
+compare or set the old English texts, and import a ring blueprint again if you
+changed or imported your own copy.
+
 ### From 2.1.3 to 2.3.0
 
 2.3.0 is the direct stable successor to 2.1.3. It includes the display,

@@ -615,8 +615,9 @@ def normalize_smartphone_forwarding(data: Any) -> ForwardingStatus:
         if raw_value is None:
             return ForwardingStatus(raw=data, mode=None, state="unknown")
         return _normalized_smartphone_forwarding(raw_value, raw_value, raw=data)
-    if data.get("mode") is None and data.get("state") == "unknown":
-        return ForwardingStatus(raw=data.get("raw", data), mode=None, state="unknown")
+    # The agent's answer when the device's reply names no mode.
+    if data.get("mode") is None and data.get("status") == "unknown":
+        return ForwardingStatus(raw=data, mode=None, state="unknown")
     if "enabled" in data:
         return _normalized_smartphone_forwarding(
             data["enabled"],

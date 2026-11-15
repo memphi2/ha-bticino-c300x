@@ -263,7 +263,9 @@ def test_smartphone_forwarding_select_subscribes_to_agent_events() -> None:
     assert listeners == [("bticino_c300x_agent_event_received", entity._handle_agent_event)]
     assert removers[0] == entity._cancel_reconnect_refresh
     assert callable(removers[1])
-    assert removers[2:] == ["unsub"]
+    assert removers[2] == "unsub"
+    # The restart signal of the agent.
+    assert len(removers) == 4 and callable(removers[3])
 
 
 def test_smartphone_forwarding_select_ignores_unrelated_events() -> None:
@@ -624,3 +626,40 @@ def test_smartphone_forwarding_push_without_a_reading_keeps_the_known_state() ->
     # Displayed as unknown, but the shared store keeps the last real reading.
     assert entity._state == "unknown"
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "blocked"
+
+
+def test_smartphone_forwarding_select_reads_again_after_an_agent_restart() -> None:
+    """A restarted agent reads the mode silently; a change made on the device
+    while it was down reaches Home Assistant only when it asks again."""
+
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+    tasks: list[Any] = []
+    written: list[bool] = []
+    entity.hass = SimpleNamespace(  # type: ignore[assignment]
+        async_create_background_task=lambda coro, name: tasks.append(coro),
+    )
+    entity.async_write_ha_state = lambda: written.append(True)  # type: ignore[method-assign]
+
+    entity._handle_agent_restarted("another-entry")
+    assert tasks == []
+    entity._handle_agent_restarted("entry-1")
+    asyncio.run(tasks[0])
+
+    assert entry.runtime_data.api.active_reads == 1
+    assert entity.current_option == "blocked" and written
+
+
+def test_a_forwarding_reading_tells_the_readiness_sensor(monkeypatch) -> None:
+    from custom_components.bticino_c300x import select as select_module
+
+    sent: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(select_module, "async_dispatcher_send", lambda *args: sent.append(args))
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+    entity.hass = "hass"  # type: ignore[assignment]
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_update())
+
+    assert sent == [("hass", "bticino_c300x_forwarding_changed", "entry-1")]

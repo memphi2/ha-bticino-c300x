@@ -153,6 +153,7 @@ SIGNAL_MEMOS_CHANGED = f"{DOMAIN}_memos_changed"
 SIGNAL_QML_PATCH_CHANGED = f"{DOMAIN}_qml_patch_changed"
 SIGNAL_AGENT_DIAGNOSTICS_CHANGED = f"{DOMAIN}_agent_diagnostics_changed"
 SIGNAL_AGENT_INFO_CHANGED = f"{DOMAIN}_agent_info_changed"
+SIGNAL_FORWARDING_CHANGED = f"{DOMAIN}_forwarding_changed"
 SIGNAL_AUTH_CONFIG_CHANGED = f"{DOMAIN}_auth_config_changed"
 SIGNAL_MQTT_CHANGED = f"{DOMAIN}_mqtt_changed"
 

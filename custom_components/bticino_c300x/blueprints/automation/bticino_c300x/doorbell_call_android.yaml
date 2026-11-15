@@ -157,10 +157,7 @@ condition:
       {{ entry_id and event_camera_entity in c300x_entities }}
   - condition: template
     value_template: >-
-      {{ states(forwarding_entity) == 'Home Assistant'
-         or states(forwarding_entity) == 'homeassistant'
-         or state_attr(forwarding_entity, 'state') == 'homeassistant'
-         or state_attr(forwarding_entity, 'mode') == 'homeassistant' }}
+      {{ state_attr(forwarding_entity, 'state') == 'homeassistant' }}
   - condition: template
     value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
 

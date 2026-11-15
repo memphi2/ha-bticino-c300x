@@ -3304,12 +3304,10 @@ def test_normalize_smartphone_forwarding_from_unprovisioned_agent_response() -> 
     }
 
 
-def test_normalize_smartphone_forwarding_accepts_unknown_agent_response() -> None:
-    assert normalize_smartphone_forwarding({"mode": None, "state": "unknown", "raw": "*#*1##"}) == {
-        "mode": None,
-        "state": "unknown",
-        "raw": "*#*1##",
-    }
+def test_normalize_smartphone_forwarding_accepts_the_agents_own_unknown_answer() -> None:
+    body = {"ok": True, "mode": None, "status": "unknown", "raw": "*#*0##"}
+
+    assert normalize_smartphone_forwarding(body) == {"mode": None, "state": "unknown", "raw": body}
 
 
 def test_normalize_smartphone_forwarding_accepts_boolean_agent_state() -> None:

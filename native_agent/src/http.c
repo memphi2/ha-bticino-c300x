@@ -5263,8 +5263,9 @@ static int note_smartphone_forwarding_changed(struct agent_runtime *runtime, int
         return c300x_smartphone_mode_from_code(code) != NULL;
     }
     if (!runtime->smartphone_forwarding_mode_known) {
+        /* The read at start failed, so nobody knows this mode yet. */
         remember_smartphone_forwarding_mode(runtime, code);
-        return 0;
+        return 1;
     }
     if (runtime->smartphone_forwarding_mode_code == code) {
         return 0;

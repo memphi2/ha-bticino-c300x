@@ -572,6 +572,10 @@ def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
     assert "note_smartphone_forwarding_changed(runtime, code)" in event_body
     assert "return 0;" in note_body
     assert "runtime->smartphone_forwarding_mode_code == code" in note_body
+    # A first reading that arrives as a device event is reported: the read at
+    # start failed, so Home Assistant does not know the mode either.
+    first_reading = note_body.split("if (!runtime->smartphone_forwarding_mode_known)", 1)[1]
+    assert first_reading.split("}", 1)[0].rstrip().endswith("return 1;")
     assert "c300x_video_set_ring_forwarding_enabled" not in remember_body
     assert '\\"smartphone_forwarding\\":%s' in state_body
     assert "refresh_smartphone_forwarding_mode(config, runtime)" in text

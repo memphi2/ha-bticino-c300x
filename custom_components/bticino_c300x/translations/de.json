@@ -52,9 +52,7 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
-          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
-          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -62,9 +60,25 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
-          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
-          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+        }
+      },
+      "user_visitor_snapshot": {
+        "title": "Besucher-Snapshot",
+        "description": "Bei jedem Klingeln und beim Start eines Videostreams wird ein Bild des Besuchers gespeichert. Diese Einstellungen gelten für dieses Bild.",
+        "data": {
+          "snapshot_width": "Bildbreite (Pixel)",
+          "snapshot_height": "Bildhöhe (Pixel)",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)",
+          "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
+        },
+        "data_description": {
+          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
+          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
+          "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
         }
       },
       "user_device_activations": {
@@ -149,9 +163,7 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
-          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
-          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -159,9 +171,25 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
-          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
-          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+        }
+      },
+      "reconfigure_visitor_snapshot": {
+        "title": "Besucher-Snapshot",
+        "description": "Bei jedem Klingeln und beim Start eines Videostreams wird ein Bild des Besuchers gespeichert. Diese Einstellungen gelten für dieses Bild.",
+        "data": {
+          "snapshot_width": "Bildbreite (Pixel)",
+          "snapshot_height": "Bildhöhe (Pixel)",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)",
+          "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
+        },
+        "data_description": {
+          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
+          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
+          "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
         }
       },
       "reconfigure_device_activations": {
@@ -498,7 +526,7 @@
       "dashboard_entity_on_several_pages": "Eine Entität ist auf mehreren Seiten gewählt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden und 1-365 Tage."
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480."
     }
   },
   "options": {
@@ -530,9 +558,7 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
-          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
-          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -540,9 +566,25 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
-          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
-          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+        }
+      },
+      "visitor_snapshot": {
+        "title": "Besucher-Snapshot",
+        "description": "Bei jedem Klingeln und beim Start eines Videostreams wird ein Bild des Besuchers gespeichert. Diese Einstellungen gelten für dieses Bild.",
+        "data": {
+          "snapshot_width": "Bildbreite (Pixel)",
+          "snapshot_height": "Bildhöhe (Pixel)",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)",
+          "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
+        },
+        "data_description": {
+          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
+          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
+          "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
         }
       },
       "device_activations": {
@@ -605,6 +647,7 @@
         "menu_options": {
           "connection": "Verbindung zum C300X",
           "features": "Video und Audio",
+          "visitor_snapshot": "Besucher-Snapshot",
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
           "dashboard_alarm": "Alarm (Alarmo)",
           "dashboard": "Display und Display-Patch",
@@ -614,6 +657,7 @@
         "menu_option_descriptions": {
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
+          "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
           "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
@@ -766,7 +810,7 @@
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
       "required": "Dieses Feld ist erforderlich.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden und 1-365 Tage."
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480."
     }
   },
   "entity": {

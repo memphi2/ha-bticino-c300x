@@ -10,7 +10,8 @@ from uuid import uuid4
 
 from aiohttp import ClientConnectionError
 from homeassistant.core import callback
-from PIL import Image, UnidentifiedImageError
+from homeassistant.util import dt as dt_util
+from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 from .api_errors import C300XAgentApiConnectionError, C300XAgentApiError
 from .config_snapshots import snapshot_options
@@ -23,17 +24,46 @@ if TYPE_CHECKING:
     from .snapshots import StreamSnapshots
 
 _LOGGER = logging.getLogger(__name__)
-MAX_FRAMEBUFFER_PIXELS = 512 * 512
+# The agent returns at most the 800x480 display as a 24-bit BMP.
+MAX_FRAMEBUFFER_PIXELS = 800 * 480
+MAX_FRAMEBUFFER_BYTES = 54 + MAX_FRAMEBUFFER_PIXELS * 3
 CAPTURE_TIMEOUT = 12
 RETRY_DELAY = 1
 MAX_ATTEMPTS = 3
 
 
-def framebuffer_jpeg(content: bytes, content_type: str) -> bytes:
-    """Validate a bounded BMP and encode a metadata-free JPEG on the executor."""
+def _draw_stamp(image: Image.Image, text: str) -> None:
+    """Write the capture time into the lower right corner, readable on any picture."""
+
+    draw = ImageDraw.Draw(image)
+    size = max(10, image.height // 24)
+    font: Any
+    try:
+        font = ImageFont.load_default(size)
+    except (OSError, TypeError, ValueError):
+        # Pillow without FreeType only has its small built-in bitmap font.
+        font = ImageFont.load_default()
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    margin = max(2, size // 3)
+    position = (
+        max(0, image.width - right - margin),
+        max(0, image.height - bottom - margin),
+    )
+    draw.text(
+        position, text, font=font, fill=(255, 255, 255),
+        stroke_width=max(1, size // 12), stroke_fill=(0, 0, 0),
+    )
+
+
+def framebuffer_jpeg(content: bytes, content_type: str, stamp: str | None = None) -> bytes:
+    """Validate a bounded BMP and encode a metadata-free JPEG on the executor.
+
+    The agent already delivered the configured size; the pixels are not rescaled.
+    ``stamp`` is the capture time to write into the image, if that is switched on.
+    """
 
     if (content_type.partition(";")[0].strip().lower() != "image/bmp"
-            or not content or len(content) > MAX_SNAPSHOT_BYTES):
+            or not content or len(content) > MAX_FRAMEBUFFER_BYTES):
         raise ValueError("Expected a bounded BMP framebuffer")
     try:
         with Image.open(BytesIO(content)) as image:
@@ -42,6 +72,8 @@ def framebuffer_jpeg(content: bytes, content_type: str) -> bytes:
             image.load()
             rgb = image.convert("RGB")
             rgb.info.clear()
+            if stamp:
+                _draw_stamp(rgb, stamp)
             output = BytesIO()
             rgb.save(output, format="JPEG", quality=85)
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as err:
@@ -164,7 +196,8 @@ class SnapshotCapture:
 
     async def _capture(self, generation: int, identity: str) -> None:
         try:
-            await asyncio.sleep(snapshot_options(self.manager.entry).delay_seconds)
+            options = snapshot_options(self.manager.entry)
+            await asyncio.sleep(options.delay_seconds)
             # The configurable settling delay is separate from the bounded
             # acquisition budget (including retries, conversion and save).
             async with asyncio.timeout(CAPTURE_TIMEOUT):
@@ -172,7 +205,7 @@ class SnapshotCapture:
                     if not self._current(generation):
                         return
                     try:
-                        content, content_type = await self.manager.entry.runtime_data.api.async_doorbell_snapshot()
+                        content, content_type = await self.manager.entry.runtime_data.api.async_doorbell_snapshot(*options.size)
                         break
                     except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError) as err:
                         retry = isinstance(err, (C300XAgentApiConnectionError, ClientConnectionError, OSError, TimeoutError))
@@ -184,7 +217,11 @@ class SnapshotCapture:
                         await asyncio.sleep(RETRY_DELAY)
                 if not self._current(generation):
                     return
-                image = await self.manager.disk_job(framebuffer_jpeg, content, content_type)
+                stamp = (
+                    dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
+                    if options.timestamp else None
+                )
+                image = await self.manager.disk_job(framebuffer_jpeg, content, content_type, stamp)
                 if self._current(generation):
                     await self.manager.save(image, identity, is_current=lambda: self._current(generation))
         except asyncio.CancelledError:

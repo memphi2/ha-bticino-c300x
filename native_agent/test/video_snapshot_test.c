@@ -103,7 +103,7 @@ static void *mock_malloc(size_t size)
 }
 static void *mock_calloc(size_t count, size_t size)
 {
-    assert(count == 1 && size <= 471606);
+    assert(count == 1 && size <= 1152054);
     if (++allocation_count == fail_allocation) return NULL;
     return calloc(count, size);
 }
@@ -188,9 +188,9 @@ static void unavailable(void)
 {
     unsigned char *data = (unsigned char *)(uintptr_t)1;
     size_t size = 123;
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_UNAVAILABLE);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_UNAVAILABLE);
     assert(data == NULL && size == 0);
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_THROTTLED);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_THROTTLED);
     assert(opens == 1);
 }
 
@@ -213,8 +213,8 @@ static void normal_page_flips(void)
             device_framebuffer();
             variable.yoffset = before * 480;
             pan_after_read = 1; after_yoffset = after * 480;
-            assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_OK);
-            assert(size == 471606 && rows == 307);
+            assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_OK);
+            assert(size == 1152054 && rows == 480);
             free(data);
         }
     }
@@ -239,7 +239,7 @@ int main(void)
     unsigned char *data;
     size_t size;
     reset();
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_OK);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_OK);
     assert(size == 70 && get32(data + 2) == size && get32(data + 10) == 54);
     assert(get32(data + 18) == 2 && get32(data + 22) == 2 && data[28] == 24);
     assert(data[54] == 36 && data[55] == 37 && data[56] == 38);
@@ -247,12 +247,12 @@ int main(void)
     assert(data[60] == 0 && data[61] == 0 && owner_checks == 3);
     free(data);
     seconds = 11;
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_THROTTLED);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_THROTTLED);
     seconds = 12;
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_OK); free(data);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_OK); free(data);
     reset(); short_reads = 1; interrupt_reads = 1;
     variable.red.offset = 0; variable.blue.offset = 16;
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_OK);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_OK);
     assert(data[54] == 38 && data[56] == 36); free(data);
     reset(); fail_open = 1; unavailable();
     reset(); fail_stat = 1; unavailable();
@@ -286,19 +286,40 @@ int main(void)
     variable.yres = 480; variable.yres_virtual = 1440;
     variable.xoffset = variable.yoffset = 0;
     fixed.line_length = 3200; fixed.smem_len = 4608000;
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_OK);
-    assert(get32(data + 18) == 512 && get32(data + 22) == 307);
-    assert(size == 471606 && size + 256 < C300X_HTTP_OUTPUT_LIMIT);
-    assert(rows == 307); free(data);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_OK);
+    /* The C300X display is returned pixel for pixel; Home Assistant sizes it. */
+    assert(get32(data + 18) == 800 && get32(data + 22) == 480);
+    assert(size == 1152054 && size == SNAPSHOT_MAX_BODY);
+    assert(rows == 480); free(data);
+    reset(); variable.xres = variable.xres_virtual = 1600;
+    variable.yres = variable.yres_virtual = 960;
+    variable.xoffset = variable.yoffset = 0;
+    fixed.line_length = 6400; fixed.smem_len = 6144000;
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_OK);
+    assert(get32(data + 18) == 800 && get32(data + 22) == 480); free(data);
     reset(); variable.xres = variable.xres_virtual = 1;
     variable.yres = variable.yres_virtual = 4096;
     variable.xoffset = variable.yoffset = 0;
     fixed.line_length = 4; fixed.smem_len = 16384;
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_OK);
-    assert(size < SNAPSHOT_MAX_BODY && get32(data + 22) == 307); free(data);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_OK);
+    assert(size < SNAPSHOT_MAX_BODY && get32(data + 22) == 480); free(data);
+    /* A requested size is delivered exactly, whatever the display's shape. */
+    device_framebuffer();
+    assert(c300x_video_snapshot(&data, &size, 688, 480) == C300X_SNAPSHOT_OK);
+    assert(get32(data + 18) == 688 && get32(data + 22) == 480);
+    assert(size == 54 + 688 * 3 * 480 && rows == 480); free(data);
+    device_framebuffer();
+    assert(c300x_video_snapshot(&data, &size, 400, 288) == C300X_SNAPSHOT_OK);
+    assert(get32(data + 18) == 400 && get32(data + 22) == 288); free(data);
+    /* Out-of-range and half-given sizes are refused before the display is opened. */
+    reset(); assert(c300x_video_snapshot(&data, &size, 801, 480) == C300X_SNAPSHOT_UNAVAILABLE);
+    reset(); assert(c300x_video_snapshot(&data, &size, 688, 481) == C300X_SNAPSHOT_UNAVAILABLE);
+    reset(); assert(c300x_video_snapshot(&data, &size, 63, 480) == C300X_SNAPSHOT_UNAVAILABLE);
+    reset(); assert(c300x_video_snapshot(&data, &size, 688, 0) == C300X_SNAPSHOT_UNAVAILABLE);
+    assert(opens == 0 && data == NULL && size == 0);
     reset();
     assert(pthread_mutex_lock(&capture_lock) == 0);
-    assert(c300x_video_snapshot(&data, &size) == C300X_SNAPSHOT_THROTTLED);
+    assert(c300x_video_snapshot(&data, &size, 0, 0) == C300X_SNAPSHOT_THROTTLED);
     assert(opens == 0 && data == NULL && size == 0);
     assert(pthread_mutex_unlock(&capture_lock) == 0);
     normal_page_flips();

@@ -121,7 +121,6 @@ def options_features_schema(
     create_homeassistant_user: bool | None = None,
     webrtc_ice_policy: str | None = None,
     native_two_way_audio: bool | None = None,
-    snapshots: dict[str, Any] | None = None,
 ) -> vol.Schema:
     """Return the second options page schema."""
 
@@ -162,10 +161,6 @@ def options_features_schema(
     )
     return _reconfigure_features_schema(
         default_video_enabled,
-        default_snapshots=snapshots if snapshots is not None else {
-            key: _config_default(config_entry, key, default)
-            for key, default in SNAPSHOT_DEFAULTS.items()
-        },
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -335,7 +330,6 @@ def reconfigure_features_schema_from_current(
     current = current_feature_options(config_entry)
     return _reconfigure_features_schema(
         bool(current[CONF_VIDEO_ENABLED]),
-        default_snapshots={key: current[key] for key in SNAPSHOT_DEFAULTS},
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
         default_doorstation_audio_gain_db=float(
             current[CONF_DOORSTATION_AUDIO_GAIN_DB]
@@ -457,7 +451,11 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     """
 
     saved = current_feature_options(config_entry)
-    menu = ["connection", "features", "device_activations", "dashboard_alarm", "dashboard"]
+    menu = ["connection", "features"]
+    if saved[CONF_VIDEO_ENABLED]:
+        # Visitor images exist only with video.
+        menu.append("visitor_snapshot")
+    menu += ["device_activations", "dashboard_alarm", "dashboard"]
     if saved[CONF_DEVICE_UI_ENABLED]:
         menu.append("dashboard_pages")
         if dashboard_entity_display_has_fields(dashboard_input_defaults({}, saved)):

@@ -18,7 +18,7 @@ from custom_components.bticino_c300x.api_errors import (
 from custom_components.bticino_c300x.const import EVENT_AGENT_EVENT_RECEIVED
 
 
-def bmp(size=(512, 307)):
+def bmp(size=(688, 480)):
     output = BytesIO()
     Image.new("RGB", size, "red").save(output, format="BMP")
     return output.getvalue()
@@ -31,7 +31,9 @@ def setup(tmp_path, monkeypatch, delay=0):
         async_doorbell_snapshot=AsyncMock(return_value=(bmp(), "image/bmp")),
     ), capabilities={"doorbell_video": {"supported": True}})
     manager.hass.bus = SimpleNamespace(async_listen=Mock(return_value=Mock()))
-    monkeypatch.setattr(capture, "snapshot_options", lambda _: SimpleNamespace(delay_seconds=delay))
+    monkeypatch.setattr(capture, "snapshot_options", lambda _: SimpleNamespace(
+        delay_seconds=delay, size=(688, 480), timestamp=False,
+    ))
     monkeypatch.setattr(capture, "RETRY_DELAY", 0)
     manager.capture.start()
     manager.hass.bus.async_listen.assert_called_once_with(EVENT_AGENT_EVENT_RECEIVED, manager.capture._event)
@@ -56,8 +58,49 @@ def test_bmp_conversion_bounds_and_metadata():
     result = capture.framebuffer_jpeg(bmp(), "image/bmp")
     with Image.open(BytesIO(result)) as image:
         assert image.format == "JPEG"
-        assert image.size == (512, 307)
+        # The agent delivered the configured size; it is not rescaled here.
+        assert image.size == (688, 480)
         assert not image.getexif()
+
+
+def test_capture_time_is_written_into_the_image_only_when_asked():
+    plain = capture.framebuffer_jpeg(bmp(), "image/bmp")
+    stamped = capture.framebuffer_jpeg(bmp(), "image/bmp", "2026-11-15 14:32:07")
+    with Image.open(BytesIO(plain)) as image:
+        corner = image.convert("RGB").crop((488, 440, 688, 480))
+        assert len(set(corner.getdata())) < 8
+    with Image.open(BytesIO(stamped)) as image:
+        assert image.size == (688, 480)
+        rgb = image.convert("RGB")
+        # White text with a dark outline in the lower right corner only.
+        corner = list(rgb.crop((488, 440, 688, 480)).getdata())
+        assert any(min(pixel) > 200 for pixel in corner)
+        assert any(max(pixel) < 60 for pixel in corner)
+        assert len(set(rgb.crop((0, 0, 200, 40)).getdata())) < 8
+
+
+def test_the_agent_is_asked_for_the_configured_size_and_the_stamp_follows_the_option(
+    tmp_path, monkeypatch,
+):
+    async def run(timestamp):
+        manager = setup(tmp_path / str(timestamp), monkeypatch)
+        monkeypatch.setattr(capture, "snapshot_options", lambda _: SimpleNamespace(
+            delay_seconds=0, size=(400, 288), timestamp=timestamp,
+        ))
+        seen = []
+        real = capture.framebuffer_jpeg
+        monkeypatch.setattr(
+            capture, "framebuffer_jpeg",
+            lambda content, kind, stamp=None: seen.append(stamp) or real(content, kind, stamp),
+        )
+        event(manager, "doorbell.pressed")
+        await drain(manager)
+        manager.entry.runtime_data.api.async_doorbell_snapshot.assert_awaited_once_with(400, 288)
+        return seen
+
+    assert asyncio.run(run(False)) == [None]
+    stamps = asyncio.run(run(True))
+    assert len(stamps) == 1 and len(stamps[0]) == 19
 
 
 @pytest.mark.parametrize("video_enabled,supported", [(False, True), (True, False), (False, False)])
@@ -103,7 +146,7 @@ def test_invalid_framebuffers(content, kind):
 
 def test_pixel_limit_before_decode():
     output = BytesIO()
-    Image.new("1", (513, 512)).save(output, format="BMP")
+    Image.new("1", (801, 480)).save(output, format="BMP")
     with pytest.raises(ValueError, match="dimensions"):
         capture.framebuffer_jpeg(output.getvalue(), "image/bmp")
 

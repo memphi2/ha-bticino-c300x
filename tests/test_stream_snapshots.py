@@ -29,7 +29,11 @@ def manager_for(tmp_path, monkeypatch, entry_id="one"):
 
 def test_defaults_and_missing_runtime():
     options = snapshot_options(SimpleNamespace(data={}, options={}))
-    assert (options.retention_days, options.delay_seconds) == (14, 5)
+    assert (options.retention_days, options.delay_seconds) == (14, 3)
+    # The image has the size the device encodes its video stream in, with the
+    # capture time written into it.
+    assert options.size == (688, 480)
+    assert options.timestamp is True
     assert snapshots.get_snapshots(SimpleNamespace(), "one") is None
 
 

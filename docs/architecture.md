@@ -126,9 +126,13 @@ The agent's authenticated snapshot endpoint checks that the media process is
 using `/dev/fb0`, validates framebuffer geometry and reads it without changing
 display state. A normal full-frame vertical page flip during the read is
 accepted; changes to the framebuffer layout, pixel format or media ownership
-still reject the image. It returns a bounded in-memory BMP; no device file is
-created.
-HA validates and converts it to JPEG in an executor. `snapshot_store.py` owns
+still reject the image. It returns a bounded in-memory BMP in exactly the
+width and height the request names (at most the 800x480 display), mixing
+neighbouring columns when the image is narrower than the display; no device
+file is created.
+HA requests the configured size, validates the image, optionally writes the
+capture time into it and encodes it as JPEG once in an executor, without
+rescaling it. The store checks the JPEG and keeps it as it is. `snapshot_store.py` owns
 per-entry storage, quota and expiry under the same HA media root as recordings.
 `snapshot_http.py` applies authentication and camera read permissions; Media
 Source exposes retained images without depending on an open frontend.

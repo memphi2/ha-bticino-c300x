@@ -375,7 +375,7 @@ def test_options_menu_names_and_explains_every_area() -> None:
 
     areas = {
         "dashboard_pages", "dashboard_alarm", "dashboard_entity_display", "dashboard",
-        "features", "device_activations", "connection",
+        "features", "visitor_snapshot", "device_activations", "connection",
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         steps = _load_json(path)["options"]["step"]

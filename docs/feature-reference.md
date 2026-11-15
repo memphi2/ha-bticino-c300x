@@ -88,14 +88,27 @@ that card; the Home Assistant entities and services remain available.
 The **Save images** switch belongs to the C300X device and is on by default.
 It controls automatic images for doorbell rings and video sessions, regardless
 of whether a Home Assistant dashboard is open. No browser capture is used.
-Under **Configure > Video and audio**, choose the image delay (default **5
-seconds**) and retention (default **14 days**). A call or stream that ends
-before capture may not produce an image.
+**Configure > Visitor Snapshot** holds the image width and height (default
+**688×480**), the image delay (default **3 seconds**), retention (default **14
+days**) and whether the capture date and time are written into the image
+(default on, lower right corner). The area is offered only while video is
+enabled; setup and reconfiguration show it as a step of its own after the video
+and audio page. A call or stream that ends before capture may not produce an
+image.
+
+The image comes from the device display, not from the video stream. The
+display is 800×480 and shows the camera picture stretched to its own width; the
+device encodes the stream itself as 688×480. The default therefore gives the
+image the size and shape of the stream. The agent delivers the image in exactly
+the configured size (width 64–800, height 64–480) and Home Assistant does not
+rescale it. Setting 800×480 returns the display pixel for pixel. A size above
+the display's is not offered, because it would add no detail.
 
 The agent reads the existing video background only while the firmware media
 process is using it. It does not start or answer a call, change forwarding,
-run FFmpeg, or create image, temporary or status files on the C300X. Conversion
-to JPEG and all persistent storage happen in Home Assistant. Reading a frame
+run FFmpeg, or create image, temporary or status files on the C300X. Encoding
+as JPEG and all persistent storage happen in Home Assistant; the image is
+encoded once and its size is left as the agent delivered it. Reading a frame
 still has a bounded CPU, RAM and network cost; this is not zero-load capture.
 The bundled agent must be updated for the new snapshot endpoint.
 

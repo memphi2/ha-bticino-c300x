@@ -52,9 +52,7 @@
           "doorstation_audio_gain_db": "Livello audio dal vivo (dB)",
           "ring_capture_audio_gain_db": "Volume delle registrazioni di chiamata (dB)",
           "webrtc_ice_policy": "Percorsi di connessione per l'immagine dal vivo",
-          "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant",
-          "snapshot_delay_seconds": "Ritardo immagine (secondi)",
-          "snapshot_retention_days": "Conservazione (giorni)"
+          "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant"
         },
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
@@ -62,9 +60,25 @@
           "doorstation_audio_gain_db": "Livello dell'audio del posto esterno dal vivo e durante una chiamata. Da -20 a +20 dB; 0 lascia l'audio invariato.",
           "ring_capture_audio_gain_db": "Volume dell'audio nelle registrazioni fatte quando qualcuno suona. Da -20 a +20 dB; il valore predefinito è 6.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
-          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda C300X; questa opzione non risponde. Parlare nella scheda C300X resta invariato.",
-          "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 5 secondi. Non serve una scheda aperta.",
-          "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie."
+          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda C300X; questa opzione non risponde. Parlare nella scheda C300X resta invariato."
+        }
+      },
+      "user_visitor_snapshot": {
+        "title": "Istantanea visitatore",
+        "description": "A ogni chiamata e all'avvio di un flusso video viene salvata un'immagine del visitatore. Queste impostazioni valgono per quell'immagine.",
+        "data": {
+          "snapshot_width": "Larghezza immagine (pixel)",
+          "snapshot_height": "Altezza immagine (pixel)",
+          "snapshot_delay_seconds": "Ritardo immagine (secondi)",
+          "snapshot_retention_days": "Conservazione (giorni)",
+          "snapshot_timestamp": "Inserisci data e ora nell'immagine"
+        },
+        "data_description": {
+          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480, l'altezza del flusso video del dispositivo e del display. Intervallo 64-480.",
+          "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
+          "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
+          "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
         }
       },
       "user_device_activations": {
@@ -149,9 +163,7 @@
           "doorstation_audio_gain_db": "Livello audio dal vivo (dB)",
           "ring_capture_audio_gain_db": "Volume delle registrazioni di chiamata (dB)",
           "webrtc_ice_policy": "Percorsi di connessione per l'immagine dal vivo",
-          "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant",
-          "snapshot_delay_seconds": "Ritardo immagine (secondi)",
-          "snapshot_retention_days": "Conservazione (giorni)"
+          "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant"
         },
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
@@ -159,9 +171,25 @@
           "doorstation_audio_gain_db": "Livello dell'audio del posto esterno dal vivo e durante una chiamata. Da -20 a +20 dB; 0 lascia l'audio invariato.",
           "ring_capture_audio_gain_db": "Volume dell'audio nelle registrazioni fatte quando qualcuno suona. Da -20 a +20 dB; il valore predefinito è 6.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
-          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda C300X; questa opzione non risponde. Parlare nella scheda C300X resta invariato.",
-          "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 5 secondi. Non serve una scheda aperta.",
-          "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie."
+          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda C300X; questa opzione non risponde. Parlare nella scheda C300X resta invariato."
+        }
+      },
+      "reconfigure_visitor_snapshot": {
+        "title": "Istantanea visitatore",
+        "description": "A ogni chiamata e all'avvio di un flusso video viene salvata un'immagine del visitatore. Queste impostazioni valgono per quell'immagine.",
+        "data": {
+          "snapshot_width": "Larghezza immagine (pixel)",
+          "snapshot_height": "Altezza immagine (pixel)",
+          "snapshot_delay_seconds": "Ritardo immagine (secondi)",
+          "snapshot_retention_days": "Conservazione (giorni)",
+          "snapshot_timestamp": "Inserisci data e ora nell'immagine"
+        },
+        "data_description": {
+          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480, l'altezza del flusso video del dispositivo e del display. Intervallo 64-480.",
+          "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
+          "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
+          "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
         }
       },
       "reconfigure_device_activations": {
@@ -498,7 +526,7 @@
       "dashboard_entity_on_several_pages": "Un'entità e scelta su più pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
-      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi e 1-365 giorni."
+      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480."
     }
   },
   "options": {
@@ -530,9 +558,7 @@
           "doorstation_audio_gain_db": "Livello audio dal vivo (dB)",
           "ring_capture_audio_gain_db": "Volume delle registrazioni di chiamata (dB)",
           "webrtc_ice_policy": "Percorsi di connessione per l'immagine dal vivo",
-          "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant",
-          "snapshot_delay_seconds": "Ritardo immagine (secondi)",
-          "snapshot_retention_days": "Conservazione (giorni)"
+          "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant"
         },
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
@@ -540,9 +566,25 @@
           "doorstation_audio_gain_db": "Livello dell'audio del posto esterno dal vivo e durante una chiamata. Da -20 a +20 dB; 0 lascia l'audio invariato.",
           "ring_capture_audio_gain_db": "Volume dell'audio nelle registrazioni fatte quando qualcuno suona. Da -20 a +20 dB; il valore predefinito è 6.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
-          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda C300X; questa opzione non risponde. Parlare nella scheda C300X resta invariato.",
-          "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 5 secondi. Non serve una scheda aperta.",
-          "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie."
+          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda C300X; questa opzione non risponde. Parlare nella scheda C300X resta invariato."
+        }
+      },
+      "visitor_snapshot": {
+        "title": "Istantanea visitatore",
+        "description": "A ogni chiamata e all'avvio di un flusso video viene salvata un'immagine del visitatore. Queste impostazioni valgono per quell'immagine.",
+        "data": {
+          "snapshot_width": "Larghezza immagine (pixel)",
+          "snapshot_height": "Altezza immagine (pixel)",
+          "snapshot_delay_seconds": "Ritardo immagine (secondi)",
+          "snapshot_retention_days": "Conservazione (giorni)",
+          "snapshot_timestamp": "Inserisci data e ora nell'immagine"
+        },
+        "data_description": {
+          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480, l'altezza del flusso video del dispositivo e del display. Intervallo 64-480.",
+          "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
+          "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
+          "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
         }
       },
       "device_activations": {
@@ -605,6 +647,7 @@
         "menu_options": {
           "connection": "Connessione al C300X",
           "features": "Video e audio",
+          "visitor_snapshot": "Istantanea visitatore",
           "device_activations": "Attivazioni: serrature, luci, luce scale",
           "dashboard_alarm": "Allarme (Alarmo)",
           "dashboard": "Display e patch display",
@@ -614,6 +657,7 @@
         "menu_option_descriptions": {
           "connection": "Indirizzo, chiave di accesso e chiave di manutenzione del C300X, indirizzo di Home Assistant.",
           "features": "Immagine dal vivo, conversazione, volumi e accesso video e audio sul C300X.",
+          "visitor_snapshot": "Dimensione dell'immagine del visitatore salvata, ritardo di acquisizione, conservazione e data scritta nell'immagine.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
           "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",
           "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, pulsanti della pagina iniziale, comportamento dopo un'azione e azioni consentite.",
@@ -766,7 +810,7 @@
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
       "required": "Questo campo è obbligatorio.",
-      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi e 1-365 giorni."
+      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480."
     }
   },
   "entity": {

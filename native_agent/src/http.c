@@ -5991,12 +5991,40 @@ static void api_state(
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_doorbell_snapshot(int client_fd)
+static int snapshot_dimension(const char *query, const char *name, unsigned int maximum,
+                              unsigned int *value)
+{
+    char text[8];
+    char *end = NULL;
+    unsigned long parsed;
+    *value = 0;
+    if (!query_param_value(query, name, text, sizeof(text))) {
+        return 1;
+    }
+    parsed = strtoul(text, &end, 10);
+    if (text[0] < '0' || text[0] > '9' || *end != '\0'
+        || parsed < C300X_SNAPSHOT_MIN_SIZE || parsed > maximum) {
+        return 0;
+    }
+    *value = (unsigned int)parsed;
+    return 1;
+}
+
+static void handle_doorbell_snapshot(int client_fd, const struct request *request)
 {
     unsigned char *data = NULL;
     size_t size = 0;
     char header[256];
-    enum c300x_snapshot_result result = c300x_video_snapshot(&data, &size);
+    unsigned int width = 0, height = 0;
+    enum c300x_snapshot_result result;
+    if (!snapshot_dimension(request->query, "width", C300X_SNAPSHOT_MAX_WIDTH, &width)
+        || !snapshot_dimension(request->query, "height", C300X_SNAPSHOT_MAX_HEIGHT, &height)
+        || (width == 0) != (height == 0)) {
+        send_json(client_fd, 400, "Bad Request",
+                  "{\"ok\":false,\"error\":\"invalid_snapshot_size\"}\n");
+        return;
+    }
+    result = c300x_video_snapshot(&data, &size, width, height);
     if (result != C300X_SNAPSHOT_OK) {
         send_json(client_fd, result == C300X_SNAPSHOT_THROTTLED ? 429 : 503,
                   result == C300X_SNAPSHOT_THROTTLED ? "Too Many Requests" : "Service Unavailable",
@@ -10206,7 +10234,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/video/doorbell/snapshot") == 0) {
-        handle_doorbell_snapshot(client_fd);
+        handle_doorbell_snapshot(client_fd, request);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/activate") == 0) {

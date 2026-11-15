@@ -557,7 +557,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 changes,
             )
             _clear_qml_followup(self.hass, entry)
-            await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
+            await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
             _LOGGER.warning("C300X agent update failed: %s", compact_error_text(err))
@@ -690,7 +690,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             )
             self._ssh_install_followup = None
             _clear_qml_followup(self.hass, entry)
-            await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
+            await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
             _LOGGER.warning("C300X SSH install failed: %s", _install_error_log_text(err))
@@ -749,6 +749,14 @@ async def _async_wait_for_agent_after_update(
     if last_error is not None and not saw_stale_setup:
         raise last_error
     raise RuntimeError("agent update verification failed")
+
+
+async def _async_migrate_mqtt_after_update(api: Any) -> None:
+    """Run the MQTT migration that ends an update, waiting while the agent is busy."""
+
+    await async_retry_update_maintenance_busy(
+        lambda: async_migrate_legacy_mqtt_if_available(api)
+    )
 
 
 async def _async_verify_agent_after_update(

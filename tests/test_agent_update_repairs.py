@@ -3023,3 +3023,26 @@ def test_patch_restore_after_update_waits_while_the_agent_is_busy(
 
     assert api.calls == expected
     assert len(api.rejected) == len(expected)
+
+
+def test_update_mqtt_migration_waits_for_a_busy_agent(monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x import agent_update, repairs
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    # The last step of an update: a status read of Home Assistant itself can
+    # be running on the device just then, and everything before it succeeded.
+    busy = C300XAgentApiConnectionError("device agent returned HTTP 409: maintenance_busy")
+    migrate = AsyncMock(side_effect=[busy, {"ok": True}])
+    api = types.SimpleNamespace(async_migrate_legacy_mqtt_to_native=migrate)
+    monkeypatch.setattr(agent_update.asyncio, "sleep", AsyncMock())
+
+    asyncio.run(repairs._async_migrate_mqtt_after_update(api))
+
+    assert migrate.await_count == 2
+
+    with open(repairs.__file__, encoding="utf-8") as handle:
+        source = handle.read()
+    assert source.count("await _async_migrate_mqtt_after_update(entry.runtime_data.api)") == 2
+    assert source.count("async_migrate_legacy_mqtt_if_available(") == 1

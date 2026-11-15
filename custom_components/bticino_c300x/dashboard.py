@@ -243,16 +243,14 @@ async def async_dashboard_payload(
         main_page["items"].append({"_kind": "weather", "_order": 0})
 
     notifications = notification_payload(entry)
-    shown = [
-        page
-        for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
-        if _dashboard_page_has_content(page)
-    ]
+    ordered = _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
     energy = await async_energy_dashboard_page(hass, entry, language)
     if energy is not None:
-        # Its position counts among the pages the display really shows.
+        # Its position counts as in the pages dialog, which also numbers a
+        # page the display then leaves out for lack of content.
         position = configured_energy_page(entry)["position"]
-        shown.insert(min(position - 1, len(shown)), energy)
+        ordered.insert(min(position - 1, len(ordered)), energy)
+    shown = [page for page in ordered if _dashboard_page_has_content(page)]
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
         shown = [main_page]

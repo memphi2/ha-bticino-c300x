@@ -196,6 +196,31 @@ def test_energy_page_takes_its_position_among_the_shown_pages(monkeypatch, posit
     assert _payload_pages(monkeypatch, {**ENERGY_ON, "position": position}) == expected
 
 
+def test_energy_page_position_counts_a_page_the_display_leaves_out(monkeypatch) -> None:
+    # The status page is configured first but has nothing to show. The form
+    # numbers it all the same, so position 3 means "after Wohnen".
+    names = ["C300X", "Wohnen", "Keller"]
+    states = {f"sensor.s{index}": FakeState("1", attributes={"friendly_name": f"S{index}"})
+              for index in (1, 2)}
+    entry = _entry(
+        {**ENERGY_ON, "position": 3},
+        **{
+            CONF_DASHBOARD_ENTITIES: list(states),
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.s1": {"page": "Wohnen"}, "sensor.s2": {"page": "Keller"},
+            },
+            CONF_DASHBOARD_PAGES: [{"name": name, "order": index + 1} for index, name in enumerate(names)],
+        },
+    )
+    monkeypatch.setattr(dashboard, "async_energy_dashboard_page", AsyncMock(
+        return_value={"title": "Energie", "energy": {"views": []}}
+    ))
+
+    result = run(dashboard.async_dashboard_payload(FakeHass(states=FakeStates(states)), entry))
+
+    assert [page["title"] for page in result["data"]["pages"]] == ["Wohnen", "Energie", "Keller"]
+
+
 def test_display_pages_are_unchanged_without_the_energy_page(monkeypatch) -> None:
     assert _payload_pages(monkeypatch, None) == ["C300X", "Wohnen", "Keller"]
     assert _payload_pages(monkeypatch, {**ENERGY_ON, "enabled": False}) == ["C300X", "Wohnen", "Keller"]

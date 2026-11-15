@@ -72,6 +72,10 @@
   no longer counts as a successful installation.
 - Keep RTSP media on its original connection when socket numbers are reused,
   and serialize complete media frames and responses to prevent interleaving.
+- Bound display callback socket operations with one deadline so a trickling
+  HTTP response cannot keep subsequent display commands blocked indefinitely.
+- Scope Android and iOS notification actions to each call's automation run, so
+  stale Answer and Hang up actions cannot operate a later call.
 - Receive the device's video and audio packets for on-demand video on the
   loopback interface only; hosts on the local network could send packets into
   a running stream.

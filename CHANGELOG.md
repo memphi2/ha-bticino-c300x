@@ -12,8 +12,9 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
   GUI confirmation and use push updates without periodic device reads.
 - Add **HA feedback colors** directly below the original touch-tone switch in
   the C300X's **Settings → General**. Save the choice locally without polling;
-  retain error messages and actual alarm states. Back up and restore the
-  original settings page through the existing transactional Display patch.
+  retain error messages and actual alarm states, and fit both controls on the
+  original screen. Back up and restore the original settings page through the
+  existing transactional Display patch; leave core-only installations unchanged.
 - Automatic visitor images on doorbell rings and video sessions without an open
   dashboard. A device-wide **Save images** switch controls capture and preview;
   the default delay is 5 seconds and retention is 14 days. Images appear in HA

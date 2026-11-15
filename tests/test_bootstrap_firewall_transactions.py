@@ -96,3 +96,80 @@ def test_success_preserves_metadata_and_is_idempotent(tmp_path: Path) -> None:
     assert not list(tmp_path.glob("iptables.c300x.*"))
     assert (tmp_path / "backup").read_text() == ORIGINAL
     assert _run(tmp_path).stdout == "changed_files=0\n"
+
+
+@pytest.mark.parametrize("copy_status", [0, 1])
+def test_incomplete_backup_is_never_published_and_retry_is_safe(
+    tmp_path: Path, copy_status: int
+) -> None:
+    live = _live(tmp_path)
+    fault = """
+cp() {
+    case "${1:-}" in
+        /tmp/c300x-firewall-original.*)
+            printf '# incomplete backup\\n' > "$2"
+            return COPY_STATUS ;;
+    esac
+    command cp "$@"
+}
+""".replace("COPY_STATUS", str(copy_status))
+
+    result = _run(tmp_path, fault)
+
+    assert result.returncode != 0
+    assert live.read_text() == ORIGINAL
+    assert not (tmp_path / "backup").exists()
+    assert not list(tmp_path.glob("backup.c300x.*"))
+    assert not (tmp_path / "mount.log").exists()
+    retry = _run(tmp_path)
+    assert retry.returncode == 0, retry.stderr
+    backup = tmp_path / "backup"
+    assert backup.read_text() == ORIGINAL
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("already_patched", [False, True])
+def test_existing_corrupt_backup_fails_closed(
+    tmp_path: Path, already_patched: bool
+) -> None:
+    live = _live(tmp_path)
+    if already_patched:
+        assert _run(tmp_path).returncode == 0
+        (tmp_path / "mount.log").unlink()
+    before = live.read_bytes()
+    backup = tmp_path / "backup"
+    backup.write_text("# corrupt backup\n", encoding="utf-8")
+
+    result = _run(tmp_path)
+
+    assert result.returncode != 0
+    assert "backup cannot be verified" in result.stderr
+    assert live.read_bytes() == before
+    assert backup.read_text() == "# corrupt backup\n"
+    assert not (tmp_path / "mount.log").exists()
+
+
+def test_existing_verified_backup_is_retained(tmp_path: Path) -> None:
+    _live(tmp_path)
+    backup = tmp_path / "backup"
+    backup.write_text(ORIGINAL, encoding="utf-8")
+    before = backup.stat()
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "changed_files=1\n"
+    assert backup.read_text() == ORIGINAL
+    assert backup.stat().st_ino == before.st_ino
+    assert backup.stat().st_mtime_ns == before.st_mtime_ns
+
+
+def test_existing_backup_symlink_fails_closed(tmp_path: Path) -> None:
+    live = _live(tmp_path)
+    (tmp_path / "backup").symlink_to(live)
+
+    result = _run(tmp_path)
+
+    assert result.returncode != 0
+    assert live.read_text() == ORIGINAL
+    assert not (tmp_path / "mount.log").exists()

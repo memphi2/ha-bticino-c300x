@@ -3755,3 +3755,38 @@ def test_an_id_of_only_dots_is_never_a_message_or_memo_id(dots):
 def test_ordinary_message_and_memo_ids_stay_valid(message_id):
     assert normalize_video_message_id(message_id) == message_id
     assert normalize_memo_id(f"voice/{message_id}") == f"voice/{message_id}"
+
+
+@pytest.mark.parametrize("call", [
+    lambda api: api.async_qml_patch_status(),
+    lambda api: api.async_apply_qml_patch(dynamic_homepage=True),
+    lambda api: api.async_apply_qml_core_patch(),
+    lambda api: api.async_restore_qml_core_patch(),
+    lambda api: api.async_restore_qml_patch(),
+    lambda api: api.async_reload_gui(),
+    lambda api: api.async_firewall_status(),
+    lambda api: api.async_apply_firewall(),
+    lambda api: api.async_restore_firewall(),
+    lambda api: api.async_ipv6_firewall_status(),
+    lambda api: api.async_apply_ipv6_firewall(),
+    lambda api: api.async_restore_ipv6_firewall(),
+])
+@pytest.mark.parametrize(("configured", "expected"), [(5.0, 15.0), (30.0, 30.0)])
+def test_script_backed_maintenance_requests_outlast_the_agent_script(
+    call, configured, expected
+) -> None:
+    # The agent answers these after running a script it gives 10 s. With the
+    # 5 s default the request gave up while the script was still running and
+    # an agent update reported a failure that a second try did not show.
+    session = _FakeSession('{"ok": true, "patched": true, "state": "patched"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+        timeout=configured,
+    )
+
+    asyncio.run(call(api))
+
+    assert session.requests[0]["kwargs"]["timeout"] == expected

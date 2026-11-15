@@ -28,6 +28,8 @@ from .api_errors import (
     C300XAgentApiResponseError,
 )
 
+_MAINTENANCE_JOB_TIMEOUT = 15.0
+
 
 class _ApiMaintenanceMixin(_C300XApiCore):
     """Maintenance endpoints: ssh, reboot, firewall, qml, mqtt, agent update, display bridge."""
@@ -450,6 +452,15 @@ class _ApiMaintenanceMixin(_C300XApiCore):
         )
         return _ok_response(data)
 
+    def _job_timeout(self) -> float:
+        """Return the wait for a request the agent answers after running a script.
+
+        The agent gives such a script 10 s. Giving up earlier reports a
+        failure for work that is still running and finishes on its own.
+        """
+
+        return max(self._timeout, _MAINTENANCE_JOB_TIMEOUT)
+
     async def async_reload_gui(self) -> dict[str, Any]:
         """Reload the C300X graphical interface through the maintenance API."""
 
@@ -458,6 +469,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/gui/actions/reload",
             json_data={"confirm": "reload_gui"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return _ok_response(data)
 
@@ -468,6 +480,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "GET",
             "/api/v1/maintenance/firewall",
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_firewall_status(data)
 
@@ -479,6 +492,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/firewall/actions/apply",
             json_data={"confirm": "apply_firewall"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_firewall_status(data)
 
@@ -490,6 +504,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/firewall/actions/restore",
             json_data={"confirm": "restore_firewall"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_firewall_status(data)
 
@@ -500,6 +515,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "GET",
             "/api/v1/maintenance/ipv6-firewall",
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_firewall_status(data)
 
@@ -511,6 +527,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/ipv6-firewall/actions/apply",
             json_data={"confirm": "apply_ipv6_firewall"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_firewall_status(data)
 
@@ -522,6 +539,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/ipv6-firewall/actions/restore",
             json_data={"confirm": "restore_ipv6_firewall"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_firewall_status(data)
 
@@ -532,6 +550,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "GET",
             "/api/v1/maintenance/qml-patch",
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_qml_patch_status(data)
 
@@ -550,6 +569,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
                 "dynamic_homepage": dynamic_homepage,
             },
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_qml_patch_status(data)
 
@@ -561,6 +581,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/qml-patch/actions/apply-core",
             json_data={"confirm": "apply_qml_core_patch"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_qml_patch_status(data)
 
@@ -572,6 +593,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/qml-patch/actions/restore-core",
             json_data={"confirm": "restore_qml_core_patch"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_qml_patch_status(data)
 
@@ -583,5 +605,6 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/qml-patch/actions/restore",
             json_data={"confirm": "restore_qml_patch"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=self._job_timeout(),
         )
         return normalize_qml_patch_status(data)

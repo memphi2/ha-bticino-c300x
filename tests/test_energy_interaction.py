@@ -28,15 +28,18 @@ def test_energy_dependencies_and_readonly_qtquick1_contract():
     source = QML.read_text()
     dependencies = HARNESS.energy_dependencies(source, QML)
     assert set(dependencies) == {
-        "C300XEnergyDistribution.qml", "C300XEnergyReadout.qml", "C300XEnergySums.qml", "js/c300x_energy.js",
+        "C300XEnergyConsumers.qml", "C300XEnergyReadout.qml", "C300XEnergySums.qml", "js/c300x_energy.js",
+        "js/c300x_energy_consumers.js",
     }
     assert len(source.splitlines()) <= 750
     for name, body in dependencies.items():
         assert len(body.splitlines()) < 200
         if name.endswith(".qml"):
             assert body.startswith("import QtQuick 1.1\n")
-        for forbidden in ("XMLHttpRequest", "Timer {", "QtQuick 2", "Canvas", ".getHours(", "Api."):
+        for forbidden in ("XMLHttpRequest", "QtQuick 2", "Canvas", ".getHours(", "Api."):
             assert forbidden not in body
+        if name != "C300XEnergyConsumers.qml":
+            assert "Timer {" not in body
 
 
 @pytest.mark.parametrize(("view", "index"), [("today", 0), ("today", 23), ("power", 42), ("power", 43), ("power", 95)])

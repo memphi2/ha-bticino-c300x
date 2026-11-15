@@ -18,7 +18,7 @@ from custom_components.bticino_c300x.display_notifications import DisplayNotific
 
 
 def maximum_energy():
-    fixture = next(item for item in HARNESS.make_fixtures(include_distribution=True)
+    fixture = next(item for item in HARNESS.make_fixtures(include_consumers=True)
                    if item["language"] == "de" and item["name"] == "stress")
     start = datetime(2026, 10, 25, tzinfo=ZoneInfo("Europe/Berlin"))
     sources = EnergySources(
@@ -33,6 +33,7 @@ def maximum_energy():
     })
     fixture["energy"]["power"] = power_history_payload(sources, raw, "de")
     assert len(fixture["energy"]["sums"]) == 8
+    assert len(fixture["energy"]["consumers"]["items"]) == 10
     return {"title": fixture["title"], "energy": fixture["energy"]}
 
 
@@ -43,7 +44,8 @@ def test_energy_with_status_agenda_48_checks_and_notifications(monkeypatch, noti
     contacts = [f"binary_sensor.ground_floor_window_{index:02d}" for index in range(24)]
     lights = [f"light.ground_floor_room_{index:02d}" for index in range(24)]
     entry = SimpleNamespace(entry_id="energy-budget", title="Energy budget", data={"device_ui_enabled": True},
-                            options={"agenda_page": {"enabled": True, "calendars": ["calendar.family"]},
+                            options={"energy_page": {"enabled": True, "views": [view["id"] for view in energy["energy"]["views"]]},
+                                     "agenda_page": {"enabled": True, "calendars": ["calendar.family"]},
                                      "leave_home_page": {"enabled": True, "contacts": contacts, "lights": lights}},
                             async_on_unload=lambda _callback: None,
                             async_create_background_task=lambda _hass, coro, _name, **_kwargs: asyncio.create_task(coro),
@@ -77,12 +79,12 @@ def test_energy_with_status_agenda_48_checks_and_notifications(monkeypatch, noti
                             "icon": "info", "priority": "normal", "expires_in": 3600,
                             "actions": [{"action_id": "household_action", "label": "Household action"}]})
             initial = await dashboard.async_dashboard_payload(hass, entry)
-            assert initial["data"]["pages"][2]["agenda"]["loading"] is True
+            assert next(page["agenda"] for page in initial["data"]["pages"] if "agenda" in page)["loading"] is True
             task = hass.data[dashboard_agenda._DATA_KEY][entry.entry_id].task
             assert task is not None
             await task
             loaded = await dashboard.async_dashboard_payload(hass, entry)
-            assert loaded["data"]["pages"][2]["agenda"]["loading"] is False
+            assert next(page["agenda"] for page in loaded["data"]["pages"] if "agenda" in page)["loading"] is False
             return loaded
         finally:
             store.close()
@@ -90,9 +92,9 @@ def test_energy_with_status_agenda_48_checks_and_notifications(monkeypatch, noti
     payload = asyncio.run(render())
     pages = payload["data"]["pages"]
     assert len(pages) == 4
-    assert any(item["kind"] == "navigation" for item in pages[0]["items"])
-    assert len(pages[2]["agenda"]["events"]) == 5
-    assert len(pages[3]["leave_home"]["checks"]) == 48
+    assert any(item["kind"] == "navigation" for page in pages for item in page.get("items", []))
+    assert len(next(page["agenda"] for page in pages if "agenda" in page)["events"]) == 5
+    assert len(next(page["leave_home"] for page in pages if "leave_home" in page)["checks"]) == 48
     assert len(payload["notifications"]) == notifications
     sizes = {"energy": len(json.dumps(energy)), "power": len(json.dumps(energy["energy"]["power"])),
              "dashboard": len(json.dumps(payload)), "notifications": len(json.dumps(payload["notifications"]))}

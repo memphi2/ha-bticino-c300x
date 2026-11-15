@@ -25,11 +25,10 @@ from .agent_diagnostics import publish_agent_media_facts
 from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.background_tasks import CameraBackgroundTasks
 from .camera_media.ha_compat import (
-    HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO,
-    CameraEntityCapabilities,
     CameraEntityFeature,
     WebRTCError,
     WebRTCSendMessage,
+    native_camera_capabilities,
 )
 from .camera_media.ha_compat import (
     async_get_supported_webrtc_provider as _async_get_supported_webrtc_provider,
@@ -1384,14 +1383,13 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._video_stream_path = str(status["stream_path"])
         self._audio_stream_path = optional_string(status.get("audio_stream_path"))
         self._recorder_stream_path = optional_string(status.get("recorder_stream_path"))
-        if HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO and CameraEntityCapabilities is not None:
-            self._attr_camera_entity_capabilities = CameraEntityCapabilities(
-                two_way_audio=(
-                    entry_config_value(self._entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True
-                    and self._bridge_status.get("talkback_supported") is True
-                    and bool(self._audio_stream_path)
-                )
-            )
+        capabilities = native_camera_capabilities(
+            enabled=entry_config_value(self._entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True,
+            supported=self._bridge_status.get("talkback_supported") is True,
+            audio_path=bool(self._audio_stream_path),
+        )
+        if capabilities is not None:
+            self._attr_camera_entity_capabilities = capabilities
         self._refresh_derived_media_state()
 
     async def async_added_to_hass(self) -> None:

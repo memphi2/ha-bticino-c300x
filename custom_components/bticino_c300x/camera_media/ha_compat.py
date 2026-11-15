@@ -32,7 +32,16 @@ __all__ = (
     "WebRTCError",
     "WebRTCSendMessage",
     "async_get_supported_webrtc_provider",
+    "native_camera_capabilities",
 )
+
+
+def native_camera_capabilities(*, enabled: bool, supported: bool, audio_path: bool) -> Any:
+    """Build native microphone capabilities only on supported HA versions."""
+
+    if not HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO or CameraEntityCapabilities is None:
+        return None
+    return CameraEntityCapabilities(two_way_audio=enabled and supported and audio_path)
 
 
 async def async_get_supported_webrtc_provider(

@@ -380,6 +380,10 @@ def dashboard_input_defaults(
     """Return dashboard input defaults for the separate display dashboard page."""
 
     data = dict(user_input)
+    from .dashboard_optional_config import OPTIONAL_PAGE_KEYS
+
+    for key in OPTIONAL_PAGE_KEYS:
+        data.setdefault(key, {} if defaults is None else defaults.get(key, {}))
     data.setdefault(
         CONF_DEVICE_UI_ENABLED,
         False if defaults is None else defaults.get(CONF_DEVICE_UI_ENABLED, False),

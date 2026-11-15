@@ -27,6 +27,7 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
 )
+from .dashboard_agenda import async_agenda_dashboard_page
 from .dashboard_config import (
     _DASHBOARD_ACTION_PAGE,
     _DASHBOARD_BUTTON_ENTITY_DOMAINS,
@@ -71,6 +72,11 @@ from .dashboard_labels import (
     _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
     _DASHBOARD_STATE_LABELS_EN,
     decimal_text,
+)
+from .dashboard_leave_home import leave_home_dashboard_page
+from .dashboard_optional_config import (
+    configured_agenda_page,
+    configured_leave_home_page,
 )
 from .dashboard_select_texts import apply_select_texts
 from .dashboard_weather import async_dashboard_weather_payload
@@ -155,6 +161,8 @@ async def async_status(
             or visible_entities
             or status_enabled
             or bool(energy_settings["enabled"] and energy_settings["views"])
+            or configured_agenda_page(entry)["enabled"]
+            or configured_leave_home_page(entry)["enabled"]
             or bool(notification_payload(entry))
         ),
         "preventReturnToHomepage": configured_dashboard_prevent_return(entry),
@@ -272,6 +280,12 @@ async def async_dashboard_payload(
             1 for page in configured[:position - 1] if page["name"] not in pages
         )
         ordered.insert(max(0, min(position - 1 - absent, len(ordered))), energy)
+    for optional_page in (
+        await async_agenda_dashboard_page(hass, entry, language),
+        leave_home_dashboard_page(hass, entry, language),
+    ):
+        if optional_page is not None:
+            ordered.append(optional_page)
     shown = [
         page for page in ordered
         if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
@@ -1027,8 +1041,9 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
         finalized["items"] = items
     if isinstance(page.get("weather"), dict):
         finalized["weather"] = page["weather"]
-    if isinstance(page.get("energy"), dict):
-        finalized["energy"] = page["energy"]
+    for key in ("energy", "agenda", "leave_home"):
+        if isinstance(page.get(key), dict):
+            finalized[key] = page[key]
     return finalized
 
 
@@ -1073,4 +1088,4 @@ def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
     other pages need weather, tiles or energy content.
     """
 
-    return any(bool(page.get(key)) for key in ("items", "weather", "energy"))
+    return any(bool(page.get(key)) for key in ("items", "weather", "energy", "agenda", "leave_home"))

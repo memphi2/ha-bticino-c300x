@@ -1031,6 +1031,10 @@ function loadDashboardPage(statusItem, pageItem) {
     applyWeather(pageItem, pageData.weather)
     assignDashboardValue(pageItem, "energy", energy || {})
     pageItem.energyVisible = energy !== null
+    assignDashboardValue(pageItem, "agenda", pageData.agenda || {})
+    pageItem.agendaVisible = !!pageData.agenda
+    assignDashboardValue(pageItem, "leaveHome", pageData.leave_home || {})
+    pageItem.leaveHomeVisible = !!pageData.leave_home
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {

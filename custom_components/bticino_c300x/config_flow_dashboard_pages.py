@@ -37,6 +37,11 @@ from .config_flow_forms import (
     weather_entity_selector as _weather_entity_selector,
 )
 from .config_flow_input import _weather_entity_id
+from .config_flow_optional_pages import (
+    optional_page_sections,
+    optional_pages_errors,
+    optional_pages_input,
+)
 from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
@@ -261,7 +266,8 @@ def dashboard_pages_schema(
     )
     keys = list(fields)
     return vol.Schema({
-        key: fields[key] for key in [keys[0], keys[-1], *keys[1:-1]]
+        **{key: fields[key] for key in [keys[0], keys[-1], *keys[1:-1]]},
+        **optional_page_sections(dashboard_input, posted),
     })
 
 
@@ -314,7 +320,7 @@ def dashboard_pages_input(
     keeps the saved weather. Returns the settings and the form errors.
     """
 
-    errors: dict[str, str] = {}
+    errors: dict[str, str] = optional_pages_errors(user_input)
     pages: list[tuple[int, int, str, list[str]]] = []
     seen_names: set[str] = set()
     seen_entities: set[str] = set()
@@ -407,6 +413,7 @@ def dashboard_pages_input(
             ordered_entities.append(entity_id)
     return {
         **dashboard_input,
+        **optional_pages_input(dashboard_input, user_input),
         CONF_WEATHER_ENTITY_ID: weather,
         CONF_DASHBOARD_STATUS_PAGE_ENABLED: status_enabled,
         CONF_DASHBOARD_ENTITIES: ordered_entities,

@@ -21,6 +21,10 @@ Page {
     property variant badges: []
     property variant items: []
     property variant energy: ({})
+    property variant agenda: ({})
+    property variant leaveHome: ({})
+    property bool agendaVisible: false
+    property bool leaveHomeVisible: false
     property int currentPageIndex: 0
     onCurrentPageIndexChanged: scroll.contentY = 0
     property int pageCount: 0
@@ -1121,6 +1125,50 @@ Page {
                     when: energyLoader.status === Loader.Ready
                 }
 
+                Loader {
+                    id: agendaLoader
+                    width: parent.width
+                    height: agendaVisible ? Math.max(0, scroll.height - 20) : 0
+                    visible: agendaVisible
+                    source: agendaVisible ? "C300XAgenda.qml" : ""
+                }
+                Binding {
+                    target: agendaLoader.item
+                    property: "agenda"
+                    value: page.agenda
+                    when: agendaLoader.status === Loader.Ready
+                }
+                Loader {
+                    id: leaveHomeLoader
+                    width: parent.width
+                    height: leaveHomeVisible ? Math.max(0, scroll.height - 20) : 0
+                    visible: leaveHomeVisible
+                    source: leaveHomeVisible ? "C300XLeaveHome.qml" : ""
+                }
+                Binding {
+                    target: leaveHomeLoader.item
+                    property: "leaveHome"
+                    value: page.leaveHome
+                    when: leaveHomeLoader.status === Loader.Ready
+                }
+                Binding {
+                    target: leaveHomeLoader.item
+                    property: "busy"
+                    value: !page.dashboardOnline || page.pendingEntity.length > 0
+                    when: leaveHomeLoader.status === Loader.Ready
+                }
+                Binding {
+                    target: leaveHomeLoader.item
+                    property: "online"
+                    value: page.dashboardOnline
+                    when: leaveHomeLoader.status === Loader.Ready
+                }
+                Connections {
+                    target: leaveHomeLoader.item
+                    onActionRequested: Api.dashboardAction(item, status, page)
+                    onAlarmRequested: tabView.activateTab(alarmPage)
+                }
+
                 Flow {
                     id: itemColumn
                     width: parent.width
@@ -1728,7 +1776,7 @@ Page {
                 }
 
                 UbuntuLightText {
-                    text: items.length === 0 && !energyVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
+                    text: items.length === 0 && !energyVisible && !agendaVisible && !leaveHomeVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
                     color: "#f1c40f"
                     font.pixelSize: 18
                     width: parent.width

@@ -381,6 +381,36 @@
               "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant; aggiunta dopo le altre pagine.",
+            "data": {
+              "enabled": "Mostra agenda",
+              "calendars": "Calendari"
+            },
+            "data_description": {
+              "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant; aggiunta dopo le altre pagine.",
+              "calendars": "Seleziona fino a otto calendari."
+            }
+          },
+          "leave_home_page": {
+            "name": "Esci di casa",
+            "description": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+            "data": {
+              "enabled": "Mostra Esci di casa",
+              "contacts": "Finestre e porte",
+              "lights": "Luci",
+              "actions": "Azioni",
+              "show_alarm": "Mostra disponibilità Alarmo"
+            },
+            "data_description": {
+              "enabled": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+              "contacts": "Seleziona fino a 24 sensori porta/finestra.",
+              "lights": "Seleziona fino a 24 luci.",
+              "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
+              "show_alarm": "Usa l'allarme già configurato per questo display."
+            }
+          },
           "energy_page": {
             "name": "Pagina energia",
             "description": "Una pagina aggiuntiva facoltativa. Mostra la configurazione Energia di Home Assistant (Impostazioni > Plance > Energia): contatori di rete, solare e batteria, i loro sensori di potenza, nomi e prezzi. Un tipo di sorgente non configurato lì viene omesso; senza alcuna sorgente la pagina non viene mostrata.",
@@ -514,6 +544,36 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant; aggiunta dopo le altre pagine.",
+            "data": {
+              "enabled": "Mostra agenda",
+              "calendars": "Calendari"
+            },
+            "data_description": {
+              "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant; aggiunta dopo le altre pagine.",
+              "calendars": "Seleziona fino a otto calendari."
+            }
+          },
+          "leave_home_page": {
+            "name": "Esci di casa",
+            "description": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+            "data": {
+              "enabled": "Mostra Esci di casa",
+              "contacts": "Finestre e porte",
+              "lights": "Luci",
+              "actions": "Azioni",
+              "show_alarm": "Mostra disponibilità Alarmo"
+            },
+            "data_description": {
+              "enabled": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+              "contacts": "Seleziona fino a 24 sensori porta/finestra.",
+              "lights": "Seleziona fino a 24 luci.",
+              "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
+              "show_alarm": "Usa l'allarme già configurato per questo display."
             }
           },
           "energy_page": {
@@ -836,6 +896,36 @@
               "name": "Titolo di questa pagina sul display",
               "position": "1 = prima pagina",
               "entities": "Ordine dei riquadri; trascina per riordinare"
+            }
+          },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant; aggiunta dopo le altre pagine.",
+            "data": {
+              "enabled": "Mostra agenda",
+              "calendars": "Calendari"
+            },
+            "data_description": {
+              "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant; aggiunta dopo le altre pagine.",
+              "calendars": "Seleziona fino a otto calendari."
+            }
+          },
+          "leave_home_page": {
+            "name": "Esci di casa",
+            "description": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+            "data": {
+              "enabled": "Mostra Esci di casa",
+              "contacts": "Finestre e porte",
+              "lights": "Luci",
+              "actions": "Azioni",
+              "show_alarm": "Mostra disponibilità Alarmo"
+            },
+            "data_description": {
+              "enabled": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+              "contacts": "Seleziona fino a 24 sensori porta/finestra.",
+              "lights": "Seleziona fino a 24 luci.",
+              "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
+              "show_alarm": "Usa l'allarme già configurato per questo display."
             }
           },
           "energy_page": {

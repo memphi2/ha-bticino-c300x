@@ -1047,6 +1047,7 @@ def _async_track_display_bridge_updates(
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
     from .dashboard import _dashboard_state_entity_id
+    from .dashboard_agenda import async_setup_agenda_updates
     from .dashboard_config import (
         _DASHBOARD_DEFAULT_PAGE,
         configured_actions,
@@ -1056,6 +1057,7 @@ def _async_track_display_bridge_updates(
         configured_status_page_enabled,
         configured_weather_entity_id,
     )
+    from .dashboard_leave_home import leave_home_entity_ids
     from .dashboard_updates import dashboard_state_event_changes_display
 
     status_enabled = configured_status_page_enabled(entry)
@@ -1064,6 +1066,7 @@ def _async_track_display_bridge_updates(
         entity_id for entity_id in configured_dashboard_entities(entry)
         if status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
     }
+    selected_entity_ids.update(leave_home_entity_ids(entry))
     projected_entity_ids = selected_entity_ids.copy()
     alarm_page_entity_id = configured_alarm_page_entity_id(entry)
     if alarm_page_entity_id:
@@ -1128,6 +1131,11 @@ def _async_track_display_bridge_updates(
             _handle_alarmo_event,
         )
     )
+    stop_agenda = async_setup_agenda_updates(
+        hass, entry, lambda: _async_schedule_display_bridge_notify(hass, entry),
+    )
+    if stop_agenda is not None:
+        unsubscribers.append(stop_agenda)
 
     def _unsub_all() -> None:
         for unsubscribe in unsubscribers:

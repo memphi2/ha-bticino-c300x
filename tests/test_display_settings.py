@@ -755,7 +755,7 @@ def test_pages_and_positions_are_applied_without_changing_capabilities():
     status = asyncio.run(async_status(hass, entry))
     assert status["alarm_page_entity"]["name"] == "Outside light"
     assert all(
-        item["entity_id"] != "button.porch"
+        item.get("entity_id") != "button.porch"
         for page in pages.values()
         for item in page.get("items", [])
     )
@@ -850,6 +850,7 @@ def test_tile_sizes_reach_the_display_only_when_configured():
         item["entity_id"]: item
         for page in payload["data"]["pages"]
         for item in page.get("items", [])
+        if "entity_id" in item
     }
     assert (items["cover.shade"]["tile_width"], items["cover.shade"]["tile_height"]) == ("full", "full")
     assert items["sensor.temp"]["tile_height"] == "half"
@@ -899,7 +900,7 @@ def test_weather_card_stays_on_the_status_page_until_placed():
     pages = {page["title"]: page for page in payload["data"]["pages"]}
     assert list(pages) == ["C300X", ""]
     assert "weather" in pages["C300X"]
-    assert _kinds(pages["C300X"]) == ["weather"]
+    assert _kinds(pages["C300X"]) == ["weather", "navigation"]
     assert _kinds(pages[""]) == ["light.one", "light.two"]
 
 
@@ -1092,6 +1093,7 @@ def test_media_player_item_reports_power_and_what_is_playing(
     payload = asyncio.run(async_dashboard_payload(hass, entry))
     item = next(
         item for page in payload["data"]["pages"] for item in page.get("items", [])
+        if item.get("entity_id") == "media_player.kitchen"
     )
     assert item["kind"] == "entity"
     assert item["state"] is is_on
@@ -1125,7 +1127,8 @@ def test_media_player_title_respects_another_secondary_line(secondary, line):
         },
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "media_player.kitchen")
     assert item["state_label"] == line
     assert item["details"]["value"] == "Evening news"
 
@@ -1140,7 +1143,8 @@ def test_unavailable_media_player_is_offline_without_controls():
         options={"device_ui_enabled": True, "dashboard_entities": ["media_player.kitchen"]},
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "media_player.kitchen")
     assert item["available"] is False
     assert item["state"] is False
     assert item["controls"] == []
@@ -1173,10 +1177,12 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
         ("page_1", "expandable"),
         ("energy_page", "expandable"),
         *((f"page_{slot}", "expandable") for slot in range(2, 9)),
+        ("agenda_page", "expandable"),
+        ("leave_home_page", "expandable"),
     ]
     # Used pages are open, and so is the first free one to add a page; the
     # energy page is closed while it is switched off.
-    assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 5
+    assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 7
     assert [item["name"] for item in fields[1]["schema"]] == [
         "enabled", "position", "view_now", "view_today", "view_power", "view_distribution", "view_balance",
     ]

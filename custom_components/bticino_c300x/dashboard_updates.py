@@ -13,6 +13,7 @@ from .dashboard_entities import (
     dashboard_entity_name_display_override,
     dashboard_entity_secondary_info_override,
 )
+from .dashboard_leave_home import leave_home_entity_ids
 from .entry_types import BticinoC300XConfigEntry
 
 
@@ -23,6 +24,13 @@ def dashboard_state_event_changes_display(
     if "old_state" not in data or "new_state" not in data:
         return True
     entity_id = data["entity_id"]
+    if entity_id in leave_home_entity_ids(entry):
+        def check(state: Any) -> Any:
+            return None if state is None else (
+                state.state, state.attributes.get("friendly_name"), state.attributes.get("device_class"),
+            )
+        if check(data["old_state"]) != check(data["new_state"]):
+            return True
     overrides = configured_dashboard_entity_display_overrides(entry)
 
     def project(state: Any) -> dict[str, Any] | None:

@@ -381,6 +381,36 @@
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
             }
           },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+            "data": {
+              "enabled": "Afficher l'agenda",
+              "calendars": "Calendriers"
+            },
+            "data_description": {
+              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+              "calendars": "Sélectionnez jusqu'à huit calendriers."
+            }
+          },
+          "leave_home_page": {
+            "name": "Quitter la maison",
+            "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
+            "data": {
+              "enabled": "Afficher Quitter la maison",
+              "contacts": "Fenêtres et portes",
+              "lights": "Lumières",
+              "actions": "Actions",
+              "show_alarm": "Afficher la disponibilité Alarmo"
+            },
+            "data_description": {
+              "enabled": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
+              "contacts": "Sélectionnez jusqu'à 24 capteurs de porte/fenêtre.",
+              "lights": "Sélectionnez jusqu'à 24 lumières.",
+              "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
+              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran."
+            }
+          },
           "energy_page": {
             "name": "Page énergie",
             "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
@@ -514,6 +544,36 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+            "data": {
+              "enabled": "Afficher l'agenda",
+              "calendars": "Calendriers"
+            },
+            "data_description": {
+              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+              "calendars": "Sélectionnez jusqu'à huit calendriers."
+            }
+          },
+          "leave_home_page": {
+            "name": "Quitter la maison",
+            "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
+            "data": {
+              "enabled": "Afficher Quitter la maison",
+              "contacts": "Fenêtres et portes",
+              "lights": "Lumières",
+              "actions": "Actions",
+              "show_alarm": "Afficher la disponibilité Alarmo"
+            },
+            "data_description": {
+              "enabled": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
+              "contacts": "Sélectionnez jusqu'à 24 capteurs de porte/fenêtre.",
+              "lights": "Sélectionnez jusqu'à 24 lumières.",
+              "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
+              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran."
             }
           },
           "energy_page": {
@@ -836,6 +896,36 @@
               "name": "Titre de cette page sur l'écran",
               "position": "1 = première page",
               "entities": "Ordre des tuiles ; faites glisser pour réordonner"
+            }
+          },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+            "data": {
+              "enabled": "Afficher l'agenda",
+              "calendars": "Calendriers"
+            },
+            "data_description": {
+              "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement ; ajouté après les autres pages.",
+              "calendars": "Sélectionnez jusqu'à huit calendriers."
+            }
+          },
+          "leave_home_page": {
+            "name": "Quitter la maison",
+            "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
+            "data": {
+              "enabled": "Afficher Quitter la maison",
+              "contacts": "Fenêtres et portes",
+              "lights": "Lumières",
+              "actions": "Actions",
+              "show_alarm": "Afficher la disponibilité Alarmo"
+            },
+            "data_description": {
+              "enabled": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
+              "contacts": "Sélectionnez jusqu'à 24 capteurs de porte/fenêtre.",
+              "lights": "Sélectionnez jusqu'à 24 lumières.",
+              "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
+              "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran."
             }
           },
           "energy_page": {

@@ -381,6 +381,36 @@
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
+          "agenda_page": {
+            "name": "Termine",
+            "description": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant; nach den anderen Seiten angehängt.",
+            "data": {
+              "enabled": "Termine anzeigen",
+              "calendars": "Kalender"
+            },
+            "data_description": {
+              "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant; nach den anderen Seiten angehängt.",
+              "calendars": "Bis zu acht Kalender auswählen."
+            }
+          },
+          "leave_home_page": {
+            "name": "Haus verlassen",
+            "description": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
+            "data": {
+              "enabled": "Haus verlassen anzeigen",
+              "contacts": "Fenster und Türen",
+              "lights": "Lichter",
+              "actions": "Aktionen",
+              "show_alarm": "Alarmo-Bereitschaft anzeigen"
+            },
+            "data_description": {
+              "enabled": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
+              "contacts": "Bis zu 24 Tür-/Fenstersensoren auswählen.",
+              "lights": "Bis zu 24 Lichter auswählen.",
+              "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
+              "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden."
+            }
+          },
           "energy_page": {
             "name": "Energieseite",
             "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
@@ -514,6 +544,36 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "agenda_page": {
+            "name": "Termine",
+            "description": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant; nach den anderen Seiten angehängt.",
+            "data": {
+              "enabled": "Termine anzeigen",
+              "calendars": "Kalender"
+            },
+            "data_description": {
+              "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant; nach den anderen Seiten angehängt.",
+              "calendars": "Bis zu acht Kalender auswählen."
+            }
+          },
+          "leave_home_page": {
+            "name": "Haus verlassen",
+            "description": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
+            "data": {
+              "enabled": "Haus verlassen anzeigen",
+              "contacts": "Fenster und Türen",
+              "lights": "Lichter",
+              "actions": "Aktionen",
+              "show_alarm": "Alarmo-Bereitschaft anzeigen"
+            },
+            "data_description": {
+              "enabled": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
+              "contacts": "Bis zu 24 Tür-/Fenstersensoren auswählen.",
+              "lights": "Bis zu 24 Lichter auswählen.",
+              "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
+              "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden."
             }
           },
           "energy_page": {
@@ -836,6 +896,36 @@
               "name": "Überschrift dieser Seite auf dem Display",
               "position": "1 = erste Seite",
               "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
+            }
+          },
+          "agenda_page": {
+            "name": "Termine",
+            "description": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant; nach den anderen Seiten angehängt.",
+            "data": {
+              "enabled": "Termine anzeigen",
+              "calendars": "Kalender"
+            },
+            "data_description": {
+              "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant; nach den anderen Seiten angehängt.",
+              "calendars": "Bis zu acht Kalender auswählen."
+            }
+          },
+          "leave_home_page": {
+            "name": "Haus verlassen",
+            "description": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
+            "data": {
+              "enabled": "Haus verlassen anzeigen",
+              "contacts": "Fenster und Türen",
+              "lights": "Lichter",
+              "actions": "Aktionen",
+              "show_alarm": "Alarmo-Bereitschaft anzeigen"
+            },
+            "data_description": {
+              "enabled": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
+              "contacts": "Bis zu 24 Tür-/Fenstersensoren auswählen.",
+              "lights": "Bis zu 24 Lichter auswählen.",
+              "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
+              "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden."
             }
           },
           "energy_page": {

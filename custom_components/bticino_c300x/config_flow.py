@@ -178,6 +178,7 @@ from .const import (
     DEFAULT_NAME,
     DOMAIN,
 )
+from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
 from .device_installer import (
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
@@ -216,6 +217,7 @@ _CREATE_HOMEASSISTANT_USER_DEFAULT = True
 _RECONFIGURED_OPTION_KEYS = frozenset(
     {
         *SNAPSHOT_DEFAULTS,
+        *OPTIONAL_PAGE_KEYS,
         CONF_ACTIONS,
         CONF_AGENT_HOST,
         CONF_AGENT_PORT,
@@ -940,6 +942,7 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
                 CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
                 CONF_DASHBOARD_PAGES: feature_data[CONF_DASHBOARD_PAGES],
                 CONF_ENERGY_PAGE: feature_data[CONF_ENERGY_PAGE],
+                **optional_page_values(feature_data),
                 CONF_DASHBOARD_STATUS_PAGE_ENABLED: feature_data[CONF_DASHBOARD_STATUS_PAGE_ENABLED],
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE: feature_data[
                     CONF_DASHBOARD_DYNAMIC_HOMEPAGE

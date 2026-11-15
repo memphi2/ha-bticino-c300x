@@ -74,6 +74,7 @@ from .const import (
 )
 from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import normalize_dashboard_pages
+from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
@@ -207,6 +208,7 @@ def current_feature_options(
 
     return {
         **{key: _config_default(config_entry, key, default) for key, default in SNAPSHOT_DEFAULTS.items()},
+        **optional_page_values({key: _config_default(config_entry, key, {}) for key in OPTIONAL_PAGE_KEYS}),
         CONF_ALARM_ENTITY_ID: _config_default(config_entry, CONF_ALARM_ENTITY_ID, ""),
         CONF_ALARM_PAGE_ENTITY_ID: _config_default(
             config_entry,
@@ -360,6 +362,8 @@ def feature_input_defaults(
     """Return feature input with hidden display fields preserved when absent."""
 
     data = dict(user_input)
+    for key in OPTIONAL_PAGE_KEYS:
+        data.setdefault(key, defaults.get(key, {}))
     for key, default in SNAPSHOT_DEFAULTS.items():
         data.setdefault(key, defaults.get(key, default))
     data.setdefault(CONF_NATIVE_TWO_WAY_AUDIO, defaults.get(CONF_NATIVE_TWO_WAY_AUDIO, False))

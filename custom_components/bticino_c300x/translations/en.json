@@ -381,6 +381,36 @@
               "entities": "Order of the tiles; drag to reorder"
             }
           },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "Next five events in seven days. Read on Home Assistant only; appended after the other pages.",
+            "data": {
+              "enabled": "Show Agenda",
+              "calendars": "Calendars"
+            },
+            "data_description": {
+              "enabled": "Next five events in seven days. Read on Home Assistant only; appended after the other pages.",
+              "calendars": "Select up to eight calendars."
+            }
+          },
+          "leave_home_page": {
+            "name": "Leave home",
+            "description": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
+            "data": {
+              "enabled": "Show Leave home",
+              "contacts": "Windows and doors",
+              "lights": "Lights",
+              "actions": "Actions",
+              "show_alarm": "Show Alarmo readiness"
+            },
+            "data_description": {
+              "enabled": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
+              "contacts": "Select up to 24 door/window sensors.",
+              "lights": "Select up to 24 lights.",
+              "actions": "Select up to eight existing allowlisted actions.",
+              "show_alarm": "Use the alarm already configured for this display."
+            }
+          },
           "energy_page": {
             "name": "Energy page",
             "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
@@ -514,6 +544,36 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
+            }
+          },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "Next five events in seven days. Read on Home Assistant only; appended after the other pages.",
+            "data": {
+              "enabled": "Show Agenda",
+              "calendars": "Calendars"
+            },
+            "data_description": {
+              "enabled": "Next five events in seven days. Read on Home Assistant only; appended after the other pages.",
+              "calendars": "Select up to eight calendars."
+            }
+          },
+          "leave_home_page": {
+            "name": "Leave home",
+            "description": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
+            "data": {
+              "enabled": "Show Leave home",
+              "contacts": "Windows and doors",
+              "lights": "Lights",
+              "actions": "Actions",
+              "show_alarm": "Show Alarmo readiness"
+            },
+            "data_description": {
+              "enabled": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
+              "contacts": "Select up to 24 door/window sensors.",
+              "lights": "Select up to 24 lights.",
+              "actions": "Select up to eight existing allowlisted actions.",
+              "show_alarm": "Use the alarm already configured for this display."
             }
           },
           "energy_page": {
@@ -836,6 +896,36 @@
               "name": "Heading of this page on the display",
               "position": "1 = first page",
               "entities": "Order of the tiles; drag to reorder"
+            }
+          },
+          "agenda_page": {
+            "name": "Agenda",
+            "description": "Next five events in seven days. Read on Home Assistant only; appended after the other pages.",
+            "data": {
+              "enabled": "Show Agenda",
+              "calendars": "Calendars"
+            },
+            "data_description": {
+              "enabled": "Next five events in seven days. Read on Home Assistant only; appended after the other pages.",
+              "calendars": "Select up to eight calendars."
+            }
+          },
+          "leave_home_page": {
+            "name": "Leave home",
+            "description": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
+            "data": {
+              "enabled": "Show Leave home",
+              "contacts": "Windows and doors",
+              "lights": "Lights",
+              "actions": "Actions",
+              "show_alarm": "Show Alarmo readiness"
+            },
+            "data_description": {
+              "enabled": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
+              "contacts": "Select up to 24 door/window sensors.",
+              "lights": "Select up to 24 lights.",
+              "actions": "Select up to eight existing allowlisted actions.",
+              "show_alarm": "Use the alarm already configured for this display."
             }
           },
           "energy_page": {

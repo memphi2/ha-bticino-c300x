@@ -80,7 +80,9 @@ static void *write_operation(void *argument)
         send_rtsp_response(operation->writer, operation->fd, 200, "7", NULL, NULL);
     } else {
         const unsigned char *frame = operation->kind == 2 ? audio_frame : video_frame;
-        ssize_t result = c300x_rtsp_send_pair(operation->writer, operation->fd, frame, 4, frame + 4, 16);
+        ssize_t result = c300x_rtsp_send_interleaved(
+            operation->writer, operation->fd, frame[1], frame + 4, 16
+        );
         assert(operation->fails ? result < 0 : result == 20);
     }
     return NULL;
@@ -142,6 +144,27 @@ static void serialization_test(int first_kind, int second_kind)
     close(independent[0]); close(independent[1]);
 }
 
+static void framing_test(void)
+{
+    int pair[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
+    assert(writer);
+    unsigned char packet[513], received[517];
+    for (size_t i = 0; i < sizeof(packet); i++) packet[i] = (unsigned char)i;
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 254, packet, sizeof(packet)) == 517);
+    assert(recv(pair[1], received, sizeof(received), MSG_WAITALL) == 517);
+    const unsigned char header[] = {'$', 254, 2, 1};
+    assert(memcmp(received, header, sizeof(header)) == 0);
+    assert(memcmp(received + sizeof(header), packet, sizeof(packet)) == 0);
+    /* The helper borrows both resources; a subsequent write must still work. */
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 2, packet, 1) == 5);
+    assert(recv(pair[1], received, 5, MSG_WAITALL) == 5);
+    assert(memcmp(received, (unsigned char[]){'$', 2, 0, 1, 0}, 5) == 0);
+    c300x_rtsp_writer_release(writer);
+    close(pair[0]); close(pair[1]);
+}
+
 static void timeout_test(void)
 {
     for (int response_write = 0; response_write < 2; response_write++) {
@@ -190,6 +213,7 @@ int main(int argc, char **argv)
     if (strcmp(argv[1], "response_after_rtp") == 0) serialization_test(0, 1);
     else if (strcmp(argv[1], "rtp_after_response") == 0) serialization_test(1, 0);
     else if (strcmp(argv[1], "audio_after_video") == 0) serialization_test(0, 2);
+    else if (strcmp(argv[1], "framing") == 0) framing_test();
     else if (strcmp(argv[1], "timeouts") == 0) timeout_test();
     else if (strcmp(argv[1], "partial_failure") == 0) partial_failure_test();
     else assert(!"unknown case");

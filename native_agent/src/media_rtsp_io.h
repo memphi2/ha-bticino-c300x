@@ -26,6 +26,11 @@ int c300x_rtsp_read_timeout(int teardown_seconds, int session_seconds, long long
 ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer,
                             int fd, const void *first, size_t first_len,
                             const void *second, size_t second_len);
+/* Send one interleaved frame within the media write budget; shut down on
+ * failure. Caller retains ownership of fd and writer throughout the call. */
+ssize_t c300x_rtsp_send_interleaved(struct c300x_rtsp_writer *writer,
+                                   int fd, int channel,
+                                   const void *packet, size_t packet_len);
 
 /* Caller serializes registry access. Entries contain fd + 1; zero is unused. */
 int c300x_rtsp_connection_add(int fds[RTSP_CONNECTION_LIMIT], int fd);

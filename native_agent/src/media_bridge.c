@@ -2131,28 +2131,7 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
         return;
     }
     c300x_video_bridge_rtp_packet(bridge->video);
-    for (size_t index = 0; index < target_count; index++) {
-        const rtsp_send_target_t *target = &targets[index];
-        if (target->transport_tcp) {
-            unsigned char frame_header[4];
-            frame_header[0] = '$';
-            frame_header[1] = (unsigned char)target->channel;
-            frame_header[2] = (unsigned char)(((unsigned)packet_len >> 8) & 0xff);
-            frame_header[3] = (unsigned char)((unsigned)packet_len & 0xff);
-            if (c300x_rtsp_send_pair(
-                target->writer,
-                target->fd,
-                frame_header,
-                sizeof(frame_header),
-                packet,
-                (size_t)packet_len
-            ) <= 0) {
-                shutdown(target->fd, SHUT_RDWR);
-            }
-        }
-        close(target->fd);
-        c300x_rtsp_writer_release(target->writer);
-    }
+    c300x_rtsp_send_targets(targets, target_count, packet, (size_t)packet_len);
 }
 
 static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {

@@ -38,6 +38,11 @@ typedef struct {
     struct sockaddr_in udp_client;
 } rtsp_send_target_t;
 
+/* Consume the retained descriptors and writer references, including on failure.
+ * Call outside the slot ownership lock: each connection has its own write budget. */
+void c300x_rtsp_send_targets(const rtsp_send_target_t *targets, size_t count,
+                             const void *packet, size_t packet_len);
+
 static inline int c300x_rtsp_client_slots_physical_count(
     const rtsp_client_slot_t *slots
 ) {

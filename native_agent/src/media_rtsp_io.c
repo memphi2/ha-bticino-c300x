@@ -1,4 +1,5 @@
 #include "media_rtsp_io.h"
+#include "media_rtsp_clients.h"
 #include "time_util.h"
 
 #include <errno.h>
@@ -111,6 +112,37 @@ ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer, int fd,
                             const void *second, size_t second_len)
 {
     return writer_send(writer, fd, first, first_len, second, second_len, 250);
+}
+
+ssize_t c300x_rtsp_send_interleaved(struct c300x_rtsp_writer *writer,
+                                   int fd, int channel,
+                                   const void *packet, size_t packet_len)
+{
+    unsigned char frame_header[4];
+    frame_header[0] = '$';
+    frame_header[1] = (unsigned char)channel;
+    frame_header[2] = (unsigned char)((packet_len >> 8) & 0xff);
+    frame_header[3] = (unsigned char)(packet_len & 0xff);
+    ssize_t result = c300x_rtsp_send_pair(
+        writer, fd, frame_header, sizeof(frame_header), packet, packet_len
+    );
+    if (result <= 0) shutdown(fd, SHUT_RDWR);
+    return result;
+}
+
+void c300x_rtsp_send_targets(const rtsp_send_target_t *targets, size_t count,
+                             const void *packet, size_t packet_len)
+{
+    for (size_t index = 0; index < count; index++) {
+        const rtsp_send_target_t *target = &targets[index];
+        if (target->transport_tcp) {
+            (void)c300x_rtsp_send_interleaved(
+                target->writer, target->fd, target->channel, packet, packet_len
+            );
+        }
+        close(target->fd);
+        c300x_rtsp_writer_release(target->writer);
+    }
 }
 
 int parse_interleaved_channel(const char *transport)

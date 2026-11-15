@@ -394,7 +394,7 @@ from there.
 
 | View | Shows |
 | --- | --- |
-| **Now** | One box each for solar, grid, battery and home with today's energy. With a power sensor set in the Energy setup, the box also shows the current power and the line to it its direction. |
+| **Now** | One box each for solar, grid, battery and home with today's energy. With a power sensor set in the Energy setup, the box also shows the current power and the line to it its direction. The grid figure adds the power sensors that are set; a grid meter without one is not part of it, so the grid and home power are only as complete as those sensors. |
 | **Today** | Hourly bars of today's sources and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Further grid meters are summed as **Other meters**. |
 | **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |
 

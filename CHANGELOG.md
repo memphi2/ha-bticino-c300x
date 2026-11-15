@@ -70,6 +70,13 @@
 - Show the forwarding select as unknown instead of unavailable when the
   device's answer names no mode.
 - Keep **Hang up** on the card for an answered call whose stream did not start.
+- Send the microphone when a ring is answered on a card that showed the ring
+  preview. The card could end up with a picture-only stream and a disabled
+  **Busy** button; an answer from a phone notification could open the
+  microphone twice.
+- Play the Home Call ringback only on the card that started the call.
+- Keep the restarted display GUI running when a Display patch job passes its
+  time limit.
 - Keep a memo delete button usable after a failed read.
 
 ### Upgrade Notes

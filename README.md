@@ -36,10 +36,16 @@ forwarding controls, messages and optional display pages.
   controls.
 - Stored video messages, voice memos and text memos when the agent reports
   those capabilities.
-- Optional native C300X display with up to eight configurable pages, weather,
-  an energy page, Alarmo and HA-driven notifications. Control lights, covers, climate, media,
+- Optional native C300X display with up to eight regular pages, weather and
+  independently enabled Energy, Agenda and Leave home pages. All page positions
+  are configurable. Direct navigation, Alarmo and HA-driven notifications are
+  included. Control lights, covers, climate, media,
   locks and other supported entities, with configurable tile sizes and labels.
   See [Display setup](docs/quickstart.md#9-optional-native-display).
+- In unreleased 2.5.0, Energy's **Consumers** view lists the top ten configured
+  devices by current W; enable it explicitly after upgrading from the removed
+  Distribution view. A standard [Notify service](docs/feature-reference.md#standard-notify-service)
+  adds bounded wake/sound on safe Home/HA screens. It is not a life-safety alarm.
 - Media readiness diagnostics with guided Repairs for the common setup problems.
 - Optional automation blueprints for notifications, Ring Capture, local Wyoming
   transcription and strict phrase decisions.
@@ -126,6 +132,8 @@ capabilities. [Set up pages and tiles](docs/quickstart.md#9-optional-native-disp
 The display examples below come from device photographs and a direct Energy
 screen capture. They are color-adjusted and AI-localized into English; photographs
 are also perspective-corrected. They illustrate configured pages, not live data.
+They do not demonstrate the unreleased 2.5.0 features or prove Notify wake/sound
+on hardware; Notify hardware validation is pending.
 
 <table>
   <tr>

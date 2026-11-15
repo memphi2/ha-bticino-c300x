@@ -176,10 +176,22 @@ Lovelace card or an embedded HA dashboard.
    **Configure > Display and Display patch**. Applying it restarts the device GUI.
 2. Open **Display pages**. Choose an optional weather entity, name your pages,
    set their order and select the entities for each. Up to eight pages are
-   available, including the status page. Drag entities to reorder their tiles.
+   available, including the status page, plus three optional pages. Set all
+   positions from 1 to 11; defaults are Energy 2, Agenda 10 and Leave home 11.
+   Equal positions put those optional pages in that order before regular pages.
+   Disabling an optional page keeps its selections and position.
+   Drag entities to reorder their tiles.
    The second section, below the independently switchable status page, adds the optional
    [energy page](feature-reference.md#energy-page), which shows Home
-   Assistant's Energy setup.
+   Assistant's Energy setup. Choose its views independently. **Consumers** lists
+   the top ten configured devices by current W without history queries.
+   Distribution has been removed: enable Consumers explicitly after upgrading;
+   the old selection is removed without enabling another view.
+   Optional **Agenda** and **Leave home** sections select calendars and departure
+   checks explicitly; they are disabled until you enable them. Agenda shows up
+   to five events in seven days, using a background HA cache. Leave home actions
+   require a second **Confirm** tap and never run when the page opens. The status page
+   links directly to every other visible page, below the optional weather card.
 3. Open **Display tiles** to set each tile's width, height, name and secondary
    line. Full-height tiles expose supported common controls directly; tap a
    tile with a chevron for its detail controls.
@@ -195,6 +207,12 @@ are read-only. Only configured entities can be operated from the display.
 After an integration update, update the agent and reapply the Display patch
 when prompted so the display receives the matching files. Page and tile
 settings themselves are stored in HA, not rewritten to the device on every change.
+The new 2.5.0 pages and [standard Notify service](feature-reference.md#standard-notify-service)
+require the matching agent and display bundle. Notify defaults to 30 seconds of
+wake and no sound for `info`; `warning` and `error` default to 30 seconds of
+each. Effects are limited to safe Home/HA screens, never queued until the next
+wake, and are supplementary, not fire-alarm functionality. Local simulations
+are not hardware proof; Notify hardware validation is pending.
 
 Details: [Display controls](feature-reference.md#display-device-controls),
 [pages and tiles](feature-reference.md#display-settings) and

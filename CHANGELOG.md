@@ -4,6 +4,30 @@
 
 - Direct page buttons below the weather on the status page, including when no
   weather entity is selected. Navigation reuses the loaded dashboard.
+- Independently enabled Agenda and Leave home pages. Agenda shows five events
+  in seven days from explicitly selected calendars, with bounded background HA
+  caching. Leave home checks selected contacts and lights; selected allowlisted
+  actions require a second Confirm tap and never run when opening the page.
+- Configure all page positions from 1 to 11, including regular pages and Energy,
+  Agenda and Leave home (defaults 2, 10 and 11). Disabled pages keep their
+  selections and position; equal positions use that optional-page order before
+  regular pages.
+- Capability-based native controls with clearer state and offline feedback;
+  exact Energy chart interval/value selection and compact HA history.
+- Replace the removed Distribution view with explicitly enabled **Consumers**:
+  ten configured electrical devices by current W, descending in two columns of
+  five, with independently scaled bars and stable colors. Measured zero remains
+  visible; unavailable readings are omitted. No recorder reads for this view.
+  The retired selection is removed without enabling Consumers or any other
+  view; other selected views remain unchanged.
+- Standard per-entry Notify service with severity and bounded wake/stock-beep
+  durations (maximum 300 seconds). Defaults: info 30 seconds wake/no sound;
+  warning and error 30 seconds each. Effects only on safe Home/HA screens, never
+  queued for a later wake, and never a fire-alarm substitute. One POST, with
+  transport acceptance distinct from physical-effect confirmation.
+- Requires matching 2.5.0 agent and display bundle. Local tests and strict
+  simulations are not hardware proof; Notify hardware validation is pending.
+  This version remains unreleased.
 
 ## v2.4.1 - 2026-11-15
 

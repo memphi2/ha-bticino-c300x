@@ -14,10 +14,34 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   and media player controls, read-only sensor details, dashboard pages, badges,
   images, switches and buttons without a refresh timer. See
   [Display Device Controls](../docs/feature-reference.md#display-device-controls).
-- `C300XEnergy.qml`: the optional energy page (views Now, Today, Power, Balance).
+- `C300XPageNavigation.qml`: direct navigation to other visible dashboard pages,
+  using the existing snapshot without new requests.
+- `C300XAgenda.qml` and `C300XLeaveHome.qml`: optional calendar and departure
+  pages. HA prepares at most five events in seven days from selected calendars
+  in a bounded background cache. Leave home uses explicit contacts, lights and
+  allowlisted actions; actions require a second Confirm tap within eight seconds.
+  No device polling is added. All regular and optional pages support positions
+  1 to 11 (Energy 2, Agenda 10, Leave home 11 by default); disabling preserves
+  selections and positions.
+- `C300XDetailControl.qml`: shared touch controls for entity detail pages.
+- `C300XEnergy.qml`: the optional energy page (views Now, Today, Power, Consumers, Balance).
   `HomeAssistant.qml` loads it only while an energy page is shown and unloads
   it again on every other page. It draws what Home Assistant has already
   computed: no timer, no animation, no request of its own.
+- `C300XEnergyConsumers.qml` and `js/c300x_energy_consumers.js`: ten configured
+  device readings in current W, descending in two columns of five. Each column
+  scales bars independently; measured zero has an empty bar, unavailable values
+  are omitted, and colors remain stable per power sensor. No recorder reads.
+  The removed Distribution selection is discarded, not mapped to Consumers;
+  existing installations must explicitly enable the new view.
+- Energy chart selection shows the exact supplied interval and values from
+  compact HA history, without fabricated intermediate points.
+- `C300XAlerts.qml` and `js/c300x_alerts.js`: standard Notify popup with bounded
+  wake and stock short-beep effects, only on safe Home/HA screens. Calls,
+  Alarmo and other protected pages block effects, with no deferred replay.
+  One loopback request sleeps waiting for an alert; idle operation does not poll.
+  This is supplementary information, not a fire alarm. See the
+  [Notify contract](../docs/feature-reference.md#standard-notify-service).
 - `C300XRingerControl.qml`: core, page-independent ringer command receiver.
   Uses the same `AudioState` enable/disable calls as the stock mute button.
   One loopback HTTP request waits for work without periodic polling; a timer
@@ -41,6 +65,11 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   the HA page's upper-right header are hidden; control-specific text is unchanged.
 
 ## Packaging
+
+The unreleased 2.5.0 features require the matching native agent and complete
+display bundle, followed by reapplying the Display patch. Local strict
+simulations do not prove physical wake or sound; Notify hardware validation
+is pending.
 
 These sources are not written to the device as they stand. Packaging
 (`scripts/stage_device_agent_bundle.py`) and the development installer

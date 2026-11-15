@@ -112,10 +112,9 @@ class EnergyPageUpdates:
             entities = frozenset(self._sources.live_power_entities(views))
             if entities != self._power_entities:
                 self._track_power(entities)
-            if not any(view in ENERGY_LIVE_VIEWS for view in views):
-                if self._unsub_delayed is not None:
-                    self._unsub_delayed()
-                    self._unsub_delayed = None
+            if not any(view in ENERGY_LIVE_VIEWS for view in views) and self._unsub_delayed is not None:
+                self._unsub_delayed()
+                self._unsub_delayed = None
         return views
 
     def _track_power(self, entities: frozenset[str]) -> None:

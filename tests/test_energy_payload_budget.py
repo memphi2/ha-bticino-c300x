@@ -13,7 +13,10 @@ from test_executor import FakeHass, FakeState
 
 from custom_components.bticino_c300x import dashboard, dashboard_agenda
 from custom_components.bticino_c300x.dashboard_energy import EnergyMeter, EnergySources
-from custom_components.bticino_c300x.dashboard_energy_power import PowerHistory, power_history_payload
+from custom_components.bticino_c300x.dashboard_energy_power import (
+    PowerHistory,
+    power_history_payload,
+)
 from custom_components.bticino_c300x.display_notifications import DisplayNotifications
 
 
@@ -98,5 +101,4 @@ def test_energy_with_status_agenda_48_checks_and_notifications(monkeypatch, noti
     assert len(payload["notifications"]) == notifications
     sizes = {"energy": len(json.dumps(energy)), "power": len(json.dumps(energy["energy"]["power"])),
              "dashboard": len(json.dumps(payload)), "notifications": len(json.dumps(payload["notifications"]))}
-    print(f"localized={localized}, notifications={notifications}: {sizes}")
     assert sizes["dashboard"] <= dashboard.DASHBOARD_RESPONSE_MAX_BYTES, sizes

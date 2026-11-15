@@ -5,7 +5,11 @@ import os
 import shutil
 
 import pytest
-from test_qml_patch_script import _copy_source_tree, _run_qml_patch_raw, _write_original_gui
+from test_qml_patch_script import (
+    _copy_source_tree,
+    _run_qml_patch_raw,
+    _write_original_gui,
+)
 from test_qml_patch_transactions import snapshot
 
 

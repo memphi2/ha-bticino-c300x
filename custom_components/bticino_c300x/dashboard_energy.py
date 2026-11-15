@@ -18,7 +18,11 @@ from typing import Any, TypedDict
 
 from .dashboard_controls import finite_number
 from .dashboard_energy_charts import chart_axis
-from .dashboard_energy_consumers import EnergyConsumer, consumer_sources, consumers_payload
+from .dashboard_energy_consumers import (
+    EnergyConsumer,
+    consumer_sources,
+    consumers_payload,
+)
 from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE, decimal_text
 
 ENERGY_VIEW_NOW = "now"

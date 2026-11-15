@@ -11,7 +11,11 @@ from custom_components.bticino_c300x import dashboard_energy_data as data
 from custom_components.bticino_c300x import dashboard_energy_power as history
 from custom_components.bticino_c300x import dashboard_energy_updates as updates
 from custom_components.bticino_c300x.dashboard_energy import (
-    ENERGY_DAY_VIEWS, ENERGY_VIEWS, EnergyDay, EnergyMeter, EnergySources,
+    ENERGY_DAY_VIEWS,
+    ENERGY_VIEWS,
+    EnergyDay,
+    EnergyMeter,
+    EnergySources,
 )
 from custom_components.bticino_c300x.dashboard_energy_consumers import EnergyConsumer
 

@@ -6,11 +6,21 @@ from types import SimpleNamespace
 import pytest
 
 from custom_components.bticino_c300x.dashboard_energy import (
-    ENERGY_DAY_VIEWS, ENERGY_LIVE_VIEWS, ENERGY_VIEWS, EnergyDay, EnergySources,
-    energy_page, energy_sources, energy_views,
+    ENERGY_DAY_VIEWS,
+    ENERGY_LIVE_VIEWS,
+    ENERGY_VIEWS,
+    EnergyDay,
+    EnergySources,
+    energy_page,
+    energy_sources,
+    energy_views,
 )
 from custom_components.bticino_c300x.dashboard_energy_consumers import (
-    EnergyConsumer, consumer_color, consumer_power_watts, consumer_sources, consumers_payload,
+    EnergyConsumer,
+    consumer_color,
+    consumer_power_watts,
+    consumer_sources,
+    consumers_payload,
 )
 from custom_components.bticino_c300x.dashboard_labels import ENERGY_LABELS_BY_LANGUAGE
 
@@ -20,7 +30,10 @@ def state(value, unit="W", name="Measured device"):
 
 
 def test_actual_installed_ha_schema_has_direct_power_mapping_not_assigned_color():
-    from homeassistant.components.energy.data import DEVICE_CONSUMPTION_SCHEMA, DeviceConsumption
+    from homeassistant.components.energy.data import (
+        DEVICE_CONSUMPTION_SCHEMA,
+        DeviceConsumption,
+    )
 
     raw = {"stat_consumption": "sensor.energy", "stat_rate": "sensor.actual_watts", "name": "Desk",
            "included_in_stat": "sensor.parent_energy"}

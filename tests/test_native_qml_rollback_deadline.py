@@ -3,12 +3,14 @@
 import shlex
 import time
 
-from native_agent.test.smoke import api_get
 from test_native_agent_maintenance_jobs import GUI, QML, response, wait_until
-from test_native_agent_maintenance_jobs import binary as binary, lab as lab
+from test_native_agent_maintenance_jobs import binary as binary
+from test_native_agent_maintenance_jobs import lab as lab
 from test_qml_patch_script import SCRIPT, SOURCE_DIR, _write_original_gui
 from test_qml_patch_startup_rollback import startup_env
 from test_qml_patch_transactions import snapshot
+
+from native_agent.test.smoke import api_get
 
 
 def test_rollback_restart_survives_ten_seconds_and_keeps_single_writer(lab):

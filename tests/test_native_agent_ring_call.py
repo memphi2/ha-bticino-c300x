@@ -327,7 +327,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "sdp = home_call_audio" in rtsp_body
     assert "request_home_call_media_if_active" in rtsp_body
     assert "wait_for_ring_session_active(&g_bridge, 1500)" in rtsp_body
-    assert "send_rtsp_response(fd, 503, cseq, NULL, NULL);" in rtsp_body
+    assert "send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);" in rtsp_body
     assert "if (!ring_session && !home_call_session) {" in rtsp_body
     assert "c300x_media_session_stop_in_progress(g_bridge.video)" in rtsp_body
     assert "c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)" in rtsp_body
@@ -633,8 +633,8 @@ def test_native_agent_ondemand_rtsp_client_receives_media_after_play_response() 
     assert play_body.index("slot->played = false;") < play_body.index(
         "start_media_session(&g_bridge)"
     )
-    assert "send_rtsp_response(fd, 200, cseq, headers, NULL);" in play_body
-    assert play_body.index("send_rtsp_response(fd, 200, cseq, headers, NULL);") < (
+    assert "send_rtsp_response(writer, fd, 200, cseq, headers, NULL);" in play_body
+    assert play_body.index("send_rtsp_response(writer, fd, 200, cseq, headers, NULL);") < (
         play_body.rindex("slot->played = true;")
     )
 
@@ -1009,7 +1009,7 @@ def test_native_agent_explicit_ondemand_stop_parks_persistent_rtsp_source() -> N
     assert "slot->fd = fd;" in register_body
     assert "c300x_rtsp_client_slots_active_count" in logical_count_body
     assert "slot->fd == fd" in rtsp_clients_header
-    assert "if (!slot->active || slot->fd < 0 || slot->parked || !slot->played)" in send_targets_body
+    assert "if (!slot->active || slot->fd < 0 || slot->parked || !slot->played || slot->writer == NULL)" in send_targets_body
     assert "(void)park_rtsp_clients_locked(bridge);" in stop_helper_body
     assert "*drain_clients = true;" in stop_helper_body
     assert "int evicted_clients = 0;" in rtsp_body
@@ -1249,7 +1249,7 @@ def test_native_agent_rtsp_answers_instead_of_closing_on_missing_client_slot() -
 
     assert len(slot_missing_blocks) == 3
     for block in slot_missing_blocks:
-        assert "send_rtsp_response(fd, 503, cseq, NULL, NULL);" in block
+        assert "send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);" in block
 
     # Each path records its own reason. A rejected registration never reaches
     # this loop (453 + close before the first request), so reaching DESCRIBE

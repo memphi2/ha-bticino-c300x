@@ -467,6 +467,7 @@ static void *forward_worker(void *arg) {
 }
 
 static int replaced_fd, replacement_fd, replaced_connection;
+static struct c300x_rtsp_writer *replaced_writer;
 static void replace_forward_target(void) {
     /* This is the disconnect/accept interleaving after the ownership lock
      * has been released, but before the relay writes its first packet. */
@@ -474,6 +475,7 @@ static void replace_forward_target(void) {
     assert(unregister_rtsp_client_locked(&g_bridge, 0, replaced_fd));
     pthread_mutex_unlock(&g_bridge.mutex);
     release_rtsp_client(&g_bridge, replaced_fd, replaced_connection);
+    c300x_rtsp_writer_release(replaced_writer);
     assert(dup2(replacement_fd, replaced_fd) == replaced_fd);
 }
 
@@ -492,8 +494,10 @@ static void target_ownership_test(void) {
         replacement_fd = replacement[0];
         replaced_connection = reserve_rtsp_client(&g_bridge, replaced_fd);
         assert(replaced_connection >= 0);
+        replaced_writer = c300x_rtsp_writer_create();
+        assert(replaced_writer);
         g_bridge.rtsp_clients[0] = (rtsp_client_slot_t){.active = true,
-            .played = true, .fd = replaced_fd, .transport_tcp = true};
+            .played = true, .fd = replaced_fd, .writer = replaced_writer, .transport_tcp = true};
         if (disconnected) close(original[1]);
         int before = open_test_fds();
         after_target_snapshot = replace_forward_target;
@@ -524,10 +528,13 @@ static void stalled_client_test(void) {
     assert(setsockopt(slow[0], SOL_SOCKET, SO_SNDBUF, &small, sizeof(small)) == 0);
     unsigned char padding[4096] = {0};
     while (send(slow[0], padding, sizeof(padding), MSG_DONTWAIT | MSG_NOSIGNAL) > 0) {}
+    struct c300x_rtsp_writer *slow_writer = c300x_rtsp_writer_create();
+    struct c300x_rtsp_writer *healthy_writer = c300x_rtsp_writer_create();
+    assert(slow_writer && healthy_writer);
     g_bridge.rtsp_clients[0] = (rtsp_client_slot_t){.active = true, .played = true,
-        .fd = slow[0], .transport_tcp = true};
+        .fd = slow[0], .writer = slow_writer, .transport_tcp = true};
     g_bridge.rtsp_clients[1] = (rtsp_client_slot_t){.active = true, .played = true,
-        .fd = healthy[0], .transport_tcp = true};
+        .fd = healthy[0], .writer = healthy_writer, .transport_tcp = true};
     long long start = c300x_monotonic_ms();
     forward_worker(NULL);
     assert(c300x_monotonic_ms() - start < 1500);
@@ -537,6 +544,8 @@ static void stalled_client_test(void) {
     stop_media_session(true, true);
     assert(c300x_monotonic_ms() - start < 2000);
     close(slow[0]); close(slow[1]); close(healthy[0]); close(healthy[1]);
+    c300x_rtsp_writer_release(slow_writer);
+    c300x_rtsp_writer_release(healthy_writer);
 }
 
 static void home_test(struct c300x_config *config, struct c300x_video *video, const char *mode) {

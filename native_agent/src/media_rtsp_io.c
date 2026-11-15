@@ -4,19 +4,68 @@
 #include <errno.h>
 #include <limits.h>
 #include <poll.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
+#include <time.h>
 
-ssize_t c300x_rtsp_send_pair(int fd, const void *first, size_t first_len,
-                            const void *second, size_t second_len)
+struct c300x_rtsp_writer {
+    pthread_mutex_t mutex;
+    atomic_uint references;
+};
+
+struct c300x_rtsp_writer *c300x_rtsp_writer_create(void)
+{
+    struct c300x_rtsp_writer *writer = malloc(sizeof(*writer));
+    if (writer == NULL) return NULL;
+    if (pthread_mutex_init(&writer->mutex, NULL) != 0) {
+        free(writer);
+        return NULL;
+    }
+    atomic_init(&writer->references, 1);
+    return writer;
+}
+
+void c300x_rtsp_writer_retain(struct c300x_rtsp_writer *writer)
+{
+    atomic_fetch_add_explicit(&writer->references, 1, memory_order_relaxed);
+}
+
+void c300x_rtsp_writer_release(struct c300x_rtsp_writer *writer)
+{
+    if (writer != NULL &&
+        atomic_fetch_sub_explicit(&writer->references, 1, memory_order_acq_rel) == 1) {
+        pthread_mutex_destroy(&writer->mutex);
+        free(writer);
+    }
+}
+
+static int writer_lock(struct c300x_rtsp_writer *writer, long long deadline)
+{
+    if (writer == NULL) { errno = EINVAL; return 0; }
+    while (c300x_monotonic_ms() < deadline) {
+        int error = pthread_mutex_trylock(&writer->mutex);
+        if (error == 0) return 1;
+        if (error != EBUSY) { errno = error; return 0; }
+        /* Avoid realtime timed-mutex deadlines on devices whose wall clock
+         * can change. Lock contention consumes the same budget as the write. */
+        struct timespec pause = {.tv_nsec = 1000000};
+        nanosleep(&pause, NULL);
+    }
+    errno = ETIMEDOUT;
+    return 0;
+}
+
+static ssize_t send_pair_until(int fd, const void *first, size_t first_len,
+                              const void *second, size_t second_len, long long deadline)
 {
     struct iovec iov[2];
     struct iovec *pending = iov;
     size_t count = 0, sent = 0;
-    long long deadline = c300x_monotonic_ms() + 250;
     if (first_len) iov[count++] = (struct iovec){.iov_base = (void *)first, .iov_len = first_len};
     if (second_len) iov[count++] = (struct iovec){.iov_base = (void *)second, .iov_len = second_len};
     while (count > 0) {
@@ -38,6 +87,30 @@ ssize_t c300x_rtsp_send_pair(int fd, const void *first, size_t first_len,
         }
     }
     return sent == first_len + second_len ? (ssize_t)sent : -1;
+}
+
+static ssize_t writer_send(struct c300x_rtsp_writer *writer, int fd,
+                           const void *first, size_t first_len,
+                           const void *second, size_t second_len, int timeout_ms)
+{
+    long long deadline = c300x_monotonic_ms() + timeout_ms;
+    if (!writer_lock(writer, deadline)) {
+        shutdown(fd, SHUT_RDWR);
+        return -1;
+    }
+    ssize_t result = send_pair_until(fd, first, first_len, second, second_len, deadline);
+    /* A partially written frame/response must never be followed by another
+     * message on this stream. Shutdown is safe on the retained socket. */
+    if (result < 0 || (size_t)result != first_len + second_len) shutdown(fd, SHUT_RDWR);
+    pthread_mutex_unlock(&writer->mutex);
+    return result;
+}
+
+ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer, int fd,
+                            const void *first, size_t first_len,
+                            const void *second, size_t second_len)
+{
+    return writer_send(writer, fd, first, first_len, second, second_len, 250);
 }
 
 int parse_interleaved_channel(const char *transport)
@@ -119,25 +192,8 @@ int c300x_rtsp_read_timeout(int teardown_seconds, int session_seconds, long long
     return seconds;
 }
 
-static ssize_t send_all(int fd, const void *buf, size_t len)
-{
-    const char *p = buf;
-    size_t left = len;
-    long long deadline = c300x_monotonic_ms() + 2000;
-    while (left > 0) {
-        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
-        ssize_t n = send(fd, p, left, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-        if (n <= 0) {
-            return n;
-        }
-        p += n;
-        left -= (size_t)n;
-    }
-    return (ssize_t)len;
-}
-
 void send_rtsp_response(
+    struct c300x_rtsp_writer *writer,
     int fd,
     int status,
     const char *cseq,
@@ -165,6 +221,6 @@ void send_rtsp_response(
         body ? body : ""
     );
     if (n > 0 && n < (int)sizeof(response)) {
-        (void)send_all(fd, response, (size_t)n);
+        (void)writer_send(writer, fd, response, (size_t)n, NULL, 0, 2000);
     }
 }

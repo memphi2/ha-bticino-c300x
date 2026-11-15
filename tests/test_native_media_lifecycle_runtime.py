@@ -23,6 +23,7 @@ def media_binaries(request, tmp_path_factory):
         ("media_lifecycle", sources),
         ("media_start_stop", sources),
         ("media_rtsp_auth", ["media_rtsp_auth", "media_base64", "string_util"]),
+        ("media_rtsp_writer", ["time_util"]),
     ):
         result = subprocess.run(
             ["cc", "-std=c11", "-O2", "-g", "-Wall", "-Wextra", "-Werror",
@@ -39,6 +40,15 @@ def media_binaries(request, tmp_path_factory):
 
 def test_rtsp_credential_validation(media_binaries):
     result = subprocess.run([str(media_binaries / "media_rtsp_auth")],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("case", [
+    "response_after_rtp", "rtp_after_response", "audio_after_video", "timeouts", "partial_failure",
+])
+def test_rtsp_writer(media_binaries, case):
+    result = subprocess.run([str(media_binaries / "media_rtsp_writer"), case],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
 

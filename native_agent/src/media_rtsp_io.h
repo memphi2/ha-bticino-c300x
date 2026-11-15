@@ -6,6 +6,13 @@
 
 #define RTSP_CONNECTION_LIMIT 8
 
+/* One writer per accepted connection. Slots borrow the handler's reference;
+ * relay targets retain it under the same lock that protects slot ownership. */
+struct c300x_rtsp_writer;
+struct c300x_rtsp_writer *c300x_rtsp_writer_create(void);
+void c300x_rtsp_writer_retain(struct c300x_rtsp_writer *writer);
+void c300x_rtsp_writer_release(struct c300x_rtsp_writer *writer);
+
 /* Absolute monotonic deadline, also bounds interrupted/short writes. */
 int c300x_rtsp_wait_writable(int fd, long long deadline_ms);
 /* Wait for input, never past deadline_ms (monotonic, 0 means no deadline).
@@ -16,7 +23,8 @@ int c300x_rtsp_wait_readable(int fd, int timeout_seconds, long long deadline_ms)
  * advertised once the client plays, else 30. Never past deadline_ms
  * (monotonic, 0 means no deadline); 0 when the deadline has passed. */
 int c300x_rtsp_read_timeout(int teardown_seconds, int session_seconds, long long deadline_ms);
-ssize_t c300x_rtsp_send_pair(int fd, const void *first, size_t first_len,
+ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer,
+                            int fd, const void *first, size_t first_len,
                             const void *second, size_t second_len);
 
 /* Caller serializes registry access. Entries contain fd + 1; zero is unused. */
@@ -26,6 +34,7 @@ void c300x_rtsp_connections_shutdown(const int fds[RTSP_CONNECTION_LIMIT]);
 int parse_interleaved_channel(const char *transport);
 
 void send_rtsp_response(
+    struct c300x_rtsp_writer *writer,
     int fd,
     int status,
     const char *cseq,

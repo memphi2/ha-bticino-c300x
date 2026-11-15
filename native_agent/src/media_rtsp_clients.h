@@ -2,6 +2,7 @@
 #define C300X_MEDIA_RTSP_CLIENTS_H
 
 #include "video_rtsp.h"
+#include "media_rtsp_io.h"
 
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -14,6 +15,7 @@
 typedef struct {
     bool active;
     int fd;
+    struct c300x_rtsp_writer *writer; /* Borrowed from the RTSP handler. */
     bool described;
     bool played;
     bool parked;
@@ -30,6 +32,7 @@ typedef struct {
 
 typedef struct {
     int fd;
+    struct c300x_rtsp_writer *writer; /* Retained along with fd. */
     bool transport_tcp;
     int channel;
     struct sockaddr_in udp_client;
@@ -136,7 +139,7 @@ static inline size_t c300x_rtsp_client_slots_send_targets(
 
     for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS && count < targets_len; index++) {
         const rtsp_client_slot_t *slot = &slots[index];
-        if (!slot->active || slot->fd < 0 || slot->parked || !slot->played) {
+        if (!slot->active || slot->fd < 0 || slot->parked || !slot->played || slot->writer == NULL) {
             continue;
         }
         if (audio && !slot->audio_enabled) {
@@ -149,6 +152,8 @@ static inline size_t c300x_rtsp_client_slots_send_targets(
             continue;
         }
         targets[count].fd = retained_fd;
+        c300x_rtsp_writer_retain(slot->writer);
+        targets[count].writer = slot->writer;
         targets[count].transport_tcp = slot->transport_tcp;
         targets[count].channel = audio ? slot->audio_interleaved_channel : slot->video_interleaved_channel;
         targets[count].udp_client = slot->udp_client;

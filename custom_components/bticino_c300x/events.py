@@ -454,6 +454,7 @@ _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "smartphone_forwarding.changed": (("select", "smartphone_forwarding_mode"),),
     "ringer.muted": (("switch", "ringer_mute"),),
+    "display.touch_tone_changed": (("switch", "touch_tone"),),
     "ringer.unmuted": (("switch", "ringer_mute"),),
     "ringer.volume_changed": (("number", "ringer_volume"),),
     "doorbell.pressed": (

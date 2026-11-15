@@ -7,6 +7,9 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 
 ### Added
 
+- Add a **Touch tone** configuration switch on the HA device page, synchronized
+  with the original C300X setting while the Display patch is active. Wait for
+  GUI confirmation and use push updates without periodic device reads.
 - Add **HA feedback colors** directly below the original touch-tone switch in
   the C300X's **Settings → General**. Save the choice locally without polling;
   retain error messages and actual alarm states. Back up and restore the
@@ -23,6 +26,7 @@ withdrawn 2.2.0 below. No intermediate upgrade is required.
 - Show the Alarm and Home Assistant display buttons automatically when their
   configured content is available, in reserved positions that do not move other
   buttons. Keep their last confirmed visibility during connection failures.
+  Refresh availability after configuration changes without restarting the GUI.
 - Offer optional native-camera two-way audio only on Home Assistant 2026.11 or
   newer, disabled by default. Talkback in the bundled card is unchanged.
 

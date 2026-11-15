@@ -46,6 +46,7 @@ from .qml_patch import (
     async_restore_qml_patch_and_confirm,
 )
 from .snapshots import SIGNAL_SNAPSHOT_CHANGED, get_snapshots
+from .switch_display import C300XTouchToneSwitch
 
 PARALLEL_UPDATES = 1
 
@@ -58,6 +59,8 @@ async def async_setup_entry(
     """Set up C300X switches."""
 
     entities: list[SwitchEntity] = []
+    if supports_capability(entry, "touch_tone"):
+        entities.append(C300XTouchToneSwitch(entry))
     if entry_video_enabled(entry) and supports_capability(entry, "doorbell_video"):
         entities.append(C300XSnapshotSwitch(entry))
     if supports_capability(entry, "ringer"):

@@ -954,6 +954,9 @@
       "answering_machine": {
         "name": "Answering machine"
       },
+      "touch_tone": {
+        "name": "Touch tone"
+      },
       "ringer_mute": {
         "name": "Ringer mute"
       },

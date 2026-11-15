@@ -954,6 +954,9 @@
       "answering_machine": {
         "name": "Anrufbeantworter"
       },
+      "touch_tone": {
+        "name": "Tastenton"
+      },
       "ringer_mute": {
         "name": "Klingel stummschalten"
       },

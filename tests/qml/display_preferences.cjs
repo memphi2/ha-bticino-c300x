@@ -115,6 +115,56 @@ function page(name, values) {
 }
 
 {
+    const {api, owner, requests} = runtime();
+    const timer = () => ({running: false, restart() {this.running = true;}, stop() {this.running = false;}});
+    Object.assign(owner, {touchToneEnabled: true, applyingTouchTone: false,
+        touchToneRetry: timer(), touchToneReportDeadline: timer(),
+        setTouchTone(value) { this.touchToneEnabled = value; }});
+    api.watchTouchTone(owner);
+    api.watchTouchTone(owner);
+    assert.equal(requests.length, 1, "one sleeping GUI connection, not polling");
+    assert.match(requests[0].url, /next\?enabled=1&session=[0-9a-f]{32}&revision=1$/);
+    const command = {ok: true, id: "a".repeat(32), enabled: false, expires: Date.now() + 5000};
+    requests[0].finish(200, command);
+    assert.equal(owner.touchToneEnabled, false);
+    assert.match(requests[1].url, /enabled=0&session=[0-9a-f]{32}&revision=2&completed=a{32}$/);
+    owner.touchToneEnabled = true;
+    api.reportTouchTone(owner);
+    assert.equal(JSON.parse(requests[2].body).enabled, true);
+    assert.equal(JSON.parse(requests[2].body).revision, 3);
+    owner.touchToneEnabled = false;
+    api.reportTouchTone(owner);
+    assert.equal(requests.length, 3, "coalesce changes during a report");
+    requests[2].finish(200, {ok: true});
+    assert.equal(JSON.parse(requests[3].body).enabled, false);
+    assert.equal(JSON.parse(requests[3].body).revision, 4);
+    requests[3].finish(200, {ok: true});
+    requests[1].finish(200, {...command, enabled: true, expires: Date.now() - 1});
+    assert.equal(owner.touchToneEnabled, false, "expired commands cannot change the original GUI");
+    assert.equal(owner.touchToneRetry.running, true);
+    api.watchTouchTone(owner);
+    const pending = requests.at(-1), late = pending.onreadystatechange;
+    owner.stopped = true;
+    api.stopTouchTone(owner);
+    assert.equal(pending.aborted, true);
+    late();
+    assert.equal(owner.touchToneRetry.running, false);
+    api.watchTouchTone(owner);
+    assert.equal(requests.at(-1), pending, "unloaded GUI cannot reconnect");
+}
+
+for (const data of [{ok: true}, {ok: true, id: "../bad", enabled: true, expires: Date.now() + 5000},
+    {ok: true, id: "a".repeat(32), enabled: "true", expires: Date.now() + 5000}]) {
+    const {api, owner, requests} = runtime();
+    const timer = {restart() {}, stop() {}};
+    Object.assign(owner, {touchToneEnabled: false, touchToneRetry: timer, touchToneReportDeadline: timer,
+        setTouchTone() {throw new Error("invalid GUI command was applied");}});
+    api.watchTouchTone(owner);
+    requests[0].finish(200, data);
+    assert.equal(requests.length, 1);
+}
+
+{
     const p = page("HomeAssistant.qml", {feedbackColorsEnabled: false, dashboardOnline: true,
         status: {text: "Action failed", color: "#ff6b6b"},
         pendingEntity: "", controlInFlight: false, controlFeedback: [],

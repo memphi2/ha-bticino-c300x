@@ -310,6 +310,13 @@ the colored HA action confirmations on or off (on by default). Action texts,
 errors, connection warnings and actual alarm or entity states remain visible.
 This is a local device preference, not another HA integration option.
 
+With the Display patch active, the C300X device page in Home Assistant also
+offers **Touch tone** under **Configuration**. It controls the same original
+device setting and follows changes made on the C300X. HA waits for the GUI's
+confirmed value; without the GUI connection the switch is unavailable. The
+agent uses a sleeping local connection, not periodic device reads, and does
+not write a second copy of this setting to its configuration.
+
 Changing the feedback setting saves it in the agent configuration, so it survives
 GUI and agent restarts. Reading it and choosing the already saved value do not
 write files; there is no periodic preference polling. If the agent cannot read

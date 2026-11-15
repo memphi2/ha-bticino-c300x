@@ -954,6 +954,9 @@
       "answering_machine": {
         "name": "Répondeur"
       },
+      "touch_tone": {
+        "name": "Son des touches"
+      },
       "ringer_mute": {
         "name": "Sonnerie muette"
       },

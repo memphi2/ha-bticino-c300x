@@ -162,6 +162,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/smartphone-forwarding` | API | Changes forwarding mode. |
 | `GET` | `/api/v1/ringer` | API | Reads ringer mute and volume state. |
 | `POST` | `/api/v1/ringer` | API | Changes ringer mute state or volume. |
+| `GET`, `POST` | `/api/v1/display/touch-tone` | API | Reads GUI-confirmed touch tone; POST `{"enabled":true}` waits up to five seconds for GUI acknowledgement. Requires the Display patch. |
 | `GET` | `/api/v1/answering-machine` | API | Reads answering-machine state. |
 | `POST` | `/api/v1/answering-machine` | API | Changes answering-machine enabled state. |
 | `GET` | `/api/v1/answering-machine/messages` | API | Lists video messages. |
@@ -1272,6 +1273,8 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/media-closed` | Reports device media-close event. |
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
+| `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |
@@ -1283,6 +1286,17 @@ configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
 
 `GET /ui/preferences` returns `{"ok":true,"feedback_enabled":true}` by default.
+Both `/ui/touch-tone/` routes require loopback, `X-C300X-UI: 1` and no `Origin`
+header. Commands carry a random 32-hex-character ID and expiry; mismatched,
+expired or missing acknowledgements never confirm an API write. The agent
+stores only the current GUI state in memory and publishes
+`display.touch_tone_changed` with `enabled` and `available`. GUI queries and
+reports also carry a 32-hex-character `session` ordering identifier and an
+increasing integer `revision`; older reports cannot replace newer confirmed
+state, including across GUI restarts. No firmware or
+agent configuration file is changed by these routes; the GUI applies the stock
+`global.beepEnabled` setter. Idle operation has no poll expiry or periodic reads.
+
 `POST /ui/preferences` accepts a boolean `feedback_enabled`, requires
 `X-C300X-UI: 1` and rejects requests with an `Origin` header. Only the loopback UI
 listener exposes it; browser preflight and other methods are rejected. The

@@ -120,6 +120,8 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/schema_compat.py",
     "custom_components/bticino_c300x/services.py",
     "custom_components/bticino_c300x/switch.py",
+    "custom_components/bticino_c300x/switch_display.py",
+    "custom_components/bticino_c300x/_api_display.py",
     "custom_components/bticino_c300x/snapshot_store.py",
     "custom_components/bticino_c300x/snapshot_http.py",
     "custom_components/bticino_c300x/snapshots.py",

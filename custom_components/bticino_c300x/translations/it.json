@@ -954,6 +954,9 @@
       "answering_machine": {
         "name": "Segreteria telefonica"
       },
+      "touch_tone": {
+        "name": "Suono tasti"
+      },
       "ringer_mute": {
         "name": "Silenzia suoneria"
       },

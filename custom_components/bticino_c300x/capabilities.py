@@ -22,12 +22,13 @@ from .event_types import (
     SMARTPHONE_FORWARDING_EVENTS,
     STAIR_LIGHT_EVENTS,
     SYSTEM_METRICS_EVENTS,
+    TOUCH_TONE_EVENTS,
 )
 
 LOCAL_ACTION_EVENT_TYPES = {
     "stair_light": "stair_light_activated",
 }
-EVENT_ENTITY_EXCLUDED_TYPES = {"agent_diagnostics_changed", "system_metrics_changed"}
+EVENT_ENTITY_EXCLUDED_TYPES = {"agent_diagnostics_changed", "system_metrics_changed", "display_touch_tone_changed"}
 EVENT_LABELS: dict[str, dict[str, str]] = {
     "en": {
         "doorbell_pressed": "Doorbell pressed",
@@ -44,6 +45,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "home_call_answered": "Home call answered",
         "home_call_ended": "Home call ended",
         "ringer_muted": "Ringer muted",
+        "display_touch_tone_changed": "Touch tone changed",
         "ringer_unmuted": "Ringer unmuted",
         "ringer_volume_changed": "Ringer volume changed",
         "smartphone_forwarding_changed": "Smartphone forwarding changed",
@@ -68,6 +70,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "home_call_answered": "Zuhause-Anruf angenommen",
         "home_call_ended": "Zuhause-Anruf beendet",
         "ringer_muted": "Klingelton stummgeschaltet",
+        "display_touch_tone_changed": "Tastenton geaendert",
         "ringer_unmuted": "Klingelton aktiviert",
         "ringer_volume_changed": "Klingel-Lautstärke geändert",
         "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
@@ -92,6 +95,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "home_call_answered": "Chiamata casa risposta",
         "home_call_ended": "Chiamata casa terminata",
         "ringer_muted": "Suoneria disattivata",
+        "display_touch_tone_changed": "Suono tasti modificato",
         "ringer_unmuted": "Suoneria attivata",
         "ringer_volume_changed": "Volume suoneria modificato",
         "smartphone_forwarding_changed": "Inoltro smartphone modificato",
@@ -116,6 +120,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "home_call_answered": "Appel domicile repondu",
         "home_call_ended": "Appel domicile termine",
         "ringer_muted": "Sonnerie coupee",
+        "display_touch_tone_changed": "Son des touches modifie",
         "ringer_unmuted": "Sonnerie activee",
         "ringer_volume_changed": "Volume sonnerie modifie",
         "smartphone_forwarding_changed": "Renvoi smartphone modifie",
@@ -135,6 +140,7 @@ _CAPABILITY_EVENT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("call_events", CALL_EVENTS),
     ("home_call", HOME_CALL_EVENTS),
     ("ringer", RINGER_EVENTS),
+    ("touch_tone", TOUCH_TONE_EVENTS),
     ("smartphone_forwarding", SMARTPHONE_FORWARDING_EVENTS),
     ("system_metrics", SYSTEM_METRICS_EVENTS),
     ("diagnostics", DIAGNOSTICS_EVENTS),

@@ -13,6 +13,7 @@ ACTIVATION_EVENTS = ("activation.executed",)
 CALL_EVENTS = ("call.started", "call.ended")
 HOME_CALL_EVENTS = ("home_call.started", "home_call.answered", "home_call.ended")
 RINGER_EVENTS = ("ringer.muted", "ringer.unmuted", "ringer.volume_changed")
+TOUCH_TONE_EVENTS = ("display.touch_tone_changed",)
 SMARTPHONE_FORWARDING_EVENTS = ("smartphone_forwarding.changed",)
 ANSWERING_MACHINE_EVENTS = ("answering_machine.messages_changed",)
 MEMO_EVENTS = ("memos.changed",)
@@ -35,6 +36,7 @@ HA_EVENT_TYPES: dict[str, str] = {
     "home_call.answered": "home_call_answered",
     "home_call.ended": "home_call_ended",
     "ringer.muted": "ringer_muted",
+    "display.touch_tone_changed": "display_touch_tone_changed",
     "ringer.unmuted": "ringer_unmuted",
     "ringer.volume_changed": "ringer_volume_changed",
     "smartphone_forwarding.changed": "smartphone_forwarding_changed",

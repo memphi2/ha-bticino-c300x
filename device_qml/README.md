@@ -26,6 +26,8 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   `Components/Settings/GeneralsChoice.qml` are not stored in this
   repository. The native agent patch script transforms the original files
   already present on the device and keeps a one-time original backup there.
+- The HA device's **Touch tone** configuration switch uses the original GUI
+  setting with confirmed commands and push state, through one sleeping connection.
 - General settings retains the stock touch-tone switch and adds **HA feedback
   colors** immediately below it. A GUI-owned preference object in the patched
   `MainApp.qml` reads the local agent once; changes are saved only on user input.

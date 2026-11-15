@@ -61,6 +61,96 @@ function requestDisplayPreferences(owner, enabled) {
     }
 }
 
+var touchToneRequest = null
+var touchToneReport = null
+var touchToneSession = ""
+var touchToneRevision = 0
+
+function nextTouchToneRevision() {
+    // Ordering identifier, not an authentication secret; remains local to Qt.
+    if (!touchToneSession || touchToneRevision >= 2147483646) {
+        touchToneSession = ""
+        for (var i = 0; i < 8; i++)
+            touchToneSession += ("0000" + Math.floor(Math.random() * 65536).toString(16)).slice(-4)
+        touchToneRevision = 0
+    }
+    return ++touchToneRevision
+}
+
+function stopTouchTone(owner) {
+    owner.touchToneRetry.stop()
+    owner.touchToneReportDeadline.stop()
+    var requests = [touchToneRequest, touchToneReport]
+    touchToneRequest = null
+    touchToneReport = null
+    for (var i = 0; i < requests.length; i++) {
+        if (requests[i]) {
+            requests[i].onreadystatechange = function() {}
+            requests[i].abort()
+        }
+    }
+}
+
+function retryTouchTone(owner) {
+    stopTouchTone(owner)
+    if (!owner.stopped) owner.touchToneRetry.restart()
+}
+
+function watchTouchTone(owner, completed) {
+    if (owner.stopped || touchToneRequest) return
+    var request = new XMLHttpRequest()
+    touchToneRequest = request
+    request.onreadystatechange = function() {
+        if (request.readyState !== 4 || owner.stopped || touchToneRequest !== request) return
+        touchToneRequest = null
+        var data = null
+        try { data = JSON.parse(request.responseText) } catch (error) {}
+        if (request.status === 200 && data && data.ok === true && typeof data.id === "string"
+            && /^[0-9a-f]{32}$/.test(data.id) && typeof data.enabled === "boolean"
+            && typeof data.expires === "number" && Date.now() < data.expires) {
+            owner.applyingTouchTone = true
+            try {
+                if (owner.touchToneEnabled !== data.enabled) owner.setTouchTone(data.enabled)
+            } catch (error) {} finally { owner.applyingTouchTone = false }
+            watchTouchTone(owner, data.id)
+        } else retryTouchTone(owner)
+    }
+    try {
+        var revision = nextTouchToneRevision()
+        request.open("GET", "http://127.0.0.1:8090/ui/touch-tone/next?enabled="
+            + (owner.touchToneEnabled ? "1" : "0") + "&session=" + touchToneSession
+            + "&revision=" + revision + (completed ? "&completed=" + completed : ""), true)
+        request.setRequestHeader("X-C300X-UI", "1")
+        request.send()
+    } catch (error) { retryTouchTone(owner) }
+}
+
+function reportTouchTone(owner) {
+    if (owner.stopped || owner.applyingTouchTone || !touchToneRequest) return
+    if (touchToneReport) {
+        owner.touchToneReportAgain = true
+        return
+    }
+    owner.touchToneReportAgain = false
+    var request = new XMLHttpRequest()
+    touchToneReport = request
+    request.onreadystatechange = function() {
+        if (request.readyState !== 4 || owner.stopped || touchToneReport !== request) return
+        touchToneReport = null
+        owner.touchToneReportDeadline.stop()
+        if (request.status !== 200) retryTouchTone(owner)
+        else if (owner.touchToneReportAgain) reportTouchTone(owner)
+    }
+    try {
+        request.open("POST", "http://127.0.0.1:8090/ui/touch-tone/state", true)
+        request.setRequestHeader("X-C300X-UI", "1")
+        request.setRequestHeader("Content-Type", "application/json")
+        owner.touchToneReportDeadline.restart()
+        var revision = nextTouchToneRevision()
+        request.send(JSON.stringify({enabled: owner.touchToneEnabled, session: touchToneSession, revision: revision}))
+    } catch (error) { retryTouchTone(owner) }
+}
+
 var BASE_URL = "http://127.0.0.1:8090"
 var connections = []
 var dashboardRevision = ""

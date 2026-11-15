@@ -26,7 +26,7 @@ from .dashboard_energy import (
     EnergySources,
     source_power_watts,
 )
-from .dashboard_energy_charts import chart_axis
+from .dashboard_energy_charts import chart_axis, chart_timeline
 from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE
 from .entry_types import BticinoC300XConfigEntry
 
@@ -223,7 +223,9 @@ def power_history_payload(
         series.append({
             "id": key,
             "label": labels[key],
-            "color": colors[key], "points": points,
+            "color": colors[key],
+            "values": [value if point is not None else None
+                       for value, point in zip(values, points, strict=True)],
             "dots": [index for index, point in enumerate(points)
                      if point is not None
                      and (index == 0 or points[index - 1] is None)
@@ -235,6 +237,7 @@ def power_history_payload(
                    "label": "24:00" if time == history.end else time.strftime("%H:%M")}
                   for time in times],
         "series": series,
+        "time": chart_timeline(history.start, history.buckets, POWER_HISTORY_BUCKET_SECONDS),
         "label": labels["power_interval"], "empty_text": labels["power_empty"],
     }
     payload["revision"] = hashlib.sha256(json.dumps(

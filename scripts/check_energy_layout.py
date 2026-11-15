@@ -114,6 +114,26 @@ def adapt_qml(source: str) -> str:
     return re.sub(r"(?m)^import Components(?:\.Styles)? 1\.0\s*\n", "", source)
 
 
+def energy_dependencies(source: str, qml: Path, revision: str | None = None) -> dict[str, str]:
+    """Follow only Energy-local QML and JS, including temporary test overrides."""
+    result = {}
+    pending = [source]
+    while pending:
+        current = pending.pop()
+        names = {name + ".qml" for name in re.findall(r"\b(C300XEnergy[A-Z]\w*)\b", current)}
+        names.update(re.findall(r'import "(js/c300x_energy\w*\.js)"', current))
+        for name in sorted(names - result.keys()):
+            if revision:
+                body = subprocess.run(["git", "show", f"{revision}:device_qml/{name}"],
+                                      cwd=ROOT, capture_output=True, text=True, check=True).stdout
+            else:
+                path = qml.parent / name
+                body = (path if path.is_file() else ROOT / "device_qml" / name).read_text()
+            result[name] = body
+            pending.append(body)
+    return result
+
+
 def rect_intersection(a: list[float], b: list[float]) -> tuple[float, float]:
     return (min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]),
             min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
@@ -254,7 +274,9 @@ def render(args, fixtures: list[dict]) -> dict:
                        abs(actual.blue() - color.blue())) <= 35
 
         for entry, color in zip(series, colors, strict=True):
-            points = entry["points"]
+            axis = fixture["energy"]["power"]["axis"]
+            points = [None if value is None else (value - axis["min"]) / (axis["max"] - axis["min"])
+                      for value in entry["values"]]
             point = points[probe["isolated_index"]]
             if any(value is not None and not isinstance(value, (float, int)) for value in points):
                 issues.append({"kind": "power_points_not_scalars", "series": entry["id"]})
@@ -279,10 +301,10 @@ def render(args, fixtures: list[dict]) -> dict:
             if not visible:
                 issues.append({"kind": "power_segment_missing", "series": entry["id"]})
         for index in probe["gap_indices"]:
-            if any(entry["points"][index] is not None for entry in series):
+            if any(entry["values"][index] is not None for entry in series):
                 issues.append({"kind": "power_gap_contract", "index": index})
                 continue
-            x = round(origin.x() + (index + 0.5) / len(series[0]["points"]) * plot.width())
+            x = round(origin.x() + (index + 0.5) / len(series[0]["values"]) * plot.width())
             painted = any(matches(x, y, color) for color in colors
                           for y in range(math.ceil(origin.y()) + 2, math.floor(origin.y() + plot.height()) - 2))
             checks["gaps"].append({"index": index, "x": x, "clear": not painted})
@@ -345,21 +367,14 @@ def render(args, fixtures: list[dict]) -> dict:
                     image.save(str(target))
                     adapted = adapted.replace(asset, str(Path(asset).with_suffix(".png")))
             (directory / "C300XEnergy.qml").write_text(adapted)
-            dependency = "C300XEnergyDistribution.qml"
-            if dependency in source:
-                if args.revision:
-                    dependency_source = subprocess.run(
-                        ["git", "show", f"{args.revision}:device_qml/{dependency}"],
-                        cwd=ROOT, capture_output=True, text=True, check=True,
-                    ).stdout
-                else:
-                    dependency_path = args.qml.parent / dependency
-                    if not dependency_path.is_file():
-                        dependency_path = ROOT / "device_qml" / dependency
-                    dependency_source = dependency_path.read_text()
-                (directory / dependency).write_text(adapt_qml(dependency_source))
+            report["dependencies"] = {}
+            for dependency, dependency_source in energy_dependencies(source, args.qml, args.revision).items():
+                target = directory / dependency
+                target.parent.mkdir(parents=True, exist_ok=True)
+                (args.output / dependency).parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(adapt_qml(dependency_source) if dependency.endswith(".qml") else dependency_source)
                 (args.output / dependency).write_text(dependency_source)
-                report["dependencies"] = {dependency: hashlib.sha256(dependency_source.encode()).hexdigest()}
+                report["dependencies"][dependency] = hashlib.sha256(dependency_source.encode()).hexdigest()
             (args.output / "source.qml").write_text(source)
             (directory / "UbuntuLightText.qml").write_text(
                 'import QtQuick 2.15\nText { textFormat: Text.PlainText; '
@@ -436,6 +451,23 @@ Rectangle {
                             settle()
                             if component.property("shown") != view["id"]:
                                 raise AssertionError(f'Tab did not select {view["id"]}')
+                            inspection = None
+                            if args.inspect is not None and view["id"] in ("today", "power"):
+                                from PySide6.QtQuick import QQuickItem
+                                is_power = view["id"] == "power"
+                                tap = component.findChild(QQuickItem, "energyPowerTap" if is_power else "energyHoursTap")
+                                count = component.property("powerBuckets") if is_power else 24
+                                selected = "selectedPower" if is_power else "selectedHour"
+                                index = min(args.inspect, count - 1)
+                                assert tap is not None and tap.isEnabled() and index >= 0
+                                point = tap.mapToItem(frame, QPointF((index + 0.5) * tap.width() / count, tap.height() / 2))
+                                QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(round(point.x()), round(point.y())))
+                                settle()
+                                assert component.property(selected) == index
+                                component.setProperty("energy", copy.deepcopy(payload))
+                                settle()
+                                assert component.property(selected) == index
+                                inspection = {"index": index, "same_payload_preserved": True}
                             shot = window.grabWindow()
                             if shot.isNull() or shot.size().width() != 800 or shot.size().height() != 480:
                                 raise RuntimeError("Offscreen framebuffer is missing or not 800x480")
@@ -478,10 +510,36 @@ Rectangle {
                                                     "body_texts": len(body_texts),
                                                     "power_pixels": power_checks,
                                                     "distribution_pixels": distribution_checks,
+                                                    "inspection": inspection,
                                                     "warnings": messages[start_messages:],
                                                     "screenshot": str(output)})
                             sys.stdout.write(f"{name}: {len(texts)} texts, {len(issues)} issues\n")
                             sys.stdout.flush()
+                            if inspection is not None:
+                                dismiss = next(item for item in component.findChildren(QQuickItem, "energyDismiss") if item.isVisible())
+                                point = dismiss.mapToItem(frame, QPointF(dismiss.width() / 2, dismiss.height() / 2))
+                                QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(round(point.x()), round(point.y())))
+                                settle()
+                                assert component.property(selected) == -1
+                                inspection["dismissed"] = True
+                                component.setProperty(selected, index)
+                                component.setProperty("visible", False)
+                                settle()
+                                assert component.property(selected) == -1
+                                component.setProperty("visible", True)
+                                if is_power:
+                                    component.setProperty(selected, index)
+                                    changed = copy.deepcopy(payload)
+                                    changed["power"]["revision"] += "-inspection-refresh"
+                                    component.setProperty("energy", changed)
+                                    settle()
+                                    assert component.property(selected) == -1
+                                if len(payload["views"]) > 1:
+                                    component.setProperty(selected, index)
+                                    other = next(item["id"] for item in payload["views"] if item["id"] != view["id"])
+                                    component.setProperty("view", other)
+                                    settle()
+                                    assert component.property(selected) == -1
             window.close()
             window.setSource(QUrl())
             app.processEvents()
@@ -503,6 +561,7 @@ def main() -> int:
     parser.add_argument("--stock-skin", type=Path, help="Optional read-only firmware skin directory")
     parser.add_argument("--languages", nargs="+", default=list(LANGUAGES))
     parser.add_argument("--views", nargs="+")
+    parser.add_argument("--inspect", type=int, help="Tap a chart bucket and verify local selection and dismissal")
     parser.add_argument("--scenarios", nargs="+", default=["normal", "stress"])
     parser.add_argument("--heights", nargs="+", type=int, default=[300, 230])
     parser.add_argument("--tabs", nargs="+", choices=["single", "multi"], default=["single", "multi"])

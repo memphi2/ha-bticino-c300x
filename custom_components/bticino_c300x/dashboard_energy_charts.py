@@ -3,9 +3,23 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from typing import Any
 
 from .dashboard_labels import decimal_text
+
+
+def chart_timeline(start: datetime, count: int, step: int) -> dict[str, Any]:
+    """Lossless bucket timestamps with only the timezone offset transitions."""
+    since = start.timestamp()
+    offsets: list[list[int]] = []
+    for index in range(count):
+        local = datetime.fromtimestamp(since + index * step, start.tzinfo)
+        delta = local.utcoffset()
+        offset = int(delta.total_seconds()) if delta is not None else 0
+        if not offsets or offsets[-1][1] != offset:
+            offsets.append([index, offset])
+    return {"start": since, "step": step, "count": count, "offsets": offsets}
 
 
 def chart_axis(low: float, high: float, language: str, unit: str) -> dict[str, Any]:
@@ -54,6 +68,7 @@ def chart_axis(low: float, high: float, language: str, unit: str) -> dict[str, A
 
     return {
         "min": lower, "max": upper, "unit": shown_unit,
+        "decimal_separator": decimal_text(".", language),
         "ticks": [
             {"value": (bottom + index) * step,
              "label": label((bottom + index) * step), "position": index / count}

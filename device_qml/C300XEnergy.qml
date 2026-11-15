@@ -1,6 +1,7 @@
 import QtQuick 1.1
 import Components 1.0
 import Components.Styles 1.0
+import "js/c300x_energy.js" as EnergyChart
 
 Item {
     id: root
@@ -27,6 +28,12 @@ Item {
     property variant powerAxis: powerHistory && powerHistory.axis ? powerHistory.axis : ({})
     property variant powerSeries: listOf(powerHistory ? powerHistory.series : undefined)
     property int legendHeight: Math.ceil(powerSeries.length / 2) * 22
+    property int selectedHour: -1
+    property int selectedPower: -1
+    property int powerBuckets: EnergyChart.count(powerSeries)
+    onShownChanged: { selectedHour = -1; selectedPower = -1 }
+    onVisibleChanged: { if (!visible) { selectedHour = -1; selectedPower = -1 } }
+    onPowerHistoryChanged: selectedPower = -1
     onEnergyChanged: syncPower()
     Component.onCompleted: syncPower()
 
@@ -343,6 +350,22 @@ Item {
                     }
                 }
             }
+            Rectangle {
+                objectName: "energyHourMarker"
+                visible: root.selectedHour >= 0
+                x: root.selectedHour * bars.slotWidth
+                width: bars.slotWidth
+                height: parent.height
+                color: "transparent"
+                border.color: "white"
+                border.width: 1
+            }
+            MouseArea {
+                objectName: "energyHoursTap"
+                anchors.fill: parent
+                enabled: root.series.length > 0
+                onClicked: root.selectedHour = EnergyChart.bucket(mouseX, width, 24)
+            }
         }
 
         Repeater {
@@ -361,74 +384,24 @@ Item {
             }
         }
 
-        Grid {
+        C300XEnergySums {
             id: sums
             anchors.top: bars.bottom
             anchors.topMargin: 26
             width: parent.width
-            columns: 2
-            spacing: 0
-            property int cellWidth: Math.floor((width - spacing) / 2)
+            visible: root.selectedHour < 0
+            rows: root.sumRows
+            costs: root.sumCosts
+        }
 
-            Repeater {
-                model: root.sumRows
-
-                Item {
-                    width: sums.cellWidth
-                    height: 22
-
-                    Rectangle {
-                        id: sumMark
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 10
-                        height: 10
-                        radius: 2
-                        color: modelData.color
-                    }
-
-                    UbuntuLightText {
-                        id: sumCost
-                        anchors.right: parent.right
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: root.sumCosts ? 82 : 0
-                        horizontalAlignment: Text.AlignRight
-                        text: modelData.cost ? modelData.cost : ""
-                        color: "#e3e9f1"
-                        font.pixelSize: 14
-                        elide: Text.ElideRight
-                        clip: true
-                    }
-
-                    UbuntuLightText {
-                        id: sumValue
-                        anchors.right: sumCost.left
-                        anchors.rightMargin: 6
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 100
-                        text: modelData.value
-                        color: "white"
-                        font.pixelSize: 15
-                        horizontalAlignment: Text.AlignRight
-                        elide: Text.ElideRight
-                        clip: true
-                    }
-
-                    UbuntuLightText {
-                        anchors.left: sumMark.right
-                        anchors.leftMargin: 8
-                        anchors.right: sumValue.left
-                        anchors.rightMargin: 6
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: modelData.label
-                        textFormat: Text.PlainText
-                        color: "white"
-                        font.pixelSize: 14
-                        elide: Text.ElideRight
-                        clip: true
-                    }
-                }
-            }
+        C300XEnergyReadout {
+            anchors.fill: parent
+            visible: root.selectedHour >= 0
+            axisWidth: root.axisWidth
+            rowsY: sums.y
+            interval: EnergyChart.interval(root.selectedHour, 60, 24)
+            rows: visible ? EnergyChart.todayRows(root.hours, root.sumRows, root.selectedHour) : []
+            onDismissed: root.selectedHour = -1
         }
     }
 
@@ -450,6 +423,7 @@ Item {
 
         UbuntuLightText {
             x: root.axisWidth
+            visible: root.selectedPower < 0
             width: parent.width - x - 8
             height: 18
             text: powerHistory.label ? powerHistory.label : ""
@@ -510,7 +484,7 @@ Item {
 
                     Item {
                         id: curve
-                        property variant points: root.listOf(modelData.points)
+                        property variant points: EnergyChart.points(modelData.values, root.powerAxis)
                         property variant dots: root.listOf(modelData.dots)
                         property color curveColor: modelData.color
                         anchors.fill: parent
@@ -564,6 +538,21 @@ Item {
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
             }
+            Rectangle {
+                objectName: "energyPowerMarker"
+                visible: root.selectedPower >= 0
+                x: root.powerBuckets > 0 ? (root.selectedPower + 0.5) * parent.width / root.powerBuckets : 0
+                width: 1
+                height: parent.height
+                color: "white"
+                opacity: 0.65
+            }
+            MouseArea {
+                objectName: "energyPowerTap"
+                anchors.fill: parent
+                enabled: root.powerBuckets > 0 && EnergyChart.timestamp(root.powerHistory, 0) !== "--"
+                onClicked: root.selectedPower = EnergyChart.bucket(mouseX, width, root.powerBuckets)
+            }
         }
 
         Repeater {
@@ -584,6 +573,7 @@ Item {
 
         Grid {
             id: powerLegend
+            visible: root.selectedPower < 0
             x: root.axisWidth
             y: powerPlot.y + powerPlot.height + 26
             width: parent.width - x
@@ -618,6 +608,16 @@ Item {
                     }
                 }
             }
+        }
+
+        C300XEnergyReadout {
+            anchors.fill: parent
+            visible: root.selectedPower >= 0
+            axisWidth: root.axisWidth
+            rowsY: powerLegend.y
+            interval: EnergyChart.timestamp(root.powerHistory, root.selectedPower)
+            rows: visible ? EnergyChart.powerRows(root.powerHistory, root.selectedPower) : []
+            onDismissed: root.selectedPower = -1
         }
     }
 

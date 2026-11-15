@@ -57,7 +57,7 @@ def test_power_fixtures_use_backend_aggregation_and_one_isolated_dot(monkeypatch
         assert len(power["series"]) == 4
         assert len(power["axis"]["ticks"]) <= 5
         for series in power["series"]:
-            points = series["points"]
+            points = series["values"]
             assert len(points) == 96
             assert all(point is None or isinstance(point, float) for point in points)
             assert series["dots"] == [42]

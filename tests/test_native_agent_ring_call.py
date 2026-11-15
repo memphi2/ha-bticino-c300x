@@ -309,7 +309,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
         '                "a=sendonly\\r\\n"'
     )
     assert media_bridge.count(backchannel_sdp) == 3
-    assert "read_rtsp_request_or_interleaved(" in rtsp_body
+    assert "c300x_media_rtsp_read(" in rtsp_body
     assert "handle_rtsp_backchannel_frame(" in rtsp_body
     assert "slot->backchannel_enabled = true;" in rtsp_body
     assert (

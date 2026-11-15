@@ -40,6 +40,8 @@ Keep real configs and tokens untracked.
 - Runtime, packaging, bootstrap, update, and security notes:
   [docs/native-agent.md](../docs/native-agent.md)
 - HTTP endpoint contract and compatibility rules: [API.md](API.md)
+- Internal media ownership and protocol modules:
+  [docs/native-media-architecture.md](../docs/native-media-architecture.md)
 - Device display QML files and safety rules:
   [device_qml/README.md](../device_qml/README.md)
 

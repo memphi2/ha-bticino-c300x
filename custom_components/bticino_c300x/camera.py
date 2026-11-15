@@ -25,10 +25,10 @@ from .agent_diagnostics import publish_agent_media_facts
 from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.background_tasks import CameraBackgroundTasks
 from .camera_media.ha_compat import (
-    CameraEntityCapabilities,
     CameraEntityFeature,
     WebRTCError,
     WebRTCSendMessage,
+    native_camera_capabilities,
 )
 from .camera_media.ha_compat import (
     async_get_supported_webrtc_provider as _async_get_supported_webrtc_provider,
@@ -58,6 +58,12 @@ from .camera_media.session_lifecycle import (
     CameraWebRTCSessions,
     media_owner_stopping,
     raise_if_on_demand_capture_active,
+)
+from .camera_media.snapshot_preview import (
+    STILL_IMAGE_BYTES,
+    STILL_IMAGE_CONTENT_TYPE,
+    snapshot_attributes,
+    snapshot_window_changed,
 )
 from .camera_media.state_machine import (
     MediaState,
@@ -113,6 +119,7 @@ from .media_status import (
     rtsp_client_count_from_status as _rtsp_client_count_from_status,
 )
 from .media_watchdog import AgentCpuWatchdog, handle_agent_cpu_metrics_changed
+from .snapshots import SIGNAL_SNAPSHOT_CHANGED, get_snapshots
 from .value_parsing import (
     freeze_state_value as _freeze_state_value,
 )
@@ -145,8 +152,6 @@ RING_CALL_WAIT_INTERVAL_SECONDS = 0.2
 RING_CALL_WAIT_TIMEOUT_SECONDS = 4.0
 WEBRTC_PROVIDER_CLOSE_DRAIN_INTERVAL_SECONDS = 0.05
 WEBRTC_PROVIDER_CLOSE_DRAIN_TIMEOUT_SECONDS = 1.0
-STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
-STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
 TALKBACK_CODEC = "speex/8000"
 TALKBACK_RTP_PAYLOAD_TYPE = 97
 _LOGGER = logging.getLogger(__name__)
@@ -201,6 +206,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     _attr_should_poll = False
     _attr_supported_features = CameraEntityFeature.STREAM
     _attr_translation_key = "doorbell_camera"
+    _unrecorded_attributes = frozenset({"snapshot_latest", "snapshot_captured_at"})
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         Camera.__init__(self)
@@ -211,6 +217,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._attr_is_streaming = False
         self.content_type = STILL_IMAGE_CONTENT_TYPE
         self._video_window_available = False
+        self._snapshot_capture_key: str | None = None
         self._video_stream_path: str | None = None
         self._audio_stream_path: str | None = None
         self._recorder_stream_path: str | None = None
@@ -253,25 +260,15 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self.stream_options[CONF_USE_WALLCLOCK_AS_TIMESTAMPS] = True
 
     @property
-    def available(self) -> bool:
-        """Return whether the configured RTSP endpoint is addressable."""
+    def entity_picture(self) -> str | None:  # type: ignore[override]
+        """Expose HA's camera proxy only when an enabled, retained image exists."""
 
-        return super().available
-
-    @property
-    def entity_picture(self) -> None:  # type: ignore[override]
-        """Keep the entity-list representation on the configured CCTV icon."""
-
-        return None
+        manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
+        return super().entity_picture if manager and manager.preview else None
 
     @cached_property
     def use_stream_for_stills(self) -> bool:
-        """Avoid HA background stream workers for still images.
-
-        The C300X starts video on demand. Asking Home Assistant to build stills from
-        RTSP can create repeated background ffmpeg attempts while the doorbell media
-        bridge is intentionally idle. Live viewing still uses native WebRTC.
-        """
+        """Keep HA from opening background RTSP/FFmpeg sessions for stills."""
 
         return False
 
@@ -280,6 +277,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         """Expose compact user-facing media state without bridge internals."""
 
         return {
+            **snapshot_attributes(self.hass, self._entry),
             "media_state": self._last_media_state.value,
             "media_primary_action": self._last_media_decision.primary_action.value,
             "video_window_available": self._video_window_available,
@@ -312,24 +310,21 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         width: int | None = None,
         height: int | None = None,
     ) -> bytes:
-        """Return a local still fallback instead of touching the C300X media path."""
+        """Return only cached image data, without opening the C300X media path."""
 
-        return STILL_IMAGE_BYTES
+        manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
+        image = manager.preview if manager else None
+        self.content_type = "image/jpeg" if image else STILL_IMAGE_CONTENT_TYPE
+        return image or STILL_IMAGE_BYTES
 
     async def async_camera_image(
         self,
         width: int | None = None,
         height: int | None = None,
     ) -> bytes:
-        """Return a local still fallback without starting an on-demand video session.
+        """Serve HA and Cloud still requests locally; live video uses WebRTC."""
 
-        The C300X video path is session based. Home Assistant and HA Cloud may
-        ask for a camera proxy still before opening WebRTC; using the base camera
-        implementation raises NotImplementedError, while warming RTSP here would
-        create surprise device load. Live viewing continues through WebRTC.
-        """
-
-        return STILL_IMAGE_BYTES
+        return self.camera_image(width, height)
 
     async def stream_source(self) -> str:
         """Return the RTSP source HA or its WebRTC provider should consume."""
@@ -924,6 +919,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     async def async_will_remove_from_hass(self) -> None:
         """Stop active media sessions when HA removes the camera entity."""
 
+        self._set_video_window_available(False)
         await self._background_tasks.close()
         self._webrtc_sessions.candidates.clear()
         self._runtime_data.resources.prepare_doorbell_video_stop = None
@@ -1367,11 +1363,18 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             allow_absolute_url=True,
         )
 
+    def _set_video_window_available(self, available: bool) -> None:
+        """Notify archive acquisition only at actual video-window boundaries."""
+
+        was_available = self._video_window_available
+        self._video_window_available = available
+        self._attr_is_streaming = available
+        snapshot_window_changed(self, was_available)
+
     def _apply_status(self, status: Mapping[str, Any]) -> None:
         self._bridge_available = bool(status.get("available"))
         self._bridge_status = optional_mapping(status.get("bridge"))
-        self._video_window_available = bool(status.get("window_available"))
-        self._attr_is_streaming = self._video_window_available
+        self._set_video_window_available(bool(status.get("window_available")))
         self._video_owner = str(status.get("media_owner") or "unknown")
         self._external_media_active = bool(status.get("external_media_active"))
         self._external_owner = optional_string(status.get("external_owner"))
@@ -1380,20 +1383,22 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._video_stream_path = str(status["stream_path"])
         self._audio_stream_path = optional_string(status.get("audio_stream_path"))
         self._recorder_stream_path = optional_string(status.get("recorder_stream_path"))
-        if CameraEntityCapabilities is not None:
-            self._attr_camera_entity_capabilities = CameraEntityCapabilities(
-                two_way_audio=(
-                    entry_config_value(self._entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True
-                    and self._bridge_status.get("talkback_supported") is True
-                    and bool(self._audio_stream_path)
-                )
-            )
+        capabilities = native_camera_capabilities(
+            enabled=entry_config_value(self._entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True,
+            supported=self._bridge_status.get("talkback_supported") is True,
+            audio_path=bool(self._audio_stream_path),
+        )
+        if capabilities is not None:
+            self._attr_camera_entity_capabilities = capabilities
         self._refresh_derived_media_state()
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to runtime event-state updates."""
 
         await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_SNAPSHOT_CHANGED, self._handle_snapshot_changed
+        ))
         self._runtime_data.resources.prepare_doorbell_video_stop = (
             self.async_prepare_doorbell_video_stop
         )
@@ -1416,6 +1421,11 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         )
         await self.async_update()
         self._async_write_ha_state_if_ready()
+
+    @callback
+    def _handle_snapshot_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id and not self._background_tasks.closing:
+            self._async_write_ha_state_if_ready()
 
     @callback
     def _handle_system_metrics_changed(self, entry_id: str) -> None:
@@ -1513,10 +1523,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._wake_rtsp_event_waiters()
             self._async_write_ha_state_if_ready()
             return
-        self._video_window_available = bool(
+        self._set_video_window_available(bool(
             event.data.get("video_window_available", False)
-        )
-        self._attr_is_streaming = self._video_window_available
+        ))
         self._bridge_available = bool(event.data.get("video_available", False))
         self._video_stream_path = event.data.get("stream_path")
         self._audio_stream_path = optional_string(event.data.get("audio_stream_path"))
@@ -1603,8 +1612,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._bridge_status["call_active"] = False
             self._bridge_status["clients"] = 0
             self._video_owner = "idle"
-            self._video_window_available = False
-            self._attr_is_streaming = False
+            self._set_video_window_available(False)
             self._video_stream_path = None
             self._audio_stream_path = None
             self._recorder_stream_path = None
@@ -1616,8 +1624,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                 session.ready = False
 
     def _clear_video_window(self) -> None:
-        self._video_window_available = False
-        self._attr_is_streaming = False
+        self._set_video_window_available(False)
         self._video_stream_path = None
         self._audio_stream_path = None
         self._recorder_stream_path = None

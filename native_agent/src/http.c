@@ -36,8 +36,10 @@
 #include "time_util.h"
 #include "ui_homeassistant.h"
 #include "ui_events.h"
+#include "touch_tone.h"
 #include "video_audio_settings.h"
 #include "video_rtsp.h"
+#include "video_snapshot.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -209,6 +211,7 @@ struct agent_runtime {
     struct voicemail_runtime voice_memos;
     unsigned long long memos_last_signature;
     struct c300x_ui_events ui_events;
+    struct c300x_touch_tone touch_tone;
     struct c300x_http_clients http_clients;
     struct c300x_http_file_transfers file_transfers;
     struct c300x_ringer_control ringer_control;
@@ -5981,6 +5984,30 @@ static void api_state(
     send_json(client_fd, 200, "OK", body);
 }
 
+static void handle_doorbell_snapshot(int client_fd)
+{
+    unsigned char *data = NULL;
+    size_t size = 0;
+    char header[256];
+    enum c300x_snapshot_result result = c300x_video_snapshot(&data, &size);
+    if (result != C300X_SNAPSHOT_OK) {
+        send_json(client_fd, result == C300X_SNAPSHOT_THROTTLED ? 429 : 503,
+                  result == C300X_SNAPSHOT_THROTTLED ? "Too Many Requests" : "Service Unavailable",
+                  result == C300X_SNAPSHOT_THROTTLED
+                      ? "{\"ok\":false,\"error\":\"snapshot_throttled\"}\n"
+                      : "{\"ok\":false,\"error\":\"snapshot_unavailable\"}\n");
+        return;
+    }
+    int length = snprintf(header, sizeof(header),
+        "HTTP/1.1 200 OK\r\nContent-Type: image/bmp\r\nContent-Length: %zu\r\n"
+        "Cache-Control: no-store\r\nConnection: close\r\n\r\n", size);
+    if (length > 0 && (size_t)length < sizeof(header)
+        && c300x_http_write(client_fd, header, (size_t)length)) {
+        (void)c300x_http_write(client_fd, (const char *)data, size);
+    }
+    free(data);
+}
+
 static void handle_doorbell_video_get(
     int client_fd,
     const struct c300x_config *config,
@@ -7091,6 +7118,26 @@ static void handle_smartphone_post(
         readback_json
     );
     send_json(client_fd, status, status == 200 ? "OK" : status == 409 ? "Conflict" : "Bad Gateway", body);
+}
+
+static void touch_tone_changed(void *ctx)
+{
+    struct agent_runtime *runtime = ctx;
+    char body[128];
+    c300x_touch_tone_status(&runtime->touch_tone, body, sizeof(body));
+    dispatch_event(runtime->config, runtime, "display.touch_tone_changed", body, 0);
+}
+
+static int handle_ui_touch_tone(int fd, struct agent_runtime *runtime, const struct request *request)
+{
+    char header[8];
+    if (!client_is_loopback(fd)) { send_loopback_required(fd); return 1; }
+    if (header_value(request, "origin", header, sizeof(header))
+        || !header_value(request, "x-c300x-ui", header, sizeof(header)) || strcmp(header, "1")) {
+        send_json(fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"ui_header_required\"}\n");
+        return 1;
+    }
+    return c300x_touch_tone_handle_ui(&runtime->touch_tone, fd, request);
 }
 
 static void handle_ringer_get(
@@ -10135,6 +10182,10 @@ static void handle_api_request(
         handle_smartphone_post(client_fd, config, runtime, request);
         return;
     }
+    if (strcmp(request->path, "/api/v1/display/touch-tone") == 0) {
+        c300x_touch_tone_handle_api(&runtime->touch_tone, client_fd, request);
+        return;
+    }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/ringer") == 0) {
         handle_ringer_get(client_fd, config, runtime);
         return;
@@ -10145,6 +10196,10 @@ static void handle_api_request(
             || strcmp(request->path, "/api/v1/video/doorbell/status") == 0)
     ) {
         handle_doorbell_video_get(client_fd, config, runtime);
+        return;
+    }
+    if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/video/doorbell/snapshot") == 0) {
+        handle_doorbell_snapshot(client_fd);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/activate") == 0) {
@@ -10519,13 +10574,54 @@ static void handle_api_request(
     send_json(client_fd, 501, "Not Implemented", "{\"ok\":false,\"error\":\"not_implemented\"}\n");
 }
 
+static void handle_ui_preferences(int client_fd, struct c300x_config *config,
+                                  const struct request *request)
+{
+    if (!client_is_loopback(client_fd)) {
+        send_loopback_required(client_fd);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0) {
+        char header[3];
+        int enabled, changed;
+        char error[C300X_MAX_ERROR_LEN];
+        /* Browsers cannot send this custom header cross-origin without preflight. */
+        if (header_value(request, "origin", header, sizeof(header))
+            || !header_value(request, "x-c300x-ui", header, sizeof(header))
+            || strcmp(header, "1") != 0) {
+            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"ui_header_required\"}\n");
+            return;
+        }
+        if (!c300x_json_bool_field(request->body, "feedback_enabled", &enabled)) {
+            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_feedback_enabled\"}\n");
+            return;
+        }
+        if (!c300x_save_display_feedback(config, enabled, error, sizeof(error), &changed)) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"config_save_failed\"}\n");
+            return;
+        }
+    } else if (strcmp(request->method, "GET") != 0) {
+        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"method_not_allowed\"}\n");
+        return;
+    }
+    send_json(client_fd, 200, "OK", config->display_feedback_enabled
+        ? "{\"ok\":true,\"feedback_enabled\":true}\n"
+        : "{\"ok\":true,\"feedback_enabled\":false}\n");
+}
+
 static int handle_ui_request(
     int client_fd,
-    const struct c300x_config *config,
+    struct c300x_config *config,
     struct agent_runtime *runtime,
     const struct request *request
 )
 {
+    if (strcmp(request->path, "/ui/preferences") == 0) {
+        handle_ui_preferences(client_fd, config, request);
+        return 1;
+    }
+    if (strcmp(request->path, "/ui/touch-tone/next") == 0 || strcmp(request->path, "/ui/touch-tone/state") == 0)
+        return handle_ui_touch_tone(client_fd, runtime, request);
     if (strcmp(request->method, "GET") != 0) {
         send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"method_not_allowed\"}\n");
         return 1;
@@ -10747,6 +10843,7 @@ static void handle_client(int client_fd, int kind, char *buffer, void *context)
     if (kind == LISTENER_API) {
         handle_api_request(client_fd, config, runtime, request);
         close_client = runtime->ringer_control.client_fd != client_fd
+            && runtime->touch_tone.client_fd != client_fd
             && runtime->maintenance_client_fd != client_fd
             && !c300x_http_file_transfers_owns(&runtime->file_transfers, client_fd);
     } else {
@@ -10773,7 +10870,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -10804,6 +10901,7 @@ int c300x_run(struct c300x_config *config)
     init_audio_codec_running_state(runtime);
     c300x_ui_events_init(&runtime->ui_events);
     c300x_ringer_control_init(&runtime->ringer_control);
+    c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
     c300x_command_job_init(&runtime->maintenance_job);
     runtime->maintenance_client_fd = -1;
     runtime->display_client_fd = -1;
@@ -10891,6 +10989,7 @@ int c300x_run(struct c300x_config *config)
         int ui_event_poll_index = -1, ui_event_poll_count = 0;
         int ui_event_poll_slots[C300X_UI_EVENT_MAX_WAITERS];
         int ringer_poll_index, ringer_poll_count;
+        int touch_tone_poll_index;
         int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
         int http_poll_index;
@@ -11004,6 +11103,10 @@ int c300x_run(struct c300x_config *config)
         ringer_poll_count = c300x_ringer_control_pollfds(&runtime->ringer_control, &poll_fds[poll_count]);
         poll_count += (nfds_t)ringer_poll_count;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms, c300x_ringer_control_timeout_ms(&runtime->ringer_control));
+        touch_tone_poll_index = (int)poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c300x_touch_tone_prepare(&runtime->touch_tone, &poll_fds[poll_count]));
+        poll_count += C300X_TOUCH_TONE_POLL_FDS;
         if (video != NULL && poll_count < (sizeof(poll_fds) / sizeof(poll_fds[0]))) {
             int max_video_fds = (int)((sizeof(poll_fds) / sizeof(poll_fds[0])) - poll_count);
             video_poll_index = (int)poll_count;
@@ -11051,6 +11154,7 @@ int c300x_run(struct c300x_config *config)
         finish_maintenance_job(runtime);
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
         c300x_ringer_control_expire(&runtime->ringer_control);
+        c300x_touch_tone_tick(&runtime->touch_tone, &poll_fds[touch_tone_poll_index]);
         if (poll_fds[callback_poll_index].revents) {
             apply_callback_results(runtime, time(NULL));
         }
@@ -11185,6 +11289,7 @@ cleanup:
         voicemail_close(&runtime->voice_memos);
         c300x_ui_events_close_all(&runtime->ui_events, ui_event_send_json, NULL);
         c300x_ringer_control_close(&runtime->ringer_control);
+        c300x_touch_tone_close(&runtime->touch_tone);
         c300x_command_job_close(&runtime->maintenance_job);
         if (runtime->maintenance_client_fd >= 0) {
             close_agent_socket(runtime->maintenance_client_fd);

@@ -130,7 +130,7 @@ def test_apply_qml_patch_forwards_dynamic_home_page_option() -> None:
         status={"available": True, "patched": True, "state": "patched"},
         apply_status={"patched": True},
     )
-    entry = _entry(api, options={CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True})
+    entry = _entry(api, options={CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False})
 
     asyncio.run(async_apply_qml_patch_and_confirm(entry))
 

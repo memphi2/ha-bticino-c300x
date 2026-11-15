@@ -290,8 +290,12 @@ def test_preparing_capture_cannot_continue_in_replacement_runtime(
         original.api.async_set_doorstation_audio_gain_db = AsyncMock(side_effect=replace)
     else:
         capture_boundary[0].side_effect = replace
-    with pytest.raises(HomeAssistantError, match="cancelled or the integration reloaded"):
+    with pytest.raises(HomeAssistantError) as error:
         asyncio.run(RingCaptureUseCase(_FakeHass(tmp_path), entry).capture(capture_mode="on_demand"))
+    if replace_during == "gain":
+        assert error.value.translation_key == "agent_command_failed"
+    else:
+        assert "cancelled or the integration reloaded" in str(error.value)
     capture_boundary[1].assert_not_awaited()
     successor.api.async_activate_doorbell_video.assert_not_awaited()
     successor.api.async_doorbell_video_status.assert_not_awaited()

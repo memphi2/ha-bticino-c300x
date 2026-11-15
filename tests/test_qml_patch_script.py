@@ -15,7 +15,9 @@ SOURCE_DIR = ROOT / "device_qml"
 # Synthetic reduced fixtures. These are not stock firmware QML files.
 ORIGINAL_MAIN_APP = "\n".join(
     [
-        "original main",
+        "import QtQuick 1.1",
+        "Item {",
+        "    // original main",
         "            homePage,",
         "            memoPage,",
         "            settingsPage,",
@@ -24,6 +26,7 @@ ORIGINAL_MAIN_APP = "\n".join(
         "        id: settingsPage",
         "        sourceUrl: \"Settings.qml\"",
         "    }",
+        "}",
         "",
     ]
 )
@@ -220,16 +223,42 @@ SOURCE_INSTALLED_FILES = (
     "js/c300x_i18n.js",
     "js/c300x_memos.js",
 )
+ORIGINAL_GENERAL_SETTINGS = """import QtQuick 1.1
+import Components 1.0
+import Components.Styles 1.0
+
+Item {
+    anchors.top: parent.top
+    anchors.topMargin: parent.height / 100 * 4
+    Column {
+        id: buttonColumn
+        spacing: 6
+    }
+    Row {
+        id: beepButton
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: buttonColumn.bottom
+        anchors.topMargin: 32
+        BasicButton {
+            id: selectorOnOff
+            checkable: true
+            checked: global.beepEnabled
+            onTouched: global.beepEnabled = checked
+        }
+    }
+}
+"""
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "b755ebd730bd5b3f7a70dc301542b21119ef4f5b88463d3bc853314609fbcad2",
-    "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
+    "MainApp.qml": "8a1690531198b53c29c0c828272faca2f5be6af6e1cd55357e12c50305fb9699",
+    "Components/Settings/GeneralsChoice.qml": "79e530cd5432ada63953783843bda0fdca5907e91e3e184de1e2bac3e5c69252",
+    "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "37270f903ee17d00332445d149921dbb13bffc48574a78772277faae19edfa40",
-    "HomeAssistant.qml": "66f83f36fc45d1b82d7d45e9ccfc320d53873c13a66bfe63fbcdb8e873075270",
-    "js/c300x_ha.js": "1dda5f70fcce7c78284220a97ac822d0bddc777cbf4c52f20bac1a4cff81e42d",
-    "js/c300x_i18n.js": "fc06da394fa0d766a9fed4af79204da37f827aa08880e602184acffd9f304375",
-    "js/c300x_memos.js": "b00878d55d0cc27f21a4b2603b1b3bed40cb80161d603d20121e49c3bba2c924",
+    "Alarm.qml": "e886ec4fbc9bafb39bf4cae546f4d4d6e1fb25a612f85f7bcd7dc964f10e2431",
+    "HomeAssistant.qml": "f9e8a9e4872eead5bb85170d5fa708c6440296a44a72446fd1a8f337a3c0c127",
+    "js/c300x_ha.js": "d19b4e427a61a2f4ec098bc93339ba86aee2b0d727bbecf7949c56cdc121e6e7",
+    "js/c300x_i18n.js": "b52a364f6f46fd3079dca0d2d2a2b9717d45250cda394a790bf307f2b3d5bd6a",
+    "js/c300x_memos.js": "4d7c36842de9372c12ad09e2bcdfca8e842518156c53e7da0068de1ab9e86a30",
 }
 
 
@@ -317,14 +346,15 @@ def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> No
     home_page = (gui_dir / "HomePage.qml").read_text()
     assert 'import "js/c300x_ha.js" as HAConfig' in home_page
     assert 'import "js/c300x_memos.js" as MemoSync' in home_page
-    assert "function displayBridgeButtonCount()" in home_page
     assert "function refreshDisplayBridgeButtons()" in home_page
+    assert 'event.topic === "display_bridge.state"' in home_page
     assert "HAConfig.homeButtons" in home_page
-    assert "+ 2 + page.displayBridgeButtonCount()" in home_page
+    assert "if (!valid) return" in home_page
     assert "id: homeAssistantButtonRow" not in home_page
-    assert "visible: page.alarmButtonVisible" in home_page
-    assert "visible: page.haButtonVisible" in home_page
-    assert "function isVisible() { return visible }" in home_page
+    assert "opacity: page.alarmButtonVisible ? 1 : 0" in home_page
+    assert "opacity: page.haButtonVisible ? 1 : 0" in home_page
+    assert "enabled: page.alarmButtonVisible" in home_page
+    assert "enabled: page.haButtonVisible" in home_page
     assert home_page.index('objectName: "settingsButton"') < home_page.index(
         'objectName: "alarmButton"'
     )
@@ -487,6 +517,33 @@ def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
         relative_path: _sha256(gui_dir / relative_path)
         for relative_path in PATCH_OUTPUT_SHA256
     } == PATCH_OUTPUT_SHA256
+
+
+def test_shared_qml_scripts_do_not_create_qml_objects() -> None:
+    # Qt 4 segfaults in createQmlObject from a .pragma library context.
+    for script in (ROOT / "device_qml/js").glob("*.js"):
+        source = script.read_text(encoding="utf-8")
+        if ".pragma library" in source:
+            assert "Qt.createQmlObject" not in source, script.name
+
+
+def test_qml_patch_upgrades_home_page_retry_timer(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+    home_page = gui_dir / "HomePage.qml"
+    home_page.write_text(
+        home_page.read_text().replace(
+            "    property alias memoEventRetryTimer: memoRetryTimer\n", ""
+        )
+    )
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
+    assert home_page.read_text().count("id: memoRetryTimer") == 1
+    assert "onTriggered: MemoSync.retryEventWatch()" in home_page.read_text()
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["changed_files"] == 0
 
 
 def test_home_assistant_qml_keeps_empty_state_label_blank() -> None:
@@ -1271,6 +1328,7 @@ def _write_original_gui(gui_dir: Path) -> None:
     (gui_dir / "MemoPage.qml").write_text(ORIGINAL_MEMO_PAGE)
     (gui_dir / "Components/Settings").mkdir(parents=True, exist_ok=True)
     (gui_dir / "Components/Settings/CallBlockPopup.qml").write_text(ORIGINAL_CALL_BLOCK_POPUP)
+    (gui_dir / "Components/Settings/GeneralsChoice.qml").write_text(ORIGINAL_GENERAL_SETTINGS)
     (gui_dir / "EventManager.qml").write_text(ORIGINAL_EVENT_MANAGER)
 
 

@@ -29,6 +29,7 @@ from .config_schemas import (
 from .config_schemas import (
     reconfigure_features_schema as _reconfigure_features_schema,
 )
+from .config_snapshots import SNAPSHOT_DEFAULTS
 from .const import (
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
@@ -120,6 +121,7 @@ def options_features_schema(
     create_homeassistant_user: bool | None = None,
     webrtc_ice_policy: str | None = None,
     native_two_way_audio: bool | None = None,
+    snapshots: dict[str, Any] | None = None,
 ) -> vol.Schema:
     """Return the second options page schema."""
 
@@ -160,6 +162,10 @@ def options_features_schema(
     )
     return _reconfigure_features_schema(
         default_video_enabled,
+        default_snapshots=snapshots if snapshots is not None else {
+            key: _config_default(config_entry, key, default)
+            for key, default in SNAPSHOT_DEFAULTS.items()
+        },
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -202,6 +208,7 @@ def current_feature_options(
     """Return effective feature options for reconfigure defaults."""
 
     return {
+        **{key: _config_default(config_entry, key, default) for key, default in SNAPSHOT_DEFAULTS.items()},
         CONF_ALARM_ENTITY_ID: _config_default(config_entry, CONF_ALARM_ENTITY_ID, ""),
         CONF_ALARM_PAGE_ENTITY_ID: _config_default(
             config_entry,
@@ -328,6 +335,7 @@ def reconfigure_features_schema_from_current(
     current = current_feature_options(config_entry)
     return _reconfigure_features_schema(
         bool(current[CONF_VIDEO_ENABLED]),
+        default_snapshots={key: current[key] for key in SNAPSHOT_DEFAULTS},
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
         default_doorstation_audio_gain_db=float(
             current[CONF_DOORSTATION_AUDIO_GAIN_DB]
@@ -349,6 +357,8 @@ def feature_input_defaults(
     """Return feature input with hidden display fields preserved when absent."""
 
     data = dict(user_input)
+    for key, default in SNAPSHOT_DEFAULTS.items():
+        data.setdefault(key, defaults.get(key, default))
     data.setdefault(CONF_NATIVE_TWO_WAY_AUDIO, defaults.get(CONF_NATIVE_TWO_WAY_AUDIO, False))
     if CONF_CREATE_HOMEASSISTANT_USER not in data:
         media_was_enabled = bool(defaults.get(CONF_VIDEO_ENABLED, False))

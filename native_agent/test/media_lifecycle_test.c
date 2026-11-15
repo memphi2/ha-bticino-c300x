@@ -3,10 +3,15 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stdlib.h>
 
 static int tracked_create(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
 static int tracked_join(pthread_t, void **);
 static long long test_clock(void);
+static void *tracked_calloc(size_t, size_t);
+static void *tracked_malloc(size_t);
+#define calloc tracked_calloc
+#define malloc tracked_malloc
 #define c300x_monotonic_ms test_clock
 #define pthread_create tracked_create
 #define pthread_join tracked_join
@@ -21,7 +26,29 @@ static int unauth_lifetime = 30;
 #undef pthread_create
 #undef pthread_join
 #undef c300x_monotonic_ms
+#undef calloc
+#undef malloc
 extern long long c300x_monotonic_ms(void);
+
+static atomic_int allocation_failure, allocations, rtsp_creates;
+static atomic_bool check_admission, fail_rtsp_create;
+
+static bool allocation_allowed(void) {
+    if (!atomic_load(&check_admission)) return true;
+    pthread_mutex_lock(&g_bridge.mutex);
+    assert(g_bridge.rtsp_client_threads > 0);
+    assert(g_bridge.rtsp_client_threads <= RTSP_CONNECTION_LIMIT);
+    pthread_mutex_unlock(&g_bridge.mutex);
+    atomic_fetch_add(&allocations, 1);
+    int remaining = atomic_load(&allocation_failure);
+    return remaining <= 0 || atomic_fetch_sub(&allocation_failure, 1) != 1;
+}
+static void *tracked_calloc(size_t count, size_t size) {
+    return allocation_allowed() ? calloc(count, size) : NULL;
+}
+static void *tracked_malloc(size_t size) {
+    return allocation_allowed() ? malloc(size) : NULL;
+}
 
 static atomic_int joins;
 static atomic_int renewals, clock_reads;
@@ -71,6 +98,10 @@ static void *home_worker(void *arg) {
 
 static int tracked_create(pthread_t *thread, const pthread_attr_t *attr,
                           void *(*worker)(void *), void *arg) {
+    if (worker == rtsp_client_thread) {
+        atomic_fetch_add(&rtsp_creates, 1);
+        if (atomic_load(&fail_rtsp_create)) return EAGAIN;
+    }
     if (worker == home_call_thread_func) {
         if (atomic_load(&fail_create)) return EAGAIN;
         worker = home_worker;
@@ -100,8 +131,77 @@ static void *client_worker(void *arg) {
     struct sockaddr_in *ipv4 = (struct sockaddr_in *)&peer;
     ipv4->sin_family = AF_INET;
     ipv4->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    handle_rtsp_client(*(int *)arg, &peer);
+    int fd = *(int *)arg;
+    int index = reserve_rtsp_client(&g_bridge, fd);
+    assert(index >= 0);
+    handle_rtsp_client(fd, &peer);
+    release_rtsp_client(&g_bridge, fd, index);
     return NULL;
+}
+
+static void drain_rtsp_clients(void) {
+    pthread_mutex_lock(&g_bridge.mutex);
+    while (g_bridge.rtsp_client_threads > 0) {
+        pthread_cond_wait(&g_bridge.ready_cond, &g_bridge.mutex);
+    }
+    for (int i = 0; i < RTSP_CONNECTION_LIMIT; i++) {
+        assert(g_bridge.rtsp_connection_fds[i] == 0);
+    }
+    pthread_mutex_unlock(&g_bridge.mutex);
+}
+
+static void admission_test(void) {
+    alarm(10);
+    struct sockaddr_storage peer = {0};
+    int pairs[RTSP_CONNECTION_LIMIT][2];
+    atomic_store(&check_admission, true);
+    for (int i = 0; i < RTSP_CONNECTION_LIMIT; i++) {
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pairs[i]) == 0);
+        start_rtsp_client(&g_bridge, pairs[i][1], &peer);
+    }
+    while (atomic_load(&allocations) < RTSP_CONNECTION_LIMIT * 3) usleep(1000);
+    assert(atomic_load(&rtsp_creates) == RTSP_CONNECTION_LIMIT);
+    for (int i = 0; i < 100; i++) {
+        int pair[2];
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+        start_rtsp_client(&g_bridge, pair[1], &peer);
+        assert(fcntl(pair[1], F_GETFD) == -1 && errno == EBADF);
+        close(pair[0]);
+    }
+    assert(atomic_load(&allocations) == RTSP_CONNECTION_LIMIT * 3);
+    assert(atomic_load(&rtsp_creates) == RTSP_CONNECTION_LIMIT);
+    for (int i = 0; i < RTSP_CONNECTION_LIMIT; i++) close(pairs[i][0]);
+    drain_rtsp_clients();
+
+    /* Argument, request and read-buffer allocation failures each release admission. */
+    for (int failure = 1; failure <= 4; failure++) {
+        int pair[2];
+        atomic_store(&allocation_failure, failure <= 3 ? failure : 0);
+        atomic_store(&fail_rtsp_create, failure == 4);
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+        start_rtsp_client(&g_bridge, pair[1], &peer);
+        drain_rtsp_clients();
+        assert(fcntl(pair[1], F_GETFD) == -1 && errno == EBADF);
+        close(pair[0]);
+    }
+    atomic_store(&fail_rtsp_create, false);
+    atomic_store(&allocation_failure, 0);
+    int pair[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    start_rtsp_client(&g_bridge, pair[1], &peer);
+    pthread_mutex_lock(&g_bridge.mutex);
+    g_bridge.running = false;
+    shutdown_all_rtsp_clients_locked(&g_bridge);
+    pthread_mutex_unlock(&g_bridge.mutex);
+    drain_rtsp_clients();
+    close(pair[0]);
+    int before = atomic_load(&allocations);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    start_rtsp_client(&g_bridge, pair[1], &peer);
+    assert(atomic_load(&allocations) == before);
+    assert(fcntl(pair[1], F_GETFD) == -1 && errno == EBADF);
+    close(pair[0]);
+    atomic_store(&check_admission, false);
 }
 
 static void request(int fd, const char *method, const char *headers, int status) {
@@ -474,7 +574,9 @@ int main(int argc, char **argv) {
     g_bridge.config = &config;
     g_bridge.video = video;
     g_bridge.running = true;
-    if (strcmp(argv[1], "serve") == 0) {
+    if (strcmp(argv[1], "admission") == 0) {
+        admission_test();
+    } else if (strcmp(argv[1], "serve") == 0) {
         serve_ffprobe(&config, video);
     } else if (strcmp(argv[1], "interleaved") == 0) {
         assert(parse_interleaved_channel("RTP/AVP/TCP;unicast;interleaved=0-1") == 0);

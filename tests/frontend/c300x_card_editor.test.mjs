@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  C300X_CAMERA_OBJECT_ID,
+  c300xDeviceActionEntity,
+  c300xEntryId,
+  c300xResolveEntity,
+} from "../../custom_components/bticino_c300x/frontend/c300x-entity-resolver.js";
+
 function installCustomElementStubs() {
   const definitions = new Map();
   globalThis.HTMLElement = class {};
@@ -146,4 +153,87 @@ test("editor does not write its default entity into a card that names its device
   // An entity the user picks is written.
   listeners.get("value-changed")({ detail: { value: { ...saved, entity: "camera.other" } } });
   assert.equal(events.at(-1).detail.config.entity, "camera.other");
+  assert.equal(events.at(-1).detail.config.entry_id, undefined);
+});
+
+function threeCameraHass() {
+  const hass = { language: "en", states: {}, entities: {}, devices: {} };
+  for (const id of ["a", "b", "c"]) {
+    hass.devices[id] = { config_entry_id: `entry-${id}` };
+    hass.states[`camera.${id}`] = { attributes: {} };
+    hass.entities[`camera.${id}`] = {
+      platform: "bticino_c300x", translation_key: "doorbell_camera", device_id: id,
+    };
+    for (const key of ["door_unlock", "stair_light"]) {
+      hass.states[`button.${id}_${key}`] = { attributes: { lock_id: "default" } };
+      hass.entities[`button.${id}_${key}`] = {
+        platform: "bticino_c300x", translation_key: key, device_id: id,
+      };
+    }
+  }
+  return hass;
+}
+
+test("entry-only editor displays B and preserves inference on unrelated edits", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  const { editor, form, events, change } = createEditor(module, { entry_id: "entry-b" });
+  editor.hass = threeCameraHass();
+  assert.equal(form.data.entity, "camera.b");
+  for (const update of [{ name: "Back door" }, { show_door_unlock: false }, { mode: "doorbell_call" }]) {
+    change({ ...form.data, ...update });
+    const saved = events.at(-1).detail.config;
+    assert.equal(saved.entry_id, "entry-b");
+    assert.equal("entity" in saved, false);
+    editor.setConfig(saved);
+    assert.equal(form.data.entity, "camera.b");
+  }
+});
+
+test("choosing A or C updates the owner and routes actions only to that camera", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  for (const selected of ["a", "c"]) {
+    const { editor, form, events, change } = createEditor(module, { entry_id: "entry-b" });
+    const hass = threeCameraHass();
+    editor.hass = hass;
+    change({ ...form.data, entity: `camera.${selected}` });
+    const saved = events.at(-1).detail.config;
+    assert.equal(saved.entity, `camera.${selected}`);
+    assert.equal(saved.entry_id, `entry-${selected}`);
+    assert.equal(c300xResolveEntity(hass, saved, "camera", C300X_CAMERA_OBJECT_ID), saved.entity);
+    assert.equal(c300xEntryId(hass, saved, saved.entity), saved.entry_id);
+    for (const key of ["door_unlock", "stair_light"]) {
+      assert.equal(c300xDeviceActionEntity(hass, saved, key), `button.${selected}_${key}`);
+    }
+    // Another form edit before HA calls setConfig must not restore entry B.
+    change({ ...form.data, name: "Selected camera" });
+    assert.equal(events.at(-1).detail.config.entry_id, `entry-${selected}`);
+    assert.equal(events.at(-1).detail.config.entity, `camera.${selected}`);
+  }
+});
+
+test("registry arrival resolves the displayed camera without changing saved config", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  const { editor, form, events, change } = createEditor(module, { entry_id: "entry-b" });
+  assert.equal(form.data.entity, "");
+  assert.equal(events.length, 0);
+  editor.hass = threeCameraHass();
+  assert.equal(form.data.entity, "camera.b");
+  assert.equal(events.length, 0);
+  change({ ...form.data, show_stair_light: false });
+  assert.equal(events.at(-1).detail.config.entity, undefined);
+  assert.equal(events.at(-1).detail.config.entry_id, "entry-b");
+});
+
+test("changing an explicitly configured camera also replaces its old entry owner", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  const { editor, form, events, change } = createEditor(module, { entity: "camera.b", entry_id: "entry-b" });
+  editor.hass = threeCameraHass();
+  change({ ...form.data, entity: "camera.c" });
+  assert.equal(events.at(-1).detail.config.entry_id, "entry-c");
+  change({ ...form.data, entity: "camera.b" });
+  assert.equal(events.at(-1).detail.config.entry_id, "entry-b");
 });

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import camera as camera_platform
 from homeassistant.components.camera import const as camera_const
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import HomeAssistant
 
 if TYPE_CHECKING:
@@ -19,14 +20,28 @@ else:
 
 # The native microphone capability was added in HA 2026.11.
 CameraEntityCapabilities = getattr(camera_platform, "CameraEntityCapabilities", None)
+HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO = (
+    (MAJOR_VERSION, MINOR_VERSION) >= (2026, 11)
+    and CameraEntityCapabilities is not None
+)
 
 __all__ = (
     "CameraEntityCapabilities",
+    "HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO",
     "CameraEntityFeature",
     "WebRTCError",
     "WebRTCSendMessage",
     "async_get_supported_webrtc_provider",
+    "native_camera_capabilities",
 )
+
+
+def native_camera_capabilities(*, enabled: bool, supported: bool, audio_path: bool) -> Any:
+    """Build native microphone capabilities only on supported HA versions."""
+
+    if not HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO or CameraEntityCapabilities is None:
+        return None
+    return CameraEntityCapabilities(two_way_audio=enabled and supported and audio_path)
 
 
 async def async_get_supported_webrtc_provider(

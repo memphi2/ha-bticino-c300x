@@ -21,6 +21,7 @@ function page() {
     const noop = () => {};
     const context = vm.createContext({
         Api, I18n, Date, Math, uiLanguage: "en", pinCode: "", pinRequested: false,
+        feedbackColorsEnabled: true, c300xDisplayPreferences: {load() {}},
         alarmOnline: true, alarmConfigured: true, alarmRawState: "disarmed",
         alarmCommands: ["arm_home", "arm_away", "disarm"], alarmCommandDetails: [],
         alarmOpenSensors: [], alarmOpenSensorCount: 0, alarmDelayRemaining: 0,

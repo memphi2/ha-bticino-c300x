@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ._api_content import _ApiContentMixin
 from ._api_device import _ApiDeviceMixin
+from ._api_display import _ApiDisplayMixin
 from ._api_maintenance import _ApiMaintenanceMixin
 from ._api_media import _ApiMediaMixin
 from ._api_normalize import (
@@ -108,6 +109,7 @@ class C300XAgentApi(
     _ApiMediaMixin,
     _ApiMaintenanceMixin,
     _ApiDeviceMixin,
+    _ApiDisplayMixin,
     _ApiContentMixin,
 ):
     """Small async client for the C300X device agent API."""

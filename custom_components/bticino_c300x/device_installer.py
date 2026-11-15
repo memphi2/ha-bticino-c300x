@@ -162,19 +162,20 @@ def _install_device_agent_sync(
     client = _connect_device_client(request)
     changed_files: list[str] = []
     try:
+        config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
+        merged_config = _merge_existing_device_config(
+            config_bytes, _read_remote_config_sync(client, config_path)
+        )
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
         for payload in bundle.payload_files:
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)
 
-        config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
         if _write_remote_file_sync(
             client,
             config_path,
-            _merge_existing_device_config(
-                config_bytes, _read_remote_config_sync(client, config_path)
-            ),
+            merged_config,
             mode="600",
         ):
             changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
@@ -450,11 +451,34 @@ _DEVICE_OWNED_CONFIG_SECTIONS = (
 
 
 def _read_remote_config_sync(client: _DeviceSshClient, remote_path: str) -> Any:
+    # lstat distinguishes an absent config from an unreadable or dangling one.
+    script = (
+        "import errno, json, os, sys\n"
+        "path = sys.argv[1]\n"
+        "try:\n"
+        "    os.lstat(path)\n"
+        "except OSError as exc:\n"
+        "    if exc.errno != errno.ENOENT:\n"
+        "        raise\n"
+        "    print(json.dumps({'missing': True}))\n"
+        "else:\n"
+        "    with open(path, 'r') as handle:\n"
+        "        content = handle.read()\n"
+        "    print(json.dumps({'content': content}))\n"
+    )
+    output = client.run(f"python - {_quote(remote_path)}", script.encode("utf-8"))
     try:
-        output = client.run(f"cat {_quote(remote_path)}")
-        return json.loads(output)
-    except (C300XDeviceInstallError, ValueError, TypeError):
-        return None
+        result = json.loads(output)
+        if result == {"missing": True} and result["missing"] is True:
+            return None
+        if not isinstance(result, dict) or set(result) != {"content"}:
+            raise ValueError("Invalid config read response")
+        existing = json.loads(result["content"])
+        if not isinstance(existing, dict):
+            raise ValueError("Device config must be an object")
+        return existing
+    except (ValueError, TypeError) as err:
+        raise C300XDeviceInstallError("device_install_failed") from err
 
 
 def _merge_existing_device_config(template: bytes, existing: Any) -> bytes:

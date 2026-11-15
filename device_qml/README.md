@@ -22,9 +22,19 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   core `EventManager.qml` patch.
 - `js/c300x_ha.js`: local HTTP helper used by the QML page.
 - `js/c300x_memos.js`: loopback-only local memo/message metadata helper used by patched device memo pages.
-- The stock `HomePage.qml` and `MemoPage.qml` are not stored in this
+- The stock `HomePage.qml`, `MemoPage.qml` and
+  `Components/Settings/GeneralsChoice.qml` are not stored in this
   repository. The native agent patch script transforms the original files
   already present on the device and keeps a one-time original backup there.
+- The HA device's **Touch tone** configuration switch uses the original GUI
+  setting with confirmed commands and push state, through one sleeping connection.
+- General settings retains the stock touch-tone switch and adds **HA feedback**
+  immediately below it. A GUI-owned preference object in the patched
+  `MainApp.qml` reads the local agent once; changes are saved only on user input.
+  It uses a declarative request deadline, not a polling timer or dynamically
+  created QML objects. Alarm states, error text and connection warnings remain
+  visible when feedback is disabled. Routine messages such as "Page loaded" in
+  the HA page's upper-right header are hidden; control-specific text is unchanged.
 
 ## Packaging
 
@@ -50,6 +60,10 @@ locally for comparison.
 - Store device file backups under
   `/home/bticino/cfg/extra/c300x-device-file-backups/original/`, mirroring the
   original GUI path.
+- The General settings page participates in the same staged apply, transactional
+  rollback and restore-all paths as the other original pages. Reapplying uses
+  the preserved original; unsupported layouts and missing required backups fail
+  before any active GUI file is changed.
 - Do not create on-device backups of generated project code such as the agent,
   display bridge, or their configs.
 - Restarting the GUI is required after a patch, but this repository does not run any device commands.

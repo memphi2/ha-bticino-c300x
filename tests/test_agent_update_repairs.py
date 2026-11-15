@@ -774,6 +774,108 @@ def test_agent_update_repair_ssh_install_reports_failures(monkeypatch, caplog) -
     assert not any("secret" in record.getMessage() for record in caplog.records)
 
 
+@pytest.mark.parametrize("method", ["async_qml_patch_status", "async_firewall_status", "async_ipv6_firewall_status"])
+def test_update_patch_capture_retries_busy_preserving_active_state(monkeypatch, method) -> None:
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x import agent_update
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    api = FakePatchApi()
+    busy = C300XAgentApiConnectionError("device agent returned HTTP 409: maintenance_busy")
+    read = AsyncMock(side_effect=[busy, {"patched": True, "state": "patched"}])
+    monkeypatch.setattr(api, method, read)
+    monkeypatch.setattr(agent_update.asyncio, "sleep", AsyncMock())
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api), options={CONF_DEVICE_UI_ENABLED: False})
+    entry.runtime_data.qml_patch_status = {"patched": False}
+
+    state = asyncio.run(_async_capture_external_patch_state(entry, require_reliable=True))
+
+    assert read.await_count == 2
+    assert state.qml_patch_required is True
+    assert state.firewall_patched is True
+    assert state.firewall_status_known is True
+    assert state.ipv6_firewall_patched is True
+    assert entry.runtime_data.qml_patch_status["patched"] is True
+
+
+@pytest.mark.parametrize("failure", ["busy", "transport"])
+@pytest.mark.parametrize("method", ["async_qml_patch_status", "async_firewall_status", "async_ipv6_firewall_status"])
+def test_update_does_not_prepare_without_reliable_patch_capture(monkeypatch, failure, method) -> None:
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x import agent_update, repairs
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    clock = [0.0]
+
+    async def sleep(delay):
+        clock[0] += delay
+
+    monkeypatch.setattr(agent_update, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(agent_update.asyncio, "sleep", sleep)
+    api = FakePatchApi()
+    read = AsyncMock(side_effect=C300XAgentApiConnectionError(
+        "device agent returned HTTP 409: maintenance_busy" if failure == "busy"
+        else "device-agent request timed out"
+    ))
+    monkeypatch.setattr(api, method, read)
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    update = AsyncMock()
+    monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", update)
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")
+    flow.async_show_form = lambda **kwargs: kwargs
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["errors"] == {"base": "update_failed"}
+    update.assert_not_awaited()
+    assert read.await_count == (12 if failure == "busy" else 1)
+    assert clock[0] == (12 if failure == "busy" else 0)
+
+
+@pytest.mark.parametrize("optional", ["unsupported", "unavailable", "core_only"])
+@pytest.mark.parametrize("method", ["async_qml_patch_status", "async_firewall_status", "async_ipv6_firewall_status"])
+def test_update_optional_patch_status_does_not_block_prepare(monkeypatch, optional, method) -> None:
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x import repairs
+    from custom_components.bticino_c300x._api_normalize import (
+        normalize_firewall_status,
+        normalize_qml_patch_status,
+    )
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiUnsupportedError
+
+    api = FakePatchApi()
+    raw = {"available": False} if optional == "unavailable" else {"core_patched": True}
+    normalize = normalize_qml_patch_status if method == "async_qml_patch_status" else normalize_firewall_status
+    status = normalize(raw)
+    assert status["patched"] is None
+    read = AsyncMock(return_value=status)
+    if optional == "unsupported":
+        read.side_effect = C300XAgentApiUnsupportedError("device agent returned HTTP 404")
+    monkeypatch.setattr(api, method, read)
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api), options={CONF_DEVICE_UI_ENABLED: False})
+    entry.runtime_data.qml_patch_status = {"patched": True}
+    entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+
+    state = asyncio.run(_async_capture_external_patch_state(entry, require_reliable=True))
+    if method == "async_qml_patch_status":
+        assert state.qml_patch_required is (optional == "unsupported")
+    else:
+        assert state.qml_patch_required is True
+    if method == "async_firewall_status":
+        assert state.firewall_status_known is False
+    # Stop at the update boundary: optional status must not prevent reaching prepare.
+    update = AsyncMock(side_effect=RuntimeError("test stops before device update"))
+    monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", update)
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")
+    flow.async_show_form = lambda **kwargs: kwargs
+    asyncio.run(flow.async_step_confirm({}))
+    update.assert_awaited_once()
+
+
 def test_capture_external_patch_state_tolerates_agent_status_errors() -> None:
     class ErrorStatusApi(FakePatchApi):
         async def async_qml_patch_status(self) -> dict[str, Any]:

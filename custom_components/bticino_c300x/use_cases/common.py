@@ -36,6 +36,14 @@ async def raise_agent_command_failed(awaitable: Awaitable[Any]) -> None:
         raise service_validation_error("agent_command_failed") from err
 
 
+def ensure_current_runtime(entry: Any, runtime: Any) -> None:
+    """Reject commands whose entry lifetime ended during an awaited operation."""
+
+    if (getattr(entry, "runtime_data", None) is not runtime
+            or getattr(getattr(runtime, "resources", None), "closed", False)):
+        raise service_validation_error("agent_command_failed")
+
+
 def ensure_maintenance_action(entry: Any, action: str) -> None:
     """Reject maintenance services unless the agent advertises and authorizes them."""
 

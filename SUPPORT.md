@@ -2,10 +2,9 @@
 
 ## Supported Release Line
 
-- `2.2.x`: current stable
-- Pre-release versions containing `b` or `rc` are opt-in testing releases,
-  not replacements for the latest stable release. Enable beta versions in HACS
-  only when you want to test them.
+- `2.1.x`: current stable (2.1.3)
+- `2.2.0`: withdrawn because its display update can cause repeated device restarts
+- `2.3.x`: in development, not yet released
 
 ## Compatibility Baseline
 

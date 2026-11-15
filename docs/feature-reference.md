@@ -83,6 +83,40 @@ independently. Both are shown by default. In YAML, set `show_door_unlock: false`
 or `show_stair_light: false` to hide the corresponding button. This only changes
 that card; the Home Assistant entities and services remain available.
 
+### Visitor Images
+
+The **Save images** switch belongs to the C300X device and is on by default.
+It controls automatic images for doorbell rings and video sessions, regardless
+of whether a Home Assistant dashboard is open. No browser capture is used.
+Under **Configure > Video and audio**, choose the image delay (default **5
+seconds**) and retention (default **14 days**). A call or stream that ends
+before capture may not produce an image.
+
+The agent reads the existing video background only while the firmware media
+process is using it. It does not start or answer a call, change forwarding,
+run FFmpeg, or create image, temporary or status files on the C300X. Conversion
+to JPEG and all persistent storage happen in Home Assistant. Reading a frame
+still has a bounded CPU, RAM and network cost; this is not zero-load capture.
+The bundled agent must be updated for the new snapshot endpoint.
+
+Images are stored beside Ring Captures under the configured HA media root:
+`c300x/snapshots/<device-directory>/`. Each C300X has its own directory and
+archive in **Media > BTicino C300X**. The storage location is not `www` and the
+integration's image endpoint requires camera read permission. HA's standard
+local-media browser also exposes this directory using HA media access rules,
+independently of camera entity permissions. Restrict media access if needed;
+disabling the camera entity does not hide the archive from that browser. The latest
+retained image is used by the camera entity and the card. The card shows only
+the capture date and time in the upper-right corner; the preview is a saved
+image, not live video. Until the first successful capture, no preview is shown.
+
+Turning **Save images** off stops new captures and hides these previews,
+without reloading the integration. Existing images remain available in Media
+until they expire. Cleanup also runs while the switch is off. Storage is
+limited to **1,000 images or 128 MiB per device**, whichever is reached first;
+the oldest images are removed first. Retention limits are enforced while HA
+is running and again after startup.
+
 ## Alarmo Display
 
 The optional native Alarmo page stays a subpage in the original blue C300X
@@ -111,21 +145,12 @@ Call are not yet confirmed on hardware.
 
 ## Display Home Page Buttons
 
-**Show home page buttons only when needed** under **Display and Display patch** decides how the
-Alarm and Home Assistant buttons reach the device's home page.
-
-| Setting | Home page |
-| --- | --- |
-| On | Each button is placed on its own and is shown only while it has something to open: Alarm when Alarmo is configured, Home Assistant when a dashboard is available. The firmware arranges them with the stock buttons and wraps to a second row once more than four are visible. |
-| Off | Both buttons sit together in one fixed pair, always visible, next to each other. |
-
-The mode is part of the page the Display patch generates, so changing it
-re-applies the patch and restarts the device GUI once. Saving the options
-without touching the setting changes nothing on the device.
-
-New entries start with the setting on. An entry created before the setting
-existed keeps the fixed pair it has been running, recorded once on upgrade, and
-the form shows that state instead of an unrelated default.
+With the Display patch, the Alarm button appears when an alarm panel is configured;
+the Home Assistant button appears when a display page has configured content.
+Their positions stay reserved, so a change in availability does not rearrange
+the other home-page buttons. A temporary connection failure keeps the last
+confirmed visibility instead of hiding both buttons. Existing installations
+receive this layout the next time the Display patch is applied.
 
 ## Display Device Controls
 
@@ -278,6 +303,39 @@ additional polling, refresh timers or device-file writes are introduced by these
 detail views.
 
 ## Display Settings
+
+On the C300X itself, open **Settings → General**. The original **Tone buttons**
+switch controls touch sounds. Directly below it, **HA feedback** turns colored
+HA action confirmations and routine messages in the HA page's upper-right
+header, such as "Page loaded", on or off (on by default). Text at the affected
+control, errors, pending actions, connection warnings and actual alarm or entity
+states remain visible.
+This is a local device preference, not another HA integration option.
+
+With the Display patch active, the C300X device page in Home Assistant also
+offers **Touch tone** under **Configuration**. It controls the same original
+device setting and follows changes made on the C300X. HA waits for the GUI's
+confirmed value; without the GUI connection the switch is unavailable. The
+agent uses a sleeping local connection, not periodic device reads, and does
+not write a second copy of this setting to its configuration.
+Touch-tone status updates also appear in **Device event** as **Touch tone
+changed**, with the stable event type `display_touch_tone_changed` for automations.
+
+Changing the feedback setting saves it in the agent configuration, so it survives
+GUI and agent restarts. Reading it and choosing the already saved value do not
+write files; there is no periodic preference polling. If the agent cannot read
+or save it, the switch is disabled with **Setting unavailable**; reopen General
+to read the actual setting before trying again.
+
+Only the optional Display patch that installs the additional HA/Alarmo pages
+changes General settings. Installing or updating the agent's core media/ringer
+hook alone leaves the page untouched. Turning the Display patch off restores
+General settings while keeping the core media/ringer hook.
+
+The Display patch backs up the original General settings page before changing
+it, keeps the original tone control and restores the page on removal. Unknown
+page layouts or a missing backup of an already patched page abort the operation
+instead of replacing the original with a guessed version.
 
 Switch the Display patch on under **Configure > Display and Display patch**;
 the settings menu then offers **Display pages** and **Display tiles**. Choose the weather, Alarmo and the entities with the normal

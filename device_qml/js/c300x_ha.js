@@ -1,5 +1,162 @@
 .pragma library
 
+function setStatus(statusItem, text, color, optionalFeedback) {
+    statusItem.optionalFeedback = optionalFeedback === true
+    statusItem.text = text
+    statusItem.color = color
+}
+
+// Qt 4 property variants discard XHR methods and identity. Keep it in JS.
+var displayPreferenceRequest = null
+
+function loadDisplayPreferences(owner) {
+    if (!owner.ready) requestDisplayPreferences(owner, null)
+}
+
+function saveDisplayPreferences(owner, enabled) {
+    if (!owner.ready || typeof enabled !== "boolean" || enabled === owner.feedbackEnabled) return
+    requestDisplayPreferences(owner, enabled)
+}
+
+function cancelDisplayPreferences(owner) {
+    var pending = displayPreferenceRequest
+    if (pending && pending.owner !== owner) return
+    displayPreferenceRequest = null
+    owner.deadline.stop()
+    owner.busy = false
+    if (pending) {
+        owner.ready = false
+        owner.errorKey = "display_settings_error"
+        pending.request.onreadystatechange = function() {}
+        pending.request.abort()
+    }
+}
+
+function requestDisplayPreferences(owner, enabled) {
+    if (owner.stopped || owner.busy || displayPreferenceRequest) return
+    var request = new XMLHttpRequest()
+    var pending = {owner: owner, request: request}
+    displayPreferenceRequest = pending
+    owner.busy = true
+    owner.errorKey = ""
+    request.onreadystatechange = function() {
+        if (request.readyState !== 4 || owner.stopped || displayPreferenceRequest !== pending) return
+        displayPreferenceRequest = null
+        owner.deadline.stop()
+        owner.busy = false
+        var data = null
+        try { data = JSON.parse(request.responseText) } catch (error) {}
+        if (request.status === 200 && data && data.ok === true && typeof data.feedback_enabled === "boolean" && (enabled === null || data.feedback_enabled === enabled)) {
+            owner.feedbackEnabled = data.feedback_enabled
+            owner.ready = true
+        } else {
+            owner.ready = false
+            owner.errorKey = "display_settings_error"
+        }
+    }
+    try {
+        request.open(enabled === null ? "GET" : "POST", "http://127.0.0.1:8090/ui/preferences", true)
+        if (enabled !== null) {
+            request.setRequestHeader("X-C300X-UI", "1")
+            request.setRequestHeader("Content-Type", "application/json")
+        }
+        owner.deadline.restart()
+        request.send(enabled === null ? null : JSON.stringify({feedback_enabled: enabled}))
+    } catch (error) {
+        cancelDisplayPreferences(owner)
+    }
+}
+
+var touchToneRequest = null
+var touchToneReport = null
+var touchToneSession = ""
+var touchToneRevision = 0
+
+function nextTouchToneRevision() {
+    // Ordering identifier, not an authentication secret; remains local to Qt.
+    if (!touchToneSession || touchToneRevision >= 2147483646) {
+        touchToneSession = ""
+        for (var i = 0; i < 8; i++)
+            touchToneSession += ("0000" + Math.floor(Math.random() * 65536).toString(16)).slice(-4)
+        touchToneRevision = 0
+    }
+    return ++touchToneRevision
+}
+
+function stopTouchTone(owner) {
+    owner.touchToneRetry.stop()
+    owner.touchToneReportDeadline.stop()
+    var requests = [touchToneRequest, touchToneReport]
+    touchToneRequest = null
+    touchToneReport = null
+    for (var i = 0; i < requests.length; i++) {
+        if (requests[i]) {
+            requests[i].onreadystatechange = function() {}
+            requests[i].abort()
+        }
+    }
+}
+
+function retryTouchTone(owner) {
+    stopTouchTone(owner)
+    if (!owner.stopped) owner.touchToneRetry.restart()
+}
+
+function watchTouchTone(owner, completed) {
+    if (owner.stopped || touchToneRequest) return
+    var request = new XMLHttpRequest()
+    touchToneRequest = request
+    request.onreadystatechange = function() {
+        if (request.readyState !== 4 || owner.stopped || touchToneRequest !== request) return
+        touchToneRequest = null
+        var data = null
+        try { data = JSON.parse(request.responseText) } catch (error) {}
+        if (request.status === 200 && data && data.ok === true && typeof data.id === "string"
+            && /^[0-9a-f]{32}$/.test(data.id) && typeof data.enabled === "boolean"
+            && typeof data.expires === "number" && Date.now() < data.expires) {
+            owner.applyingTouchTone = true
+            try {
+                if (owner.touchToneEnabled !== data.enabled) owner.setTouchTone(data.enabled)
+            } catch (error) {} finally { owner.applyingTouchTone = false }
+            watchTouchTone(owner, data.id)
+        } else retryTouchTone(owner)
+    }
+    try {
+        var revision = nextTouchToneRevision()
+        request.open("GET", "http://127.0.0.1:8090/ui/touch-tone/next?enabled="
+            + (owner.touchToneEnabled ? "1" : "0") + "&session=" + touchToneSession
+            + "&revision=" + revision + (completed ? "&completed=" + completed : ""), true)
+        request.setRequestHeader("X-C300X-UI", "1")
+        request.send()
+    } catch (error) { retryTouchTone(owner) }
+}
+
+function reportTouchTone(owner) {
+    if (owner.stopped || owner.applyingTouchTone || !touchToneRequest) return
+    if (touchToneReport) {
+        owner.touchToneReportAgain = true
+        return
+    }
+    owner.touchToneReportAgain = false
+    var request = new XMLHttpRequest()
+    touchToneReport = request
+    request.onreadystatechange = function() {
+        if (request.readyState !== 4 || owner.stopped || touchToneReport !== request) return
+        touchToneReport = null
+        owner.touchToneReportDeadline.stop()
+        if (request.status !== 200) retryTouchTone(owner)
+        else if (owner.touchToneReportAgain) reportTouchTone(owner)
+    }
+    try {
+        request.open("POST", "http://127.0.0.1:8090/ui/touch-tone/state", true)
+        request.setRequestHeader("X-C300X-UI", "1")
+        request.setRequestHeader("Content-Type", "application/json")
+        owner.touchToneReportDeadline.restart()
+        var revision = nextTouchToneRevision()
+        request.send(JSON.stringify({enabled: owner.touchToneEnabled, session: touchToneSession, revision: revision}))
+    } catch (error) { retryTouchTone(owner) }
+}
+
 var BASE_URL = "http://127.0.0.1:8090"
 var connections = []
 var dashboardRevision = ""
@@ -28,8 +185,8 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         if (pageItem.preventReturnToHomepage !== undefined) {
             pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         }
-        statusItem.text = uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected")
-        statusItem.color = pageItem.commandPending ? "#f1c40f" : "#58d68d"
+        setStatus(statusItem, uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected"),
+            pageItem.commandPending ? "#f1c40f" : "#58d68d", !pageItem.commandPending)
         if (data.alarm && data.alarm.state) {
             var previousState = pageItem.alarmRawState
             var previousCommand = pageItem.selectedCommand
@@ -91,8 +248,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         // such as "API error: 503" in a translated interface. The code stays
         // visible because it names the cause exactly, but the sentence around
         // it is the user's language.
-        statusItem.text = statusErrorText(pageItem, error)
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b")
         if (pageItem.setAlarmDelayRemaining) {
             pageItem.setAlarmDelayRemaining(0)
         }
@@ -125,8 +281,7 @@ function dashboard(statusItem, pageItem) {
         }
         pageItem.dashboardOnline = true
         if (data && data.not_modified === true) {
-            statusItem.text = uiText(pageItem, "board_loaded")
-            statusItem.color = "#58d68d"
+            setStatus(statusItem, uiText(pageItem, "board_loaded"), "#58d68d", true)
             finishDashboardRefresh(statusItem, pageItem)
             return
         }
@@ -143,8 +298,8 @@ function dashboard(statusItem, pageItem) {
             pageItem.currentPageIndex = 0
         }
         loadDashboardPage(statusItem, pageItem)
-        statusItem.text = pages.length > 0 ? uiText(pageItem, "board_loaded") : uiText(pageItem, "no_dashboard_pages")
-        statusItem.color = pages.length > 0 ? "#58d68d" : "#f1c40f"
+        setStatus(statusItem, uiText(pageItem, pages.length > 0 ? "board_loaded" : "no_dashboard_pages"),
+            pages.length > 0 ? "#58d68d" : "#f1c40f", pages.length > 0)
         if (pageItem.refreshSelectedItem) pageItem.refreshSelectedItem()
         finishDashboardRefresh(statusItem, pageItem)
     }, function(error) {
@@ -155,8 +310,7 @@ function dashboard(statusItem, pageItem) {
         pageItem.watchFailed = true
         dashboardRevision = ""
         if (!pageItem.controlInFlight) pageItem.pendingEntity = ""
-        statusItem.text = uiText(pageItem, "stale_state")
-        statusItem.color = "#f1c40f"
+        setStatus(statusItem, uiText(pageItem, "stale_state"), "#f1c40f")
     })
 }
 
@@ -336,8 +490,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
         if (!data || data.ok !== true) {
             pageItem.pendingEntity = ""
             setDashboardFeedback(pageItem, item.entity_id, "action_error")
-            statusItem.text = uiText(pageItem, "action_error")
-            statusItem.color = "#ff6b6b"
+            setStatus(statusItem, uiText(pageItem, "action_error"), "#ff6b6b")
             return
         }
         setDashboardFeedback(pageItem, item.entity_id, "action_sent", expected)
@@ -347,8 +500,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
         pageItem.controlInFlight = false
         pageItem.pendingEntity = ""
         setDashboardFeedback(pageItem, item.entity_id, "state_unconfirmed")
-        statusItem.text = uiText(pageItem, "state_unconfirmed")
-        statusItem.color = "#f1c40f"
+        setStatus(statusItem, uiText(pageItem, "state_unconfirmed"), "#f1c40f")
     }, commandScope(pageItem, "commandGeneration"))
 }
 
@@ -392,8 +544,7 @@ function dashboardPreviousPage(statusItem, pageItem) {
 
 function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
     if (!item || !item.entity_id || !item.domain) {
-        statusItem.text = uiText(pageItem, "invalid_action")
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, "invalid_action"), "#ff6b6b")
         return
     }
     if (refreshDashboard !== false) {
@@ -410,8 +561,8 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         if (generation !== pageItem.runtimeGeneration) return
         if (quickGeneration !== pageItem.quickActionGeneration) return
         pageItem.quickActionPending = false
-        statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
-        statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, data.ok ? "action_sent" : "action_error"),
+            data.ok ? "#58d68d" : "#ff6b6b", data.ok === true)
         if (data.ok && pageItem.refreshAlarmStatus) {
             pageItem.refreshAlarmStatus(true)
         }
@@ -419,15 +570,13 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         if (generation !== pageItem.runtimeGeneration) return
         if (quickGeneration !== pageItem.quickActionGeneration) return
         pageItem.quickActionPending = false
-        statusItem.text = statusErrorText(pageItem, error)
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b")
     }, commandScope(pageItem, "quickActionGeneration"))
 }
 
 function dashboardSliderAction(item, direction, statusItem, pageItem) {
     if (!item || !item.entity_id || !direction) {
-        statusItem.text = uiText(pageItem, "invalid_action")
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, "invalid_action"), "#ff6b6b")
         return
     }
     dashboardControl(item, {command: direction}, null, statusItem, pageItem)
@@ -435,8 +584,7 @@ function dashboardSliderAction(item, direction, statusItem, pageItem) {
 
 function dashboardChoiceAction(item, option, statusItem, pageItem) {
     if (!item || !item.entity_id || option === undefined || option === null) {
-        statusItem.text = uiText(pageItem, "invalid_action")
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, uiText(pageItem, "invalid_action"), "#ff6b6b")
         return
     }
     dashboardControl(item, {command: ""}, option, statusItem, pageItem)
@@ -490,8 +638,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         if (pageItem.setCommandFeedback) {
             pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
         } else {
-            statusItem.text = alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem)
-            statusItem.color = "#ff6b6b"
+            setStatus(statusItem, alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem), "#ff6b6b")
         }
         return
     }
@@ -522,8 +669,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
             if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("sending", command, "#f1c40f")
             } else {
-                statusItem.text = uiText(pageItem, "sending")
-                statusItem.color = "#f1c40f"
+                setStatus(statusItem, uiText(pageItem, "sending"), "#f1c40f")
             }
             pageItem.bypassOffered = false
             if (command === "disarm" && pageItem.setAlarmDelayRemaining) {
@@ -572,14 +718,12 @@ function alarmCheck(command, statusItem, pageItem) {
                 if (pageItem.setCommandFeedback) {
                     pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
                 } else {
-                    statusItem.text = uiText(pageItem, "not_ready_to_arm")
-                    statusItem.color = "#ff6b6b"
+                    setStatus(statusItem, uiText(pageItem, "not_ready_to_arm"), "#ff6b6b")
                 }
             } else if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("ready_to_arm", command, "#58d68d")
             } else {
-                statusItem.text = uiText(pageItem, "ready_to_arm")
-                statusItem.color = "#58d68d"
+                setStatus(statusItem, uiText(pageItem, "ready_to_arm"), "#58d68d")
             }
             return
         }
@@ -608,8 +752,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
         if (pageItem.flashCommandButton) {
             pageItem.flashCommandButton(command, "#ff6b6b")
         }
-        statusItem.text = ""
-        statusItem.color = "#ff6b6b"
+        setStatus(statusItem, "", "#ff6b6b")
         if (pageItem.setCommandFeedback && !pageItem.bypassVisible()) {
             pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
         }
@@ -619,8 +762,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
         if (pageItem.setCommandFeedback) {
             pageItem.setCommandFeedback("invalid_code", command, "#ff6b6b")
         } else {
-            statusItem.text = uiText(pageItem, "invalid_code")
-            statusItem.color = "#ff6b6b"
+            setStatus(statusItem, uiText(pageItem, "invalid_code"), "#ff6b6b")
         }
         return true
     }
@@ -636,8 +778,7 @@ function setErrorFeedback(command, statusItem, pageItem) {
         pageItem.setCommandFeedback("alarm_command_error", command, "#ff6b6b")
         return
     }
-    statusItem.text = uiText(pageItem, "alarm_command_error")
-    statusItem.color = "#ff6b6b"
+    setStatus(statusItem, uiText(pageItem, "alarm_command_error"), "#ff6b6b")
 }
 
 function mergeAlarmCommandDetail(pageItem, command, update) {
@@ -883,8 +1024,8 @@ function loadDashboardPage(statusItem, pageItem) {
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {
-        statusItem.text = uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + " " + uiText(pageItem, "status_loaded")
-        statusItem.color = "#58d68d"
+        setStatus(statusItem, uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1)
+            + " " + uiText(pageItem, "status_loaded"), "#58d68d", true)
     }
 }
 

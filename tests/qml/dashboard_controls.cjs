@@ -16,6 +16,7 @@ const I18n = library("c300x_i18n.js");
 const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
+    feedbackColorsEnabled: true, c300xDisplayPreferences: {load() {}},
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
     interactionActive: false, armedCommand: "", listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
     commandGeneration: 0, controlFeedback: [],

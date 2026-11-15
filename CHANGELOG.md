@@ -1,6 +1,94 @@
 # Changelog
 
-## v2.2.0 - 2026-11-14
+## v2.3.0 - 2026-11-15
+
+The direct stable update from 2.1.3 includes the changes listed under the
+withdrawn 2.2.0 below. No intermediate upgrade is required.
+
+### Added
+
+- Add a **Touch tone** configuration switch on the HA device page, synchronized
+  with the original C300X setting while the Display patch is active. Wait for
+  GUI confirmation and use push updates without periodic device reads. Expose
+  touch-tone status changes through the Device event entity too.
+- Add **HA feedback** directly below the original touch-tone switch in
+  the C300X's **Settings → General**. Save the choice locally without polling;
+  retain error messages and actual alarm states, and fit both controls on the
+  original screen. Back up and restore the original settings page through the
+  existing transactional Display patch; leave core-only installations unchanged.
+  Turning it off also hides routine messages such as "Page loaded" in the HA
+  page's upper-right header, without hiding errors or pending actions.
+- Automatic visitor images on doorbell rings and video sessions without an open
+  dashboard. A device-wide **Save images** switch controls capture and preview;
+  the default delay is 5 seconds and retention is 14 days. Images appear in HA
+  Media and as the last-image preview in the card and camera entity. The agent
+  reads the existing video framebuffer without extra device filesystem writes;
+  JPEG conversion and storage take place in HA.
+  The card preview shows its capture date and time in the upper-right corner.
+
+### Changed
+
+- Show the Alarm and Home Assistant display buttons automatically when their
+  configured content is available, in reserved positions that do not move other
+  buttons. Keep their last confirmed visibility during connection failures.
+  Refresh availability after configuration changes without restarting the GUI.
+- Offer optional native-camera two-way audio only on Home Assistant 2026.11 or
+  newer, disabled by default. Talkback in the bundled card is unchanged.
+
+### Fixed
+
+- Allow a bounded wait for H.264 parameter sets when recording a ring already
+  in progress, preventing MP4 startup failures with missing video dimensions.
+- Keep visitor images when the device display performs a normal framebuffer
+  page flip during capture, instead of discarding the completed snapshot.
+- Convert extracted capture frames explicitly to full color range before JPEG
+  encoding instead of relying on automatic ffmpeg format negotiation.
+- Preserve technical event types such as `ring` on the event entities so
+  type-filtered automations match; use HA's event-attribute translations for
+  readable labels in the interface, including English.
+- Wait briefly when a startup status check temporarily occupies maintenance
+  access before an agent update. Preserve patch-state checks before preparing
+  the update; upload and apply operations are not blindly retried.
+- Prevent a display startup crash and repeated device restarts introduced in
+  2.2.0. The memo notification retry timer is now owned by the QML page instead
+  of being dynamically created from a shared JavaScript library, which crashes
+  the device's Qt 4 runtime.
+- Drain pending image work before unloading or replacing the entry, and serve
+  simultaneous latest-image requests without unnecessary disk contention.
+- Keep camera and device selection aligned in the card editor when multiple
+  C300X devices are configured.
+- Preserve legacy device-button registrations when the device is offline and
+  its display-patch status cannot be determined.
+- Abort SSH reinstallation if existing device settings cannot be read reliably
+  instead of replacing them with defaults.
+- Check for newly connected viewers before answering an automatic ring capture
+  and before hanging up during capture cleanup.
+- Cancel obsolete codec refreshes when an entity unloads, and prevent failed
+  preview transitions from retrying indefinitely or clearing a newer stream.
+- Reject delayed media start, answer and stop commands after their integration
+  instance has unloaded or been replaced; guard audio-gain preparation too.
+- Match notification events to the selected device even when it has no camera
+  entity, including HA's single-entry and composite device representations.
+- Reserve RTSP worker capacity before allocating resources; use private codec
+  temporary files and bounded local media command deadlines.
+- Restore invalid agent boot links transactionally and report init failures.
+- Roll back failed GUI file updates and preserve recovery backups when removal
+  cannot verify restoration, including user-label-only patches.
+- Use private temporary workspaces for agent removal, and stop before changing
+  device files if preparing that workspace fails.
+
+### Release Validation
+
+- Bind the packaged native executable to a reviewed local-build hash and source
+  digest. Validate transferred agent bytes before rebuilding release assets.
+- Include the snapshot image dependency in the runtime SBOM.
+- Check recording startup, JPEG color ranges and event types using the official
+  HA containers for the minimum and latest stable versions, not only host tools.
+
+## v2.2.0 - 2026-11-14 (withdrawn)
+
+Withdrawn because the display update can crash the device GUI and cause
+repeated device restarts. Skip this version and update directly to 2.3.0.
 
 ### Added
 

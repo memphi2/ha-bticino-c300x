@@ -7,6 +7,7 @@
 #include "audio_codec.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -121,7 +122,7 @@ static int read_file(const char *path, char **data, size_t *len, mode_t *mode) {
  * of a truncated/corrupt live config. When the target already exists we copy its
  * owner+mode onto the temp first (the rename gives a new inode), preserving what
  * the old in-place write kept for free; new targets (backup creation) get the
- * default mode and the caller sets it explicitly afterwards. */
+ * private mode and the caller sets it explicitly afterwards. */
 static int overwrite_file(const char *path, const char *data, size_t len) {
     C300X_AUDIO_STAT_STRUCT st;
     int have_meta = audio_stat_path(path, &st) == 0 && S_ISREG(st.st_mode);
@@ -130,26 +131,39 @@ static int overwrite_file(const char *path, const char *data, size_t len) {
     int fd;
     int ok = 1;
 
-    if (snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= (int)sizeof(tmp)) {
+    if (snprintf(tmp, sizeof(tmp), "%s.tmp.XXXXXX", path) >= (int)sizeof(tmp)) {
         return 0;
     }
-    fp = fopen(tmp, "wb");
+    fd = mkstemp(tmp);
+    if (fd < 0) {
+        return 0;
+    }
+    if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0) {
+        close(fd);
+        unlink(tmp);
+        return 0;
+    }
+    fp = fdopen(fd, "wb");
     if (fp == NULL) {
+        close(fd);
+        unlink(tmp);
         return 0;
     }
-    fd = fileno(fp);
     if (fwrite(data, 1, len, fp) != len) {
         ok = 0;
     }
-    if (fflush(fp) != 0 || fsync(fd) != 0) {
+    if (fflush(fp) != 0) {
         ok = 0;
     }
     if (ok && have_meta) {
         /* rename creates a new inode, so restore the original owner/mode */
-        if (fchmod(fd, st.st_mode & 07777) != 0
-            || fchown(fd, st.st_uid, st.st_gid) != 0) {
+        if (fchown(fd, st.st_uid, st.st_gid) != 0
+            || fchmod(fd, st.st_mode & 07777) != 0) {
             ok = 0;
         }
+    }
+    if (ok && fsync(fd) != 0) {
+        ok = 0;
     }
     if (fclose(fp) != 0) {
         ok = 0;

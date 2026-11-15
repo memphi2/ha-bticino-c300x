@@ -27,6 +27,7 @@ from custom_components.bticino_c300x.media import (
     async_setup_media_view,
     runtime_entry,
 )
+from custom_components.bticino_c300x.snapshot_http import C300XSnapshotView
 
 
 def test_video_message_view_exposes_playable_mp4_route() -> None:
@@ -103,6 +104,7 @@ def test_media_view_registration_is_idempotent() -> None:
     async_setup_media_view(hass)  # type: ignore[arg-type]
 
     assert [type(view) for view in registered] == [
+        C300XSnapshotView,
         C300XVideoMessageMediaView,
         C300XVoiceMemoMediaView,
         C300XRingCaptureMediaView,

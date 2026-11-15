@@ -5,10 +5,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from test_on_demand_capture import _entry
 
 from custom_components.bticino_c300x._api_normalize import normalize_doorbell_video
+from custom_components.bticino_c300x.camera_media.session_lifecycle import (
+    media_owner_stopping,
+    media_stop_scope,
+)
 from custom_components.bticino_c300x.const import EVENT_AGENT_EVENT_RECEIVED
 from custom_components.bticino_c300x.use_cases import ring_capture
 
@@ -168,6 +172,37 @@ def test_ambiguous_or_replaced_call_status_prevents_hangup(capture, changed, dur
         runtime.resources.prepare_doorbell_video_stop.assert_not_awaited()
 
 
+@pytest.mark.parametrize("during_prepare", [False, True])
+@pytest.mark.parametrize("clients", [1, 2, "missing", None, "0", "invalid", False, True, 0.0, -1, [], {}])
+def test_remaining_or_unknown_clients_skip_cleanup_preserving_result(
+    capture, clients, during_prepare
+):
+    use_case, entry, bus, recording, status = capture
+    runtime = entry.runtime_data
+
+    async def change(*args, **kwargs):
+        if clients == "missing":
+            status["bridge"].pop("clients")
+        else:
+            status["bridge"]["clients"] = clients
+        return {"capture_id": "test"}
+
+    if during_prepare:
+        runtime.resources.prepare_doorbell_video_stop.side_effect = change
+    else:
+        recording.side_effect = change
+
+    assert asyncio.run(use_case.capture()) == {"capture_id": "test"}
+    runtime.api.async_hangup_doorbell_call.assert_not_awaited()
+    if during_prepare:
+        runtime.resources.prepare_doorbell_video_stop.assert_awaited_once()
+    else:
+        runtime.resources.prepare_doorbell_video_stop.assert_not_awaited()
+    assert runtime.resources.ring_capture_task is None
+    assert not media_owner_stopping(runtime.resources, "doorbell")
+    assert bus.listeners == []
+
+
 @pytest.mark.parametrize("missing", ["timestamp", "event_bus"])
 def test_missing_call_ownership_evidence_skips_automatic_hangup(capture, missing):
     use_case, entry, _, _, status = capture
@@ -258,6 +293,113 @@ def test_own_hangup_end_event_does_not_cancel_successful_capture(capture):
     entry.runtime_data.api.async_hangup_doorbell_call.side_effect = hangup
     assert asyncio.run(use_case.capture()) == {"capture_id": "test"}
     assert bus.listeners == []
+
+
+@pytest.mark.parametrize("stage", ["fresh_status", "after_gain"])
+@pytest.mark.parametrize("consumer", ["native", "local_offer"])
+def test_new_client_before_answer_rejects_without_answer_or_cleanup(capture, monkeypatch, stage, consumer):
+    use_case, entry, bus, recording, status = capture
+    runtime = entry.runtime_data
+    reads = 0
+    local_sessions = 0
+    runtime.resources.media_session_count = lambda: local_sessions
+
+    def connect():
+        nonlocal local_sessions
+        if consumer == "native":
+            status["bridge"]["clients"] = 1
+        else:
+            local_sessions = 1
+
+    async def read():
+        nonlocal reads
+        reads += 1
+        if stage == "fresh_status" and reads == 2:
+            connect()
+        return status
+
+    async def gain(*args, **kwargs):
+        assert media_owner_stopping(runtime.resources, "doorbell")
+        if stage == "after_gain":
+            connect()
+
+    gain_sync = AsyncMock(side_effect=gain)
+    monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_gain", gain_sync)
+    runtime.api.async_doorbell_video_status.side_effect = read
+    with pytest.raises(ServiceValidationError) as err:
+        asyncio.run(use_case.capture())
+    assert err.value.translation_key == "ring_capture_busy"
+    runtime.api.async_answer_doorbell_call.assert_not_awaited()
+    runtime.api.async_hangup_doorbell_call.assert_not_awaited()
+    runtime.resources.prepare_doorbell_video_stop.assert_not_awaited()
+    recording.assert_not_awaited()
+    assert gain_sync.await_count == (stage == "after_gain")
+    assert runtime.resources.ring_capture_task is None
+    assert runtime.resources.media_stop_counts == {}
+    assert bus.listeners == []
+
+
+def test_answer_admission_remains_reserved_through_recording_and_cleanup(capture):
+    use_case, entry, _, recording, _ = capture
+    runtime = entry.runtime_data
+    original_answer = runtime.api.async_answer_doorbell_call.side_effect
+
+    async def answer():
+        assert media_owner_stopping(runtime.resources, "doorbell")
+        await original_answer()
+
+    async def record(*args, **kwargs):
+        assert media_owner_stopping(runtime.resources, "doorbell")
+        return {"capture_id": "test"}
+
+    async def prepare():
+        assert media_owner_stopping(runtime.resources, "doorbell")
+
+    runtime.api.async_answer_doorbell_call.side_effect = answer
+    recording.side_effect = record
+    runtime.resources.prepare_doorbell_video_stop.side_effect = prepare
+    assert asyncio.run(use_case.capture()) == {"capture_id": "test"}
+    assert runtime.resources.media_stop_counts == {}
+
+
+def test_existing_media_stop_rejects_capture_without_touching_call(capture):
+    use_case, entry, _, recording, _ = capture
+    runtime = entry.runtime_data
+    with media_stop_scope(runtime.resources, "doorbell"):
+        with pytest.raises(ServiceValidationError) as err:
+            asyncio.run(use_case.capture())
+        assert err.value.translation_key == "ring_capture_busy"
+        assert runtime.resources.media_stop_counts == {"doorbell": 1}
+    runtime.api.async_answer_doorbell_call.assert_not_awaited()
+    runtime.api.async_hangup_doorbell_call.assert_not_awaited()
+    runtime.resources.prepare_doorbell_video_stop.assert_not_awaited()
+    recording.assert_not_awaited()
+
+
+def test_answer_during_gain_sync_is_not_claimed_for_cleanup(capture, monkeypatch):
+    use_case, entry, _, _, status = capture
+
+    async def gain(*args, **kwargs):
+        status["bridge"].update(ring_answered=True, ring_audio_active=True)
+
+    monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_gain", gain)
+    assert asyncio.run(use_case.capture()) == {"capture_id": "test"}
+    entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
+    entry.runtime_data.api.async_hangup_doorbell_call.assert_not_awaited()
+    entry.runtime_data.resources.prepare_doorbell_video_stop.assert_not_awaited()
+    assert entry.runtime_data.resources.media_stop_counts == {}
+
+
+def test_video_only_ring_capture_does_not_reserve_answer_admission(capture):
+    use_case, entry, _, recording, _ = capture
+
+    async def record(*args, **kwargs):
+        assert not media_owner_stopping(entry.runtime_data.resources, "doorbell")
+        return {"capture_id": "test"}
+
+    recording.side_effect = record
+    assert asyncio.run(use_case.capture(include_audio=False)) == {"capture_id": "test"}
+    entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
 
 
 @pytest.mark.parametrize("stage", ["initial", "after_gain"])

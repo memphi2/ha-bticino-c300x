@@ -97,6 +97,44 @@ try {
     }
     await page.screenshot({ path: resolve(artifacts, `card-${width}.png`) });
   }
+  await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 320; canvas.height = 240;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#337799"; ctx.fillRect(0, 0, 320, 240);
+    lab.previewUrl = URL.createObjectURL(await new Promise((done) => canvas.toBlob(done, "image/jpeg")));
+    lab.hass.states[lab.camera].attributes.stream_snapshots = true;
+    lab.card.hass = { ...lab.hass };
+    lab.card._snapshots.showPreview(lab.previewUrl, 1800000000);
+    await lab.card._snapshotEl.decode();
+  });
+  for (const width of [240, 320, 390, 1024]) {
+    await page.setViewport({ width, height: 800 });
+    for (const language of ["de", "en", "fr", "it"]) {
+      const result = await page.evaluate(async (language) => {
+        lab.hass.language = language;
+        lab.card.hass = { ...lab.hass };
+        await new Promise(requestAnimationFrame);
+        const label = lab.card._snapshotLabelEl;
+        const rect = label.getBoundingClientRect();
+        const media = lab.card.shadowRoot.querySelector(".media").getBoundingClientRect();
+        return { text: label.textContent, expected: new Date(1800000000000).toLocaleString(language),
+          visible: !label.hidden && !lab.card._snapshotEl.hidden,
+          contained: rect.left >= media.left && rect.bottom <= media.bottom,
+          top: Math.abs(rect.top - media.top - 8), right: Math.abs(media.right - rect.right - 8) };
+      }, language);
+      assert.equal(result.text, result.expected);
+      assert.equal(result.visible && result.contained, true, `${width}px ${language} snapshot bounds`);
+      assert.ok(result.top < 1 && result.right < 1, `${width}px ${language} snapshot position`);
+    }
+    await page.screenshot({ path: resolve(artifacts, `snapshot-${width}.png`) });
+  }
+  await page.evaluate(() => {
+    lab.card._snapshots.showPreview("", 0);
+    URL.revokeObjectURL(lab.previewUrl);
+    lab.hass.states[lab.camera].attributes.stream_snapshots = false;
+    lab.card.hass = { ...lab.hass };
+  });
   const click = async (selector) => { await page.evaluate((selector) => lab.card.shadowRoot.querySelector(selector).click(), selector); };
   for (const width of [320, 1024]) {
     await page.setViewport({ width, height: 800 });

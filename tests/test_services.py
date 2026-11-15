@@ -1548,7 +1548,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
         assert result == captured
         assert hass.services.responses[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)].value == "optional"
         assert api.capture_doorbell_call_calls == 0
-        assert api.doorbell_video_status_calls == 4
+        assert api.doorbell_video_status_calls == 5
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1593,7 +1593,7 @@ def test_capture_doorbell_call_service_uses_stored_runtime_data(monkeypatch) -> 
         captured_entry = calls[0]["args"][1]
         assert captured_entry.entry_id == "entry-id"
         assert captured_entry.runtime_data is runtime_data
-        assert api.doorbell_video_status_calls == 4
+        assert api.doorbell_video_status_calls == 5
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1947,7 +1947,7 @@ def test_capture_doorbell_call_service_answers_audio_capture_without_announcemen
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         await handler(types.SimpleNamespace(data={}))
 
-        assert api.doorbell_video_status_calls == 4
+        assert api.doorbell_video_status_calls == 5
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1961,6 +1961,8 @@ def test_capture_doorbell_call_service_waits_for_answered_ring_before_capture(
         api = _FakeApi()
         statuses = [
             {"bridge": {"media_owner": "idle", "clients": 0}},
+            {"bridge": {"media_owner": "ring", "ring_call_active": True}},
+            # Final admission check after gain synchronization, before answer.
             {"bridge": {"media_owner": "ring", "ring_call_active": True}},
             {
                 "bridge": {
@@ -1977,6 +1979,7 @@ def test_capture_doorbell_call_service_waits_for_answered_ring_before_capture(
                     "ring_media_active": True,
                     "ring_audio_active": True,
                     "ring_answered": True,
+                    "clients": 0,
                 }
             },
         ]
@@ -2039,6 +2042,9 @@ def test_capture_doorbell_call_service_tolerates_transient_status_gap_after_answ
         statuses = [
             {"bridge": {"media_owner": "idle", "clients": 0}},
             {"bridge": {"media_owner": "idle", "clients": 0}},
+            # Final pre-answer read, then a transient idle read after answer.
+            {"bridge": {"media_owner": "idle", "clients": 0}},
+            {"bridge": {"media_owner": "idle", "clients": 0}},
             {
                 "bridge": {
                     "media_owner": "ring",
@@ -2054,6 +2060,7 @@ def test_capture_doorbell_call_service_tolerates_transient_status_gap_after_answ
                     "ring_media_active": True,
                     "ring_audio_active": True,
                     "ring_answered": True,
+                    "clients": 0,
                 }
             },
         ]

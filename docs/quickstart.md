@@ -135,7 +135,24 @@ Test in this order:
 Talkback needs a secure Home Assistant frontend: HTTPS, Home Assistant Cloud or
 another secure browser context with microphone permission.
 
-## 8. Optional Blueprints
+## 8. Visitor Images and Automations
+
+With video enabled and the matching agent installed, **Save images** is enabled
+by default on the C300X device page. A ring or video session requests one image
+after **5 seconds**, even with every dashboard closed. The agent only reads the
+existing camera framebuffer; JPEG conversion and storage happen in HA.
+
+- Open **Media > BTicino C300X Media** to browse saved images.
+- Change delay and retention under **Configure > Video and audio**. Retention
+  defaults to **14 days**.
+- Turn **Save images** off to stop new captures and hide the shared card/camera
+  preview. Existing archives remain until they expire.
+- Images use the configured HA media directory, like recordings. Its normal
+  media-access permissions also apply; camera permission alone does not hide
+  images from HA's local-media browser.
+
+See [Visitor images](feature-reference.md#visitor-images) for limits and behavior
+when a call or stream ends before the capture delay.
 
 Ready-made blueprints are available for doorbell notifications, Ring Call
 notifications, capture, Wyoming transcription and strict phrase decisions. They
@@ -172,6 +189,10 @@ settings themselves are stored in HA, not rewritten to the device on every chang
 Details: [Display controls](feature-reference.md#display-device-controls),
 [pages and tiles](feature-reference.md#display-settings) and
 [Alarmo](feature-reference.md#alarmo-display).
+
+See [display examples](../README.md#c300x-display-pages) for status tiles, lights,
+color/brightness and media-player controls. The stair-light shortcut in the
+Alarmo example is configurable, not a required part of that page.
 
 ## After the First Test
 

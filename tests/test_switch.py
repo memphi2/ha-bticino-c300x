@@ -27,6 +27,7 @@ from custom_components.bticino_c300x.switch import (  # noqa: E402
     C300XNativeMqttBridgeSwitch,
     C300XNoAuthSwitch,
     C300XRingerMuteSwitch,
+    C300XSnapshotSwitch,
     _async_refresh_initial_states,
     async_setup_entry,
 )
@@ -48,6 +49,34 @@ def test_config_switches_are_disabled_by_default() -> None:
 
     for switch_class in config_switch_classes:
         assert switch_class(_FakeEntry()).entity_registry_enabled_default is False
+
+
+def test_snapshot_switch_changes_manager_without_device_io(monkeypatch) -> None:
+    import custom_components.bticino_c300x.switch as module
+
+    entry = _FakeEntry()
+    switch = C300XSnapshotSwitch(entry)
+    switch.hass = SimpleNamespace()
+    manager = SimpleNamespace(enabled=True, closed=False)
+    changes = []
+
+    async def set_enabled(enabled):
+        changes.append(enabled)
+        manager.enabled = enabled
+
+    manager.async_set_enabled = set_enabled
+    monkeypatch.setattr(module, "get_snapshots", lambda *_: manager)
+    assert switch.available
+    assert switch.is_on
+    asyncio.run(switch.async_turn_off())
+    assert switch.is_on is False
+    asyncio.run(switch.async_turn_on())
+    assert switch.is_on is True
+    assert changes == [False, True]
+    manager.closed = True
+    assert switch.available is False
+    with pytest.raises(HomeAssistantError, match="unavailable"):
+        asyncio.run(switch.async_turn_off())
 
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")

@@ -52,7 +52,9 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -60,7 +62,9 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
         }
       },
       "user_device_activations": {
@@ -145,7 +149,9 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -153,7 +159,9 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
         }
       },
       "reconfigure_device_activations": {
@@ -489,7 +497,8 @@
       "dashboard_page_name_duplicate": "Zwei Seiten haben denselben Namen; gib jeder Seite einen eigenen.",
       "dashboard_entity_on_several_pages": "Eine Entität ist auf mehreren Seiten gewählt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
-      "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift."
+      "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden und 1-365 Tage."
     }
   },
   "options": {
@@ -521,7 +530,9 @@
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
-          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
+          "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant",
+          "snapshot_delay_seconds": "Bildverzögerung (Sekunden)",
+          "snapshot_retention_days": "Bilder aufbewahren (Tage)"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
@@ -529,7 +540,9 @@
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist.",
+          "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 5 Sekunden. Keine geöffnete Karte erforderlich.",
+          "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt."
         }
       },
       "device_activations": {
@@ -752,7 +765,8 @@
       "dashboard_entity_on_several_pages": "Eine Entität ist auf mehreren Seiten gewählt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
-      "required": "Dieses Feld ist erforderlich."
+      "required": "Dieses Feld ist erforderlich.",
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden und 1-365 Tage."
     }
   },
   "entity": {
@@ -801,35 +815,44 @@
     "event": {
       "doorbell_event": {
         "name": "Klingelereignis",
-        "state": {
-          "ring": "Klingeln"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Klingeln"
+            }
+          }
         }
       },
       "agent_event": {
         "name": "Geräteereignis",
-        "state": {
-          "agent_restarted": "Device-Agent neu gestartet",
-          "answering_machine_messages_changed": "Video-Nachrichten aktualisiert",
-          "call_ended": "Anruf beendet",
-          "call_started": "Anruf gestartet",
-          "door_unlock_ended": "Türöffner beendet",
-          "door_unlock_started": "Türöffner gestartet",
-          "doorbell_media_closed": "Türkamera-Stream beendet",
-          "doorbell_pressed": "Türklingel gedrückt",
-          "doorbell_view_requested": "Türkamera-Ansicht gestartet",
-          "home_call_answered": "Zuhause-Anruf angenommen",
-          "home_call_ended": "Zuhause-Anruf beendet",
-          "home_call_started": "Zuhause-Anruf gestartet",
-          "memos_changed": "Memos aktualisiert",
-          "ringer_muted": "Klingelton stummgeschaltet",
-          "ringer_unmuted": "Klingelton aktiviert",
-          "ringer_volume_changed": "Klingel-Lautstärke geändert",
-          "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
-          "stair_light_activated": "Treppenlicht aktiviert",
-          "stair_light_released": "Treppenlicht freigegeben",
-          "system_metrics_changed": "Systemwerte aktualisiert",
-          "agent_diagnostics_changed": "Agent-Schreibdiagnose aktualisiert",
-          "activation_executed": "Geräteaktion ausgeführt"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "agent_restarted": "Device-Agent neu gestartet",
+              "answering_machine_messages_changed": "Video-Nachrichten aktualisiert",
+              "call_ended": "Anruf beendet",
+              "call_started": "Anruf gestartet",
+              "door_unlock_ended": "Türöffner beendet",
+              "door_unlock_started": "Türöffner gestartet",
+              "doorbell_media_closed": "Türkamera-Stream beendet",
+              "doorbell_pressed": "Türklingel gedrückt",
+              "doorbell_view_requested": "Türkamera-Ansicht gestartet",
+              "home_call_answered": "Zuhause-Anruf angenommen",
+              "home_call_ended": "Zuhause-Anruf beendet",
+              "home_call_started": "Zuhause-Anruf gestartet",
+              "memos_changed": "Memos aktualisiert",
+              "display_touch_tone_changed": "Tastenton geändert",
+              "ringer_muted": "Klingelton stummgeschaltet",
+              "ringer_unmuted": "Klingelton aktiviert",
+              "ringer_volume_changed": "Klingel-Lautstärke geändert",
+              "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
+              "stair_light_activated": "Treppenlicht aktiviert",
+              "stair_light_released": "Treppenlicht freigegeben",
+              "system_metrics_changed": "Systemwerte aktualisiert",
+              "agent_diagnostics_changed": "Agent-Schreibdiagnose aktualisiert",
+              "activation_executed": "Geräteaktion ausgeführt"
+            }
+          }
         }
       }
     },
@@ -940,6 +963,9 @@
       "answering_machine": {
         "name": "Anrufbeantworter"
       },
+      "touch_tone": {
+        "name": "Tastenton"
+      },
       "ringer_mute": {
         "name": "Klingel stummschalten"
       },
@@ -972,6 +998,9 @@
       },
       "homeassistant_media_user_setup": {
         "name": "Home Assistant User-Patch"
+      },
+      "stream_snapshots": {
+        "name": "Bilder speichern"
       }
     }
   },

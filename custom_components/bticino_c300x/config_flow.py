@@ -132,6 +132,7 @@ from .config_schemas import (
 from .config_schemas import (
     setup_features_schema as _setup_features_schema,
 )
+from .config_snapshots import SNAPSHOT_DEFAULTS
 from .const import (
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
@@ -210,6 +211,7 @@ _SETUP_VIDEO_ENABLED_DEFAULT = True
 _CREATE_HOMEASSISTANT_USER_DEFAULT = True
 _RECONFIGURED_OPTION_KEYS = frozenset(
     {
+        *SNAPSHOT_DEFAULTS,
         CONF_ACTIONS,
         CONF_AGENT_HOST,
         CONF_AGENT_PORT,
@@ -622,6 +624,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             )
                         ),
                         default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
+                        default_snapshots={key: feature_data[key] for key in SNAPSHOT_DEFAULTS},
                     ),
                     errors=errors,
             )
@@ -1015,6 +1018,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             )
                         ),
                         default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
+                        default_snapshots={key: feature_data[key] for key in SNAPSHOT_DEFAULTS},
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -1477,6 +1481,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                             )
                         ),
                         native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
+                        snapshots={key: feature_data[key] for key in SNAPSHOT_DEFAULTS},
                     ),
                     errors=errors,
                     description_placeholders=(

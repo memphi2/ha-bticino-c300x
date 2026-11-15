@@ -6,6 +6,7 @@ import types
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -43,6 +44,16 @@ from custom_components.bticino_c300x.data import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture
+def snapshot_runtime_boundary(monkeypatch):
+    """Runtime tests delegate snapshot storage/lifecycle to its focused tests."""
+    from custom_components.bticino_c300x import snapshots
+
+    setup = AsyncMock()
+    monkeypatch.setattr(snapshots, "async_setup_snapshots", setup)
+    return setup
 
 
 def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -161,6 +172,7 @@ def test_payload_recovery_marker_does_not_reload_active_update(marker) -> None:
 
 def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch: pytest.MonkeyPatch,
+    snapshot_runtime_boundary,
 ) -> None:
     calls: list[str] = []
     from homeassistant.helpers import aiohttp_client, dispatcher
@@ -279,6 +291,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         await task
 
     asyncio.run(setup())
+    snapshot_runtime_boundary.assert_awaited_once_with(hass, entry)
     assert len(signals) == 1
 
     assert entry.runtime_data.agent_info["version"] == "1.2.0"
@@ -312,7 +325,7 @@ def test_setup_entry_rejects_missing_required_fields() -> None:
 @pytest.mark.parametrize("cancelled", [False, True])
 @pytest.mark.parametrize("cleanup_error", [False, True])
 def test_setup_failure_releases_callbacks_and_allows_retry(
-    monkeypatch, stage, cancelled, cleanup_error
+    monkeypatch, stage, cancelled, cleanup_error, snapshot_runtime_boundary
 ):
     from custom_components.bticino_c300x import events, repair_issues, services, webhook
 
@@ -780,12 +793,14 @@ def test_configure_display_bridge_registers_and_clears_callback(
     asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == [(True, "https://ha.local/webhook-id", "secret")]
+    assert api.notifications == ["display_bridge.state"]
     assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
     entry.options[CONF_DEVICE_UI_ENABLED] = False
     api = _DisplayBridgeApi({"configured": True})
     asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
     assert api.configured == [(False, "", "")]
+    assert api.notifications == []
 
 
 def test_configure_display_bridge_skips_matching_registration(
@@ -824,7 +839,17 @@ def test_configure_display_bridge_skips_matching_registration(
     asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == []
+    assert api.notifications == ["display_bridge.state"]
     assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
+
+
+def test_display_configuration_notify_failure_is_nonfatal() -> None:
+    class Api:
+        async def async_notify_display_bridge_event(self, topic):
+            assert topic == "display_bridge.state"
+            raise api_errors.C300XAgentApiError("offline")
+
+    asyncio.run(runtime_manager._async_notify_display_configuration(Api()))
 
 
 def test_configure_display_bridge_records_agent_failures(
@@ -1459,7 +1484,8 @@ def test_display_bridge_notify_ignores_stale_runtime() -> None:
     assert old_runtime.display_bridge_alarm_notify_pending is False
 
 
-def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> None:  # noqa: ANN001
+@pytest.mark.parametrize("explicit_disabled", [True, False])
+def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch, explicit_disabled) -> None:  # noqa: ANN001
     import homeassistant.helpers.entity_registry as entity_registry
 
     class FakeRegistry:
@@ -1486,7 +1512,9 @@ def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> No
     hass = SimpleNamespace(
         states=SimpleNamespace(async_remove=lambda entity_id: state_removed.append(entity_id))
     )
-    entry = _entry(options={CONF_DEVICE_UI_ENABLED: False})
+    entry = _entry(options={CONF_DEVICE_UI_ENABLED: False} if explicit_disabled else {})
+    if not explicit_disabled:
+        entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": False})
 
     runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
@@ -1745,6 +1773,10 @@ class _DisplayBridgeApi:
         self._status = status
         self._error = error
         self.configured: list[tuple[bool, str, str]] = []
+        self.notifications: list[str] = []
+
+    async def async_notify_display_bridge_event(self, topic: str) -> None:
+        self.notifications.append(topic)
 
     async def async_display_bridge_status(self) -> dict[str, Any]:
         if self._error is not None:
@@ -1856,7 +1888,9 @@ def test_setup_reads_the_patch_status_before_cleaning_up_gui_buttons() -> None:
     )
 
 
-def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch) -> None:  # noqa: ANN001
+@pytest.mark.parametrize("status", [{"patched": True}, {}, {"patched": None}, None])
+@pytest.mark.parametrize("available", [False, True])
+def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch, status, available) -> None:  # noqa: ANN001
     """The button platform creates these under entry_device_ui_enabled_or_patch_
     active. Gating the cleanup on the strict predicate meant an entry predating
     the device-UI option but running an active patch had its buttons removed
@@ -1882,15 +1916,20 @@ def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch
 
     registry = FakeRegistry()
     monkeypatch.setattr(entity_registry, "async_get", lambda _hass: registry)
-    hass = SimpleNamespace(states=SimpleNamespace(async_remove=lambda _entity_id: None))
-    # No explicit device-UI setting, but the QML patch is active: exactly the
-    # entry shape the lenient predicate exists for.
+    state_removed: list[str] = []
+    hass = SimpleNamespace(states=SimpleNamespace(async_remove=state_removed.append))
+    # Legacy entries retain their registry metadata unless status confirms
+    # the patch is absent, including when an offline startup cannot read it.
     entry = _entry()
-    entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": True})
+    entry.runtime_data = SimpleNamespace(
+        qml_patch_status=status,
+        connection_state=SimpleNamespace(available=available),
+    )
 
     runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
     assert registry.removed == []
+    assert state_removed == []
 
 
 def test_changed_home_page_button_mode_reapplies_the_display_patch(
@@ -2067,20 +2106,19 @@ def test_migrate_entry_pins_the_home_page_mode_the_device_is_running(
     assert update["options"]["dashboard_dynamic_homepage"] is True
 
 
-def test_display_patch_apply_shares_one_home_page_default() -> None:
-    """The form default and the apply fallback must be the same value."""
+@pytest.mark.parametrize("legacy_options", [{}, {"dashboard_dynamic_homepage": False},
+                                          {"dashboard_dynamic_homepage": True}])
+def test_display_patch_apply_uses_automatic_home_buttons(legacy_options) -> None:
+    """Applying the patch uses automatic visibility without a separate option."""
 
-    from custom_components.bticino_c300x.config_flow_dashboard import (
-        DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
-    )
-    from custom_components.bticino_c300x.const import (
-        DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
-    )
+    from custom_components.bticino_c300x.config_flow_dashboard import dashboard_schema
+    from custom_components.bticino_c300x.qml_patch import _apply_full_patch_action
 
-    assert DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT is DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE
-
-    qml_patch_source = (
-        ROOT / "custom_components" / "bticino_c300x" / "qml_patch.py"
-    ).read_text(encoding="utf-8")
-    assert "DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE," in qml_patch_source
-    assert "CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False" not in qml_patch_source
+    api = SimpleNamespace(async_apply_qml_patch=AsyncMock())
+    entry = SimpleNamespace(options=legacy_options, data={},
+                            runtime_data=SimpleNamespace(api=api))
+    asyncio.run(_apply_full_patch_action(entry)())
+    api.async_apply_qml_patch.assert_awaited_once_with(dynamic_homepage=True)
+    assert "dashboard_dynamic_homepage" not in {
+        getattr(key, "schema", key) for key in dashboard_schema().schema
+    }

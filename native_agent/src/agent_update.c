@@ -698,17 +698,20 @@ static int render_agent_init_script(
 
 static int ensure_agent_init_link(void)
 {
-    char current[C300X_MAX_PATH_LEN];
-    ssize_t len = readlink(C300X_AGENT_INIT_LINK, current, sizeof(current) - 1);
-
-    if (len >= 0) {
-        current[len] = '\0';
-        if (agent_init_link_matches()) {
-            return 1;
-        }
-        (void)unlink(C300X_AGENT_INIT_LINK);
+    C300X_UPDATE_STAT_STRUCT info;
+    if (agent_init_link_matches()) {
+        return 1;
     }
-    return symlink(C300X_AGENT_INIT_SCRIPT, C300X_AGENT_INIT_LINK) == 0 || errno == EEXIST;
+    /* The update transaction has backed up any invalid regular file or link. */
+    if (update_lstat(C300X_AGENT_INIT_LINK, &info) == 0) {
+        if ((!S_ISREG(info.st_mode) && !S_ISLNK(info.st_mode))
+            || unlink(C300X_AGENT_INIT_LINK) != 0) {
+            return 0;
+        }
+    } else if (errno != ENOENT) {
+        return 0;
+    }
+    return symlink(C300X_AGENT_INIT_SCRIPT, C300X_AGENT_INIT_LINK) == 0;
 }
 
 static int apply_agent_update_init_script(

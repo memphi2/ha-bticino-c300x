@@ -1,13 +1,15 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=cff8390bf24fff10";
+} from "./c300x-translations.js?v=047a3dd4cc8ee9b6";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
   c300xEntityId,
+  c300xEntryId,
   c300xFirstEntity,
-} from "./c300x-entity-resolver.js?v=cff8390bf24fff10";
+  c300xResolveEntity,
+} from "./c300x-entity-resolver.js?v=047a3dd4cc8ee9b6";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 
@@ -33,12 +35,8 @@ function c300xFireConfigChanged(element, config) {
 
 export class C300XDoorbellCallCardEditor extends HTMLElement {
   setConfig(config) {
-    const stub = c300xDoorbellCardStubConfig(this._hass);
-    // A card may name its device by entry_id alone. The entity shown in the
-    // form is then only the default; it must not be written into the card.
-    this._defaultEntity = config && config.entity ? "" : stub.entity || "";
     this._config = {
-      ...stub,
+      ...C300X_DEFAULT_CONFIG,
       ...config,
     };
     this._render();
@@ -47,7 +45,8 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
   set hass(hass) {
     const languageChanged = c300xLanguage(this._hass) !== c300xLanguage(hass);
     this._hass = hass;
-    if (!this.shadowRoot || languageChanged) {
+    const entity = c300xResolveEntity(hass, this._config, "camera", C300X_CAMERA_OBJECT_ID);
+    if (!this.shadowRoot || languageChanged || entity !== this._displayedEntity) {
       this._render();
       return;
     }
@@ -69,8 +68,13 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
 
     const form = root.querySelector("ha-form");
     form.hass = this._hass;
+    // An inferred camera is display-only until the user changes the picker.
+    this._displayedEntity = c300xResolveEntity(
+      this._hass, this._config, "camera", C300X_CAMERA_OBJECT_ID,
+    );
     form.data = {
       ...this._config,
+      entity: this._displayedEntity,
       show_media_readiness: this._config.show_media_readiness !== false,
       show_door_unlock: this._config.show_door_unlock !== false,
       show_stair_light: this._config.show_stair_light !== false,
@@ -146,6 +150,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
   _setConfig(config) {
     const nextConfig = { ...config };
     const modeChanged = this._config.mode !== nextConfig.mode;
+    const entityChanged = (nextConfig.entity || "") !== this._displayedEntity;
     for (const [key, value] of Object.entries(nextConfig)) {
       if (value === "") {
         delete nextConfig[key];
@@ -162,17 +167,19 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
     }
     delete nextConfig.home_call_entity;
     delete nextConfig.doorbell_state_entity;
-    if (this._defaultEntity && nextConfig.entity === this._defaultEntity) {
+    if (!this._config.entity && !entityChanged) {
       delete nextConfig.entity;
-    } else {
-      this._defaultEntity = "";
+    } else if (entityChanged && nextConfig.entity) {
+      const entryId = c300xEntryId(this._hass, {}, nextConfig.entity);
+      if (entryId) nextConfig.entry_id = entryId;
+      else delete nextConfig.entry_id;
     }
     if (JSON.stringify(this._config) === JSON.stringify(nextConfig)) {
       return;
     }
     this._config = nextConfig;
     c300xFireConfigChanged(this, nextConfig);
-    if (modeChanged) {
+    if (modeChanged || entityChanged) {
       this._render();
     }
   }

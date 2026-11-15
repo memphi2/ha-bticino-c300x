@@ -162,6 +162,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/smartphone-forwarding` | API | Changes forwarding mode. |
 | `GET` | `/api/v1/ringer` | API | Reads ringer mute and volume state. |
 | `POST` | `/api/v1/ringer` | API | Changes ringer mute state or volume. |
+| `GET`, `POST` | `/api/v1/display/touch-tone` | API | Reads GUI-confirmed touch tone; POST `{"enabled":true}` waits up to five seconds for GUI acknowledgement. Requires the Display patch. |
 | `GET` | `/api/v1/answering-machine` | API | Reads answering-machine state. |
 | `POST` | `/api/v1/answering-machine` | API | Changes answering-machine enabled state. |
 | `GET` | `/api/v1/answering-machine/messages` | API | Lists video messages. |
@@ -173,6 +174,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/memos/actions/delete` | API | Deletes selected memos. |
 | `GET` | `/api/v1/video/doorbell` | API | None. |
 | `GET` | `/api/v1/video/doorbell/status` | API | None. |
+| `GET` | `/api/v1/video/doorbell/snapshot` | API | Reads the active video framebuffer into bounded RAM and returns BMP data for HA-side conversion. No file writes, video activation or call answer. |
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
@@ -1257,8 +1259,9 @@ filesystem writable only for final copy/write work, then remount read-only.
 
 ## Loopback UI API
 
-The UI listener is intended for local QML pages. It rejects non-GET methods and
-requires display bridge support where applicable.
+The UI listener is intended for local QML pages. Existing routes accept only
+GET; the local preference route also accepts a guarded POST. Routes forwarding
+requests to Home Assistant require an active display bridge.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -1269,14 +1272,39 @@ requires display bridge support where applicable.
 | `GET` | `/ui/events/next` | Long-poll next QML event. |
 | `GET` | `/ui/media-closed` | Reports device media-close event. |
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
+| `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
+| `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |
 | `GET` | `/ui/action` | Execute configured display action. |
 | `GET` | `/ui/alarm/command` | Execute configured alarm command. |
 
-UI endpoints use the local display bridge and shared secret configured through
-the API listener. They must not expose configured token values.
+Home Assistant proxy endpoints use the display bridge and shared secret
+configured through the API listener. Local metadata, preferences and core GUI
+hooks do not require that registration. No route exposes configured token values.
+
+`GET /ui/preferences` returns `{"ok":true,"feedback_enabled":true}` by default.
+Both `/ui/touch-tone/` routes require loopback, `X-C300X-UI: 1` and no `Origin`
+header. Commands carry a random 32-hex-character ID and expiry; mismatched,
+expired or missing acknowledgements never confirm an API write. The agent
+stores only the current GUI state in memory and publishes
+`display.touch_tone_changed` with `enabled` and `available`. GUI queries and
+reports also carry a 32-hex-character `session` ordering identifier and an
+increasing integer `revision`; older reports cannot replace newer confirmed
+state, including across GUI restarts. No firmware or
+agent configuration file is changed by these routes; the GUI applies the stock
+`global.beepEnabled` setter. Idle operation has no poll expiry or periodic reads.
+
+`POST /ui/preferences` accepts a boolean `feedback_enabled`, requires
+`X-C300X-UI: 1` and rejects requests with an `Origin` header. Only the loopback UI
+listener exposes it; browser preflight and other methods are rejected. The
+agent persists changes as `displayBridge.feedbackEnabled`, preserving unrelated
+pending configuration. Reads and unchanged values cause no filesystem writes.
+A failed save leaves the live preference unchanged and returns HTTP 500. QML
+only updates the switch after confirmation; an ambiguous timeout requires a
+fresh read before another write.
 
 The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
 It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight

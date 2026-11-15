@@ -95,7 +95,10 @@ Key sections:
 - `maintenance`: gated SSH/reboot/display-reload commands
 - `systemMetrics`: optional low-frequency push updates for load and temperature
 - `video`: optional local media doorstation media support
-- `displayBridge`: optional dashboard proxy for QML
+- `displayBridge`: optional dashboard proxy for QML; `feedbackEnabled` stores
+  the local **Settings > General > HA feedback** choice (default true).
+  Changing it requires no HA connection or GUI restart and writes configuration
+  only when the value changes.
 
 Callback URLs for event subscriptions and the display bridge support HTTP and
 HTTPS. Use a Home Assistant endpoint reachable from the C300X. For HTTPS, keep
@@ -224,9 +227,8 @@ at start-up, and this path cannot be tested without a power cut on a device.
 
 ## Release agent reuse
 
-Release builds may reuse the previous release agent binary only when none of
-the native-agent or device-display bundle inputs changed. A rebuild is required
-when any of these paths change:
+Release builds accept an executable only when it matches the reviewed build
+lock for the current source. The lock covers these native and bundle inputs:
 
 - `native_agent/src`
 - `native_agent/scripts`
@@ -238,11 +240,17 @@ when any of these paths change:
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
 
-The release workflow enforces this list before accepting a reused agent asset.
-When a fresh ARMHF agent build is required, release metadata records sanitized
-sysroot evidence from `C300X_DEVICE_SYSROOT`: whether a sysroot was configured,
-whether relevant ARMHF libraries were available, their SHA256 hashes and a
-combined fingerprint. The metadata must not expose local sysroot paths.
+The release workflow checks the source digest and executable SHA-256 before
+accepting a transferred agent. Native changes require a fresh ARMHF build and
+ABI/stack checks. Display-content-only changes may retain the binary, but the
+bundle and reviewed approval must be regenerated.
+
+Release metadata describes the environment that generates it. Hosted CI does
+not have `C300X_DEVICE_SYSROOT`, so its sysroot evidence is unavailable even when
+the approved binary was built locally. Local metadata can record library hashes
+and a combined fingerprint without paths; this evidence is not transferred by
+the ZIP-only release handoff. Keep local build/ABI logs separately. The build
+lock is maintainer approval, not independent compiler/sysroot provenance.
 
 ## Smoke tests
 

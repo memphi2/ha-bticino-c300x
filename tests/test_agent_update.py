@@ -316,6 +316,122 @@ class FakeHass:
         return target(*args)
 
 
+@pytest.mark.parametrize("failure", [
+    "busy_once", "busy_always", "transport", "wrapped_transport", "other_http",
+    "other_conflict", "apply_busy", "upload_busy",
+])
+def test_update_retries_only_prepare_busy(monkeypatch, failure) -> None:
+    from unittest.mock import AsyncMock
+
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    clock = [0.0]
+    sleeps = []
+
+    async def sleep(delay):
+        sleeps.append(delay)
+        clock[0] += delay
+
+    monkeypatch.setattr(agent_update, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(agent_update.asyncio, "sleep", sleep)
+    busy = C300XAgentApiConnectionError("device agent returned HTTP 409: maintenance_busy")
+    error = {
+        "transport": C300XAgentApiConnectionError("device-agent request timed out"),
+        "other_http": C300XAgentApiConnectionError("device agent returned HTTP 500: maintenance_busy"),
+        "other_conflict": C300XAgentApiConnectionError("device agent returned HTTP 409: update_conflict"),
+    }.get(failure, busy)
+    if failure == "wrapped_transport":
+        error.__cause__ = TimeoutError()
+    prepare = AsyncMock(return_value={"ok": True})
+    if failure == "busy_once":
+        prepare.side_effect = [busy, {"ok": True}]
+    elif failure in {"busy_always", "transport", "wrapped_transport", "other_http", "other_conflict"}:
+        prepare.side_effect = error
+    api = FakeUpdateApi()
+    monkeypatch.setattr(api, "async_prepare_agent_update", prepare)
+    apply = AsyncMock(return_value={"ok": True}, side_effect=busy if failure == "apply_busy" else None)
+    monkeypatch.setattr(api, "async_apply_agent_update", apply)
+    upload = AsyncMock(side_effect=busy if failure == "upload_busy" else None)
+    monkeypatch.setattr(agent_update, "_async_upload_bundle_file", upload)
+    monkeypatch.setattr(agent_update, "_async_read_file_bytes", AsyncMock(return_value=b"{}"))
+    monkeypatch.setattr(agent_update, "async_load_packaged_bundle_metadata", AsyncMock(return_value={
+        "agent_version": "2.2.0", "bundle_hash": "sha256:test", "files": [],
+    }))
+
+    if failure == "busy_once":
+        assert asyncio.run(async_apply_packaged_agent_update(FakeHass(), api)) == {"ok": True}
+        assert prepare.await_count == 2
+        assert sleeps == [1.0]
+        assert upload.await_count == apply.await_count == 1
+    else:
+        with pytest.raises(C300XAgentApiConnectionError) as raised:
+            asyncio.run(async_apply_packaged_agent_update(FakeHass(), api))
+        assert raised.value is error
+        if failure == "busy_always":
+            assert prepare.await_count == 12
+            assert sum(sleeps) == agent_update.MAINTENANCE_BUSY_WAIT_SECONDS == 12
+        else:
+            assert prepare.await_count == 1
+            assert sleeps == []
+        assert apply.await_count == (1 if failure == "apply_busy" else 0)
+        assert upload.await_count == (1 if failure in {"apply_busy", "upload_busy"} else 0)
+
+
+@pytest.mark.parametrize("busy_first", [False, True])
+def test_busy_budget_does_not_cancel_admitted_request(monkeypatch, busy_first) -> None:
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    clock = [0.0]
+    calls = []
+    sleeps = []
+
+    def forbidden_timeout(*args):
+        pytest.fail("busy retry must not impose an action timeout")
+
+    async def sleep(delay):
+        sleeps.append(delay)
+        clock[0] += delay
+
+    async def action():
+        calls.append(clock[0])
+        clock[0] += 20.0
+        if busy_first and len(calls) == 1:
+            raise C300XAgentApiConnectionError("device agent returned HTTP 409: maintenance_busy")
+        return {"ok": True}
+
+    monkeypatch.setattr(agent_update, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(agent_update.asyncio, "sleep", sleep)
+    monkeypatch.setattr(agent_update.asyncio, "timeout", forbidden_timeout)
+
+    assert asyncio.run(agent_update.async_retry_update_maintenance_busy(action)) == {"ok": True}
+    assert calls == ([0.0, 21.0] if busy_first else [0.0])
+    assert sleeps == ([1.0] if busy_first else [])
+
+
+def test_busy_budget_does_not_admit_retry_after_slow_busy_response(monkeypatch) -> None:
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    clock = [0.0]
+    calls = []
+    busy = C300XAgentApiConnectionError("device agent returned HTTP 409: maintenance_busy")
+
+    async def sleep(delay):
+        clock[0] += delay
+
+    async def action():
+        calls.append(clock[0])
+        if len(calls) == 2:
+            clock[0] += 20.0
+        raise busy
+
+    monkeypatch.setattr(agent_update, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(agent_update.asyncio, "sleep", sleep)
+    with pytest.raises(C300XAgentApiConnectionError) as raised:
+        asyncio.run(agent_update.async_retry_update_maintenance_busy(action))
+    assert raised.value is busy
+    assert calls == [0.0, 1.0]
+
+
 def test_apply_packaged_agent_update_uploads_files_and_manifest(
     tmp_path: Path,
     monkeypatch,

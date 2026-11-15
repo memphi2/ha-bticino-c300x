@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import yaml
 
@@ -149,17 +151,56 @@ def test_doorbell_blueprints_use_event_entry_and_selected_device() -> None:
 
 
 def test_doorbell_notification_allows_camera_less_events() -> None:
-    data = _blueprint("doorbell_notification.yaml")
-    inputs = data["blueprint"]["input"]
-    first_condition = data["condition"][0]
+    import asyncio
 
-    assert "entry_id" not in inputs
-    assert first_condition == {
-        "condition": "template",
-        "value_template": (
-            "{{ entry_id and (not event_camera_entity or event_camera_entity in c300x_entities) }}"
-        ),
-    }
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers import frame
+    from homeassistant.helpers.device_registry import DeviceEntry
+    from homeassistant.helpers.template import Template
+
+    data = _blueprint("doorbell_notification.yaml")
+    assert "entry_id" not in data["blueprint"]["input"]
+
+    async def run() -> None:
+        hass = HomeAssistant(str(ROOT))
+        selected = DeviceEntry(config_entry_id="entry_a", id="device_a")
+        composite = DeviceEntry(
+            config_entry_id="entry_a", id="composite",
+            composite_subentries={"entry_a": {None}, "entry_b": {None}},
+        )
+        devices = {selected.id: selected, composite.id: composite}
+        registry = SimpleNamespace(async_get=devices.get)
+        template = Template(data["condition"][0]["value_template"], hass)
+        # DeviceEntry compatibility properties use HA's frame reporting helper.
+        # Restore its global HA reference when this isolated event loop exits.
+        with (
+            patch.object(frame._hass, "hass", None),
+            patch("homeassistant.helpers.device_registry.async_get", return_value=registry),
+        ):
+            frame.async_setup(hass)
+            for entry_id, camera, device, expected in (
+                ("entry_a", "", "device_a", True),
+                ("entry_b", "", "device_a", False),
+                ("entry_a", "camera.a", "device_a", True),
+                ("entry_b", "camera.b", "device_a", False),
+                ("entry_b", "camera.a", "device_a", False),
+                ("entry_a", "camera.b", "device_a", False),
+                ("", "", "device_a", False),
+                ("entry_a", "", "removed_device", False),
+                ("entry_a", "", "composite", True),
+                ("entry_b", "", "composite", True),
+                ("entry_c", "", "composite", False),
+                ("entry_b", "camera.b", "composite", True),
+                ("entry_c", "camera.b", "composite", False),
+            ):
+                assert bool(template.async_render({
+                    "entry_id": entry_id,
+                    "event_camera_entity": camera,
+                    "c300x_device": device,
+                    "c300x_entities": ["camera.a", "camera.b"] if device == "composite" else ["camera.a"],
+                })) is expected, (entry_id, camera, device)
+
+    asyncio.run(run())
 
 
 def test_doorbell_notification_derives_camera_from_device() -> None:

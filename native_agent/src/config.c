@@ -112,6 +112,7 @@ void c300x_default_config(struct c300x_config *config)
     config->ui_port = 8090;
     config->allow_lan = 0;
     config->display_bridge_enabled = 0;
+    config->display_feedback_enabled = 1;
     safe_copy(config->device_model, sizeof(config->device_model), "C300X");
     safe_copy(config->device_firmware, sizeof(config->device_firmware), "");
     safe_copy(config->openwebnet_host, sizeof(config->openwebnet_host), "127.0.0.1");
@@ -1376,6 +1377,13 @@ int c300x_load_config(
             return 0;
         }
     }
+    if (nested_member(document, document_end, "displayBridge", "feedbackEnabled", &value)) {
+        if (!bool_value(value, document_end, &config->display_feedback_enabled)) {
+            set_error(error, error_len, "displayBridge.feedbackEnabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
     if (nested_member3(document, document_end, "displayBridge", "homeAssistant", "requestTimeoutMs", &value)) {
         if (!int_value(value, document_end, &config->home_assistant_request_timeout_ms)) {
             set_error(error, error_len, "displayBridge.homeAssistant.requestTimeoutMs must be positive");
@@ -1880,6 +1888,7 @@ int c300x_config_persisted_equal(
         && C300X_EQ_INT(ui_port)
         && C300X_EQ_INT(allow_lan)
         && C300X_EQ_INT(display_bridge_enabled)
+        && C300X_EQ_INT(display_feedback_enabled)
         && C300X_EQ_STR(device_model)
         && C300X_EQ_STR(device_firmware)
         && C300X_EQ_INT(home_assistant_request_timeout_ms)
@@ -2285,6 +2294,7 @@ static int save_config_internal(
     fprintf(file, ",\"keepAliveMs\": %d,\"rtpPortStart\": %u,\"rtpPortCount\": %d}\n  },\n", config->video_rtsp_keep_alive_ms, config->video_rtp_port_start, config->video_rtp_port_count);
     fprintf(file, "  \"displayBridge\": {\n");
     fprintf(file, "    \"enabled\": %s,\n", config->display_bridge_enabled ? "true" : "false");
+    fprintf(file, "    \"feedbackEnabled\": %s,\n", config->display_feedback_enabled ? "true" : "false");
     fprintf(file, "    \"homeAssistant\": {\"requestTimeoutMs\": %d}\n  }\n}\n", config->home_assistant_request_timeout_ms);
 
     if (ferror(file)) {
@@ -2317,6 +2327,28 @@ static int save_config_internal(
         *changed = 1;
     }
     return 1;
+}
+
+int c300x_save_display_feedback(struct c300x_config *live, int enabled,
+                                char *error, size_t error_len, int *changed)
+{
+    if (changed != NULL) *changed = 0;
+    if (enabled != 0 && enabled != 1) {
+        set_error(error, error_len, "feedback preference must be a boolean");
+        return 0;
+    }
+    if (live->display_feedback_enabled == enabled) return 1;
+    struct c300x_config *desired = calloc(1, sizeof(*desired));
+    if (desired == NULL) { set_error(error, error_len, "out_of_memory"); return 0; }
+    /* Preserve persisted changes awaiting restart rather than saving live state. */
+    int ok = c300x_load_config(live->config_path, desired, error, error_len);
+    if (ok) {
+        desired->display_feedback_enabled = enabled;
+        ok = c300x_save_config_if_changed(desired, error, error_len, changed);
+    }
+    if (ok) live->display_feedback_enabled = enabled;
+    free(desired);
+    return ok;
 }
 
 int c300x_save_mqtt_config(const struct c300x_config *live, const struct c300x_config *updated,

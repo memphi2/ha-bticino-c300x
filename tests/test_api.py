@@ -163,6 +163,28 @@ class _RaisingSession:
         raise self._exception
 
 
+def test_snapshot_endpoint_is_authenticated_bounded_and_read_only() -> None:
+    session = _FakeSession(response_body=b"BM-frame", content_type="image/bmp")
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
+    assert asyncio.run(api.async_doorbell_snapshot()) == (b"BM-frame", "image/bmp")
+    assert session.requests[0]["args"] == (
+        "GET", "http://agent.local:8080/api/v1/video/doorbell/snapshot"
+    )
+    assert len(session.requests) == 1
+
+
+@pytest.mark.parametrize("content_length", [None, 512 * 1024 + 1])
+def test_snapshot_endpoint_rejects_oversized_response(content_length) -> None:
+    session = _FakeSession(
+        response_body=b"x" * (512 * 1024 + 1),
+        content_type="image/bmp",
+        response_content_length=content_length,
+    )
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
+    with pytest.raises(C300XAgentApiResponseError, match="too large"):
+        asyncio.run(api.async_doorbell_snapshot())
+
+
 def test_build_agent_base_url_defaults_to_http() -> None:
     assert build_agent_base_url("agent.local", 8080) == (
         "http://agent.local:8080"

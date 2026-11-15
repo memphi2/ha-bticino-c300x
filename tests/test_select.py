@@ -423,6 +423,65 @@ def test_audio_codec_select_subscribes_to_connection_signal() -> None:
     assert all(callable(remover) for remover in removers)
 
 
+@pytest.mark.parametrize("remove", [False, True])
+@pytest.mark.parametrize("suppress_cancel", [False, True])
+def test_pending_codec_refresh_cannot_write_after_reload(remove, suppress_cancel) -> None:
+    async def run() -> None:
+        entry = _audio_codec_entry()
+        entity = C300XAudioCodecSelect(entry)
+        started, finish = asyncio.Event(), asyncio.Event()
+        cancelled = False
+
+        async def delayed_status():
+            nonlocal cancelled
+            started.set()
+            try:
+                await finish.wait()
+            except asyncio.CancelledError:
+                cancelled = True
+                if not suppress_cancel:
+                    raise
+                await finish.wait()
+            return {"running_state": "speex", "reboot_required": False}
+
+        entry.runtime_data.api.async_audio_codec_status = delayed_status
+        removers, tasks, writes = [], [], []
+
+        def create(coro):
+            task = asyncio.create_task(coro)
+            tasks.append(task)
+            return task
+
+        entity.hass = SimpleNamespace(async_create_task=create)
+        entity.async_on_remove = removers.append
+        entity.async_write_ha_state = lambda: writes.append(True)
+        await entity.async_added_to_hass()
+        entity._pending_option = "pcmu"
+        entity._handle_reboot_reconnect(entry.entry_id)
+        await started.wait()
+        # Repeated connection signals must not start overlapping status reads.
+        entity._handle_reboot_reconnect(entry.entry_id)
+        assert len(tasks) == 1
+        if remove:
+            for callback in removers:
+                callback()
+            await asyncio.sleep(0)
+            assert cancelled
+        replacement = _FakeRuntimeData()
+        replacement.event_state.audio_codec = "pcmu"
+        entry.runtime_data = replacement
+        finish.set()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        assert replacement.event_state.audio_codec == "pcmu"
+        assert writes == []
+        assert entity._resolving_pending is False
+        if remove:
+            entity._handle_reboot_reconnect(entry.entry_id)
+            assert len(tasks) == 1
+
+    asyncio.run(run())
+
+
 def test_audio_codec_select_stays_on_live_codec_while_reboot_is_deferred() -> None:
     entry = _audio_codec_entry()
     entry.runtime_data.api.audio_codec_reboots = False

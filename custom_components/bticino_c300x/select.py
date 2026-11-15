@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -202,6 +203,8 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         self._pending_option: str | None = None
         self._seen_reboot_gap = False
         self._resolving_pending = False
+        self._pending_refresh_task: asyncio.Task[None] | None = None
+        self._removed = False
         self._attr_available = True
 
     @property
@@ -235,10 +238,14 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     async def async_update(self) -> None:
         """Refresh the codec state from the device."""
 
+        runtime = self._entry.runtime_data
         try:
-            status = await self._entry.runtime_data.api.async_audio_codec_status()
+            status = await runtime.api.async_audio_codec_status()
         except C300XAgentApiError:
-            self._attr_available = False
+            if not self._removed and self._entry.runtime_data is runtime:
+                self._attr_available = False
+            return
+        if self._removed or self._entry.runtime_data is not runtime:
             return
         self._apply_status(status)
 
@@ -272,7 +279,7 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         # seen -- which used to leave the change stuck pending until a manual
         # reload. (The gap flag is still recorded for legacy agents that report
         # only the on-disk codec; see `_apply_status`.)
-        if entry_id != self._entry.entry_id or not self._pending_option:
+        if self._removed or entry_id != self._entry.entry_id or not self._pending_option:
             return
         if not self._entry.runtime_data.connection_state.available:
             self._seen_reboot_gap = True
@@ -280,14 +287,23 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         if self._resolving_pending:
             return
         self._resolving_pending = True
-        self.hass.async_create_task(self._async_resolve_pending())
+        self._pending_refresh_task = self.hass.async_create_task(self._async_resolve_pending())
+
+    @callback
+    def _cancel_pending_refresh(self) -> None:
+        self._removed = True
+        if self._pending_refresh_task is not None:
+            self._pending_refresh_task.cancel()
+            self._pending_refresh_task = None
 
     async def _async_resolve_pending(self) -> None:
+        runtime = self._entry.runtime_data
         try:
             await self.async_update()
         finally:
             self._resolving_pending = False
-        self.async_write_ha_state()
+        if not self._removed and self._entry.runtime_data is runtime:
+            self.async_write_ha_state()
 
     def _clear_pending(self) -> None:
         self._pending_option = None
@@ -297,6 +313,7 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         """Resolve pending codec changes when the agent reconnects post-reboot."""
 
         await super().async_added_to_hass()
+        self.async_on_remove(self._cancel_pending_refresh)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,

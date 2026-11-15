@@ -13,6 +13,7 @@ import zipfile
 from pathlib import Path
 
 from manifest_version import read_integration_version
+from native_build_lock import validate_archive
 from stage_device_agent_bundle import AGENT_BINARY, stage_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,7 +51,7 @@ def main() -> int:
         default=None,
         help=(
             "Extract the ARMHF agent binary from an existing HACS release zip. "
-            "Use only when native-agent and device bundle inputs are unchanged."
+            "Requires the checkout's reviewed native build lock."
         ),
     )
     args = parser.parse_args()
@@ -59,7 +60,7 @@ def main() -> int:
     if args.reuse_agent_from_release_zip is not None:
         try:
             _restore_agent_from_release_zip(args.reuse_agent_from_release_zip)
-        except (OSError, zipfile.BadZipFile, KeyError) as err:
+        except (OSError, zipfile.BadZipFile, KeyError, ValueError) as err:
             sys.stderr.write(f"Cannot reuse ARMHF agent from release zip: {err}\n")
             return 1
     elif not args.skip_build:
@@ -72,6 +73,7 @@ def main() -> int:
             return 1
         env = os.environ.copy()
         env["C300X_DEVICE_SYSROOT"] = str(sysroot)
+        _run(["make", "-C", str(ROOT / "native_agent"), "clean"], env=env)
         _run(
             ["make", "-C", str(ROOT / "native_agent"), "armhf", "armhf-abi-check"],
             env=env,
@@ -123,6 +125,7 @@ def _write_zip(output: Path) -> None:
 
 
 def _restore_agent_from_release_zip(zip_path: Path) -> None:
+    validate_archive(zip_path, root=ROOT)
     with zipfile.ZipFile(zip_path) as archive:
         data = archive.read("device_agent/armhf/c300x-agent-native")
     AGENT_BINARY.parent.mkdir(parents=True, exist_ok=True)
@@ -131,12 +134,17 @@ def _restore_agent_from_release_zip(zip_path: Path) -> None:
 
 
 def _zip_info(path: Path) -> zipfile.ZipInfo:
+    relative = path.relative_to(PACKAGE_ROOT)
     info = zipfile.ZipInfo(
-        filename=path.relative_to(PACKAGE_ROOT).as_posix(),
+        filename=relative.as_posix(),
         date_time=ZIP_TIMESTAMP,
     )
     info.compress_type = zipfile.ZIP_DEFLATED
     mode = path.stat().st_mode & 0o777
+    if relative.parts[0] != "device_agent":
+        # Checkout umasks differ between local builds and hosted CI. Device
+        # bundle modes are already fixed explicitly by the bundle stager.
+        mode = 0o755 if mode & 0o111 else 0o644
     info.external_attr = (stat.S_IFREG | mode) << 16
     return info
 

@@ -1,5 +1,6 @@
 export const C300X_TRANSLATIONS = {
   en: {
+    last_image: "Archived image (not live)",
     device_unresolved: "Camera device assignment unavailable",
     door_unlock: "Open door",
     stair_light: "Staircase light",
@@ -46,6 +47,7 @@ export const C300X_TRANSLATIONS = {
     unknown: "Unknown",
   },
   de: {
+    last_image: "Archivbild (nicht live)",
     device_unresolved: "Gerätezuordnung der Kamera nicht verfügbar",
     door_unlock: "Tür öffnen",
     stair_light: "Treppenlicht",
@@ -92,6 +94,7 @@ export const C300X_TRANSLATIONS = {
     unknown: "Unbekannt",
   },
   fr: {
+    last_image: "Image archivée (pas en direct)",
     device_unresolved: "Affectation de l'appareil de la caméra indisponible",
     door_unlock: "Ouvrir la porte",
     stair_light: "Éclairage de l'escalier",
@@ -138,6 +141,7 @@ export const C300X_TRANSLATIONS = {
     unknown: "Inconnu",
   },
   it: {
+    last_image: "Immagine archiviata (non in diretta)",
     device_unresolved: "Associazione del dispositivo della telecamera non disponibile",
     door_unlock: "Apri porta",
     stair_light: "Luce scale",

@@ -45,6 +45,8 @@ from .qml_patch import (
     async_refresh_qml_patch_status,
     async_restore_qml_patch_and_confirm,
 )
+from .snapshots import SIGNAL_SNAPSHOT_CHANGED, get_snapshots
+from .switch_display import C300XTouchToneSwitch
 
 PARALLEL_UPDATES = 1
 
@@ -57,6 +59,10 @@ async def async_setup_entry(
     """Set up C300X switches."""
 
     entities: list[SwitchEntity] = []
+    if supports_capability(entry, "touch_tone"):
+        entities.append(C300XTouchToneSwitch(entry))
+    if entry_video_enabled(entry) and supports_capability(entry, "doorbell_video"):
+        entities.append(C300XSnapshotSwitch(entry))
     if supports_capability(entry, "ringer"):
         entities.append(C300XRingerMuteSwitch(entry))
     if supports_capability(entry, "answering_machine"):
@@ -89,6 +95,57 @@ def _agent_action(message: str) -> Iterator[None]:
         yield
     except C300XAgentApiError as err:
         raise HomeAssistantError(message) from err
+
+
+class C300XSnapshotSwitch(C300XEntity, SwitchEntity):
+    """Control HA-side image storage without reloading or changing the device."""
+
+    _attr_should_poll = False
+    _attr_translation_key = "stream_snapshots"
+    _attr_icon = "mdi:camera-burst"
+
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
+        super().__init__(entry, "stream_snapshots")
+
+    @property
+    def available(self) -> bool:
+        manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
+        return manager is not None and not manager.closed
+
+    @property
+    def is_on(self) -> bool | None:
+        manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
+        return manager.enabled if manager else None
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set_enabled(False)
+
+    async def async_update(self) -> None:
+        """State is already held by the HA manager; no device read is needed."""
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        manager = get_snapshots(self.hass, self._entry.entry_id)
+        if manager is None or manager.closed:
+            raise HomeAssistantError("C300X image storage is unavailable")
+        try:
+            await manager.async_set_enabled(enabled)
+        except OSError as err:
+            raise HomeAssistantError("Could not save C300X image settings") from err
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_SNAPSHOT_CHANGED, self._handle_snapshot_changed
+        ))
+
+    @callback
+    def _handle_snapshot_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id:
+            self.async_write_ha_state()
 
 
 class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):

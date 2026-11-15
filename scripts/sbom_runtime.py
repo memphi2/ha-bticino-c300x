@@ -13,6 +13,7 @@ import zipfile
 from typing import Any
 
 _PYTHON_PACKAGES = {
+    "PIL": False,
     "aiohttp": False,
     "av": True,
     "homeassistant": False,
@@ -21,6 +22,7 @@ _PYTHON_PACKAGES = {
     "propcache": False,
     "voluptuous": True,
 }
+_PYTHON_DISTRIBUTIONS = {"PIL": "pillow"}
 _ROOT_ID = "SPDXRef-Package-ha-bticino-c300x"
 
 
@@ -62,21 +64,22 @@ def runtime_inventory(
     packages: list[dict[str, Any]] = []
     relationships: list[dict[str, str]] = []
     for name in sorted(external):
-        package_id = f"SPDXRef-Runtime-Python-{name}"
+        distribution = _PYTHON_DISTRIBUTIONS.get(name, name)
+        package_id = f"SPDXRef-Runtime-Python-{distribution}"
         version = asyncssh_version if name == "asyncssh" else None
         comment = (
             "Optional SSH install/repair dependency, installed through Home Assistant on demand; not bundled."
             if name == "asyncssh"
             else "External Home Assistant runtime dependency; installed version not observed; not bundled."
         )
-        package = _external_package(package_id, name, comment)
+        package = _external_package(package_id, distribution, comment)
         if version:
             package["versionInfo"] = version
         package["externalRefs"] = [
             {
                 "referenceCategory": "PACKAGE-MANAGER",
                 "referenceType": "purl",
-                "referenceLocator": f"pkg:pypi/{name}"
+                "referenceLocator": f"pkg:pypi/{distribution}"
                 + (f"@{version}" if version else ""),
             }
         ]

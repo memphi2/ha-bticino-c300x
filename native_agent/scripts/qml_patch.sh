@@ -14,7 +14,7 @@ DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
-FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
@@ -97,8 +97,11 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "HomeAssistant.qml"' \
         && file_contains "$GUI_DIR/MainApp.qml" 'alarmPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
+        && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xDisplayPreferences' \
+        && general_settings_patch_present \
         && home_page_feature_patch_present \
         && file_contains "$GUI_DIR/HomePage.qml" 'MemoSync.syncHomeNotifications(page)' \
+        && file_contains "$GUI_DIR/HomePage.qml" 'property alias memoEventRetryTimer: memoRetryTimer' \
         && file_contains "$GUI_DIR/HomePage.qml" 'objectName: "alarmButton"' \
         && file_contains "$GUI_DIR/HomePage.qml" 'objectName: "haButton"' \
         && file_contains "$GUI_DIR/HomePage.qml" 'images/call/icon_call-home.svg' \
@@ -106,6 +109,7 @@ full_patch_present() {
         && file_contains "$GUI_DIR/Alarm.qml" 'headerLabel: uiText("alarm")' \
         && file_contains "$GUI_DIR/HomeAssistant.qml" 'Api.dashboard' \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function homeButtons' \
+        && file_contains "$GUI_DIR/js/c300x_ha.js" 'function loadDisplayPreferences' \
         && file_contains "$GUI_DIR/js/c300x_i18n.js" 'function weather' \
         && file_contains "$GUI_DIR/js/c300x_memos.js" 'function unreadCountFromPath' \
         && file_contains "$GUI_DIR/js/c300x_memos.js" 'function syncMemoModel'
@@ -113,10 +117,13 @@ full_patch_present() {
 
 partial_patch_present() {
     file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "Alarm.qml"' \
+        || file_contains "$GUI_DIR/MainApp.qml" 'id: c300xDisplayPreferences' \
         || file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "HomeAssistant.qml"' \
         || file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
         || file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
+        || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
+        || general_settings_partial_present \
         || [ -f "$GUI_DIR/Alarm.qml" ] \
         || [ -f "$GUI_DIR/HomeAssistant.qml" ] \
         || [ -f "$GUI_DIR/js/c300x_ha.js" ] \
@@ -124,8 +131,20 @@ partial_patch_present() {
         || [ -f "$GUI_DIR/js/c300x_memos.js" ]
 }
 
+general_settings_patch_present() {
+    file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'id: c300xFeedbackSetting' \
+        && file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'checked: c300xFeedbackSetting.visible ? c300xDisplayPreferences.feedbackEnabled : true' \
+        && file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'onTouched: global.beepEnabled = checked'
+}
+
+general_settings_partial_present() {
+    file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'c300xDisplayPreferences' \
+        || file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'c300xFeedbackSetting'
+}
+
 home_page_feature_patch_present() {
     file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
+        || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || (
             file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
             && file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \
@@ -218,21 +237,67 @@ remount_ro() {
 }
 
 finish_write_action() {
-    remount_ro
+    write_rc=$?
     trap - EXIT HUP INT TERM
+    recovery_ok=1
+    if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
+        for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
+            if [ -f "$WRITE_TRANSACTION/$transaction_rel" ]; then
+                if ! mkdir -p "$(dirname "$GUI_DIR/$transaction_rel")" \
+                    || ! mv -f "$WRITE_TRANSACTION/$transaction_rel" "$GUI_DIR/$transaction_rel"; then
+                    recovery_ok=0
+                fi
+            else
+                rm -f "$GUI_DIR/$transaction_rel" || recovery_ok=0
+            fi
+        done
+    fi
+    if [ "$recovery_ok" = "1" ]; then
+        if [ -n "${WRITE_TRANSACTION:-}" ]; then
+            rm -rf "$WRITE_TRANSACTION" || write_rc=1
+        fi
+    else
+        printf 'GUI rollback failed; recovery files retained in %s\n' "$WRITE_TRANSACTION" >&2
+        write_rc=1
+    fi
+    if [ "${WRITE_TRANSACTION_COMMITTED:-0}" = "1" ] && [ "${REMOVE_EMPTY_JS:-0}" = "1" ]; then
+        rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
+    fi
+    remount_ro || write_rc=1
+    return "$write_rc"
 }
 
 abort_write_action() {
-    remount_ro
-    trap - EXIT HUP INT TERM
+    finish_write_action || true
     exit 130
 }
 
 run_write_action() {
+    WRITE_TRANSACTION=
+    WRITE_TRANSACTION_READY=0
+    WRITE_TRANSACTION_COMMITTED=0
+    REMOVE_EMPTY_JS=0
     trap finish_write_action EXIT
     trap abort_write_action HUP INT TERM
     remount_rw
+    # Keep recovery on the GUI filesystem so rollback needs no further copies.
+    transaction_dir="$GUI_DIR/.c300x-qml-transaction.$$"
+    (umask 077; mkdir "$transaction_dir")
+    WRITE_TRANSACTION="$transaction_dir"
+    for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
+        transaction_source="$GUI_DIR/$transaction_rel"
+        if [ -L "$transaction_source" ] || { [ -e "$transaction_source" ] && [ ! -f "$transaction_source" ]; }; then
+            printf 'Unsupported GUI file type: %s\n' "$transaction_source" >&2
+            return 1
+        fi
+        if [ -f "$transaction_source" ]; then
+            mkdir -p "$(dirname "$WRITE_TRANSACTION/$transaction_rel")"
+            cp -p "$transaction_source" "$WRITE_TRANSACTION/$transaction_rel"
+        fi
+    done
+    WRITE_TRANSACTION_READY=1
     "$@"
+    WRITE_TRANSACTION_COMMITTED=1
     finish_write_action
 }
 
@@ -253,6 +318,9 @@ backup_file() {
         Components/Settings/CallBlockPopup.qml)
             require_clean_call_block_popup "$backup_src"
             ;;
+        Components/Settings/GeneralsChoice.qml)
+            require_clean_general_settings "$backup_src"
+            ;;
         EventManager.qml)
             if grep -F -q 'function c300xNotifyMediaClosed()' "$backup_src"; then
                 printf 'Refusing to back up an already patched EventManager.qml\n' >&2
@@ -261,14 +329,21 @@ backup_file() {
             ;;
         MainApp.qml)
             if grep -F -q 'sourceUrl: "Alarm.qml"' "$backup_src" \
-                || grep -F -q 'sourceUrl: "HomeAssistant.qml"' "$backup_src"; then
+                || grep -F -q 'sourceUrl: "HomeAssistant.qml"' "$backup_src" \
+                || grep -F -q 'c300xDisplayPreferences' "$backup_src"; then
                 printf 'Refusing to back up an already patched MainApp.qml\n' >&2
                 return 1
             fi
             ;;
     esac
     mkdir -p "$(dirname "$backup_dest")"
-    cp -p "$backup_src" "$backup_dest"
+    backup_temp_dir="$(mktemp -d "$backup_dest.tmp.XXXXXX")" || return 1
+    if ! cp -p "$backup_src" "$backup_temp_dir/original" \
+        || ! mv -f "$backup_temp_dir/original" "$backup_dest"; then
+        rm -rf "$backup_temp_dir"
+        return 1
+    fi
+    rmdir "$backup_temp_dir"
 }
 
 install_file() {
@@ -323,6 +398,102 @@ verify_generated_page() {
     done
 }
 
+require_clean_general_settings() {
+    [ -s "$1" ]
+    if grep -E -q 'c300xDisplayPreferences|c300xFeedbackSetting' "$1"; then
+        printf 'Refusing to back up or patch already patched GeneralsChoice.qml\n' >&2
+        return 1
+    fi
+}
+
+patch_general_settings() {
+    settings_rel="Components/Settings/GeneralsChoice.qml"
+    settings_original="$BACKUP_DIR/$settings_rel"
+    settings_output="${PATCH_OUTPUT_DIR:-$GUI_DIR}/$settings_rel"
+    backup_file "$settings_rel"
+    if [ ! -f "$settings_original" ]; then
+        printf 'Missing original GeneralsChoice.qml backup\n' >&2
+        return 1
+    fi
+    require_clean_general_settings "$settings_original"
+    mkdir -p "$(dirname "$settings_output")"
+    cp -p "$settings_original" "$settings_output"
+    # Keep the vendor tone switch; make room for one native-style row below it.
+    awk '
+        $0 == "import QtQuick 1.1" { imports++ }
+        $0 == "    anchors.topMargin: parent.height / 100 * 4" {
+            print "    anchors.topMargin: 8"
+            top_margins++
+            next
+        }
+        !tone && $0 == "        spacing: 6" {
+            print "        spacing: 4"
+            column_spacing++
+            next
+        }
+        $0 == "        id: beepButton" { tone++ }
+        tone && $0 == "        anchors.topMargin: 32" {
+            print "        anchors.topMargin: 8"
+            margins++
+            next
+        }
+        $0 == "            checked: global.beepEnabled" { checked++ }
+        $0 == "            onTouched: global.beepEnabled = checked" { handler++ }
+        $0 == "}" {
+            roots++
+            print ""
+            print "    Item {"
+            print "        id: c300xFeedbackSetting"
+            print "        visible: typeof c300xDisplayPreferences !== \"undefined\""
+            print "        anchors.horizontalCenter: parent.horizontalCenter"
+            print "        anchors.top: beepButton.bottom"
+            print "        anchors.topMargin: 6"
+            print "        width: buttonColumn.width"
+            print "        height: 44"
+            print "        onVisibleChanged: if (visible) c300xDisplayPreferences.load()"
+            print "        Component.onCompleted: if (visible) c300xDisplayPreferences.load()"
+            print "        UbuntuLightText {"
+            print "            anchors.left: parent.left"
+            print "            anchors.right: c300xFeedbackSwitch.left"
+            print "            anchors.rightMargin: 12"
+            print "            anchors.verticalCenter: parent.verticalCenter"
+            print "            text: c300xFeedbackSetting.visible ? c300xDisplayPreferences.label : \"\""
+            print "            color: \"white\""
+            print "            font.pixelSize: 18"
+            print "            wrapMode: Text.WordWrap"
+            print "        }"
+            print "        BasicButton {"
+            print "            id: c300xFeedbackSwitch"
+            print "            anchors.right: parent.right"
+            print "            anchors.verticalCenter: parent.verticalCenter"
+            print "            enabled: c300xFeedbackSetting.visible && c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy"
+            print "            opacity: enabled ? 1 : 0.5"
+            print "            checked: c300xFeedbackSetting.visible ? c300xDisplayPreferences.feedbackEnabled : true"
+            print "            style: CheckableButtonStyle {"
+            print "                defaultImage: \"../../images/ringtones/switch-bg_btn.svg\""
+            print "                checkedImage: \"../../images/ringtones/switch-bg_btn_p.svg\""
+            print "                defaultIconLeft: \"../../images/ringtones/switch_btn.svg\""
+            print "                defaultIconRight: \"../../images/ringtones/disable_icon.svg\""
+            print "                checkedIconLeft: \"../../images/ringtones/enable_icon.svg\""
+            print "                checkedIconRight: \"../../images/ringtones/switch_btn_p.svg\""
+            print "            }"
+            print "            onTouched: c300xDisplayPreferences.setFeedbackEnabled(!c300xDisplayPreferences.feedbackEnabled)"
+            print "        }"
+            print "    }"
+        }
+        { print }
+        END {
+            if (imports != 1 || top_margins != 1 || column_spacing != 1 || tone != 1 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
+                print "Unsupported original GeneralsChoice.qml layout" > "/dev/stderr"
+                exit 12
+            }
+        }
+    ' "$settings_original" > "$settings_output"
+    verify_generated_page "$settings_output" "$settings_rel" \
+        'anchors.top: beepButton.bottom' 'id: c300xFeedbackSetting' \
+        'onTouched: global.beepEnabled = checked'
+}
+
 patch_home_page() {
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     home_page="$output_dir/HomePage.qml"
@@ -349,6 +520,14 @@ patch_home_page() {
             print ""
             print "    property int externalUnreadMessages: -1"
             print "    property int externalUnreadMemos: -1"
+            print "    property alias memoEventRetryTimer: memoRetryTimer"
+            print ""
+            print "    Timer {"
+            print "        id: memoRetryTimer"
+            print "        repeat: false"
+            print "        running: false"
+            print "        onTriggered: MemoSync.retryEventWatch()"
+            print "    }"
             print ""
             print "    function unreadMessagesCount() {"
             print "        return externalUnreadMessages >= 0 ? externalUnreadMessages : answeringModel.obj.unreadMessages"
@@ -364,7 +543,10 @@ patch_home_page() {
             print ""
             print "    function handleMessageNotificationEvent(event) {"
             if (dynamic_home_page == "1") {
-                print "        if (event && event.topic === \"notifications\") refreshDisplayBridgeButtons()"
+                print "        if (event && (event.topic === \"notifications\" || event.topic === \"display_bridge.state\")) {"
+                print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
+                print "            refreshDisplayBridgeButtons()"
+                print "        }"
             }
             print "        if (event && (event.topic === \"memos\" || event.topic === \"answering_machine.messages\")) {"
             print "            refreshMessageNotifications()"
@@ -389,12 +571,9 @@ patch_home_page() {
             print "    property bool alarmButtonVisible: false"
             print "    property bool haButtonVisible: false"
             print ""
-            print "    function displayBridgeButtonCount() {"
-            print "        return (alarmButtonVisible ? 1 : 0) + (haButtonVisible ? 1 : 0)"
-            print "    }"
-            print ""
             print "    function refreshDisplayBridgeButtons() {"
-            print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable) {"
+            print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable, valid) {"
+            print "            if (!valid) return"
             print "            page.alarmButtonVisible = alarmConfigured"
             print "            page.haButtonVisible = dashboardAvailable"
             print "        })"
@@ -439,10 +618,15 @@ patch_home_page() {
         }
         function print_home_assistant_dynamic_flow_items() {
             print ""
+            print "            Row {"
+            print "                id: displayBridgeButtonRow"
+            print "                width: buttonPrototype.width * 2 + foobar.spacing"
+            print "                height: buttonPrototype.height"
+            print "                spacing: foobar.spacing"
             print "            BasicButton {"
             print "                objectName: \"alarmButton\""
-            print "                visible: page.alarmButtonVisible"
-            print "                function isVisible() { return visible }"
+            print "                opacity: page.alarmButtonVisible ? 1 : 0"
+            print "                enabled: page.alarmButtonVisible"
             print "                style: HomePageButtonStyle {"
             print "                    pressedImage: \"images/function_btn_p.svg\""
             print "                    pressedIcon: \"images/keylock_icon-small_p.svg\""
@@ -455,8 +639,8 @@ patch_home_page() {
             print ""
             print "            BasicButton {"
             print "                objectName: \"haButton\""
-            print "                visible: page.haButtonVisible"
-            print "                function isVisible() { return visible }"
+            print "                opacity: page.haButtonVisible ? 1 : 0"
+            print "                enabled: page.haButtonVisible"
             print "                style: HomePageButtonStyle {"
             print "                    pressedImage: \"images/function_btn_p.svg\""
             print "                    pressedIcon: \"images/call/icon_call-home_p.svg\""
@@ -465,6 +649,7 @@ patch_home_page() {
             print "                    description: \"Home Assistant\""
             print "                }"
             print "                onTouched: tabView.activateTab(haPage)"
+            print "            }"
             print "            }"
         }
         function delta(line, opened, closed, copy) {
@@ -517,14 +702,6 @@ patch_home_page() {
         $0 ~ /function buttonCount\(\)/ {
             in_button_count=1
             print
-            next
-        }
-        in_button_count && dynamic_home_page == "1" && $0 ~ /\+ 2/ {
-            sub(/\+ 2/, "+ 2 + page.displayBridgeButtonCount()")
-            print
-            if ($0 ~ /\}/) {
-                in_button_count=0
-            }
             next
         }
         in_button_count && $0 ~ /^[[:space:]]*\}/ {
@@ -604,11 +781,11 @@ patch_home_page() {
             'import "js/c300x_memos.js" as MemoSync' \
             'import "js/c300x_ha.js" as HAConfig' \
             'function refreshMessageNotifications()' \
-            'function displayBridgeButtonCount()' \
+            'property alias memoEventRetryTimer: memoRetryTimer' \
+            'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
-            '+ 2 + page.displayBridgeButtonCount()' \
-            'visible: page.alarmButtonVisible' \
-            'visible: page.haButtonVisible' \
+            'opacity: page.alarmButtonVisible ? 1 : 0' \
+            'opacity: page.haButtonVisible ? 1 : 0' \
             'objectName: "alarmButton"' \
             'objectName: "haButton"' \
             'images/call/icon_call-home.svg'
@@ -618,6 +795,8 @@ patch_home_page() {
             "HomePage.qml" \
             'import "js/c300x_memos.js" as MemoSync' \
             'function refreshMessageNotifications()' \
+            'property alias memoEventRetryTimer: memoRetryTimer' \
+            'onTriggered: MemoSync.retryEventWatch()' \
             'function startMessageNotificationWatch()' \
             'MemoSync.syncHomeNotifications(page)' \
             'id: homeAssistantButtonRow' \
@@ -817,6 +996,7 @@ generate_feature_patch_stage() {
     export PATCH_OUTPUT_DIR
     patch_home_page
     patch_memo_page
+    patch_general_settings
     copy_generated_file "Alarm.qml"
     copy_generated_file "HomeAssistant.qml"
     copy_generated_file "js/c300x_ha.js"
@@ -835,6 +1015,7 @@ generate_full_patch_stage() {
     copy_generated_file "C300XRingerControl.qml"
     patch_home_page
     patch_memo_page
+    patch_general_settings
     copy_generated_file "Alarm.qml"
     copy_generated_file "HomeAssistant.qml"
     copy_generated_file "js/c300x_ha.js"
@@ -934,6 +1115,69 @@ patch_main_app() {
     fi
     mkdir -p "$output_dir"
     cp -p "$source_main_app" "$main_app"
+    awk '
+        $0 == "import QtQuick 1.1" {
+            print
+            print "import \"js/c300x_ha.js\" as C300XPreferencesApi"
+            print "import \"js/c300x_i18n.js\" as C300XPreferencesText"
+            imports++
+            next
+        }
+        $0 == "Item {" {
+            print
+            print "    Item {"
+            print "        id: c300xDisplayPreferences"
+            print "        property bool feedbackEnabled: true"
+            print "        property bool ready: false"
+            print "        property bool busy: false"
+            print "        property bool stopped: false"
+            print "        property bool touchToneEnabled: global.beepEnabled"
+            print "        property bool applyingTouchTone: false"
+            print "        property bool touchToneReportAgain: false"
+            print "        property alias touchToneRetry: c300xTouchToneRetry"
+            print "        property alias touchToneReportDeadline: c300xTouchToneDeadline"
+            print "        function setTouchTone(value) { global.beepEnabled = value }"
+            print "        onTouchToneEnabledChanged: if (!applyingTouchTone && !stopped) c300xTouchToneReport.restart()"
+            print "        property string errorKey: \"\""
+            print "        property string label: C300XPreferencesText.text(trsl.language, errorKey || \"ha_feedback_colors\") + trsl.empty"
+            print "        property alias deadline: c300xPreferencesDeadline"
+            print "        function load() { C300XPreferencesApi.loadDisplayPreferences(c300xDisplayPreferences) }"
+            print "        function setFeedbackEnabled(value) { C300XPreferencesApi.saveDisplayPreferences(c300xDisplayPreferences, value) }"
+            print "        Timer {"
+            print "            id: c300xPreferencesDeadline"
+            print "            interval: 5000"
+            print "            repeat: false"
+            print "            onTriggered: C300XPreferencesApi.cancelDisplayPreferences(c300xDisplayPreferences)"
+            print "        }"
+            print "        Timer {"
+            print "            id: c300xTouchToneRetry"
+            print "            interval: 30000"
+            print "            onTriggered: C300XPreferencesApi.watchTouchTone(c300xDisplayPreferences)"
+            print "        }"
+            print "        Timer {"
+            print "            id: c300xTouchToneReport"
+            print "            interval: 0"
+            print "            onTriggered: C300XPreferencesApi.reportTouchTone(c300xDisplayPreferences)"
+            print "        }"
+            print "        Timer {"
+            print "            id: c300xTouchToneDeadline"
+            print "            interval: 5000"
+            print "            onTriggered: C300XPreferencesApi.retryTouchTone(c300xDisplayPreferences)"
+            print "        }"
+            print "        Component.onCompleted: { load(); C300XPreferencesApi.watchTouchTone(c300xDisplayPreferences) }"
+            print "        Component.onDestruction: {"
+            print "            stopped = true"
+            print "            C300XPreferencesApi.cancelDisplayPreferences(c300xDisplayPreferences)"
+            print "            C300XPreferencesApi.stopTouchTone(c300xDisplayPreferences)"
+            print "        }"
+            print "    }"
+            roots++
+            next
+        }
+        { print }
+        END { if (imports != 1 || roots != 1) exit 12 }
+    ' "$source_main_app" > "$temp_file"
+    mv "$temp_file" "$main_app"
     if ! grep -q 'alarmPage,' "$main_app"; then
         awk '
             { print }
@@ -1032,6 +1276,14 @@ restore_file() {
 
 restore_changed_count() {
     changed=0
+    if [ -e "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" ]; then
+        if ! cmp -s "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" "$GUI_DIR/Components/Settings/GeneralsChoice.qml"; then
+            changed=$((changed + 1))
+        fi
+    elif general_settings_partial_present; then
+        printf 'No original backup available for Components/Settings/GeneralsChoice.qml; refusing to remove stock GUI file\n' >&2
+        return 1
+    fi
     for rel in MainApp.qml HomePage.qml MemoPage.qml; do
         restore_original="$BACKUP_DIR/$rel"
         restore_dest="$GUI_DIR/$rel"
@@ -1099,6 +1351,9 @@ restore_feature_stock_file() {
 }
 
 restore_patch_files() {
+    if [ -e "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" ] || general_settings_partial_present; then
+        restore_file "Components/Settings/GeneralsChoice.qml"
+    fi
     restore_feature_stock_file "MainApp.qml"
     restore_feature_stock_file "HomePage.qml"
     restore_feature_stock_file "MemoPage.qml"
@@ -1108,7 +1363,7 @@ restore_patch_files() {
     restore_file "js/c300x_i18n.js"
     restore_file "js/c300x_memos.js"
     remove_obsolete_gui_files
-    rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
+    REMOVE_EMPTY_JS=1
 }
 
 restore_media_user_label_changed_count() {
@@ -1136,7 +1391,9 @@ restore_media_user_label_files() {
 }
 
 restore_core_patch_files() {
-    restore_file "EventManager.qml"
+    if [ -e "$BACKUP_DIR/EventManager.qml" ] || core_partial_patch_present; then
+        restore_file "EventManager.qml"
+    fi
     restore_file "C300XRingerControl.qml"
 }
 

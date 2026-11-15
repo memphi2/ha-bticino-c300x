@@ -1,16 +1,17 @@
 # Current Legal and Provenance Audit Snapshot
 
-Checked: 2026-11-14. Source line: integration and native agent `2.2.0`,
-prepared from `v2.1.3` with the display additions and review corrections. This report covers the
-repository, not a newly published release.
+Source review: 2026-11-14. Integration and native agent `2.3.0`, prepared as
+the direct stable successor to `v2.1.3`, with display additions, visitor images
+and review corrections. This report covers the local source tree, not a newly
+published release.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.
 
 ## Verified Scope
 
-The local `scripts/check_legal_audit.py` gate passed against 693 tracked files.
-It checks forbidden payloads and directories, required license/privacy/security
+The local `scripts/check_legal_audit.py` source-policy gate checks forbidden
+payloads and directories, required license/privacy/security
 documents, runtime dependency declarations, reference markers, and the expected
 project artwork hash. It is a policy check, not a source-similarity detector.
 
@@ -19,7 +20,7 @@ and non-affiliation notices, and a privacy notice. No tracked firmware images,
 APKs, packet captures, device backups, or native library binaries were found by
 the gate. Builds and device-specific inputs remain outside tracked source.
 
-The prior 2.1.0b3 snapshot dated 2026-11-08 is superseded; its full text remains in
+The prior audit dated 2026-11-08 is superseded; its full text remains in
 Git history. Its search results and release-artifact checks are not evidence for
 the current code or a future release.
 
@@ -57,6 +58,17 @@ does not eliminate the legacy cryptography or host-identity limitation.
 `PRIVACY.md` describes the local data flow, bounded RAM-only media cache, Recorder
 exclusions for new memo text entries, and the independent retention of old
 history, exports, recordings, and backups.
+
+Visitor images are enabled by default and stored in HA's configured media
+directory. The agent reads an active framebuffer without creating device files.
+The integration endpoint checks camera read permission, but HA's standard local
+media browser applies its own access rules. Camera restrictions alone do not
+protect that archive. Retention and storage limits are documented separately
+from backup retention.
+
+The English display examples are edited from maintainer-provided photographs,
+with AI-assisted perspective correction and localization. They are illustrative
+documentation assets, not extracted firmware files or exact runtime captures.
 
 ## Not Verified Here
 

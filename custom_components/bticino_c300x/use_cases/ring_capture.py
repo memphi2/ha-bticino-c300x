@@ -6,14 +6,14 @@ import asyncio
 import logging
 from asyncio import Lock
 from collections.abc import Mapping
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from typing import Any, cast
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
 from ..camera_media.capture_lifecycle import RingCaptureCallGuard
-from ..camera_media.session_lifecycle import media_stop_scope
+from ..camera_media.session_lifecycle import media_owner_stopping, media_stop_scope
 from ..doorstation_audio import async_ensure_doorstation_audio_gain
 from ..entry_locks import entry_lock
 from ..exceptions import service_validation_error
@@ -89,10 +89,17 @@ class RingCaptureUseCase:
                 resources.ring_capture_task = capture_task
             answered_call = False
             call_guard = None
+            admission = ExitStack()
             capture_error: BaseException | None = None
             try:
                 if not on_demand:
                     call_guard = RingCaptureCallGuard(self._hass, self._entry.entry_id)
+                    if include_audio or announcement_path is not None:
+                        if media_owner_stopping(resources, "doorbell"):
+                            raise service_validation_error("ring_capture_busy")
+                        # Reserve HA admission through recording and cleanup;
+                        # existing/opening consumers are checked separately.
+                        admission.enter_context(media_stop_scope(resources, "doorbell"))
                 status = await self._async_ensure_not_busy(capture_mode)
                 if not on_demand:
                     self._ensure_ring_capture_runtime(runtime)
@@ -154,6 +161,7 @@ class RingCaptureUseCase:
                             else:
                                 raise service_validation_error("agent_command_failed") from err
                 finally:
+                    admission.close()
                     if call_guard is not None:
                         call_guard.close()
                     if not on_demand and resources.ring_capture_task is capture_task:
@@ -175,13 +183,30 @@ class RingCaptureUseCase:
     async def _async_answer_ring(self, runtime: Any) -> bool:
         status = await runtime.api.async_doorbell_video_status()
         self._ensure_ring_capture_runtime(runtime)
+        self._raise_if_ring_answer_blocked(runtime, status)
         if _ring_answer_media_ready(status) or _status_bridge(status).get("ring_answer_requested"):
             return False
         await async_ensure_doorstation_audio_gain(self._entry, status=status)
         self._ensure_ring_capture_runtime(runtime)
+        # Gain synchronization can yield to a native client or another answer.
+        status = await runtime.api.async_doorbell_video_status()
+        self._ensure_ring_capture_runtime(runtime)
+        self._raise_if_ring_answer_blocked(runtime, status)
+        if _ring_answer_media_ready(status) or _status_bridge(status).get("ring_answer_requested"):
+            return False
         ensure_doorbell_call_supported(self._entry)
         await raise_agent_command_failed(runtime.api.async_answer_doorbell_call())
         return True
+
+    def _raise_if_ring_answer_blocked(self, runtime: Any, status: Mapping[str, Any]) -> None:
+        session_count = getattr(runtime.resources, "media_session_count", None)
+        try:
+            raise_if_ring_capture_blocked(status)
+            raise_if_ring_answer_would_block_capture(status)
+            if callable(session_count) and session_count():
+                raise HomeAssistantError("C300X camera consumer is already active or opening")
+        except HomeAssistantError as err:
+            raise service_validation_error("ring_capture_busy") from err
 
     async def _async_hangup_owned_ring(self, runtime: Any, guard: RingCaptureCallGuard) -> None:
         # Never dereference a replacement runtime after an awaited close.

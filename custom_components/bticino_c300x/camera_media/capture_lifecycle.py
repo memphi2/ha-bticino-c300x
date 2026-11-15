@@ -53,6 +53,11 @@ class RingCaptureCallGuard:
         bridge = status.get("bridge")
         if not isinstance(bridge, Mapping):
             return False
+        # The recorder has disconnected before cleanup. Any remaining client
+        # may be a newer viewer; unknown counts cannot authorize hangup either.
+        clients = bridge.get("clients")
+        if type(clients) is not int or clients != 0:
+            return False
         return bool(
             self._unsubscribe is not None
             and not self.invalidated

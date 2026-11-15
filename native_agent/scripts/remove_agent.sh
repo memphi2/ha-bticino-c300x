@@ -12,17 +12,34 @@ SSH_INIT="${C300X_SSH_INIT:-/etc/init.d/dropbear}"
 REBOOT="${C300X_REBOOT:-/sbin/reboot}"
 IPTABLES_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables"
 IPTABLES6_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables6"
-TMP_SELF="/tmp/c300x-remove-agent.$$"
 
 if [ "${1:-}" != "remove" ] && [ "${1:-}" != "--run-from-tmp" ]; then
     printf 'Usage: %s remove\n' "$0" >&2
     exit 64
 fi
 
+REMOVE_WORK="$(mktemp -d "${TMPDIR:-/tmp}/c300x-remove-agent.XXXXXX")" || {
+    printf 'Cannot create private removal workspace; keeping agent files and backups in place\n' >&2
+    exit 1
+}
+cleanup_workspace() {
+    cleanup_status=$?
+    trap - EXIT HUP INT TERM
+    rm -rf "$REMOVE_WORK"
+    exit "$cleanup_status"
+}
+trap cleanup_workspace EXIT
+trap 'exit 130' HUP INT TERM
+TMP_SELF="$REMOVE_WORK/remove_agent.sh"
+
 if [ "${1:-}" = "remove" ]; then
-    cp "$0" "$TMP_SELF"
-    chmod 700 "$TMP_SELF"
-    exec "$TMP_SELF" --run-from-tmp
+    if ! cp "$0" "$TMP_SELF" || ! chmod 700 "$TMP_SELF"; then
+        printf 'Cannot stage removal script; keeping agent files and backups in place\n' >&2
+        exit 1
+    fi
+    # Keep the parent cleanup trap while the copied script survives agent removal.
+    (exec "$TMP_SELF" --run-from-tmp)
+    exit $?
 fi
 
 start_ssh() {
@@ -38,10 +55,15 @@ remount_root_ro() {
 }
 
 restore_qml() {
+    if [ ! -x "$QML_PATCH" ]; then
+        printf 'Cannot verify GUI restoration without executable patch script; keeping agent files and backups in place\n' >&2
+        exit 1
+    fi
     if [ -x "$QML_PATCH" ]; then
         status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" status 2>/dev/null || true)"
         if printf '%s' "$status" | grep -F -q '"state":"original"' \
-            && printf '%s' "$status" | grep -F -q '"core_state":"original"'; then
+            && printf '%s' "$status" | grep -F -q '"core_state":"original"' \
+            && printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
             return 0
         fi
         if ! C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" restore-all >/dev/null 2>&1; then
@@ -55,7 +77,7 @@ remove_managed_block() {
     target="$1"
     begin="$2"
     end="$3"
-    tmp="/tmp/c300x-managed-block.$$"
+    tmp="$REMOVE_WORK/managed-block"
 
     [ -f "$target" ] || return 0
     if ! awk -v begin="$begin" -v end="$end" '
@@ -135,7 +157,6 @@ restore_media_patches
 remove_startup
 rm -rf "$AGENT_DIR" "$BACKUP_ROOT"
 start_ssh
-rm -f "$TMP_SELF"
 schedule_reboot
 
 exit 0

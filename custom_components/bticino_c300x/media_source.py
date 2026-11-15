@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote
 
@@ -22,6 +23,7 @@ from .api import (
     normalize_memo_id,
     normalize_video_message_id,
 )
+from .config_snapshots import snapshot_options
 from .const import DOMAIN
 from .media import runtime_entry
 from .memos import (
@@ -37,6 +39,7 @@ from .ring_capture import (
     ring_capture_media_path,
     ring_capture_media_url,
 )
+from .snapshots import get_snapshots, snapshot_url
 from .video_messages import (
     VIDEO_MESSAGE_PLAYBACK_MIME_TYPE,
     video_message_items,
@@ -70,6 +73,26 @@ class C300XStoredMediaSource(MediaSource):
         """Resolve a stored C300X media-source id to the HA proxy URL."""
 
         media_kind, entry_id, media_id = _parse_identifier(item.identifier)
+        if media_kind == "snapshot":
+            manager = get_snapshots(self.hass, entry_id)
+            if manager is None or manager.closed:
+                raise Unresolvable("Unknown C300X image store")
+            async with manager.lock:
+                if manager.closed:
+                    raise Unresolvable("Unknown C300X image store")
+                try:
+                    content = await manager.disk_job(
+                        manager.store.read,
+                        media_id,
+                        snapshot_options(manager.entry).retention_days,
+                    )
+                except (OSError, ValueError) as err:
+                    raise Unresolvable("Could not read C300X image") from err
+                if manager.closed:
+                    raise Unresolvable("Unknown C300X image store")
+            if content is None:
+                raise Unresolvable("C300X image has expired or does not exist")
+            return PlayMedia(snapshot_url(entry_id, media_id), "image/jpeg")
         if media_kind == "capture":
             path = await _async_ring_capture_path(self.hass, media_id)
             if path is None:
@@ -118,11 +141,47 @@ class C300XStoredMediaSource(MediaSource):
         )
 
     async def async_browse_media(self, item: MediaSourceItem) -> BrowseMediaSource:
-        """Return browsable stored video messages."""
+        """Return browsable stored C300X media."""
 
         if item.identifier == "capture":
             return _ring_capture_folder(
                 await _async_ring_capture_items(self.hass),
+            )
+        if item.identifier and item.identifier.startswith("snapshot/"):
+            entry_id = item.identifier.split("/", 1)[1]
+            manager = get_snapshots(self.hass, entry_id)
+            if manager is None or manager.closed:
+                raise BrowseError("Unknown C300X image store")
+            async with manager.lock:
+                if manager.closed:
+                    raise BrowseError("Unknown C300X image store")
+                try:
+                    images = await manager.disk_job(
+                        manager.store.items,
+                        snapshot_options(manager.entry).retention_days,
+                    )
+                except (OSError, ValueError) as err:
+                    raise BrowseError("Could not browse C300X images") from err
+                if manager.closed:
+                    raise BrowseError("Unknown C300X image store")
+            return _snapshot_folder(
+                entry_id,
+                manager.entry.title,
+                [
+                    BrowseMediaSource(
+                        domain=DOMAIN,
+                        identifier=f"snapshot/{entry_id}/{image.name}",
+                        media_class=MediaClass.IMAGE,
+                        media_content_type="image/jpeg",
+                        title=datetime.fromtimestamp(image.captured_at, UTC).isoformat(
+                            timespec="seconds"
+                        ),
+                        thumbnail=snapshot_url(entry_id, image.name),
+                        can_play=True,
+                        can_expand=False,
+                    )
+                    for image in images
+                ],
             )
         if item.identifier:
             raise BrowseError("Unknown C300X media-source item")
@@ -139,6 +198,9 @@ class C300XStoredMediaSource(MediaSource):
                 memos = await _async_memos_for_entry(entry)
             children.extend(_message_children(entry.entry_id, messages))
             children.extend(_voice_memo_children(entry.entry_id, memos))
+            manager = get_snapshots(self.hass, entry.entry_id)
+            if manager is not None and not manager.closed:
+                children.append(_snapshot_folder(entry.entry_id, entry.title))
         children.append(_ring_capture_folder())
 
         return BrowseMediaSource(
@@ -170,11 +232,15 @@ async def _async_ring_capture_items(hass: HomeAssistant) -> list[dict[str, Any]]
 
 async def _async_ring_capture_path(hass: HomeAssistant, file_name: str) -> Any:
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(ring_capture_media_path, hass, file_name)
+        return await hass.async_add_executor_job(
+            ring_capture_media_path, hass, file_name
+        )
     return await asyncio.to_thread(ring_capture_media_path, hass, file_name)
 
 
-def _message_children(entry_id: str, messages: dict[str, Any]) -> list[BrowseMediaSource]:
+def _message_children(
+    entry_id: str, messages: dict[str, Any]
+) -> list[BrowseMediaSource]:
     return [
         BrowseMediaSource(
             domain=DOMAIN,
@@ -190,7 +256,9 @@ def _message_children(entry_id: str, messages: dict[str, Any]) -> list[BrowseMed
     ]
 
 
-def _voice_memo_children(entry_id: str, memos: dict[str, Any]) -> list[BrowseMediaSource]:
+def _voice_memo_children(
+    entry_id: str, memos: dict[str, Any]
+) -> list[BrowseMediaSource]:
     return [
         BrowseMediaSource(
             domain=DOMAIN,
@@ -245,6 +313,11 @@ def _parse_identifier(identifier: str | None) -> tuple[str, str, str]:
     value = str(identifier or "").strip()
     if "/" not in value:
         raise Unresolvable("C300X media identifier is incomplete")
+    if value.startswith("snapshot/"):
+        parts = value.split("/")
+        if len(parts) != 3 or not all(parts):
+            raise Unresolvable("C300X image identifier is incomplete")
+        return "snapshot", parts[1], parts[2]
     if value.startswith("capture/"):
         file_name = unquote(value.split("/", 1)[1])
         if not file_name:
@@ -282,3 +355,19 @@ def _voice_media_class() -> MediaClass:
 
 def _directory_media_class() -> MediaClass:
     return getattr(MediaClass, "DIRECTORY", MediaClass.APP)
+
+
+def _snapshot_folder(
+    entry_id: str, title: str, children: list[BrowseMediaSource] | None = None
+) -> BrowseMediaSource:
+    return BrowseMediaSource(
+        domain=DOMAIN,
+        identifier=f"snapshot/{entry_id}",
+        media_class=_directory_media_class(),
+        media_content_type="",
+        title=f"{title} - Stream images",
+        can_play=False,
+        can_expand=True,
+        children_media_class=MediaClass.IMAGE,
+        children=children,
+    )

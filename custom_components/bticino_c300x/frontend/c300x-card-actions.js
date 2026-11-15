@@ -76,7 +76,13 @@ export class C300XCardActions {
           if (lifecycle.ringPreviewActive && card._webrtc.pc) {
             await card._startAnsweredDoorbellStream();
           } else {
-            await card._startTalkback();
+            const started = await card._startTalkback();
+            // The call is answered on the device even when the stream does
+            // not start. A failed start resets the peer state; keep the call
+            // answered so the user can still hang up.
+            if (started === false && isCurrent()) {
+              lifecycle.doorbellAnswered = true;
+            }
           }
         } catch (err) {
           if (isCurrent()) card._error = err?.message || `${err}`;

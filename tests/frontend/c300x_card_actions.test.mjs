@@ -90,6 +90,26 @@ test("action controller answers a ring call before promoting the answered stream
   assert.equal(card._lifecycle.doorbellAnswered, true);
 });
 
+test("an answered call stays answered when its stream does not start", async () => {
+  const { calls, card } = fakeCard({
+    _doorstationView: () => ({ action: "answer" }),
+    async _startTalkback() {
+      calls.push(["talkback"]);
+      // The failure path of the real start clears the peer state.
+      card._lifecycle.doorbellAnswered = false;
+      return false;
+    },
+  });
+  await new C300XCardActions(card).handlePrimaryAction();
+  assert.deepEqual(calls.slice(0, 2), [
+    ["service", "bticino_c300x", "answer_doorbell_call", { entry_id: "entry-1" }],
+    ["talkback"],
+  ]);
+  // Hang up must stay possible for the call that is answered on the device.
+  assert.equal(card._lifecycle.doorbellAnswered, true);
+  assert.equal(card._lifecycle.answeringDoorbell, false);
+});
+
 test("answering fails visibly without sending an unscoped service or starting media", async () => {
   const { calls, card } = fakeCard({
     _doorstationView: () => ({ action: "answer" }),

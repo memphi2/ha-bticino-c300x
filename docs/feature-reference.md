@@ -386,22 +386,31 @@ from there.
 | --- | --- |
 | **Show the energy page** | Off by default. |
 | **Position** | 1 to 9, 2 by default. At the same position the energy page comes before the other page. |
-| **Views** | **Now**, **Today**, **Balance**; none selected means all. With more than one, buttons at the bottom of the page switch between them. |
+| **Show Now / Today / Power / Balance** | Each subpage has its own switch. With more than one enabled, buttons at the bottom switch between them. Switching all four off hides the Energy page and stops its updates without deleting its settings. |
 
 | View | Shows |
 | --- | --- |
 | **Now** | One box each for solar, grid, battery and home with today's energy. With complete power-sensor coverage in the Energy setup, the box also shows current power and its flow direction. If a grid connection lacks a power sensor or a required sensor is unavailable, grid and home power are omitted instead of showing a partial total. Tariff meters may share one power sensor. |
-| **Today** | Hourly bars of today's sources and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Further grid meters are summed as **Other meters**. |
+| **Today** | Hourly bars with a labelled energy axis and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Further grid meters are summed as **Other meters**. Values and costs occupy separate columns. |
+| **Power** | Today's power curves for grid, solar, battery and home from the power sensors configured in HA's Energy dashboard. The chart uses 15-minute means of recorded power statistics, a common W/kW scale and a visible zero line. Export and battery charging appear below zero. Missing data leaves gaps rather than fabricated zero readings. |
 | **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |
 
 A kind of source that is not set up in Home Assistant is left out, with its
 box, rows and bars. Without any electricity source the page is not shown. Gas
 and water meters are not part of the page.
 
-Home Assistant computes everything from its long-term statistics; the display
-only draws the result. The daily figures are read at most every five minutes.
-A changed power value reaches the display at most every ten seconds, and only
-while a power sensor is set up. The display file of the page is loaded only
+Home Assistant computes the charts from its recorder statistics; the display
+only draws the result. The daily figures and power history are cached for five
+minutes, with shared reads and retry backoff after database errors. The power
+curve requires recorded mean statistics for the configured power sensors; it
+does not start any new measurements. Only enabled views request or cache their
+data. Disabling a view discards data used only by that view; shared daily values
+remain only while another enabled view needs them. All caches live in HA's
+memory, not in additional files. These switches do not change or delete Home
+Assistant's existing recorder history.
+The **Now** view receives changed live power at most every ten seconds.
+No charts are stored on the C300X and no extra device polling is added.
+The display file of the page is loaded only
 while the page is open. Texts follow the language of Home Assistant in German,
 English, French and Italian; other languages show English.
 

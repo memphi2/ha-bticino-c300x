@@ -119,6 +119,26 @@ microphone input is Chrome's fake device and no C300X is contacted. Screenshots
 are written to ignored `.artifacts/browser/`. These are not real-HA frontend or
 device interoperability tests.
 
+## Display Layout Checks
+
+The optional `scripts/check_energy_layout.py` renders the production Energy QML
+offscreen in an existing PySide6 environment:
+
+```bash
+/path/to/qt-python scripts/check_energy_layout.py \
+  --fixture-python /path/to/ha-python --check --output .artifacts/energy
+```
+
+It checks four languages, all subpages, normal and reduced heights, tab switching
+and long labels/large values. Screenshots, text bounds and diagnostics stay in
+the ignored artifacts directory. `--revision COMMIT` renders an older QML file
+without changing the checkout. `--stock-skin DIRECTORY` can read local skin
+images; no vendor assets are bundled or uploaded.
+
+Qt Quick 1.1 imports and two vendor components are adapted for the local Qt 6
+renderer. This verifies layout, not Qt 4 firmware or device performance.
+PySide6 is a development-only tool, not an integration dependency.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.

@@ -6,11 +6,15 @@
 
 - Add an optional **Energy** page to the display's Home Assistant pages. It
   uses the sources of HA's Energy dashboard and needs no extra entities. Up to
-  three views can be chosen: **Now** (flow between solar, grid, battery and
+  four views can be switched independently: **Now** (flow between solar, grid, battery and
   home with current power), **Today** (hourly bars and totals per meter with
-  costs) and **Balance** (solar used at home, self-sufficiency, net grid use
+  costs), **Power** (today's power curves as 15-minute averages) and **Balance** (solar used at home, self-sufficiency, net grid use
   and cost). Enable it and set its position under **Display pages**. The page
   is in German, English, French and Italian.
+- Give Energy charts labelled axes, higher-contrast colours and separate
+  bounded value/cost columns. All subpages can be switched off without losing
+  settings. Power history uses cached HA statistics, not extra device polling
+  or storage.
 - Make the visitor image size configurable up to the display's 800x480
   (default 688x480, the video size) and optionally write the capture date and
   time into the image (default on). The settings have their own **Visitor

@@ -14,7 +14,7 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   and media player controls, read-only sensor details, dashboard pages, badges,
   images, switches and buttons without a refresh timer. See
   [Display Device Controls](../docs/feature-reference.md#display-device-controls).
-- `C300XEnergy.qml`: the optional energy page (views Now, Today, Balance).
+- `C300XEnergy.qml`: the optional energy page (views Now, Today, Power, Balance).
   `HomeAssistant.qml` loads it only while an energy page is shown and unloads
   it again on every other page. It draws what Home Assistant has already
   computed: no timer, no animation, no request of its own.

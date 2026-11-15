@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import suppress
 from typing import Any, cast
 
+from homeassistant.components.lovelace.const import ConfigNotFound
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -150,8 +151,10 @@ async def _async_setup_lovelace_cards(
     dashboard_path, dashboard = _storage_lovelace_dashboard(hass, dashboard_path)
     try:
         config = await dashboard.async_load(False)
-    except Exception:  # noqa: BLE001 - storage dashboards may still be auto-generated
+    except ConfigNotFound:
         config = {"views": []}
+    except Exception as err:
+        raise _LovelaceCardSetupError("lovelace_config_invalid") from err
     if not isinstance(config, dict):
         raise _LovelaceCardSetupError("lovelace_config_invalid")
     views = config.setdefault("views", [])

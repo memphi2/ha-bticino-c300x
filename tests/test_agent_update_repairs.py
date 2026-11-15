@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
+from homeassistant.components.lovelace.const import ConfigNotFound
 
 IGNORED_ISSUES: list[tuple[str, str, bool]] = []
 
@@ -1214,7 +1215,7 @@ def test_frontend_card_helpers_normalize_dashboard_targets(monkeypatch) -> None:
     assert _submitted_view_path({_LOVELACE_VIEW_FIELD: "/door/"}) == "door"
 
 
-def test_frontend_card_repair_recovers_from_lovelace_load_failure(monkeypatch) -> None:
+def test_frontend_card_repair_initializes_missing_lovelace_config(monkeypatch) -> None:
     lovelace_package = types.ModuleType("homeassistant.components.lovelace")
     lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
     lovelace_const.LOVELACE_DATA = "lovelace"
@@ -1240,7 +1241,7 @@ def test_frontend_card_repair_recovers_from_lovelace_load_failure(monkeypatch) -
             self.saved: dict[str, Any] | None = None
 
         async def async_load(self, _force: bool) -> dict[str, Any]:
-            raise RuntimeError("not generated yet")
+            raise ConfigNotFound
 
         async def async_save(self, config: dict[str, Any]) -> None:
             self.saved = config

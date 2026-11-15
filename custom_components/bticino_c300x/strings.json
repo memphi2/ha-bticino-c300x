@@ -835,6 +835,7 @@
           "home_call_ended": "Home call ended",
           "home_call_started": "Home call started",
           "memos_changed": "Memos changed",
+          "display_touch_tone_changed": "Touch tone changed",
           "ringer_muted": "Ringer muted",
           "ringer_unmuted": "Ringer unmuted",
           "ringer_volume_changed": "Ringer volume changed",

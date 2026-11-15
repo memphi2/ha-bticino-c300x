@@ -835,6 +835,7 @@
           "home_call_ended": "Zuhause-Anruf beendet",
           "home_call_started": "Zuhause-Anruf gestartet",
           "memos_changed": "Memos aktualisiert",
+          "display_touch_tone_changed": "Tastenton geändert",
           "ringer_muted": "Klingelton stummgeschaltet",
           "ringer_unmuted": "Klingelton aktiviert",
           "ringer_volume_changed": "Klingel-Lautstärke geändert",

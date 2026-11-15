@@ -835,6 +835,7 @@
           "home_call_ended": "Appel domicile terminé",
           "home_call_started": "Appel domicile démarré",
           "memos_changed": "Mémos mis a jour",
+          "display_touch_tone_changed": "Son des touches modifié",
           "ringer_muted": "Sonnerie coupée",
           "ringer_unmuted": "Sonnerie activée",
           "ringer_volume_changed": "Volume sonnerie modifié",

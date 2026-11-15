@@ -835,6 +835,7 @@
           "home_call_ended": "Chiamata casa terminata",
           "home_call_started": "Chiamata casa avviata",
           "memos_changed": "Memo aggiornati",
+          "display_touch_tone_changed": "Suono dei tasti modificato",
           "ringer_muted": "Suoneria disattivata",
           "ringer_unmuted": "Suoneria attivata",
           "ringer_volume_changed": "Volume suoneria modificato",

@@ -49,6 +49,10 @@
 
 ### Fixed
 
+- Release partially initialized browser audio resources when audio gain setup
+  fails, keeping direct audio playback available.
+- Share concurrent Energy statistics reads and pause retries after database
+  errors. Keep the same day's last available figures during a failed refresh.
 - Receive the device's video and audio packets for on-demand video on the
   loopback interface only; hosts on the local network could send packets into
   a running stream.

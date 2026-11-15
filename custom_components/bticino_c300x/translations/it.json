@@ -393,11 +393,11 @@
               "view_balance": "Bilancio"
             },
             "data_description": {
-              "enabled": "Mostra la pagina se almeno una vista è attiva; disattivare tutte le viste la nasconde senza perdere queste impostazioni.",
+              "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
               "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
-              "view_power": "Storico dei sensori di potenza configurati",
+              "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
@@ -526,11 +526,11 @@
               "view_balance": "Bilancio"
             },
             "data_description": {
-              "enabled": "Mostra la pagina se almeno una vista è attiva; disattivare tutte le viste la nasconde senza perdere queste impostazioni.",
+              "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
               "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
-              "view_power": "Storico dei sensori di potenza configurati",
+              "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
@@ -846,11 +846,11 @@
               "view_balance": "Bilancio"
             },
             "data_description": {
-              "enabled": "Mostra la pagina se almeno una vista è attiva; disattivare tutte le viste la nasconde senza perdere queste impostazioni.",
+              "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
               "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
-              "view_power": "Storico dei sensori di potenza configurati",
+              "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }

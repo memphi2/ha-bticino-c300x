@@ -393,11 +393,11 @@
               "view_balance": "Bilanz"
             },
             "data_description": {
-              "enabled": "Zeigt die Seite, wenn mindestens eine Ansicht aktiviert ist. Sind alle Ansichten ausgeschaltet, bleibt die Seite ausgeblendet und die Einstellungen bleiben erhalten.",
+              "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
               "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
-              "view_power": "Verlauf der konfigurierten Leistungssensoren",
+              "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }
@@ -526,11 +526,11 @@
               "view_balance": "Bilanz"
             },
             "data_description": {
-              "enabled": "Zeigt die Seite, wenn mindestens eine Ansicht aktiviert ist. Sind alle Ansichten ausgeschaltet, bleibt die Seite ausgeblendet und die Einstellungen bleiben erhalten.",
+              "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
               "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
-              "view_power": "Verlauf der konfigurierten Leistungssensoren",
+              "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }
@@ -846,11 +846,11 @@
               "view_balance": "Bilanz"
             },
             "data_description": {
-              "enabled": "Zeigt die Seite, wenn mindestens eine Ansicht aktiviert ist. Sind alle Ansichten ausgeschaltet, bleibt die Seite ausgeblendet und die Einstellungen bleiben erhalten.",
+              "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
               "position": "1 = erste Seite; Standard ist 2, vor einer anderen Seite mit derselben Position",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
-              "view_power": "Verlauf der konfigurierten Leistungssensoren",
+              "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
             }
           }

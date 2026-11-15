@@ -393,11 +393,11 @@
               "view_balance": "Balance"
             },
             "data_description": {
-              "enabled": "Show the page when at least one view is enabled; all views off hides it without losing these settings.",
+              "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
               "position": "1 = first page; 2 by default, before another page with the same position",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
-              "view_power": "History of the configured power sensors",
+              "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
@@ -526,11 +526,11 @@
               "view_balance": "Balance"
             },
             "data_description": {
-              "enabled": "Show the page when at least one view is enabled; all views off hides it without losing these settings.",
+              "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
               "position": "1 = first page; 2 by default, before another page with the same position",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
-              "view_power": "History of the configured power sensors",
+              "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
@@ -846,11 +846,11 @@
               "view_balance": "Balance"
             },
             "data_description": {
-              "enabled": "Show the page when at least one view is enabled; all views off hides it without losing these settings.",
+              "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
               "position": "1 = first page; 2 by default, before another page with the same position",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
-              "view_power": "History of the configured power sensors",
+              "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }

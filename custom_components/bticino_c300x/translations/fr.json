@@ -393,11 +393,11 @@
               "view_balance": "Bilan"
             },
             "data_description": {
-              "enabled": "Affiche la page si au moins une vue est activée ; désactiver toutes les vues la masque sans perdre ces réglages.",
+              "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
               "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
-              "view_power": "Historique des capteurs de puissance configurés",
+              "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
@@ -526,11 +526,11 @@
               "view_balance": "Bilan"
             },
             "data_description": {
-              "enabled": "Affiche la page si au moins une vue est activée ; désactiver toutes les vues la masque sans perdre ces réglages.",
+              "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
               "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
-              "view_power": "Historique des capteurs de puissance configurés",
+              "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
@@ -846,11 +846,11 @@
               "view_balance": "Bilan"
             },
             "data_description": {
-              "enabled": "Affiche la page si au moins une vue est activée ; désactiver toutes les vues la masque sans perdre ces réglages.",
+              "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
               "position": "1 = première page ; 2 par défaut, avant une autre page de même position",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
-              "view_power": "Historique des capteurs de puissance configurés",
+              "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }

@@ -14,13 +14,26 @@ Item {
     property int boxHeight: 76
     property variant hours: energy && energy.hours ? energy.hours : ({})
     property variant series: listOf(hours ? hours.series : undefined)
-    property real hoursMax: hours && hours.max > 0 ? hours.max : 0
+    property variant hoursAxis: hours && hours.axis ? hours.axis : ({})
+    property real hoursMax: hoursAxis.max > 0 ? hoursAxis.max : 1
     property variant nodes: energy && energy.nodes ? energy.nodes : ({})
     property variant sumRows: listOf(energy ? energy.sums : undefined)
-    property int sumsHeight: sumRows.length > 0 ? Math.ceil(sumRows.length / 2) * 28 - 4 : 0
+    property int sumsHeight: Math.ceil(sumRows.length / 2) * 22
     property bool sumCosts: hasCosts()
-    property int barsHeight: Math.max(40, Math.min(Math.floor(bodyHeight * 0.42), bodyHeight - 40 - sumsHeight))
+    property int barsHeight: Math.max(40, bodyHeight - 56 - sumsHeight)
     property int balanceGap: bodyHeight < 220 ? 4 : 12
+    property int axisWidth: 62
+    property variant powerHistory: ({})
+    property variant powerAxis: powerHistory && powerHistory.axis ? powerHistory.axis : ({})
+    property variant powerSeries: listOf(powerHistory ? powerHistory.series : undefined)
+    property int legendHeight: Math.ceil(powerSeries.length / 2) * 22
+    onEnergyChanged: syncPower()
+    Component.onCompleted: syncPower()
+
+    function syncPower() {
+        var next = energy && energy.power ? energy.power : ({})
+        if (!next.revision || !powerHistory || next.revision !== powerHistory.revision) powerHistory = next
+    }
 
     function listOf(value) {
         return value && typeof value !== "string" && value.length !== undefined ? value : []
@@ -153,7 +166,7 @@ Item {
                     anchors.top: parent.top
                     anchors.leftMargin: 10
                     anchors.topMargin: 6
-                    width: parent.width - 20 - boxPower.paintedWidth - 6
+                    width: parent.width - 26 - boxPower.width
                     text: box.present ? box.info.label : ""
                     color: "#c7d0d9"
                     font.pixelSize: 15
@@ -166,6 +179,9 @@ Item {
                     anchors.top: parent.top
                     anchors.rightMargin: 10
                     anchors.topMargin: 5
+                    width: box.present && box.info.power ? 88 : 0
+                    horizontalAlignment: Text.AlignRight
+                    elide: Text.ElideRight
                     text: box.present && box.info.power ? box.info.power : ""
                     color: box.present ? box.info.color : "white"
                     font.pixelSize: 17
@@ -202,24 +218,65 @@ Item {
     }
 
     Item {
+        id: todayView
         width: parent.width
         height: bodyHeight
         visible: shown === "today"
 
         UbuntuLightText {
             id: barsTop
-            text: hours && hours.label ? hours.label : ""
-            color: "#c7d0d9"
+            width: root.axisWidth - 8
+            height: 18
+            text: hoursAxis.unit ? hoursAxis.unit : "kWh"
+            color: "white"
             font.pixelSize: 13
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
         }
 
         Item {
             id: bars
             anchors.top: barsTop.bottom
-            anchors.topMargin: 2
-            width: parent.width
+            anchors.topMargin: 10
+            x: root.axisWidth
+            width: parent.width - x - 8
             height: barsHeight
-            property int slotWidth: Math.floor(width / 24)
+            property real slotWidth: width / 24
+
+            Rectangle {
+                anchors.fill: parent
+                color: "#041b3b"
+                opacity: 0.45
+            }
+
+            Repeater {
+                model: root.listOf(hoursAxis.ticks)
+
+                Item {
+                    y: Math.round((1 - modelData.position) * bars.height)
+                    width: bars.width
+                    height: 1
+
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: "white"
+                        opacity: modelData.value === 0 ? 0.65 : 0.23
+                    }
+
+                    UbuntuLightText {
+                        x: -root.axisWidth
+                        y: -7
+                        width: root.axisWidth - 8
+                        height: 15
+                        text: modelData.label
+                        color: "white"
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                    }
+                }
+            }
 
             Rectangle {
                 anchors.left: parent.left
@@ -245,8 +302,8 @@ Item {
                         Rectangle {
                             property int upper: root.barPixels(root.stacked(slot.hour, index))
                             property int lower: index > 0 ? root.barPixels(root.stacked(slot.hour, index - 1)) : 0
-                            x: 3
-                            width: slot.width - 6
+                            x: 2
+                            width: Math.max(1, slot.width - 4)
                             height: upper - lower
                             y: slot.height - upper
                             color: modelData.color
@@ -257,25 +314,28 @@ Item {
         }
 
         Repeater {
-            model: [0, 6, 12, 18]
+            model: [0, 6, 12, 18, 24]
 
             UbuntuLightText {
-                x: modelData * bars.slotWidth + 3
+                x: bars.x + modelData * bars.slotWidth - (modelData === 24 ? width : modelData === 0 ? 0 : width / 2)
+                width: 40
+                height: 17
                 anchors.top: bars.bottom
                 anchors.topMargin: 1
-                text: modelData + ":00"
-                color: "#c7d0d9"
-                font.pixelSize: 13
+                text: (modelData < 10 ? "0" : "") + modelData + ":00"
+                color: "white"
+                font.pixelSize: 12
+                horizontalAlignment: modelData === 24 ? Text.AlignRight : modelData === 0 ? Text.AlignLeft : Text.AlignHCenter
             }
         }
 
         Grid {
             id: sums
             anchors.top: bars.bottom
-            anchors.topMargin: 22
+            anchors.topMargin: 26
             width: parent.width
             columns: 2
-            spacing: 4
+            spacing: 0
             property int cellWidth: Math.floor((width - spacing) / 2)
 
             Repeater {
@@ -283,7 +343,7 @@ Item {
 
                 Item {
                     width: sums.cellWidth
-                    height: 24
+                    height: 22
 
                     Rectangle {
                         id: sumMark
@@ -299,11 +359,13 @@ Item {
                         anchors.right: parent.right
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
-                        width: root.sumCosts ? 86 : 0
+                        width: root.sumCosts ? 82 : 0
                         horizontalAlignment: Text.AlignRight
                         text: modelData.cost ? modelData.cost : ""
-                        color: "#c7d0d9"
-                        font.pixelSize: 15
+                        color: "#e3e9f1"
+                        font.pixelSize: 14
+                        elide: Text.ElideRight
+                        clip: true
                     }
 
                     UbuntuLightText {
@@ -311,9 +373,13 @@ Item {
                         anchors.right: sumCost.left
                         anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
+                        width: 100
                         text: modelData.value
                         color: "white"
-                        font.pixelSize: 16
+                        font.pixelSize: 15
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                        clip: true
                     }
 
                     UbuntuLightText {
@@ -324,8 +390,198 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.label
                         textFormat: Text.PlainText
-                        color: "#c7d0d9"
-                        font.pixelSize: 16
+                        color: "white"
+                        font.pixelSize: 14
+                        elide: Text.ElideRight
+                        clip: true
+                    }
+                }
+            }
+        }
+    }
+
+    Item {
+        id: powerView
+        width: parent.width
+        height: bodyHeight
+        visible: shown === "power"
+
+        UbuntuLightText {
+            width: root.axisWidth - 8
+            height: 18
+            text: powerAxis.unit ? powerAxis.unit : "W"
+            color: "white"
+            font.pixelSize: 13
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+        }
+
+        UbuntuLightText {
+            x: root.axisWidth
+            width: parent.width - x - 8
+            height: 18
+            text: powerHistory.label ? powerHistory.label : ""
+            color: "#e3e9f1"
+            font.pixelSize: 13
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+        }
+
+        Item {
+            id: powerPlot
+            x: root.axisWidth
+            y: 28
+            width: parent.width - x - 8
+            height: Math.max(40, bodyHeight - y - 26 - root.legendHeight)
+
+            Rectangle {
+                anchors.fill: parent
+                color: "#041b3b"
+                opacity: 0.45
+            }
+
+            Repeater {
+                model: root.listOf(powerAxis.ticks)
+
+                Item {
+                    y: Math.round((1 - modelData.position) * powerPlot.height)
+                    width: powerPlot.width
+                    height: 1
+
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: "white"
+                        opacity: modelData.value === 0 ? 0.65 : 0.23
+                    }
+
+                    UbuntuLightText {
+                        x: -root.axisWidth
+                        y: -7
+                        width: root.axisWidth - 8
+                        height: 15
+                        text: modelData.label
+                        color: "white"
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                clip: true
+
+                Repeater {
+                    model: root.shown === "power" ? root.powerSeries : []
+
+                    Item {
+                        id: curve
+                        property variant points: root.listOf(modelData.points)
+                        property variant dots: root.listOf(modelData.dots)
+                        property color curveColor: modelData.color
+                        anchors.fill: parent
+
+                        Repeater {
+                            model: Math.max(0, curve.points.length - 1)
+
+                            Rectangle {
+                                property variant a: curve.points[index]
+                                property variant b: curve.points[index + 1]
+                                property bool connected: a !== null && b !== null && a !== undefined && b !== undefined
+                                property real dx: connected ? (b.x - a.x) * powerPlot.width : 0
+                                property real dy: connected ? (a.y - b.y) * powerPlot.height : 0
+                                visible: connected
+                                x: connected ? a.x * powerPlot.width : 0
+                                y: connected ? (1 - a.y) * powerPlot.height - 1 : 0
+                                width: Math.sqrt(dx * dx + dy * dy)
+                                height: 2
+                                color: curve.curveColor
+                                rotation: Math.atan2(dy, dx) * 180 / Math.PI
+                                transformOrigin: Item.TopLeft
+                                smooth: true
+                            }
+                        }
+
+                        Repeater {
+                            model: curve.dots
+
+                            Rectangle {
+                                x: modelData.x * powerPlot.width - 2
+                                y: (1 - modelData.y) * powerPlot.height - 2
+                                width: 4
+                                height: 4
+                                radius: 2
+                                color: curve.curveColor
+                            }
+                        }
+                    }
+                }
+            }
+
+            UbuntuLightText {
+                visible: root.powerSeries.length === 0
+                anchors.fill: parent
+                anchors.margins: 12
+                text: powerHistory.empty_text ? powerHistory.empty_text : ""
+                font.pixelSize: 18
+                color: "white"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                wrapMode: Text.WordWrap
+                elide: Text.ElideRight
+            }
+        }
+
+        Repeater {
+            model: root.listOf(powerHistory.times)
+
+            UbuntuLightText {
+                property real position: modelData.position
+                x: powerPlot.x + position * powerPlot.width - (position === 1 ? width : position === 0 ? 0 : width / 2)
+                y: powerPlot.y + powerPlot.height + 3
+                width: 40
+                height: 17
+                text: modelData.label
+                color: "white"
+                font.pixelSize: 12
+                horizontalAlignment: position === 1 ? Text.AlignRight : position === 0 ? Text.AlignLeft : Text.AlignHCenter
+            }
+        }
+
+        Grid {
+            id: powerLegend
+            x: root.axisWidth
+            y: powerPlot.y + powerPlot.height + 26
+            width: parent.width - x
+            height: root.legendHeight
+            columns: 2
+            spacing: 0
+
+            Repeater {
+                model: root.powerSeries
+
+                Item {
+                    width: powerLegend.width / 2
+                    height: 22
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 22
+                        height: 3
+                        color: modelData.color
+                    }
+
+                    UbuntuLightText {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 30
+                        anchors.rightMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.label
+                        font.pixelSize: 14
+                        color: "white"
                         elide: Text.ElideRight
                     }
                 }
@@ -415,11 +671,15 @@ Item {
                 }
 
                 UbuntuLightText {
-                    anchors.centerIn: parent
+                    anchors.fill: parent
+                    anchors.margins: 6
                     text: modelData.label
                     color: "white"
                     font.pixelSize: 18
                     font.bold: root.shown === modelData.id
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
                 }
 
                 Rectangle {

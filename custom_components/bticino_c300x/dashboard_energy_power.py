@@ -187,12 +187,20 @@ def power_history_payload(
     groups: dict[str, list[float | None]] = {
         key: [] for key in source_power_watts(sources, {})
     }
+    entities = sources.power_entities
     for index in range(history.buckets):
         power = {
             entity_id: values[index] if index < len(values) else None
             for entity_id, values in history.values.items()
         }
-        for key, value in source_power_watts(sources, power).items():
+        # Zero for unconfigured power is a policy, not a recorded observation.
+        # Without any configured sample, gaps and future buckets stay empty.
+        group_power = (
+            source_power_watts(sources, power)
+            if any(finite_number(power.get(entity)) is not None for entity in entities)
+            else dict.fromkeys(groups)
+        )
+        for key, value in group_power.items():
             groups[key].append(finite_number(value))
     known = [value for values in groups.values() for value in values if value is not None]
     axis = chart_axis(min(known, default=0), max(known, default=0), language, "W")
@@ -213,7 +221,9 @@ def power_history_payload(
         if not any(point is not None for point in points):
             continue
         series.append({
-            "id": key, "label": labels[key], "color": colors[key], "points": points,
+            "id": key,
+            "label": labels[key],
+            "color": colors[key], "points": points,
             "dots": [index for index, point in enumerate(points)
                      if point is not None
                      and (index == 0 or points[index - 1] is None)

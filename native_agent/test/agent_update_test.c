@@ -261,6 +261,9 @@ int main(int argc, char **argv)
     assert(c300x_join_path(config.config_path, sizeof(config.config_path), argv[1], "config.json"));
     assert(c300x_join_path(test_init_script, sizeof(test_init_script), argv[1], "init-script"));
     assert(c300x_join_path(test_init_link, sizeof(test_init_link), argv[1], "init-link"));
+    /* Set 3 can stage the new QML before the set 4 updater installs it. */
+    assert(agent_update_stage_path(&config, "device_agent/qml/C300XEnergyDistribution.qml", stage, sizeof(stage)));
+    assert(agent_update_target_path(&config, "device_agent/qml/C300XEnergyDistribution.qml", target, sizeof(target)));
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
         assert(!agent_update_stage_path(&config, invalid[i], stage, sizeof(stage)));
         assert(!agent_update_target_path(&config, invalid[i], target, sizeof(target)));

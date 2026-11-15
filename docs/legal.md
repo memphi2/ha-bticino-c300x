@@ -42,13 +42,14 @@ cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
 ## No firmware or APK payloads
 
 Documentation display illustrations under `docs/images/readme/` are based on
-maintainer-provided device photographs. The `-en.webp` examples are AI-assisted
-display-only crops, perspective corrections and English localizations, not
-pixel-exact captures or extracted firmware assets. Their values are examples.
-`display-energy-en.webp` is a Qt-rendered preview of the project's own energy
-page using synthetic values and an approximate blue frame, not a device
-photograph. Its renderer is `scripts/check_energy_layout.py`; no vendor
-assets were used for this preview.
+maintainer-provided device photographs and a direct display capture. The
+`-en.webp` examples use AI-assisted English localization and color matching;
+photographs also use display-only crops and perspective correction. They are
+not pixel-exact captures or extracted firmware assets. Their values are examples.
+`display-energy-en.webp` comes from a read-only capture of the maintainer's
+C300X Energy page on 2026-11-15, before the 2.4.1 display update. Its existing
+layout and values were retained while matching the other examples' blue palette
+and translating the labels. It does not illustrate the new Distribution view.
 Depicted product interfaces and names do not imply vendor affiliation.
 
 The repository must not contain:

@@ -126,7 +126,7 @@ def test_page_combines_kept_statistics_with_current_power(monkeypatch) -> None:
     assert page["title"] == "Energie"
     assert [view["id"] for view in page["energy"]["views"]] == ["now", "balance"]
     assert page["energy"]["nodes"]["grid"] == {
-        "label": "Netz", "color": "#f5f8ff", "lines": ["1 kWh"], "power": "400 W", "flow": 1,
+        "label": "Netz", "color": "#75bfff", "lines": ["1 kWh"], "power": "400 W", "flow": 1,
     }
     assert page["energy"]["balance"][-1] == {"label": "Kosten heute", "value": "0,30 €", "color": "#e3e9f1"}
     # The display asks on every event: the statistics are read once per five minutes.

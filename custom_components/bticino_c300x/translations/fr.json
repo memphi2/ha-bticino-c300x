@@ -390,6 +390,7 @@
               "view_now": "Maintenant",
               "view_today": "Aujourd’hui",
               "view_power": "Historique de puissance",
+              "view_distribution": "Répartition de puissance actuelle",
               "view_balance": "Bilan"
             },
             "data_description": {
@@ -398,6 +399,7 @@
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
+              "view_distribution": "Diagramme Sankey des mesures actuelles en W/kW ; sans totaux journaliers ni requêtes historiques",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
@@ -523,6 +525,7 @@
               "view_now": "Maintenant",
               "view_today": "Aujourd’hui",
               "view_power": "Historique de puissance",
+              "view_distribution": "Répartition de puissance actuelle",
               "view_balance": "Bilan"
             },
             "data_description": {
@@ -531,6 +534,7 @@
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
+              "view_distribution": "Diagramme Sankey des mesures actuelles en W/kW ; sans totaux journaliers ni requêtes historiques",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }
@@ -843,6 +847,7 @@
               "view_now": "Maintenant",
               "view_today": "Aujourd’hui",
               "view_power": "Historique de puissance",
+              "view_distribution": "Répartition de puissance actuelle",
               "view_balance": "Bilan"
             },
             "data_description": {
@@ -851,6 +856,7 @@
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
+              "view_distribution": "Diagramme Sankey des mesures actuelles en W/kW ; sans totaux journaliers ni requêtes historiques",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
             }
           }

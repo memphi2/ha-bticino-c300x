@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LANGUAGES = ("de", "en", "fr", "it")
 
 
-def make_fixtures() -> list[dict]:
+def make_fixtures(include_distribution: bool = False) -> list[dict]:
     """Use the production pure formatter in an existing HA Python environment."""
     sys.path.insert(0, str(ROOT))
     from custom_components.bticino_c300x.dashboard_energy import (
@@ -82,7 +82,8 @@ def make_fixtures() -> list[dict]:
                       "solar_power": scale * 1250, "battery_power": scale * -280}
             page = energy_page(sources, day, powers,
                                language=language, currency="EUR",
-                               views=["now", "today", "power", "balance"])
+                               views=["now", "today", "power",
+                                      *(["distribution"] if include_distribution else []), "balance"])
             assert page is not None
             assert len(page["energy"]["sums"]) == 8
             start = datetime(2026, 11, 15, tzinfo=UTC)
@@ -289,6 +290,43 @@ def render(args, fixtures: list[dict]) -> dict:
                 issues.append({"kind": "power_gap_bridged", "index": index})
         return issues, checks
 
+    def distribution_pixels(component, frame, shot, payload, view):
+        """Check lazy lifetime, bounded ribbons and actual pixels of this subpage."""
+        objects = []
+
+        def visit(item):
+            if item.objectName() in {"energyDistribution", "distributionSlice"}:
+                objects.append(item)
+            for child in item.childItems():
+                visit(child)
+
+        visit(component)
+        roots = [item for item in objects if item.objectName() == "energyDistribution"]
+        slices = [item for item in objects if item.objectName() == "distributionSlice"]
+        distribution = payload.get("distribution") or {}
+        nodes = [node for side in ("left", "right") for node in distribution.get(side, [])[:3]]
+        expected = (24 * sum(isinstance(node.get("size"), (int, float)) and node["size"] > 0
+                             for node in nodes)
+                    if view == "distribution" and distribution.get("complete") is True else 0)
+        issues = []
+        if len(roots) != int(view == "distribution"):
+            issues.append({"kind": "distribution_loader_lifetime"})
+        if len(slices) != expected:
+            issues.append({"kind": "distribution_slice_count", "expected": expected, "actual": len(slices)})
+        checked = 0
+        for item in slices:
+            if item.height() < 2:
+                continue
+            center = item.mapToItem(frame, QPointF(item.width() / 2, item.height() / 2))
+            actual = shot.pixelColor(round(center.x()), round(center.y()))
+            color = item.property("color")
+            if max(abs(actual.red() - color.red()), abs(actual.green() - color.green()),
+                   abs(actual.blue() - color.blue())) > 35:
+                issues.append({"kind": "distribution_band_missing"})
+                break
+            checked += 1
+        return issues, {"loaded": len(roots), "slices": len(slices), "checked_pixels": checked}
+
     try:
         with tempfile.TemporaryDirectory(prefix="c300x-energy-layout-") as temp:
             directory = Path(temp)
@@ -307,6 +345,21 @@ def render(args, fixtures: list[dict]) -> dict:
                     image.save(str(target))
                     adapted = adapted.replace(asset, str(Path(asset).with_suffix(".png")))
             (directory / "C300XEnergy.qml").write_text(adapted)
+            dependency = "C300XEnergyDistribution.qml"
+            if dependency in source:
+                if args.revision:
+                    dependency_source = subprocess.run(
+                        ["git", "show", f"{args.revision}:device_qml/{dependency}"],
+                        cwd=ROOT, capture_output=True, text=True, check=True,
+                    ).stdout
+                else:
+                    dependency_path = args.qml.parent / dependency
+                    if not dependency_path.is_file():
+                        dependency_path = ROOT / "device_qml" / dependency
+                    dependency_source = dependency_path.read_text()
+                (directory / dependency).write_text(adapt_qml(dependency_source))
+                (args.output / dependency).write_text(dependency_source)
+                report["dependencies"] = {dependency: hashlib.sha256(dependency_source.encode()).hexdigest()}
             (args.output / "source.qml").write_text(source)
             (directory / "UbuntuLightText.qml").write_text(
                 'import QtQuick 2.15\nText { textFormat: Text.PlainText; '
@@ -392,6 +445,12 @@ Rectangle {
                             if view["id"] == "power":
                                 power_issues, power_checks = power_pixels(component, frame, shot, fixture)
                                 issues.extend(power_issues)
+                            distribution_checks = {}
+                            if "C300XEnergyDistribution.qml" in source:
+                                distribution_issues, distribution_checks = distribution_pixels(
+                                    component, frame, shot, payload, view["id"],
+                                )
+                                issues.extend(distribution_issues)
                             body_texts = [item for item in texts if item["ink"][1] < height - tab_height - 8]
                             if not body_texts:
                                 issues.append({"kind": "blank_view"})
@@ -418,6 +477,7 @@ Rectangle {
                                                     "sampled_colors": len(pixels),
                                                     "body_texts": len(body_texts),
                                                     "power_pixels": power_checks,
+                                                    "distribution_pixels": distribution_checks,
                                                     "warnings": messages[start_messages:],
                                                     "screenshot": str(output)})
                             sys.stdout.write(f"{name}: {len(texts)} texts, {len(issues)} issues\n")
@@ -439,6 +499,7 @@ def main() -> int:
     parser.add_argument("--fixture-python", default=sys.executable, help="Existing HA Python for pure backend fixtures")
     parser.add_argument("--fixtures", type=Path, help="External JSON fixtures, bypass backend imports")
     parser.add_argument("--emit-fixtures", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--distribution-fixtures", action="store_true", help="Include the current power distribution tab")
     parser.add_argument("--stock-skin", type=Path, help="Optional read-only firmware skin directory")
     parser.add_argument("--languages", nargs="+", default=list(LANGUAGES))
     parser.add_argument("--views", nargs="+")
@@ -448,13 +509,14 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Fail for layout issues (baseline capture still writes artifacts)")
     args = parser.parse_args()
     if args.emit_fixtures:
-        sys.stdout.write(json.dumps(make_fixtures(), ensure_ascii=True) + "\n")
+        sys.stdout.write(json.dumps(make_fixtures(args.distribution_fixtures), ensure_ascii=True) + "\n")
         return 0
     args.output.mkdir(parents=True, exist_ok=True)
     if args.fixtures:
         fixtures = json.loads(args.fixtures.read_text())
     else:
-        result = subprocess.run([args.fixture_python, str(Path(__file__).resolve()), "--emit-fixtures"],
+        result = subprocess.run([args.fixture_python, str(Path(__file__).resolve()), "--emit-fixtures",
+                                 *(["--distribution-fixtures"] if args.distribution_fixtures else [])],
                                 capture_output=True, text=True, timeout=60, check=True)
         fixtures = json.loads(result.stdout)
     report = render(args, fixtures)

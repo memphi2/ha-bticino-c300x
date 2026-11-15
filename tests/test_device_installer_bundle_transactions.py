@@ -16,7 +16,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     component = tmp_path / "component"
     manifest = {
         "agent_version": "same-version", "api_version": "1",
-        "bundle_hash": "sha256:new", "update_file_set_version": 3,
+        "bundle_hash": "sha256:new", "update_file_set_version": 4,
     }
     old_manifest = json.dumps({**manifest, "bundle_hash": "sha256:old"}).encode()
     for name in (
@@ -108,7 +108,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         return compare_agent_bundle({
             "version": "same-version", "api_version": "1",
             "agent": {"bundle_hash": installed["bundle_hash"], "self_update_supported": True,
-                      "self_update_file_set_version": 3},
+                      "self_update_file_set_version": 4},
         }, manifest).update_required
 
     return SimpleNamespace(

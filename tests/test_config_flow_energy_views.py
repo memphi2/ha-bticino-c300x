@@ -13,7 +13,7 @@ from custom_components.bticino_c300x.config_flow_dashboard_pages import (
     dashboard_pages_schema,
 )
 
-VIEWS = ("now", "today", "power", "balance")
+VIEWS = ("now", "today", "power", "distribution", "balance")
 FIELDS = tuple(f"view_{view}" for view in VIEWS)
 
 
@@ -28,7 +28,7 @@ def _defaults(schema):
     }
 
 
-def test_energy_has_four_independent_boolean_selectors():
+def test_energy_has_five_independent_boolean_selectors():
     schema = dashboard_pages_schema({})
     fields = _section(schema).schema.schema
 
@@ -41,7 +41,7 @@ def test_energy_has_four_independent_boolean_selectors():
 @pytest.mark.parametrize("stored", [
     {}, {"views": None}, {"views": "today"}, {"views": {}}, {"views": ["bogus"]},
 ])
-def test_missing_or_invalid_saved_views_default_to_all_four(stored):
+def test_missing_or_invalid_saved_views_default_to_all_five(stored):
     settings = {"energy_page": {"enabled": True, **stored}}
     schema = dashboard_pages_schema(settings)
     assert _defaults(schema) == {"enabled": True, **dict.fromkeys(FIELDS, True)}
@@ -53,7 +53,8 @@ def test_missing_or_invalid_saved_views_default_to_all_four(stored):
 
 
 @pytest.mark.parametrize("views", [
-    ["now", "today", "balance"], ["now"], ["today", "balance"], ["power"], [],
+    ["now", "today", "balance"], ["now"], ["today", "balance"], ["power"],
+    ["distribution"], ["power", "distribution"], [],
 ])
 def test_opening_and_saving_keeps_exact_saved_selections(views):
     settings = {"energy_page": {"enabled": True, "position": 2, "views": views}}
@@ -68,7 +69,7 @@ def test_opening_and_saving_keeps_exact_saved_selections(views):
     assert set(saved["energy_page"]) == {"enabled", "position", "views"}
 
 
-@pytest.mark.parametrize("flags", list(product((False, True), repeat=4)))
+@pytest.mark.parametrize("flags", list(product((False, True), repeat=len(VIEWS))))
 def test_each_toggle_survives_post_save_and_reopen(flags):
     settings = {"energy_page": {"enabled": True, "views": list(VIEWS)}}
     toggles = dict(zip(FIELDS, flags, strict=True))
@@ -90,7 +91,7 @@ def test_each_toggle_survives_post_save_and_reopen(flags):
 def test_validation_retry_retains_false_flags_and_global_switch(enabled):
     settings = {"energy_page": {"enabled": True, "views": list(VIEWS)}}
     toggles = {"enabled": enabled, "view_now": False, "view_today": True,
-               "view_power": False, "view_balance": False}
+               "view_power": False, "view_distribution": False, "view_balance": False}
     posted = post_pages_like_home_assistant(dashboard_pages_schema(settings), {
         "page_2": {"entities": ["light.room"]},
         "energy_page": toggles,
@@ -119,11 +120,11 @@ def test_partial_posts_do_not_add_unselected_views(posted):
     assert saved["energy_page"] == settings["energy_page"]
     assert _defaults(dashboard_pages_schema(settings, posted)) == {
         "enabled": True, "view_now": False, "view_today": True,
-        "view_power": False, "view_balance": False,
+        "view_power": False, "view_distribution": False, "view_balance": False,
     }
 
 
-@pytest.mark.parametrize("views", [[], ["now", "today", "balance"], ["power"]])
+@pytest.mark.parametrize("views", [[], ["now", "today", "balance"], ["power"], ["distribution"]])
 def test_legacy_posted_list_is_accepted_without_a_storage_migration(views):
     saved, errors = dashboard_pages_input({}, {"energy_page": {"enabled": True, "views": views}})
 

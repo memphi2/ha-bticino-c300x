@@ -1,4 +1,4 @@
-"""Battery coverage belongs to sources, not independent meter counts."""
+"""Battery sums use configured sensors; unconfigured power contributes zero."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -30,7 +30,7 @@ def battery(name, direction, power=None):
 @pytest.mark.parametrize("first", ["from", "to", "both"])
 @pytest.mark.parametrize("second", ["from", "to", "both"])
 @pytest.mark.parametrize("coverage", ["unconfigured", "unavailable", "complete", "shared"])
-def test_all_battery_sources_need_power_for_live_and_history(first, second, coverage):
+def test_battery_unconfigured_zero_and_configured_unknown_match_live_and_history(first, second, coverage):
     second_sensor = None if coverage == "unconfigured" else (
         "sensor.a_power" if coverage == "shared" else "sensor.b_power"
     )
@@ -40,7 +40,7 @@ def test_all_battery_sources_need_power_for_live_and_history(first, second, cove
     ]})
     readings = {"sensor.grid_power": 1000.0, "sensor.a_power": 500.0,
                 "sensor.b_power": None if coverage == "unavailable" else -100.0}
-    expected = {"complete": 400.0, "shared": 500.0}.get(coverage)
+    expected = {"complete": 400.0, "shared": 500.0, "unconfigured": 500.0}.get(coverage)
     aggregate = source_power_watts(sources, readings)
     assert aggregate["battery"] == expected
     assert aggregate["home"] == (None if expected is None else 1000 + expected)
@@ -58,7 +58,9 @@ def test_all_battery_sources_need_power_for_live_and_history(first, second, cove
     series = {item["id"]: item for item in payload["series"]}
     assert ("battery" in series) is (expected is not None)
     assert ("home" in series) is (expected is not None)
+    assert all("partial" not in item for item in series.values())
     if expected is not None:
+        assert series["battery"]["label"] == "Battery"
         axis = payload["axis"]
         for key, value in (("battery", expected), ("home", 1000 + expected)):
             actual = series[key]["points"][0] * (axis["max"] - axis["min"]) + axis["min"]

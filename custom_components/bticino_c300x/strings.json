@@ -390,6 +390,7 @@
               "view_now": "Now",
               "view_today": "Today",
               "view_power": "Power history",
+              "view_distribution": "Live power distribution",
               "view_balance": "Balance"
             },
             "data_description": {
@@ -398,6 +399,7 @@
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
+              "view_distribution": "Sankey diagram of current W/kW readings; no daily energy totals or history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
@@ -523,6 +525,7 @@
               "view_now": "Now",
               "view_today": "Today",
               "view_power": "Power history",
+              "view_distribution": "Live power distribution",
               "view_balance": "Balance"
             },
             "data_description": {
@@ -531,6 +534,7 @@
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
+              "view_distribution": "Sankey diagram of current W/kW readings; no daily energy totals or history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }
@@ -843,6 +847,7 @@
               "view_now": "Now",
               "view_today": "Today",
               "view_power": "Power history",
+              "view_distribution": "Live power distribution",
               "view_balance": "Balance"
             },
             "data_description": {
@@ -851,6 +856,7 @@
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
+              "view_distribution": "Sankey diagram of current W/kW readings; no daily energy totals or history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
             }
           }

@@ -21,8 +21,9 @@ from homeassistant.core import HomeAssistant
 
 from .dashboard_config import configured_energy_page
 from .dashboard_energy import (
+    ENERGY_DAY_VIEWS,
+    ENERGY_LIVE_VIEWS,
     ENERGY_VIEW_BALANCE,
-    ENERGY_VIEW_NOW,
     ENERGY_VIEW_POWER,
     ENERGY_VIEW_TODAY,
     EnergyDay,
@@ -75,7 +76,7 @@ def _active_energy_views(entry: BticinoC300XConfigEntry) -> list[str]:
 
     settings = configured_energy_page(entry)
     views: list[str] = settings["views"] if settings["enabled"] else []
-    if not any(view != ENERGY_VIEW_POWER for view in views):
+    if not any(view in ENERGY_DAY_VIEWS for view in views):
         forget_energy_day(entry.entry_id)
     if ENERGY_VIEW_POWER not in views:
         forget_power_history(entry.entry_id)
@@ -139,14 +140,14 @@ async def async_energy_dashboard_page(
         )
     day = (
         await _async_energy_day(hass, entry.entry_id, day_sources, still_active)
-        if any(view != ENERGY_VIEW_POWER for view in views) else EnergyDay()
+        if any(view in ENERGY_DAY_VIEWS for view in views) else EnergyDay()
     )
     if not still_active():
         return None
     power = {
         entity_id: power_watts(hass.states.get(entity_id))
         for entity_id in sources.power_entities
-    } if ENERGY_VIEW_NOW in views else {}
+    } if any(view in ENERGY_LIVE_VIEWS for view in views) else {}
     currency = str(getattr(hass.config, "currency", "") or "")
     page = energy_page(
         sources, day, power,

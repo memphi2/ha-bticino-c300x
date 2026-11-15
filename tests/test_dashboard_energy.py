@@ -121,6 +121,7 @@ def test_day_totals_match_home_assistants_own_energy_dashboard() -> None:
     assert energy["views"] == [
         {"id": "now", "label": "Jetzt"}, {"id": "today", "label": "Heute"},
         {"id": "power", "label": "Leistung"},
+        {"id": "distribution", "label": "Verteilung"},
         {"id": "balance", "label": "Bilanz"},
     ]
     nodes = energy["nodes"]
@@ -143,9 +144,9 @@ def test_today_view_has_hourly_bars_and_a_bounded_sums_table() -> None:
     )["energy"]
 
     hours = energy["hours"]
-    assert [len(series["values"]) for series in hours["series"]] == [24, 24, 24]
-    assert hours["series"][0]["values"][3] == 20.0
-    assert hours["series"][1]["values"][12] == 0.19
+    assert [len(series["values"]) for series in hours["series"]] == [24] * 5
+    assert sum(series["values"][3] for series in hours["series"][:3]) == 20.0
+    assert hours["series"][3]["values"][12] == 0.19
     assert hours["max"] == 20.0 and hours["label"] == "20 kWh"
     sums = energy["sums"]
     assert len(sums) == 8
@@ -158,6 +159,10 @@ def test_today_view_has_hourly_bars_and_a_bounded_sums_table() -> None:
     assert sums[6]["value"] == "20 kWh" and sums[6]["cost"] == "4,80 €"
     assert sums[7]["value"] == "25,1 kWh" and sums[7]["cost"] == "6,44 €"
     assert sums[2]["value"] == "-0,1 kWh" and "cost" not in sums[0]
+    assert [series["color"] for series in hours["series"][:3]] == [
+        row["color"] for row in sums[4:7]
+    ]
+    assert len({series["color"] for series in hours["series"]}) == 5
 
 
 def test_power_sensors_add_live_values_and_directions() -> None:
@@ -381,7 +386,7 @@ def test_power_just_below_a_kilowatt_does_not_read_1000_w() -> None:
     assert format_power(999.4, "de") == "999 W"
 
 
-def test_a_kind_with_a_source_lacking_its_power_sensor_shows_no_power() -> None:
+def test_unconfigured_solar_power_contributes_zero_to_configured_readings() -> None:
     preferences = {"energy_sources": [
         {"type": "grid", "stat_energy_from": "sensor.house", "stat_rate": "sensor.house_power"},
         {"type": "solar", "stat_energy_from": "sensor.roof", "stat_rate": "sensor.roof_power"},
@@ -391,28 +396,26 @@ def test_a_kind_with_a_source_lacking_its_power_sensor_shows_no_power() -> None:
 
     nodes = energy_page(energy_sources(preferences), EnergyDay(), power, language="en")["energy"]["nodes"]
 
-    # One inverter's power is not the solar power, and the home's would be too low.
-    assert "power" not in nodes["solar"]
-    assert "power" not in nodes["home"]
+    assert nodes["solar"]["power"] == "500 W"
+    assert nodes["home"]["power"] == "800 W"
     assert nodes["grid"]["power"] == "300 W"
 
 
-def test_grid_power_is_unknown_when_a_connection_lacks_its_sensor() -> None:
+def test_grid_connections_without_power_do_not_hide_configured_readings() -> None:
     sources = energy_sources(PREFERENCES)
     power = {"sensor.house_power": 850.0, "sensor.pv_power": 120.0, "sensor.bat_power": -200.0}
 
     nodes = energy_page(sources, DAY, power)["energy"]["nodes"]
 
-    assert sources.grid_power_complete is False
-    assert "power" not in nodes["grid"] and nodes["grid"]["flow"] == 0
-    assert "power" not in nodes["home"] and nodes["home"]["flow"] == 0
+    assert nodes["grid"]["power"] == "850 W" and nodes["grid"]["flow"] == 1
+    assert nodes["home"]["power"] == "770 W" and nodes["home"]["flow"] == 1
     assert nodes["grid"]["lines"] == ["25.1 kWh", "0 kWh"]
     assert nodes["solar"]["power"] == "120 W"
     assert nodes["battery"]["power"] == "200 W"
 
 
 @pytest.mark.parametrize("missing_direction", ["stat_energy_from", "stat_energy_to"])
-def test_grid_coverage_includes_import_and_export_only_connections(missing_direction) -> None:
+def test_unconfigured_import_or_export_power_contributes_zero(missing_direction) -> None:
     sources = energy_sources({"energy_sources": [
         {"type": "grid", "stat_energy_from": "sensor.a", "stat_rate": "sensor.a_power"},
         {"type": "grid", missing_direction: "sensor.b"},
@@ -420,8 +423,7 @@ def test_grid_coverage_includes_import_and_export_only_connections(missing_direc
 
     nodes = energy_page(sources, EnergyDay(), {"sensor.a_power": 300.0})["energy"]["nodes"]
 
-    assert not sources.grid_power_complete
-    assert "power" not in nodes["grid"] and "power" not in nodes["home"]
+    assert nodes["grid"]["power"] == nodes["home"]["power"] == "300 W"
 
 
 @pytest.mark.parametrize("second_power", [200.0, None])
@@ -434,7 +436,6 @@ def test_all_configured_grid_power_sensors_must_report(second_power) -> None:
 
     nodes = energy_page(sources, EnergyDay(), power)["energy"]["nodes"]
 
-    assert sources.grid_power_complete
     if second_power is None:
         assert "power" not in nodes["grid"] and "power" not in nodes["home"]
     else:
@@ -459,10 +460,37 @@ def test_tariff_meters_can_share_one_grid_power_sensor(legacy: bool) -> None:
 
     nodes = energy_page(sources, EnergyDay(), {"sensor.power": 300.0})["energy"]["nodes"]
 
-    assert sources.grid_power_complete
     assert len(sources.grid_from) == 2
     assert sources.grid_power == ("sensor.power",)
     assert nodes["grid"]["power"] == nodes["home"]["power"] == "300 W"
+
+
+@pytest.mark.parametrize("kind", ["grid", "solar", "battery"])
+@pytest.mark.parametrize("stat_rate", [None, "", " "])
+def test_source_without_configured_power_is_zero_without_a_subscription(kind, stat_rate):
+    sources = energy_sources({"energy_sources": [
+        {"type": kind, "stat_energy_from": "sensor.energy", "stat_rate": stat_rate},
+    ]})
+    assert not sources.power_entities
+    assert source_power_watts(sources, {"sensor.unselected": 999}) == {kind: 0, "home": 0}
+    nodes = energy_page(sources, EnergyDay(), {}, views=["now"])["energy"]["nodes"]
+    assert nodes[kind]["power"] == nodes["home"]["power"] == "0 W"
+    assert nodes[kind]["flow"] == nodes["home"]["flow"] == 0
+
+
+@pytest.mark.parametrize("kind", ["grid", "solar", "battery"])
+@pytest.mark.parametrize("missing", [None, float("nan"), float("inf"), float("-inf"), True])
+def test_configured_invalid_power_is_unknown_even_with_unconfigured_siblings(kind, missing):
+    sources = energy_sources({"energy_sources": [
+        {"type": kind, "stat_energy_from": "sensor.a_energy", "stat_rate": "sensor.a_power"},
+        {"type": kind, "stat_energy_from": "sensor.b_energy", "stat_rate": "sensor.b_power"},
+        {"type": kind, "stat_energy_from": "sensor.c_energy"},
+    ]})
+    assert sources.power_entities == {"sensor.a_power", "sensor.b_power"}
+    assert source_power_watts(sources, {"sensor.a_power": 500, "sensor.b_power": missing}) == {
+        kind: None, "home": None,
+    }
+    assert source_power_watts(sources, {"sensor.a_power": 500}) == {kind: None, "home": None}
 
 
 @pytest.mark.parametrize(("value", "language", "expected"), [

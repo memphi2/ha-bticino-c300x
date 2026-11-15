@@ -1,8 +1,24 @@
 # Changelog
 
-## v2.5.0 - Unreleased
+## v2.4.1 - 2026-11-15
 
-Development started from v2.4.0. No functional changes yet.
+### Added
+
+- Optional Distribution energy subpage with a Sankey diagram of current W/kW
+  readings, separate from daily energy totals and power history. It shares
+  existing live updates and does not query recorder history.
+
+### Fixed
+
+- Keep power visible when some energy sources have no configured power sensor:
+  these sources contribute 0 W while configured sensors are summed normally.
+  Unavailable configured sensors and missing recorded samples remain unknown.
+
+### Changed
+
+- Use consistent source colors across energy views and distinct grid-meter
+  segments in Today, with matching colors in the totals table.
+- Show current power beneath the flow arrows on the Now energy view.
 
 ## v2.4.0 - 2026-11-15
 

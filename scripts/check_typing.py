@@ -78,6 +78,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/dashboard_energy.py",
     "custom_components/bticino_c300x/dashboard_energy_charts.py",
     "custom_components/bticino_c300x/dashboard_energy_data.py",
+    "custom_components/bticino_c300x/dashboard_energy_distribution.py",
     "custom_components/bticino_c300x/dashboard_energy_power.py",
     "custom_components/bticino_c300x/dashboard_energy_updates.py",
     "custom_components/bticino_c300x/dashboard_updates.py",

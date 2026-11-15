@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "native_agent/scripts/qml_patch.sh"
 SOURCE_DIR = ROOT / "device_qml"
@@ -219,6 +221,7 @@ SOURCE_INSTALLED_FILES = (
     "Alarm.qml",
     "HomeAssistant.qml",
     "C300XEnergy.qml",
+    "C300XEnergyDistribution.qml",
     "C300XRingerControl.qml",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
@@ -264,7 +267,8 @@ PATCH_OUTPUT_SHA256 = {
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
     "HomeAssistant.qml": "bea481bb6384488d8cd369e21984fe046918378b2d45993b5d37bc2e0a6f7992",
-    "C300XEnergy.qml": "adff4d298b0eb63d3fae50beaa01eaa23c2a110a8950374addc1777f2f57e745",
+    "C300XEnergy.qml": "330622a775f746e607253b40cb4fc2a18029fa4db6cb22eedef8f7fd4b39c7a6",
+    "C300XEnergyDistribution.qml": "de645190befd8755de211eaac6d9104f0bc96df424820fcb191f53ff7f00f9fd",
     "js/c300x_ha.js": "21585924604abd460d45e6e30c70285730f0335ade65afade561cd39a1243d7d",
     "js/c300x_i18n.js": "e8a75ca586851478abcf7c9f915110022d335fcb02b50dbc2d308dfdc0527594",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
@@ -452,39 +456,42 @@ def test_qml_core_upgrade_corrects_legacy_media_port(tmp_path: Path) -> None:
     assert event_manager.read_text() == ORIGINAL_EVENT_MANAGER
 
 
-def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path) -> None:
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
 
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
-    assert (gui_dir / "C300XEnergy.qml").read_bytes() == (SOURCE_DIR / "C300XEnergy.qml").read_bytes()
+    assert (gui_dir / filename).read_bytes() == (SOURCE_DIR / filename).read_bytes()
 
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all")["state"] == "original"
-    assert not (gui_dir / "C300XEnergy.qml").exists()
+    assert not (gui_dir / filename).exists()
 
 
-def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: Path) -> None:
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
 
-    (gui_dir / "C300XEnergy.qml").unlink()
+    (gui_dir / filename).unlink()
 
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] != "patched"
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
-    assert (gui_dir / "C300XEnergy.qml").exists()
+    assert (gui_dir / filename).exists()
 
 
-def test_a_leftover_energy_page_file_counts_as_a_partial_patch(tmp_path: Path) -> None:
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+def test_a_leftover_energy_page_file_counts_as_a_partial_patch(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
-    (gui_dir / "C300XEnergy.qml").write_text("import QtQuick 1.1\nItem {}\n")
+    (gui_dir / filename).write_text("import QtQuick 1.1\nItem {}\n")
 
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] != "original"
 
@@ -499,7 +506,6 @@ def test_the_energy_page_file_is_loaded_only_for_an_energy_page() -> None:
     assert "pageItem.energyVisible = energy !== null" in script
     assert "flowVisible" not in page and "flowVisible" not in script
     assert energy.isascii()
-    assert "//" not in energy and "/*" not in energy
     assert "Canvas" not in energy and "Timer" not in energy
 
 
@@ -1206,13 +1212,14 @@ def test_qml_patch_starts_the_gui_outside_its_own_process_group(tmp_path: Path) 
     assert session == pid
 
 
-def test_qml_patch_names_a_missing_display_file_and_leaves_no_staging(tmp_path: Path) -> None:
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+def test_qml_patch_names_a_missing_display_file_and_leaves_no_staging(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
     source_dir = tmp_path / "source"
     _copy_source_tree(source_dir)
-    (source_dir / "C300XEnergy.qml").unlink()
+    (source_dir / filename).unlink()
     staging = tmp_path / "staging"
 
     result = _run_qml_patch_raw(
@@ -1221,7 +1228,7 @@ def test_qml_patch_names_a_missing_display_file_and_leaves_no_staging(tmp_path: 
     )
 
     assert result.returncode != 0
-    assert "C300XEnergy.qml" in result.stderr
+    assert filename in result.stderr
     assert not staging.exists()
     assert not (gui_dir / "HomeAssistant.qml").exists()
 

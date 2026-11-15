@@ -345,7 +345,8 @@ def test_repair_flow_init_ignores_internal_flow_data() -> None:
 
 
 @pytest.mark.parametrize("bootstrap", [False, True])
-def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) -> None:
+@pytest.mark.parametrize("file_set", [2, 4])
+def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap, file_set) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
@@ -377,7 +378,7 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) ->
         calls.append(f"verify:{result['ok']}")
         return {
             "version": "1.1.0", "capabilities": {},
-            "agent": {"self_update_supported": True, "self_update_file_set_version": 2},
+            "agent": {"self_update_supported": True, "self_update_file_set_version": file_set},
         }
 
     async def restore_state(*_args: Any) -> None:
@@ -401,7 +402,7 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) ->
     monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
     monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
     async def packaged_bundle(_hass: Any) -> dict[str, Any]:
-        return {"agent_version": "1.1.0", "update_file_set_version": 2}
+        return {"agent_version": "1.1.0", "update_file_set_version": file_set}
 
     monkeypatch.setattr(repairs, "async_load_packaged_bundle_metadata", packaged_bundle)
     flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]

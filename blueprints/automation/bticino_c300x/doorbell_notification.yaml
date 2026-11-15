@@ -48,7 +48,9 @@ variables:
 condition:
   - condition: template
     value_template: >-
-      {{ entry_id in (device_attr(c300x_device, 'config_entries') or [])
+      {% set owner = device_attr(c300x_device, 'config_entry_id') %}
+      {% set composite = device_attr(c300x_device, 'is_composite_device') %}
+      {{ entry_id in ([owner] if owner and not composite else (device_attr(c300x_device, 'config_entries') or []))
          and (not event_camera_entity or event_camera_entity in c300x_entities) }}
 
 action:

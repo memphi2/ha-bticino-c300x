@@ -154,6 +154,8 @@ def test_doorbell_notification_allows_camera_less_events() -> None:
     import asyncio
 
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers import frame
+    from homeassistant.helpers.device_registry import DeviceEntry
     from homeassistant.helpers.template import Template
 
     data = _blueprint("doorbell_notification.yaml")
@@ -161,10 +163,21 @@ def test_doorbell_notification_allows_camera_less_events() -> None:
 
     async def run() -> None:
         hass = HomeAssistant(str(ROOT))
-        selected = SimpleNamespace(config_entries={"entry_a"})
-        registry = SimpleNamespace(async_get=lambda device_id: selected if device_id == "device_a" else None)
+        selected = DeviceEntry(config_entry_id="entry_a", id="device_a")
+        composite = DeviceEntry(
+            config_entry_id="entry_a", id="composite",
+            composite_subentries={"entry_a": {None}, "entry_b": {None}},
+        )
+        devices = {selected.id: selected, composite.id: composite}
+        registry = SimpleNamespace(async_get=devices.get)
         template = Template(data["condition"][0]["value_template"], hass)
-        with patch("homeassistant.helpers.device_registry.async_get", return_value=registry):
+        # DeviceEntry compatibility properties use HA's frame reporting helper.
+        # Restore its global HA reference when this isolated event loop exits.
+        with (
+            patch.object(frame._hass, "hass", None),
+            patch("homeassistant.helpers.device_registry.async_get", return_value=registry),
+        ):
+            frame.async_setup(hass)
             for entry_id, camera, device, expected in (
                 ("entry_a", "", "device_a", True),
                 ("entry_b", "", "device_a", False),
@@ -174,12 +187,17 @@ def test_doorbell_notification_allows_camera_less_events() -> None:
                 ("entry_a", "camera.b", "device_a", False),
                 ("", "", "device_a", False),
                 ("entry_a", "", "removed_device", False),
+                ("entry_a", "", "composite", True),
+                ("entry_b", "", "composite", True),
+                ("entry_c", "", "composite", False),
+                ("entry_b", "camera.b", "composite", True),
+                ("entry_c", "camera.b", "composite", False),
             ):
                 assert bool(template.async_render({
                     "entry_id": entry_id,
                     "event_camera_entity": camera,
                     "c300x_device": device,
-                    "c300x_entities": ["camera.a"],
+                    "c300x_entities": ["camera.a", "camera.b"] if device == "composite" else ["camera.a"],
                 })) is expected, (entry_id, camera, device)
 
     asyncio.run(run())

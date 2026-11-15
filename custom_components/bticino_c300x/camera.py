@@ -56,6 +56,7 @@ from .camera_media.sdp import (
 )
 from .camera_media.session_lifecycle import (
     CameraWebRTCSessions,
+    closed_notice,
     media_owner_stopping,
     raise_if_on_demand_capture_active,
 )
@@ -1053,9 +1054,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._webrtc_sessions.candidates.pop(session_id, None)
             if notify_client:
                 with suppress(Exception):
-                    provider_session.send_message(
-                        {"type": "closed", "reason": reason}
-                    )
+                    provider_session.send_message(closed_notice(reason))
             await self._async_log_go2rtc_debug(
                 provider_session.provider,
                 "provider_go2rtc_before_close",

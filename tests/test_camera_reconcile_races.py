@@ -1,6 +1,7 @@
 """An old idle reply must not close a newly started doorbell stream."""
 
 import asyncio
+import contextlib
 from types import SimpleNamespace
 
 import pytest
@@ -308,3 +309,37 @@ def test_idle_reconciliation_preserves_reused_session_candidates_during_close(mo
             await camera.async_will_remove_from_hass()
 
     asyncio.run(run())
+
+
+def test_the_closed_notice_passes_through_home_assistants_webrtc_sender() -> None:
+    """Home Assistant's own sender turns each message into a dict with as_dict().
+
+    A plain dict has no such method: the notice raised inside the sender, was
+    swallowed, and the card kept showing a frozen picture.
+    """
+
+    from custom_components.bticino_c300x.camera_media.session_lifecycle import (
+        CameraWebRTCSessions,
+        OpeningOffer,
+        closed_notice,
+    )
+
+    sent: list[dict] = []
+
+    def core_sender(message) -> None:
+        sent.append(message.as_dict())
+
+    assert closed_notice("agent_idle_reconcile") == {"type": "closed", "reason": "agent_idle_reconcile"}
+    core_sender(closed_notice("agent_idle_reconcile"))
+    assert sent == [{"type": "closed", "reason": "agent_idle_reconcile"}]
+
+    async def run() -> None:
+        task = asyncio.ensure_future(asyncio.sleep(60))
+        sessions = CameraWebRTCSessions.__new__(CameraWebRTCSessions)
+        sessions.offers = {"s": OpeningOffer(task=task, owner="doorbell", send_message=core_sender)}
+        sessions.cancel_offer("s", reason="doorbell_media_closed")
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    asyncio.run(run())
+    assert sent[-1] == {"type": "closed", "reason": "doorbell_media_closed"}

@@ -1048,23 +1048,36 @@ def _async_track_display_bridge_updates(
 
     from .dashboard import _dashboard_state_entity_id
     from .dashboard_config import (
+        _DASHBOARD_DEFAULT_PAGE,
         configured_actions,
         configured_alarm_page_entity_id,
         configured_dashboard_entities,
+        configured_dashboard_entity_display_overrides,
+        configured_status_page_enabled,
         configured_weather_entity_id,
     )
     from .dashboard_updates import dashboard_state_event_changes_display
 
-    selected_entity_ids = set(configured_dashboard_entities(entry))
+    status_enabled = configured_status_page_enabled(entry)
+    overrides = configured_dashboard_entity_display_overrides(entry)
+    selected_entity_ids = {
+        entity_id for entity_id in configured_dashboard_entities(entry)
+        if status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
+    }
     projected_entity_ids = selected_entity_ids.copy()
     alarm_page_entity_id = configured_alarm_page_entity_id(entry)
     if alarm_page_entity_id:
         projected_entity_ids.add(alarm_page_entity_id)
-    unfiltered_entity_ids = {str(alarm_entity_id), configured_weather_entity_id(entry)}
-    for entity_id in (alarm_page_entity_id, configured_weather_entity_id(entry)):
+    weather_entity_id = configured_weather_entity_id(entry) if status_enabled else None
+    unfiltered_entity_ids = {str(alarm_entity_id), weather_entity_id}
+    # Add each visible use independently: a hidden tile may share its source
+    # with an action on another page or the Alarmo quick entity.
+    for entity_id in (alarm_page_entity_id, weather_entity_id):
         if entity_id:
             selected_entity_ids.add(entity_id)
     for action in configured_actions(entry).values():
+        if not status_enabled and action.get("dashboard", {}).get("page") == _DASHBOARD_DEFAULT_PAGE:
+            continue
         entity_id = _dashboard_state_entity_id(action, action.get("dashboard", {}))
         if entity_id:
             selected_entity_ids.add(entity_id)

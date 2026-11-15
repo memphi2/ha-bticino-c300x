@@ -57,8 +57,9 @@
   missing-Alarmo Repairs when the selection is removed.
 - Release the microphone when answering a preview fails, and close ringback
   audio resources when a card is removed or reconfigured.
-- Replace bootstrap firewall files and publish their backups atomically,
-  rejecting backups that cannot be verified.
+- Replace and restore firewall files atomically, rejecting backups that cannot
+  be verified. Failed restores preserve the agent and backups instead of
+  continuing removal; failed read-only remounts are reported.
 - Check the firmware ABI before developer uploads and install the complete
   startup bundle before advertising its new manifest.
 - Release partially initialized browser audio resources when audio gain setup
@@ -76,6 +77,8 @@
   HTTP response cannot keep subsequent display commands blocked indefinitely.
 - Scope Android and iOS notification actions to each call's automation run, so
   stale Answer and Hang up actions cannot operate a later call.
+- Stop hidden-only status-page entities and weather from triggering display
+  requests. Shared visible sources and Alarmo updates remain active.
 - Receive the device's video and audio packets for on-demand video on the
   loopback interface only; hosts on the local network could send packets into
   a running stream.

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+QML_SUCCESS = {"ok": True, "patched": True, "core_patched": True, "gui_running": True}
 
 
 def _fake_tool(path: Path, name: str) -> None:
@@ -22,6 +23,13 @@ def _fake_tool(path: Path, name: str) -> None:
         "    log.write(json.dumps([name, *sys.argv[1:]]) + '\\n')\n"
         "if name == 'make' and os.environ.get('FAIL_TARGET') in sys.argv[1:]:\n"
         "    sys.exit(1)\n"
+        "if name == 'sshpass' and sys.argv[-1].endswith(\"qml_patch.sh' apply\"):\n"
+        "    print(os.environ['QML_RESULT'])\n"
+        "    sys.exit(int(os.environ['QML_EXIT']))\n"
+        "if name == 'sshpass' and 'ssh' in sys.argv "
+        "and \"mv -f '\" in sys.argv[-1] and '.bundle.json.new' in sys.argv[-1]:\n"
+        "    with open(os.environ['REMOTE_MANIFEST'], 'w') as manifest:\n"
+        "        manifest.write('new manifest\\n')\n"
         "if name == 'sshpass' and os.environ.get('FAIL_STARTUP') == '1' "
         "and sys.argv[-1].startswith('sh -s -- '):\n"
         "    sys.exit(1)\n"
@@ -31,7 +39,8 @@ def _fake_tool(path: Path, name: str) -> None:
 
 def _run_install(
     tmp_path: Path, *, fail_target: str = "", fail_startup: bool = False,
-    remote_dir: str = "/synthetic/agent",
+    remote_dir: str = "/synthetic/agent", apply_qml: bool = False,
+    qml_result: str = "", qml_exit: int = 0, upload_agent: bool = True,
 ):
     tree = tmp_path / "checkout"
     scripts = tree / "scripts"
@@ -46,14 +55,20 @@ def _run_install(
     for name in ("make", "sshpass"):
         _fake_tool(commands / name, name)
     log = tmp_path / "commands.jsonl"
+    manifest = tmp_path / "remote-bundle.json"
+    manifest.write_text("old manifest\n")
     result = subprocess.run(
-        ["bash", str(scripts / "install_c300x_device.sh"), "--agent"],
+        ["bash", str(scripts / "install_c300x_device.sh"),
+         *(["--agent"] if upload_agent else []), *(["--apply-qml"] if apply_qml else [])],
         env={
             **os.environ,
             "PATH": f"{commands}:{os.environ['PATH']}",
             "COMMAND_LOG": str(log),
             "FAIL_TARGET": fail_target,
             "FAIL_STARTUP": "1" if fail_startup else "0",
+            "QML_RESULT": qml_result,
+            "QML_EXIT": str(qml_exit),
+            "REMOTE_MANIFEST": str(manifest),
             "C300X_HOST": "synthetic.invalid",
             "C300X_USER": "synthetic",
             "C300X_PASSWORD": "synthetic",
@@ -110,6 +125,60 @@ def test_failed_startup_install_never_publishes_bundle_manifest(tmp_path):
     assert result.returncode != 0
     assert not any("bundle.json" in arg for call in calls for arg in call)
     assert "Installed" not in result.stdout
+
+
+@pytest.mark.parametrize("payload", [
+    "", "not JSON", "null", "[]", "true", "{}",
+    json.dumps(json.dumps(QML_SUCCESS)),
+    json.dumps(QML_SUCCESS) + "\n{}",
+    *[json.dumps({**QML_SUCCESS, key: value})
+      for key in QML_SUCCESS for value in (False, None, 1, "true")],
+    *[json.dumps({key: value for key, value in QML_SUCCESS.items() if key != missing})
+      for missing in QML_SUCCESS],
+    json.dumps({"ok": False, "state": "reload_failed", "patched": None,
+                "core_patched": None, "gui_running": False}),
+])
+def test_failed_qml_result_preserves_old_manifest(tmp_path, payload):
+    result, calls = _run_install(tmp_path, apply_qml=True, qml_result=payload)
+    assert result.returncode != 0
+    assert "QML patch verification failed" in result.stderr
+    assert "Installed" not in result.stdout
+    assert not any("bundle.json" in arg for call in calls for arg in call)
+    assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"
+
+
+def test_qml_transport_failure_preserves_old_manifest(tmp_path):
+    result, calls = _run_install(
+        tmp_path, apply_qml=True, qml_result=json.dumps(QML_SUCCESS), qml_exit=1,
+    )
+    assert result.returncode != 0
+    assert "Installed" not in result.stdout
+    assert not any("bundle.json" in arg for call in calls for arg in call)
+    assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"
+
+
+def test_verified_qml_result_precedes_manifest_publication(tmp_path):
+    payload = json.dumps({**QML_SUCCESS, "state": "patched"}, indent=2)
+    result, calls = _run_install(tmp_path, apply_qml=True, qml_result=payload)
+    assert result.returncode == 0, result.stderr
+    qml = next(i for i, call in enumerate(calls) if call[-1].endswith("qml_patch.sh' apply"))
+    manifest = next(i for i, call in enumerate(calls) if "bundle.json" in call[-1])
+    assert qml < manifest
+    assert (tmp_path / "remote-bundle.json").read_text() == "new manifest\n"
+    assert payload in result.stdout
+    assert "Installed" in result.stdout
+
+
+@pytest.mark.parametrize("success", [False, True])
+def test_qml_only_install_also_validates_result(tmp_path, success):
+    result, calls = _run_install(
+        tmp_path, apply_qml=True, upload_agent=False,
+        qml_result=json.dumps({**QML_SUCCESS, "gui_running": success}),
+    )
+    assert (result.returncode == 0) is success
+    assert ("Installed" in result.stdout) is success
+    assert not any("bundle.json" in arg for call in calls for arg in call)
+    assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"
 
 
 @pytest.mark.parametrize("remote_dir", ["relative", "/agent/../other", "/agent'bad", "/agent$(bad)"])

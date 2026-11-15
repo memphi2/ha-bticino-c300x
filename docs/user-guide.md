@@ -35,7 +35,7 @@ Most users only need:
 
 - **Save images** enables automatic visitor images independently of an open
   dashboard. Delay and retention are configured under Video and audio; defaults
-  are 5 seconds and 14 days. Images and their shared camera/card preview are
+  are 3 seconds and 14 days. Images and their shared camera/card preview are
   stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
 - Use the **C300X Doorbell Call Card** in **Auto** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.

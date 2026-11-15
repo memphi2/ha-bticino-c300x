@@ -86,6 +86,7 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         await asyncio.sleep(0)
         resources.close()
         resources.close()
+        assert resources.closed is True
         await asyncio.gather(*tasks, return_exceptions=True)
         assert all(task.cancelled() for task in tasks)
         assert calls == ["registration", "display", "event-webhook", "webhook"]
@@ -95,7 +96,7 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name not in {"pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
+            if item.name not in {"closed", "pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
         )
 
     asyncio.run(run())
@@ -120,6 +121,7 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
             resources.close()
         resources.close()
         await asyncio.gather(task, return_exceptions=True)
+        assert resources.closed is True
         assert task.cancelled()
         assert calls == ["webhook"]
         assert len(error.value.exceptions) == 1
@@ -130,7 +132,7 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name not in {"pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
+            if item.name not in {"closed", "pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
         )
 
     asyncio.run(run())

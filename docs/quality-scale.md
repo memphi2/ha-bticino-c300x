@@ -31,9 +31,9 @@ Two coverage requirements must not be conflated:
 No full-suite coverage run was performed for this audit. Existing `.coverage`
 files, earlier full runs and historical release reports are **not current-source
 proof**. The local [coverage gate](../scripts/check_coverage.py) enforces an
-aggregate 95% floor; its legacy Platinum wording does not change the official
-Silver requirement. Both coverage rules stay TODO pending a fresh per-module
-report after all concurrent reviews. Code references below are inspection
+aggregate 95% floor, not an official HA tier requirement. Both coverage rules
+stay TODO pending a fresh per-module report after all concurrent reviews.
+Code references below are inspection
 evidence; test-module references identify existing checks or the place to add a
 missing regression, not a claim that every referenced test ran today.
 
@@ -62,7 +62,7 @@ rule mismatch or missing evidence, not necessarily a runtime defect.
 | `docs-conditions` | Bronze | exempt | No custom condition platform or `conditions.yaml` exists. HA state/template conditions in blueprints are built-ins, not a C300X condition API. See the official exception below. |
 | `docs-high-level-description` | Bronze | done | [README](../README.md) and [user guide](user-guide.md) identify the Classe 300X, the unofficial integration and its purpose. |
 | `docs-installation-instructions` | Bronze | done | [Quickstart](quickstart.md) covers prerequisites, Marketplace/HACS, address entry, explicit bootstrap installation and first-use checks. Field completeness is separate below. |
-| `docs-removal-instructions` | Bronze | todo | [Remove Agent](advanced-maintenance.md#remove-agent) describes device-agent removal only. Add HA config-entry removal and custom-integration uninstall steps, including what remains on the device. `test_init_runtime.py` / `test_runtime_data.py` cover cleanup behavior, not complete user instructions. |
+| `docs-removal-instructions` | Bronze | done | [HA removal guide](advanced-maintenance.md#remove-home-assistant-integration) separates entry/package/device removal and explains retained media, config and backups; Quickstart links it. Official HA/HACS steps checked 2026-11-16; `test_user_documentation.py` guards scope/warnings and links, `test_init_runtime.py` / `test_runtime_data.py` cover cleanup behavior. |
 | `docs-triggers` | Bronze | exempt | No custom trigger platform or `triggers.yaml` exists. `event.py` and bundled blueprints use standard event/state triggers; [blueprints](blueprints.md) explains those workflows. See the official exception below. |
 | `entity-event-setup` | Bronze | done | `C300XEntity.async_added_to_hass` and platform callbacks register listeners with `async_on_remove`; reconnect work is cancelled on removal. `test_entity.py`, `test_event_entity.py`, `test_binary_sensor.py`. |
 | `entity-unique-id` | Bronze | done | `entity.py:entry_entity_unique_id` combines the persistent config-entry ID with each entity key. Activation keys include their configured activation ID. `test_entity.py`, `test_button.py`, `test_event_entity.py`. |
@@ -73,8 +73,8 @@ rule mismatch or missing evidence, not necessarily a runtime defect.
 | `unique-config-entry` | Bronze | done | `config_flow.py` checks stable identity and host/port matches before bootstrap and entry creation, and aborts competing discovery flows. `test_config_flow_helpers.py` duplicate/identity cases and `test_discovery.py`. |
 | `action-exceptions` | Silver | done | `use_cases/common.py` and entity actions map API failures to HA exceptions; notification validation uses `ServiceValidationError`. `test_entity_action_errors.py`, `test_services.py`, `test_alarm_service_results.py`. Translation completeness is separate. |
 | `config-entry-unloading` | Silver | done | `__init__.py:async_unload_entry`, runtime resource cleanup and Notify teardown release callbacks/tasks. `test_runtime_data.py`, `test_webhook_runtime_lifecycle.py`, `test_init_runtime.py`. |
-| `docs-configuration-parameters` | Silver | todo | [Feature reference](feature-reference.md#setup-and-options) and form help cover settings areas, but the docs do not explain the ICE-policy choices behind "Connection paths for the live picture". Add the concrete allowed choices and when to use them, from `config_schemas.py`, `strings.json` and `test_config_flow_helpers.py` ICE-policy tests. This is a specific omission, not a blanket rejection of existing docs. |
-| `docs-installation-parameters` | Silver | todo | [Quickstart](quickstart.md) covers ordinary setup; ICE policy is also offered during setup without documentation of its individual choices. The same focused field-description addition can close this gap; compare `config_flow_features.py`, `config_schemas.py` and `test_config_flow_helpers.py`. |
+| `docs-configuration-parameters` | Silver | done | [Feature reference](feature-reference.md#setup-and-options) and form help cover settings areas; the linked [ICE reference](media-troubleshooting.md#connection-paths-for-the-live-picture) now explains all four choices, default, directional scope and exceptions. `test_user_documentation.py` compares the table with the filter and selector values; `test_config_flow_helpers.py` covers the field contract. |
+| `docs-installation-parameters` | Silver | done | [Quickstart](quickstart.md) covers setup and one-time SSH inputs and now links the same ICE reference, including that no address/token is needed for this selector. `test_user_documentation.py` checks discoverability/default; `test_config_flow_helpers.py` covers setup choices. |
 | `entity-unavailable` | Silver | done | `entity.py:available` follows shared connection state after grace; failed command reads also clear availability. Connection-diagnostic sensors intentionally remain readable. `test_entity.py`, `test_connection_state.py`, `test_switch.py`, `test_number.py`. |
 | `integration-owner` | Silver | done | `manifest.json` now lists `@memphi2`, matching the maintainer of the linked `memphi2/ha-bticino-c300x` source and issue repository. This is ownership metadata, not an awarded tier. |
 | `log-when-unavailable` | Silver | todo | `events.py:_handle_registration_failure` warns on each failure; successful registration calls `C300XConnectionState.mark_connected` without a recovery log. Add transition-only loss/recovery assertions to `test_events.py` / `test_connection_state.py`; outbound agent traffic makes the old exemption invalid. |

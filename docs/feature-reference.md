@@ -46,6 +46,17 @@ Maintenance controls (SSH, noAuth, mDNS discovery, firewall patches, GUI
 reload, reboot, agent update/remove) are device entities, not a settings area;
 they write to the device only when the entity, button or Repair is used.
 
+**Connection paths for the live picture** is available in setup and under
+**Video and audio** in options. Its default is **IPv4 and local IPv6 (ULA) -
+recommended** (`prefer_ipv4_ula`). The
+[ICE policy reference](media-troubleshooting.md#connection-paths-for-the-live-picture)
+explains all four choices, the address filters and preserved relay/mDNS paths.
+No address or token is entered in this selector.
+
+To uninstall, use the [HA removal guide](advanced-maintenance.md#remove-home-assistant-integration).
+Deleting an HA entry, uninstalling the downloaded package and removing the device
+agent have different effects on settings, media and backups.
+
 ## Main User Features
 
 | Feature | User surface | Notes |

@@ -92,6 +92,11 @@ Recommended first-run choices:
 
 Feature choices can be changed later from the integration options.
 
+For **Connection paths for the live picture**, keep the default
+**IPv4 and local IPv6 (ULA) - recommended** unless your network needs another
+policy. See [all four ICE choices and their exceptions](media-troubleshooting.md#connection-paths-for-the-live-picture)
+before changing it; this field does not configure device callbacks or a firewall.
+
 ## 5. Check Media Readiness
 
 After setup, open the `Media readiness` diagnostic sensor.
@@ -234,6 +239,14 @@ Use [Feature reference](feature-reference.md) to decide what to enable next:
 - display pages,
 - Ring Capture and local Wyoming transcription,
 - maintenance controls.
+
+## Removing the Integration
+
+For removal rather than an update, follow the
+[HA entry and custom-integration removal guide](advanced-maintenance.md#remove-home-assistant-integration).
+It explains retained media/configuration and backups. Removing the native device
+agent is a separate, explicitly requested maintenance operation, not part of
+ordinary HA-entry deletion.
 
 ## If Something Fails
 

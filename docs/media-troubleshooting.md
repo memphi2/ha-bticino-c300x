@@ -22,6 +22,47 @@ card or call `bticino_c300x.stop_doorbell_video`, then retry.
 If this happens directly after updating the native agent or changing display
 pages, reload the integration once and re-check `Media readiness`.
 
+## Connection Paths for the Live Picture
+
+During setup, or under **Configure > Video and audio**, **Connection paths for
+the live picture** selects which ICE addresses the HA WebRTC provider may send
+to the browser. Use it when video cannot connect or freezes on a multi-VLAN or
+dual-stack network. Start with the default: **IPv4 and local IPv6 (ULA) -
+recommended** (`prefer_ipv4_ula`). You select a policy; no address or token needs
+to be entered in this field.
+
+| UI choice | Stored value | Non-relay address groups removed | When useful |
+| --- | --- | --- | --- |
+| All addresses | `all` | None | When your network needs an address excluded by another policy, or to compare without filtering. |
+| Without link-local addresses (fe80::, 169.254.x.x) | `drop_link_local` | IPv4 link-local; IPv6 link-local | Keep other IPv6 paths, but exclude addresses that normally cannot cross subnets. |
+| IPv4 and local IPv6 (ULA) - recommended | `prefer_ipv4_ula` | IPv4 link-local; IPv6 link-local; Other IPv6 | Default for IPv4/ULA networks; excludes changing or unroutable non-ULA IPv6 paths. This filters candidates, not their priority. |
+| IPv4 only | `ipv4_only` | IPv4 link-local; IPv6 link-local; Other IPv6; IPv6 ULA | Diagnose a network whose usable direct media path is IPv4. The exceptions below still apply. |
+
+IPv4 link-local means `169.254.0.0/16`; IPv6 link-local means `fe80::/10`.
+IPv6 ULA means `fc00::/7`. **Other IPv6** is the code's category for every
+remaining IPv6 address, not just globally routable ones. IPv4-mapped IPv6
+addresses are classified by their embedded IPv4 address. Other IPv4 addresses
+are kept by all four policies.
+
+The filter preserves **TURN relay candidates**, **mDNS `.local` candidates**,
+unknown addresses and unparseable candidate lines under every policy. It does
+not resolve mDNS names to enforce a family restriction. Consequently, **IPv4
+only is not a guarantee of an IPv4-only connection** or a firewall policy.
+
+Filtering applies to provider-to-browser candidates, including candidates in
+the answer SDP and later trickled candidates. Browser-to-provider candidates
+are not filtered. It does not change the C300X IP address, RTSP transport,
+callback HTTP/HTTPS setting, firewall or codec, and saving this setting does not
+install a device patch. Save the selected policy, close the old stream and open
+it again to compare the result. If the change removes your only working path,
+restore the previous choice; do not change device firewall/codec settings as an
+automatic follow-up.
+
+Implementation reference:
+[`webrtc_ice_filter.py`](../custom_components/bticino_c300x/camera_media/webrtc_ice_filter.py),
+[`const.py`](../custom_components/bticino_c300x/const.py), and
+[`test_webrtc_ice_filter.py`](../tests/test_webrtc_ice_filter.py).
+
 ## Device Reboots After PCMU On-demand Video
 
 Native agent **2.0.0** includes the correction for undersized PCMU silence packets

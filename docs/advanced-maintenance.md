@@ -206,11 +206,102 @@ using its existing callback registration mechanism. Switching back to HTTP and
 restarting releases the TLS libraries. Certificate failures never fall back to
 unencrypted HTTP.
 
+## Remove Home Assistant Integration
+
+Removing an HA entry, removing the downloaded integration, and uninstalling the
+native device agent are **separate operations**. None is required for a normal
+update. Do not select **Remove device agent** just to remove an HA entry or fix
+a dashboard. Deleting the HA entry does not uninstall the device agent or
+restore persistent C300X settings.
+
+1. Make a Home Assistant backup before removing configuration. Export any visitor
+   images or Ring Captures you want to keep, and check whether your backup
+   actually includes their media storage. External media and device files may
+   need separate backups; an HA backup is not a C300X firmware/config backup.
+   Follow the [official backup guide](https://www.home-assistant.io/common-tasks/general/backups/).
+2. Stop viewing/recording sessions and disable or adapt automations that use this
+   C300X. Decide separately whether the device agent should remain installed.
+   If you explicitly intend to uninstall it too, read [Remove Agent](#remove-agent)
+   and complete that operation while its HA maintenance entity is still present.
+   Otherwise leave the device installation alone.
+3. Open **Settings > Devices & services**, select **BTicino C300X**, and choose
+   the three-dot menu of the intended entry, then **Delete** and confirm. Check
+   the entry name when several C300X devices are configured. This removes that
+   entry's HA configuration, devices and entities; the integration releases its
+   runtime listeners/tasks and clears its Repair issues. Follow any HA restart
+   prompt. See the [official entry-removal steps](https://www.home-assistant.io/common-tasks/general/#removing-an-integration-instance).
+4. Remove broken card references, dashboard views and automations manually, or
+   point them at another device deliberately. Imported blueprints and automations
+   are not automatically removed. Keep the integration package while another
+   C300X entry still uses it.
+5. Only when no C300X entries need the package, uninstall the downloaded custom
+   integration through the method used to install it:
+
+   - **Marketplace (HA 2026.11+):** open **Settings > Marketplace**, the BTicino
+     C300X repository, then its three-dot menu and **Uninstall**. Confirm and
+     follow the restart prompt. If entries still exist, the dialog offers
+     **View integration** or **Delete and uninstall**; use the combined action
+     only when deletion of those entries is intended. [Official Marketplace instructions](https://www.home-assistant.io/integrations/marketplace/#uninstalling-a-repository).
+   - **HACS:** open the downloaded BTicino C300X repository's three-dot menu and
+     select **Remove**, then restart Home Assistant as requested. This removes
+     downloaded code, not all related data. [Official HACS instructions](https://www.hacs.xyz/docs/use/repositories/dashboard/#removing-a-repository).
+   - **Manual installation:** after deleting all C300X entries, stop HA and
+     remove only `custom_components/bticino_c300x` from its configuration
+     directory, then start HA again. Do not remove the whole `custom_components`
+     directory or manually edit HA's config-entry registry.
+
+### Data That Can Remain
+
+- **Device installation:** if you did not explicitly uninstall the agent, its
+  files, tokens/config, startup integration, patches and device-file backups
+  remain. The device may still try its old HA callbacks; deleting an HA entry
+  is not credential revocation or a device reset. Reconfiguring or removing
+  those device settings is a separate, deliberate maintenance operation.
+- **Saved media:** visitor images remain under
+  `<HA media root>/c300x/snapshots/<device-directory>/`; Ring Capture recordings
+  and metadata remain under the `c300x` media area or a chosen export location.
+  Snapshot retention stops for an unloaded/removed entry. Re-adding the device
+  creates a new entry ID and does not adopt that old snapshot directory.
+  Review/export these files and delete only the identified device's data if you
+  want it erased; never delete a shared media root wholesale.
+- **HA-local settings and UI:** the snapshot switch's private storage record
+  `.storage/bticino_c300x.snapshots.<entry_id>` can remain, as can downloaded
+  blueprints, dashboard/card resources, customized automations and HA history.
+  Clean up user-facing references through HA first. Do not edit `.storage` while
+  HA is running; any manual cleanup needs a backup and positive identification
+  of the removed entry. Package removal is not a historical-data purge.
+- **Backups and copies:** old HA backups, device backups and exported recordings
+  may still contain credentials, configuration or personal media. Decide their
+  retention separately. Removing live files does not erase older backup copies;
+  keep backups private, and do not discard the only recovery copy prematurely.
+
+HA/HACS UI sources checked on **2026-11-16**. Removal behavior was checked against
+`__init__.py:async_remove_entry`, `runtime_manager.py`, `events.py`,
+`snapshots.py` and `snapshot_store.py`; no removal operation was performed.
+
 ## Remove Agent
 
 Use the **Remove device agent** maintenance button only when uninstalling or
 recovering the C300X. The flow removes agent-owned files and supported patch
 state. It should not be part of normal update work.
+
+This is an explicit **device-writing, rebooting operation**, not the HA-entry
+Delete action. Arrange a maintenance window with no active call or recording,
+preserve needed configuration/media and recovery backups first, then enable/use
+the maintenance entity only if you intend this removal. Keep the HA entry until
+the device operation reports its outcome; do not repeatedly retry an uncertain
+result or manually delete recovery files.
+
+The current removal script restores supported QML, firewall and media patches,
+removes startup files and the agent directory (including `config.json`), and on
+success also removes its managed device-file backup root before scheduling a
+device reboot. It starts SSH for recovery. On restoration failure it reports an
+error and retains agent files/backups; this is not a promise that every earlier
+step was rolled back. It is not a factory reset and does not erase HA media or
+HA backups. Review any remaining device users/settings separately; never assume
+all device credentials or unrelated firmware configuration were reset.
+
+Source: [`native_agent/scripts/remove_agent.sh`](../native_agent/scripts/remove_agent.sh).
 
 ## Developer Checks
 

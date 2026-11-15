@@ -862,7 +862,10 @@ async def _async_run_ffmpeg(
         "copy",
     ]
     if include_audio:
-        audio_filter = "aresample=48000:async=1:first_pts=0,pan=stereo|c0=c0|c1=c0"
+        # The device audio keeps its own sample rate and channel count; the
+        # resampler only keeps it in step with the video. MP4 needs AAC, which
+        # browsers play at the device's 8 kHz mono as well.
+        audio_filter = "aresample=async=1:first_pts=0"
         if audio_gain_db:
             # The limiter only catches what the gain may push over full scale;
             # at 0 dB the level of the device audio is left alone.
@@ -873,14 +876,10 @@ async def _async_run_ffmpeg(
                 "0:a:0?",
                 "-af",
                 audio_filter,
-                "-ac",
-                "2",
-                "-ar",
-                "48000",
                 "-c:a",
                 "aac",
                 "-b:a",
-                "128k",
+                "48k",
             ]
         )
     else:

@@ -941,15 +941,19 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
 
     command = commands[0]
     audio_filter = command[command.index("-af") + 1]
-    assert "aresample=48000" in audio_filter
-    assert "pan=stereo" in audio_filter
+    # The device audio is neither resampled to another rate nor spread over
+    # two channels; only the codec changes, because MP4 needs AAC.
+    assert audio_filter.startswith("aresample=async=1:first_pts=0")
+    assert "48000" not in audio_filter
+    assert "pan=" not in audio_filter
     assert "dynaudnorm=" not in audio_filter
     assert "alimiter=" in audio_filter
     assert "volume=6dB" in audio_filter
     assert "volume=30dB" not in audio_filter
-    assert command[command.index("-ac") + 1] == "2"
-    assert command[command.index("-ar") + 1] == "48000"
-    assert command[command.index("-b:a") + 1] == "128k"
+    mp4_audio = command[command.index("-af"):command.index("-movflags")]
+    assert "-ac" not in mp4_audio and "-ar" not in mp4_audio
+    assert mp4_audio[mp4_audio.index("-c:a") + 1] == "aac"
+    assert mp4_audio[mp4_audio.index("-b:a") + 1] == "48k"
     assert str(tmp_path / "work" / "latest.raw.wav") in command
     assert not any("latest.processed.wav" in part for cmd in commands for part in cmd)
     assert len(commands) == 5

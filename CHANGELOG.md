@@ -82,6 +82,8 @@
   could leave video dead after the next agent restart.
 - Close the stream on the card at once when Home Assistant ends a session
   itself, instead of showing a frozen picture until the connection times out.
+- Ignore the device GUI's transient media-close notification during on-demand
+  startup, so it cannot end the card's stream before the first video frame.
 - Refuse MQTT settings without any topic; saved, they stopped the agent at its
   next start.
 - Keep a memo delete button usable after a failed read.

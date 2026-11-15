@@ -2804,9 +2804,12 @@ static void handle_ui_media_closed(
 )
 {
     if (runtime != NULL) {
+        /* The GUI also emits onCallEnded during on-demand startup. Apply the
+         * same transition guard as UDP before consuming the close event. */
         if (
             runtime->video != NULL
             && !c300x_media_session_stop_in_progress(runtime->video)
+            && !c300x_video_ignore_transient_media_closed(runtime->video)
             && c300x_video_consume_media_closed_event(runtime->video)
         ) {
             dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0);

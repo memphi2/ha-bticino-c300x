@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=f5eee003fa82e689";
+} from "./c300x-translations.js?v=7e926d3b2245d2bb";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,24 +15,24 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=f5eee003fa82e689";
+} from "./c300x-entity-resolver.js?v=7e926d3b2245d2bb";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=f5eee003fa82e689";
-import { C300XCardActions } from "./c300x-card-actions.js?v=f5eee003fa82e689";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=f5eee003fa82e689";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=f5eee003fa82e689";
+} from "./c300x-card-editor.js?v=7e926d3b2245d2bb";
+import { C300XCardActions } from "./c300x-card-actions.js?v=7e926d3b2245d2bb";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=7e926d3b2245d2bb";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=7e926d3b2245d2bb";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=f5eee003fa82e689";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=f5eee003fa82e689";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=f5eee003fa82e689";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=f5eee003fa82e689";
+} from "./c300x-state-model.js?v=7e926d3b2245d2bb";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=7e926d3b2245d2bb";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=7e926d3b2245d2bb";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=7e926d3b2245d2bb";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -510,6 +510,8 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._secondaryEl.textContent = this._error
       || this._notice
       || this._labelOrRaw(view.secondaryKey);
+    // The footer stays one row, so a long message is cut; the tooltip has it all.
+    this._secondaryEl.title = this._secondaryEl.textContent;
     this._secondaryEl.classList.toggle("error", !!this._error);
     this._secondaryEl.classList.toggle("notice", !this._error && !!this._notice);
     this._mediaEl.style.display = view.showMedia ? "" : "none";
@@ -1208,13 +1210,15 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
     const hasRepair = c300xMediaReadinessHasRepair(entity);
     this._readinessEl.classList.toggle("actionable", hasRepair);
-    this._readinessTextEl.textContent = this._readinessLabel(entity, normalized);
+    const readinessLabel = this._readinessLabel(entity, normalized);
+    this._readinessTextEl.textContent = readinessLabel;
     if (hasRepair) {
       this._readinessEl.title = this._label("open_repairs");
       this._readinessEl.setAttribute("role", "button");
       this._readinessEl.setAttribute("aria-label", this._label("open_repairs"));
     } else {
-      this._readinessEl.removeAttribute("title");
+      // A narrow card shows only the icon; the tooltip then carries the text.
+      this._readinessEl.title = readinessLabel;
       this._readinessEl.removeAttribute("role");
       this._readinessEl.removeAttribute("aria-label");
     }

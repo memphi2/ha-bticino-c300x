@@ -311,6 +311,8 @@ test("readiness warnings do not open Repairs while blockers do", async () => {
     "Ring Call requires Home Assistant forwarding",
   );
   assert.equal(readinessElement.attributes.has("role"), false);
+  // A narrow card cuts the readiness text; the tooltip carries it in full.
+  assert.equal(readinessElement.title, "Ring Call requires Home Assistant forwarding");
   readinessElement.dispatch("click");
   assert.deepEqual(paths, []);
 

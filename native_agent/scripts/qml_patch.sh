@@ -1120,7 +1120,6 @@ patch_main_app() {
             print "        property bool stopped: false"
             print "        property string errorKey: \"\""
             print "        property string label: C300XPreferencesText.text(trsl.language, errorKey || \"ha_feedback_colors\") + trsl.empty"
-            print "        property variant request: null"
             print "        property alias deadline: c300xPreferencesDeadline"
             print "        function load() { C300XPreferencesApi.loadDisplayPreferences(c300xDisplayPreferences) }"
             print "        function setFeedbackEnabled(value) { C300XPreferencesApi.saveDisplayPreferences(c300xDisplayPreferences, value) }"

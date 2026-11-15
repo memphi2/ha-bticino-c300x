@@ -248,14 +248,14 @@ Item {
 }
 """
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "72f2b25c3662768cd8dab7aa2da29b49f319635b24c2d38e963d54816049fafe",
+    "MainApp.qml": "91f97655a23dd3e46a14b5d005018964066c2bf751520c84b6dee6ec013e6d29",
     "Components/Settings/GeneralsChoice.qml": "6b7758186c430e8623c4f97107fd8a68324c0b99ba9c7d15113da643417a4139",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "f95b9e0e83d6c63fb8ca4bd3a768952284864d7bf75f048b4cc9f1e327cf27ad",
     "HomeAssistant.qml": "d5d552d69d734042b764164b5075419c800e6ff55015a87a53222cdba59f4937",
-    "js/c300x_ha.js": "562a47eab137e6aab425c5cadc0101410f720404adfcc854d5f0f4bf8d26d36f",
+    "js/c300x_ha.js": "ad26df52213e83b681a8192a4e4ca172576a1436838080d5c8cf13bd288dcec8",
     "js/c300x_i18n.js": "cf5b4c49e71846c19671fe1625c348bf26673ef37e42fb5c9164d1e64750b937",
     "js/c300x_memos.js": "4d7c36842de9372c12ad09e2bcdfca8e842518156c53e7da0068de1ab9e86a30",
 }

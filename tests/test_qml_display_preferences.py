@@ -73,6 +73,7 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
     assert "checked: global.beepEnabled" in patched
     assert "onTouched: global.beepEnabled = checked" in patched
     assert "Qt.createQmlObject" not in (gui / "MainApp.qml").read_text()
+    assert "property variant request:" not in (gui / "MainApp.qml").read_text()
     assert _run_qml_patch(tmp_path, gui, backup, "apply")["changed_files"] == 0
     assert (backup / SETTINGS).read_bytes() == original
     _run_qml_patch(tmp_path, gui, backup, "restore-all")

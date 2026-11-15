@@ -1,6 +1,8 @@
 .pragma library
 
-// One GUI-owned request and deadline; no polling and no dynamic Qt objects.
+// Qt 4 property variants discard XHR methods and identity. Keep it in JS.
+var displayPreferenceRequest = null
+
 function loadDisplayPreferences(owner) {
     if (!owner.ready) requestDisplayPreferences(owner, null)
 }
@@ -11,27 +13,29 @@ function saveDisplayPreferences(owner, enabled) {
 }
 
 function cancelDisplayPreferences(owner) {
-    var request = owner.request
-    owner.request = null
+    var pending = displayPreferenceRequest
+    if (pending && pending.owner !== owner) return
+    displayPreferenceRequest = null
     owner.deadline.stop()
     owner.busy = false
-    if (request) {
+    if (pending) {
         owner.ready = false
         owner.errorKey = "display_settings_error"
-        request.onreadystatechange = function() {}
-        request.abort()
+        pending.request.onreadystatechange = function() {}
+        pending.request.abort()
     }
 }
 
 function requestDisplayPreferences(owner, enabled) {
-    if (owner.stopped || owner.busy) return
+    if (owner.stopped || owner.busy || displayPreferenceRequest) return
     var request = new XMLHttpRequest()
-    owner.request = request
+    var pending = {owner: owner, request: request}
+    displayPreferenceRequest = pending
     owner.busy = true
     owner.errorKey = ""
     request.onreadystatechange = function() {
-        if (request.readyState !== 4 || owner.stopped || owner.request !== request) return
-        owner.request = null
+        if (request.readyState !== 4 || owner.stopped || displayPreferenceRequest !== pending) return
+        displayPreferenceRequest = null
         owner.deadline.stop()
         owner.busy = false
         var data = null

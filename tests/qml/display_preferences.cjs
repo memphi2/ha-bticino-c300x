@@ -22,9 +22,13 @@ function runtime() {
     vm.runInContext(fs.readFileSync(path.join(jsRoot, "c300x_ha.js"), "utf8")
         .replace(/^\.pragma library\s*/, ""), api);
     const owner = {feedbackEnabled: true, ready: false, busy: false, stopped: false,
-        errorKey: "", request: null, deadline: {
+        errorKey: "", deadline: {
             running: false, restart() { this.running = true; }, stop() { this.running = false; },
         }};
+    Object.defineProperty(owner, "request", {
+        set() { throw new Error("Qt 4 cannot retain XHR objects in a QML variant"); },
+        get() { throw new Error("XHR must stay in JavaScript"); },
+    });
     return {api, owner, requests};
 }
 
@@ -86,9 +90,20 @@ for (const stopped of [false, true]) {
     api.loadDisplayPreferences(owner);
     assert.equal(requests.length, stopped ? 1 : 2);
     if (!stopped) {
+        lateCallback();
+        assert.equal(owner.busy, true, "late completion cannot clear the replacement request");
         requests[1].finish(200, {ok: true, feedback_enabled: false});
         assert.equal(owner.feedbackEnabled, false, "readback resolves an ambiguous save");
     }
+}
+
+{
+    const {api, owner, requests} = runtime();
+    api.loadDisplayPreferences(owner);
+    api.cancelDisplayPreferences({stopped: true});
+    assert.equal(requests[0].aborted, undefined, "a different owner cannot cancel this request");
+    requests[0].finish(200, {ok: true, feedback_enabled: true});
+    assert.equal(owner.ready, true);
 }
 
 function page(name, values) {

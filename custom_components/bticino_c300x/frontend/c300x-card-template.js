@@ -15,10 +15,13 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           position: relative;
           width: 100%;
           flex: 1 1 auto;
+          aspect-ratio: 688 / 480;
           background: #111;
           min-height: 0;
         }
         video {
+          position: absolute;
+          inset: 0;
           width: 100%;
           height: 100%;
           object-fit: contain;
@@ -55,20 +58,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           width: 100%;
           height: 100%;
           object-fit: contain;
-          pointer-events: none;
-        }
-        .snapshot-label {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-          max-width: calc(100% - 16px);
-          box-sizing: border-box;
-          padding: 4px 8px;
-          background: rgba(0, 0, 0, 0.75);
-          color: white;
-          font-size: 12px;
-          text-align: right;
-          overflow-wrap: anywhere;
           pointer-events: none;
         }
         [hidden] { display: none !important; }
@@ -346,7 +335,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           <video class="transition-video" playsinline autoplay></video>
           <div class="empty"></div>
           <img class="snapshot-preview" alt="" hidden>
-          <div class="snapshot-label" hidden></div>
         </div>
         <div class="body">
           <div class="row-actions">

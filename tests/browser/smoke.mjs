@@ -4,6 +4,7 @@ import { readFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname, sep } from "node:path";
 import puppeteer from "puppeteer-core";
+import { checkSnapshotLayout } from "./snapshot_layout.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontend = resolve(here, "../../custom_components/bticino_c300x/frontend");
@@ -46,19 +47,25 @@ try {
   await mkdir(artifacts, { recursive: true });
   await page.goto(origin);
   await page.waitForFunction(() => !!window.lab);
+  await checkSnapshotLayout(page, artifacts);
   const assertFooterLayout = async (label) => {
     const failures = await page.evaluate(() => {
       const root = lab.card.shadowRoot;
       const outer = lab.card.getBoundingClientRect();
       const body = root.querySelector(".body");
       const bodyRect = body.getBoundingClientRect();
-      const top = bodyRect.top + parseFloat(getComputedStyle(body).paddingTop);
+      const style = getComputedStyle(body);
+      const top = bodyRect.top + parseFloat(style.paddingTop);
+      const bottom = bodyRect.bottom - parseFloat(style.paddingBottom);
+      const center = (top + bottom) / 2;
       const failures = [];
       if (document.documentElement.scrollWidth > innerWidth) failures.push("page overflow");
       for (const selector of [".row-actions", ".device-actions"]) {
         const element = root.querySelector(selector);
         const rect = element.getBoundingClientRect();
-        if (rect.width && rect.height && Math.abs(rect.top - top) > 1) failures.push(`${selector} not at top`);
+        if (rect.width && rect.height && Math.abs((rect.top + rect.bottom) / 2 - center) > 1) {
+          failures.push(`${selector} not vertically centered`);
+        }
       }
       const buttons = [...root.querySelectorAll("button")].filter((button) => button.getBoundingClientRect().width);
       for (const button of buttons) {
@@ -115,15 +122,16 @@ try {
         lab.hass.language = language;
         lab.card.hass = { ...lab.hass };
         await new Promise(requestAnimationFrame);
-        const label = lab.card._snapshotLabelEl;
-        const rect = label.getBoundingClientRect();
+        const image = lab.card._snapshotEl;
+        const rect = image.getBoundingClientRect();
         const media = lab.card.shadowRoot.querySelector(".media").getBoundingClientRect();
-        return { text: label.textContent, expected: new Date(1800000000000).toLocaleString(language),
-          visible: !label.hidden && !lab.card._snapshotEl.hidden,
+        return { text: image.getAttribute("aria-label"), expected: new Date(1800000000000).toLocaleString(language),
+          visible: !image.hidden, overlay: !!lab.card.shadowRoot.querySelector(".snapshot-label"),
           contained: rect.left >= media.left && rect.bottom <= media.bottom,
-          top: Math.abs(rect.top - media.top - 8), right: Math.abs(media.right - rect.right - 8) };
+          top: Math.abs(rect.top - media.top), right: Math.abs(media.right - rect.right) };
       }, language);
-      assert.equal(result.text, result.expected);
+      assert.ok(result.text.endsWith(result.expected));
+      assert.equal(result.overlay, false);
       assert.equal(result.visible && result.contained, true, `${width}px ${language} snapshot bounds`);
       assert.ok(result.top < 1 && result.right < 1, `${width}px ${language} snapshot position`);
     }

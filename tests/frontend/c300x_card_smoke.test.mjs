@@ -69,7 +69,6 @@ function installFakeDom() {
           ".media",
           ".empty",
           ".snapshot-preview",
-          ".snapshot-label",
           ".body",
           ".row-action",
           ".action-icon",
@@ -183,7 +182,7 @@ function fakeHass({ cameraEntity, connection } = {}) {
   };
 }
 
-test("snapshot preview shows only its timestamp and hides during live video", async () => {
+test("snapshot preview has an accessible timestamp without an overlay and hides during live video", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?snapshot-wiring");
   const card = new (registry.get("c300x-doorbell-call-card"))();
@@ -200,7 +199,8 @@ test("snapshot preview shows only its timestamp and hides during live video", as
     const capturedAt = 1800000000;
     card._snapshots.showPreview("blob:archive", capturedAt);
     assert.equal(card._snapshotEl.hidden, false);
-    assert.equal(card._snapshotLabelEl.textContent, new Date(capturedAt * 1000).toLocaleString("en"));
+    assert.equal(card._snapshotLabelEl, undefined);
+    assert.ok(card._snapshotEl.attributes.get("aria-label").endsWith(new Date(capturedAt * 1000).toLocaleString("en")));
     assert.match(card._snapshotEl.attributes.get("aria-label"), /Archived image \(not live\)/);
     assert.equal(updates.at(-1).entryId, "entry-1");
     assert.equal(updates.at(-1).attributes, attrs);
@@ -214,7 +214,6 @@ test("snapshot preview shows only its timestamp and hides during live video", as
     attrs.stream_snapshots = false;
     card._updateState();
     assert.equal(card._snapshotEl.hidden, true);
-    assert.equal(card._snapshotLabelEl.hidden, true);
   } finally {
     card.disconnectedCallback();
   }

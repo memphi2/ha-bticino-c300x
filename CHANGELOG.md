@@ -34,6 +34,9 @@
 - Keep the card footer's text beside the buttons at every width instead of
   moving it below them. Text that does not fit is cut with an ellipsis and
   stays readable in the tooltip; an error or notice uses at most two lines.
+- Keep the card's image area the same size for snapshots and live video, and
+  remove its duplicate timestamp overlay. The optional timestamp in the saved
+  image remains unchanged.
 - Align the **Tone buttons** and **HA feedback** rows in the device's
   **Settings → General** with the buttons above them.
 - Record the audio track of a Ring Capture's MP4 with the device's own sample

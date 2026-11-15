@@ -87,7 +87,7 @@ Item {
                         anchors.right: parent.right
                         height: Math.max(0, row.height - 6)
                         text: row.consumer.value; textFormat: Text.PlainText
-                        color: row.consumer.watts === null ? "#c7d0d9" : "white"
+                        color: Consumers.finite(row.consumer.watts) ? "white" : "#c7d0d9"
                         font.pixelSize: text.length > 16 ? 12 : 16
                         font.bold: true
                         verticalAlignment: Text.AlignVCenter
@@ -100,7 +100,7 @@ Item {
                         objectName: "consumerBar"
                         y: row.height - 5; width: row.fraction * row.width; height: 4
                         color: row.consumer.color
-                        visible: row.consumer.watts !== null && row.consumer.watts > 0
+                        visible: Consumers.finite(row.consumer.watts) && row.consumer.watts > 0
                     }
                 }
             }

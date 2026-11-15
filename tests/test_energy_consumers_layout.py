@@ -29,6 +29,8 @@ def test_consumers_is_lazy_qtquick1_without_idle_polling():
     assert "repeat: false" in source
     assert 'source: root.visible && shown === "consumers" ? "C300XEnergyConsumers.qml" : ""' in parent
     assert 'property: "consumers"' in parent
+    assert 'color: Consumers.finite(row.consumer.watts) ? "white" : "#c7d0d9"' in source
+    assert 'visible: Consumers.finite(row.consumer.watts) && row.consumer.watts > 0' in source
     for token in ("Canvas", "QtQuick 2", "XMLHttpRequest", "kWh", 'text: "log"'):
         assert token not in source
 

@@ -1,4 +1,4 @@
-"""Frontend repair preserves stored dashboards across read failures."""
+"""Frontend repair preserves stored dashboards and their view layouts."""
 
 import asyncio
 from copy import deepcopy
@@ -63,3 +63,77 @@ def test_frontend_repair_initializes_only_missing_config(dashboard):
     dashboard._store.async_save.assert_awaited_once()
     saved = dashboard._store.async_save.call_args.args[0]["config"]
     assert saved["views"][0]["sections"][0]["cards"][0]["entity"] == "camera.door"
+
+
+@pytest.mark.parametrize("layout", [
+    pytest.param({"cards": [{"type": "entities", "entities": ["light.kitchen"]}]}, id="default-masonry"),
+    pytest.param({"type": "masonry", "cards": []}, id="explicit-masonry"),
+    pytest.param({"type": "masonry", "sections": [{"type": "grid", "cards": []}]}, id="masonry-with-inert-sections"),
+    pytest.param({"type": "sections"}, id="sections-missing-list"),
+    pytest.param({"type": "sections", "sections": []}, id="sections-empty-list"),
+    pytest.param({"type": "sections", "sections": [{"type": "grid", "cards": [
+        {"type": "entities", "entities": ["light.kitchen"]},
+    ]}]}, id="sections-existing-list"),
+])
+def test_frontend_repair_inserts_into_actual_view_layout_and_is_idempotent(dashboard, layout):
+    view = {"path": "home", "title": "Home", **deepcopy(layout)}
+    unrelated = {"path": "other", "cards": [{"type": "markdown", "content": "Keep"}]}
+    config = {"views": [view, deepcopy(unrelated)]}
+    dashboard._store.async_load.return_value = {"config": config}
+
+    async def repair_twice():
+        for _ in range(2):
+            assert await frontend._async_setup_lovelace_cards(
+                dashboard.hass, SimpleNamespace(), view_path="home",
+            ) == "/lovelace/home"
+
+    asyncio.run(repair_twice())
+    if layout.get("type") == "sections":
+        cards = view["sections"][0]["cards"]
+        assert "cards" not in view
+        before = layout.get("sections") or [{"cards": []}]
+        original_cards = before[0]["cards"]
+    else:
+        cards = view["cards"]
+        assert view.get("sections") == layout.get("sections")
+        original_cards = layout.get("cards", [])
+    assert cards[:-1] == original_cards
+    assert cards[-1]["type"] == "custom:c300x-doorbell-call-card"
+    assert cards[-1]["entity"] == "camera.door"
+    assert view.get("type") == layout.get("type")
+    assert config["views"][1] == unrelated
+    dashboard._store.async_save.assert_awaited_once()
+
+
+@pytest.mark.parametrize("view_type", [None, "masonry", "sections"])
+def test_frontend_repair_preserves_existing_card_without_duplicates(dashboard, view_type):
+    card = {"type": "custom:c300x-doorbell-call-card", "entity": "camera.door", "name": "My door"}
+    view = {"path": "home", "title": "Home"}
+    if view_type is not None:
+        view["type"] = view_type
+    if view_type == "sections":
+        view["sections"] = [{"type": "grid", "cards": [card]}]
+    else:
+        view["cards"] = [card]
+    config = {"views": [view]}
+    original = deepcopy(config)
+    dashboard._store.async_load.return_value = {"config": config}
+
+    async def repair_twice():
+        for _ in range(2):
+            await frontend._async_setup_lovelace_cards(
+                dashboard.hass, SimpleNamespace(), view_path="home",
+            )
+
+    asyncio.run(repair_twice())
+    assert config == original
+    dashboard._store.async_save.assert_not_awaited()
+
+
+@pytest.mark.parametrize("sections", ["invalid", [None], [{"cards": "invalid"}]])
+def test_frontend_repair_rejects_invalid_sections_instead_of_using_hidden_cards(sections):
+    view = {"type": "sections", "sections": sections, "cards": []}
+    original = deepcopy(view)
+    with pytest.raises(frontend._LovelaceCardSetupError):
+        frontend._cards_for_view(view)
+    assert view == original

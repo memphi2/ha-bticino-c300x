@@ -354,14 +354,18 @@ def _is_empty_placeholder_view(view: dict[str, Any]) -> bool:
 def _cards_for_view(view: dict[str, Any]) -> list[dict[str, Any]]:
     """Return the card list where generated cards should be added."""
 
-    sections = view.setdefault("sections", [{"type": "grid", "cards": []}])
-    if isinstance(sections, list) and sections:
+    if view.get("type") == "sections":
+        sections = view.setdefault("sections", [])
+        if not isinstance(sections, list):
+            raise _LovelaceCardSetupError("lovelace_config_invalid")
+        if not sections:
+            sections.append({"type": "grid", "cards": []})
         section = sections[0]
-        if isinstance(section, dict):
-            cards = section.setdefault("cards", [])
-            if isinstance(cards, list):
-                return cards
-    cards = view.setdefault("cards", [])
+        if not isinstance(section, dict):
+            raise _LovelaceCardSetupError("lovelace_config_invalid")
+        cards = section.setdefault("cards", [])
+    else:
+        cards = view.setdefault("cards", [])
     if isinstance(cards, list):
         return cards
     raise _LovelaceCardSetupError("lovelace_config_invalid")

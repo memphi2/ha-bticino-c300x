@@ -20,6 +20,7 @@ def test_native_alert_logic(script: str) -> None:
 
 
 @pytest.mark.parametrize("mode,fault,error", [
+    ("ack", "none", None),
     ("localization", "none", None),
     ("transport", "none", None),
     ("touch", "none", None),

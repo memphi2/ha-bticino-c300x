@@ -1653,11 +1653,18 @@ function sendForward(entry) {
             finishForward(xhr)
         }
     }
-    xhr.open("GET", BASE_URL + entry.path)
-    xhr.send()
+    try {
+        xhr.open("GET", BASE_URL + entry.path)
+        xhr.send()
+    } catch (error) {
+        xhr.onreadystatechange = function() {}
+        try { xhr.abort() } catch (abortError) {}
+        removeConnection(xhr)
+        try { deliverForward(xhr, "transport error") } finally { finishForward(xhr) }
+    }
 }
 
-function deliverForward(xhr) {
+function deliverForward(xhr, transportError) {
     var waiters = xhr.waiters
     // Taken before the first callback runs: a callback can start the next
     // request, and an answered read must not still collect waiters.
@@ -1665,16 +1672,16 @@ function deliverForward(xhr) {
     xhr.sharedPath = ""
     if (!commandScopeCurrent(xhr.scope)) return
     var data = null
-    var failure = ""
+    var failure = transportError || ""
     if (xhr.scope && Date.now() >= xhr.scope.expires) {
         failure = "command expired"
-    } else if (xhr.status === 200) {
+    } else if (!failure && xhr.status === 200) {
         try {
             data = JSON.parse(xhr.responseText)
         } catch (error) {
             failure = "Invalid JSON"
         }
-    } else {
+    } else if (!failure) {
         failure = "API error: " + xhr.status
     }
     for (var i = 0; i < waiters.length; i++) {

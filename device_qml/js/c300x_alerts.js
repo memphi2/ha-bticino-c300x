@@ -12,7 +12,7 @@ function runtimeFor(owner) {
 }
 
 function attach(owner, io) {
-    var runtime = {owner: owner, controller: createController(io), pendingRequest: null, ackRequest: null}
+    var runtime = {owner: owner, controller: createController(io), pendingRequest: null, ackToken: null}
     runtimes.push(runtime)
     return runtime
 }
@@ -233,12 +233,20 @@ function createController(io) {
     }
 
     function acknowledge() {
-        var command = finish("ack")
-        if (!command || stopped) return
-        if (!io.blocked() && io.screen() === io.normal) {
+        var item = active
+        if (!item || item.ackPending || !current(item)) return
+        relinquish(item)
+        item.ackPending = true
+        if (io.screen() === io.normal) {
             try { io.simulateClick() } catch (error) {}
         }
-        if (!stopped) io.ack(command)
+        if (current(item)) io.ack(item.command)
+    }
+
+    function acknowledged(success) {
+        if (!active || !active.ackPending || !current(active)) return
+        active.ackPending = false
+        if (success) finish("ack")
     }
 
     function destroy() {
@@ -248,5 +256,5 @@ function createController(io) {
     }
 
     return {receive: receive, tick: tick, preempt: preempt, userInteraction: userInteraction,
-        screenChanged: screenChanged, acknowledge: acknowledge, destroy: destroy}
+        screenChanged: screenChanged, acknowledge: acknowledge, acknowledged: acknowledged, destroy: destroy}
 }

@@ -33,7 +33,7 @@ function fixture(options = {}) {
             f.beeps.push(f.now); return true;
         },
         show(c) { f.visible = c; }, hide() { f.visible = null; f.order.push("hide"); },
-        ack(c) { f.acks.push(c); f.order.push("ack"); }
+        ack(c) { f.acks.push(c); f.order.push("ack"); if (!f.deferAck) f.c.acknowledged(true); }
     };
     f.c = logic.createController(io);
     f.step = (ms = 250) => { f.now += ms; f.c.tick(); };
@@ -96,9 +96,21 @@ assert.ok(logic.validate(command({wake_duration: 0, sound_duration: 300, expires
 {
     const f = fixture(); f.c.receive(command()); f.advance(500);
     f.c.acknowledge(); const wakes = f.wakes.length; f.advance(40000);
-    assert.equal(f.acks.length, 1); assert.deepEqual(f.order, ["hide", "ack"]);
+    assert.equal(f.acks.length, 1); assert.deepEqual(f.order, ["ack", "hide"]);
     assert.equal(f.releases.length, 0); assert.equal(f.wakes.length, wakes);
     assert.equal(f.beeps.length, 1); f.c.acknowledge(); assert.equal(f.acks.length, 1);
+}
+{
+    const f = fixture({deferAck: true}); f.c.receive(command());
+    f.c.acknowledge(); f.c.acknowledge();
+    assert.equal(f.acks.length, 1); assert.ok(f.visible, "pending is not acknowledged");
+    const effects = [f.beeps.length, f.wakes.length, f.releases.length];
+    f.advance(10000);
+    assert.deepEqual([f.beeps.length, f.wakes.length, f.releases.length], effects);
+    f.c.acknowledged(false); assert.ok(f.visible, "failure keeps notice visible");
+    f.advance(1000); assert.equal(f.acks.length, 1, "failure must not retry automatically");
+    f.c.acknowledge(); assert.equal(f.acks.length, 2);
+    f.c.acknowledged(true); assert.equal(f.visible, null);
 }
 for (const cancel of ["preempt", "destroy"]) {
     const f = fixture(); const c = command(); f.c.receive(c); f.c[cancel]();

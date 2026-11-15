@@ -3,6 +3,7 @@ import BtObjects 2.0
 import BtClass 1.0
 import "js/c300x_alerts.js" as Alerts
 import "js/c300x_i18n.js" as I18n
+import "js/c300x_ha.js" as Api
 
 Item {
     id: root
@@ -11,6 +12,9 @@ Item {
     property variant notice: null
     property int pollGeneration: 0
     property int resumeAttempts: 5
+    property int runtimeGeneration: 0
+    property bool acknowledging: false
+    property bool ackFailed: false
     property string uiLanguage: trsl.language
     property string acknowledgeLabel: uiText("dismiss_notification")
     property color accent: !notice || notice.severity === "info" ? "#68baff" : notice.severity === "warning" ? "#f1c40f" : "#ff6b6b"
@@ -142,30 +146,38 @@ Item {
         var runtime = Alerts.runtimeFor(root)
         if (stopped || !runtime) return
         abortAcknowledgement()
-        var request = new XMLHttpRequest()
-        runtime.ackRequest = request
-        request.onreadystatechange = function() {
-            if (stopped || Alerts.runtimeFor(root) !== runtime || runtime.ackRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
-            runtime.ackRequest = null
-            ackTimeout.stop()
-        }
+        var token = {}
+        runtime.ackToken = token
+        acknowledging = true
         var option = JSON.stringify({revision: command.revision, action_id: null})
-        var url = "http://127.0.0.1:8090/homeassistant?domain=c300x&service=toggle&entities=" +
+        var path = "/homeassistant?domain=c300x&service=toggle&entities=" +
             encodeURIComponent("notification." + command.notification_id) + "&option=" + encodeURIComponent(option)
+        function complete(success) {
+            if (!stopped && Alerts.runtimeFor(root) === runtime && runtime.ackToken === token) finishAcknowledgement(success)
+        }
+        ackTimeout.restart()
         try {
-            request.open("GET", url, true)
-            ackTimeout.restart()
-            request.send()
-        } catch (error) { abortAcknowledgement() }
+            Api.getJson(path, function(data) { complete(!!data && data.ok === true) },
+                function() { complete(false) }, Api.commandScope(root, ""))
+        } catch (error) { complete(false) }
+    }
+
+    function finishAcknowledgement(success) {
+        var runtime = Alerts.runtimeFor(root)
+        if (!runtime || !runtime.ackToken) return
+        abortAcknowledgement()
+        ackFailed = !success
+        runtime.controller.acknowledged(success)
     }
 
     function abortAcknowledgement() {
         ackTimeout.stop()
+        Api.cancelPageCommands(root)
+        runtimeGeneration += 1
         var runtime = Alerts.runtimeFor(root)
-        if (!runtime) return
-        var request = runtime.ackRequest
-        runtime.ackRequest = null
-        if (request) { request.onreadystatechange = function() {}; request.abort() }
+        if (runtime) runtime.ackToken = null
+        acknowledging = false
+        ackFailed = false
     }
 
     function initialize() {
@@ -180,8 +192,8 @@ Item {
             releaseNormal: function() { global.screenState.disableState(ScreenState.Normal) },
             soundReady: function() { return root.soundReady() },
             beep: function(guard) { return root.shortBeep(guard) },
-            show: function(command) { root.notice = command; messageScroll.contentY = 0; effects.restart() },
-            hide: function() { effects.stop(); root.notice = null },
+            show: function(command) { root.abortAcknowledgement(); root.notice = command; messageScroll.contentY = 0; effects.restart() },
+            hide: function() { root.abortAcknowledgement(); effects.stop(); root.notice = null },
             ack: function(command) { root.sendAcknowledgement(command) }
         })
         waitForCommand()
@@ -206,7 +218,7 @@ Item {
     Timer { id: effects; interval: 250; repeat: true; onTriggered: root.tick() }
     Timer { id: reconnect; interval: 30000; repeat: false; onTriggered: root.waitForCommand() }
     Timer { id: resume; interval: 100; repeat: false; onTriggered: root.waitForCommand() }
-    Timer { id: ackTimeout; interval: 10000; repeat: false; onTriggered: root.abortAcknowledgement() }
+    Timer { id: ackTimeout; interval: 10000; repeat: false; onTriggered: root.finishAcknowledgement(false) }
     Component.onCompleted: initialize()
     Component.onDestruction: shutdown()
 
@@ -277,15 +289,16 @@ Item {
             border.color: "white"; radius: 4
             Text {
                 anchors.fill: parent; anchors.margins: 8
-                text: root.acknowledgeLabel
+                text: root.acknowledging ? root.uiText("sending") : root.ackFailed ? root.uiText("alert_ack_retry") : root.acknowledgeLabel
                 textFormat: Text.PlainText
-                font.pixelSize: 22; color: "white"
+                font.pixelSize: root.ackFailed ? 18 : 22; color: root.ackFailed ? "#ffd166" : "white"
                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
             MouseArea {
                 id: acknowledgeMouse
                 anchors.fill: parent
+                enabled: !root.acknowledging
                 onPressed: root.userInteraction()
                 onClicked: root.acknowledge()
             }

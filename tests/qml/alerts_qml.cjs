@@ -4,6 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const qml = fs.readFileSync(path.join(__dirname, "../../device_qml/C300XAlerts.qml"), "utf8");
 const js = fs.readFileSync(path.join(__dirname, "../../device_qml/js/c300x_alerts.js"), "utf8");
+const apiSource = fs.readFileSync(path.join(__dirname, "../../device_qml/js/c300x_ha.js"), "utf8");
 const i18n = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(__dirname, "../../device_qml/js/c300x_i18n.js"), "utf8")
     .replace(/^\.pragma library\s*/, ""), i18n);
@@ -21,6 +22,8 @@ function timer() {
 function fixture(sharedEngine) {
     const requests = [];
     const events = [];
+    let now = BASE;
+    class Clock extends Date { getTime() { return now; } static now() { return now; } }
     const audio = {state: 0, audioAccess: false, flag: false,
         isStateEnabled(state) { assert.equal(state, 1); return this.flag; },
         enableState(state) {
@@ -33,7 +36,7 @@ function fixture(sharedEngine) {
         this.readyState = 0; this.status = 0; this.headers = {}; this.aborted = false;
         requests.push(this);
         this.open = (method, url, async) => {
-            this.method = method; this.url = url; assert.equal(async, true);
+            this.method = method; this.url = url; this.readyState = 1; assert.notEqual(async, false);
             if (failOpen) throw Error("open failed");
         };
         this.setRequestHeader = (name, value) => { this.headers[name] = value; };
@@ -47,11 +50,13 @@ function fixture(sharedEngine) {
     XHR.DONE = 4;
     const engine = sharedEngine || vm.createContext({});
     if (!sharedEngine) vm.runInContext(js.replace(/^\.pragma library\s*/, ""), engine);
+    const api = vm.createContext({XMLHttpRequest: XHR, Date: Clock});
+    vm.runInContext(apiSource.replace(/^\.pragma library\s*/, ""), api);
     const context = vm.createContext({
         blocked: false, stopped: false, visible: true, notice: null,
-        pollGeneration: 0, resumeAttempts: 5,
-        XMLHttpRequest: XHR, Alerts: engine, I18n: i18n, uiLanguage: "en",
-        Date: class extends Date { getTime() { return BASE; } },
+        pollGeneration: 0, resumeAttempts: 5, runtimeGeneration: 0, acknowledging: false, ackFailed: false,
+        XMLHttpRequest: XHR, Alerts: engine, Api: api, I18n: i18n, uiLanguage: "en",
+        Date: Clock,
         effects: timer(), reconnect: timer(), resume: timer(), ackTimeout: timer(), messageScroll: {contentY: 77},
         ScreenState: {ScreenOff: 0, Normal: 2}, AudioState: {Idle: 0, Beep: 1, RingtoneMute: 4},
         global: {audioState: audio, screenState: {state: 2, screensaverInterval: 20000,
@@ -61,14 +66,15 @@ function fixture(sharedEngine) {
     context.root = context;
     // Node does not implement Qt 4 QVariant conversion. Fail closed if any
     // runtime handle is ever stored on the QML owner instead of the JS module.
-    for (const name of ["controller", "pendingRequest", "ackRequest"]) {
+    for (const name of ["controller", "pendingRequest", "ackRequest", "ackToken"]) {
         Object.defineProperty(context, name, {
             get() { throw Error("Qt 4 cannot retain " + name + " in a QML variant"); },
             set() { throw Error("Qt 4 cannot retain " + name + " in a QML variant"); }
         });
     }
     vm.runInContext(methods, context);
-    return {c: context, requests, events, audio, engine,
+    return {c: context, requests, events, audio, engine, api,
+        advance(ms) { now += ms; },
         get runtime() { return vm.runInContext("Alerts.runtimeFor(root)", context); },
         resume() { assert.equal(context.resume.running, true); context.resume.running = false; context.waitForCommand(); },
         failOpen(value) { failOpen = value; }, failSend(value) { failSend = value; }};
@@ -240,13 +246,12 @@ for (const guard of ["blocked", "visible"]) {
 }
 {
     const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload);
-    let noticeAtSend, runningAtSend;
-    // Observe state at the acknowledgement API boundary, not just after the call.
-    const original = f.c.sendAcknowledgement;
-    f.c.sendAcknowledgement = c => {
-        noticeAtSend = f.c.notice; runningAtSend = f.c.effects.running; original(c);
-    };
-    f.c.acknowledge(); assert.equal(noticeAtSend, null); assert.equal(runningAtSend, false);
+    f.api.getJsonShared("/ui/state", () => {}, () => {});
+    const read = f.requests.at(-1), count = f.requests.length;
+    f.c.acknowledge(); f.c.acknowledge();
+    assert.equal(f.requests.length, count, "ack waits for the occupied display slot");
+    assert.equal(f.c.acknowledging, true); assert.ok(f.c.notice);
+    read.complete(200, {});
     const ack = f.requests.at(-1); const url = new URL(ack.url);
     assert.equal(url.pathname, "/homeassistant");
     assert.equal(url.searchParams.get("domain"), "c300x");
@@ -255,24 +260,121 @@ for (const guard of ["blocked", "visible"]) {
     assert.deepEqual(JSON.parse(url.searchParams.get("option")), {revision: payload.revision, action_id: null});
     assert.equal(f.c.ackTimeout.running, true); assert.equal(f.runtime.pendingRequest, f.requests[1]);
     ack.complete(500, {}); assert.equal(f.c.ackTimeout.running, false);
-    assert.equal(f.c.notice, null, "ack delivery failure must not resume effects");
-    const n = f.requests.length; f.c.acknowledge(); assert.equal(f.requests.length, n);
+    assert.ok(f.c.notice, "failed ack must not hide the notice");
+    assert.equal(f.c.ackFailed, true); assert.equal(f.c.acknowledging, false);
+    const n = f.requests.length, effects = f.events.length;
+    f.advance(1000); f.c.tick();
+    assert.equal(f.requests.length, n, "no automatic retry traffic");
+    assert.equal(f.events.length, effects, "no resumed wake or sound");
+    f.c.acknowledge(); assert.equal(f.requests.length, n + 1);
+    f.requests.at(-1).complete(200, {ok: true});
+    assert.equal(f.c.notice, null); assert.equal(f.c.ackFailed, false);
+    assert.equal(f.c.effects.running, false);
     f.c.shutdown(); assert.equal(f.requests[1].aborted, true);
 }
 {
-    const f = fixture(); f.c.initialize(); f.c.sendAcknowledgement(payload);
-    const ack = f.runtime.ackRequest, oldCallback = ack.onreadystatechange;
-    f.c.abortAcknowledgement(); assert.equal(ack.aborted, true);
-    f.c.sendAcknowledgement(payload); const pendingAck = f.runtime.ackRequest;
-    oldCallback();
-    assert.equal(f.runtime.ackRequest, pendingAck, "late acknowledgement cannot clear replacement");
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload); f.c.acknowledge();
+    const ack = f.requests.at(-1);
+    f.c.finishAcknowledgement(false);
+    assert.equal(ack.aborted, false, "retain the shared slot until the sent request finishes");
+    f.c.acknowledge(); const pendingAck = f.runtime.ackToken;
+    ack.complete(200, {ok: true});
+    assert.equal(f.runtime.ackToken, pendingAck, "late success cannot confirm an explicit retry");
+    assert.ok(f.c.notice);
     assert.equal(f.c.ackTimeout.running, true);
     const staleGet = f.runtime.pendingRequest.onreadystatechange;
-    f.c.shutdown(); assert.equal(pendingAck.aborted, true);
+    const sent = f.requests.at(-1);
+    f.c.shutdown(); sent.complete(200, {ok: true});
     const n = f.requests.length; staleGet(); f.c.waitForCommand(); f.c.sendAcknowledgement(payload);
     f.c.preempt(); f.c.userInteraction(); f.c.acknowledge();
     assert.equal(f.requests.length, n); assert.equal(f.runtime, null);
     assert.equal(f.c.effects.running, false); assert.equal(f.c.reconnect.running, false);
+}
+
+for (const [status, body] of [[503, {ok: true}], [200, {}], [200, null], [200, {ok: false}], [200, "invalid"]]) {
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload);
+    f.c.acknowledge(); const count = f.requests.length;
+    f.requests.at(-1).complete(status, body);
+    assert.equal(f.c.ackFailed, true); assert.ok(f.c.notice);
+    assert.equal(f.requests.length, count); assert.equal(f.c.ackTimeout.running, false);
+    f.c.shutdown();
+}
+for (const fault of ["failOpen", "failSend"]) {
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload);
+    f[fault](true); f.c.acknowledge();
+    assert.ok(f.c.notice); assert.equal(f.c.ackFailed, true);
+    f[fault](false);
+    const count = f.requests.length;
+    f.c.acknowledge();
+    assert.equal(f.requests.length, count + 1, "failed transport must release shared slot: " + fault);
+    f.requests.at(-1).complete(200, {ok: true});
+    assert.equal(f.c.notice, null); f.c.shutdown();
+}
+for (const cancel of ["preempt", "shutdown", "replace", "timeout", "queue-expiry"]) {
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload);
+    f.api.getJsonShared("/ui/state", () => {}, () => {});
+    const read = f.requests.at(-1), count = f.requests.length;
+    f.c.acknowledge(); assert.equal(f.requests.length, count);
+    if (cancel === "replace") {
+        f.runtime.pendingRequest.complete(200, {...payload, id: "3".repeat(32), revision: "4".repeat(32)});
+    } else if (cancel === "timeout") {
+        f.c.finishAcknowledgement(false);
+    } else if (cancel === "queue-expiry") {
+        f.advance(10001);
+    } else {
+        f.c[cancel]();
+    }
+    read.complete(200, {});
+    assert.equal(f.requests.filter(r => r.url?.includes("entities=")).length, 0,
+        "cancelled or expired queued ack is never sent: " + cancel);
+    if (cancel === "timeout" || cancel === "queue-expiry") {
+        assert.ok(f.c.notice); assert.equal(f.c.ackFailed, true);
+    }
+    f.c.shutdown();
+}
+{
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload); f.c.acknowledge();
+    const old = f.requests.at(-1), staleCallback = old.onreadystatechange;
+    f.c.visible = false; f.c.updateGuard();
+    assert.equal(f.c.notice, null); assert.equal(f.c.acknowledging, false);
+    f.c.visible = true; f.c.updateGuard(); f.resume();
+    f.runtime.pendingRequest.complete(200, {...payload, id: "3".repeat(32), revision: "4".repeat(32)});
+    f.c.acknowledge(); const newToken = f.runtime.ackToken;
+    old.complete(200, {ok: true}); staleCallback();
+    assert.equal(f.runtime.ackToken, newToken);
+    assert.equal(f.c.notice.revision, "4".repeat(32)); assert.equal(f.c.acknowledging, true);
+    f.requests.at(-1).complete(200, {ok: true});
+    assert.equal(f.c.notice, null); f.c.shutdown();
+}
+{
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload); f.c.acknowledge();
+    // HomeAssistant's runtime stop may abort the shared request. It must not
+    // confirm our notice, and the one-shot UI deadline exposes the cancellation.
+    f.api.stopDashboardRuntime();
+    assert.ok(f.c.notice); assert.equal(f.c.acknowledging, true);
+    f.c.finishAcknowledgement(false);
+    assert.equal(f.c.ackFailed, true); assert.equal(f.c.acknowledging, false);
+    const count = f.requests.length; f.c.tick(); assert.equal(f.requests.length, count);
+    f.c.acknowledge(); f.requests.at(-1).complete(200, {ok: true});
+    assert.equal(f.c.notice, null); f.c.shutdown();
+}
+{
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload); f.c.acknowledge();
+    const old = f.requests.at(-1);
+    f.runtime.pendingRequest.complete(200, {...payload, id: "3".repeat(32), revision: "4".repeat(32)});
+    old.complete(200, {ok: true});
+    assert.equal(f.c.notice.revision, "4".repeat(32), "old success must not dismiss the replacement alert");
+    assert.equal(f.c.acknowledging, false); assert.equal(f.c.ackFailed, false);
+    f.c.shutdown();
+}
+{
+    const f = fixture(); f.c.initialize(); f.requests[0].complete(200, payload);
+    for (let i = 0; i <= f.api.FORWARD_QUEUE_LIMIT; i++) f.api.getJson("/ui/state", () => {}, () => {});
+    const count = f.requests.length;
+    f.c.acknowledge();
+    assert.equal(f.c.acknowledging, false); assert.equal(f.c.ackFailed, true); assert.ok(f.c.notice);
+    assert.equal(f.requests.length, count, "full queue does not start another transport");
+    f.c.shutdown(); f.api.stopDashboardRuntime();
 }
 
 assert.match(qml, /property bool blocked: true/);
@@ -287,7 +389,10 @@ assert.match(qml, /onPressed: root.userInteraction\(\)/);
 assert.match(qml, /onClicked: root.acknowledge\(\)/);
 assert.match(qml, /Component.onDestruction: shutdown\(\)/);
 assert.equal((qml.match(/textFormat: Text.PlainText/g) || []).length, 4);
-assert.doesNotMatch(qml + js, /ringtoneManager|ForcedNormal|enableState\(ScreenState.ScreenOff\)|beepEnabled\s*=|setVolume|setInterval|Api\./);
+assert.doesNotMatch(qml + js, /ringtoneManager|ForcedNormal|enableState\(ScreenState.ScreenOff\)|beepEnabled\s*=|setVolume|setInterval/);
+assert.match(qml, /onTriggered: root.finishAcknowledgement\(false\)/);
+assert.match(qml, /enabled: !root.acknowledging/);
+assert.match(qml, /root.ackFailed \? root.uiText\("alert_ack_retry"\)/);
 assert.equal((qml.match(/disableState\(ScreenState.Normal\)/g) || []).length, 1);
 
 // Execute the actual outside-panel handler: it must release the lease without

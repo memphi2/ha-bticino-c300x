@@ -489,7 +489,7 @@ Item {
                             Rectangle {
                                 property variant a: curve.points[index]
                                 property variant b: curve.points[index + 1]
-                                property bool connected: a !== null && b !== null && a !== undefined && b !== undefined
+                                property bool connected: a !== null && a !== undefined && b !== null && b !== undefined
                                 property real dx: connected ? powerPlot.width / curve.points.length : 0
                                 property real dy: connected ? (a - b) * powerPlot.height : 0
                                 visible: connected

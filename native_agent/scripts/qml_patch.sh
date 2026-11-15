@@ -14,13 +14,7 @@ DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
-FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
-# The energy page is loaded on demand. An agent directory written by an older
-# updater has no such file; the display then works without that page.
-OPTIONAL_FEATURE_FILE="C300XEnergy.qml"
-if [ -f "$SOURCE_DIR/$OPTIONAL_FEATURE_FILE" ]; then
-    FEATURE_PATCH_FILES="$FEATURE_PATCH_FILES $OPTIONAL_FEATURE_FILE"
-fi
+FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml Alarm.qml HomeAssistant.qml C300XEnergy.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
@@ -114,6 +108,7 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
         && file_contains "$GUI_DIR/Alarm.qml" 'headerLabel: uiText("alarm")' \
         && file_contains "$GUI_DIR/HomeAssistant.qml" 'Api.dashboard' \
+        && [ -f "$GUI_DIR/C300XEnergy.qml" ] \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function homeButtons' \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function loadDisplayPreferences' \
         && file_contains "$GUI_DIR/js/c300x_i18n.js" 'function weather' \
@@ -132,7 +127,7 @@ partial_patch_present() {
         || general_settings_partial_present \
         || [ -f "$GUI_DIR/Alarm.qml" ] \
         || [ -f "$GUI_DIR/HomeAssistant.qml" ] \
-        || [ -f "$GUI_DIR/$OPTIONAL_FEATURE_FILE" ] \
+        || [ -f "$GUI_DIR/C300XEnergy.qml" ] \
         || [ -f "$GUI_DIR/js/c300x_ha.js" ] \
         || [ -f "$GUI_DIR/js/c300x_i18n.js" ] \
         || [ -f "$GUI_DIR/js/c300x_memos.js" ]
@@ -368,12 +363,6 @@ install_file() {
 
 copy_generated_file() {
     install_file "$1" generated
-}
-
-copy_optional_generated_file() {
-    if [ -f "$SOURCE_DIR/$1" ]; then
-        install_file "$1" generated
-    fi
 }
 
 require_clean_original_page() {
@@ -1021,7 +1010,7 @@ generate_feature_patch_stage() {
     patch_general_settings
     copy_generated_file "Alarm.qml"
     copy_generated_file "HomeAssistant.qml"
-    copy_optional_generated_file "$OPTIONAL_FEATURE_FILE"
+    copy_generated_file "C300XEnergy.qml"
     copy_generated_file "js/c300x_ha.js"
     copy_generated_file "js/c300x_i18n.js"
     copy_generated_file "js/c300x_memos.js"
@@ -1041,7 +1030,7 @@ generate_full_patch_stage() {
     patch_general_settings
     copy_generated_file "Alarm.qml"
     copy_generated_file "HomeAssistant.qml"
-    copy_optional_generated_file "$OPTIONAL_FEATURE_FILE"
+    copy_generated_file "C300XEnergy.qml"
     copy_generated_file "js/c300x_ha.js"
     copy_generated_file "js/c300x_i18n.js"
     copy_generated_file "js/c300x_memos.js"
@@ -1322,7 +1311,7 @@ restore_changed_count() {
             changed=$((changed + 1))
         fi
     done
-    for rel in Alarm.qml HomeAssistant.qml "$OPTIONAL_FEATURE_FILE" js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js; do
+    for rel in Alarm.qml HomeAssistant.qml C300XEnergy.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js; do
         if [ -e "$GUI_DIR/$rel" ]; then
             changed=$((changed + 1))
         fi
@@ -1383,7 +1372,7 @@ restore_patch_files() {
     restore_feature_stock_file "MemoPage.qml"
     restore_file "Alarm.qml"
     restore_file "HomeAssistant.qml"
-    restore_file "$OPTIONAL_FEATURE_FILE"
+    restore_file "C300XEnergy.qml"
     restore_file "js/c300x_ha.js"
     restore_file "js/c300x_i18n.js"
     restore_file "js/c300x_memos.js"

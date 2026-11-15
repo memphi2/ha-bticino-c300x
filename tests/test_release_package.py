@@ -755,7 +755,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     paths = {entry["path"] for entry in bundle["files"]}
     assert bundle["integration_version"] == version
     assert bundle["agent_version"] == version
-    assert bundle["update_file_set_version"] == 2
+    assert bundle["update_file_set_version"] == 3
     probe = tmp_path / "update_paths.c"
     probe.write_text(
         '#include <stdio.h>\n#include "agent_update_paths.h"\n'

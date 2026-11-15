@@ -465,20 +465,18 @@ def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path) -> 
     assert not (gui_dir / "C300XEnergy.qml").exists()
 
 
-def test_qml_patch_works_from_a_source_tree_without_the_energy_page_file(tmp_path: Path) -> None:
+def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
-    source_dir = tmp_path / "source"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
-    _copy_source_tree(source_dir)
-    (source_dir / "C300XEnergy.qml").unlink()
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
 
-    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", source_dir=source_dir)
+    (gui_dir / "C300XEnergy.qml").unlink()
 
-    assert status["state"] == "patched"
-    assert not (gui_dir / "C300XEnergy.qml").exists()
-    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status", source_dir=source_dir)["state"] == "patched"
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] != "patched"
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
+    assert (gui_dir / "C300XEnergy.qml").exists()
 
 
 def test_a_leftover_energy_page_file_counts_as_a_partial_patch(tmp_path: Path) -> None:

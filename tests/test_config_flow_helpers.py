@@ -2487,6 +2487,37 @@ def test_options_flow_returns_to_the_menu_after_saving_and_done_closes_it() -> N
     assert len(updates) == 1
 
 
+def test_options_flow_unchanged_submit_writes_nothing_on_an_entry_from_an_older_release() -> None:
+    """Leaving an area unchanged does not reload an entry that lacks newer settings.
+
+    An entry saved by an older release has no value for settings added since.
+    Filling them with their defaults is not a change the user made, so it
+    must not be written (a write reloads the entry and ends a running call).
+    """
+
+    updates: list[dict] = []
+    entry = SimpleNamespace(
+        data={CONF_AGENT_HOST: "agent.local", CONF_AGENT_PORT: 8091, CONF_AGENT_TOKEN: "token"},
+        options={CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"},
+        runtime_data=None,
+    )
+    flow = _options_flow(entry)
+    flow.hass.config_entries.async_update_entry = (
+        lambda _target, *, options: updates.append(dict(options))
+    )
+    asyncio.run(flow.async_step_dashboard_alarm())
+    menu = asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"}))
+    assert (menu["type"], menu["step_id"]) == ("menu", "init")
+    assert updates == []
+
+    # A real change is still written, with every setting.
+    asyncio.run(flow.async_step_dashboard_alarm())
+    asyncio.run(flow.async_step_dashboard_alarm({CONF_ALARM_ENTITY_ID: "alarm_control_panel.other"}))
+    assert len(updates) == 1
+    assert updates[0][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.other"
+    assert updates[0][CONF_AGENT_HOST] == "agent.local"
+
+
 def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     """The options menu leads to areas that each save on their own.
 

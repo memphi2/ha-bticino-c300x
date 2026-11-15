@@ -97,7 +97,8 @@ def test_native_audio_choice_is_retained_on_success_and_validation_error(kind, e
     result = asyncio.run(step({
         CONF_VIDEO_ENABLED: True,
         CONF_NATIVE_TWO_WAY_AUDIO: enabled,
-        CONF_DOORSTATION_AUDIO_GAIN_DB: 99 if invalid else 0,
+        # A changed level: the options flow writes nothing for an unchanged area.
+        CONF_DOORSTATION_AUDIO_GAIN_DB: 99 if invalid else 1,
     }))
     if invalid:
         assert result["errors"] == {CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain"}

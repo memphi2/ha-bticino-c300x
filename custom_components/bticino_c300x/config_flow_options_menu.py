@@ -9,9 +9,28 @@ from typing import Any, cast
 
 from homeassistant.config_entries import ConfigFlowResult
 
+from .config_flow_input import _feature_input
+
 
 class OptionsMenuSteps:
     """Store what an area saved, show the menu again, and close it on Done."""
+
+    _unchanged_options: dict[str, Any] | None = None
+
+    def _note_saved_options(self) -> None:
+        """Remember what saving an opened area without a change would store.
+
+        The stored form can differ from the entry although the user changed
+        nothing: an entry saved by an older release lacks newer settings.
+        """
+
+        flow: Any = self
+        if self._unchanged_options is None:
+            feature_data, errors = _feature_input(
+                {**flow._feature_options, **flow._dashboard_options}
+            )
+            if not errors:
+                self._unchanged_options = {**flow._connection_options, **feature_data}
 
     async def _async_store_options(self, options: dict[str, Any]) -> ConfigFlowResult:
         """Save the settings of an area and return to the menu.
@@ -23,13 +42,10 @@ class OptionsMenuSteps:
 
         flow: Any = self
         entry = flow._config_entry
-        saved = {**entry.data, **entry.options}
-        if (
-            any(key not in saved or saved[key] != value for key, value in options.items())
-            or any(key not in options for key in entry.options)
-        ):
+        if options != self._unchanged_options and options != dict(entry.options):
             flow.hass.config_entries.async_update_entry(entry, options=options)
         # The next area starts from what is saved now.
+        self._unchanged_options = None
         flow._connection_options = {}
         flow._feature_options = {}
         flow._device_activations = []

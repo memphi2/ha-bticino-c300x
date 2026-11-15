@@ -1436,6 +1436,7 @@ class BticinoC300XOptionsFlow(
             )
         if not self._dashboard_options:
             self._dashboard_options = _dashboard_input_defaults({}, feature_defaults)
+        self._note_saved_options()
         return feature_defaults
 
     async def async_step_connection(

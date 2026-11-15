@@ -547,13 +547,18 @@ def test_the_alarm_area_sets_alarmo_and_its_quick_action(monkeypatch, saved, cha
     ))
 
     assert result["type"] == "menu", result.get("errors")
+    # An area left as it is writes nothing; the entry data still holds it.
+    saved = {**entry.data, **entry.options}
     for key, value in stored.items():
-        assert entry.options[key] == value
+        assert saved[key] == value
     # What the area does not show stays; the display settings of an entity
     # that is no longer shown go.
-    assert entry.options["dashboard_entities"] == ["light.room"]
-    overrides = entry.options["dashboard_entity_display_overrides"]
+    assert saved["dashboard_entities"] == ["light.room"]
+    overrides = saved["dashboard_entity_display_overrides"]
     assert overrides["light.room"] == {"page": "Room"}
+    if not changes:
+        assert entry.options == {}
+        return
     assert "switch.old" not in overrides
     assert ("switch.porch" in overrides) == (stored.get("alarm_page_entity_id") == "switch.porch")
 

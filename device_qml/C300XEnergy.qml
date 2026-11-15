@@ -490,11 +490,11 @@ Item {
                                 property variant a: curve.points[index]
                                 property variant b: curve.points[index + 1]
                                 property bool connected: a !== null && b !== null && a !== undefined && b !== undefined
-                                property real dx: connected ? (b.x - a.x) * powerPlot.width : 0
-                                property real dy: connected ? (a.y - b.y) * powerPlot.height : 0
+                                property real dx: connected ? powerPlot.width / curve.points.length : 0
+                                property real dy: connected ? (a - b) * powerPlot.height : 0
                                 visible: connected
-                                x: connected ? a.x * powerPlot.width : 0
-                                y: connected ? (1 - a.y) * powerPlot.height - 1 : 0
+                                x: connected ? (index + 0.5) * powerPlot.width / curve.points.length : 0
+                                y: connected ? (1 - a) * powerPlot.height - 1 : 0
                                 width: Math.sqrt(dx * dx + dy * dy)
                                 height: 2
                                 color: curve.curveColor
@@ -508,8 +508,8 @@ Item {
                             model: curve.dots
 
                             Rectangle {
-                                x: modelData.x * powerPlot.width - 2
-                                y: (1 - modelData.y) * powerPlot.height - 2
+                                x: (modelData + 0.5) * powerPlot.width / curve.points.length - 2
+                                y: (1 - curve.points[modelData]) * powerPlot.height - 2
                                 width: 4
                                 height: 4
                                 radius: 2

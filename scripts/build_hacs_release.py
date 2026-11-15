@@ -134,12 +134,17 @@ def _restore_agent_from_release_zip(zip_path: Path) -> None:
 
 
 def _zip_info(path: Path) -> zipfile.ZipInfo:
+    relative = path.relative_to(PACKAGE_ROOT)
     info = zipfile.ZipInfo(
-        filename=path.relative_to(PACKAGE_ROOT).as_posix(),
+        filename=relative.as_posix(),
         date_time=ZIP_TIMESTAMP,
     )
     info.compress_type = zipfile.ZIP_DEFLATED
     mode = path.stat().st_mode & 0o777
+    if relative.parts[0] != "device_agent":
+        # Checkout umasks differ between local builds and hosted CI. Device
+        # bundle modes are already fixed explicitly by the bundle stager.
+        mode = 0o755 if mode & 0o111 else 0o644
     info.external_attr = (stat.S_IFREG | mode) << 16
     return info
 

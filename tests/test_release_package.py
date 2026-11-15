@@ -56,6 +56,35 @@ def _load_bundle_stager():
     return module
 
 
+def test_release_zip_is_independent_of_checkout_umask(tmp_path, monkeypatch):
+    builder = _load_release_builder()
+    package = tmp_path / "package"
+    package.mkdir()
+    monkeypatch.setattr(builder, "PACKAGE_ROOT", package)
+    source = package / "manifest.json"
+    source.write_text('{}\n')
+    archives = []
+    for mode in (0o664, 0o644, 0o600):
+        source.chmod(mode)
+        archive = tmp_path / f"{mode:o}.zip"
+        builder._write_zip(archive)
+        archives.append(archive.read_bytes())
+    assert archives[0] == archives[1] == archives[2]
+
+
+def test_release_zip_preserves_explicit_private_device_bundle_modes(tmp_path, monkeypatch):
+    builder = _load_release_builder()
+    monkeypatch.setattr(builder, "PACKAGE_ROOT", tmp_path)
+    for relative, mode in (("device_agent/bundle.json", 0o600),
+                           ("device_agent/scripts/remove_agent.sh", 0o700),
+                           ("device_agent/qml/HomeAssistant.qml", 0o644)):
+        source = tmp_path / relative
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.touch()
+        source.chmod(mode)
+        assert builder._zip_info(source).external_attr >> 16 & 0o777 == mode
+
+
 def _load_release_assets(*, validate_contents=False):
     spec = importlib.util.spec_from_file_location("write_release_assets", RELEASE_ASSETS_SCRIPT)
     assert spec is not None

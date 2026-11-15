@@ -1013,9 +1013,15 @@ async def _async_track_display_updates(
         return None
     from .dashboard_energy_updates import async_track_energy_page_updates
 
-    stop_energy = await async_track_energy_page_updates(
-        hass, entry, lambda: _async_schedule_display_bridge_notify(hass, entry),
-    )
+    try:
+        stop_energy = await async_track_energy_page_updates(
+            hass, entry, lambda: _async_schedule_display_bridge_notify(hass, entry),
+        )
+    except BaseException:
+        # The caller never gets the unsubscribe when this is cancelled by an
+        # unload or fails, so the listeners registered above end here.
+        unsubscribe()
+        raise
     if stop_energy is None:
         return unsubscribe
 

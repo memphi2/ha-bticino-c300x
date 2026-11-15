@@ -25,6 +25,7 @@ Page {
     property int pageCount: 0
     property bool energyVisible: false
     property bool preventReturnToHomepage: true
+    property bool decimalComma: false
     property string pageTitle: ""
     property string pageLabel: ""
     property bool weatherVisible: false
@@ -155,7 +156,7 @@ Page {
 
     function localNumber(value) {
         var text = String(value)
-        return I18n.language(uiLanguage) === "en" ? text : text.replace(".", ",")
+        return decimalComma ? text.replace(".", ",") : text
     }
 
     function numberText(control, value) {

@@ -221,6 +221,53 @@ def test_energy_page_position_counts_a_page_the_display_leaves_out(monkeypatch) 
     assert [page["title"] for page in result["data"]["pages"]] == ["Wohnen", "Energie", "Keller"]
 
 
+def test_energy_page_position_counts_a_configured_page_without_tiles(monkeypatch) -> None:
+    # "Garten" is configured second but has no tile, so it never becomes a
+    # page. The form numbers it all the same: position 3 means "before Keller".
+    names = ["C300X", "Garten", "Keller"]
+    states = {f"sensor.s{index}": FakeState("1", attributes={"friendly_name": f"S{index}"})
+              for index in (1, 2)}
+    entry = _entry(
+        {**ENERGY_ON, "position": 3},
+        **{
+            CONF_DASHBOARD_ENTITIES: list(states),
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.s1": {"page": "C300X"}, "sensor.s2": {"page": "Keller"},
+            },
+            CONF_DASHBOARD_PAGES: [{"name": name, "order": index + 1} for index, name in enumerate(names)],
+        },
+    )
+    monkeypatch.setattr(dashboard, "async_energy_dashboard_page", AsyncMock(
+        return_value={"title": "Energie", "energy": {"views": []}}
+    ))
+
+    result = run(dashboard.async_dashboard_payload(FakeHass(states=FakeStates(states)), entry))
+
+    assert [page["title"] for page in result["data"]["pages"]] == ["C300X", "Energie", "Keller"]
+
+
+def test_the_display_learns_which_decimal_sign_home_assistant_writes(monkeypatch) -> None:
+    monkeypatch.setattr(dashboard, "async_energy_dashboard_page", AsyncMock(return_value=None))
+    german = FakeHass()
+    german.config = types.SimpleNamespace(language="de")
+    english = FakeHass()
+    english.config = types.SimpleNamespace(language="en-GB")
+
+    assert run(dashboard.async_dashboard_payload(german, _entry()))["decimalComma"] is True
+    assert run(dashboard.async_dashboard_payload(english, _entry()))["decimalComma"] is False
+
+
+def test_a_shortened_choice_list_shortens_its_texts_too() -> None:
+    options = [f"option_{index:04d}" for index in range(2000)]
+    control = {"kind": "choice", "options": list(options), "labels": [f"Text {o}" for o in options]}
+    payload = {"data": {"pages": [{"items": [{"kind": "detail", "controls": [control]}]}]}}
+
+    dashboard._fit_dashboard_response(_entry(), payload)
+
+    assert len(control["options"]) < 2000
+    assert len(control["labels"]) == len(control["options"])
+
+
 def test_display_pages_are_unchanged_without_the_energy_page(monkeypatch) -> None:
     assert _payload_pages(monkeypatch, None) == ["C300X", "Wohnen", "Keller"]
     assert _payload_pages(monkeypatch, {**ENERGY_ON, "enabled": False}) == ["C300X", "Wohnen", "Keller"]

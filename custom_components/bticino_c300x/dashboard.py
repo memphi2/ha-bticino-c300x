@@ -244,13 +244,18 @@ async def async_dashboard_payload(
         main_page["items"].append({"_kind": "weather", "_order": 0})
 
     notifications = notification_payload(entry)
-    ordered = _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
+    configured = configured_dashboard_pages(entry)
+    ordered = _ordered_dashboard_pages(pages, configured)
     energy = await async_energy_dashboard_page(hass, entry, language)
     if energy is not None:
-        # Its position counts as in the pages dialog, which also numbers a
-        # page the display then leaves out for lack of content.
+        # Its position counts as in the pages dialog. That also numbers a
+        # page the display leaves out for lack of content, and a configured
+        # page without any tile, which is not among the pages at all.
         position = configured_energy_page(entry)["position"]
-        ordered.insert(min(position - 1, len(ordered)), energy)
+        absent = sum(
+            1 for page in configured[:position - 1] if page["name"] not in pages
+        )
+        ordered.insert(max(0, min(position - 1 - absent, len(ordered))), energy)
     shown = [page for page in ordered if _dashboard_page_has_content(page)]
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
@@ -258,6 +263,9 @@ async def async_dashboard_payload(
     return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,
+        # The numbers in the texts follow Home Assistant's language; the
+        # display writes its own numbers the same way.
+        "decimalComma": language != "en",
         "notifications": notifications,
         "data": {"pages": [_finalize_dashboard_page(page) for page in shown]},
     })
@@ -303,14 +311,19 @@ def _fit_dashboard_response(
         # The longest lists go first and the cutting stops as soon as the
         # answer fits, so a thermostat's modes and a select's few options
         # stay whole next to a player's favourites.
-        lists.sort(key=lambda holder: len(json.dumps(holder["options"])), reverse=True)
+        def text_size(holder: dict[str, Any]) -> int:
+            return len(json.dumps(holder["options"])) + len(json.dumps(holder.get("labels", [])))
+
+        lists.sort(key=text_size, reverse=True)
         for limit in _DASHBOARD_CHOICE_TRIM_LIMITS:
             for holder in lists:
                 if len(holder["options"]) <= limit:
                     continue
-                before = len(json.dumps(holder["options"]))
+                before = text_size(holder)
                 holder["options"] = holder["options"][:limit]
-                size -= before - len(json.dumps(holder["options"]))
+                if "labels" in holder:
+                    holder["labels"] = holder["labels"][:limit]
+                size -= before - text_size(holder)
                 if size <= DASHBOARD_RESPONSE_MAX_BYTES:
                     break
             if size <= DASHBOARD_RESPONSE_MAX_BYTES:

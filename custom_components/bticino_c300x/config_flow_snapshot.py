@@ -34,7 +34,10 @@ def snapshot_step(
             errors[str(err)] = "invalid_snapshot_option"
     return None, show_form(
         step_id=step_id,
-        data_schema=snapshot_schema({key: current[key] for key in SNAPSHOT_DEFAULTS}),
+        # After a refused value the form keeps what was typed.
+        data_schema=snapshot_schema({
+            key: (user_input or {}).get(key, current[key]) for key in SNAPSHOT_DEFAULTS
+        }),
         errors=errors,
     )
 

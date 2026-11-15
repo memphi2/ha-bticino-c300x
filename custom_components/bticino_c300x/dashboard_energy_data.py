@@ -28,7 +28,7 @@ from .entry_types import BticinoC300XConfigEntry
 _LOGGER = logging.getLogger(__name__)
 
 ENERGY_STATISTICS_MAX_AGE_SECONDS = 300.0
-_CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "CHF": "CHF"}
+_CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
 
 # entry id -> (read at, local day, statistic ids, day)
 _DAY_CACHE: dict[str, tuple[float, str, frozenset[str], EnergyDay]] = {}

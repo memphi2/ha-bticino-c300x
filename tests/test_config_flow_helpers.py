@@ -2544,6 +2544,9 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     )
     assert refused["step_id"] == "visitor_snapshot"
     assert refused["errors"] == {"snapshot_width": "invalid_snapshot_option"}
+    # The form comes back with what was typed, not with the saved values.
+    typed = {str(key): key.default() for key in refused["data_schema"].schema}
+    assert typed == {**snapshot_settings, "snapshot_width": 801}
     _flow, result = _options_area(entry, "visitor_snapshot", snapshot_settings)
     _save_options_area(entry, result)
     assert {key: entry.options[key] for key in snapshot_settings} == snapshot_settings

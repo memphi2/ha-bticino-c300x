@@ -292,6 +292,7 @@ function dashboard(statusItem, pageItem) {
         assignDashboardValue(pageItem, "notifications", listOrEmpty(data.notifications))
         if (pageItem.notifications.length === 0) pageItem.notificationsOpen = false
         pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
+        pageItem.decimalComma = data.decimalComma === true
         assignDashboardValue(pageItem, "dashboardPages", pages)
         pageItem.pageCount = pages.length
         if (pageItem.currentPageIndex >= pages.length) {

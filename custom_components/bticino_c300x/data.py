@@ -207,6 +207,7 @@ class C300XEventState:
 class C300XRuntimeResources:
     """Own cancellable work and subscriptions for one config-entry lifetime."""
 
+    closed: bool = False
     unregister_webhook: Callable[[], None] | None = None
     unregister_event_webhook: Callable[[], None] | None = None
     unregister_event_registration: Callable[[], None] | None = None
@@ -229,6 +230,7 @@ class C300XRuntimeResources:
     def close(self) -> None:
         """Release callbacks and tasks once; never invoke media/device commands."""
 
+        self.closed = True
         callbacks = (
             self.close_display_notifications,
             self.unregister_event_registration,

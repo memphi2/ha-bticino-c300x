@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..camera_media.session_lifecycle import media_stop_scope
-from .common import ensure_home_call_supported, raise_agent_command_failed
+from .common import (
+    ensure_current_runtime,
+    ensure_home_call_supported,
+    raise_agent_command_failed,
+)
 
 
 class HomeCallUseCase:
@@ -28,14 +32,17 @@ class HomeCallUseCase:
         """Stop the local Home Call to the C300X."""
 
         ensure_home_call_supported(self._entry)
+        runtime = self._entry.runtime_data
+        ensure_current_runtime(self._entry, runtime)
         prepare_stop = getattr(
-            self._entry.runtime_data.resources,
+            runtime.resources,
             "prepare_home_call_stop",
             None,
         )
-        with media_stop_scope(self._entry.runtime_data.resources, "home_call"):
+        with media_stop_scope(runtime.resources, "home_call"):
             if prepare_stop is not None:
                 await prepare_stop()
+                ensure_current_runtime(self._entry, runtime)
             await raise_agent_command_failed(
-                self._entry.runtime_data.api.async_stop_home_call()
+                runtime.api.async_stop_home_call()
             )

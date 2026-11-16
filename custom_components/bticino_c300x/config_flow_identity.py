@@ -124,7 +124,17 @@ async def async_existing_manual_discovery(
             continue
         if not entry_connection_matches_discovery(entry, connection):
             continue
+        runtime = getattr(entry, "runtime_data", None)
+        resources = getattr(runtime, "resources", None)
         await async_adopt_discovery_identity(flow.hass, entry, read_setup, current_entries)
-        flow._async_request_event_registration(entry)
+        # Unload closes resources before HA removes runtime_data. A discovery
+        # read must not attach new work to that closed or replaced lifetime.
+        if (
+            resources is not None and not resources.closed
+            and getattr(entry, "runtime_data", None) is runtime
+            and runtime.resources is resources
+            and entry in current_entries()
+        ):
+            flow._async_request_event_registration(entry)
         return cast(dict[str, Any], flow.async_abort(reason="already_configured"))
     return None

@@ -61,7 +61,9 @@ def async_setup_media_view(hass: HomeAssistant) -> None:
         return
     from .snapshot_http import C300XSnapshotView
     from .visitor_journal_http import C300XVisitorJournalView
+    from .visitor_journal_ws import async_register_visitor_journal_ws
 
+    async_register_visitor_journal_ws(hass)
     hass.http.register_view(cast(Any, C300XSnapshotView()))
     hass.http.register_view(cast(Any, C300XVisitorJournalView()))
     hass.http.register_view(cast(Any, C300XVideoMessageMediaView()))

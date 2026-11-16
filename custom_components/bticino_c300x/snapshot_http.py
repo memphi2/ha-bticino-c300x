@@ -16,6 +16,23 @@ from .media import HomeAssistantView, runtime_entry
 from .snapshots import get_snapshots
 
 
+def authorize_snapshot_entry(hass: Any, user: Any, entry_id: str, policy: str) -> tuple[Any, Any, Any]:
+    """Share the entry/camera permission decision across HTTP and WebSocket reads."""
+    entry = runtime_entry(hass, entry_id)
+    manager = get_snapshots(hass, entry_id)
+    if entry is None or manager is None or manager.closed:
+        raise web.HTTPNotFound()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "camera", DOMAIN, entry_entity_unique_id(entry, "doorbell_camera")
+    )
+    registered = registry.async_get(entity_id) if entity_id else None
+    if (registered is None or registered.disabled_by or user is None
+            or not (user.is_admin or user.permissions.check_entity(entity_id, policy))):
+        raise web.HTTPForbidden()
+    return entry, manager, hass.states.get(entity_id)
+
+
 class C300XSnapshotView(HomeAssistantView):
     """Read-only access to stored images, never public files or uploads."""
 
@@ -24,21 +41,7 @@ class C300XSnapshotView(HomeAssistantView):
     requires_auth = True
 
     def _authorize(self, request: web.Request, entry_id: str, policy: str) -> tuple[Any, Any, Any]:
-        hass = request.app["hass"]
-        entry = runtime_entry(hass, entry_id)
-        manager = get_snapshots(hass, entry_id)
-        if entry is None or manager is None or manager.closed:
-            raise web.HTTPNotFound()
-        registry = er.async_get(hass)
-        entity_id = registry.async_get_entity_id(
-            "camera", DOMAIN, entry_entity_unique_id(entry, "doorbell_camera")
-        )
-        registered = registry.async_get(entity_id) if entity_id else None
-        user = request.get("hass_user")
-        if (registered is None or registered.disabled_by or user is None
-                or not (user.is_admin or user.permissions.check_entity(entity_id, policy))):
-            raise web.HTTPForbidden()
-        return entry, manager, hass.states.get(entity_id)
+        return authorize_snapshot_entry(request.app["hass"], request.get("hass_user"), entry_id, policy)
 
     async def get(self, request: web.Request, entry_id: str, image_id: str) -> web.Response:
         entry, manager, _state = self._authorize(request, entry_id, POLICY_READ)

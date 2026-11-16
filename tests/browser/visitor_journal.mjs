@@ -55,9 +55,10 @@ try {
     ];
     lab.fetches = [];
     lab.journalListeners = new Set();
-    const subscribe = lab.hass.connection.subscribeEvents;
-    lab.hass.connection.subscribeEvents = async (callback, type) => {
-      if (type !== "bticino_c300x_visitor_journal_changed") return subscribe(callback, type);
+    const subscribe = lab.hass.connection.subscribeMessage;
+    lab.hass.connection.subscribeMessage = async (callback, message) => {
+      if (message.type !== "bticino_c300x/visitor_journal/subscribe") return subscribe(callback, message);
+      if (message.entry_id !== "entry-one") throw new Error("Unexpected journal entry");
       lab.journalListeners.add(callback);
       return () => lab.journalListeners.delete(callback);
     };

@@ -1,7 +1,7 @@
 import { c300xLocalize } from "./c300x-translations.js?v=5391b85a94f19d3c";
 
 const BASE = "/api/bticino_c300x/visitor-journal/";
-const CHANGED = "bticino_c300x_visitor_journal_changed";
+const SUBSCRIBE = "bticino_c300x/visitor_journal/subscribe";
 
 export async function journalBlob(response, limit, signal) {
   if (!response.ok || Number(response.headers.get("Content-Length")) > limit) throw new Error("media");
@@ -161,14 +161,20 @@ export class C300XVisitorJournal extends HTMLElement {
     if (!this.isConnected || this.hidden || !this.entryId || this.active) return;
     this.active = true;
     const generation = ++this.generation;
-    const subscribe = this.hass?.connection?.subscribeEvents;
+    const connection = this.hass?.connection;
+    const entryId = this.entryId;
+    const subscribe = connection?.subscribeMessage;
     if (subscribe) {
-      Promise.resolve().then(() => subscribe.call(this.hass.connection, (event) => {
-        if (this.active && this.generation === generation && event.data?.entry_id === this.entryId) void this.load();
-      }, CHANGED)).then((unsubscribe) => {
+      Promise.resolve().then(() => subscribe.call(connection, (event) => {
+        if (!this.active || this.generation !== generation || event.entry_id !== entryId) return;
+        if (event.closed) this.deactivate();
+        else void this.load();
+      }, { type: SUBSCRIBE, entry_id: entryId })).then((unsubscribe) => {
         if (!this.active || this.generation !== generation) unsubscribe();
         else this.unsubscribe = unsubscribe;
-      }).catch(() => {});
+      }).catch(() => {
+        if (this.generation === generation) this.deactivate();
+      });
     }
     void this.load();
   }

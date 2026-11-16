@@ -35,6 +35,17 @@ def section(document: str, heading: str) -> str:
     return text.split(f"## {heading}\n", 1)[1].split("\n## ", 1)[0]
 
 
+def test_support_policy_matches_latest_dated_stable_release():
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    versions = re.findall(r"^## v(\d+\.\d+\.\d+) - \d{4}-\d{2}-\d{2}$", changelog, re.M)
+    assert versions, "A stable release must be documented in the changelog"
+    stable = versions[0]
+    minor = stable.rsplit(".", 1)[0]
+    support = (ROOT / "SUPPORT.md").read_text(encoding="utf-8")
+    assert f"- `{minor}.x`: current stable ({stable})" in support
+    assert support.count("current stable") == 1
+
+
 def ice_rows():
     text = section("media-troubleshooting.md", "Connection Paths for the Live Picture")
     rows = re.findall(r"^\| ([^|]+) \| `([^`]+)` \| ([^|]+) \| ([^|]+) \|$", text, re.M)

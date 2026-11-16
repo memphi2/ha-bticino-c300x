@@ -21,8 +21,8 @@
   The retired selection is removed without enabling Consumers or any other
   view; other selected views remain unchanged.
 - Standard per-entry Notify service with severity and bounded wake/stock-beep
-  durations (maximum 300 seconds). Defaults: info 30 seconds wake/no sound;
-  warning and error 30 seconds each. Effects only on safe Home/HA screens, never
+  durations (maximum 300 seconds). Defaults: 30 seconds wake and sound for
+  all three severities. Effects only on safe Home/HA screens, never
   queued for a later wake, and never a fire-alarm substitute. One POST, with
   transport acceptance distinct from physical-effect confirmation.
 - Preserve the previous display files when a GUI restart fails, and report

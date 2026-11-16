@@ -600,7 +600,7 @@ Replace `your_entry_id` with the lowercase ID of the configured entry.
 
 | Severity | Default wake duration | Default sound duration |
 | --- | --- | --- |
-| `info` (default) | 30 seconds | 0 seconds |
+| `info` (default) | 30 seconds | 30 seconds |
 | `warning` | 30 seconds | 30 seconds |
 | `error` | 30 seconds | 30 seconds |
 

@@ -31,6 +31,11 @@
   failed notification acknowledgements remain visible and can be retried.
 - Restrict Notify calls to administrators and trusted automations. Ignore stale
   webhook and card completions after their runtime or call has been replaced.
+- Reject agent HTTP redirects instead of forwarding credentials, bind connection
+  changes to the confirmed device identity, and verify the saved device before
+  adopting a discovered identity.
+- Discard late display commands and diagnostic responses after unload, and retry
+  failed display-bridge registration on renewal without polling healthy bridges.
 - Preserve dashboard configuration when a Lovelace repair cannot read it.
   Bound calendar work and display payloads, and stop calendar resources when
   their page is disabled or reconfigured.

@@ -28,6 +28,7 @@ FRONTEND_MODULES = (
     "c300x-ring-preview-state.js",
     "c300x-state-model.js",
     "c300x-stream-snapshots.js",
+    "c300x-visitor-journal.js",
     "c300x-translations.js",
     "c300x-webrtc-client.js",
     "c300x-webrtc-debug.js",

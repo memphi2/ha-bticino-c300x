@@ -134,6 +134,10 @@ limited to **1,000 images or 128 MiB per device**, whichever is reached first;
 the oldest images are removed first. Retention limits are enforced while HA
 is running and again after startup.
 
+The optional [Visitor Journal](visitor-journal.md) in the doorstation card links
+observed rings to these saved images and existing ring recordings. It is off in
+the card by default and never starts additional recording or live video.
+
 ## Alarmo Display
 
 The optional native Alarmo page stays a subpage in the original blue C300X

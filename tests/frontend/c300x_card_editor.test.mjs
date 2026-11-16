@@ -80,6 +80,20 @@ function createEditor(module, config = {}, language = "en") {
   return { editor, form, events, change: (value) => listeners.get("value-changed")({ detail: { value } }) };
 }
 
+test("visitor journal is explicitly opt-in and editor preserves the choice", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  const { editor, form, change } = createEditor(module);
+  assert.notEqual(form.data.show_visitor_journal, true);
+  assert.deepEqual(form.schema.find((field) => field.name === "show_visitor_journal").selector, { boolean: {} });
+  change({ ...form.data, show_visitor_journal: true });
+  assert.equal(editor._config.show_visitor_journal, true);
+  change({ ...editor._config, name: "Front door" });
+  assert.equal(editor._config.show_visitor_journal, true);
+  change({ ...editor._config, show_visitor_journal: false });
+  assert.equal(editor._config.show_visitor_journal, undefined);
+});
+
 test("editor exposes independent default-on device action switches in every mode", async () => {
   installCustomElementStubs();
   const module = await importEditorModule();

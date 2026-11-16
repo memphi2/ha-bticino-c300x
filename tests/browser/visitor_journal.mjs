@@ -1,0 +1,186 @@
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { readFile, mkdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { resolve, dirname, sep } from "node:path";
+import { execFileSync } from "node:child_process";
+import puppeteer from "puppeteer-core";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const frontend = resolve(here, "../../custom_components/bticino_c300x/frontend");
+const artifacts = resolve(here, "../../.artifacts/browser");
+const clip = execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "color=green:size=160x120:rate=10", "-t", "1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", "pipe:1"]);
+const server = createServer(async (request, response) => {
+  const pathname = new URL(request.url, "http://localhost").pathname;
+  if (pathname === "/favicon.ico") { response.writeHead(204).end(); return; }
+  if (pathname === "/synthetic.mp4") { response.setHeader("Content-Type", "video/mp4"); response.end(clip); return; }
+  let path;
+  if (pathname === "/") path = resolve(here, "fixture.html");
+  else if (pathname === "/fixture.mjs") path = resolve(here, "fixture.mjs");
+  else if (pathname.startsWith("/frontend/")) {
+    path = resolve(frontend, pathname.slice(10));
+    if (!path.startsWith(frontend + sep) || !path.endsWith(".js")) path = null;
+  }
+  if (!path) { response.writeHead(404).end(); return; }
+  try {
+    response.setHeader("Content-Type", path.endsWith("html") ? "text/html" : "text/javascript");
+    response.end(await readFile(path));
+  } catch { response.writeHead(404).end(); }
+});
+await new Promise((done) => server.listen(0, "127.0.0.1", done));
+const origin = `http://127.0.0.1:${server.address().port}`;
+let browser;
+try {
+  browser = await puppeteer.launch({ executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome", headless: true,
+    args: ["--disable-background-networking", ...(process.env.CI ? ["--no-sandbox"] : [])] });
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setRequestInterception(true);
+  page.on("request", (request) => {
+    if ([origin, "null"].includes(new URL(request.url()).origin)) request.continue();
+    else { errors.push("Unexpected external request"); request.abort(); }
+  });
+  await mkdir(artifacts, { recursive: true });
+  await page.goto(origin);
+  await page.waitForFunction(() => !!window.lab);
+  await page.evaluate(async () => {
+    const image = await new Promise((done) => lab.source.toBlob(done, "image/jpeg"));
+    const video = await (await fetch("/synthetic.mp4")).blob();
+    const now = Date.now() / 1000;
+    lab.visits = [
+      { id: "a".repeat(32), at: now, image_at: now + 2, video_at: now + 5, expires_at: now + 86400, outcome: "answered", image: true, video: true },
+      { id: "b".repeat(32), at: now - 60, expires_at: now + 86400, outcome: "unknown", image: true, video: false },
+      { id: "c".repeat(32), at: now - 120, expires_at: now + 86400, outcome: "unknown", image: false, video: false },
+    ];
+    lab.fetches = [];
+    lab.journalListeners = new Set();
+    const subscribe = lab.hass.connection.subscribeEvents;
+    lab.hass.connection.subscribeEvents = async (callback, type) => {
+      if (type !== "bticino_c300x_visitor_journal_changed") return subscribe(callback, type);
+      lab.journalListeners.add(callback);
+      return () => lab.journalListeners.delete(callback);
+    };
+    lab.hass.fetchWithAuth = async (url, options) => {
+      lab.fetches.push({ url, signal: options.signal });
+      if (url.endsWith("/image")) return new Response(image, { headers: { "Content-Type": "image/jpeg" } });
+      if (url.endsWith("/video")) return new Response(video, { headers: { "Content-Type": "video/mp4" } });
+      return Response.json({ visits: lab.visits });
+    };
+    lab.readJournal = lab.hass.fetchWithAuth;
+    lab.revoked = [];
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.revokeObjectURL = (url) => { lab.revoked.push(url); revoke(url); };
+    lab.journal = lab.card.shadowRoot.querySelector("c300x-visitor-journal");
+  });
+  assert.equal(await page.evaluate(() => lab.journal.hidden), true);
+  assert.equal(await page.evaluate(() => lab.fetches.length), 0);
+  await page.evaluate(() => { lab.card.setConfig({ entity: lab.camera, show_visitor_journal: true }); lab.card.hass = lab.hass; });
+  await page.waitForFunction(() => !lab.journal.hidden);
+  assert.equal(await page.evaluate(() => lab.fetches.length), 0, "Collapsed journal must not fetch");
+  await page.evaluate(() => { lab.journal.details.open = true; });
+  await page.waitForFunction(() => lab.journal.items.length === 3);
+  assert.equal(await page.evaluate(() => lab.journalListeners.size), 1);
+  await page.evaluate(() => { lab.journal.shadowRoot.querySelector(".visit").focus(); });
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => !!lab.journal.url);
+  await page.waitForFunction(() => lab.journal.shadowRoot.querySelector("img").naturalWidth > 0);
+  assert.equal(await page.evaluate(() => lab.journal.shadowRoot.querySelector(".previous").disabled), true);
+  const firstUrl = await page.evaluate(() => lab.journal.url);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForFunction(() => lab.journal.index === 1 && !!lab.journal.url);
+  assert.equal(await page.evaluate((url) => lab.revoked.includes(url), firstUrl), true);
+  await page.evaluate(() => lab.journal.shadowRoot.querySelector(".next").click());
+  assert.equal(await page.evaluate(() => lab.journal.index), 2);
+  assert.equal(await page.evaluate(() => lab.journal.shadowRoot.querySelector(".next").disabled), true);
+  assert.equal(await page.evaluate(() => lab.journal.url), "");
+  await page.evaluate(() => {
+    const frame = lab.journal.shadowRoot.querySelector(".frame");
+    frame.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", pointerId: 2, clientX: 30, clientY: 50 }));
+    frame.dispatchEvent(new PointerEvent("pointerup", { pointerType: "touch", pointerId: 2, clientX: 110, clientY: 54 }));
+  });
+  await page.waitForFunction(() => lab.journal.index === 1 && !!lab.journal.url);
+  await page.evaluate(() => lab.journal.show(0, "video"));
+  await page.waitForFunction(() => lab.journal.shadowRoot.querySelector("video").readyState >= 2);
+  assert.equal(await page.evaluate(() => lab.journal.shadowRoot.querySelector("video").paused), true, "No autoplay");
+  await page.evaluate(() => lab.journal.shadowRoot.querySelector("video").play());
+  await page.evaluate(() => lab.journal.step(1));
+  await page.waitForFunction(() => !!lab.journal.url);
+  assert.equal(await page.evaluate(() => {
+    const video = lab.journal.shadowRoot.querySelector("video");
+    return video.paused && !video.getAttribute("src");
+  }), true);
+  for (const width of [240, 320, 390, 1024]) {
+    await page.setViewport({ width, height: 800 });
+    for (const language of ["en", "de", "fr", "it"]) {
+      const result = await page.evaluate(async (language) => {
+        lab.hass.language = language;
+        lab.card.hass = { ...lab.hass };
+        await new Promise(requestAnimationFrame);
+        const root = lab.journal.shadowRoot;
+        const dialog = lab.journal.dialog.getBoundingClientRect();
+        const frame = root.querySelector(".frame").getBoundingClientRect();
+        const buttons = [...root.querySelectorAll("dialog button")];
+        return { inside: dialog.left >= 0 && dialog.right <= innerWidth && dialog.top >= 0 && dialog.bottom <= innerHeight,
+          overflow: document.documentElement.scrollWidth > innerWidth,
+          labels: buttons.every((button) => !!button.getAttribute("aria-label")),
+          frame: { width: frame.width, height: frame.height },
+          timestamp: root.querySelector("h2").textContent,
+          expected: new Date((lab.journal.items[lab.journal.index][`${lab.journal.kind}_at`] || lab.journal.items[lab.journal.index].at) * 1000).toLocaleString(language) };
+      }, language);
+      assert.ok(result.inside && !result.overflow && result.labels, `${width} ${language}`);
+      assert.equal(result.timestamp, result.expected);
+      const after = await page.evaluate(async () => {
+        await lab.journal.show(2);
+        const rect = lab.journal.shadowRoot.querySelector(".frame").getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      });
+      assert.deepEqual(after, result.frame, "Missing media must not resize viewer");
+      await page.evaluate(() => lab.journal.show(1));
+    }
+    await page.screenshot({ path: resolve(artifacts, `visitor-journal-${width}.png`) });
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !lab.journal.dialog.open);
+  assert.equal(await page.evaluate(() => lab.journal.url), "");
+  await page.evaluate(() => {
+    lab.hass.fetchWithAuth = async () => new Promise((done) => { lab.finishMedia = done; });
+    lab.journal.hass = lab.hass;
+    lab.journal.dialog.showModal();
+    void lab.journal.show(0);
+  });
+  await page.waitForFunction(() => !!lab.finishMedia);
+  await page.evaluate(() => {
+    lab.card.setConfig({ entity: lab.camera, show_visitor_journal: false });
+    lab.card.hass = lab.hass;
+    lab.finishMedia(new Response("stale", { headers: { "Content-Type": "image/jpeg" } }));
+  });
+  await page.waitForFunction(() => lab.journal.hidden);
+  assert.deepEqual(await page.evaluate(() => [lab.journal.url, lab.journalListeners.size, lab.peers.size, lab.calls.length]), ["", 0, 0, 0]);
+  await page.evaluate(() => {
+    lab.hass.fetchWithAuth = lab.readJournal;
+    lab.card.setConfig({ entity: lab.camera, show_visitor_journal: true });
+    lab.card.hass = lab.hass;
+  });
+  await page.waitForFunction(() => lab.journal.items.length === 3);
+  await page.evaluate(() => { lab.journal.dialog.showModal(); return lab.journal.show(0, "video"); });
+  await page.waitForFunction(() => lab.journal.shadowRoot.querySelector("video").readyState >= 2);
+  await page.evaluate(async () => {
+    lab.closedVideo = lab.journal.shadowRoot.querySelector("video");
+    await lab.closedVideo.play();
+    lab.detachedUrl = lab.journal.url;
+    lab.card.remove();
+  });
+  assert.equal(await page.evaluate(() => lab.closedVideo.paused && !lab.closedVideo.getAttribute("src")
+    && !lab.journal.url && lab.revoked.includes(lab.detachedUrl) && lab.journalListeners.size === 0), true);
+  await page.evaluate(() => document.querySelector("#mount").append(lab.card));
+  await page.waitForFunction(() => lab.journal.items.length === 3);
+  assert.equal(await page.evaluate(() => lab.journalListeners.size), 1);
+  assert.deepEqual(await page.evaluate(() => [lab.peers.size, lab.calls.length]), [0, 0]);
+  await page.evaluate(() => lab.card.remove());
+  assert.deepEqual(errors, []);
+  console.log("Visitor journal: opt-in, image/video, keyboard/swipe, bounds, four languages, cleanup, no device calls: PASS");
+} finally {
+  await browser?.close();
+  await new Promise((done) => server.close(done));
+}

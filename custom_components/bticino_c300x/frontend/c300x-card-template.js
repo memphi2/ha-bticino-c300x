@@ -367,5 +367,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
             </button>
           </div>
         </div>
+        <c300x-visitor-journal hidden></c300x-visitor-journal>
       </ha-card>
     `;

@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -324,6 +325,27 @@ Rectangle {{
 '''
 
 
+@contextmanager
+def animation_clock():
+    """Keep Qt's real-time animation clock ticking even for static offscreen scenes."""
+    from PySide6.QtCore import QVariantAnimation
+
+    # QML Timers are pause animations. With no active animation, Qt can use an
+    # 8000 ms CoarseTimer whose deadline is rounded by hundreds of milliseconds.
+    # Keep normal animation ticks, without changing QML intervals or advancing
+    # simulated time. This value is not connected to any visual item.
+    clock = QVariantAnimation()
+    clock.setStartValue(0.0)
+    clock.setEndValue(1.0)
+    clock.setDuration(1000)
+    clock.setLoopCount(-1)
+    clock.start()
+    try:
+        yield clock
+    finally:
+        clock.stop()
+
+
 def render(args):
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     os.environ["QT_QUICK_BACKEND"] = "software"
@@ -449,7 +471,7 @@ def render(args):
         return [rect.x(), rect.y(), rect.width(), rect.height()]
 
     try:
-        with tempfile.TemporaryDirectory(prefix="c300x-display-layout-") as temp:
+        with animation_clock(), tempfile.TemporaryDirectory(prefix="c300x-display-layout-") as temp:
             directory = Path(temp)
             write_alert_mocks(directory)
             for name, data in sources.items():

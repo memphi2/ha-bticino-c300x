@@ -82,7 +82,7 @@ def qt_python():
     return interpreter
 
 
-def run_harness(tmp_path, component, source, scenarios=()):
+def run_harness(tmp_path, component, source, scenarios=(), viewport="narrow"):
     qml = tmp_path / (component + ".qml")
     qml.write_text(source)
     dependencies = {}
@@ -94,7 +94,7 @@ def run_harness(tmp_path, component, source, scenarios=()):
             dependency.write_bytes(body)
             dependencies[dependency] = body
     result = subprocess.run([qt_python(), str(SCRIPT), "--qml-dir", str(tmp_path),
-                             "--components", component, "--viewports", "narrow",
+                             "--components", component, "--viewports", viewport,
                              "--output", str(tmp_path / "output"), "--check",
                              *(["--scenarios", *scenarios] if scenarios else [])],
                             capture_output=True, text=True, timeout=120)
@@ -228,6 +228,103 @@ def test_shared_window_keeps_real_confirmation_timer_after_navigation(tmp_path):
     checks = {check["name"]: check for check in report["cases"][1]["checks"]}
     assert checks["timeout never executes"]["passed"]
     assert checks["timeout clears confirmation"]["passed"]
+    for name in ("C300XPageNavigation", "C300XLeaveHome"):
+        source = SCRIPT.parents[1] / "device_qml" / (name + ".qml")
+        assert report["production_files"][str(source)] == hashlib.sha256(source.read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize("load_ms", [0, 5])
+def test_animation_clock_keeps_real_qml_timer_and_stops_on_exit(tmp_path, load_ms):
+    # Pick a late coarse-timer phase where available; no production QML is edited.
+    probe = r'''
+import importlib.util
+import json
+import os
+import sys
+
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+os.environ["QT_QUICK_BACKEND"] = "software"
+from PySide6.QtCore import QAbstractAnimation, QElapsedTimer, QTimer, Qt, QUrl
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtTest import QTest
+
+spec = importlib.util.spec_from_file_location("harness", sys.argv[1])
+harness = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(harness)
+app = QGuiApplication([])
+engine = QQmlEngine()
+component = QQmlComponent(engine)
+component.setData(b"import QtQml 2.15\nTimer { interval: 8000; repeat: false }", QUrl())
+timer = component.create()
+assert timer is not None, component.errors()
+fired = []
+elapsed = QElapsedTimer()
+timer.triggered.connect(lambda: fired.append(elapsed.elapsed()))
+load_ticks = []
+load_ms = int(sys.argv[2])
+load = QTimer()
+load.setTimerType(Qt.PreciseTimer)
+def busy_tick():
+    load_ticks.append(1)
+    QTest.qSleep(load_ms)
+load.timeout.connect(busy_tick)
+with harness.animation_clock() as clock:
+    selector = QTimer()
+    selector.setTimerType(Qt.CoarseTimer)
+    phase = QElapsedTimer()
+    phase.start()
+    while True:
+        selector.start(8000)
+        remaining = selector.remainingTime()
+        selector.stop()
+        if remaining >= 8350 or phase.elapsed() >= 1500:
+            break
+        QTest.qWait(5)
+    elapsed.start()
+    timer.setProperty("running", True)
+    if load_ms:
+        load.start(20)
+    QTest.qWait(8250)
+    waited = elapsed.elapsed()
+    load.stop()
+    assert clock.state() == QAbstractAnimation.Running
+assert clock.state() == QAbstractAnimation.Stopped
+try:
+    with harness.animation_clock() as failed_clock:
+        raise RuntimeError("cleanup probe")
+except RuntimeError:
+    pass
+assert failed_clock.state() == QAbstractAnimation.Stopped
+print(json.dumps(dict(fired=fired, waited=waited, coarse_remaining=remaining,
+                     load_ticks=len(load_ticks),
+                     interval=timer.property("interval"), running=timer.property("running"))))
+'''
+    result = subprocess.run([qt_python(), "-c", probe, str(SCRIPT), str(load_ms)],
+                            capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+    timing = json.loads(result.stdout)
+    (tmp_path / "clock.json").write_text(json.dumps(timing))
+    assert timing["interval"] == 8000
+    assert timing["waited"] >= 8250
+    assert len(timing["fired"]) == 1, timing
+    assert 7900 <= timing["fired"][0] <= 8250, timing
+    assert not timing["running"]
+    assert timing["load_ticks"] >= 100 if load_ms else timing["load_ticks"] == 0
+
+
+def test_leave_home_timeout_still_detects_broken_handler(tmp_path):
+    component = "C300XLeaveHome"
+    source = (SCRIPT.parents[1] / "device_qml" / (component + ".qml")).read_text()
+    handler = "onTriggered: root.clearConfirmation()"
+    assert source.count(handler) == 1
+    source = source.replace(handler, "onTriggered: {}")
+    result, report = run_harness(tmp_path, component, source, ("normal",), viewport="native")
+    assert result.returncode == 1, result.stdout + result.stderr
+    checks = {check["name"]: check for check in report["cases"][0]["checks"]}
+    assert checks["timeout never executes"]["passed"]
+    assert not checks["timeout clears confirmation"]["passed"]
+    assert checks["timeout clears confirmation"]["actual"] == "scene.departure"
 
 
 @pytest.mark.parametrize("fault", ["none", "wrong_palette", "click_through", "broken_scroll",

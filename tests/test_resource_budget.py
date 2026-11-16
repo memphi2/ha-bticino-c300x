@@ -21,9 +21,9 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    # Ratchet down after extracting transport, file responses and callback I/O.
-    assert path.stat().st_size <= 425_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 12_300
+    # Ratchet down after transport, auth and script-backed maintenance routes.
+    assert path.stat().st_size <= 390_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 10_850
 
 
 def test_extracted_http_modules_have_separate_budgets() -> None:
@@ -33,6 +33,9 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         # Reserve loopback GUI slots even when network clients fill the pool.
         "http_clients.c": (4_300, 135),
         "callback_queue.c": (6_500, 220),
+        "http_auth.c": (5_500, 165),
+        "http_maintenance.c": (8_000, 220),
+        "http_device_user.c": (13_000, 340),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name

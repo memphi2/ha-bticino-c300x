@@ -83,14 +83,37 @@ Responsibilities:
 - Explicit maintenance/update actions for device-agent, display, firewall, MQTT
   migration and media-user setup.
 
-QML status/patch scripts and GUI reload run as a single bounded child-process
-job in `command_job.c`. The main poll loop continues serving events and requests;
-it never waits synchronously for these scripts. Status and standalone GUI reload
-jobs have a 10-second deadline; QML writes allow 30 seconds for a failed start,
-file rollback and restart of the previous GUI. Output is bounded and there are
-no extra wakeups while idle. Concurrent maintenance writes
-are rejected as busy. A disconnected client does not restart or duplicate its
-job. Other legacy maintenance operations are not yet asynchronous.
+HTTP authentication policy lives in `http_auth.c`; API admission remains in
+`http.c`, before the extracted route dispatchers. `http_maintenance.c` owns
+the QML/GUI routes and one child-process job, client socket and completion
+continuation. It exposes a write-accounting callback, not the agent runtime
+structure. `http_device_user.c` owns device-user responses and the ordered
+label-script/status continuations, using that same job slot.
+
+QML status/patch scripts, GUI reload and device-user label scripts run through
+`command_job.c`. The main poll loop never waits synchronously for these
+scripts. Each status, label and standalone GUI reload script retains its
+10-second deadline; QML writes retain 30 seconds for a failed start, file
+rollback and restart of the previous GUI. There is no maintenance queue or
+additional thread. Concurrent maintenance writes and competing script reads
+are rejected as busy after authorization. A disconnected client retains its
+slot until completion; it does not cancel, restart or duplicate device work.
+Shutdown kills the active process group and releases the socket/context.
+
+QML/GUI output retains its 4096-byte buffer and overflow failure. Device-user
+captures retain their legacy bounded-prefix behavior: 4096 bytes for status,
+8192 for label apply/restore, including the terminator. A single request-scoped
+context is allocated only while needed. The existing eight reads of at most
+1024 bytes per job tick bound noisy-child work. Idle maintenance has no timer.
+HTTP request/output/file-transfer and callback queue limits are unchanged.
+
+This is not a fully asynchronous device-I/O architecture. Device-user routing
+hash/read/write, remount and fsync operations still execute synchronously.
+Firewall, audio-codec, update, legacy MQTT and other device-command routes also
+remain in `http.c`; their transaction/state dependencies need separate scoped
+extractions. No generic worker thread or asynchronous filesystem transaction
+has been introduced. See the [HTTP maintenance boundary](native-http-maintenance.md)
+for compatibility details and focused validation.
 
 QML write transactions retain their previous active files until the GUI process
 start check succeeds. A failed start restores those files before attempting to

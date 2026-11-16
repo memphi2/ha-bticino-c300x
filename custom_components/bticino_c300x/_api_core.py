@@ -66,6 +66,7 @@ class _C300XApiCore:
             async with self._session.request(
                 method,
                 f"{self._base_url}{path}",
+                allow_redirects=False,
                 headers=self._auth_headers(extra_headers),
                 json=json_data,
                 timeout=cast(
@@ -112,6 +113,7 @@ class _C300XApiCore:
             async with self._session.request(
                 method,
                 f"{self._base_url}{path}",
+                allow_redirects=False,
                 headers=self._auth_headers(extra_headers),
                 timeout=cast(Any, self._timeout),
             ) as response:

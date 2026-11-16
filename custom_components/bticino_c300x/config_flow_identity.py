@@ -130,9 +130,9 @@ async def async_existing_manual_discovery(
         # Unload closes resources before HA removes runtime_data. A discovery
         # read must not attach new work to that closed or replaced lifetime.
         if (
-            resources is not None and not resources.closed
+            runtime is not None and resources is not None and not resources.closed
             and getattr(entry, "runtime_data", None) is runtime
-            and runtime.resources is resources
+            and getattr(runtime, "resources", None) is resources
             and entry in current_entries()
         ):
             flow._async_request_event_registration(entry)

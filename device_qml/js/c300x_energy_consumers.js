@@ -4,17 +4,23 @@ function finite(value) {
     return typeof value === "number" && isFinite(value) && value >= 0;
 }
 
-function wholeWatts(watts) {
+function scientificWatts(watts, text) {
+    return typeof text === "string" && text.length <= 25 && text.slice(-2) === " W" &&
+        /^[1-9](\.[0-9]{1,16})?e\+[0-9]{1,3} W$/.test(text) &&
+        Number(text.slice(0, -2)) === watts;
+}
+
+function wholeWatts(watts, value) {
     // Match Python round(): exact halves go to the nearest even integer.
     var rounded = Math.floor(watts), fraction = watts - rounded;
     if (fraction > 0.5 || (fraction === 0.5 && rounded % 2 !== 0)) rounded += 1;
-    var text = rounded.toFixed(0), parts = text.split("e+");
-    // toFixed switches to scientific notation at 1e21; keep the unit in whole W.
-    if (parts.length === 2) {
-        var digits = parts[0].replace(".", "");
-        text = digits + new Array(Number(parts[1]) - digits.length + 2).join("0");
-    }
-    return text + " W";
+    if (watts < 1e21 && typeof value === "string" && value.length <= 23 && value.slice(-2) === " W" &&
+        /^(0|[1-9][0-9]*) W$/.test(value) && Number(value.slice(0, -2)) === rounded) return value;
+    if (watts >= 1e21 && scientificWatts(watts, value)) return value;
+    // Qt4 pads shortest dtoa digits in toFixed: trust the backend for unsafe integers.
+    if (rounded <= 9007199254740991) return rounded.toFixed(0) + " W";
+    var text = rounded.toExponential() + " W";
+    return scientificWatts(rounded, text) ? text : "--";
 }
 
 function rows(payload) {
@@ -26,8 +32,7 @@ function rows(payload) {
         var watts = finite(item.watts) ? item.watts : null;
         result.push({entity_id: String(item.entity_id || ""), label: String(item.label || ""),
             watts: watts, color: item.color || "#90caf9",
-            value: watts === null ? "--" : typeof item.value === "string" && /^\d+ W$/.test(item.value) ?
-                item.value : wholeWatts(watts), order: i});
+            value: watts === null ? "--" : wholeWatts(watts, item.value), order: i});
     }
     result.sort(function(a, b) {
         if (a.watts === null && b.watts !== null) return 1;

@@ -1,6 +1,7 @@
 """Consumers replace the old flow chart with independently scaled live watts."""
 
 import json
+import os
 import shutil
 import subprocess
 
@@ -18,6 +19,20 @@ def test_consumers_js_contract_extremes_and_hysteresis():
     result = subprocess.run([node, str(ROOT / "tests/qml/energy_consumers.cjs")],
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_consumers_qt4_runtime_labels():
+    paths = [os.environ.get("C300X_QT4_" + key) for key in ("QEMU", "ROOTFS", "PROBE", "IMPORTS")]
+    if not all(paths):
+        pytest.skip("Optional offline Qt4 ARM runtime requires C300X_QT4_QEMU/ROOTFS/PROBE/IMPORTS")
+    qemu, rootfs, probe, imports = paths
+    result = subprocess.run([
+        qemu, "-L", rootfs, "-E", f"LD_LIBRARY_PATH={rootfs}/usr/lib:{rootfs}/lib",
+        probe, str(ROOT / "tests/qml/energy_consumers_qt4.qml"), imports,
+    ], env={**os.environ, "PROBE_CREATE": "1"}, capture_output=True, text=True, timeout=30)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "C300X_CONSUMERS_QT4_PASS 214" in output, output
 
 
 def test_consumers_is_lazy_qtquick1_without_idle_polling():
@@ -51,6 +66,10 @@ def test_consumers_current_geometry_pixels_scales_and_lazy_unload(tmp_path):
         assert checks["no idle timer"]["passed"]
         assert checks["consumers unload on tab switch"]["passed"]
         assert checks["consumers unload when hidden"]["passed"]
+        for shot in case["snapshots"]:
+            for text in shot["texts"]:
+                if text["text"].endswith(" W"):
+                    assert len(text["text"]) <= 25
         assert not any(text["text"] == "log" for shot in case["snapshots"] for text in shot["texts"])
 
 

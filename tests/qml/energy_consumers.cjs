@@ -30,7 +30,7 @@ for (const [watts, expected] of [[0, '0 W'], [-0, '0 W'], [1e-200, '0 W'],
         [0.5, '0 W'], [1.5, '2 W'], [2.5, '2 W'], [3.5, '4 W'],
         [0.49999999999999994, '0 W'], [0.5000000000000001, '1 W'],
         [1234.5678912345, '1235 W'], [22000.5, '22000 W'], [22001.5, '22002 W'],
-        [1234.5, '1234 W'], [1235.5, '1236 W'], [1e21, '1000000000000000000000 W']]) {
+        [1234.5, '1234 W'], [1235.5, '1236 W'], [9007199254740991, '9007199254740991 W']]) {
     for (const value of [undefined, null, 12, '', 'bad W', `${watts} W`,
                          `${watts}`.replace('.', ',') + ' W', '1.25 kW', expected]) {
         const row = ctx.rows({items: [{watts, value}]})[0];
@@ -38,9 +38,42 @@ for (const [watts, expected] of [[0, '0 W'], [-0, '0 W'], [1e-200, '0 W'],
         assert.equal(row.watts, watts);
     }
 }
-for (const watts of [Number.MAX_VALUE, 1.2345678901234567e200]) {
-    assert(/^\d+ W$/.test(ctx.rows({items: [{watts}]})[0].value));
+// Preserve Python's canonical integer digits; Qt4 toFixed would pad shortest dtoa instead.
+for (const [watts, value] of [[9007199254740992, '9007199254740992 W'],
+        [1e20, '100000000000000000000 W'], [999999999999999900000, '999999999999999868928 W'],
+        [1e21, '1e+21 W'], [Number.MAX_VALUE, '1.7976931348623157e+308 W']]) {
+    const row = ctx.rows({items: [{watts, value}]})[0];
+    assert.equal(row.value, value);
+    assert.equal(row.watts, watts);
 }
+// A Qt4-like toFixed must never be used to invent exact digits for unsafe integers.
+vm.runInContext(`var nativeToFixed = Number.prototype.toFixed;
+    Number.prototype.toFixed = function(digits) {
+        if (this > 9007199254740991) throw new Error('unsafe toFixed');
+        return nativeToFixed.call(this, digits);
+    };`, ctx);
+for (const watts of [9007199254740992, 1e20, 999999999999999900000,
+                    1e21, 1.0000000000000001e21, Number.MAX_VALUE, 1.2345678901234567e200]) {
+    for (const value of [undefined, null, 12, '', '9'.repeat(309) + ' W', '1 W', '1 kWh',
+                         ' 1e+21 W', '1e+21 W\n', '1.000000000000000000000e+21 W',
+                         'Infinity W', 'NaN W', '0.1e+22 W', '1e-21 W', '1000000000000000000000 W']) {
+        const row = ctx.rows({items: [{watts, value}]})[0];
+        assert(/^[1-9](?:\.\d+)?e\+\d+ W$/.test(row.value));
+        assert(row.value.length <= 25);
+        assert(row.value.endsWith(' W'));
+        assert.equal(Number(row.value.slice(0, -2)), watts);
+        assert.equal(row.watts, watts);
+    }
+}
+vm.runInContext('Number.prototype.toFixed = nativeToFixed;', ctx);
+vm.runInContext(`var nativeToExponential = Number.prototype.toExponential;
+    Number.prototype.toExponential = function() { return '1e+20'; };`, ctx);
+assert.equal(ctx.rows({items: [{watts: 1e21}]})[0].value, '--');
+assert.equal(ctx.rows({items: [{watts: 1e21, value: '1e+21 W'}]})[0].value, '1e+21 W');
+vm.runInContext('Number.prototype.toExponential = nativeToExponential;', ctx);
+assert.equal(ctx.rows({items: [{watts: 0.5, value: '1 W'}]})[0].value, '0 W');
+assert.equal(ctx.rows({items: [{watts: 1250, value: '999 W'}]})[0].value, '1250 W');
+assert.equal(ctx.rows({items: [{watts: 1234.5, value: '9'.repeat(309) + ' W'}]})[0].value, '1234 W');
 const fractional = items([1.01, 1.02, 1.03]);
 const fractionalRows = ctx.rows({items: fractional});
 assert.deepEqual(plain(fractionalRows.map(row => row.watts)), [1.03, 1.02, 1.01]);

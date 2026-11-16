@@ -1,6 +1,7 @@
 """Configured HA device power only: exact watts, stable Top10 and no inference."""
 
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -125,7 +126,9 @@ def test_colors_follow_entity_identity_not_power_rank_or_preferences_order():
     (1234.5678912345, "W", 1234.5678912345, "1235 W"),
     (22000.5, "W", 22000.5, "22000 W"), (22001.5, "W", 22001.5, "22002 W"),
     (1.2345, "kW", 1234.5, "1234 W"), (1.2355, "kW", 1235.5, "1236 W"),
-    (0.0005, "kW", 0.5, "0 W"), (1e21, "W", 1e21, "1000000000000000000000 W"),
+    (0.0005, "kW", 0.5, "0 W"), (1e20, "W", 1e20, "100000000000000000000 W"),
+    (999999999999999900000, "W", 999999999999999900000.0, "999999999999999868928 W"),
+    (1e21, "W", 1e21, "1e+21 W"),
 ])
 @pytest.mark.parametrize("language", ["de", "en", "fr", "it", "unknown"])
 def test_value_text_is_whole_watts_without_changing_measurement(value, unit, watts, display, language):
@@ -160,9 +163,19 @@ def test_names_units_localization_and_extremes_stay_bounded(language):
     assert items["sensor.tiny"]["value"] == "0 W"
     assert items["sensor.tiny"]["watts"] == 1e-100
     assert items["sensor.huge"]["watts"] == 1e300
-    assert all(len(item["value"]) <= 311 and item["value"].removesuffix(" W").isdigit()
-               and item["value"].endswith(" W") for item in items.values())
+    assert items["sensor.huge"]["value"] == "1e+300 W"
+    assert all(len(item["value"]) <= 25 and item["value"].endswith(" W") for item in items.values())
     assert len(json.dumps(result, allow_nan=False)) < 2048
+
+
+@pytest.mark.parametrize("watts", [1e21, 1.0000000000000001e21, 1.2345678901234567e200, sys.float_info.max])
+def test_extreme_display_round_trips_without_clamping_the_measurement(watts):
+    item = consumers_payload((EnergyConsumer("sensor.power"),),
+                             {"sensor.power": state(watts)}, "en")["items"][0]
+    assert item["watts"] == watts
+    assert len(item["value"]) <= 25
+    assert "e+" in item["value"] and item["value"].endswith(" W")
+    assert float(item["value"].removesuffix(" W")) == watts
 
 
 def test_consumer_page_is_independent_of_daily_energy_and_allows_no_aggregate_sources():

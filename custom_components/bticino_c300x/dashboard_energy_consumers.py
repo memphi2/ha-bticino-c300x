@@ -61,6 +61,11 @@ def consumer_color(entity_id: str) -> str:
     return _COLORS[int(hashlib.sha256(entity_id.encode()).hexdigest()[:8], 16) % len(_COLORS)]
 
 
+def consumer_value(watts: float) -> str:
+    """Whole W; extreme floats use bounded, round-trip scientific notation."""
+    return f"{round(watts)} W" if watts < 1e21 else f"{watts} W"
+
+
 def consumers_payload(
     sources: tuple[EnergyConsumer, ...], states: Mapping[str, Any], language: str,
 ) -> dict[str, Any]:
@@ -80,6 +85,6 @@ def consumers_payload(
         name = source.name or (getattr(state, "attributes", {}) or {}).get("friendly_name")
         label = " ".join(name.split())[:80] if isinstance(name, str) and name.strip() else source.entity_id
         items.append({"entity_id": source.entity_id, "label": label, "watts": watts,
-                      "value": f"{round(watts)} W", "color": consumer_color(source.entity_id)})
+                      "value": consumer_value(watts), "color": consumer_color(source.entity_id)})
     return {"items": items, "unit": "W", "empty_text": labels["consumers_empty"],
             "status": labels["consumers_incomplete"] if incomplete else ""}

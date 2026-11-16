@@ -163,20 +163,40 @@ def run(mode, fault="none"):
                 js("var stale = mockTransport.pending()[0]; var callback = stale.onreadystatechange; probe.callActive = true")
                 assert js("stale.aborted && mockTransport.pending().length === 0")
                 QTest.qWait(150)
-                assert js("mockTransport.log.length") == 1
-                js("probe.callActive = false")
-                QTest.qWait(150)
                 assert js("mockTransport.log.length") == 2
+                assert js("probe.alertTarget.canConnect() && !probe.alertTarget.canListen()")
+                assert js("mockTransport.pending().length === 1")
+                assert js("mockTransport.pending()[0].url") == "http://127.0.0.1:8090/ui/alerts/next?protected=1"
+                js("var protectedPoll = mockTransport.pending()[0]")
+                QTest.qWait(300)
+                assert js("mockTransport.log.length") == 2, "protected GET sleeps without polling"
+                js("probe.callActive = false")
+                assert js("protectedPoll.aborted && mockTransport.pending().length === 0")
+                QTest.qWait(150)
+                assert js("mockTransport.log.length") == 3
+                assert js("mockTransport.pending()[0].url") == "http://127.0.0.1:8090/ui/alerts/next"
                 js('stale.status = 200; stale.readyState = 4; stale.responseText = "{}"; callback()')
                 assert js("mockTransport.pending().length === 1 && mockTransport.pending()[0] !== stale && !probe.alertTarget.notice")
                 js("probe.alertTarget.preempt()")
                 assert js("mockTransport.pending().length === 0")
                 QTest.qWait(150)
-                assert js("mockTransport.log.length") == 3
+                assert js("mockTransport.log.length") == 4
                 js('mockTransport.pending()[0].respond(409, "{}")')
                 QTest.qWait(150)
-                assert js("mockTransport.log.length") == 4
+                assert js("mockTransport.log.length") == 5
                 assert js("mockTransport.pending().length === 1")
+                js("probe.alertTarget.visible = false")
+                QTest.qWait(150)
+                assert js("probe.alertTarget.canConnect() && !probe.alertTarget.canListen()")
+                assert js("mockTransport.pending().length === 1")
+                assert js("mockTransport.pending()[0].url") == "http://127.0.0.1:8090/ui/alerts/next?protected=1"
+                deliver(1)
+                assert js("!probe.alertTarget.notice && mockTransport.pending().length === 0")
+                assert root.property("wakeCalls") == 0
+                assert root.property("beepCalls") == 0
+                js("probe.alertTarget.preempt()")
+                QTest.qWait(150)
+                assert js("mockTransport.pending().length === 1"), "hidden root resumes until shutdown"
             else:
                 # Control run proves the real timer releases an owned wake.
                 js("probe.global.screenState.state = 0")
@@ -200,7 +220,7 @@ def run(mode, fault="none"):
                 assert root.property("underlyingClicks") == 2
             js("var last = mockTransport.pending()[0]; probe.alertTarget.shutdown()")
             QTest.qWait(150)
-            assert js("last.aborted && mockTransport.pending().length === 0 && !probe.alertTarget.canListen()")
+            assert js("last.aborted && mockTransport.pending().length === 0 && !probe.alertTarget.canListen() && !probe.alertTarget.canConnect()")
             window.setSource(QUrl())
             window.close()
             app.processEvents()

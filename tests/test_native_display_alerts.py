@@ -33,9 +33,9 @@ def post(lab, data=None, headers=BEARER_HEADERS):
     return request(lab.api, "POST", json.dumps(payload() if data is None else data), headers, API)
 
 
-def connect(lab):
+def connect(lab, *, protected=False):
     gui = http.client.HTTPConnection("127.0.0.1", lab.ui, timeout=2)
-    gui.request("GET", NEXT, headers=GUI_HEADERS)
+    gui.request("GET", NEXT + ("?protected=1" if protected else ""), headers=GUI_HEADERS)
     assert request(lab.ui, path="/health")[0] == 200
     return gui
 
@@ -209,8 +209,9 @@ def test_duplicate_never_replays_after_gui_restart(lab):
         gui.close()
 
 
-def test_idle_poll_and_shutdown_cleanup(lab):
-    gui = connect(lab)
+@pytest.mark.parametrize("protected", [False, True])
+def test_idle_poll_and_shutdown_cleanup(lab, protected):
+    gui = connect(lab, protected=protected)
     try:
         # No periodic empty response, including beyond the delivery window.
         gui.sock.settimeout(5.2)
@@ -221,6 +222,40 @@ def test_idle_poll_and_shutdown_cleanup(lab):
         assert post(lab)[0] == 503
     finally:
         gui.close()
+
+
+def test_live_protected_listener_suppresses_without_delivery_or_replay(lab):
+    before = file_state(lab.path)
+    gui = connect(lab, protected=True)
+    expected = (200, {"ok": True, "accepted": False, "suppressed": True, "reason": "display_protected"})
+    try:
+        assert post(lab)[:2] == expected
+        gui.sock.settimeout(0.1)
+        with pytest.raises(TimeoutError):
+            gui.sock.recv(1, socket.MSG_PEEK)
+        assert post(lab, payload(message="Different"))[0] == 409
+        assert file_state(lab.path) == before
+        gui.sock.shutdown(socket.SHUT_RDWR)
+        gui.close()
+        # A remembered suppression applies only to the old request ID.
+        assert post(lab, payload(id="c" * 32))[0] == 503
+        gui = connect(lab)
+        assert post(lab)[:2] == expected
+        assert post(lab, payload(id="c" * 32))[:2] == (200, {"ok": True, "accepted": True})
+        assert json.loads(gui.getresponse().read())["id"] == "c" * 32
+    finally:
+        gui.close()
+
+
+@pytest.mark.parametrize("query", ["protected=0", "protected=true", "protected=1&protected=1", "protected=1&extra=1"])
+def test_protection_mode_has_one_unambiguous_encoding(lab, query):
+    assert request(lab.ui, headers=GUI_HEADERS, path=NEXT + "?" + query)[0] == 400
+
+
+def test_protection_mode_retains_gui_authentication(lab):
+    assert request(lab.ui, path=NEXT + "?protected=1")[0] == 403
+    assert request(lab.ui, headers={**GUI_HEADERS, "Origin": "null"}, path=NEXT + "?protected=1")[0] == 403
+    assert post(lab)[0] == 503
 
 
 @pytest.mark.parametrize("sanitized", [False, True], ids=["host", "asan-ubsan"])

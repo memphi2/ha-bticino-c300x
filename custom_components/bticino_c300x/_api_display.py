@@ -18,17 +18,19 @@ def _touch_tone_status(data: Any) -> dict[str, Any]:
 
 class _ApiDisplayMixin(_C300XApiCore):
     async def async_send_display_alert(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Send once; acceptance confirms transport queueing, not GUI effects."""
+        """Send once; distinguish queue acceptance from explicit GUI protection."""
         data = await self._request_json(
             "POST", "/api/v1/display/alert", json_data=payload,
             request_timeout=8.0,
         )
-        if (
-            not isinstance(data, dict)
-            or data.get("ok") is not True
-            or data.get("accepted") is not True
-        ):
+        if not isinstance(data, dict) or data.get("ok") is not True:
             raise C300XAgentApiResponseError("Display alert transport was not accepted")
+        accepted = (data.get("accepted") is True
+                    and data.get("suppressed", False) is False and data.get("reason") is None)
+        protected = (data.get("accepted") is False and data.get("suppressed") is True
+                     and data.get("reason") == "display_protected")
+        if not accepted and not protected:
+            raise C300XAgentApiResponseError("Unconfirmed display alert outcome")
         return data
 
     async def async_touch_tone_status(self) -> dict[str, Any]:

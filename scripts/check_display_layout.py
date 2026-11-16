@@ -808,7 +808,7 @@ def render(args):
                                 check("ack request revision", json.loads(query["option"][0]), {"revision": f"{1:032x}", "action_id": None})
                             click(named(area, "underlying"))
                             check("underlying sentinel really works", frame.property("underlyingClicks"), 1)
-                            # Inject a captured callback after abort; never manufacture a live GET while protected.
+                            # Protected roots retain only a presence GET; stale safe callbacks cannot deliver.
                             for serial, (prop, value, restore) in enumerate((
                                 ("callActive", True, False), ("ringing", True, False), ("guiReady", False, True),
                                 ("activePage", "alarm", "home"), ("activePage", "settings", "home"),
@@ -818,18 +818,27 @@ def render(args):
                                 js("var savedPoll = mockTransport.capture()")
                                 guard_target = component if prop == "visible" else frame
                                 guard_target.setProperty(prop, value)
-                                settle()
+                                settle(125)
                                 check(f"{prop}-{value} blocked", js("probe.alertTarget.canListen()"), False)
+                                check(f"{prop}-{value} connected", js("probe.alertTarget.canConnect()"), True)
                                 check(f"{prop}-{value} preempts", panel.isVisible(), False)
                                 check(f"{prop}-{value} aborts poll", js("savedPoll.request.aborted === true"), True)
-                                check(f"{prop}-{value} no pending poll", js("mockTransport.pending().length"), 0)
+                                check(f"{prop}-{value} one protected poll", js("mockTransport.pending().map(function(r) { "
+                                      "return {method: r.method, url: r.url, headers: r.headers} })"), [
+                                    {"method": "GET", "url": "http://127.0.0.1:8090/ui/alerts/next?protected=1",
+                                     "headers": {"X-C300X-GUI": "alerts-v1"}}])
+                                js("var protectedPoll = mockTransport.pending()[0]")
                                 deliver(serial * 2 + 1, stale=True)
                                 snapshot(f"blocked-{prop}-{value}", expect_blank=True)
                                 check(f"{prop}-{value} suppresses incoming", panel.isVisible(), False)
+                                check(f"{prop}-{value} stale preserves protected poll", js("mockTransport.pending()[0] === protectedPoll"), True)
                                 guard_target.setProperty(prop, restore)
                                 settle(125)
                                 wait_until(lambda: js("mockTransport.pending().length") == 1, 1000)
                                 check(f"{prop}-{value} resumes once", js("mockTransport.pending().length"), 1)
+                                check(f"{prop}-{value} aborts protected poll", js("protectedPoll.aborted === true"), True)
+                                check(f"{prop}-{value} restores safe URL", js("mockTransport.pending()[0].url"),
+                                      "http://127.0.0.1:8090/ui/alerts/next")
                                 js("var resumedPoll = mockTransport.pending()[0]")
                                 deliver(serial * 2 + 1, stale=True)
                                 check(f"{prop}-{value} stale preserves resumed poll", js("mockTransport.pending()[0] === resumedPoll"), True)

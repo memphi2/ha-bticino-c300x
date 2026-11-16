@@ -614,6 +614,10 @@ other life-safety alerting system**.
 Popup, wake and the bounded stock short-beep signal are permitted only on the
 stock Home or HA page when the GUI is ready and no call is active or ringing.
 Alarmo, PIN entry, settings and other protected pages block these effects.
+With the matching agent and Display patch, a live GUI explicitly reports this
+protection: the action completes without a delivery error, keeps the HA notice,
+and logs that popup, wake and sound were suppressed. This is not confirmation
+that an alert was shown or heard. A missing or disconnected GUI remains an error.
 User interaction, standby, a call or leaving an allowed context stops them;
 they are not queued for the next wake or replayed on return. Higher-severity
 alerts may replace lower-severity alerts, not vice versa.
@@ -621,14 +625,18 @@ alerts may replace lower-severity alerts, not vice versa.
 The integration stores the notice in HA memory, then sends exactly one POST to
 the agent. No waiting GUI connection means an error, not a native queue or
 automatic retry. The stored notice may still be read later on the HA page,
-without delayed wake or sound. An accepted response confirms a write to the
+without delayed wake or sound. Protection is tied to the live GUI connection,
+not a persistent flag; the connection adds no periodic status polling or device
+file writes. An accepted response confirms a write to the
 waiting GUI connection only; it does not prove GUI rendering, physical wake
 or audible output. A lost response does not prove non-delivery.
 
 This feature requires the matching **2.5.0 agent and display bundle**, including
 the reapplied Display patch. The unreleased implementation is validated by
-local tests and strict simulations, not hardware proof. Notify hardware
-validation is pending.
+local tests and strict simulations, not hardware proof. Wake, timed sound,
+acknowledgement and call protection were manually tested on the previous 2.5.0
+candidate; the updated protection-status protocol still requires a device test
+before merge.
 
 ## Entity Reference
 

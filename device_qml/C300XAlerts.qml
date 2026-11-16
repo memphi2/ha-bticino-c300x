@@ -33,13 +33,12 @@ Item {
         return !stopped && !blocked && visible && !!Alerts.runtimeFor(root)
     }
 
+    function canConnect() {
+        return !stopped && !!Alerts.runtimeFor(root)
+    }
+
     function updateGuard() {
-        if (blocked || !visible) preempt()
-        else if (canListen()) {
-            reconnect.stop()
-            resumeAttempts = 5
-            resume.restart()
-        }
+        preempt()
     }
 
     function abortPoll() {
@@ -60,7 +59,7 @@ Item {
         // Call hooks can run before their guard bindings change, or without a
         // guard transition. Yield once for both bindings and socket teardown.
         resumeAttempts = 5
-        if (canListen()) resume.restart()
+        if (canConnect()) resume.restart()
     }
 
     function userInteraction() {
@@ -106,24 +105,26 @@ Item {
 
     function waitForCommand() {
         var runtime = Alerts.runtimeFor(root)
-        if (!canListen() || runtime.pendingRequest) return
+        if (!canConnect() || runtime.pendingRequest) return
         reconnect.stop()
         resume.stop()
         var generation = pollGeneration
+        // A protected connection only advertises presence, never commands.
+        var protectedRequest = !canListen()
         var request = new XMLHttpRequest()
         runtime.pendingRequest = request
         request.onreadystatechange = function() {
-            if (!canListen() || Alerts.runtimeFor(root) !== runtime || generation !== pollGeneration || runtime.pendingRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
+            if (!canConnect() || Alerts.runtimeFor(root) !== runtime || generation !== pollGeneration || runtime.pendingRequest !== request || request.readyState !== XMLHttpRequest.DONE) return
             runtime.pendingRequest = null
             var valid = false
-            if (request.status === 200 && request.responseText.length <= 16384) {
+            if (!protectedRequest && canListen() && request.status === 200 && request.responseText.length <= 16384) {
                 try {
                     var command = JSON.parse(request.responseText)
                     valid = !!Alerts.validate(command, new Date().getTime())
                     if (valid) runtime.controller.receive(command)
                 } catch (error) { valid = false }
             }
-            if (!canListen() || generation !== pollGeneration) return
+            if (!canConnect() || generation !== pollGeneration) return
             if (valid) { resumeAttempts = 5; waitForCommand() }
             else if (request.status === 409 && resumeAttempts > 0) {
                 resumeAttempts -= 1
@@ -131,14 +132,14 @@ Item {
             } else reconnect.restart()
         }
         try {
-            request.open("GET", "http://127.0.0.1:8090/ui/alerts/next", true)
+            request.open("GET", "http://127.0.0.1:8090/ui/alerts/next" + (protectedRequest ? "?protected=1" : ""), true)
             request.setRequestHeader("X-C300X-GUI", "alerts-v1")
             request.send()
         } catch (error) {
             runtime.pendingRequest = null
             request.onreadystatechange = function() {}
             request.abort()
-            if (canListen() && generation === pollGeneration) reconnect.restart()
+            if (canConnect() && generation === pollGeneration) reconnect.restart()
         }
     }
 

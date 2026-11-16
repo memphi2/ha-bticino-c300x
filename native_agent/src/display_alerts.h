@@ -13,11 +13,12 @@ struct c300x_display_alert_receipt {
     char id[33];
     char digest[65];
     long long deadline_ms;
-    int accepted;
+    int outcome;
 };
 
 struct c300x_display_alerts {
     int gui_fd;
+    int gui_protected;
     struct c300x_display_alert_receipt receipts[C300X_DISPLAY_ALERTS_DEDUP_SLOTS];
 };
 

@@ -370,7 +370,10 @@ def test_alerts_mock_transport_pixels_and_interactions(tmp_path, fault):
             assert "adaptation_warnings" not in case
             requests = case["mock_requests"]
             assert len([request for request in requests if "/homeassistant?" in request["url"]]) == 1
-            assert len([request for request in requests if "/ui/alerts/next" in request["url"]]) == 14
+            assert len([request for request in requests if request["url"] == "http://127.0.0.1:8090/ui/alerts/next"]) == 14
+            protected = [request for request in requests if request["url"] == "http://127.0.0.1:8090/ui/alerts/next?protected=1"]
+            assert len(protected) == 6
+            assert all(request["headers"] == {"X-C300X-GUI": "alerts-v1"} for request in protected)
             assert all(request["method"] == "GET" for request in requests)
             states = {shot["state"] for shot in case["snapshots"]}
             assert {"acknowledged", "blocked-callActive-True", "blocked-activePage-alarm", "blocked-visible-False"} <= states

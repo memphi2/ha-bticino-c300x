@@ -39,6 +39,9 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
 - `C300XAlerts.qml` and `js/c300x_alerts.js`: standard Notify popup with bounded
   wake and stock short-beep effects, only on safe Home/HA screens. Calls,
   Alarmo and other protected pages block effects, with no deferred replay.
+  A single sleeping loopback request reports protection for that connection's
+  lifetime; closing it clears the status. No periodic status timer or file write
+  is added. Protected requests never receive alert payloads.
   One loopback request sleeps waiting for an alert; idle operation does not poll.
   This is supplementary information, not a fire alarm. See the
   [Notify contract](../docs/feature-reference.md#standard-notify-service).

@@ -253,15 +253,24 @@ class _AgentEventRegistration:
         self._connection_state.mark_connected()
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._send_connection_state_changed()
-        if registration_created or transport_changed:
+        resources = getattr(runtime, "resources", None)
+        if (
+            registration_created or transport_changed
+            or getattr(resources, "display_bridge_registration_pending", False)
+        ):
             await self._handle_runtime_registration_created()
+        if (
+            getattr(resources, "display_bridge_registration_pending", False)
+            and self._renewal_cancel is None
+        ):
+            self._schedule_renewal()
         self._registration_stage = "diagnostics"
         await async_refresh_agent_diagnostics(self._hass, self._entry)
 
     async def _handle_runtime_registration_created(self) -> None:
         """Refresh runtime-only agent features after a new agent subscription."""
 
-        if self._on_runtime_registration_created is None:
+        if self._stopped or self._on_runtime_registration_created is None:
             return
         try:
             await self._on_runtime_registration_created()

@@ -939,6 +939,19 @@ async def _async_configure_display_bridge(
 
     from .callback_url import async_generate_agent_callback_url
 
+    runtime_data = entry.runtime_data
+    resources = getattr(runtime_data, "resources", None)
+
+    def check_active() -> None:
+        if (
+            getattr(entry, "runtime_data", None) is not runtime_data
+            or getattr(resources, "closed", False)
+        ):
+            raise asyncio.CancelledError
+
+    check_active()
+    if resources is not None:
+        resources.display_bridge_registration_pending = True
     enabled = bool(_entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False))
     webhook_url = (
         await async_generate_agent_callback_url(
@@ -950,7 +963,8 @@ async def _async_configure_display_bridge(
         else ""
     )
     shared_secret = entry.data.get(CONF_SHARED_SECRET, "") if enabled else ""
-    diagnostics = entry.runtime_data.diagnostics.display_bridge_diagnostics
+    check_active()
+    diagnostics = runtime_data.diagnostics.display_bridge_diagnostics
     if enabled:
         diagnostics.mark_callback_attempt(webhook_url, datetime.now(UTC))
     else:
@@ -959,6 +973,7 @@ async def _async_configure_display_bridge(
         diagnostics.mark_attempt(datetime.now(UTC))
     try:
         status = await api.async_display_bridge_status()
+        check_active()
         configured = bool(status.get("configured"))
         if enabled:
             expected_hash = display_bridge_callback_fingerprint(
@@ -967,10 +982,14 @@ async def _async_configure_display_bridge(
                 shared_secret,
             )
             if configured and status.get("callback_hash") == expected_hash:
+                if resources is not None:
+                    resources.display_bridge_registration_pending = False
                 diagnostics.mark_success(datetime.now(UTC))
                 await _async_notify_display_configuration(api)
                 return
         elif not configured:
+            if resources is not None:
+                resources.display_bridge_registration_pending = False
             diagnostics.mark_success(datetime.now(UTC))
             return
         await api.async_configure_display_bridge(
@@ -978,10 +997,16 @@ async def _async_configure_display_bridge(
             webhook_url=webhook_url,
             shared_secret=shared_secret,
         )
+        check_active()
+        if resources is not None:
+            resources.display_bridge_registration_pending = False
         diagnostics.mark_success(datetime.now(UTC))
         if enabled:
             await _async_notify_display_configuration(api)
     except C300XAgentApiUnsupportedError:
+        check_active()
+        if resources is not None:
+            resources.display_bridge_registration_pending = False
         diagnostics.mark_failure(
             "device-agent endpoint is not available",
             datetime.now(UTC),
@@ -989,6 +1014,9 @@ async def _async_configure_display_bridge(
         if enabled:
             _LOGGER.debug("C300X device agent does not support display bridge registration")
     except C300XAgentApiError as err:
+        check_active()
+        if resources is not None:
+            resources.display_bridge_registration_pending = True
         error = compact_error_text(err)
         diagnostics.mark_failure(error, datetime.now(UTC))
         if enabled:

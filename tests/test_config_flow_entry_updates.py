@@ -8,14 +8,19 @@ import pytest
 from homeassistant.config_entries import UNDEFINED
 
 from custom_components.bticino_c300x import config_flow
+from custom_components.bticino_c300x.camera_media.ha_compat import (
+    HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO,
+)
 from custom_components.bticino_c300x.config_flow_features import (
     current_connection_options,
 )
+from custom_components.bticino_c300x.config_snapshots import CONF_SNAPSHOT_RETENTION
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_MAINTENANCE_TOKEN,
+    CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
 )
@@ -124,3 +129,68 @@ def test_recovery_reload_is_listener_aware_and_atomic(monkeypatch, route, listen
     assert not result.get("errors")
     assert hass.config_entries.async_schedule_reload.call_count == (0 if listeners and not changed else 1)
     assert hass.config_entries.async_update_entry.call_count <= 1
+
+
+@pytest.mark.parametrize("storage", ["data", "options"])
+@pytest.mark.parametrize(
+    "initial,current,submitted,expected",
+    [
+        pytest.param((True, False), (False, False), (True, True), (False, False), id="enable-audio-after-video-disabled"),
+        pytest.param((True, False), (True, True), (False, False), (False, False), id="disable-video-after-audio-enabled"),
+        pytest.param((False, False), (True, True), (False, False), (True, True), id="preserve-newer-media-enabled"),
+        pytest.param((True, False), (True, True), (True, False), (True, True), id="preserve-newer-audio-enabled"),
+        pytest.param((True, True), (False, False), (True, True), (False, False), id="preserve-newer-media-disabled"),
+        pytest.param((True, True), (True, True), (True, False), (True, False), id="explicit-audio-disabled"),
+        pytest.param((True, True), (True, True), (True, True), (True, True), id="normalize-raw-unsupported-audio"),
+        pytest.param((False, True), (False, True), (False, True), (False, False), id="normalize-audio-without-video"),
+    ],
+)
+def test_concurrent_media_edits_preserve_current_values_and_native_audio_dependencies(
+    storage, initial, current, submitted, expected,
+):
+    entry, hass = entry_hass()
+    entry.data.update({CONF_VIDEO_ENABLED: initial[0], CONF_NATIVE_TWO_WAY_AUDIO: initial[1]})
+    flow = flow_for(entry, hass, "options")
+
+    async def exercise():
+        await flow.async_step_features()
+        getattr(entry, storage).update({
+            CONF_VIDEO_ENABLED: current[0], CONF_NATIVE_TWO_WAY_AUDIO: current[1],
+            CONF_AGENT_HOST: "new.local", CONF_AGENT_TOKEN: "new-valid",
+        })
+        entry.options["unrelated"] = "concurrent"
+        result = await flow.async_step_features({
+            CONF_VIDEO_ENABLED: submitted[0], CONF_NATIVE_TWO_WAY_AUDIO: submitted[1],
+            CONF_SNAPSHOT_RETENTION: 21,
+        })
+        assert result["type"] == "menu"
+        assert entry.options[CONF_VIDEO_ENABLED] is expected[0]
+        assert entry.options[CONF_NATIVE_TWO_WAY_AUDIO] is (
+            expected[1] and HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
+        )
+        assert entry.options[CONF_SNAPSHOT_RETENTION] == 21
+        assert entry.options["unrelated"] == "concurrent"
+        assert current_connection_options(entry)[CONF_AGENT_HOST] == "new.local"
+        assert current_connection_options(entry)[CONF_AGENT_TOKEN] == "new-valid"
+        hass.config_entries.async_update_entry.assert_called_once()
+        hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
+
+    asyncio.run(exercise())
+
+
+def test_unchanged_supported_media_form_remains_a_noop():
+    entry, hass = entry_hass()
+    enabled = HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
+    entry.data[CONF_NATIVE_TWO_WAY_AUDIO] = enabled
+    flow = flow_for(entry, hass, "options")
+
+    async def exercise():
+        await flow.async_step_features()
+        result = await flow.async_step_features({
+            CONF_VIDEO_ENABLED: True, CONF_NATIVE_TWO_WAY_AUDIO: enabled,
+        })
+        assert result["type"] == "menu"
+        hass.config_entries.async_update_entry.assert_not_called()
+        hass.config_entries.async_schedule_reload.assert_not_called()
+
+    asyncio.run(exercise())

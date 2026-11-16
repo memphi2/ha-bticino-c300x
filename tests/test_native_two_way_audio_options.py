@@ -5,13 +5,13 @@ from types import SimpleNamespace
 
 import pytest
 import voluptuous as vol
+from test_display_settings import _OptionsAreas
 
 from custom_components.bticino_c300x.camera_media.ha_compat import (
     HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO,
 )
 from custom_components.bticino_c300x.config_flow import (
     BticinoC300XConfigFlow,
-    BticinoC300XOptionsFlow,
     _clear_reconfigured_option_overrides,
 )
 from custom_components.bticino_c300x.config_flow_features import (
@@ -80,10 +80,8 @@ def test_native_audio_choice_is_retained_on_success_and_validation_error(kind, e
         options={CONF_NATIVE_TWO_WAY_AUDIO: not enabled}, runtime_data=None,
     )
     if kind == "options":
-        flow = BticinoC300XOptionsFlow(entry)
-        flow.hass = SimpleNamespace(config_entries=SimpleNamespace(
-            async_update_entry=lambda target, *, options: setattr(target, "options", dict(options)),
-        ))
+        areas = _OptionsAreas(entry)
+        flow = areas._flow()
         step = flow.async_step_features
         pending = ""
     else:
@@ -103,12 +101,18 @@ def test_native_audio_choice_is_retained_on_success_and_validation_error(kind, e
     if invalid:
         assert result["errors"] == {CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain"}
         _assert_form_audio(result["data_schema"], enabled)
+        if kind == "options":
+            areas.hass.config_entries.async_update_entry.assert_not_called()
+            areas.hass.config_entries.async_schedule_reload.assert_not_called()
     else:
         # The options flow saves the area at once; the other flows keep it pending.
         kept = getattr(flow, pending) if pending else entry.options
         assert kept[CONF_NATIVE_TWO_WAY_AUDIO] is (
             enabled and HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
         )
+        if kind == "options":
+            areas.hass.config_entries.async_update_entry.assert_called_once()
+            areas.hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
 
 
 def test_reconfigure_removes_stale_native_audio_override():

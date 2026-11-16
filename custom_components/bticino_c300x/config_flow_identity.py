@@ -1,10 +1,20 @@
-"""Pure config-entry identity and discovery endpoint comparisons."""
+"""Config-entry identity checks and authenticated discovery adoption."""
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
-from .const import CONF_AGENT_HOST, CONF_AGENT_PORT, DEFAULT_AGENT_PORT, DOMAIN
+from .api_errors import C300XAgentApiError
+from .const import (
+    CONF_AGENT_HOST,
+    CONF_AGENT_PORT,
+    CONF_AGENT_TOKEN,
+    CONF_MAINTENANCE_TOKEN,
+    DEFAULT_AGENT_PORT,
+    DOMAIN,
+)
+from .discovery import discovery_matches_entry
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 
@@ -49,3 +59,72 @@ def stable_unique_id_from_setup_data(setup_data: dict[str, Any]) -> str | None:
 
     device_id = setup_data.get("device_id")
     return discovery_unique_id({"id": device_id}) if device_id else None
+
+
+def entry_identity_connection(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
+    """Snapshot the effective endpoint and credentials, not unrelated settings."""
+    return {
+        key: entry_config_value(entry, key, default)
+        for key, default in (
+            (CONF_AGENT_HOST, ""), (CONF_AGENT_PORT, DEFAULT_AGENT_PORT),
+            (CONF_AGENT_TOKEN, ""), (CONF_MAINTENANCE_TOKEN, ""),
+        )
+    }
+
+
+
+async def async_adopt_discovery_identity(
+    hass: Any,
+    entry: BticinoC300XConfigEntry,
+    read_setup: Callable[..., Awaitable[dict[str, Any]]],
+    current_entries: Callable[[], list[BticinoC300XConfigEntry]],
+) -> None:
+    """Treat discovery only as a hint to read the already trusted endpoint."""
+    saved = entry_identity_connection(entry)
+    saved_id = entry.unique_id
+    if not saved[CONF_AGENT_TOKEN]:
+        return
+    try:
+        setup = await read_setup(hass, saved, api_token=saved[CONF_AGENT_TOKEN])
+    except C300XAgentApiError:
+        return
+    actual = stable_unique_id_from_setup_data(setup)
+    if (
+        actual is None
+        or saved != entry_identity_connection(entry)
+        or saved_id != entry.unique_id
+        or entry not in (entries := current_entries())
+        or any(
+            other is not entry and discovery_matches_entry(actual, other.unique_id)
+            for other in entries
+        )
+    ):
+        return
+    hass.config_entries.async_update_entry(entry, unique_id=actual)
+
+
+async def async_existing_manual_discovery(
+    flow: Any,
+    discovered_unique_id: str | None,
+    connection: dict[str, Any],
+    matches: Callable[[str | None, str | None], bool],
+    read_setup: Callable[..., Awaitable[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    """Deduplicate discovery and adopt only identity read from the saved endpoint."""
+    if discovered_unique_id is None:
+        return None
+    current_entries = getattr(flow, "_async_current_entries", None)
+    if current_entries is None:
+        return None
+    for entry in current_entries():
+        entry_unique_id = str(getattr(entry, "unique_id", "") or "")
+        if matches(discovered_unique_id, entry_unique_id):
+            return None
+        if not entry_uses_manual_setup_unique_id(entry):
+            continue
+        if not entry_connection_matches_discovery(entry, connection):
+            continue
+        await async_adopt_discovery_identity(flow.hass, entry, read_setup, current_entries)
+        flow._async_request_event_registration(entry)
+        return cast(dict[str, Any], flow.async_abort(reason="already_configured"))
+    return None

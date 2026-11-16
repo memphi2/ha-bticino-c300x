@@ -1549,6 +1549,10 @@ def test_zeroconf_probes_agent_before_auth_form(
 def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    async def validated_identity(_hass, _connection):
+        return {"device_id": "ABCDEF"}, {}
+
+    monkeypatch.setattr(config_flow_module.config_flow_auth, "async_validate_connection", validated_identity)
     calls: list[str] = []
     flow = BticinoC300XConfigFlow()
     flow.hass = SimpleNamespace()
@@ -1690,6 +1694,13 @@ def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
         probe_agent,
     )
 
+    async def read_saved_endpoint(_hass, connection, *, api_token):
+        assert connection[CONF_AGENT_HOST] == "192.0.2.60"
+        assert api_token == "known-token"
+        return {"device_id": "c300x-aabbcc001122"}
+
+    monkeypatch.setattr(config_flow_module, "_async_agent_setup_data", read_saved_endpoint)
+
     result = asyncio.run(
         flow.async_step_zeroconf(
             SimpleNamespace(
@@ -1785,6 +1796,10 @@ def test_zeroconf_rediscovery_requests_runtime_event_registration(
 def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    async def validated_identity(_hass, _connection):
+        return {"device_id": "c300xaabbcc001122"}, {}
+
+    monkeypatch.setattr(config_flow_module.config_flow_auth, "async_validate_connection", validated_identity)
     calls: list[str] = []
     pending_flows = [{"flow_id": "zeroconf-flow"}]
     flow = BticinoC300XConfigFlow()

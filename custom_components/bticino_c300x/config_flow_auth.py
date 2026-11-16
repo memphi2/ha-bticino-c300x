@@ -92,6 +92,20 @@ class AuthFlowSteps:
 
     _setup_unique_id: str | None
 
+    def _setup_identity_error(self: Any, setup: dict[str, Any]) -> dict[str, str]:
+        identity = stable_unique_id_from_setup_data(setup)
+        if self._setup_unique_id is not None:
+            if identity is None:
+                return {"base": "cannot_connect"}
+            if not discovery_matches_entry(identity, self._setup_unique_id):
+                return {"base": "wrong_device"}
+        self._setup_unique_id = identity
+        return {}
+
+    async def _async_validate_setup_identity(self: Any) -> dict[str, str]:
+        setup, errors = await async_validate_connection(self.hass, self._setup_connection)
+        return errors or cast(dict[str, str], self._setup_identity_error(setup))
+
     def _show_agent_auth(self: Any, errors: dict[str, str]) -> ConfigFlowResult:
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="agent_auth",
@@ -112,6 +126,8 @@ class AuthFlowSteps:
             if not errors:
                 candidate = {**self._setup_connection, **auth_data}
                 setup, errors = await async_validate_connection(self.hass, candidate)
+                if not errors:
+                    errors = self._setup_identity_error(setup)
                 if not errors:
                     self._setup_connection = candidate
                     unique_id = stable_unique_id_from_setup_data(setup)

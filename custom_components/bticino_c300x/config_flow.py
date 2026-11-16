@@ -107,10 +107,10 @@ from .config_flow_forms import (
     actions_json as _actions_json,
 )
 from .config_flow_identity import (
-    entry_connection_matches_discovery as _entry_connection_matches_discovery,
+    async_existing_manual_discovery as _async_existing_manual_discovery,
 )
 from .config_flow_identity import (
-    entry_uses_manual_setup_unique_id as _entry_uses_manual_setup_unique_id,
+    entry_connection_matches_discovery as _entry_connection_matches_discovery,
 )
 from .config_flow_identity import manual_setup_unique_id as _manual_setup_unique_id
 from .config_flow_identity import reconfigure_unique_id as _reconfigure_unique_id
@@ -480,7 +480,6 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         discovered_unique_id = discovery_unique_id(properties)
         unique_id = discovered_unique_id or DOMAIN
-        self._setup_unique_id = unique_id
         await self.async_set_unique_id(unique_id)
         self._async_request_existing_entry_event_registration(
             discovered_unique_id,
@@ -525,27 +524,10 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     ) -> FlowResult | None:
         """Merge a later mDNS identity into an existing manual setup entry."""
 
-        if discovered_unique_id is None:
-            return None
-        current_entries = getattr(self, "_async_current_entries", None)
-        if current_entries is None:
-            return None
-
-        for entry in current_entries():
-            entry_unique_id = str(getattr(entry, "unique_id", "") or "")
-            if discovery_matches_entry(discovered_unique_id, entry_unique_id):
-                return None
-            if not _entry_uses_manual_setup_unique_id(entry):
-                continue
-            if not _entry_connection_matches_discovery(entry, connection):
-                continue
-            self.hass.config_entries.async_update_entry(
-                entry,
-                unique_id=discovered_unique_id,
-            )
-            self._async_request_event_registration(entry)
-            return self.async_abort(reason="already_configured")
-        return None
+        return cast(FlowResult | None, await _async_existing_manual_discovery(
+            self, discovered_unique_id, connection,
+            discovery_matches_entry, _async_agent_setup_data,
+        ))
 
     @callback
     def _async_request_existing_entry_event_registration(
@@ -895,9 +877,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     ) -> FlowResult:
         """Create the initial config entry after feature collection."""
 
-        _, errors = await config_flow_auth.async_validate_connection(
-            self.hass, self._setup_connection,
-        )
+        errors = await self._async_validate_setup_identity()
         if errors:
             return self._show_agent_auth(errors)
 

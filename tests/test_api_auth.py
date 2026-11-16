@@ -1,6 +1,7 @@
 """Credential failures must not become retryable network failures."""
 
 import asyncio
+import json
 
 import pytest
 
@@ -54,3 +55,23 @@ def test_maintenance_validation_omits_bearer():
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "", HEADER_MAINTENANCE_TOKEN: "admin-secret",
     }
+
+
+@pytest.mark.parametrize(
+    ("enabled", "allowed", "fingerprint", "accepted"),
+    [(True, False, "", False), (False, True, "", False),
+     (True, True, "", True), (False, False, "admin-only", True)],
+)
+def test_public_auth_status_does_not_validate_wrong_maintenance_key(enabled, allowed, fingerprint, accepted):
+    session = _FakeSession(json.dumps({
+        "noAuth": True, "maintenance_enabled": enabled,
+        "maintenance_no_auth_allowed": allowed,
+        "maintenance_token_fingerprint": fingerprint,
+    }))
+    api = C300XAgentApi(session, "http://agent", "", "admin")
+    if accepted:
+        asyncio.run(api.async_validate_maintenance_auth())
+    else:
+        with pytest.raises(C300XAgentApiAuthError) as caught:
+            asyncio.run(api.async_validate_maintenance_auth())
+        assert caught.value.maintenance

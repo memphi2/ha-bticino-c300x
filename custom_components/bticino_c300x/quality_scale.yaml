@@ -35,11 +35,11 @@ rules:
   has-entity-name: done
   runtime-data: done
   test-before-configure:
-    status: todo
-    comment: Initial API probing and explicit SSH install verification exist. The agent_auth path still advances when optional stable-ID probing fails; a successful authenticated connection is not required on every path before entry creation.
+    status: done
+    comment: Shared read-only credential validation covers manual and discovered setup, installer skip, final creation, reconfigure and connection options. Focused auth-flow and bootstrap regressions pass on HA 2026.10.0 and 2026.11.1; SSH credentials remain ephemeral.
   test-before-setup:
     status: todo
-    comment: Runtime setup deliberately tolerates an offline agent and recovers later. All API errors, including authentication failures, currently use that path rather than differentiated HA setup exceptions.
+    comment: Authentication rejection now raises ConfigEntryAuthFailed and offline recovery can start reauth. Existing entries deliberately still load unavailable while offline rather than raising ConfigEntryNotReady; this custom-integration policy remains distinct from the strict HA setup contract. Focused runtime tests cover both paths.
   unique-config-entry: done
 
   action-exceptions: done
@@ -57,14 +57,14 @@ rules:
     status: done
     comment: manifest.json lists @memphi2, the maintainer of the linked public source repository.
   log-when-unavailable:
-    status: todo
-    comment: events.py logs each registration failure and success changes connection state without a matching recovery log; transition-only loss/recovery logging and caplog tests are missing.
+    status: done
+    comment: Event registration warns once per outage and logs one recovery, using shared registration state across rediscovery. Focused caplog and teardown tests cover repeated failures, incoming callbacks, recovery, another outage and cancellation on HA 2026.10.0 and 2026.11.1.
   parallel-updates:
     status: done
     comment: Entities are non-polling and command concurrency is bounded where outbound calls exist.
   reauthentication-flow:
-    status: todo
-    comment: Outbound agent API and maintenance tokens exist. Options/reconfigure can change them, but there is no async_step_reauth or authentication-failure-triggered recovery flow. SSH bootstrap credentials are one-time inputs.
+    status: done
+    comment: Entry-bound reauth validates access and supplied maintenance keys, preserves identity and unrelated settings, clears stale key overrides and reloads once. Startup and registration rejection trigger HA reauth; focused tests include the installed HA ConfigEntry deduplication API on 2026.10.0 and 2026.11.1. SSH bootstrap remains separate.
   test-coverage:
     status: todo
     comment: Silver requires more than 95 percent coverage in every integration module. The local aggregate 95 percent floor and historical reports do not prove this for the current source.

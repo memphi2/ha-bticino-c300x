@@ -25,6 +25,7 @@ from .agent_contracts import (
     SelfTestStatus,
 )
 from .api_errors import (
+    C300XAgentApiAuthError,
     C300XAgentApiResponseError,
 )
 
@@ -157,7 +158,20 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/auth",
             extra_headers={**self._maintenance_headers(), "Authorization": ""},
         )
-        return normalize_auth_config_status(data)
+        status = normalize_auth_config_status(data)
+        # In API no-auth mode this GET is public. The native agent only exposes
+        # the admin fingerprint to an authorized admin; do not mistake a public
+        # status read for proof that the supplied maintenance key was accepted.
+        if (
+            status.get("no_auth")
+            and not (
+                status.get("maintenance_enabled")
+                and status.get("maintenance_no_auth_allowed")
+            )
+            and not data.get("maintenance_token_fingerprint")
+        ):
+            raise C300XAgentApiAuthError(maintenance=True)
+        return status
 
     async def async_set_no_auth_enabled(
         self,

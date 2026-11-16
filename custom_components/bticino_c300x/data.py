@@ -69,6 +69,7 @@ class C300XConnectionState:
     """Runtime connection state for the device agent."""
 
     available: bool = True
+    authentication_failed: bool = False
     connection_state: str = "connected"
     reconnect_count: int = 0
     last_connection_stage: str | None = None
@@ -89,6 +90,8 @@ class C300XConnectionState:
     def mark_connected(self) -> None:
         """Mark the agent as connected and count recovered reconnects."""
 
+        if self.authentication_failed:
+            return
         if self.was_reconnecting:
             self.reconnect_count += 1
         self.available = True
@@ -107,6 +110,8 @@ class C300XConnectionState:
     ) -> None:
         """Mark a reconnectable outage while preserving short grace availability."""
 
+        if self.authentication_failed:
+            return
         self.connection_state = "reconnecting" if self.available else "disconnected"
         self.last_connection_stage = _connection_stage_from_reason(reason)
         self.last_reconnect_reason = reason

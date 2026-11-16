@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from native_agent.test.smoke import TOKEN, api_get, free_tcp_port, wait_for_health
+from native_agent.test.smoke import TOKEN, api_get, free_tcp_ports, wait_for_health
 
 ROOT = Path(__file__).resolve().parents[1]
 QML = "/api/v1/maintenance/qml-patch"
@@ -66,11 +66,11 @@ class Lab:
 
 @pytest.fixture
 def lab(binary, tmp_path):
-    port, ui_port = free_tcp_port(), free_tcp_port()
+    port, ui_port, own = free_tcp_ports(3)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
         "api": {"token": TOKEN},
-        "openwebnet": {"host": "127.0.0.1", "port": free_tcp_port(), "timeoutMs": 100},
+        "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
         "maintenance": {"enabled": True, "adminToken": "maintenance-token",
                         "qmlPatch": {"enabled": True, "script": str(tmp_path / "job.sh")},
                         "guiReload": {"enabled": True, "script": str(tmp_path / "job.sh")}},

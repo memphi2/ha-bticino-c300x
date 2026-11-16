@@ -17,7 +17,7 @@ from native_agent.test.smoke import (
     api_get,
     api_post,
     callback_url,
-    free_tcp_port,
+    free_tcp_ports,
     free_udp_port,
     managed_tcp_server,
     read_frame,
@@ -96,8 +96,7 @@ def forwarding_agent(
         managed_tcp_server(ForwardingDevice()) as device,
         managed_tcp_server(CallbackServer()) as callback,
     ):
-        api_port = free_tcp_port()
-        ui_port = free_tcp_port()
+        api_port, ui_port = free_tcp_ports(2)
         config = {
             "listen": {"host": "127.0.0.1", "apiPort": api_port, "uiPort": ui_port},
             "api": {"token": TOKEN},

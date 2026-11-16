@@ -356,7 +356,7 @@ class _AgentEventRegistration:
         self._schedule_renewal()
 
     def _schedule_renewal(self) -> None:
-        if self._stopped:
+        if self._stopped or self._renewal_cancel is not None:
             return
         self._renewal_cancel = async_call_later(
             self._hass,

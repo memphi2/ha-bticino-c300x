@@ -116,6 +116,47 @@ def test_late_failure_during_final_diagnostics_also_rearms(monkeypatch):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("stage", ["list", "create"])
+def test_startup_failure_overlapping_subscription_owns_one_renewal(monkeypatch, stage):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch)
+        entered, release = asyncio.Event(), asyncio.Event()
+        method = (
+            "async_list_event_subscriptions"
+            if stage == "list" else "async_register_event_subscription"
+        )
+        original = getattr(api, method)
+
+        async def blocked_subscription(**kwargs):
+            entered.set()
+            await release.wait()
+            return await original(**kwargs)
+
+        monkeypatch.setattr(api, method, blocked_subscription)
+        worker.start()
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            api.async_configure_display_bridge.side_effect = C300XAgentApiConnectionError("overlapping startup failure")
+            await runtime_manager._async_configure_display_bridge(hass, entry, api)
+            assert _active_scheduled_delays() == [300]
+            renewal = _active_scheduled_calls(300)[0]
+            release.set()
+            await _drain_hass_tasks(hass)
+            assert _active_scheduled_calls(300) == [renewal]
+            api.async_configure_display_bridge.side_effect = None
+            await renewal.callback(None)
+            assert not entry.runtime_data.resources.display_bridge_registration_pending
+            assert _active_scheduled_delays() == [300]
+        finally:
+            release.set()
+            entry.runtime_data.resources.close()
+            await asyncio.gather(*hass.async_tasks, return_exceptions=True)
+        assert _active_scheduled_delays() == []
+        assert fake_dispatcher.listeners == []
+
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("unsupported", [False, True])
 def test_healthy_or_unsupported_startup_has_no_idle_poll(monkeypatch, unsupported):
     async def run():

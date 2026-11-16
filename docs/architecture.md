@@ -113,6 +113,13 @@ context is allocated only while needed. The existing eight reads of at most
 1024 bytes per job tick bound noisy-child work. Idle maintenance has no timer.
 HTTP request/output/file-transfer and callback queue limits are unchanged.
 
+Native MQTT broker output uses a fixed 3077-byte pending buffer owned by its
+existing poll state. Complete frames are admitted in order; saturated new
+events are dropped best-effort. CONNECT/SUBSCRIBE output, CONNACK receive and
+PINGREQ progress without synchronous output waits. No worker or idle timer is
+added. DNS/TCP establishment and MQTT-to-device command forwarding remain
+synchronous; see [MQTT output ownership](native-mqtt-output.md).
+
 2.7 is not complete: this is not a fully asynchronous device-I/O architecture.
 Device-user routing hash/read/write, remount and fsync operations still execute
 synchronously.

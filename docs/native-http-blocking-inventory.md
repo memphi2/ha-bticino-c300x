@@ -15,8 +15,8 @@ child exit on the main loop. `http_audio_codec.c` also uses the shared reboot
 continuation. No extra worker thread or command queue was added.
 
 The codec native mutation and device-user native routing/user operations have
-**not** become asynchronous. Write-accounting callbacks also still run on the
-main loop and may reach MQTT publication below.
+**not** become asynchronous. Write-accounting callbacks still run on the main
+loop; their MQTT publication now uses bounded nonblocking output as noted below.
 
 See [preserved contracts](native-http-maintenance.md) for exact statuses,
 deadlines, capture limits, slot admission, disconnect and shutdown behavior.
@@ -138,23 +138,27 @@ command slot and must coordinate with independent media work.
 
 ## Indirect Network Waits And Existing Background Work
 
-HTTP writes/events can reach `record_agent_write` -> diagnostics event, or
-`dispatch_event`/`dispatch_event_internal` directly -> `c300x_mqtt_publish_event`
--> `mqtt_publish` -> `mqtt_send_packet` -> `send_all`. The MQTT socket is
-nonblocking, but `send_all` handles backpressure with a synchronous 500ms
-`poll(POLLOUT)` and may repeat it. This includes maintenance write accounting,
-activation/forwarding/ringer events, memo/message change notifications and
-`/ui/media-closed`. It is not fixed by moving only the child command.
+**Resolved: synchronous MQTT output backpressure.** HTTP writes/events can
+reach `record_agent_write` -> diagnostics event, or
+`dispatch_event`/`dispatch_event_internal` directly -> `c300x_mqtt_publish_event`.
+These publications now use `mqtt_output.c` through the existing MQTT poll owner,
+not `send_all`/synchronous `poll(POLLOUT)`. This covers maintenance write
+accounting, activation/forwarding/ringer events, memo/message notifications and
+`/ui/media-closed` without changing their HTTP responses.
 
-Candidate: bounded pending-packet ownership in the existing MQTT poll state,
-preserving packet order, existing best-effort publication behavior and failure
-handling. Define partial-write/disconnect and saturation behavior first; do not
-reuse a callback worker against the main-owned MQTT socket. There is currently
-no suitable output queue whose size can simply be increased.
+Pending wire output is fixed at 3077 bytes with atomic whole-frame admission.
+Saturation drops the new best-effort publication, not an earlier partial frame.
+Two bytes are reserved for one pending PINGREQ. Positive writes reset the
+existing 500ms no-progress allowance; fatal/stalled output closes and reconnects
+without replay. CONNECT/SUBSCRIBE output and the per-read 1500ms CONNACK wait
+are now poll-driven too. No thread, heap queue or idle timer was added. See
+[MQTT output contracts and tests](native-mqtt-output.md).
 
 MQTT reconnect (`c300x_mqtt_open_if_needed`) and command draining
 (`handle_mqtt_commands` -> `send_mqtt_command_to_device`) also perform DNS/socket
-waits on the loop, though they are not direct HTTP request handlers. Enabling
+waits on the loop, though they are not direct HTTP request handlers. Specifically,
+`socket_connect_timeout` still resolves DNS and waits for TCP establishment;
+only the subsequent MQTT handshake/output is now poll-driven. Enabling
 MQTT can trigger the next reconnect iteration. Startup/periodic forwarding
 refresh is another non-request OpenWebNet caller. These prevent a whole-loop
 nonblocking claim even after request handlers alone are changed.

@@ -106,7 +106,7 @@ use the device sysroot; no installed-device behavior is claimed.
 **2.7 is not complete.** This extraction moves the listed command waits off the
 HTTP loop, not every blocking device operation. See the
 [blocking-path inventory and proposed ownership designs](native-http-blocking-inventory.md)
-for exact remaining route/call paths, including OpenWebNet, MQTT event sends,
+for exact remaining route/call paths, including OpenWebNet, MQTT connection waits,
 media lifecycle joins, and in-process file/remount transactions. Their recovery,
 ordering and cancellation semantics must be settled before moving them to a
 worker. The remaining `http.c` is still large; it has not been split into

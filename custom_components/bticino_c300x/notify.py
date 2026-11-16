@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from typing import Any
 
 from homeassistant.components.notify.legacy import BaseNotificationService
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers.service import async_set_service_schema
 from homeassistant.setup import async_setup_component
 
 from .capabilities import entry_device_ui_enabled_or_patch_active
@@ -17,6 +19,36 @@ from .entry_types import BticinoC300XConfigEntry
 from .service_authorization import authorized_service
 
 _SERVICES = f"{DOMAIN}_notify_services"
+
+
+@callback
+def _async_set_notify_description(
+    hass: HomeAssistant, name: str, service: C300XNotificationService,
+) -> None:
+    """Describe the fixed display target without changing runtime validation."""
+    title = service.entry.title.strip() or "BTicino C300X"
+    fields = deepcopy(service.services_dict["notify"]["fields"])
+    fields.pop("target", None)
+    fields["data"].update({
+        "description": (
+            "Optional display settings: severity is info (default), warning or error. "
+            "wake_duration and sound_duration are integer seconds from 0 to 300 "
+            "(both default to 30; 0 disables the respective effect). "
+            "expires_in is 1 to 604800 seconds (default 3600). "
+            "notification_id replaces an existing notification with the same ID "
+            "(1-64 lowercase letters, digits, underscores or hyphens)."
+        ),
+        "example": {"severity": "info", "wake_duration": 30, "sound_duration": 30},
+    })
+    async_set_service_schema(hass, "notify", name, {
+        "name": f"Send a display notification to {title}",
+        "description": (
+            "Shows a notification on this BTicino C300X display. By default, wakes "
+            "the screen and plays sound for 30 seconds. Requires an updated device "
+            "agent and Display patch."
+        ),
+        "fields": fields,
+    })
 
 
 class C300XNotificationService(BaseNotificationService):
@@ -78,6 +110,7 @@ async def async_setup_notify(
     try:
         await service.async_setup(hass, name, name)
         await service.async_register_services()
+        _async_set_notify_description(hass, name, service)
         hass.data.setdefault(_SERVICES, {})[entry.entry_id] = service
         entry.async_on_unload(lambda: async_unload_notify(hass, entry))
     except (Exception, asyncio.CancelledError):

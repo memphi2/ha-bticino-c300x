@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant import config_entries, loader
+from homeassistant.components import notify as ha_notify
 from homeassistant.components.http import HomeAssistantHTTP
+from homeassistant.components.notify.legacy import NOTIFY_SERVICE_SCHEMA
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import (
     HomeAssistantError,
@@ -17,6 +19,7 @@ from homeassistant.exceptions import (
     Unauthorized,
     UnknownUser,
 )
+from homeassistant.helpers.service import async_get_all_descriptions
 
 from custom_components.bticino_c300x import runtime_manager
 from custom_components.bticino_c300x.data import C300XRuntimeResources
@@ -31,10 +34,10 @@ from custom_components.bticino_c300x.notify import (
 )
 
 
-def entry_for(key="first", *, enabled=True, capability=True):
+def entry_for(key="first", *, title="Front door", enabled=True, capability=True):
     callbacks = []
     return SimpleNamespace(
-        entry_id=key, data={}, options={"device_ui_enabled": enabled},
+        entry_id=key, title=title, data={}, options={"device_ui_enabled": enabled},
         async_on_unload=callbacks.append, unload_callbacks=callbacks,
         runtime_data=SimpleNamespace(
             capabilities={"display_alerts": capability},
@@ -53,6 +56,8 @@ async def notify_context(tmp_path, monkeypatch, **options):
     hass.http = HomeAssistantHTTP(hass, None, None, None, ["127.0.0.1"], 0, [], "modern")
     # UI/HTTP are outside this service test; notify and its registry are real HA.
     hass.config.components.update({"http", "websocket_api", "frontend"})
+    # Notify metadata needs its real feature enum, not optional AI dependencies.
+    monkeypatch.setattr("homeassistant.helpers.service._base_components", lambda: {"notify": ha_notify})
     monkeypatch.setattr(runtime_manager, "_async_schedule_display_bridge_notify", lambda *a, **kw: None)
     entry = entry_for(**options)
     try:
@@ -71,6 +76,101 @@ async def send(hass, entry, **kwargs):
         "notify", f"bticino_c300x_{entry.entry_id}",
         {"message": "Test message", **kwargs}, blocking=True,
     )
+
+
+@pytest.mark.parametrize("title,display_title", [
+    ("Front door", "Front door"),
+    ("  Renamed entrance  ", "Renamed entrance"),
+    ("", "BTicino C300X"),
+    ("  ", "BTicino C300X"),
+    ('<img src=x onerror="alert(1)"> & Door', '<img src=x onerror="alert(1)"> & Door'),
+])
+def test_notify_metadata_uses_plain_entry_title_and_preserves_schema(
+    tmp_path, monkeypatch, title, display_title,
+):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch, title=title) as (hass, entry):
+            name = "bticino_c300x_first"
+            service = hass.data["bticino_c300x_notify_services"][entry.entry_id]
+            metadata = (await async_get_all_descriptions(hass))["notify"][name]
+            assert metadata["name"] == f"Send a display notification to {display_title}"
+            assert name not in metadata["name"] + metadata["description"]
+            assert "BTicino C300X display" in metadata["description"]
+            assert "30 seconds" in metadata["description"]
+            assert "<img" not in metadata["description"]
+            assert "target" not in metadata
+            fields = metadata["fields"]
+            assert set(fields) == {"message", "title", "data"}
+            original = service.services_dict["notify"]["fields"]
+            assert "target" in original
+            for field in ("message", "title"):
+                assert fields[field] == original[field]
+                assert fields[field] is not original[field]
+            assert fields["data"]["selector"] == original["data"]["selector"]
+            assert fields["data"]["example"] != original["data"]["example"]
+            hints = fields["data"]["description"]
+            for hint in ("severity", "info (default)", "warning", "error", "wake_duration",
+                         "sound_duration", "0 to 300", "default to 30", "0 disables",
+                         "expires_in", "604800", "3600", "notification_id"):
+                assert hint in hints
+            assert hass.services.async_services()["notify"][name].schema is NOTIFY_SERVICE_SCHEMA
+            assert service.targets is None
+            assert service.registered_targets == {}
+            await send(hass, entry, data=fields["data"]["example"])
+            entry.runtime_data.api.async_send_display_alert.assert_awaited_once()
+    asyncio.run(run())
+
+
+def test_notify_metadata_duplicate_titles_rename_and_reload_keep_service_ids(tmp_path, monkeypatch):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, first):
+            second = entry_for("second", title=first.title)
+            try:
+                await async_setup_notify(hass, second)
+                descriptions = (await async_get_all_descriptions(hass))["notify"]
+                first_name, second_name = "bticino_c300x_first", "bticino_c300x_second"
+                assert descriptions[first_name] == descriptions[second_name]
+                first.title = "Garden entrance"
+                async_unload_notify(hass, first)
+                descriptions = (await async_get_all_descriptions(hass))["notify"]
+                assert first_name not in descriptions
+                assert second_name in descriptions
+                await async_setup_notify(hass, first)
+                await async_setup_notify(hass, first)
+                descriptions = (await async_get_all_descriptions(hass))["notify"]
+                assert descriptions[first_name]["name"] == "Send a display notification to Garden entrance"
+                assert descriptions[second_name]["name"] == "Send a display notification to Front door"
+                assert {name for name in descriptions if name.startswith("bticino_c300x_")} == {first_name, second_name}
+                await send(hass, first)
+                await send(hass, second)
+                for entry in (first, second):
+                    entry.runtime_data.api.async_send_display_alert.assert_awaited_once()
+            finally:
+                async_unload_notify(hass, second)
+                second.runtime_data.resources.close()
+    asyncio.run(run())
+
+
+def test_notify_metadata_failure_rolls_back_registration(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import notify
+
+    def fail(*args):
+        raise RuntimeError("metadata failed")
+
+    async def run():
+        async with notify_context(tmp_path, monkeypatch, enabled=False) as (hass, entry):
+            entry.options["device_ui_enabled"] = True
+            with monkeypatch.context() as patch:
+                patch.setattr(notify, "async_set_service_schema", fail)
+                with pytest.raises(RuntimeError, match="metadata failed"):
+                    await async_setup_notify(hass, entry)
+            assert not hass.services.has_service("notify", "bticino_c300x_first")
+            assert "bticino_c300x_notify_services" not in hass.data
+            assert not entry.unload_callbacks
+            await async_setup_notify(hass, entry)
+            metadata = (await async_get_all_descriptions(hass))["notify"]["bticino_c300x_first"]
+            assert metadata["name"] == "Send a display notification to Front door"
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("caller", ["reader", "controller", "unknown"])

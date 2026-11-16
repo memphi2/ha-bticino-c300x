@@ -1,9 +1,9 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-16. Integration and native agent `2.5.0`, the successor
-to `v2.4.1`, adding optional Agenda and Leave home pages, live Consumers,
-page navigation and bounded display notifications. This report covers the local source tree, not a newly published
-release.
+Source review: 2026-11-16. Integration and native agent `2.6.0` development builds
+on the unmerged `2.5.0` display work with credential recovery and an HA-only
+visitor journal. The latest stable release remains `v2.4.1`. This report covers
+the local source tree, not a newly published release.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.

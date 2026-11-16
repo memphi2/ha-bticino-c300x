@@ -28,6 +28,8 @@ forwarding controls, messages and optional display pages.
 - Doorbell ring events and local camera viewing.
 - Automatic visitor images stored in Home Assistant, with a shared camera/card
   preview and configurable retention. See [Images](docs/feature-reference.md#visitor-images).
+- Optional [Visitor journal](docs/visitor-journal.md) in the card, with saved
+  image/video browsing by buttons, keyboard or swipe; no additional live stream.
 - Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
   Assistant.
 - Audio-only Home Call from Home Assistant to the C300X display.

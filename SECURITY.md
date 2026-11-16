@@ -49,6 +49,9 @@ is separate from the service permissions above: playback does not authorize
 recording, deletion or device control.
 
 The integration's snapshot-image endpoint does check camera read permission.
+The visitor journal metadata and playback endpoints use that same permission
+decision and isolate entries. Journal clip links do not change permissions on
+the existing shared Ring Capture endpoint or the standard HA media browser.
 However, copies in HA's standard local-media directory follow HA media access
 rules, independently of camera permissions. Neither hiding an entity nor
 denying camera access protects the shared archive. Only provide HA access to

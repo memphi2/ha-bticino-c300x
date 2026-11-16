@@ -28,6 +28,7 @@ Most users only need:
 | Add notification or capture automations | [Blueprints](blueprints.md) |
 | Set up native display pages, tiles and Alarmo | [Display setup](quickstart.md#9-optional-native-display) |
 | Save visitor images and control retention | [Visitor images](feature-reference.md#visitor-images) |
+| Browse a visit's saved image or video in the card | [Visitor journal](visitor-journal.md) |
 | Upgrade from 2.3.0 or 2.1.3 | [Upgrade guide](advanced-maintenance.md#updates) |
 | Update, remove or repair the device agent | [Advanced maintenance](advanced-maintenance.md) |
 

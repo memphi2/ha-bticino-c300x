@@ -32,6 +32,15 @@ pages and display tiles are offered while the Display patch is on, the tiles
 only once there is an entity on a page or an Alarmo quick action. Every field
 has a help text.
 
+Normal credential entry is checked before saving: rejected agent keys and
+rejected supplied maintenance keys have separate errors from an unreachable
+agent. Correct the keys through Home Assistant's reauthentication flow when
+prompted; the existing entry and unrelated settings are retained. Blank key
+fields for an existing connection retain the saved key. An existing entry can
+still start while its device is offline and reconnect later. This does not
+bypass credential validation for a new entry or a changed connection, and the
+one-time SSH installation remains a separate explicit step.
+
 | Area | Purpose | Writes to device |
 | --- | --- | --- |
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |

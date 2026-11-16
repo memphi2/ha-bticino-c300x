@@ -835,9 +835,10 @@ Audio gain options:
 
 - **Live audio level (dB)** affects on-demand and Ring Call downstream
   audio. Default is `0 dB`.
-- **Volume of ring recordings (dB)** affects Ring Capture WAV/MP4 processing. Default
-  is `6 dB`. At `0 dB` the level of the device audio is left unchanged: neither
-  the gain nor the limiter that guards it is applied.
+- **Volume of ring recordings (dB)** affects the audio in Ring Capture MP4 files.
+  Default is `6 dB`. At `0 dB` the level of the device audio is left unchanged:
+  neither the gain nor the limiter that guards it is applied. The separate
+  16 kHz mono WAV used for transcription is not affected by this setting.
 - The allowed range is `-20 dB` to `+20 dB`.
 - At `0 dB`, live audio stays on the neutral path and the integration avoids
   unnecessary gain updates.

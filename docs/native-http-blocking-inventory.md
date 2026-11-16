@@ -1,7 +1,8 @@
 # Native HTTP Blocking-Path Inventory
 
-This is a source audit of `work/2.7-http`, not a device timing measurement or a
-claim of complete nonblocking HTTP. **Architecture work 2.7 remains incomplete.**
+This is a source audit of the integrated 2.7 development tree, not a device timing
+measurement or a claim of complete nonblocking HTTP. **Architecture work 2.7
+remains incomplete.**
 The paths below were followed from request dispatch into their implementation,
 including continuations and event publication. Ordinary filesystem calls are
 listed separately from explicit process/socket/thread waits.
@@ -9,14 +10,16 @@ listed separately from explicit process/socket/thread waits.
 ## Completed Command Boundaries
 
 `http_maintenance.c`, `http_device_user.c` and `http_service_commands.c` share
-one `command_job` and retained client/context. QML/GUI and device-user label
-scripts, SSH probe/start/stop, and SSH-before-reboot/removal no longer wait for
-child exit on the main loop. `http_audio_codec.c` also uses the shared reboot
+one `command_job` and retained client/context. QML/GUI and the read-only
+device-user status script, SSH probe/start/stop, and SSH-before-reboot/removal
+no longer wait for child exit on the main loop. `http_audio_codec.c` also uses the shared reboot
 continuation. No extra worker thread or command queue was added.
 
 The codec native mutation and device-user native routing/user operations have
-**not** become asynchronous. Write-accounting callbacks still run on the main
-loop; their MQTT publication now uses bounded nonblocking output as noted below.
+**not** become asynchronous. Device-user label apply/restore also remain
+synchronous after the unsafe job extraction was deferred. Write-accounting
+callbacks still run on the main loop; their MQTT publication now uses bounded
+nonblocking output as noted below.
 
 See [preserved contracts](native-http-maintenance.md) for exact statuses,
 deadlines, capture limits, slot admission, disconnect and shutdown behavior.
@@ -40,12 +43,19 @@ The names identify actual functions rather than proposed abstractions.
 | POST firewall or IPv6 firewall `actions/restore` | Corresponding restore function -> backup/file restore and remount shell waits. Restore does not run the apply-runtime-rules function. |
 | POST `update/apply` | `handle_agent_update_apply` -> `apply_agent_update_files` in `agent_update.c`: hash/copy/backup transaction and `update_remount` -> `system(mount ...)`; callback `apply_agent_update_firewall_patches` can enter both firewall apply paths. |
 | POST `audio-codec/actions/apply` or `actions/restore` | `c300x_http_audio_codec_route` -> `c300x_audio_codec_apply`/`restore` -> synchronous paired-file backup/patch/fsync and private `remount` -> `system(mount ...)`. Only subsequent SSH/reboot scheduling is offloaded. |
-| GET `/api/v1/device-user`; POST its `actions/ensure` or `actions/restore` | `http_device_user.c` -> `c300x_device_user_read_status`/`c300x_device_routing_read_status` (files/hashes). Ensure calls `c300x_device_routing_apply` and `c300x_device_user_ensure_homeassistant`; restore calls `c300x_device_routing_restore`. Routing reaches `c300x_patch_remount_root` -> `system`, file copies/patches/fsync; user setup persists credentials. Label-script/status phases alone use jobs. |
+| GET `/api/v1/device-user`; POST `device-user/actions/ensure-homeassistant` or `device-user/actions/restore-homeassistant-setup` | `http_device_user.c` -> `c300x_device_user_read_status`/`c300x_device_routing_read_status` (files/hashes). Ensure calls `c300x_device_routing_apply` and `c300x_device_user_ensure_homeassistant`; restore calls `c300x_device_routing_restore`. Routing reaches `c300x_patch_remount_root` -> `system`, file copies/patches/fsync; user setup persists credentials. Label writes use `c300x_command_transaction_capture` -> synchronous pipe drain and `waitpid`, including script rollback/remount cleanup. Only the read-only status script uses a job, after mutations finish. |
 
 Positive-delay `run_detached_command` calls for agent restart and update-triggered
 restart already return after fork, without waiting for the child's sleep/exit.
 They are not counted as synchronous child-exit waits. Their existing scheduling
 acceptance semantics must not silently become execution-success semantics.
+
+Label writes have bounded-prefix output but no execution deadline or forced
+cancellation. Graceful shutdown waits for their completion; a hung script can
+block dispatch and shutdown indefinitely. Restoring the previous synchronous
+capture verbatim was rejected because its ten-second `SIGKILL` could also skip
+rollback/remount cleanup. This is a safety fallback, not completion of the
+nonblocking design. See [label-write evidence](native-http-maintenance.md#validation).
 
 ### Safe Transaction Design Before Moving These
 
@@ -74,8 +84,9 @@ This needs a recovery decision first: the existing job shutdown kills the
 process group, which is not safe to transplant into the middle of a paired
 file update or writable-root interval. Define safe cancellation checkpoints,
 durable recovery after forced termination, observation during the transition,
-and which existing partial-success/error outcome to return. No such behavior
-change is included in this branch.
+and which existing partial-success/error outcome to return. No asynchronous
+file-transaction recovery design is implemented here. The label-write fallback
+does not change or certify cancellation of existing QML apply/restore jobs.
 
 ## OpenWebNet Network Waits
 
@@ -190,12 +201,15 @@ scoped work instead of applying a blanket filesystem wrapper.
   executable, one active process, high descriptor closure and cancellation.
 - Existing focused QML/device-user, transport/parser, auth, output-boundary and
   codec transaction tests remain independent regression gates.
+- Label-write follow-up: real-script shutdown/rollback and helper capture tests
+  are listed in [maintenance validation](native-http-maintenance.md#validation),
+  including the old-route negative control and the successful status-test rerun.
 
 No device, HA or external service mutation is needed for these tests. This
 inventory intentionally reports open work rather than marking 2.7 complete.
 
-The continuation validation run selected 217 tests across transport, command
-jobs, device-user routes/jobs, QML/GUI jobs, service/reboot jobs, maintenance
+Before the label-write fallback, the continuation validation run selected 217
+tests across transport, command jobs, device-user routes/jobs, QML/GUI jobs, service/reboot jobs, maintenance
 auth, codec writes and resource budgets; all passed. Host and ARMHF builds and
 the device-sysroot ABI check passed. The ARMHF stack check remained below 24576
 bytes (maximum 24200 in `send_sip_setup`). This was not a full-suite run.

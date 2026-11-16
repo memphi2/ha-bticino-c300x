@@ -21,7 +21,8 @@ file set (`1` when the field is missing). A bundle's `update_file_set_version`
 declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
 set `3` adds `C300XEnergy.qml`, and set `4` is the retired 2.4.1 energy-view set.
 Set `5` adds the 2.5 display navigation, optional-page, Consumers and alert
-components. The matching native agent and complete display bundle are required;
+components. Set `6` adds the shared checks/optional-page views and Situations.
+The matching native agent and complete display bundle are required;
 updating the HA integration alone does not install these GUI components.
 When the installed self-updater cannot install the target file set, Home
 Assistant first installs and verifies the new executable, then completes the
@@ -1057,17 +1058,47 @@ Validation examples:
 
 ## Maintenance Actions
 
-QML status/patch and GUI reload keep their HTTP connection open until the script
-finishes without blocking the event loop. Status and standalone GUI reload have
-a 10-second script deadline; QML writes allow 30 seconds for rollback and a
-restart of the previous GUI if the initial start check fails. Only one
-such job runs at a time. While it is active, additional script jobs and
-maintenance POST requests return `409` with `error: maintenance_busy` after
-authentication. Retrying must wait for the current job to finish. A client
-disconnect does not cancel or repeat an already accepted operation. Script
-timeouts, failed execution and oversized output use the existing `502` response.
-The legacy `/api/v1/device-user` read also returns busy during a job because
-it invokes the same QML script; media-user setup/status is otherwise synchronous.
+Execution is hybrid; **2.7 is incomplete and does not promise nonblocking HTTP
+for all operations**. QML status/patch, GUI reload, the read-only device-user
+status script, SSH probe/start/stop and SSH-before-reboot/removal share one
+asynchronous job slot. Connections stay open until the existing response
+boundary; no new job ID, queue or early-success response is introduced.
+
+While that slot is occupied, authorized maintenance POSTs and competing QML or
+device-user status reads return `409` with `error: maintenance_busy`. An enabled,
+authorized SSH GET instead waits in an existing bounded input slot, without a
+new busy status or execution deadline. The 500ms receive deadline applies to
+incomplete input, not a complete deferred SSH request. Unauthorized and disabled
+SSH requests are not deferred. Retrying a busy request must wait for completion.
+
+QML status and standalone GUI reload retain a 10-second script deadline; QML
+writes retain 30 seconds for a failed start, rollback and restart of the previous
+GUI. Their failed execution, timeout and overflowing 4096-byte output retain
+the existing `502` responses. Device-user status alone also has a 10-second
+deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
+with unavailable/unknown label status. SSH/service jobs have no execution
+deadline and discard output, preserving their previous wait semantics.
+
+Device-user native routing/user mutations and label apply/restore are
+**synchronous**. Label writes use an 8192-byte bounded-prefix capture, without
+an execution deadline, `SIGKILL` cancellation or `pthread_cancel`. Graceful agent
+shutdown waits for the script to finish commit/rollback and remount cleanup.
+This deliberately replaces the old unsafe ten-second label-write kill timeout.
+A hung script can block HTTP dispatch and graceful shutdown indefinitely; a
+client timeout or disconnect does not abort or replay a physical write. Forced
+process termination and power loss are not covered by this guarantee.
+
+Only after the write phase finishes does device-user start its asynchronous
+read-only status phase. Ensure still requires successful label-script exit and
+JSON `ok:true`; restore retains its exit-status-only interpretation. Native
+codec file mutation also remains synchronous; only its reboot tail uses jobs.
+Shutdown cancels an active asynchronous job without invoking its completion
+or advancing another phase, but cannot reach that cleanup during a synchronous
+label transaction. Existing QML-write job cancellation is unchanged, not newly
+certified as transaction-safe by the label-write fix.
+
+See [HTTP maintenance ownership](../docs/native-http-maintenance.md) and the
+[remaining blocking-path inventory](../docs/native-http-blocking-inventory.md).
 
 All endpoints in this section require maintenance authorization. Mutating
 endpoints require exact confirmation tokens so accidental browser/script calls

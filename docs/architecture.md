@@ -87,21 +87,27 @@ HTTP authentication policy lives in `http_auth.c`; API admission remains in
 `http.c`, before the extracted route dispatchers. `http_maintenance.c` owns
 the QML/GUI routes and one child-process job, client socket and completion
 continuation. It exposes a write-accounting callback, not the agent runtime
-structure. `http_device_user.c` owns device-user responses and the ordered
-label-script/status continuations, using that same job slot.
+structure. `http_device_user.c` owns device-user responses and synchronous label
+writes; only its read-only status phase uses that same job slot.
 `http_service_commands.c` owns SSH probe/start/stop and SSH-before-reboot/removal
 continuations. `http_audio_codec.c` owns codec routes and reuses the reboot
 continuation while preserving its separate 200/status-body response contract.
 
-QML status/patch scripts, GUI reload and device-user label scripts run through
-`command_job.c`. The main poll loop never waits synchronously for these
-scripts. Each status, label and standalone GUI reload script retains its
+QML status/patch scripts, GUI reload and the read-only device-user status script
+run through `command_job.c`. The main poll loop never waits synchronously for these
+scripts. Each status and standalone GUI reload script retains its
 10-second deadline; QML writes retain 30 seconds for a failed start, file
 rollback and restart of the previous GUI. There is no maintenance queue or
-additional thread. Concurrent maintenance writes and competing script reads
-are rejected as busy after authorization. A disconnected client retains its
+additional thread. While an asynchronous job owns the slot, maintenance writes
+and competing QML/device-user reads are rejected as busy after authorization. A disconnected client retains its
 slot until completion; it does not cancel, restart or duplicate device work.
 Shutdown kills the active process group and releases the socket/context.
+Label apply/restore instead use `command_transaction.c` synchronously, through
+commit/rollback, remount cleanup and child reap. They have no execution deadline
+or forced cancellation; graceful shutdown waits for the write to return. This
+also removes the old synchronous capture's unsafe ten-second kill timeout.
+A hung label script blocks HTTP and graceful shutdown indefinitely. The change
+does not certify existing QML-write job cancellation as transaction-safe.
 SSH status GETs instead wait in existing bounded input slots, without gaining a
 new busy status. Service commands preserve their legacy absence of a deadline
 and discarded output; no new worker, queue or idle polling is introduced.
@@ -121,8 +127,8 @@ added. DNS/TCP establishment and MQTT-to-device command forwarding remain
 synchronous; see [MQTT output ownership](native-mqtt-output.md).
 
 2.7 is not complete: this is not a fully asynchronous device-I/O architecture.
-Device-user routing hash/read/write, remount and fsync operations still execute
-synchronously.
+Device-user routing hash/read/write, label write scripts, remount and fsync
+operations still execute synchronously.
 Codec mutation is still synchronous despite the route extraction. Firewall,
 update, legacy MQTT, OpenWebNet and media lifecycle waits need further scoped
 work. No generic worker thread or asynchronous filesystem transaction has been

@@ -8,9 +8,10 @@
   shared header lookup. Route modules do not bypass API admission.
 - `http_maintenance.c`: exact QML/GUI route matching and a single process,
   retained client socket and optional completion context. No queue or new thread.
-- `http_device_user.c`: device-user route validation, response formatting and
-  ordered apply/restore/status continuations. No dependency on agent runtime
-  internals. Completed writes call the existing accounting hook on the main loop.
+- `http_device_user.c`: device-user route validation, response formatting,
+  synchronous apply/restore and asynchronous read-only status completion. No
+  dependency on agent runtime internals. Completed writes call the existing
+  accounting hook on the main loop, before starting the status job.
 - `http_service_commands.c`: SSH probe/start/stop and ordered SSH-before-reboot
   or removal. The codec route reuses its reboot continuation, not its response.
 - `http_audio_codec.c`: codec status/action validation and response ownership.
@@ -20,6 +21,9 @@
 - `command_job.c`: spawn, bounded nonblocking pipe reads, monotonic deadline,
   process-group cancellation and reaping. External capture buffers are borrowed
   until completion/close, never freed by the job.
+- `command_transaction.c`: synchronous label-write spawn, bounded-prefix output
+  drain and child reap. No deadline, cancellation, worker or idle timer. Signal
+  interruptions retry the read/wait, allowing commit/rollback cleanup to finish.
 
 ## Preserved Contracts
 
@@ -27,8 +31,9 @@ Routes, methods, confirmations and status/error bodies are unchanged. Unmatched
 methods/paths retain the 501 fallback. API rejection remains 401 with the bearer
 challenge; maintenance rejection remains 403. Bootstrap access still needs both
 noAuth flags and enabled maintenance. Disabled QML/GUI features retain 404.
-Authorized overlapping maintenance writes/script reads return 409
-`maintenance_busy`; the global write guard still runs before route validation.
+During an asynchronous job, authorized maintenance writes and competing QML or
+device-user script reads return 409 `maintenance_busy`; the global write guard
+still runs before route validation. SSH reads use the deferral described below.
 
 QML actions remain `status`, `apply`, `core-apply`, `core-restore`, `restore`;
 GUI reload remains `reload`. The camel-case dynamic-homepage field retains
@@ -47,11 +52,25 @@ status, not a new endpoint failure. Output starting with `{` retains the legacy
 available flag even if individual fields cannot be parsed. No SIP identity
 fields are exposed.
 
-Each device-user script has its original 10-second deadline, including the
-separate final status phase. QML status/GUI deadlines remain 10 seconds and QML
-writes remain 30 seconds. The single slot stays owned across phases and through
-child reap. Client disconnect does not abort a partly completed transaction.
-Shutdown closes the owner without invoking a completion or advancing a phase.
+The device-user read-only status script retains its 10-second deadline, including
+the final status phase after a write. Label apply/restore are deliberately kept
+off the cancellable job API. They block dispatch through commit/rollback,
+remount cleanup and reap, then start the status job. Graceful agent shutdown is
+processed only after the synchronous write returns; client disconnect does not
+abort or duplicate it. Output overflow is drained, not a reason to stop a write.
+
+The old synchronous capture was unsafe too: its ten-second timeout sent
+`SIGKILL` without running the script's rollback/remount traps. The label-write
+fallback therefore has **no execution deadline or forced cancellation**, not a
+verbatim restoration of that capture. A hung script blocks HTTP and graceful
+shutdown indefinitely. Power loss or forced process termination is outside this
+guarantee; asynchronous transaction recovery remains deferred architecture work.
+
+QML status/GUI deadlines remain 10 seconds and QML writes remain 30 seconds.
+Asynchronous jobs retain their slot through reap; shutdown closes that owner
+without invoking a completion or advancing a phase. Their existing process-group
+kill behavior is unchanged. In particular, the label-write fix does not certify
+existing QML-write job cancellation as transaction-safe.
 
 Ordinary job output remains 4096 bytes including NUL and fails on overflow.
 Device-user status captures retain 4096 bytes and label captures 8192 bytes,
@@ -100,6 +119,23 @@ ensure/restore ordering, failure responses, confirmations, cancellation and
 write-accounting tests. Host and ASan/UBSan variants cover exact output boundaries,
 truncation, spawn failure and single-slot ownership. ARMHF ABI and stack checks
 use the device sysroot; no installed-device behavior is claimed.
+
+Label-write follow-up: `test_native_device_user_shutdown.py` executes the real
+QML script against temporary GUI files with mount/GUI commands stubbed. It
+checks apply/restore commit and rollback, shutdown during initial/recovery start,
+read-only remount cleanup and writes exceeding the former ten-second deadline.
+`test_native_command_transaction.py` checks output bounds, failures, interrupted
+reads/waits, early stdout closure and child/FD cleanup. Both run host and
+ASan/UBSan variants. A negative control using the pre-fix `1cc61ec` route left
+modified labels and orphaned transactions, with no read-only remount call, for
+both apply and restore.
+
+The follow-up passed 124 focused checks, including all 11 full-agent status
+tests, plus Ruff and compile-only ARMHF checks of the two changed production
+modules. The status-test build initially lacked `curl/curl.h`; rerunning with
+the existing curl headers and runtime library path passed without installing
+dependencies. Earlier ABI and stack evidence above is not a new full validation
+of this follow-up. No full gates, bundle rebuild or device/HA access were run.
 
 ## Remaining Scope
 

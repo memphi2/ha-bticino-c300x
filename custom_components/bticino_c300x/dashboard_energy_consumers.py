@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from heapq import nsmallest
 from typing import Any
 
-from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE, decimal_text
+from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE
 from .validation_patterns import HA_ENTITY_ID_RE
 
 # Readable members of HA frontend's default --color-N graph palette. Browser
@@ -79,9 +79,7 @@ def consumers_payload(
     for source, watts, state in nsmallest(10, measured, key=lambda item: (-item[1], item[0].entity_id)):
         name = source.name or (getattr(state, "attributes", {}) or {}).get("friendly_name")
         label = " ".join(name.split())[:80] if isinstance(name, str) and name.strip() else source.entity_id
-        value = str(watts).removesuffix(".0") if watts else "0"
-        value = decimal_text(value, language)
         items.append({"entity_id": source.entity_id, "label": label, "watts": watts,
-                      "value": f"{value} W", "color": consumer_color(source.entity_id)})
+                      "value": f"{round(watts)} W", "color": consumer_color(source.entity_id)})
     return {"items": items, "unit": "W", "empty_text": labels["consumers_empty"],
             "status": labels["consumers_incomplete"] if incomplete else ""}

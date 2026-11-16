@@ -4,6 +4,19 @@ function finite(value) {
     return typeof value === "number" && isFinite(value) && value >= 0;
 }
 
+function wholeWatts(watts) {
+    // Match Python round(): exact halves go to the nearest even integer.
+    var rounded = Math.floor(watts), fraction = watts - rounded;
+    if (fraction > 0.5 || (fraction === 0.5 && rounded % 2 !== 0)) rounded += 1;
+    var text = rounded.toFixed(0), parts = text.split("e+");
+    // toFixed switches to scientific notation at 1e21; keep the unit in whole W.
+    if (parts.length === 2) {
+        var digits = parts[0].replace(".", "");
+        text = digits + new Array(Number(parts[1]) - digits.length + 2).join("0");
+    }
+    return text + " W";
+}
+
 function rows(payload) {
     var source = payload && payload.items, result = [];
     if (!source || typeof source === "string" || source.length === undefined) return result;
@@ -13,8 +26,8 @@ function rows(payload) {
         var watts = finite(item.watts) ? item.watts : null;
         result.push({entity_id: String(item.entity_id || ""), label: String(item.label || ""),
             watts: watts, color: item.color || "#90caf9",
-            value: watts === null ? "--" : typeof item.value === "string" && / W$/.test(item.value) ?
-                item.value : String(watts) + " W", order: i});
+            value: watts === null ? "--" : typeof item.value === "string" && /^\d+ W$/.test(item.value) ?
+                item.value : wholeWatts(watts), order: i});
     }
     result.sort(function(a, b) {
         if (a.watts === null && b.watts !== null) return 1;

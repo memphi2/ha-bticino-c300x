@@ -1466,6 +1466,7 @@ class BticinoC300XOptionsFlow(
                 )
             if not errors:
                 self._connection_options = connection_options
+                self._connection_validated = True
                 return await self._async_save_options(feature_defaults)
             schema = self.add_suggested_values_to_schema(schema, user_input)
 

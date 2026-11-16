@@ -9,13 +9,16 @@ from typing import Any, cast
 
 from homeassistant.config_entries import ConfigFlowResult
 
+from .config_flow_features import current_connection_options
 from .config_flow_input import _feature_input
+from .entry_config import entry_config_value
 
 
 class OptionsMenuSteps:
     """Store what an area saved, show the menu again, and close it on Done."""
 
     _unchanged_options: dict[str, Any] | None = None
+    _connection_validated = False
 
     def _note_saved_options(self) -> None:
         """Remember what saving an opened area without a change would store.
@@ -42,10 +45,29 @@ class OptionsMenuSteps:
 
         flow: Any = self
         entry = flow._config_entry
-        if options != self._unchanged_options and options != dict(entry.options):
-            flow.hass.config_entries.async_update_entry(entry, options=options)
+        if options != self._unchanged_options or (
+            self._connection_validated
+            and flow._connection_options != current_connection_options(entry)
+        ):
+            unchanged = self._unchanged_options or {}
+            # An area can remain open while reauth or another flow saves. Only
+            # its edits override current settings; never restore its old keys.
+            merged = {
+                **entry.options,
+                **{
+                    key: entry_config_value(entry, key, value)
+                    if (
+                        key in unchanged and value == unchanged[key]
+                        and not (self._connection_validated and key in flow._connection_options)
+                    ) else value
+                    for key, value in options.items()
+                },
+            }
+            if merged != dict(entry.options):
+                flow.hass.config_entries.async_update_entry(entry, options=merged)
         # The next area starts from what is saved now.
         self._unchanged_options = None
+        self._connection_validated = False
         flow._connection_options = {}
         flow._feature_options = {}
         flow._device_activations = []

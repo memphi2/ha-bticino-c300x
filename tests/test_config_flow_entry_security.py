@@ -130,3 +130,48 @@ def test_offline_feature_edit_does_not_require_credentials(monkeypatch):
     assert result["type"] == "menu"
     assert current_connection_options(entry)[CONF_AGENT_TOKEN] == "old"
     validate.assert_not_called()
+
+
+@pytest.mark.parametrize("change", ["reauth", "options", "reconfigure"])
+def test_open_feature_form_keeps_newer_connection_when_saved(monkeypatch, change):
+    entry, hass = entry_hass()
+    flow = bound_flow(entry, hass, "options")
+    validate = AsyncMock(return_value=({"device_id": "device-a"}, {}))
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", validate)
+
+    async def exercise():
+        await flow.async_step_features()
+        other = bound_flow(entry, hass, "options" if change == "options" else "reconfigure")
+        if change == "reauth":
+            other.context["source"] = "reauth"
+            await other.async_step_reauth_confirm({CONF_AGENT_TOKEN: "new-valid"})
+        else:
+            await submit(other, "options" if change == "options" else "finish", {
+                **current_connection_options(entry), CONF_AGENT_TOKEN: "new-valid",
+                CONF_AGENT_HOST: "new.local",
+            })
+        before = current_connection_options(entry)
+        entry.options["unrelated"] = "concurrent-value"
+        calls = validate.await_count
+        await flow.async_step_features({CONF_VIDEO_ENABLED: False})
+        assert current_connection_options(entry) == before
+        assert entry.options["unrelated"] == "concurrent-value"
+        assert entry.options[CONF_VIDEO_ENABLED] is False
+        assert validate.await_count == calls
+
+    asyncio.run(exercise())
+
+
+def test_connection_save_keeps_the_exact_validated_credential_pair(monkeypatch):
+    entry, hass = entry_hass()
+    flow = bound_flow(entry, hass, "options")
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", AsyncMock(return_value=({"device_id": "device-a"}, {})))
+
+    async def exercise():
+        await flow.async_step_connection()
+        entry.data[CONF_AGENT_TOKEN] = "newer"
+        await flow.async_step_connection({**current_connection_options(entry), CONF_AGENT_HOST: "new.local", CONF_AGENT_TOKEN: "old"})
+        assert current_connection_options(entry)[CONF_AGENT_HOST] == "new.local"
+        assert current_connection_options(entry)[CONF_AGENT_TOKEN] == "old"
+
+    asyncio.run(exercise())

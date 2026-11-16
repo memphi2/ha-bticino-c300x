@@ -89,6 +89,9 @@ the QML/GUI routes and one child-process job, client socket and completion
 continuation. It exposes a write-accounting callback, not the agent runtime
 structure. `http_device_user.c` owns device-user responses and the ordered
 label-script/status continuations, using that same job slot.
+`http_service_commands.c` owns SSH probe/start/stop and SSH-before-reboot/removal
+continuations. `http_audio_codec.c` owns codec routes and reuses the reboot
+continuation while preserving its separate 200/status-body response contract.
 
 QML status/patch scripts, GUI reload and device-user label scripts run through
 `command_job.c`. The main poll loop never waits synchronously for these
@@ -99,6 +102,9 @@ additional thread. Concurrent maintenance writes and competing script reads
 are rejected as busy after authorization. A disconnected client retains its
 slot until completion; it does not cancel, restart or duplicate device work.
 Shutdown kills the active process group and releases the socket/context.
+SSH status GETs instead wait in existing bounded input slots, without gaining a
+new busy status. Service commands preserve their legacy absence of a deadline
+and discarded output; no new worker, queue or idle polling is introduced.
 
 QML/GUI output retains its 4096-byte buffer and overflow failure. Device-user
 captures retain their legacy bounded-prefix behavior: 4096 bytes for status,
@@ -107,13 +113,16 @@ context is allocated only while needed. The existing eight reads of at most
 1024 bytes per job tick bound noisy-child work. Idle maintenance has no timer.
 HTTP request/output/file-transfer and callback queue limits are unchanged.
 
-This is not a fully asynchronous device-I/O architecture. Device-user routing
-hash/read/write, remount and fsync operations still execute synchronously.
-Firewall, audio-codec, update, legacy MQTT and other device-command routes also
-remain in `http.c`; their transaction/state dependencies need separate scoped
-extractions. No generic worker thread or asynchronous filesystem transaction
-has been introduced. See the [HTTP maintenance boundary](native-http-maintenance.md)
-for compatibility details and focused validation.
+2.7 is not complete: this is not a fully asynchronous device-I/O architecture.
+Device-user routing hash/read/write, remount and fsync operations still execute
+synchronously.
+Codec mutation is still synchronous despite the route extraction. Firewall,
+update, legacy MQTT, OpenWebNet and media lifecycle waits need further scoped
+work. No generic worker thread or asynchronous filesystem transaction has been
+introduced. See the [HTTP maintenance boundary](native-http-maintenance.md)
+for compatibility details and focused validation, and the
+[blocking-path inventory](native-http-blocking-inventory.md) for remaining
+call paths and safe alternative designs.
 
 QML write transactions retain their previous active files until the GUI process
 start check succeeds. A failed start restores those files before attempting to

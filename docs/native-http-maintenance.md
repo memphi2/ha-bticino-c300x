@@ -11,6 +11,12 @@
 - `http_device_user.c`: device-user route validation, response formatting and
   ordered apply/restore/status continuations. No dependency on agent runtime
   internals. Completed writes call the existing accounting hook on the main loop.
+- `http_service_commands.c`: SSH probe/start/stop and ordered SSH-before-reboot
+  or removal. The codec route reuses its reboot continuation, not its response.
+- `http_audio_codec.c`: codec status/action validation and response ownership.
+  Its native file transaction remains synchronous; only the reboot tail is a job.
+- `http_clients.c` / `http_client_input.c`: bounded slot admission/deferred
+  dispatch versus request receive/framing/deadline handling.
 - `command_job.c`: spawn, bounded nonblocking pipe reads, monotonic deadline,
   process-group cancellation and reaping. External capture buffers are borrowed
   until completion/close, never freed by the job.
@@ -53,6 +59,37 @@ including NUL, discarding excess as the old synchronous capture did. One
 request-scoped context is retained, not a queued request body or copied runtime.
 HTTP input/output, file-transfer and callback capacities/timeouts are unchanged.
 
+SSH GET and setter responses retain 200 and actual probe results. A failed
+probe means `enabled:false,running:false`, not 502. Failed start/stop commands
+retain 502 `maintenance_command_failed`; successful action endpoints retain
+their literal start/stop bodies without adding a probe. Feature-disabled
+SSH/reboot/removal retain 404, confirmation failures 400, and existing auth gates
+still apply. SSH-before-reboot/removal failure remains deliberately ignored.
+Reboot/removal retain 202 after delayed-launch acceptance, not after execution.
+Removal retains its 500ms delay; reboot uses the unchanged configured positive
+delay. Codec mutation failure retains 500 with its original detail; success
+retains 200 and the original status body even if reboot scheduling fails
+(`rebooting:false`). Changed-file accounting still precedes its reboot attempt.
+
+Service waits previously used `system()` or blocking `waitpid()` without a
+deadline. Exit-only command jobs preserve that absence of a deadline, discard
+stdout/stderr to `/dev/null` without introducing an output-overflow failure,
+and use the old service launcher's descriptor close bound (at most 4096).
+They occupy the same single slot and use the existing active-only 50ms reap
+tick; an idle job has no timer. A hung service can therefore keep that slot
+busy until shutdown, but does not itself block HTTP dispatch. This is not a
+claim that all route-side filesystem or event publication is nonblocking.
+
+An authorized enabled SSH GET waits behind an occupied slot without acquiring
+a new 409 contract. It retains its complete request in the existing eight-slot
+input pool, with two slots still reserved for UI requests and 8192 bytes per
+input. There is no additional queue. The 500ms incomplete-request deadline still
+applies to receiving input, not to an already complete deferred request.
+Successful parsing restores the raw request delimiters for a later retry.
+Deferred slots have no poll FD or timer; active-job completion/reap drives
+progress. Unauthorized/disabled requests are not deferred. Saturation retains
+the existing excess-connection close behavior, not a new HTTP status.
+
 ## Validation
 
 Focused loopback tests exercise service responsiveness, API/UI access during
@@ -66,10 +103,12 @@ use the device sysroot; no installed-device behavior is claimed.
 
 ## Remaining Scope
 
-This extraction moves script waits off the HTTP loop, not every device operation.
-Routing/user filesystem work, binary hashing, remount/fsync, firewall shell
-commands, update transactions, legacy MQTT migration and other synchronous
-device commands still require separate work. Their write/recovery semantics
-must be designed before moving them to a worker. The remaining `http.c` is
-still large; it has not been split into arbitrary shared-runtime fragments.
+**2.7 is not complete.** This extraction moves the listed command waits off the
+HTTP loop, not every blocking device operation. See the
+[blocking-path inventory and proposed ownership designs](native-http-blocking-inventory.md)
+for exact remaining route/call paths, including OpenWebNet, MQTT event sends,
+media lifecycle joins, and in-process file/remount transactions. Their recovery,
+ordering and cancellation semantics must be settled before moving them to a
+worker. The remaining `http.c` is still large; it has not been split into
+arbitrary shared-runtime fragments.
 Release metadata, build lock and full-suite/device validation are parent work.

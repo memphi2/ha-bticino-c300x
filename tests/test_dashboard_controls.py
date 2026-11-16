@@ -41,6 +41,7 @@ def state(value="on", **attributes):
 
 def hass_for(snapshot):
     return SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=lambda _: snapshot),
         services=SimpleNamespace(async_call=AsyncMock()),
         bus=SimpleNamespace(async_fire=lambda *_: None),
@@ -754,6 +755,7 @@ def test_a_select_tile_offers_the_first_options_of_its_submenu():
     snapshot = state(long_names[0], options=long_names, friendly_name="Station")
     submenu = entity_controls("select.station", snapshot)[0]["options"]
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get={"select.station": snapshot}.get),
         config=SimpleNamespace(language="en"),
     )
@@ -785,6 +787,7 @@ def _player(number, names):
 
 def _dashboard(states, *, notifications=()):
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en"),
     )
     store = SimpleNamespace(payload=lambda: list(notifications))

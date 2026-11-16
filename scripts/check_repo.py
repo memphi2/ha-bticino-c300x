@@ -677,14 +677,21 @@ def _uses_untyped_config_entry(tree: ast.AST) -> bool:
             annotations.append(node.returns)
         elif isinstance(node, ast.TypeAlias):
             annotations.append(node.value)
-    for annotation in annotations:
+    seen_references: set[str] = set()
+    while annotations:
+        annotation = annotations.pop()
         for node in ast.walk(annotation):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if node.value in seen_references:
+                    continue
+                seen_references.add(node.value)
                 try:
-                    nodes.extend(ast.walk(ast.parse(node.value, mode="eval")))
+                    reference = ast.parse(node.value, mode="eval")
                 except SyntaxError:
                     # Invalid annotations are diagnosed by the typing gate.
                     continue
+                nodes.extend(ast.walk(reference))
+                annotations.append(reference)
     return any(
         isinstance(node, ast.Attribute)
         and node.attr == "ConfigEntry"

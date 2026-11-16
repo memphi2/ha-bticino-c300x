@@ -121,6 +121,7 @@ def test_config_entry_typing_checks_import_symbols_not_name_prefixes(tmp_path, m
         "def example() -> 'config_entries.ConfigEntry': pass\n",
         "entries: list['config_entries.ConfigEntry']\n",
         "type Entry = 'config_entries.ConfigEntry'\n",
+        '''def example(entry: "list['config_entries.ConfigEntry']"): pass\n''',
     ):
         module.write_text(source, encoding="utf-8")
         assert len(check_repo.check_config_entry_typing()) == 1

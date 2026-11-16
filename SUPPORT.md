@@ -2,7 +2,8 @@
 
 ## Supported Release Line
 
-- `2.5.x`: local development, not released
+- `2.6.x`: local development, not released
+- `2.5.x`: preceding development line, not released
 - `2.4.x`: current stable (2.4.1)
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 

@@ -606,7 +606,7 @@ def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]
     setup_body = _section(
         media_bridge,
         "static bool send_sip_setup",
-        "static void send_sip_bye",
+        "static void close_home_call_fds_locked",
     )
     rtsp_body = _section(
         media_bridge,

@@ -145,6 +145,7 @@ class AuthFlowSteps:
         if user_input is not None:
             auth_data, errors = _agent_auth_input(
                 user_input, require_agent_token=self._setup_agent_needs_token,
+                saved=self._setup_connection if self._setup_bootstrapped else None,
             )
             if not errors:
                 candidate = {**self._setup_connection, **auth_data}
@@ -157,6 +158,8 @@ class AuthFlowSteps:
                     if unique_id is not None:
                         self._setup_unique_id = unique_id
                         self._async_abort_duplicate_setup_flows(unique_id)
+                    if self._setup_pending_features is not None:
+                        return cast(ConfigFlowResult, await self._async_create_setup_entry(self._setup_pending_features))
                     return cast(ConfigFlowResult, await self.async_step_user_features())
         return cast(ConfigFlowResult, self._show_agent_auth(errors))
 

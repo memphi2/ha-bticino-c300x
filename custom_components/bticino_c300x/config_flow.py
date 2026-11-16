@@ -276,6 +276,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         self._setup_connection: dict[str, Any] = {}
         self._setup_unique_id: str | None = None
         self._setup_agent_needs_token = False
+        self._setup_bootstrapped = False
+        self._setup_pending_features: dict[str, Any] | None = None
         self._setup_device_ui_default = False
         self._setup_feature_data: dict[str, Any] = {}
         self._setup_device_activations: list[dict[str, Any]] = []
@@ -298,6 +300,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         errors: dict[str, str] = {}
         if user_input is not None:
+            self._setup_bootstrapped = False
             self._setup_connection, errors = _initial_connection_input(
                 user_input,
                 include_name=True,
@@ -389,6 +392,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             else:
                 self._setup_connection[CONF_AGENT_TOKEN] = api_token
                 self._setup_connection[CONF_MAINTENANCE_TOKEN] = maintenance_token
+                self._setup_bootstrapped = True
                 probe = await _async_probe_agent(
                     self.hass,
                     self._setup_connection,
@@ -879,7 +883,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         errors = await self._async_validate_setup_identity()
         if errors:
+            self._setup_pending_features = feature_data
             return self._show_agent_auth(errors)
+        self._setup_pending_features = None
 
         if self._setup_unique_id is not None:
             self._async_abort_duplicate_setup_flows(self._setup_unique_id)

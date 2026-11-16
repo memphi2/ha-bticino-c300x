@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from .config_flow_optional_pages import optional_pages_input
 from .const import CONF_ENERGY_PAGE
 from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT, normalize_dashboard_page_name
@@ -40,7 +41,7 @@ def page_form_positions(
             values = values if isinstance(values, dict) else {}
             used = slot == 1 or normalize_dashboard_page_name(values.get("name", "")) or values.get("entities")
             positions[key] = page_position(values.get("position"), slot) if used else None
-        defaults = {CONF_ENERGY_PAGE: normalize_energy_page(None), **optional_page_values({})}
+        defaults = {CONF_ENERGY_PAGE: normalize_energy_page(None), **optional_pages_input(saved, posted)}
         for key in SPECIAL_PAGE_ORDER:
             if isinstance(values := posted.get(key), dict):
                 positions[key] = page_position(values.get("position"), defaults[key]["position"])

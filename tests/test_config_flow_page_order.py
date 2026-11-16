@@ -85,6 +85,37 @@ def test_hidden_logical_pages_and_inactive_energy_keep_configured_positions():
     assert not any(value for key, value in posted["energy_page"].items() if key.startswith("view_"))
 
 
+@pytest.mark.parametrize("key", ["agenda_page", "leave_home_page"])
+@pytest.mark.parametrize("omit_enabled", [False, True])
+def test_disabled_optional_retry_with_cleared_position_matches_saved_fallback(key, omit_enabled):
+    saved, _ = dashboard_pages_input({}, form_input())
+    saved[key].update(enabled=False, position=3)
+    if key == "agenda_page":
+        saved[key]["calendars"] = ["calendar.work"]
+    else:
+        saved[key].update(contacts=["binary_sensor.door"], lights=["light.room"], show_alarm=True)
+    posted = post_pages_like_home_assistant(dashboard_pages_schema(saved), {
+        key: {"position": None},
+        "page_2": {"name": None},
+    })
+    if omit_enabled:
+        posted[key].pop("enabled")
+    unchanged, errors = dashboard_pages_input(saved, posted)
+    assert unchanged == saved and errors == {"page_2": "dashboard_page_name_missing"}
+
+    placeholders = dashboard_pages_placeholders(saved, posted)
+    assert placeholders[f"{key}_position"] == " 3"
+    retry = dashboard_pages_schema(saved, posted)
+    keys = [str(marker) for marker in retry.schema]
+    assert keys.index(key) < keys.index("page_2")
+    corrected = post_pages_like_home_assistant(retry, {"page_2": {"name": "Room 2"}})
+    assert "position" not in corrected[key]
+    result, errors = dashboard_pages_input(saved, corrected)
+    assert not errors
+    assert result[key] == saved[key]
+    assert placeholders[f"{key}_position"] == f" {result[key]['position']}"
+
+
 @pytest.mark.parametrize("name", ["strings.json", *[f"translations/{lang}.json" for lang in ("en", "de", "fr", "it")]])
 def test_every_page_title_renders_its_position_in_all_flows_and_languages(name):
     saved, _ = dashboard_pages_input({}, form_input((6, 2, 4), (1, 3, 5)))

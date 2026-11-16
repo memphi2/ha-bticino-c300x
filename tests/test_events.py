@@ -31,9 +31,18 @@ class _ScheduledCall:
 class _FakeDispatcher:
     def __init__(self) -> None:
         self.signals: list[tuple[str, str]] = []
+        self.listeners: list[tuple[Any, str, Any]] = []
+
+    def async_dispatcher_connect(self, hass, signal, callback):
+        listener = (hass, signal, callback)
+        self.listeners.append(listener)
+        return lambda: self.listeners.remove(listener)
 
     def async_dispatcher_send(self, hass: HomeAssistant, signal: str, entry_id: str) -> None:
         self.signals.append((signal, entry_id))
+        for listener_hass, listener_signal, callback in list(self.listeners):
+            if listener_hass is hass and listener_signal == signal:
+                callback(entry_id)
 
 
 class _FakeScheduler:
@@ -87,11 +96,13 @@ def event_ha_boundary(monkeypatch):
     from homeassistant.helpers import entity_registry
 
     fake_dispatcher.signals.clear()
+    fake_dispatcher.listeners.clear()
     fake_scheduler.reset()
     webhook_calls.clear()
     monkeypatch.setattr(webhook, "async_generate_url", _webhook_url)
     monkeypatch.setattr(webhook, "async_generate_path", _webhook_path)
     monkeypatch.setattr(events_module, "async_dispatcher_send", fake_dispatcher.async_dispatcher_send)
+    monkeypatch.setattr(events_module, "async_dispatcher_connect", fake_dispatcher.async_dispatcher_connect)
     monkeypatch.setattr(events_module, "async_call_later", fake_scheduler.async_call_later)
     monkeypatch.setattr(entity_registry, "async_get", lambda hass: hass.entity_registry)
 

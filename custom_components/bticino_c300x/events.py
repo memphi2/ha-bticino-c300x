@@ -10,7 +10,10 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
 from homeassistant.helpers.event import async_call_later
 
 from .agent_diagnostics import async_refresh_agent_diagnostics
@@ -37,6 +40,15 @@ _REGISTRATION_RETRY_SECONDS = 30
 _MAX_REGISTRATION_RETRY_SECONDS = 300
 _ENTITY_REGISTRY_REFRESH_SECONDS = 1
 _SUBSCRIPTION_REFRESH_SECONDS = 300
+_SIGNAL_RUNTIME_REGISTRATION_FAILED = f"{DOMAIN}_runtime_registration_failed"
+
+
+@callback
+def async_notify_runtime_registration_failed(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry,
+) -> None:
+    """Wake the owned registration worker after a separate startup failure."""
+    async_dispatcher_send(hass, _SIGNAL_RUNTIME_REGISTRATION_FAILED, entry.entry_id)
 
 
 async def async_start_agent_event_registration(
@@ -138,6 +150,7 @@ class _AgentEventRegistration:
         self._renewal_cancel: CALLBACK_TYPE | None = None
         self._registry_refresh_cancel: CALLBACK_TYPE | None = None
         self._entity_registry_cancel: CALLBACK_TYPE | None = None
+        self._runtime_failure_cancel: CALLBACK_TYPE | None = None
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._task: Task[Any] | None = None
         self._active_tasks: set[Task[Any]] = set()
@@ -150,6 +163,11 @@ class _AgentEventRegistration:
         self._entity_registry_cancel = _async_listen_entity_registry_updates(
             self._hass,
             self._schedule_registry_refresh,
+        )
+        self._runtime_failure_cancel = async_dispatcher_connect(
+            self._hass,
+            _SIGNAL_RUNTIME_REGISTRATION_FAILED,
+            self._schedule_runtime_retry,
         )
         self._task = self._hass.async_create_task(self._register())
         return self.unregister
@@ -168,6 +186,9 @@ class _AgentEventRegistration:
         self._cancel_registry_refresh()
         if self._entity_registry_cancel is not None:
             self._entity_registry_cancel()
+        if self._runtime_failure_cancel is not None:
+            self._runtime_failure_cancel()
+            self._runtime_failure_cancel = None
 
     async def _register(self, now: Any = None) -> None:
         if self._stopped:
@@ -316,6 +337,23 @@ class _AgentEventRegistration:
             _MAX_REGISTRATION_RETRY_SECONDS,
             self._retry_delay_seconds * 2,
         )
+
+    @callback
+    def _schedule_runtime_retry(self, entry_id: str) -> None:
+        runtime = getattr(self._entry, "runtime_data", None)
+        resources = getattr(runtime, "resources", None)
+        if (
+            self._stopped
+            or entry_id != self._entry.entry_id
+            or getattr(runtime, "api", None) is not self._api
+            or getattr(resources, "closed", False)
+            or not getattr(resources, "display_bridge_registration_pending", False)
+            or self._retry_cancel is not None
+            or self._renewal_cancel is not None
+            or self._registry_refresh_cancel is not None
+        ):
+            return
+        self._schedule_renewal()
 
     def _schedule_renewal(self) -> None:
         if self._stopped:

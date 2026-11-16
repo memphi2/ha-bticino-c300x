@@ -1016,7 +1016,10 @@ async def _async_configure_display_bridge(
     except C300XAgentApiError as err:
         check_active()
         if resources is not None:
+            from .events import async_notify_runtime_registration_failed
+
             resources.display_bridge_registration_pending = True
+            async_notify_runtime_registration_failed(hass, entry)
         error = compact_error_text(err)
         diagnostics.mark_failure(error, datetime.now(UTC))
         if enabled:

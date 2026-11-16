@@ -1683,6 +1683,13 @@ def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
         probe_agent,
     )
 
+    async def read_saved_endpoint(_hass, connection, *, api_token):
+        assert connection[CONF_AGENT_HOST] == "192.0.2.60"
+        assert api_token == "known-token"
+        return {"device_id": "c300x-aabbcc001122"}
+
+    monkeypatch.setattr(config_flow_module, "_async_agent_setup_data", read_saved_endpoint)
+
     result = asyncio.run(
         flow.async_step_zeroconf(
             SimpleNamespace(

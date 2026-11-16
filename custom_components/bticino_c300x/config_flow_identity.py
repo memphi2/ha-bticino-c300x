@@ -1,4 +1,4 @@
-"""Pure config-entry identity and discovery endpoint comparisons."""
+"""Config-entry identity checks and authenticated discovery adoption."""
 
 from __future__ import annotations
 
@@ -107,3 +107,33 @@ async def async_entry_identity_error(
         if not discovery_matches_entry(actual, expected):
             return "unique_id_mismatch"
     return None
+
+
+async def async_adopt_discovery_identity(
+    hass: Any,
+    entry: BticinoC300XConfigEntry,
+    read_setup: Callable[..., Awaitable[dict[str, Any]]],
+    current_entries: Callable[[], list[BticinoC300XConfigEntry]],
+) -> None:
+    """Treat discovery only as a hint to read the already trusted endpoint."""
+    saved = entry_identity_connection(entry)
+    saved_id = entry.unique_id
+    if not saved[CONF_AGENT_TOKEN]:
+        return
+    try:
+        setup = await read_setup(hass, saved, api_token=saved[CONF_AGENT_TOKEN])
+    except C300XAgentApiError:
+        return
+    actual = stable_unique_id_from_setup_data(setup)
+    if (
+        actual is None
+        or saved != entry_identity_connection(entry)
+        or saved_id != entry.unique_id
+        or entry not in (entries := current_entries())
+        or any(
+            other is not entry and discovery_matches_entry(actual, other.unique_id)
+            for other in entries
+        )
+    ):
+        return
+    hass.config_entries.async_update_entry(entry, unique_id=actual)

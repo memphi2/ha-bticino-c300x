@@ -113,3 +113,40 @@ def test_entry_change_during_identity_read_cannot_persist(monkeypatch):
     result = asyncio.run(submit(flow, "options", dict(entry.data)))
     assert result["errors"] == {"base": "cannot_connect"}
     flow._async_save_options.assert_not_called()
+
+
+@pytest.mark.parametrize("mode", ["offline", "rejected", "no_key", "missing_id", "verified", "raced", "duplicate"])
+def test_discovery_never_adopts_an_unverified_advertised_identity(monkeypatch, mode):
+    entry = existing_entry()
+    entry.unique_id = "bticino_c300x:a.local:8091"
+    if mode == "no_key":
+        entry.data[CONF_AGENT_TOKEN] = ""
+    entries = [entry]
+    if mode == "duplicate":
+        entries.append(SimpleNamespace(unique_id="devicea"))
+    flow = bound_flow(entry, "reconfigure")
+    flow._async_current_entries = lambda: entries
+    flow._abort_if_unique_id_configured = Mock()
+    flow._async_request_event_registration = Mock()
+
+    async def read(_hass, connection, *, api_token):
+        assert connection[CONF_AGENT_HOST] == "a.local"
+        assert api_token == "access-a"
+        if mode in {"offline", "rejected"}:
+            raise C300XAgentApiConnectionError("HTTP 401" if mode == "rejected" else "offline")
+        if mode == "raced":
+            entry.options[CONF_AGENT_HOST] = "changed.local"
+        return {} if mode == "missing_id" else {"device_id": "device-a"}
+
+    probe = AsyncMock(side_effect=read)
+    monkeypatch.setattr(config_flow, "_async_agent_setup_data", probe)
+    result = asyncio.run(flow.async_step_zeroconf(SimpleNamespace(
+        host="a.local", port=8091, properties={"id": "forged-device"}, name="Door",
+    )))
+    assert result["reason"] == "already_configured"
+    update = flow.hass.config_entries.async_update_entry
+    if mode == "verified":
+        update.assert_called_once_with(entry, unique_id="devicea")
+    else:
+        update.assert_not_called()
+    assert probe.await_count == (0 if mode == "no_key" else 1)

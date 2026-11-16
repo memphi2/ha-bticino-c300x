@@ -106,6 +106,9 @@ from .config_flow_forms import (
     actions_json as _actions_json,
 )
 from .config_flow_identity import (
+    async_adopt_discovery_identity as _async_adopt_discovery_identity,
+)
+from .config_flow_identity import (
     async_entry_identity_error as _async_entry_identity_error,
 )
 from .config_flow_identity import (
@@ -569,9 +572,8 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
                 continue
             if not _entry_connection_matches_discovery(entry, connection):
                 continue
-            self.hass.config_entries.async_update_entry(
-                entry,
-                unique_id=discovered_unique_id,
+            await _async_adopt_discovery_identity(
+                self.hass, entry, _async_agent_setup_data, current_entries,
             )
             self._async_request_event_registration(entry)
             return self.async_abort(reason="already_configured")

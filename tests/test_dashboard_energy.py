@@ -144,7 +144,7 @@ def test_today_view_has_hourly_bars_and_a_bounded_sums_table() -> None:
     )["energy"]
 
     hours = energy["hours"]
-    assert [len(series["values"]) for series in hours["series"]] == [24] * 5
+    assert [len(series["values"]) for series in hours["series"]] == [24] * 6
     assert sum(series["values"][3] for series in hours["series"][:3]) == 20.0
     assert hours["series"][3]["values"][12] == 0.19
     assert hours["max"] == 20.0 and hours["label"] == "20 kWh"
@@ -162,7 +162,7 @@ def test_today_view_has_hourly_bars_and_a_bounded_sums_table() -> None:
     assert [series["color"] for series in hours["series"][:3]] == [
         row["color"] for row in sums[4:7]
     ]
-    assert len({series["color"] for series in hours["series"]}) == 5
+    assert len({series["color"] for series in hours["series"]}) == 6
 
 
 def test_power_sensors_add_live_values_and_directions() -> None:
@@ -254,6 +254,19 @@ def test_a_meter_correction_cannot_stretch_or_shrink_the_hour_bars() -> None:
 
     assert hours["series"][0]["values"][9] == 0.0
     assert hours["max"] == 2.0 and hours["label"] == "2 kWh"
+
+
+@pytest.mark.parametrize("imported,exported", [(2.0, 3.0), (0.0, 3.0), (2.0, 0.0), (0.0, 0.0), (2.0, -1.0)])
+def test_today_export_is_negative_and_does_not_cancel_import_stack(imported, exported):
+    sources = EnergySources(grid_from=(EnergyMeter("grid"),), grid_to=(EnergyMeter("export"),))
+    day = EnergyDay(hours={"grid": _hours(imported), "export": _hours(exported)})
+    hours = energy_page(sources, day, {}, views=["today"])["energy"]["hours"]
+    assert hours["series"][0]["values"][12] == imported
+    assert hours["series"][-1]["color"] == COLOR_EXPORT
+    assert hours["series"][-1]["values"][12] == -max(0, exported)
+    assert hours["axis"]["min"] <= -max(0, exported)
+    assert hours["axis"]["max"] >= imported
+    assert any(tick["value"] == 0 for tick in hours["axis"]["ticks"])
 
 
 def test_a_battery_that_only_charges_has_no_series_in_the_hour_bars() -> None:

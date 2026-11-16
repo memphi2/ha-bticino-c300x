@@ -56,7 +56,24 @@ const sums = [{color: 'red', label: 'Discharge', value: '0,1 kWh'},
 const hours = {series: [{color: 'red', values: [0, 1.234, null, -1, '2']}]};
 assert.deepEqual(rows(ctx.todayRows(hours, sums, 0)), [{color: 'red', label: 'Discharge', value: '0 kWh'}]);
 assert.equal(ctx.todayRows(hours, sums, 1)[0].value, '1,234 kWh');
-for (const index of [2, 3, 4, 8]) assert.equal(ctx.todayRows(hours, sums, index)[0].value, '--');
+assert.equal(ctx.todayRows(hours, sums, 3)[0].value, '-1 kWh');
+for (const index of [2, 4, 8]) assert.equal(ctx.todayRows(hours, sums, index)[0].value, '--');
+
+const stackedBars = [{values: [2]}, {values: [-3]}, {values: [1]}, {values: [-1]}];
+const signedAxis = {min: -4, max: 4};
+for (const [index, y, height] of [[0, 20, 20], [1, 40, 30], [2, 10, 10], [3, 70, 10]]) {
+    assert.deepEqual(rows(ctx.barSegment(stackedBars, 0, index, signedAxis, 80)), {y, height});
+}
+assert.deepEqual(rows(ctx.barSegment([{values: [-3]}], 0, 0, {min: -4, max: 0}, 80)), {y: 0, height: 60});
+assert.deepEqual(rows(ctx.barSegment([{values: [2]}], 0, 0, {min: 0, max: 4}, 80)), {y: 40, height: 40});
+for (const value of [0, null, undefined, NaN, Infinity, '2']) {
+    assert.deepEqual(rows(ctx.barSegment([{values: [value]}], 0, 0, signedAxis, 80)), {y: 0, height: 0});
+}
+for (const axis of [null, {}, {min: 1, max: 1}, {min: 0, max: Infinity}]) {
+    assert.equal(ctx.barSegment(stackedBars, 0, 0, axis, 80).height, 0);
+}
+for (const index of [-1, 4]) assert.equal(ctx.barSegment(stackedBars, 0, index, signedAxis, 80).height, 0);
+assert.equal(ctx.barSegment(stackedBars, 0, 0, signedAxis, 0).height, 0);
 
 for (const fixture of JSON.parse(fs.readFileSync(0, 'utf8'))) {
     const energy = fixture.energy, before = JSON.stringify(energy);

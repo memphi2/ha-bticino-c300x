@@ -16,7 +16,6 @@ Item {
     property variant hours: energy && energy.hours ? energy.hours : ({})
     property variant series: listOf(hours ? hours.series : undefined)
     property variant hoursAxis: hours && hours.axis ? hours.axis : ({})
-    property real hoursMax: hoursAxis.max > 0 ? hoursAxis.max : 1
     property variant nodes: energy && energy.nodes ? energy.nodes : ({})
     property variant sumRows: listOf(energy ? energy.sums : undefined)
     property int sumsHeight: Math.ceil(sumRows.length / 2) * 22
@@ -86,20 +85,6 @@ Item {
     function lineText(info, index) {
         var lines = listOf(info ? info.lines : undefined)
         return index < lines.length ? lines[index] : ""
-    }
-
-    function stacked(hour, upto) {
-        var total = 0
-        var all = series
-        for (var i = 0; i <= upto && i < all.length; i++) {
-            var values = listOf(all[i].values)
-            total += hour < values.length ? Math.max(0, values[hour]) : 0
-        }
-        return total
-    }
-
-    function barPixels(value) {
-        return hoursMax > 0 ? Math.round(Math.min(1, value / hoursMax) * barsHeight) : 0
     }
 
     Item {
@@ -281,6 +266,7 @@ Item {
             width: parent.width - x - 8
             height: barsHeight
             property real slotWidth: width / 24
+            property int tickLabelStep: Math.max(1, Math.ceil((root.listOf(hoursAxis.ticks).length - 1) * 16 / height))
 
             Rectangle {
                 anchors.fill: parent
@@ -304,6 +290,7 @@ Item {
                     }
 
                     UbuntuLightText {
+                        visible: index % bars.tickLabelStep === 0
                         x: -root.axisWidth
                         y: -7
                         width: root.axisWidth - 8
@@ -339,12 +326,12 @@ Item {
                         model: root.shown === "today" ? root.series : []
 
                         Rectangle {
-                            property int upper: root.barPixels(root.stacked(slot.hour, index))
-                            property int lower: index > 0 ? root.barPixels(root.stacked(slot.hour, index - 1)) : 0
+                            objectName: "energyHourBar"
+                            property variant segment: EnergyChart.barSegment(root.series, slot.hour, index, root.hoursAxis, slot.height)
                             x: 2
                             width: Math.max(1, slot.width - 4)
-                            height: upper - lower
-                            y: slot.height - upper
+                            height: segment.height
+                            y: segment.y
                             color: modelData.color
                         }
                     }

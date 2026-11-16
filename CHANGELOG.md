@@ -2,6 +2,10 @@
 
 ## v2.6.0 - Unreleased
 
+- Show grid export below zero in Energy's Today chart, with separate positive
+  stacks, a signed axis and negative values in the hourly readout.
+- Round Consumers values to whole watts while retaining measurement precision
+  for ranking and bar lengths.
 - Keep the four built-in display-page sections (Status, Energy, Agenda and
   Leave home) together at the top of the configuration form, before the seven
   custom pages. Headings retain their configured display positions.

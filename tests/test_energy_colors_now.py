@@ -13,6 +13,7 @@ import pytest
 
 from custom_components.bticino_c300x.dashboard_energy import (
     COLOR_BATTERY,
+    COLOR_EXPORT,
     COLOR_GRID,
     COLOR_GRID_METERS,
     COLOR_GRID_OTHER,
@@ -54,7 +55,7 @@ def test_source_colors_match_now_today_and_power():
     assert COLOR_GRID == "#75bfff"
     assert {key: node["color"] for key, node in energy["nodes"].items()} == palette
     assert {curve["id"]: curve["color"] for curve in curves} == palette
-    assert [entry["color"] for entry in energy["hours"]["series"]] == [COLOR_GRID, COLOR_SOLAR, COLOR_BATTERY]
+    assert [entry["color"] for entry in energy["hours"]["series"]] == [COLOR_GRID, COLOR_SOLAR, COLOR_BATTERY, COLOR_EXPORT]
 
 
 @pytest.mark.parametrize("count", [0, 1, 2, 3, 4, 12])
@@ -66,7 +67,7 @@ def test_tariff_stack_colors_match_bounded_rows_and_preserve_totals(count, missi
         costs={f"cost{i}": float(i + 1) for i in range(count)},
     )
     energy = energy_page(setup, day, {})["energy"]
-    series = energy["hours"]["series"][:-2]
+    series = energy["hours"]["series"][:-3]
     rows = [row for row in energy["sums"] if row["label"].startswith("Meter ") or row["label"] == "Other meters"]
     assert len(energy["sums"]) <= 8
     assert len(series) == len(rows) <= len(COLOR_GRID_METERS)

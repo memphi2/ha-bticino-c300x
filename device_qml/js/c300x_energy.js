@@ -73,6 +73,24 @@ function decimalSeparator(axis) {
     return ".";
 }
 
+function barSegment(series, hour, index, axis, height) {
+    var empty = {y: 0, height: 0};
+    if (!axis || !finite(axis.min) || !finite(axis.max) || axis.max <= axis.min ||
+            !finite(height) || height <= 0 || index < 0 || index >= series.length) return empty;
+    var value = list(series[index].values)[hour];
+    if (!finite(value) || value === 0) return empty;
+    var base = 0;
+    for (var i = 0; i < index; i++) {
+        var previous = list(series[i].values)[hour];
+        if (finite(previous) && (previous < 0) === (value < 0)) base += previous;
+    }
+    var span = axis.max - axis.min;
+    if (!finite(span) || !finite(base + value)) return empty;
+    var from = Math.round(Math.max(0, Math.min(1, (axis.max - base) / span)) * height);
+    var to = Math.round(Math.max(0, Math.min(1, (axis.max - base - value) / span)) * height);
+    return {y: Math.min(from, to), height: Math.abs(to - from)};
+}
+
 function number(value, digits, separator) {
     if (value !== 0 && (Math.abs(value) < 0.001 || Math.abs(value) >= 1e9)) {
         return value.toExponential(2).replace(".", separator);
@@ -112,7 +130,7 @@ function todayRows(hours, sums, index) {
         }
         var value = list(entry.values)[index];
         result.push({label: label, color: entry.color,
-                     value: index >= 0 && finite(value) && value >= 0 ? number(value, 3, separator) + " kWh" : "--"});
+                     value: index >= 0 && finite(value) ? number(value, 3, separator) + " kWh" : "--"});
     }
     return result;
 }

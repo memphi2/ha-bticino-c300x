@@ -466,7 +466,7 @@ from there.
 | View | Shows |
 | --- | --- |
 | **Now** | One box each for solar, grid, battery and home with today's energy. Current W/kW values appear beneath the flow arrows. Sources without a configured power sensor contribute 0 W; configured sensors are summed normally. A configured sensor that becomes unavailable remains unknown rather than 0 W. Meters may share one power sensor; its reading is counted once. |
-| **Today** | Hourly bars with a labelled energy axis and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Grid meters have distinct colored segments matching the table; further meters are grouped as **Other meters** in both places. Values and costs occupy separate columns. |
+| **Today** | Hourly bars with a labelled energy axis: grid import, solar and battery discharge stack above zero; grid export extends below zero without cancelling the positive stack. Tapping an hour also shows the negative export value. The table has up to eight rows with costs. Grid meters have distinct colored segments matching the table; further meters are grouped as **Other meters** in both places. Values and costs occupy separate columns. |
 | **Power** | Today's power curves for grid, solar, battery and home from the power sensors configured in HA's Energy dashboard. The chart uses 15-minute means of recorded power statistics, a common W/kW scale and a visible zero line. Sources without a configured power sensor contribute zero without suppressing other curves. Export and battery charging appear below zero. Missing statistics from configured sensors leave gaps; no future or otherwise unrecorded samples are invented. |
 | **Consumers** | The ten configured electrical devices with the highest current power in W, in two columns of five, sorted descending. |
 | **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |
@@ -481,7 +481,8 @@ state. Nested configured devices remain individual readings, not a computed
 household total. Each column scales its bars independently so smaller loads
 remain legible; compare the numeric W values across columns. Colors are stable
 per power sensor and drawn from an HA-like palette, not copied from an assigned
-HA device color.
+HA device color. Displayed values are rounded to whole watts, including readings
+converted from kW. Ranking and bar lengths retain the unrounded measurements.
 
 **Upgrade from 2.4.1:** Distribution has been removed. Enable **Consumers**
 explicitly once if wanted; it is not a replacement selection applied

@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -441,7 +441,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -813,7 +813,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",

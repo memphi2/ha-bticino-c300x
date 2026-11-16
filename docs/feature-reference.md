@@ -380,10 +380,11 @@ HA selectors; Alarmo is set under **Alarm (Alarmo)**;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
-The pages dialog has up to 8 regular pages plus independently enabled Energy,
-Agenda and Leave home pages, one section each. Sections follow the display order;
-their titles show the page's position and name, for example **Page 2: Living room**.
-Unused regular sections remain at the end. Alarmo is not one of
+The pages dialog has four built-in pages (Status, Energy, Agenda and Leave home)
+and up to seven custom pages, one section each. The four built-in sections
+always appear first, even when disabled; custom sections follow in display order.
+Titles show the page's display position and name, for example **Page 2: Living room**,
+not its place in the form. Unused custom sections remain at the end. Alarmo is not one of
 the pages: its Alarm page opens from the home page button and has an area of
 its own in the settings menu.
 

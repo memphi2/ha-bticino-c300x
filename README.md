@@ -39,8 +39,8 @@ forwarding controls, messages and optional display pages.
   without opening another live stream; it does not create recordings itself.
 - **Use the C300X as a home-control display.** Keep the native blue interface
   with configurable controls for lights, covers, climate, media and locks,
-  plus weather and Alarmo. Up to eight regular pages and independently enabled
-  Energy, Agenda and Leave home pages have configurable positions. Energy
+  plus weather and Alarmo. Four built-in pages (Status, Energy, Agenda and
+  Leave home) and up to seven custom pages have configurable positions. Energy
   includes live power, history and up to ten consumers configured in HA's
   Energy dashboard, ranked by current W. Agenda shows upcoming calendar events; Leave home checks
   selected contacts and lights, with explicitly confirmed actions.

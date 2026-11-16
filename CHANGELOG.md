@@ -2,6 +2,9 @@
 
 ## v2.6.0 - Unreleased
 
+- Keep the four built-in display-page sections (Status, Energy, Agenda and
+  Leave home) together at the top of the configuration form, before the seven
+  custom pages. Headings retain their configured display positions.
 - Validate agent and supplied maintenance credentials before saving normal
   setup, reconfiguration or connection options. Distinguish rejected keys from
   an unreachable agent, with translated form errors and entry-bound reauthentication.

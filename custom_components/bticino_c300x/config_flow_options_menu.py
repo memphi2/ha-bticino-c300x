@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from homeassistant.config_entries import ConfigFlowResult
 
+from .config_flow_entry_update import async_ensure_entry_reload
 from .config_flow_features import current_connection_options
 from .config_flow_input import _feature_input
 from .entry_config import entry_config_value
@@ -45,6 +46,8 @@ class OptionsMenuSteps:
 
         flow: Any = self
         entry = flow._config_entry
+        had_listeners = bool(entry.update_listeners)
+        changed = False
         if options != self._unchanged_options or (
             self._connection_validated
             and flow._connection_options != current_connection_options(entry)
@@ -64,7 +67,11 @@ class OptionsMenuSteps:
                 },
             }
             if merged != dict(entry.options):
-                flow.hass.config_entries.async_update_entry(entry, options=merged)
+                changed = flow.hass.config_entries.async_update_entry(entry, options=merged)
+        async_ensure_entry_reload(
+            flow.hass, entry, changed=changed, had_listeners=had_listeners,
+            force=self._connection_validated and not had_listeners,
+        )
         # The next area starts from what is saved now.
         self._unchanged_options = None
         self._connection_validated = False

@@ -77,6 +77,7 @@ from .config_flow_dashboard_pages import (
 from .config_flow_dashboard_pages import (
     dashboard_pages_schema as _dashboard_pages_schema,
 )
+from .config_flow_entry_update import async_update_reconfigured_entry
 from .config_flow_features import (
     current_connection_options as _current_connection_options,
 )
@@ -1390,8 +1391,7 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
             data_updates[CONF_SHARED_SECRET] = secrets.token_urlsafe(32)
             data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
 
-        _clear_reconfigured_option_overrides(self.hass, entry, data_updates)
-        return self.async_update_and_abort(entry, data_updates=data_updates)
+        return async_update_reconfigured_entry(self, entry, data_updates, _RECONFIGURED_OPTION_KEYS)
 
     @staticmethod
     @callback

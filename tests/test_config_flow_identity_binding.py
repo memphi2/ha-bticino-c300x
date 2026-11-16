@@ -32,7 +32,7 @@ def existing_entry():
 
 def bound_flow(entry, route):
     flow = BticinoC300XOptionsFlow(entry) if route == "options" else BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=Mock()))
+    flow.hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=Mock(), async_schedule_reload=Mock()))
     flow.context = {"source": "reconfigure", "entry_id": entry.entry_id}
     flow._get_reconfigure_entry = lambda: entry
     flow.async_set_unique_id = AsyncMock()

@@ -95,3 +95,32 @@ def test_connection_save_keeps_exact_validated_pair(monkeypatch):
         assert current_connection_options(entry)[CONF_AGENT_TOKEN] == "old"
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("route", ["options", "reconfigure"])
+@pytest.mark.parametrize("listeners", [False, True])
+@pytest.mark.parametrize("changed", [False, True])
+def test_recovery_reload_is_listener_aware_and_atomic(monkeypatch, route, listeners, changed):
+    entry, hass = entry_hass()
+    entry.update_listeners = [object()] if listeners else []
+    flow = flow_for(entry, hass, route)
+    update = hass.config_entries.async_update_entry.side_effect
+
+    def with_listener(*args, **kwargs):
+        did_change = update(*args, **kwargs)
+        if listeners and did_change:
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+            entry.update_listeners.clear()
+        return did_change
+
+    hass.config_entries.async_update_entry.side_effect = with_listener
+    monkeypatch.setattr(config_flow, "_async_agent_setup_data", AsyncMock(return_value={"device_id": "device-a"}))
+    connection = current_connection_options(entry)
+    entry.data.update(connection)
+    if changed:
+        entry.options[CONF_AGENT_TOKEN] = "override"
+        connection[CONF_AGENT_TOKEN] = "corrected"
+    result = asyncio.run(submit(flow, route, connection))
+    assert not result.get("errors")
+    assert hass.config_entries.async_schedule_reload.call_count == (0 if listeners and not changed else 1)
+    assert hass.config_entries.async_update_entry.call_count <= 1

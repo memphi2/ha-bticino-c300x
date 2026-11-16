@@ -175,7 +175,7 @@ def test_existing_clip_identity_and_media_retention_are_independent(tmp_path, mo
         await journal.attach_clip(key, metadata)
         assert journal.items()[0]["clip"] is None
         journal.close()
-        journal.attach_snapshot(journal.active, "c300x-1800000000000-" + "a" * 32 + ".jpg")
+        await journal.attach_snapshot(journal.active, "c300x-1800000000000-" + "a" * 32 + ".jpg", b"")
 
     asyncio.run(run())
 
@@ -208,13 +208,13 @@ def test_snapshot_completion_links_original_ring_without_extra_acquisition(tmp_p
         journal.event(ring)
         manager.capture._event(ring)
         await drain(manager)
-        assert journal.items()[0]["snapshot"] == manager.latest.name
+        assert journal.items()[0]["snapshot"]["name"] == manager.latest.name
         manager.capture._event(ring)
         await drain(manager)
         manager.entry.runtime_data.api.async_doorbell_snapshot.assert_awaited_once()
         journal.event(event(sequence=2))
         # An old completion can only attach to its original retained visit.
-        journal.attach_snapshot(visit_id(ring.data), manager.latest.name)
+        await journal.attach_snapshot(visit_id(ring.data), manager.latest.name, manager.image)
         assert journal.records[journal.active]["snapshot"] is None
         manager.close()
 

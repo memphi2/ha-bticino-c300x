@@ -23,7 +23,7 @@ def test_list_and_media_require_camera_permission_and_entry_owner(tmp_path, monk
         journal.store = SimpleNamespace(async_delay_save=Mock(), async_save=AsyncMock())
         journal.event(event())
         item = await manager.save(jpeg(), "one")
-        journal.attach_snapshot(journal.active, item.name)
+        await journal.attach_snapshot(journal.active, item.name, manager.image)
         key = journal.active
         request = Request(manager)
         view = C300XVisitorJournalView()
@@ -75,6 +75,16 @@ def test_clip_is_read_only_bounded_and_reauthorized_after_io(tmp_path, monkeypat
         response = await view.get(request, "one", journal.active, "video")
         assert response.body == b"existing MP4"
         assert response.headers["X-Content-Type-Options"] == "nosniff"
+        listed = json.loads((await view.get(request, "one")).text)["visits"][0]
+        revision = listed["video_revision"]
+        assert len(revision) == 64
+        assert listed["image_revision"] is None
+        assert name not in json.dumps(listed)
+        assert "signature" not in listed
+        assert json.loads((await view.get(request, "one")).text)["visits"][0]["video_revision"] == revision
+        path.write_bytes(b"new completed MP4")
+        await journal.attach_clip(journal.active, {"output_path": str(path), "entry_id": "one", "capture_mode": "ring"})
+        assert json.loads((await view.get(request, "one")).text)["visits"][0]["video_revision"] != revision
         async with manager.lock:
             with pytest.raises(web.HTTPTooManyRequests):
                 await view.get(request, "one", journal.active, "video")

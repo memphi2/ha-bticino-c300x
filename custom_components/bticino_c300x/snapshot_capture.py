@@ -230,7 +230,7 @@ class SnapshotCapture:
                 if self._current(generation):
                     item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
                     if self._current(generation) and self.manager.journal is not None:
-                        self.manager.journal.attach_snapshot(visitor_id, item.name)
+                        await self.manager.journal.attach_snapshot(visitor_id, item.name, image)
         except asyncio.CancelledError:
             raise
         except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError):

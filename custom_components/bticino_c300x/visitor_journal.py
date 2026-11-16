@@ -16,13 +16,13 @@ from homeassistant.helpers.storage import Store
 from .config_snapshots import snapshot_options
 from .const import DOMAIN, EVENT_AGENT_EVENT_RECEIVED
 from .event_payload import agent_event_key
+from .snapshot_identity import describe_snapshot, valid_snapshot
 
 MAX_VISITS = 1000
 MAX_JOURNAL_BYTES = 1024 * 1024
 MAX_ACTIVE_SECONDS = 120
 EVENT_JOURNAL_CHANGED = f"{DOMAIN}_visitor_journal_changed"
 _ID = re.compile(r"[0-9a-f]{32}\Z", re.ASCII)
-_IMAGE = re.compile(r"c300x-[0-9]{13}-[0-9a-f]{32}\.jpg\Z", re.ASCII)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -141,9 +141,18 @@ class VisitorJournal:
                     item["outcome"] = "answered"
                     self.changed()
 
-    def attach_snapshot(self, key: str | None, name: str) -> None:
-        if not self.closed and key is not None and key == self.active and key in self.records and _IMAGE.fullmatch(name):
-            self.records[key]["snapshot"] = name
+    async def attach_snapshot(self, key: str | None, name: str, acquired: bytes) -> None:
+        if self.closed or key is None or key != self.active or key not in self.records:
+            return
+        try:
+            identity = await self.hass.async_add_executor_job(
+                describe_snapshot, self.hass, self.entry.entry_id, name, acquired,
+                snapshot_options(self.entry).retention_days,
+            )
+        except (OSError, TypeError, ValueError):
+            return
+        if identity and not self.closed and key == self.active and key in self.records:
+            self.records[key]["snapshot"] = identity
             self.changed()
 
     async def attach_clip(self, key: str | None, metadata: Mapping[str, Any]) -> None:
@@ -218,11 +227,10 @@ def _validated_record(raw: Any) -> dict[str, Any] | None:
         return None
     from .visitor_journal_media import valid_clip
 
-    image = raw.get("snapshot")
     return {
         "id": raw["id"], "at": at, "source": source,
         "outcome": "answered" if raw.get("outcome") == "answered" else "unknown",
-        "snapshot": image if isinstance(image, str) and _IMAGE.fullmatch(image) else None,
+        "snapshot": valid_snapshot(raw.get("snapshot")),
         "clip": valid_clip(raw.get("clip")),
     }
 

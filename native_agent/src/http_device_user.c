@@ -1,4 +1,5 @@
 #include "http_device_user.h"
+#include "command_transaction.h"
 #include "device_routing.h"
 #include "device_user.h"
 #include "http_util.h"
@@ -17,7 +18,6 @@ enum device_user_phase { USER_STATUS, USER_ENSURE, USER_RESTORE };
 
 struct device_user_request {
     const struct c300x_config *config;
-    enum device_user_phase phase;
     struct c300x_device_user_status status;
     struct c300x_device_routing_status routing;
     char output[C300X_DEVICE_USER_STATUS_BODY_LEN];
@@ -151,23 +151,15 @@ static void send_error(int fd, const char *error, const char *detail)
     c300x_http_send_json(fd, 500, "Internal Server Error", body);
 }
 
-static int start_capture(struct c300x_http_maintenance *owner,
-    struct device_user_request *state, enum device_user_phase phase, const char *action)
-{
-    state->phase = phase;
-    return access(state->config->maintenance_qml_patch_script, X_OK) == 0
-        && c300x_command_job_start_capture(&owner->job,
-            state->config->maintenance_qml_patch_script, action, state->output,
-            phase == USER_STATUS ? 4096 : sizeof(state->output), 10000);
-}
-
 static int start_status(struct c300x_http_maintenance *owner, int fd,
     struct device_user_request *state)
 {
     (void)c300x_device_user_read_status(&state->status);
     memset(&state->routing, 0, sizeof(state->routing));
     (void)c300x_device_routing_read_status(&state->routing);
-    if (start_capture(owner, state, USER_STATUS, "status")) {
+    if (access(state->config->maintenance_qml_patch_script, X_OK) == 0
+        && c300x_command_job_start_capture(&owner->job,
+            state->config->maintenance_qml_patch_script, "status", state->output, 4096, 10000)) {
         return 1;
     }
     /* A missing/failed status script never makes device-user GET fail. */
@@ -190,28 +182,8 @@ static int restore_routing(struct c300x_http_maintenance *owner, int fd,
 static int finish_device_user(struct c300x_http_maintenance *owner)
 {
     struct device_user_request *state = owner->context;
-    int fd = owner->client_fd;
-    if (state->phase == USER_STATUS) {
-        send_status(fd, state, !owner->job.failed);
-        return 1;
-    }
-    if (owner->job.failed) {
-        send_error(fd, state->phase == USER_ENSURE
-            ? "media_user_label_setup_failed" : "media_user_label_restore_failed", NULL);
-        return 1;
-    }
-    if (state->phase == USER_RESTORE) {
-        /* Restore historically checks exit success, not the script's JSON. */
-        return !restore_routing(owner, fd, state);
-    }
-    const char *body = trim_ascii(state->output);
-    int ok = 0;
-    if (body[0] != '{' || !c300x_json_bool_field(body, "ok", &ok) || !ok) {
-        send_error(fd, "media_user_label_setup_failed", NULL);
-        return 1;
-    }
-    owner->record_write(owner->write_context, "device_user", "ensure_homeassistant_user");
-    return !start_status(owner, fd, state);
+    send_status(owner->client_fd, state, !owner->job.failed);
+    return 1;
 }
 
 static int ensure_user(struct c300x_http_maintenance *owner, int fd,
@@ -228,11 +200,19 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
         send_error(fd, "device_user_update_failed", error);
         return 0;
     }
-    if (start_capture(owner, state, USER_ENSURE, "media-user-label-apply")) {
-        return 1;
+    if (!c300x_command_transaction_capture(state->config->maintenance_qml_patch_script,
+            "media-user-label-apply", state->output, sizeof(state->output))) {
+        send_error(fd, "media_user_label_setup_failed", NULL);
+        return 0;
     }
-    send_error(fd, "media_user_label_setup_failed", NULL);
-    return 0;
+    const char *body = trim_ascii(state->output);
+    int ok = 0;
+    if (body[0] != '{' || !c300x_json_bool_field(body, "ok", &ok) || !ok) {
+        send_error(fd, "media_user_label_setup_failed", NULL);
+        return 0;
+    }
+    owner->record_write(owner->write_context, "device_user", "ensure_homeassistant_user");
+    return start_status(owner, fd, state);
 }
 
 int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int client_fd,
@@ -279,8 +259,12 @@ int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int clien
     } else if (access(config->maintenance_qml_patch_script, X_OK) != 0) {
         pending = restore_routing(owner, client_fd, state);
     } else {
-        pending = start_capture(owner, state, USER_RESTORE, "media-user-label-restore");
-        if (!pending) {
+        /* Restore historically checks exit success, not the script's JSON. */
+        if (c300x_command_transaction_capture(config->maintenance_qml_patch_script,
+                "media-user-label-restore", state->output, sizeof(state->output))) {
+            pending = restore_routing(owner, client_fd, state);
+        } else {
+            pending = 0;
             send_error(client_fd, "media_user_label_restore_failed", NULL);
         }
     }

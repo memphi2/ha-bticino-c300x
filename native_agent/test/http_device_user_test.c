@@ -18,6 +18,13 @@ static const char *test_case;
 static int response_status, responses, closes, writes, applied, ensured, restored, reads;
 static char response_body[8192], write_reason[96];
 static long long time_offset;
+static volatile sig_atomic_t shutdown_requested;
+
+static void shutdown_signal(int signo)
+{
+    (void)signo;
+    shutdown_requested = 1;
+}
 
 long long c300x_monotonic_ms(void)
 {
@@ -98,6 +105,14 @@ int main(int argc, char **argv)
     struct pollfd fd;
     assert(argc == 4 && config != NULL && request != NULL);
     test_case = argv[1];
+    int transaction_test = strcmp(test_case, "transaction") == 0;
+    if (transaction_test) {
+        struct sigaction action = {0};
+        action.sa_handler = shutdown_signal;
+        assert(sigemptyset(&action.sa_mask) == 0);
+        /* No SA_RESTART: exercise EINTR in both capture reads and child reap. */
+        assert(sigaction(SIGTERM, &action, NULL) == 0);
+    }
     const char *operation = argv[3];
     config->maintenance_enabled = 1;
     config->api_no_auth = 1;
@@ -127,10 +142,26 @@ int main(int argc, char **argv)
     c300x_http_maintenance_init(&owner, record_write, &writes);
     assert(c300x_http_maintenance_prepare(&owner, &fd) == -1 && fd.fd == -1);
     assert(c300x_http_device_user_route(&owner, 1234, config, request));
+    if (transaction_test) {
+        /* Mirror HTTP shutdown: finish dispatch, then close the job owner.
+         * The pre-fix route returns early and kills its still-writing child. */
+        while (!shutdown_requested) {
+            c300x_http_maintenance_tick(&owner);
+            (void)poll(NULL, 0, 10);
+        }
+        c300x_http_maintenance_close(&owner);
+        assert(owner.context == NULL && !c300x_http_maintenance_busy(&owner));
+        while (waitpid(-1, NULL, 0) > 0 || errno == EINTR) {}
+        assert(errno == ECHILD);
+        printf("{\"writes\":%d,\"restored\":%d,\"status\":%d}\n", writes, restored, response_status);
+        free(request);
+        free(config);
+        return 0;
+    }
     int asynchronous = c300x_http_maintenance_busy(&owner);
     if (asynchronous) {
         assert(responses == 0 && owner.client_fd == 1234);
-        assert(owner.job.capture_size == (strcmp(operation, "status") == 0 ? 4096 : 8192));
+        assert(owner.job.capture_size == 4096);
         long long remaining = owner.job.deadline_ms - c300x_monotonic_ms();
         assert(remaining > 9000 && remaining <= 10000);
     }

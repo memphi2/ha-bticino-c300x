@@ -19,7 +19,7 @@ def route_binary(request, tmp_path_factory):
          str(NATIVE / "test/http_device_user_test.c"),
          *[str(NATIVE / "src" / name) for name in (
              "http_device_user.c", "http_maintenance.c", "http_auth.c",
-             "command_job.c", "string_util.c", "json_util.c", "json_parse.c")],
+             "command_job.c", "command_transaction.c", "string_util.c", "json_util.c", "json_parse.c")],
          "-o", str(binary)], capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr
@@ -30,6 +30,7 @@ def route_binary(request, tmp_path_factory):
     (operation, case)
     for operation in ("status", "ensure", "restore")
     for case in ("success", "failure", "overflow", "missing", "timeout", "shutdown")
+    if operation == "status" or case not in ("timeout", "shutdown")
 ] + [
     (operation, case)
     for operation in ("ensure", "restore")

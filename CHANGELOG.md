@@ -34,8 +34,11 @@
 - Reject agent HTTP redirects instead of forwarding credentials, bind connection
   changes to the confirmed device identity, and verify the saved device before
   adopting a discovered identity.
+- Preserve newer connection settings when saving an older options dialog,
+  and reload recovered entries once after an atomic configuration update.
 - Discard late display commands and diagnostic responses after unload, and retry
   failed display-bridge registration on renewal without polling healthy bridges.
+  Late discovery responses cannot restart a closed event subscription.
 - Preserve dashboard configuration when a Lovelace repair cannot read it.
   Bound calendar work and display payloads, and stop calendar resources when
   their page is disabled or reconfigured.

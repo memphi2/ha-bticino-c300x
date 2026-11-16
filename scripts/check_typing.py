@@ -164,6 +164,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/visitor_journal.py",
     "custom_components/bticino_c300x/visitor_journal_http.py",
     "custom_components/bticino_c300x/visitor_journal_media.py",
+    "custom_components/bticino_c300x/visitor_journal_ws.py",
     "custom_components/bticino_c300x/webhook.py",
     "scripts/build_hacs_release.py",
     "scripts/check_release_tag.py",

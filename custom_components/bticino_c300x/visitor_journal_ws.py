@@ -30,7 +30,7 @@ def subscribe_journal(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
                               "Visitor journal unavailable")
         return
 
-    from homeassistant.components import websocket_api
+    from homeassistant.components.websocket_api.messages import event_message
 
     stopped = False
 
@@ -64,14 +64,14 @@ def subscribe_journal(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
         if not authorized():
             stop()
             return
-        connection.send_message(websocket_api.event_message(message_id, {"entry_id": entry_id}))
+        connection.send_message(event_message(message_id, {"entry_id": entry_id}))
 
     @callback
     def state_changed() -> None:
         if stopped or entry.state is ConfigEntryState.LOADED:
             return
         if authorized():
-            connection.send_message(websocket_api.event_message(
+            connection.send_message(event_message(
                 message_id, {"entry_id": entry_id, "closed": True},
             ))
         stop(from_state_change=True)

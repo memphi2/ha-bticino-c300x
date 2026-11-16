@@ -25,7 +25,8 @@ class HomeCallUseCase:
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_start_home_call(
                 duration_seconds=duration_seconds
-            )
+            ),
+            entry=self._entry,
         )
 
     async def stop(self) -> None:
@@ -44,5 +45,5 @@ class HomeCallUseCase:
                 await prepare_stop()
                 ensure_current_runtime(self._entry, runtime)
             await raise_agent_command_failed(
-                runtime.api.async_stop_home_call()
+                runtime.api.async_stop_home_call(), entry=self._entry,
             )

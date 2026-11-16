@@ -7,31 +7,51 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, async_get_hass
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from ..agent_diagnostics import async_refresh_agent_diagnostics
+from ..api_errors import C300XAgentApiAuthError
 from ..capabilities import (
     capability_is_supported,
     entry_gui_function_patch_active,
     maintenance_action_is_supported,
     memo_text_write_supported,
 )
-from ..const import CONF_MAINTENANCE_TOKEN
+from ..const import CONF_MAINTENANCE_TOKEN, SIGNAL_CONNECTION_STATE_CHANGED
 from ..entity import entry_video_enabled
 from ..entry_config import entry_config_value
 from ..exceptions import service_validation_error
 from ..qml_patch import async_refresh_qml_patch_status
+from ..runtime_auth import async_classify_runtime_auth_error, async_request_reauth
 
 MEDIA_PLAYER_DOMAIN = "media_player"
 MEDIA_PLAYER_PLAY_MEDIA_SERVICE = "play_media"
 
 
-async def raise_agent_command_failed(awaitable: Awaitable[Any]) -> None:
+async def raise_agent_command_failed(awaitable: Awaitable[Any], *, entry: Any) -> None:
     """Run an agent command and translate failures into HA service errors."""
 
+    runtime = getattr(entry, "runtime_data", None)
     try:
         await awaitable
+    except C300XAgentApiAuthError as err:
+        ensure_current_runtime(entry, runtime)
+        if runtime is None:
+            raise service_validation_error("agent_command_failed") from err
+        failure = await async_classify_runtime_auth_error(runtime.api, err)
+        ensure_current_runtime(entry, runtime)
+        if isinstance(failure, C300XAgentApiAuthError):
+            hass = async_get_hass()
+            # An in-flight bearer-only renewal must not clear maintenance reauth.
+            resources = runtime.resources
+            unregister = resources.unregister_event_registration
+            resources.unregister_event_registration = None
+            if unregister is not None:
+                unregister()
+            async_request_reauth(hass, entry, runtime.connection_state, failure)
+            async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
+        raise service_validation_error("agent_command_failed") from failure
     except Exception as err:
         raise service_validation_error("agent_command_failed") from err
 

@@ -2608,7 +2608,7 @@ def test_common_agent_command_failures_are_translated() -> None:
 
     async def _run() -> None:
         try:
-            await common_use_cases.raise_agent_command_failed(_failing_command())
+            await common_use_cases.raise_agent_command_failed(_failing_command(), entry=_FakeEntry(_FakeRuntimeData()))
         except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "agent_command_failed"
         else:

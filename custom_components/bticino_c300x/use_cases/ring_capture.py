@@ -203,7 +203,7 @@ class RingCaptureUseCase:
         if _ring_answer_media_ready(status) or _status_bridge(status).get("ring_answer_requested"):
             return False
         ensure_doorbell_call_supported(self._entry)
-        await raise_agent_command_failed(runtime.api.async_answer_doorbell_call())
+        await raise_agent_command_failed(runtime.api.async_answer_doorbell_call(), entry=self._entry)
         return True
 
     def _raise_if_ring_answer_blocked(self, runtime: Any, status: Mapping[str, Any]) -> None:

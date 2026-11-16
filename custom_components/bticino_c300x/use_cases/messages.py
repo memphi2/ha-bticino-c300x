@@ -52,7 +52,8 @@ class MessagesUseCase:
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_delete_answering_machine_message(
                 message_id
-            )
+            ),
+            entry=self._entry,
         )
         await async_refresh_after_message_mutation(
             self._hass,

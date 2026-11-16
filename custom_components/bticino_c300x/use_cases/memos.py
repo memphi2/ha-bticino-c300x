@@ -48,7 +48,7 @@ class MemosUseCase:
 
         ensure_text_memo_write_supported(self._entry)
         await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_create_text_memo(text, read=read)
+            self._entry.runtime_data.api.async_create_text_memo(text, read=read), entry=self._entry,
         )
         await async_refresh_after_message_mutation(
             self._hass,
@@ -72,7 +72,7 @@ class MemosUseCase:
         await async_ensure_gui_function_patch(self._entry)
         memo_id = await self._latest_memo_id(kind)
         await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_delete_memo(memo_id)
+            self._entry.runtime_data.api.async_delete_memo(memo_id), entry=self._entry,
         )
         await async_refresh_after_message_mutation(
             self._hass,

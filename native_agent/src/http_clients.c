@@ -1,10 +1,8 @@
 #include "http_clients.h"
+#include "http_client_input.h"
 #include "http_util.h"
-#include "system_metrics.h"
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 
 static void clear_client(struct c300x_http_client *client)
 {
@@ -61,8 +59,8 @@ int c300x_http_clients_prepare(struct c300x_http_clients *clients, struct pollfd
     int timeout = -1;
     for (int i = 0; i < C300X_HTTP_MAX_CLIENTS; i++) {
         struct c300x_http_client *client = &clients->slots[i];
-        fds[i] = (struct pollfd){.fd = client->fd, .events = POLLIN};
-        if (client->fd < 0) {
+        fds[i] = (struct pollfd){.fd = client->ready ? -1 : client->fd, .events = POLLIN};
+        if (client->fd < 0 || client->ready) {
             continue;
         }
         long long remaining = client->deadline - now;
@@ -81,45 +79,20 @@ void c300x_http_clients_handle(struct c300x_http_clients *clients, const struct 
         if (client->fd < 0) {
             continue;
         }
-        /* Data may have arrived during a previous handler, after poll().
-         * Give expired clients one nonblocking read, never another wait. */
-        int expired = client->deadline <= c300x_system_metrics_monotonic_ms();
-        if (!expired && (fds[i].fd != client->fd || !fds[i].revents)) {
-            continue;
-        }
-        ssize_t received = recv(client->fd, client->buffer + client->used,
-            REQUEST_BUFFER_SIZE - client->used - 1, MSG_DONTWAIT);
-        if (received < 0 && errno == EINTR) {
-            continue;
-        }
-        if (received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            if (expired) {
+        if (!client->ready) {
+            int status = c300x_http_client_receive(client, &fds[i]);
+            if (status < 0) {
                 clear_client(client);
             }
-            continue;
-        }
-        if (received <= 0) {
-            clear_client(client);
-            continue;
-        }
-        client->used += (size_t)received;
-        int size_error;
-        int status = c300x_http_request_status(client->buffer, client->used, REQUEST_BUFFER_SIZE, &size_error);
-        if (status == 0) {
-            if (client->deadline <= c300x_system_metrics_monotonic_ms()) {
-                clear_client(client);
+            if (status <= 0) {
+                continue;
             }
-            continue;
+            client->ready = 1;
         }
-        if (status > 0) {
-            int fd = client->fd;
+        if (ready(client->fd, client->kind, client->buffer, context)) {
             client->fd = -1;
-            ready(fd, client->kind, client->buffer, context);
-        } else {
-            c300x_http_send_json(client->fd, size_error > 0 ? 413 : 400,
-                size_error > 0 ? "Payload Too Large" : "Bad Request", "{\"ok\":false,\"error\":\"invalid_request\"}\n");
+            clear_client(client);
         }
-        clear_client(client);
     }
 }
 

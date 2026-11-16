@@ -7,11 +7,15 @@ static int completed;
 static int delayed_peer = -1;
 static const char *delayed_request;
 static int delay_handler;
-static void ready(int fd, int kind, char *buffer, void *context)
+static int defer_handler;
+static int ready(int fd, int kind, char *buffer, void *context)
 {
     (void)context;
     assert(kind == 2);
     assert(strstr(buffer, "GET /health ") != NULL);
+    if (defer_handler) {
+        return 0;
+    }
     completed++;
     if (delay_handler) {
         delay_handler = 0;
@@ -22,6 +26,40 @@ static void ready(int fd, int kind, char *buffer, void *context)
         usleep(600000);
     }
     close(fd);
+    return 1;
+}
+
+static void deferred_test(int cancel)
+{
+    struct c300x_http_clients clients;
+    struct pollfd fds[C300X_HTTP_MAX_CLIENTS];
+    int pair[2];
+    const char *text = "GET /health HTTP/1.1\r\nHost: local\r\n\r\n";
+    c300x_http_clients_init(&clients);
+    long long now = c300x_system_metrics_monotonic_ms();
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    assert(c300x_http_clients_add(&clients, pair[0], 2, now));
+    assert(send_all_bytes(pair[1], text, strlen(text)));
+    c300x_http_clients_prepare(&clients, fds, now);
+    assert(poll(fds, C300X_HTTP_MAX_CLIENTS, 0) == 1);
+    defer_handler = 1;
+    int before = completed;
+    c300x_http_clients_handle(&clients, fds, ready, NULL);
+    char *buffer = clients.slots[0].buffer;
+    assert(clients.slots[0].ready && buffer != NULL && completed == before);
+    assert(c300x_http_clients_prepare(&clients, fds, now + 100000) == -1);
+    assert(fds[0].fd == -1);
+    c300x_http_clients_handle(&clients, fds, ready, NULL);
+    assert(clients.slots[0].buffer == buffer && completed == before);
+    defer_handler = 0;
+    if (!cancel) {
+        c300x_http_clients_handle(&clients, fds, ready, NULL);
+        assert(completed == before + 1 && clients.slots[0].fd == -1);
+    }
+    c300x_http_clients_close(&clients);
+    char byte;
+    assert(recv(pair[1], &byte, 1, 0) == 0);
+    close(pair[1]);
 }
 
 static void expired_ready_test(int late, int complete)
@@ -105,5 +143,7 @@ int main(void)
     expired_ready_test(0, 1);
     expired_ready_test(1, 1);
     expired_ready_test(1, 0);
+    deferred_test(0);
+    deferred_test(1);
     return 0;
 }

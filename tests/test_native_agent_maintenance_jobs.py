@@ -65,7 +65,12 @@ class Lab:
 
 
 @pytest.fixture
-def lab(binary, tmp_path):
+def maintenance_options():
+    return {}
+
+
+@pytest.fixture
+def lab(binary, tmp_path, maintenance_options):
     port, ui_port, own = free_tcp_ports(3)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
@@ -73,7 +78,8 @@ def lab(binary, tmp_path):
         "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
         "maintenance": {"enabled": True, "adminToken": "maintenance-token",
                         "qmlPatch": {"enabled": True, "script": str(tmp_path / "job.sh")},
-                        "guiReload": {"enabled": True, "script": str(tmp_path / "job.sh")}},
+                        "guiReload": {"enabled": True, "script": str(tmp_path / "job.sh")},
+                        **maintenance_options},
         "activations": {"enabled": False, "autoDiscover": False},
         "events": {"udp": {"enabled": False}},
         "answeringMachine": {"messages": {"enabled": False}},

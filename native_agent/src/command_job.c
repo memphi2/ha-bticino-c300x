@@ -23,18 +23,17 @@ void c300x_command_job_init(struct c300x_command_job *job)
     job->output_fd = -1;
 }
 
-int c300x_command_job_start(struct c300x_command_job *job, const char *program,
-    const char *argument, int dynamic_homepage, int timeout_ms)
+static int start_job(struct c300x_command_job *job, const char *program,
+    char *const argv[], int dynamic_homepage, int timeout_ms, int wait_only)
 {
     int pipes[2];
     posix_spawn_file_actions_t actions;
     posix_spawnattr_t attr;
     size_t count = 0, used = 0;
     char **env;
-    char *argv[] = {(char *)program, (char *)argument, NULL};
     int error;
 
-    if (job->pid > 0 || timeout_ms <= 0 || pipe(pipes) != 0) {
+    if (job->pid > 0 || (!wait_only && timeout_ms <= 0) || pipe(pipes) != 0) {
         return 0;
     }
     if (fcntl(pipes[0], F_SETFD, FD_CLOEXEC) < 0
@@ -64,11 +63,21 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
     if (posix_spawnattr_init(&attr) != 0) {
         goto fail_actions;
     }
-    error = posix_spawn_file_actions_adddup2(&actions, pipes[1], STDOUT_FILENO);
+    error = wait_only
+        ? posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
+        : posix_spawn_file_actions_adddup2(&actions, pipes[1], STDOUT_FILENO);
     error |= posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
     error |= posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     /* Closing a descriptor that is not open is not an error for spawn. */
-    for (int fd = STDERR_FILENO + 1; fd < C300X_COMMAND_INHERITED_FD_LIMIT; fd++) {
+    /* Preserve the old service launcher close range, including higher FDs. */
+    long fd_limit = wait_only ? sysconf(_SC_OPEN_MAX) : C300X_COMMAND_INHERITED_FD_LIMIT;
+    if (fd_limit < 0) {
+        fd_limit = 1024;
+    }
+    if (fd_limit > 4096) {
+        fd_limit = 4096;
+    }
+    for (int fd = STDERR_FILENO + 1; fd < fd_limit; fd++) {
         error |= posix_spawn_file_actions_addclose(&actions, fd);
     }
     error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
@@ -86,7 +95,7 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
     }
     close(pipes[1]);
     job->output_fd = pipes[0];
-    job->deadline_ms = c300x_monotonic_ms() + timeout_ms;
+    job->deadline_ms = wait_only ? 0 : c300x_monotonic_ms() + timeout_ms;
     return 1;
 
 fail_actions:
@@ -97,6 +106,19 @@ fail_pipe:
     close(pipes[0]);
     close(pipes[1]);
     return 0;
+}
+
+int c300x_command_job_start(struct c300x_command_job *job, const char *program,
+    const char *argument, int dynamic_homepage, int timeout_ms)
+{
+    char *argv[] = {(char *)program, (char *)argument, NULL};
+    return start_job(job, program, argv, dynamic_homepage, timeout_ms, 0);
+}
+
+int c300x_command_job_start_wait(struct c300x_command_job *job, const char *program,
+    char *const argv[])
+{
+    return start_job(job, program, argv, 0, 0, 1);
 }
 
 int c300x_command_job_start_capture(struct c300x_command_job *job, const char *program,
@@ -118,6 +140,9 @@ int c300x_command_job_prepare(const struct c300x_command_job *job, struct pollfd
     *fd = (struct pollfd){.fd = job->output_fd, .events = POLLIN};
     if (job->pid <= 0) {
         return -1;
+    }
+    if (job->deadline_ms == 0) {
+        return 50;
     }
     /* Reap only while a job exists, including after stdout has closed. */
     remaining = job->deadline_ms - c300x_monotonic_ms();
@@ -163,7 +188,8 @@ void c300x_command_job_tick(struct c300x_command_job *job)
             break;
         }
     }
-    if (!job->complete && (job->failed || c300x_monotonic_ms() >= job->deadline_ms)) {
+    if (!job->complete && (job->failed
+        || (job->deadline_ms > 0 && c300x_monotonic_ms() >= job->deadline_ms))) {
         job->failed = 1;
         job->complete = 1;
         if (reaped == 0 || (reaped < 0 && wait_error != ECHILD)) {

@@ -13,13 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.mark.parametrize(
     "harness", ["http_request_test.c", "http_file_test.c", "http_clients_test.c", "http_output_test.c"]
 )
-def test_native_http_transport(tmp_path: Path, harness: str) -> None:
+@pytest.mark.parametrize("sanitize", [False, True], ids=["host", "asan-ubsan"])
+def test_native_http_transport(tmp_path: Path, harness: str, sanitize: bool) -> None:
     binary = tmp_path / "http-request-test"
     subprocess.run(
         [
             "cc",
             "-std=c11",
             "-O2",
+            *(["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else []),
             "-D_DEFAULT_SOURCE",
             "-D_POSIX_C_SOURCE=200809L",
             "-ffunction-sections",
@@ -33,6 +35,7 @@ def test_native_http_transport(tmp_path: Path, harness: str) -> None:
             str(ROOT / "native_agent/src/http_request.c"),
             str(ROOT / "native_agent/src/http_response.c"),
             str(ROOT / "native_agent/src/http_clients.c"),
+            str(ROOT / "native_agent/src/http_client_input.c"),
         ],
         check=True,
         capture_output=True,

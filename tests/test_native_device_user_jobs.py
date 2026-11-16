@@ -7,6 +7,9 @@ import pytest
 from test_native_agent_maintenance_jobs import GUI, QML, response, wait_until
 from test_native_agent_maintenance_jobs import binary as binary
 from test_native_agent_maintenance_jobs import lab as lab
+from test_native_agent_maintenance_jobs import (
+    maintenance_options as maintenance_options,
+)
 
 from native_agent.test.smoke import TOKEN, api_get
 

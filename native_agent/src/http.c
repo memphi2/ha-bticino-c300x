@@ -6,6 +6,7 @@
 #include "callback_queue.h"
 #include "http_maintenance.h"
 #include "http_device_user.h"
+#include "http_service_commands.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -432,11 +433,6 @@ static void handle_restart_agent(
     int client_fd,
     const struct c300x_config *config,
     const struct agent_runtime *runtime,
-    const struct request *request
-);
-static void handle_remove_agent(
-    int client_fd,
-    const struct c300x_config *config,
     const struct request *request
 );
 static void handle_agent_update_status(
@@ -7759,41 +7755,6 @@ static void close_extra_fds_for_exec(void)
     }
 }
 
-static int ssh_service_running(void)
-{
-    int status = system("pidof dropbear >/dev/null 2>&1");
-    return status != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-
-static void send_ssh_status(int client_fd)
-{
-    char body[96];
-    int running = ssh_service_running();
-    snprintf(
-        body,
-        sizeof(body),
-        "{\"ok\":true,\"enabled\":%s,\"running\":%s}\n",
-        running ? "true" : "false",
-        running ? "true" : "false"
-    );
-    send_json(client_fd, 200, "OK", body);
-}
-
-static int maintenance_ssh_supported(const struct c300x_config *config)
-{
-    return (
-        maintenance_auth_available(config)
-        && config->maintenance_ssh_start_enabled
-    );
-}
-
-static int maintenance_agent_remove_supported(const struct c300x_config *config)
-{
-    return (
-        maintenance_auth_available(config)
-        && config->maintenance_agent_remove_enabled
-    );
-}
 
 static int maintenance_firewall_supported(const struct c300x_config *config)
 {
@@ -8953,154 +8914,6 @@ static void handle_firewall_action(
     send_firewall_status_body(client_fd, config, "ipv4", state, exists, changed_files);
 }
 
-static void handle_ssh_get(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct request *request
-)
-{
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!maintenance_ssh_supported(config)) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
-        return;
-    }
-    send_ssh_status(client_fd);
-}
-
-static void handle_start_ssh(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct request *request
-)
-{
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!maintenance_ssh_supported(config)) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
-        return;
-    }
-    if (!confirm_matches(request, "start_ssh")) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
-        return;
-    }
-    if (!run_detached_command("/etc/init.d/dropbear", "start", 0)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
-        return;
-    }
-    send_json(client_fd, 200, "OK", "{\"ok\":true,\"action\":\"ssh_start\",\"enabled\":true,\"running\":true}\n");
-}
-
-static void handle_stop_ssh(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct request *request
-)
-{
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!maintenance_ssh_supported(config)) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
-        return;
-    }
-    if (!confirm_matches(request, "stop_ssh")) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
-        return;
-    }
-    if (!run_detached_command("/etc/init.d/dropbear", "stop", 0)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
-        return;
-    }
-    send_json(client_fd, 200, "OK", "{\"ok\":true,\"action\":\"ssh_stop\",\"enabled\":false,\"running\":false}\n");
-}
-
-static void handle_ssh_set(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct request *request
-)
-{
-    int enabled = 0;
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!maintenance_ssh_supported(config)) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
-        return;
-    }
-    if (!c300x_json_bool_field(request->body, "enabled", &enabled)) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_ssh_enabled_required\"}\n");
-        return;
-    }
-    if (!run_detached_command("/etc/init.d/dropbear", enabled ? "start" : "stop", 0)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
-        return;
-    }
-    send_ssh_status(client_fd);
-}
-
-static void handle_reboot(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct request *request
-)
-{
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!config->maintenance_reboot_enabled) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
-        return;
-    }
-    if (!confirm_matches(request, "reboot")) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
-        return;
-    }
-    if (config->maintenance_ssh_start_enabled) {
-        (void)run_detached_command("/etc/init.d/dropbear", "start", 0);
-    }
-    if (!run_detached_command("/sbin/reboot", NULL, config->maintenance_reboot_delay_ms)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
-        return;
-    }
-    send_json(client_fd, 202, "Accepted", "{\"ok\":true,\"action\":\"reboot\",\"scheduled\":true}\n");
-}
-
-static void handle_remove_agent(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct request *request
-)
-{
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!maintenance_agent_remove_supported(config)) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
-        return;
-    }
-    if (!confirm_matches(request, "remove_agent")) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
-        return;
-    }
-    if (config->maintenance_ssh_start_enabled) {
-        (void)run_detached_command("/etc/init.d/dropbear", "start", 0);
-    }
-    if (!run_detached_command(config->maintenance_agent_remove_script, "remove", 500)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
-        return;
-    }
-    send_json(client_fd, 202, "Accepted", "{\"ok\":true,\"action\":\"remove_agent\",\"scheduled\":true,\"ssh_kept_running\":true}\n");
-}
 
 static void handle_restart_agent(
     int client_fd,
@@ -9560,7 +9373,9 @@ static void handle_api_request(
     }
 
     if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)
-        || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)) {
+        || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
+        || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
+            run_detached_command)) {
         return;
     }
 
@@ -9815,32 +9630,6 @@ static void handle_api_request(
             handle_unlock(client_fd, config, decoded_lock_id);
             return;
         }
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/ssh/actions/start") == 0) {
-        handle_start_ssh(client_fd, config, request);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/ssh/actions/stop") == 0) {
-        handle_stop_ssh(client_fd, config, request);
-        return;
-    }
-    if (strcmp(request->path, "/api/v1/maintenance/ssh") == 0) {
-        if (strcmp(request->method, "GET") == 0) {
-            handle_ssh_get(client_fd, config, request);
-            return;
-        }
-        if (strcmp(request->method, "POST") == 0) {
-            handle_ssh_set(client_fd, config, request);
-            return;
-        }
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/reboot") == 0) {
-        handle_reboot(client_fd, config, request);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/agent/actions/remove") == 0) {
-        handle_remove_agent(client_fd, config, request);
-        return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/agent/actions/restart") == 0) {
         handle_restart_agent(client_fd, config, runtime, request);
@@ -10235,7 +10024,7 @@ struct http_context {
     struct agent_runtime *runtime;
 };
 
-static void handle_client(int client_fd, int kind, char *buffer, void *context)
+static int handle_client(int client_fd, int kind, char *buffer, void *context)
 {
     struct http_context *http = context;
     struct c300x_config *config = http->config;
@@ -10247,7 +10036,7 @@ static void handle_client(int client_fd, int kind, char *buffer, void *context)
     if (request == NULL) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
         close_agent_socket(client_fd);
-        return;
+        return 1;
     }
 
     if (!parse_request(buffer, request)) {
@@ -10260,6 +10049,10 @@ static void handle_client(int client_fd, int kind, char *buffer, void *context)
     }
 
     if (kind == LISTENER_API) {
+        if (c300x_http_service_commands_defer(&runtime->maintenance, config, request)) {
+            free(request);
+            return 0;
+        }
         handle_api_request(client_fd, config, runtime, request);
         close_client = runtime->ringer_control.client_fd != client_fd
             && runtime->touch_tone.client_fd != client_fd
@@ -10275,6 +10068,7 @@ cleanup:
     if (close_client) {
         close_agent_socket(client_fd);
     }
+    return 1;
 }
 
 static int agent_has_home_assistant_connection(

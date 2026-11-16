@@ -135,9 +135,10 @@ export class C300XVisitorJournal extends HTMLElement {
 
   configure({ hass, entryId, enabled }) {
     if (!this.shadowRoot) return;
-    const changed = this.entryId !== entryId || this.hass?.connection !== hass?.connection || this.hidden === !!enabled;
+    const changed = this.entryId !== entryId || this.connection !== hass?.connection || this.hidden === !!enabled;
     if (changed) this.deactivate();
     this.hass = hass;
+    this.connection = hass?.connection;
     this.entryId = entryId;
     this.hidden = !enabled || !entryId;
     this.labels();

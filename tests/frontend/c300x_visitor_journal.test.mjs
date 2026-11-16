@@ -70,6 +70,31 @@ test("late subscription acknowledgement releases its listener after detach", asy
   assert.equal(journal.unsubscribe, null);
 });
 
+test("connection replacement disposes old and late listeners even when hass is mutated in place", async () => {
+  let oldCallback, finishOld, oldRemoved = 0, newRemoved = 0;
+  const journal = subscriptionJournal(callback => {
+    oldCallback = callback;
+    return new Promise(resolve => { finishOld = resolve; });
+  });
+  Object.assign(journal, { shadowRoot: {}, details: { open: true }, dialog: { open: false, close() {} } });
+  journal.labels = journal.renderList = () => {};
+  const hass = journal.hass;
+  journal.configure({ hass, entryId: "one", enabled: true });
+  await Promise.resolve();
+  hass.connection = { subscribeMessage: () => Promise.resolve(() => newRemoved++) };
+  journal.configure({ hass, entryId: "one", enabled: true });
+  await new Promise(setImmediate);
+  const loads = journal.loads;
+  oldCallback({ entry_id: "one" });
+  assert.equal(journal.loads, loads);
+  finishOld(() => oldRemoved++);
+  await new Promise(setImmediate);
+  assert.equal(oldRemoved, 1);
+  assert.equal(newRemoved, 0);
+  journal.deactivate();
+  assert.equal(newRemoved, 1);
+});
+
 test("rejected subscription clears stale data and allows a later activation", async () => {
   const journal = subscriptionJournal(() => Promise.reject(new Error("unauthorized")));
   journal.items = [{ id: "private" }];

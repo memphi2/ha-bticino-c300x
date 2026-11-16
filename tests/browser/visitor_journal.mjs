@@ -59,8 +59,9 @@ try {
     lab.hass.connection.subscribeMessage = async (callback, message) => {
       if (message.type !== "bticino_c300x/visitor_journal/subscribe") return subscribe(callback, message);
       if (message.entry_id !== "entry-one") throw new Error("Unexpected journal entry");
-      lab.journalListeners.add(callback);
-      return () => lab.journalListeners.delete(callback);
+      const listeners = lab.journalListeners;
+      listeners.add(callback);
+      return () => listeners.delete(callback);
     };
     lab.hass.fetchWithAuth = async (url, options) => {
       lab.fetches.push({ url, signal: options.signal });
@@ -220,6 +221,28 @@ try {
   await page.waitForFunction(() => lab.journal.items.length === 3);
   assert.equal(await page.evaluate(() => lab.journalListeners.size), 1);
   assert.deepEqual(await page.evaluate(() => [lab.peers.size, lab.calls.length]), [0, 0]);
+  await page.evaluate(() => {
+    lab.oldJournalListeners = lab.journalListeners;
+    lab.oldJournalCallback = [...lab.journalListeners][0];
+    lab.journalListeners = new Set();
+    lab.hass = { ...lab.hass, connection: { ...lab.hass.connection } };
+    lab.card.hass = lab.hass;
+  });
+  await page.waitForFunction(() => lab.journal.items.length === 3 && lab.journalListeners.size === 1 && !lab.journal.loading);
+  assert.equal(await page.evaluate(() => lab.oldJournalListeners.size), 0);
+  assert.equal(await page.evaluate(() => lab.journal.connection === lab.hass.connection), true);
+  assert.equal(await page.evaluate(() => {
+    const count = lab.fetches.length;
+    lab.oldJournalCallback({ entry_id: "entry-one" });
+    return lab.fetches.length === count;
+  }), true);
+  await page.evaluate(() => {
+    for (const callback of lab.journalListeners) callback({ entry_id: "entry-one", closed: true });
+  });
+  assert.deepEqual(await page.evaluate(() => [lab.journal.active, lab.journalListeners.size, lab.journal.items.length]), [false, 0, 0]);
+  // HA delivering state after entry reload must work even if the visible signature is identical.
+  await page.evaluate(() => { lab.card.hass = { ...lab.hass }; });
+  await page.waitForFunction(() => lab.journal.items.length === 3 && lab.journalListeners.size === 1);
   await page.evaluate(() => lab.card.remove());
   assert.deepEqual(errors, []);
   console.log("Visitor journal: opt-in, image/video, keyboard/swipe, bounds, four languages, cleanup, no device calls: PASS");

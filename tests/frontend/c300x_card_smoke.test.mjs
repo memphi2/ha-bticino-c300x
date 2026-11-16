@@ -1712,6 +1712,37 @@ test("doorbell card coalesces unchanged hass updates into one animation frame", 
   assert.equal(renderCalls, 2);
 });
 
+test("journal gets connection replacements without a rendered state change, but not after disposal", async () => {
+  const registry = installFakeDom();
+  const frames = [];
+  globalThis.requestAnimationFrame = callback => { frames.push(callback); return frames.length; };
+  globalThis.cancelAnimationFrame = () => {};
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?journal-connection");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera", show_visitor_journal: true });
+  const configurations = [];
+  card.shadowRoot.children.set("c300x-visitor-journal", { configure: value => configurations.push(value), deactivate() {} });
+  const hass = fakeHass({ connection: {} });
+  card.hass = hass;
+  frames.shift()();
+  const signature = card._lastRenderSignature;
+  let renders = 0;
+  const updateState = card._updateState.bind(card);
+  card._updateState = () => { renders++; updateState(); };
+  const replacement = { ...hass, connection: {} };
+  card.hass = replacement;
+  assert.equal(configurations.at(-1).hass, replacement);
+  assert.equal(configurations.at(-1).entryId, "entry-1");
+  assert.equal(configurations.at(-1).enabled, true);
+  frames.shift()();
+  assert.equal(card._lastRenderSignature, signature);
+  assert.equal(renders, 0);
+  card.disconnectedCallback();
+  const count = configurations.length;
+  card.hass = { ...replacement, connection: {} };
+  assert.equal(configurations.length, count);
+});
+
 test("primary hangup remains available while ring answer waits for microphone permission", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?primary-hangup-pending-microphone");

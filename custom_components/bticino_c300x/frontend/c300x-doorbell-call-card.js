@@ -228,6 +228,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._ensureLocationChangeListener();
     this._maybeRefreshCardGain();
     this._ensureRendered();
+    this._configureJournal();
     this._scheduleUpdate();
   }
 
@@ -449,10 +450,7 @@ class C300XDoorbellCallCard extends HTMLElement {
 
     const homeCallMode = this._isHomeCallMode();
     const autoMode = this._isAutoMode();
-    this.shadowRoot.querySelector("c300x-visitor-journal")?.configure?.({
-      hass: this._hass, entryId: this._entryId(),
-      enabled: !homeCallMode && this._config.show_visitor_journal === true,
-    });
+    this._configureJournal();
     const entity = this._cameraEntity();
     const mediaState = c300xMediaState(entity);
     const mediaUpdate = this._lifecycle.evaluateMediaState(mediaState);
@@ -1193,6 +1191,14 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   _entryId() {
     return c300xEntryId(this._hass, this._config, this._resolvedCameraEntityId());
+  }
+
+  _configureJournal() {
+    if (this._disposed || !this._config) return;
+    this.shadowRoot?.querySelector("c300x-visitor-journal")?.configure?.({
+      hass: this._hass, entryId: this._entryId(),
+      enabled: !this._isHomeCallMode() && this._config.show_visitor_journal === true,
+    });
   }
 
   _serviceData() {

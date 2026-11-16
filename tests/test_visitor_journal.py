@@ -70,6 +70,50 @@ def test_ambiguous_or_closed_calls_never_fabricate_outcome(tmp_path, monkeypatch
     assert journal.items()[0]["outcome"] == "unknown"
 
 
+@pytest.mark.parametrize("payload", [
+    None, [], {}, {"video": None}, {"video": 1}, {"video": []},
+    {"video": {"bridge": None}}, {"video": {"bridge": "ring"}},
+])
+def test_malformed_answer_evidence_is_ignored(tmp_path, monkeypatch, payload):
+    _, journal = fixture(tmp_path, monkeypatch)
+    journal.event(event())
+    answer = event("doorbell_view_requested", 2)
+    answer.data["data"] = payload
+    journal.event(answer)
+    assert journal.items()[0]["outcome"] == "unknown"
+
+
+@pytest.mark.parametrize("at", [
+    None, True, False, "123", [], {}, 0, -1,
+    float("nan"), float("inf"), float("-inf"), 1800000001,
+])
+def test_invalid_restored_timestamp_is_rejected(monkeypatch, at):
+    monkeypatch.setattr(journal_module.time, "time", lambda: 1800000000)
+    source = event().data["source_event_id"]
+    raw = {"id": visit_id({"source_event_id": source}), "source": source, "at": at}
+    assert journal_module._validated_record(raw) is None
+
+
+@pytest.mark.parametrize("number_type", [int, float])
+def test_numeric_subclass_timestamp_is_still_rejected(number_type):
+    subclass = type("TimestampSubclass", (number_type,), {})
+    source = event().data["source_event_id"]
+    raw = {"id": visit_id({"source_event_id": source}), "source": source, "at": subclass(1)}
+    assert journal_module._validated_record(raw) is None
+
+
+@pytest.mark.parametrize("at", [1, 1.25, 1800000000, 1800000000.0])
+def test_valid_restored_timestamp_is_not_coerced(monkeypatch, at):
+    monkeypatch.setattr(journal_module.time, "time", lambda: 1800000000)
+    source = event().data["source_event_id"]
+    raw = {"id": visit_id({"source_event_id": source}), "source": source, "at": at}
+    record = journal_module._validated_record(raw)
+    assert record is not None
+    assert record["at"] is at
+    assert record["source"] == source
+    assert record["id"] == raw["id"]
+
+
 def test_answer_requires_ordered_same_instance_ring_evidence(tmp_path, monkeypatch):
     _, journal = fixture(tmp_path, monkeypatch)
     journal.event(event(sequence=10))

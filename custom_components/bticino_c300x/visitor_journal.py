@@ -130,7 +130,9 @@ class VisitorJournal:
         elif kind == "doorbell_view_requested" and active is not None and active in self.records:
             payload = data.get("data")
             video = payload.get("video") if isinstance(payload, Mapping) else None
-            bridge = video.get("bridge") if isinstance(video, Mapping) else None
+            if not isinstance(video, Mapping):
+                return
+            bridge = video.get("bridge")
             # A request/preview, browser state, or lack of an answer is not an outcome.
             if (isinstance(bridge, Mapping) and bridge.get("media_owner") == "ring"
                     and bridge.get("ring_answered") is True
@@ -220,7 +222,9 @@ def _validated_record(raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict) or not isinstance(raw.get("id"), str) or not _ID.fullmatch(raw["id"]):
         return None
     at = raw.get("at")
-    if type(at) not in (int, float) or not 0 < at <= time.time():
+    if type(at) is not int and type(at) is not float:
+        return None
+    if not 0 < at <= time.time():
         return None
     source = raw.get("source")
     if visit_id({"source_event_id": source}) != raw["id"]:

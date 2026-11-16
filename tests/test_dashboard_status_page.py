@@ -22,9 +22,12 @@ from custom_components.bticino_c300x.const import (
 )
 
 
-def test_status_then_energy_are_first_configuration_sections() -> None:
+def test_status_and_optional_sections_precede_unused_regular_sections() -> None:
     schema = dashboard_pages_schema({})
-    assert [str(key) for key in schema.schema][:3] == ["page_1", "energy_page", "page_2"]
+    assert [str(key) for key in schema.schema] == [
+        "page_1", "energy_page", "agenda_page", "leave_home_page",
+        *[f"page_{number}" for number in range(2, 9)],
+    ]
     status = next(value for key, value in schema.schema.items() if str(key) == "page_1")
     enabled = next(key for key in status.schema.schema if str(key) == "enabled")
     assert enabled.default() is True

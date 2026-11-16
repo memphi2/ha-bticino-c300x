@@ -10,9 +10,15 @@ from custom_components.bticino_c300x.api import C300XAgentApi
 from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 from custom_components.bticino_c300x.const import HEADER_MAINTENANCE_TOKEN
 
+PROTECTED = {"ok": True, "accepted": False, "suppressed": True, "reason": "display_protected"}
+
 
 @pytest.mark.parametrize("status,body", [
     (200, {"ok": True, "accepted": True}),
+    (200, PROTECTED),
+    (200, {**PROTECTED, "accepted": True}), (200, {**PROTECTED, "accepted": 0}),
+    (200, {**PROTECTED, "suppressed": 1}), (200, {**PROTECTED, "reason": "gui_missing"}),
+    (200, {"ok": True, "accepted": False, "suppressed": True}),
     (200, {"ok": True}), (200, {"ok": True, "accepted": False}),
     (200, {"ok": 1, "accepted": True}), (200, {"ok": True, "accepted": 1}),
     (200, []), (200, None), (404, {"error": "unsupported"}),
@@ -33,7 +39,9 @@ def test_real_http_transport_once(status, body):
         app.router.add_post("/api/v1/display/alert", receive)
         async with TestServer(app) as server, ClientSession() as session:
             api = C300XAgentApi(session, str(server.make_url("")), "token", "maintenance")
-            if status == 200 and body == {"ok": True, "accepted": True} and type(body["ok"]) is bool and type(body["accepted"]) is bool:
+            if (status == 200 and isinstance(body, dict) and body.get("ok") is True
+                    and ((body.get("accepted") is True and body == {"ok": True, "accepted": True})
+                         or (body.get("accepted") is False and body.get("suppressed") is True and body == PROTECTED))):
                 assert await api.async_send_display_alert(payload) == body
             else:
                 with pytest.raises(C300XAgentApiError):

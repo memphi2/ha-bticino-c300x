@@ -108,6 +108,7 @@ function fixture(sharedEngine) {
 {
     const f = fixture();
     assert.equal(f.c.canListen(), false);
+    assert.equal(f.c.canConnect(), false);
     f.c.updateGuard(); f.c.waitForCommand(); f.c.preempt();
     f.c.screenChanged(); f.c.tick(); f.c.acknowledge();
     f.c.sendAcknowledgement(payload);
@@ -188,31 +189,107 @@ for (const response of [[500, {}], [200, "invalid json"], [200, {...payload, unk
     f.c.waitForCommand(); assert.equal(f.requests.length, 2); f.c.shutdown();
     assert.equal(f.c.reconnect.running, false);
 }
-for (const fault of ["failOpen", "failSend"]) {
-    const f = fixture(); f[fault](true); f.c.initialize();
-    assert.equal(f.runtime.pendingRequest, null); assert.equal(f.c.reconnect.running, true);
-    assert.equal(f.requests[0].aborted, true); f.c.shutdown();
+for (const blocked of [false, true]) {
+    for (const fault of ["failOpen", "failSend"]) {
+        const f = fixture(); f.c.blocked = blocked; f[fault](true); f.c.initialize();
+        assert.equal(f.runtime.pendingRequest, null); assert.equal(f.c.reconnect.running, true);
+        assert.equal(f.requests[0].aborted, true); f.c.shutdown();
+    }
 }
 for (const guard of ["blocked", "visible"]) {
     const f = fixture(); f.c[guard] = guard === "blocked"; f.c.initialize();
-    assert.equal(f.requests.length, 0, "no initial listener on protected or hidden page");
+    assert.equal(f.c.canListen(), false); assert.equal(f.c.canConnect(), true);
+    assert.equal(f.requests.length, 1, "protected and hidden roots advertise presence");
+    const initial = f.runtime.pendingRequest, initialCallback = initial.onreadystatechange;
+    assert.equal(initial.url, "http://127.0.0.1:8090/ui/alerts/next?protected=1");
+    assert.equal(initial.method, "GET"); assert.equal(initial.headers["X-C300X-GUI"], "alerts-v1");
+    f.c.waitForCommand(); assert.equal(f.requests.length, 1, "one sleeping protected GET");
+    for (const name of ["effects", "resume", "reconnect", "ackTimeout"]) assert.equal(f.c[name].running, false);
     f.c[guard] = guard !== "blocked"; f.c.updateGuard();
-    assert.equal(f.requests.length, 0, "guard clear yields for socket teardown");
-    f.resume(); assert.equal(f.requests.length, 1);
+    assert.equal(initial.aborted, true);
+    assert.equal(f.requests.length, 1, "guard clear yields for socket teardown");
+    f.resume(); assert.equal(f.requests.length, 2);
     const old = f.runtime.pendingRequest, stale = old.onreadystatechange;
+    assert.equal(old.url, "http://127.0.0.1:8090/ui/alerts/next");
     f.c[guard] = guard === "blocked"; f.c.updateGuard();
     assert.equal(old.aborted, true); assert.equal(f.runtime.pendingRequest, null);
-    assert.equal(f.c.resume.running, false); assert.equal(f.c.reconnect.running, false);
-    f.c.waitForCommand(); assert.equal(f.requests.length, 1);
-    f.c[guard] = guard !== "blocked"; f.c.updateGuard(); f.resume();
-    const current = f.runtime.pendingRequest;
+    assert.equal(f.c.resume.running, true); assert.equal(f.c.reconnect.running, false);
+    f.resume(); assert.equal(f.requests.length, 3);
+    const protectedPoll = f.runtime.pendingRequest;
+    assert.equal(protectedPoll.url, initial.url);
     old.status = 200; old.responseText = JSON.stringify(payload); old.readyState = 4;
+    stale();
+    assert.equal(f.runtime.pendingRequest, protectedPoll, "old safe callback cannot steal protected listener");
+    assert.equal(f.c.notice, null);
+    f.c[guard] = guard !== "blocked"; f.c.updateGuard(); f.resume();
+    assert.equal(protectedPoll.aborted, true);
+    const current = f.runtime.pendingRequest;
+    assert.equal(current.url, old.url);
+    initial.status = 200; initial.responseText = JSON.stringify(payload); initial.readyState = 4;
+    initialCallback();
+    assert.equal(f.runtime.pendingRequest, current, "old protected callback cannot steal safe listener");
     stale();
     assert.equal(f.runtime.pendingRequest, current, "old callback cannot steal resumed listener");
     assert.equal(f.c.notice, null); assert.equal(f.events.includes("wake"), false);
     assert.equal(f.events.includes("beep"), false);
     current.complete(200, payload); assert.equal(f.c.notice.title, payload.title);
     f.c.shutdown();
+}
+
+// Transport EOF/errors clear the protected slot and retry only after backoff.
+for (const status of [0, 500, 503]) {
+    const f = fixture(); f.c.blocked = true; f.c.initialize();
+    f.runtime.pendingRequest.complete(status, {});
+    assert.equal(f.runtime.pendingRequest, null); assert.equal(f.c.reconnect.running, true);
+    assert.equal(f.c.resume.running, false); assert.deepEqual(f.events, ["send"]);
+    f.c.waitForCommand();
+    assert.equal(f.runtime.pendingRequest.url, "http://127.0.0.1:8090/ui/alerts/next?protected=1");
+    assert.equal(f.c.reconnect.running, false); f.c.shutdown();
+}
+
+// Even a valid command returned illegally on a protected GET must be ignored,
+// including when the guard has cleared before its change handler executes.
+for (const guard of ["blocked", "visible"]) {
+    for (const clearGuard of [false, true]) {
+        for (const body of [payload, "invalid json", "x".repeat(16385)]) {
+            const f = fixture(); f.c[guard] = guard === "blocked"; f.c.initialize();
+            f.runtime.controller.receive = () => assert.fail("protected request dispatched a command");
+            if (clearGuard) f.c[guard] = guard !== "blocked";
+            f.runtime.pendingRequest.complete(200, body);
+            assert.equal(f.runtime.pendingRequest, null);
+            assert.equal(f.c.notice, null); assert.deepEqual(f.events, ["send"]);
+            assert.equal(f.requests.length, 1, "unexpected protected response cannot spin");
+            assert.equal(f.c.reconnect.running, true);
+            assert.equal(f.c.resume.running, false); assert.equal(f.c.effects.running, false);
+            f.c.shutdown();
+        }
+    }
+}
+
+for (const guard of ["blocked", "visible"]) {
+    const f = fixture(); f.c[guard] = guard === "blocked"; f.c.initialize();
+    const old = f.runtime.pendingRequest;
+    f.c.preempt(); assert.equal(old.aborted, true);
+    f.resume();
+    for (let attempt = 0; attempt < 6; attempt++) {
+        assert.equal(f.runtime.pendingRequest.url, "http://127.0.0.1:8090/ui/alerts/next?protected=1");
+        f.runtime.pendingRequest.complete(409, {});
+        if (attempt < 5) {
+            assert.equal(f.c.reconnect.running, false);
+            f.resume();
+        }
+    }
+    assert.equal(f.c.resume.running, false, "protected busy retries are also bounded");
+    assert.equal(f.c.reconnect.running, true);
+    f.c.waitForCommand();
+    const sleeping = f.runtime.pendingRequest, count = f.requests.length;
+    f.advance(600000); f.c.waitForCommand();
+    assert.equal(f.requests.length, count);
+    for (const name of ["effects", "resume", "reconnect", "ackTimeout"]) assert.equal(f.c[name].running, false);
+    f.c.shutdown();
+    assert.equal(sleeping.aborted, true); assert.equal(f.c.canConnect(), false);
+    f.c.preempt(); f.c.updateGuard(); f.c.waitForCommand();
+    assert.equal(f.requests.length, count); assert.equal(f.c.resume.running, false);
 }
 {
     const f = fixture(); f.c.initialize(); const old = f.runtime.pendingRequest;

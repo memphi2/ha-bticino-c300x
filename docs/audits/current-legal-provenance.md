@@ -1,8 +1,8 @@
 # Current Legal and Provenance Audit Snapshot
 
 Source review: 2026-11-16. Integration and native agent `2.6.0` development builds
-on the unmerged `2.5.0` display work with credential recovery and an HA-only
-visitor journal. The latest stable release remains `v2.4.1`. This report covers
+on the `2.5.0` release line with credential recovery and an HA-only
+visitor journal. The latest stable release is `v2.5.0`. This report covers
 the local source tree, not a newly published release.
 
 This is a technical provenance and packaging review, not a legal opinion,

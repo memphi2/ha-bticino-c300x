@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -18,6 +19,8 @@ from .display_notifications import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _integer(value: Any) -> int:
@@ -94,10 +97,15 @@ async def async_send_display_alert(
         "expires_in": notice["expires_in"],
     }
     try:
-        await runtime.api.async_send_display_alert(payload)
+        result = await runtime.api.async_send_display_alert(payload)
     except C300XAgentApiError as err:
         # Keep the HA notice: a lost response cannot prove GUI non-delivery.
         raise HomeAssistantError(
             f"C300X display alert delivery was not confirmed: {err}. "
             "The HA notice remains stored; wake and sound are not confirmed."
         ) from err
+    if isinstance(result, dict) and result.get("suppressed") is True:
+        _LOGGER.info(
+            "C300X notification stored in HA without popup, wake or sound: "
+            "the device GUI reports a protected screen or call. No effects are queued"
+        )

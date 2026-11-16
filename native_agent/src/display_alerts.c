@@ -21,9 +21,16 @@ static void fail(int fd, int status, const char *error)
     c300x_http_send_json(fd, status, "Display Alert Error", body);
 }
 
-static void accepted(int fd)
+enum alert_outcome { DELIVERY_FAILED, TRANSPORT_ACCEPTED, DISPLAY_PROTECTED };
+
+static void result(int fd, int outcome)
 {
-    c300x_http_send_json(fd, 200, "OK", "{\"ok\":true,\"accepted\":true}\n");
+    if (outcome == DISPLAY_PROTECTED)
+        c300x_http_send_json(fd, 200, "OK",
+            "{\"ok\":true,\"accepted\":false,\"suppressed\":true,\"reason\":\"display_protected\"}\n");
+    else if (outcome == TRANSPORT_ACCEPTED)
+        c300x_http_send_json(fd, 200, "OK", "{\"ok\":true,\"accepted\":true}\n");
+    else fail(fd, 503, "display_alerts_delivery_failed");
 }
 
 static const char *space(const char *p)
@@ -147,6 +154,7 @@ void c300x_display_alerts_close(struct c300x_display_alerts *alerts)
 {
     close_agent_socket(alerts->gui_fd);
     alerts->gui_fd = -1;
+    alerts->gui_protected = 0;
 }
 
 void c300x_display_alerts_tick(struct c300x_display_alerts *alerts, const struct pollfd *fds)
@@ -167,10 +175,14 @@ int c300x_display_alerts_handle_ui(struct c300x_display_alerts *alerts, int fd,
     const struct request *request)
 {
     if (strcmp(request->method, "GET")) { fail(fd, 405, "method_not_allowed"); return 1; }
-    if (request->query[0] || request->body_len) { fail(fd, 400, "invalid_alert_poll"); return 1; }
+    int protected = strcmp(request->query, "protected=1") == 0;
+    if ((request->query[0] && !protected) || request->body_len) {
+        fail(fd, 400, "invalid_alert_poll"); return 1;
+    }
     prune_listener(alerts);
     if (alerts->gui_fd >= 0) { fail(fd, 409, "display_alerts_listener_busy"); return 1; }
     alerts->gui_fd = fd;
+    alerts->gui_protected = protected;
     return 0;
 }
 
@@ -198,8 +210,7 @@ void c300x_display_alerts_handle_api(struct c300x_display_alerts *alerts, int fd
             if (!free_slot) free_slot = receipt;
         } else if (!strcmp(receipt->id, payload.id)) {
             if (strcmp(receipt->digest, digest)) fail(fd, 409, "display_alert_id_conflict");
-            else if (receipt->accepted) accepted(fd);
-            else fail(fd, 503, "display_alerts_delivery_failed");
+            else result(fd, receipt->outcome);
             return;
         }
     }
@@ -209,8 +220,13 @@ void c300x_display_alerts_handle_api(struct c300x_display_alerts *alerts, int fd
     memcpy(free_slot->id, payload.id, sizeof(free_slot->id));
     memcpy(free_slot->digest, digest, sizeof(free_slot->digest));
     free_slot->deadline_ms = now + C300X_DISPLAY_ALERTS_DEDUP_MS;
-    free_slot->accepted = deliver(alerts->gui_fd, body, payload.expires_in);
-    c300x_display_alerts_close(alerts);
-    if (free_slot->accepted) accepted(fd);
-    else fail(fd, 503, "display_alerts_delivery_failed");
+    /* Protection belongs to this live socket, never to a cached GUI flag. */
+    if (alerts->gui_protected) {
+        free_slot->outcome = DISPLAY_PROTECTED;
+    } else {
+        free_slot->outcome = deliver(alerts->gui_fd, body, payload.expires_in)
+            ? TRANSPORT_ACCEPTED : DELIVERY_FAILED;
+        c300x_display_alerts_close(alerts);
+    }
+    result(fd, free_slot->outcome);
 }

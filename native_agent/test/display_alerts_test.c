@@ -32,14 +32,20 @@ int c300x_http_write(int fd, const char *data, size_t size)
     return write_success;
 }
 
-static int listen_gui(struct c300x_display_alerts *alerts)
+static int listen_gui_mode(struct c300x_display_alerts *alerts, int protected)
 {
     int pair[2];
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
     memset(&request, 0, sizeof(request));
     strcpy(request.method, "GET");
+    if (protected) strcpy(request.query, "protected=1");
     assert(c300x_display_alerts_handle_ui(alerts, pair[0], &request) == 0);
     return pair[1];
+}
+
+static int listen_gui(struct c300x_display_alerts *alerts)
+{
+    return listen_gui_mode(alerts, 0);
 }
 
 static void post(struct c300x_display_alerts *alerts, int id)
@@ -55,8 +61,39 @@ static void post(struct c300x_display_alerts *alerts, int id)
     c300x_display_alerts_handle_api(alerts, -1, &request);
 }
 
+static void protected_receipts_test(void)
+{
+    struct c300x_display_alerts alerts;
+    c300x_display_alerts_init(&alerts);
+    int peer = listen_gui_mode(&alerts, 1), fd = alerts.gui_fd;
+    for (int i = 0; i < C300X_DISPLAY_ALERTS_DEDUP_SLOTS; i++) {
+        post(&alerts, i);
+        assert(status == 200 && strstr(response, "\"accepted\":false"));
+        assert(strstr(response, "display_protected") && writes == 0);
+        assert(alerts.gui_fd == fd && alerts.gui_protected);
+    }
+    post(&alerts, 99);
+    assert(status == 503 && strstr(response, "dedup_full"));
+    now += C300X_DISPLAY_ALERTS_DEDUP_MS;
+    post(&alerts, 99);
+    assert(status == 200 && strstr(response, "display_protected") && writes == 0);
+    close(peer);
+    post(&alerts, 100);
+    assert(status == 503 && alerts.gui_fd == -1 && !alerts.gui_protected);
+    peer = listen_gui(&alerts);
+    post(&alerts, 99);
+    assert(status == 200 && strstr(response, "display_protected") && writes == 0);
+    post(&alerts, 100);
+    assert(status == 200 && writes == 1 && alerts.gui_fd == -1);
+    close(peer);
+    c300x_display_alerts_close(&alerts);
+}
+
 int main(void)
 {
+    protected_receipts_test();
+    now = 1000;
+    writes = 0;
     struct c300x_display_alerts alerts;
     struct pollfd snapshot;
     c300x_display_alerts_init(&alerts);

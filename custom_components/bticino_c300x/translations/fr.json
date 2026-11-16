@@ -272,10 +272,10 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
         "sections": {
           "page_1": {
-            "name": "Page 1 : Page d'état",
+            "name": "Page{page_1_position} : Page d'état",
             "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
               "enabled": "Afficher la page d'état",
@@ -291,7 +291,7 @@
             }
           },
           "page_2": {
-            "name": "Page 2{page_2_name}",
+            "name": "Page{page_2_position}{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -304,7 +304,7 @@
             }
           },
           "page_3": {
-            "name": "Page 3{page_3_name}",
+            "name": "Page{page_3_position}{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -317,7 +317,7 @@
             }
           },
           "page_4": {
-            "name": "Page 4{page_4_name}",
+            "name": "Page{page_4_position}{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -330,7 +330,7 @@
             }
           },
           "page_5": {
-            "name": "Page 5{page_5_name}",
+            "name": "Page{page_5_position}{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -343,7 +343,7 @@
             }
           },
           "page_6": {
-            "name": "Page 6{page_6_name}",
+            "name": "Page{page_6_position}{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -356,7 +356,7 @@
             }
           },
           "page_7": {
-            "name": "Page 7{page_7_name}",
+            "name": "Page{page_7_position}{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -369,7 +369,7 @@
             }
           },
           "page_8": {
-            "name": "Page 8{page_8_name}",
+            "name": "Page{page_8_position}{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -382,7 +382,7 @@
             }
           },
           "agenda_page": {
-            "name": "Agenda",
+            "name": "Page{agenda_page_position} : Agenda",
             "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
             "data": {
               "enabled": "Afficher l'agenda",
@@ -396,7 +396,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Quitter la maison",
+            "name": "Page{leave_home_page_position} : Quitter la maison",
             "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
             "data": {
               "enabled": "Afficher Quitter la maison",
@@ -416,7 +416,7 @@
             }
           },
           "energy_page": {
-            "name": "Page énergie",
+            "name": "Page{energy_page_position} : Énergie",
             "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
             "data": {
               "enabled": "Afficher la page énergie",
@@ -441,10 +441,10 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
         "sections": {
           "page_1": {
-            "name": "Page 1 : Page d'état",
+            "name": "Page{page_1_position} : Page d'état",
             "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
               "enabled": "Afficher la page d'état",
@@ -460,7 +460,7 @@
             }
           },
           "page_2": {
-            "name": "Page 2{page_2_name}",
+            "name": "Page{page_2_position}{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -473,7 +473,7 @@
             }
           },
           "page_3": {
-            "name": "Page 3{page_3_name}",
+            "name": "Page{page_3_position}{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -486,7 +486,7 @@
             }
           },
           "page_4": {
-            "name": "Page 4{page_4_name}",
+            "name": "Page{page_4_position}{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -499,7 +499,7 @@
             }
           },
           "page_5": {
-            "name": "Page 5{page_5_name}",
+            "name": "Page{page_5_position}{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -512,7 +512,7 @@
             }
           },
           "page_6": {
-            "name": "Page 6{page_6_name}",
+            "name": "Page{page_6_position}{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -525,7 +525,7 @@
             }
           },
           "page_7": {
-            "name": "Page 7{page_7_name}",
+            "name": "Page{page_7_position}{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -538,7 +538,7 @@
             }
           },
           "page_8": {
-            "name": "Page 8{page_8_name}",
+            "name": "Page{page_8_position}{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -551,7 +551,7 @@
             }
           },
           "agenda_page": {
-            "name": "Agenda",
+            "name": "Page{agenda_page_position} : Agenda",
             "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
             "data": {
               "enabled": "Afficher l'agenda",
@@ -565,7 +565,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Quitter la maison",
+            "name": "Page{leave_home_page_position} : Quitter la maison",
             "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
             "data": {
               "enabled": "Afficher Quitter la maison",
@@ -585,7 +585,7 @@
             }
           },
           "energy_page": {
-            "name": "Page énergie",
+            "name": "Page{energy_page_position} : Énergie",
             "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
             "data": {
               "enabled": "Afficher la page énergie",
@@ -813,10 +813,10 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, le numéro de la section s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
+        "description": "Configurez jusqu'à 8 pages pour l'écran. Chaque page est une section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.",
         "sections": {
           "page_1": {
-            "name": "Page 1 : Page d'état",
+            "name": "Page{page_1_position} : Page d'état",
             "description": "La page d'état Home Assistant affiche les indicateurs HA, alarme et heure. Activez-la ou désactivez-la indépendamment de sa carte météo facultative et de ses entités. Son titre sur l'écran est Home Assistant.",
             "data": {
               "enabled": "Afficher la page d'état",
@@ -832,7 +832,7 @@
             }
           },
           "page_2": {
-            "name": "Page 2{page_2_name}",
+            "name": "Page{page_2_position}{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -845,7 +845,7 @@
             }
           },
           "page_3": {
-            "name": "Page 3{page_3_name}",
+            "name": "Page{page_3_position}{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -858,7 +858,7 @@
             }
           },
           "page_4": {
-            "name": "Page 4{page_4_name}",
+            "name": "Page{page_4_position}{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -871,7 +871,7 @@
             }
           },
           "page_5": {
-            "name": "Page 5{page_5_name}",
+            "name": "Page{page_5_position}{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -884,7 +884,7 @@
             }
           },
           "page_6": {
-            "name": "Page 6{page_6_name}",
+            "name": "Page{page_6_position}{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -897,7 +897,7 @@
             }
           },
           "page_7": {
-            "name": "Page 7{page_7_name}",
+            "name": "Page{page_7_position}{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -910,7 +910,7 @@
             }
           },
           "page_8": {
-            "name": "Page 8{page_8_name}",
+            "name": "Page{page_8_position}{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
@@ -923,7 +923,7 @@
             }
           },
           "agenda_page": {
-            "name": "Agenda",
+            "name": "Page{agenda_page_position} : Agenda",
             "description": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
             "data": {
               "enabled": "Afficher l'agenda",
@@ -937,7 +937,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Quitter la maison",
+            "name": "Page{leave_home_page_position} : Quitter la maison",
             "description": "État des entités explicitement sélectionnées. Les actions demandent confirmation ; l'alarme ouvre ses commandes existantes protégées par code PIN.",
             "data": {
               "enabled": "Afficher Quitter la maison",
@@ -957,7 +957,7 @@
             }
           },
           "energy_page": {
-            "name": "Page énergie",
+            "name": "Page{energy_page_position} : Énergie",
             "description": "Une page supplémentaire facultative. Elle affiche la configuration Énergie de Home Assistant (Paramètres > Tableaux de bord > Énergie) : compteurs du réseau, du solaire et de la batterie, leurs capteurs de puissance, noms et prix. Un type de source qui n'y est pas configuré est omis ; sans aucune source, la page n'est pas affichée.",
             "data": {
               "enabled": "Afficher la page énergie",

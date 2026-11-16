@@ -12,10 +12,10 @@
   opening the viewer never starts a live stream or a recording. HA retains
   bounded per-entry metadata using the snapshot retention setting. The card
   toggle controls visibility, not collection; uncertain call outcomes stay unknown.
-- This development version builds on unreleased 2.5.0. Neither version is merged
-  or published by this preparation; device Notify validation remains pending.
+- This development version builds on the 2.5.0 release line. Version 2.6.0
+  remains unreleased; this preparation does not validate device behavior.
 
-## v2.5.0 - Unreleased
+## v2.5.0 - 2026-11-16
 
 - Direct page buttons below the weather on the status page, including when no
   weather entity is selected. Navigation reuses the loaded dashboard.
@@ -26,7 +26,8 @@
 - Configure all page positions from 1 to 11, including regular pages and Energy,
   Agenda and Leave home (defaults 2, 10 and 11). Disabled pages keep their
   selections and position; equal positions use that optional-page order before
-  regular pages.
+  regular pages. The configuration sections show each page's position and
+  follow the display order, including Energy, Agenda and Leave home.
 - Capability-based native controls with clearer state and offline feedback;
   exact Energy chart interval/value selection and compact HA history.
 - Replace the removed Distribution view with explicitly enabled **Consumers**:
@@ -39,7 +40,10 @@
   durations (maximum 300 seconds). Defaults: 30 seconds wake and sound for
   all three severities. Effects only on safe Home/HA screens, never
   queued for a later wake, and never a fire-alarm substitute. One POST, with
-  transport acceptance distinct from physical-effect confirmation.
+  transport acceptance distinct from physical-effect confirmation. Protected
+  screens and calls explicitly suppress effects without an action error;
+  unavailable GUI connections still report delivery failures. Actions have
+  readable names rather than config-entry IDs.
 - Preserve the previous display files when a GUI restart fails, and report
   update cleanup or read-only remount failures instead of claiming success.
 - Keep display requests and cleanup compatible with the device's Qt 4 runtime;
@@ -61,9 +65,8 @@
   their page is disabled or reconfigured.
 - Document the HA quality scale as a per-rule self-assessment, not an awarded
   tier, with explicit remaining gaps and removal and connection guidance.
-- Requires matching 2.5.0 agent and display bundle. Local tests and strict
-  simulations are not hardware proof; Notify hardware validation is pending.
-  This version remains unreleased.
+- Requires the matching 2.5.0 agent and display bundle. Update the packaged
+  agent and apply the Display patch when prompted after restarting HA.
 
 ## v2.4.1 - 2026-11-15
 

@@ -272,10 +272,10 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
         "sections": {
           "page_1": {
-            "name": "Page 1: Status page",
+            "name": "Page{page_1_position}: Status page",
             "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
               "enabled": "Show the status page",
@@ -291,7 +291,7 @@
             }
           },
           "page_2": {
-            "name": "Page 2{page_2_name}",
+            "name": "Page{page_2_position}{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -304,7 +304,7 @@
             }
           },
           "page_3": {
-            "name": "Page 3{page_3_name}",
+            "name": "Page{page_3_position}{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -317,7 +317,7 @@
             }
           },
           "page_4": {
-            "name": "Page 4{page_4_name}",
+            "name": "Page{page_4_position}{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -330,7 +330,7 @@
             }
           },
           "page_5": {
-            "name": "Page 5{page_5_name}",
+            "name": "Page{page_5_position}{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -343,7 +343,7 @@
             }
           },
           "page_6": {
-            "name": "Page 6{page_6_name}",
+            "name": "Page{page_6_position}{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -356,7 +356,7 @@
             }
           },
           "page_7": {
-            "name": "Page 7{page_7_name}",
+            "name": "Page{page_7_position}{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -369,7 +369,7 @@
             }
           },
           "page_8": {
-            "name": "Page 8{page_8_name}",
+            "name": "Page{page_8_position}{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -382,7 +382,7 @@
             }
           },
           "agenda_page": {
-            "name": "Agenda",
+            "name": "Page{agenda_page_position}: Agenda",
             "description": "Next five events in seven days. Read on Home Assistant only.",
             "data": {
               "enabled": "Show Agenda",
@@ -396,7 +396,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Leave home",
+            "name": "Page{leave_home_page_position}: Leave home",
             "description": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
             "data": {
               "enabled": "Show Leave home",
@@ -416,7 +416,7 @@
             }
           },
           "energy_page": {
-            "name": "Energy page",
+            "name": "Page{energy_page_position}: Energy",
             "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
             "data": {
               "enabled": "Show the energy page",
@@ -441,10 +441,10 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
         "sections": {
           "page_1": {
-            "name": "Page 1: Status page",
+            "name": "Page{page_1_position}: Status page",
             "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
               "enabled": "Show the status page",
@@ -460,7 +460,7 @@
             }
           },
           "page_2": {
-            "name": "Page 2{page_2_name}",
+            "name": "Page{page_2_position}{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -473,7 +473,7 @@
             }
           },
           "page_3": {
-            "name": "Page 3{page_3_name}",
+            "name": "Page{page_3_position}{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -486,7 +486,7 @@
             }
           },
           "page_4": {
-            "name": "Page 4{page_4_name}",
+            "name": "Page{page_4_position}{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -499,7 +499,7 @@
             }
           },
           "page_5": {
-            "name": "Page 5{page_5_name}",
+            "name": "Page{page_5_position}{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -512,7 +512,7 @@
             }
           },
           "page_6": {
-            "name": "Page 6{page_6_name}",
+            "name": "Page{page_6_position}{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -525,7 +525,7 @@
             }
           },
           "page_7": {
-            "name": "Page 7{page_7_name}",
+            "name": "Page{page_7_position}{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -538,7 +538,7 @@
             }
           },
           "page_8": {
-            "name": "Page 8{page_8_name}",
+            "name": "Page{page_8_position}{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -551,7 +551,7 @@
             }
           },
           "agenda_page": {
-            "name": "Agenda",
+            "name": "Page{agenda_page_position}: Agenda",
             "description": "Next five events in seven days. Read on Home Assistant only.",
             "data": {
               "enabled": "Show Agenda",
@@ -565,7 +565,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Leave home",
+            "name": "Page{leave_home_page_position}: Leave home",
             "description": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
             "data": {
               "enabled": "Show Leave home",
@@ -585,7 +585,7 @@
             }
           },
           "energy_page": {
-            "name": "Energy page",
+            "name": "Page{energy_page_position}: Energy",
             "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
             "data": {
               "enabled": "Show the energy page",
@@ -813,10 +813,10 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
         "sections": {
           "page_1": {
-            "name": "Page 1: Status page",
+            "name": "Page{page_1_position}: Status page",
             "description": "The Home Assistant status page shows HA, alarm and time badges. Enable or disable it here, independently of its optional weather card and entities. Its heading on the display is Home Assistant.",
             "data": {
               "enabled": "Show the status page",
@@ -832,7 +832,7 @@
             }
           },
           "page_2": {
-            "name": "Page 2{page_2_name}",
+            "name": "Page{page_2_position}{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -845,7 +845,7 @@
             }
           },
           "page_3": {
-            "name": "Page 3{page_3_name}",
+            "name": "Page{page_3_position}{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -858,7 +858,7 @@
             }
           },
           "page_4": {
-            "name": "Page 4{page_4_name}",
+            "name": "Page{page_4_position}{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -871,7 +871,7 @@
             }
           },
           "page_5": {
-            "name": "Page 5{page_5_name}",
+            "name": "Page{page_5_position}{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -884,7 +884,7 @@
             }
           },
           "page_6": {
-            "name": "Page 6{page_6_name}",
+            "name": "Page{page_6_position}{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -897,7 +897,7 @@
             }
           },
           "page_7": {
-            "name": "Page 7{page_7_name}",
+            "name": "Page{page_7_position}{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -910,7 +910,7 @@
             }
           },
           "page_8": {
-            "name": "Page 8{page_8_name}",
+            "name": "Page{page_8_position}{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -923,7 +923,7 @@
             }
           },
           "agenda_page": {
-            "name": "Agenda",
+            "name": "Page{agenda_page_position}: Agenda",
             "description": "Next five events in seven days. Read on Home Assistant only.",
             "data": {
               "enabled": "Show Agenda",
@@ -937,7 +937,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Leave home",
+            "name": "Page{leave_home_page_position}: Leave home",
             "description": "Read-only checks for explicitly selected entities. Actions require confirmation; the alarm opens its existing PIN-protected controls.",
             "data": {
               "enabled": "Show Leave home",
@@ -957,7 +957,7 @@
             }
           },
           "energy_page": {
-            "name": "Energy page",
+            "name": "Page{energy_page_position}: Energy",
             "description": "An optional extra page. It shows Home Assistant's own Energy setup (Settings > Dashboards > Energy): grid, solar and battery meters, their power sensors, names and prices. A kind of source that is not set up there is left out, and without any source the page is not shown.",
             "data": {
               "enabled": "Show the energy page",

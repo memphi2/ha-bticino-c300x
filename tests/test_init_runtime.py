@@ -457,12 +457,17 @@ def test_setup_failure_releases_callbacks_and_allows_retry(
 def test_remove_entry_clears_repair_issues_and_runtime_resources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from unittest.mock import AsyncMock
+
+    import custom_components.bticino_c300x.notify_names as notify_names
     import custom_components.bticino_c300x.repair_issues as repair_issues
     import custom_components.bticino_c300x.visitor_journal as visitor_journal
 
     remove_journal = AsyncMock()
     monkeypatch.setattr(visitor_journal, "async_remove_journal", remove_journal)
 
+    remove_name = AsyncMock()
+    monkeypatch.setattr(notify_names, "async_remove_name", remove_name)
     cleared: list[str] = []
     cancelled: list[str] = []
     callbacks: list[str] = []
@@ -502,6 +507,7 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     asyncio.run(integration.async_remove_entry(hass, entry))
     remove_journal.assert_awaited_once_with(hass, entry.entry_id)
 
+    remove_name.assert_awaited_once_with(hass, entry.entry_id)
     assert cleared == [entry.entry_id]
     assert callbacks == [
         "expire",

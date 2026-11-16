@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from hashlib import sha256
+from pathlib import Path
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -14,6 +16,33 @@ from .const import DEFAULT_NAME, DOMAIN
 from .entry_types import BticinoC300XConfigEntry
 
 _NAMES = f"{DOMAIN}_notify_names"
+
+
+def _read_names(path: str) -> dict[str, str] | None:
+    """Read and validate the physical HA storage envelope, never its cache."""
+    try:
+        with Path(path).open(encoding="utf-8") as stream:
+            stored = json.load(stream)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as err:
+        raise ServiceValidationError("Cannot read C300X notification action reservations") from err
+    if (
+        not isinstance(stored, dict)
+        or stored.get("key") != _NAMES
+        or type(stored.get("version")) is not int or stored["version"] != 1
+        or type(stored.get("minor_version")) is not int or stored["minor_version"] != 1
+    ):
+        raise ServiceValidationError("Invalid C300X notification action storage envelope")
+    names = stored.get("data")
+    if not isinstance(names, dict) or any(
+        not isinstance(key, str) or not isinstance(name, str)
+        or not (name == DOMAIN or name.startswith(f"{DOMAIN}_"))
+        or slugify(name) != name
+        for key, name in names.items()
+    ) or len(set(names.values())) != len(names):
+        raise ServiceValidationError("Invalid C300X notification action reservations")
+    return names
 
 
 class NotifyNames:
@@ -41,14 +70,29 @@ class NotifyNames:
                 raise ServiceValidationError("Invalid C300X notification action reservations")
             self._names = names
         if self._unsaved:
-            await self._store.async_save(self._names)
-            self._unsaved = False
+            await self._async_save(self._names)
         return self._names
 
     async def _async_save(self, names: dict[str, str]) -> None:
         self._names = names
         self._unsaved = True
-        await self._store.async_save(names)
+        # Cancellation must not let a still-running atomic writer overtake a retry.
+        save = asyncio.create_task(self._store.async_save(names))
+        cancelled = False
+        while not save.done():
+            try:
+                # Unlike awaiting the task, wait never forwards cancellation to it.
+                await asyncio.wait({save})
+            except asyncio.CancelledError:
+                cancelled = True
+        if cancelled:
+            if not save.cancelled():
+                save.exception()
+            raise asyncio.CancelledError
+        save.result()
+        persisted = await self._hass.async_add_executor_job(_read_names, self._store.path)
+        if persisted != names:
+            raise ServiceValidationError("C300X notification action reservations were not persisted")
         self._unsaved = False
 
     async def async_name(self, entry: BticinoC300XConfigEntry) -> str:

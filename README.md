@@ -25,33 +25,39 @@ forwarding controls, messages and optional display pages.
 
 ## What You Get
 
-- Doorbell ring events and local camera viewing.
-- Automatic visitor images stored in Home Assistant, with a shared camera/card
-  preview and configurable retention. See [Images](docs/feature-reference.md#visitor-images).
-- Optional [Visitor journal](docs/visitor-journal.md) in the card, with saved
-  image/video browsing by buttons, keyboard or swipe; no additional live stream.
-- Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
-  Assistant.
-- Audio-only Home Call from Home Assistant to the C300X display.
-- Talkback through the bundled C300X card. Optional native HA camera talkback
-  requires enabling it in the integration options and HA 2026.11+ Labs.
-- Door unlock, stair light, ringer mute, forwarding and answering-machine
-  controls.
-- Stored video messages, voice memos and text memos when the agent reports
-  those capabilities.
-- Optional native C300X display with up to eight regular pages, weather and
-  independently enabled Energy, Agenda and Leave home pages. All page positions
-  are configurable. Direct navigation, Alarmo and HA-driven notifications are
-  included. Control lights, covers, climate, media,
-  locks and other supported entities, with configurable tile sizes and labels.
+- **See and answer the door.** Local live video and talkback through the bundled
+  card, doorbell events, and Ring Call answer/hang-up when forwarding is set to
+  Home Assistant. Audio-only Home Call reaches the C300X display.
+- **Control the door station.** Door unlock, stair light, ringer mute,
+  forwarding and answering-machine controls, plus stored video messages,
+  voice memos and text memos where supported by the agent.
+- **Review visits and saved media.** Automatic [visitor images](docs/feature-reference.md#visitor-images)
+  provide the shared camera/card preview, with configurable retention and no
+  image files written to the C300X. The optional
+  [visitor journal](docs/visitor-journal.md) groups observed rings with their
+  available saved images and clips. Browse by buttons, keyboard or image swipes
+  without opening another live stream; it does not create recordings itself.
+- **Use the C300X as a home-control display.** Keep the native blue interface
+  with configurable controls for lights, covers, climate, media and locks,
+  plus weather and Alarmo. Up to eight regular pages and independently enabled
+  Energy, Agenda and Leave home pages have configurable positions. Energy
+  includes live power, history and up to ten consumers configured in HA's
+  Energy dashboard, ranked by current W. Agenda shows upcoming calendar events; Leave home checks
+  selected contacts and lights, with explicitly confirmed actions.
   See [Display setup](docs/quickstart.md#9-optional-native-display).
-- Energy's **Consumers** view lists the top ten configured
-  devices by current W; enable it explicitly after upgrading from the removed
-  Distribution view. A standard [Notify service](docs/feature-reference.md#standard-notify-service)
-  adds bounded wake/sound on safe Home/HA screens. It is not a life-safety alarm.
-- Media readiness diagnostics with guided Repairs for the common setup problems.
-- Optional automation blueprints for notifications, Ring Capture, local Wyoming
-  transcription and strict phrase decisions.
+- **Connect notifications and automations.** The standard
+  [Notify service](docs/feature-reference.md#standard-notify-service) offers
+  info, warning and error notices with bounded display wake and sound, without
+  interrupting protected screens or calls. It is not a life-safety alarm.
+  Optional [blueprints](docs/blueprints.md) cover notifications, Ring Capture,
+  local transcription and phrase-based decisions.
+- **Diagnose and recover connections.** Media readiness diagnostics and guided
+  Repairs explain setup problems. Credential checks
+  distinguish rejected keys from unreachable devices and guide reauthentication,
+  while existing entries can still start offline.
+
+Talkback in the native HA camera view is separate from card talkback: it is
+off by default and requires HA 2026.11+ Labs and the integration option.
 
 ## Requirements
 
@@ -164,6 +170,7 @@ feature or firmware version.
 | Install and configure | [Quickstart](docs/quickstart.md) |
 | Task-focused user guide | [User guide](docs/user-guide.md) |
 | Complete feature and entity/service reference | [Feature reference](docs/feature-reference.md) |
+| Browse saved visit images and clips | [Visitor journal](docs/visitor-journal.md) |
 | Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
 | Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |
 | Ready-made automations | [Blueprints](docs/blueprints.md) |
@@ -185,7 +192,7 @@ feature or firmware version.
 
 - IoT class: `local_push`
 - HACS: default repository, installed as a custom integration with `zip_release`
-- Quality target: Home Assistant Quality Scale Platinum track
+- Quality scale: per-rule [self-assessment](docs/quality-scale.md), not an awarded tier
 - License: Apache-2.0
 - Support scope: community project, not an official BTicino/Legrand or Home
   Assistant Core integration

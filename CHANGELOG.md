@@ -12,8 +12,6 @@
   opening the viewer never starts a live stream or a recording. HA retains
   bounded per-entry metadata using the snapshot retention setting. The card
   toggle controls visibility, not collection; uncertain call outcomes stay unknown.
-- This development version builds on the 2.5.0 release line. Version 2.6.0
-  remains unreleased; this preparation does not validate device behavior.
 
 ## v2.5.0 - 2026-11-16
 

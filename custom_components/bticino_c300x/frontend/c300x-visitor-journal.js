@@ -1,4 +1,4 @@
-import { c300xLocalize } from "./c300x-translations.js?v=5391b85a94f19d3c";
+import { c300xLocalize } from "./c300x-translations.js?v=2d135ec258c1624e";
 
 const BASE = "/api/bticino_c300x/visitor-journal/";
 const SUBSCRIBE = "bticino_c300x/visitor_journal/subscribe";

@@ -1,9 +1,10 @@
 """Independent status-page visibility and configuration ordering."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from test_config_flow_helpers import _options_area, _save_options_area
+from test_display_settings import _OptionsAreas
 from test_executor import FakeEntry, FakeHass, FakeState, FakeStates, run
 
 from custom_components.bticino_c300x import dashboard
@@ -52,19 +53,26 @@ def test_status_visibility_roundtrip_preserves_weather_and_tiles(enabled) -> Non
 
 
 def test_disabled_status_survives_options_save_and_reopen() -> None:
-    entry = FakeEntry(data={CONF_DEVICE_UI_ENABLED: True})
-    _flow, result = _options_area(entry, "dashboard_pages", {
+    entry = SimpleNamespace(
+        entry_id="status-page", data={CONF_DEVICE_UI_ENABLED: True},
+        options={}, runtime_data=None, update_listeners=[],
+    )
+    areas = _OptionsAreas(entry)
+    result = run(areas._flow().async_step_dashboard_pages({
         "page_1": {"enabled": False, "weather_entity_id": "weather.home"},
-    })
-    _save_options_area(entry, result)
+    }))
+    assert result["type"] == "menu"
+    areas.hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
     assert entry.options[CONF_DASHBOARD_STATUS_PAGE_ENABLED] is False
     assert entry.options[CONF_WEATHER_ENTITY_ID] == "weather.home"
-    _flow, result = _options_area(entry, "dashboard_pages")
+    result = run(areas._flow().async_step_dashboard_pages())
     status = next(
         value for key, value in result["data_schema"].schema.items() if str(key) == "page_1"
     )
     toggle = next(key for key in status.schema.schema if str(key) == "enabled")
     assert toggle.default() is False
+    areas.hass.config_entries.async_update_entry.assert_called_once()
+    areas.hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
 
 
 def test_disabled_status_hides_retained_content_and_skips_forecast(monkeypatch) -> None:

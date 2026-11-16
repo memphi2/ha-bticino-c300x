@@ -272,10 +272,10 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
         "sections": {
           "page_1": {
-            "name": "Seite 1: Statusseite",
+            "name": "Seite{page_1_position}: Statusseite",
             "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
               "enabled": "Statusseite anzeigen",
@@ -291,7 +291,7 @@
             }
           },
           "page_2": {
-            "name": "Seite 2{page_2_name}",
+            "name": "Seite{page_2_position}{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -304,7 +304,7 @@
             }
           },
           "page_3": {
-            "name": "Seite 3{page_3_name}",
+            "name": "Seite{page_3_position}{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -317,7 +317,7 @@
             }
           },
           "page_4": {
-            "name": "Seite 4{page_4_name}",
+            "name": "Seite{page_4_position}{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -330,7 +330,7 @@
             }
           },
           "page_5": {
-            "name": "Seite 5{page_5_name}",
+            "name": "Seite{page_5_position}{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -343,7 +343,7 @@
             }
           },
           "page_6": {
-            "name": "Seite 6{page_6_name}",
+            "name": "Seite{page_6_position}{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -356,7 +356,7 @@
             }
           },
           "page_7": {
-            "name": "Seite 7{page_7_name}",
+            "name": "Seite{page_7_position}{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -369,7 +369,7 @@
             }
           },
           "page_8": {
-            "name": "Seite 8{page_8_name}",
+            "name": "Seite{page_8_position}{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -382,7 +382,7 @@
             }
           },
           "agenda_page": {
-            "name": "Termine",
+            "name": "Seite{agenda_page_position}: Termine",
             "description": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
             "data": {
               "enabled": "Termine anzeigen",
@@ -396,7 +396,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Haus verlassen",
+            "name": "Seite{leave_home_page_position}: Haus verlassen",
             "description": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
             "data": {
               "enabled": "Haus verlassen anzeigen",
@@ -416,7 +416,7 @@
             }
           },
           "energy_page": {
-            "name": "Energieseite",
+            "name": "Seite{energy_page_position}: Energie",
             "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
             "data": {
               "enabled": "Energieseite anzeigen",
@@ -441,10 +441,10 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
         "sections": {
           "page_1": {
-            "name": "Seite 1: Statusseite",
+            "name": "Seite{page_1_position}: Statusseite",
             "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
               "enabled": "Statusseite anzeigen",
@@ -460,7 +460,7 @@
             }
           },
           "page_2": {
-            "name": "Seite 2{page_2_name}",
+            "name": "Seite{page_2_position}{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -473,7 +473,7 @@
             }
           },
           "page_3": {
-            "name": "Seite 3{page_3_name}",
+            "name": "Seite{page_3_position}{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -486,7 +486,7 @@
             }
           },
           "page_4": {
-            "name": "Seite 4{page_4_name}",
+            "name": "Seite{page_4_position}{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -499,7 +499,7 @@
             }
           },
           "page_5": {
-            "name": "Seite 5{page_5_name}",
+            "name": "Seite{page_5_position}{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -512,7 +512,7 @@
             }
           },
           "page_6": {
-            "name": "Seite 6{page_6_name}",
+            "name": "Seite{page_6_position}{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -525,7 +525,7 @@
             }
           },
           "page_7": {
-            "name": "Seite 7{page_7_name}",
+            "name": "Seite{page_7_position}{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -538,7 +538,7 @@
             }
           },
           "page_8": {
-            "name": "Seite 8{page_8_name}",
+            "name": "Seite{page_8_position}{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -551,7 +551,7 @@
             }
           },
           "agenda_page": {
-            "name": "Termine",
+            "name": "Seite{agenda_page_position}: Termine",
             "description": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
             "data": {
               "enabled": "Termine anzeigen",
@@ -565,7 +565,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Haus verlassen",
+            "name": "Seite{leave_home_page_position}: Haus verlassen",
             "description": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
             "data": {
               "enabled": "Haus verlassen anzeigen",
@@ -585,7 +585,7 @@
             }
           },
           "energy_page": {
-            "name": "Energieseite",
+            "name": "Seite{energy_page_position}: Energie",
             "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
             "data": {
               "enabled": "Energieseite anzeigen",
@@ -800,10 +800,10 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
+        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
         "sections": {
           "page_1": {
-            "name": "Seite 1: Statusseite",
+            "name": "Seite{page_1_position}: Statusseite",
             "description": "Die Home-Assistant-Statusseite zeigt HA-, Alarm- und Zeitanzeigen. Hier unabhängig von der optionalen Wetterkarte und den Entitäten ein- oder ausschalten. Die Überschrift auf dem Display ist Home Assistant.",
             "data": {
               "enabled": "Statusseite anzeigen",
@@ -819,7 +819,7 @@
             }
           },
           "page_2": {
-            "name": "Seite 2{page_2_name}",
+            "name": "Seite{page_2_position}{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -832,7 +832,7 @@
             }
           },
           "page_3": {
-            "name": "Seite 3{page_3_name}",
+            "name": "Seite{page_3_position}{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -845,7 +845,7 @@
             }
           },
           "page_4": {
-            "name": "Seite 4{page_4_name}",
+            "name": "Seite{page_4_position}{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -858,7 +858,7 @@
             }
           },
           "page_5": {
-            "name": "Seite 5{page_5_name}",
+            "name": "Seite{page_5_position}{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -871,7 +871,7 @@
             }
           },
           "page_6": {
-            "name": "Seite 6{page_6_name}",
+            "name": "Seite{page_6_position}{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -884,7 +884,7 @@
             }
           },
           "page_7": {
-            "name": "Seite 7{page_7_name}",
+            "name": "Seite{page_7_position}{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -897,7 +897,7 @@
             }
           },
           "page_8": {
-            "name": "Seite 8{page_8_name}",
+            "name": "Seite{page_8_position}{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
@@ -910,7 +910,7 @@
             }
           },
           "agenda_page": {
-            "name": "Termine",
+            "name": "Seite{agenda_page_position}: Termine",
             "description": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
             "data": {
               "enabled": "Termine anzeigen",
@@ -924,7 +924,7 @@
             }
           },
           "leave_home_page": {
-            "name": "Haus verlassen",
+            "name": "Seite{leave_home_page_position}: Haus verlassen",
             "description": "Nur Statusanzeige explizit ausgewählter Entitäten. Aktionen erfordern eine Bestätigung; der Alarm öffnet seine vorhandene PIN-geschützte Bedienung.",
             "data": {
               "enabled": "Haus verlassen anzeigen",
@@ -944,7 +944,7 @@
             }
           },
           "energy_page": {
-            "name": "Energieseite",
+            "name": "Seite{energy_page_position}: Energie",
             "description": "Eine optionale zusätzliche Seite. Sie zeigt die Energie-Einrichtung von Home Assistant (Einstellungen > Dashboards > Energie): Zähler für Netz, PV und Batterie, deren Leistungssensoren, Namen und Preise. Eine Quellenart, die dort nicht eingerichtet ist, entfällt; ganz ohne Quelle wird die Seite nicht gezeigt.",
             "data": {
               "enabled": "Energieseite anzeigen",

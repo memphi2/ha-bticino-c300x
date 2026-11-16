@@ -1,8 +1,8 @@
 """Pages step of the display dashboard settings.
 
 The display has up to ``DASHBOARD_PAGE_MAX_COUNT`` regular pages. The form has one
-section per page: the first is the status page, which carries the badges and
-the weather card, set here as its Weather field; every other page has a name,
+section per page: the status page carries the badges and the weather card,
+set here as its Weather field; every other page has a name,
 which the display shows as its heading. Each section has a position from 1 to 11,
 which orders the pages, and the entities shown on that page, in the order they
 are picked.
@@ -16,6 +16,8 @@ store absolute display positions; regular pages stay numbered among themselves.
 The shared layout helper converts between these positions for the form and
 the display. Equal requested positions put Energy, Agenda and Leave home
 before regular pages, in that order. Disabled pages retain their settings.
+Section titles and order follow display positions, not internal form slot keys;
+unused regular sections remain available at the end.
 """
 
 from __future__ import annotations
@@ -41,6 +43,7 @@ from .config_flow_optional_pages import (
 from .config_flow_optional_pages import (
     page_position_selector as _page_position_selector,
 )
+from .config_flow_page_order import ordered_page_sections, page_form_positions
 from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
@@ -60,16 +63,14 @@ from .dashboard_entities import (
     normalize_dashboard_page_name,
     normalize_dashboard_pages,
 )
-from .dashboard_optional_config import optional_page_values
 from .dashboard_page_order import (
     PAGE_POSITION_MAX as POSITION_MAX,
 )
 from .dashboard_page_order import (
-    page_layout_slots,
-    submitted_special_positions,
+    page_position as _page_position,
 )
 from .dashboard_page_order import (
-    page_position as _page_position,
+    submitted_special_positions,
 )
 from .schema_compat import vol
 
@@ -178,12 +179,7 @@ def dashboard_pages_schema(
 
     layout = dashboard_page_layout(dashboard_input)
     energy = normalize_energy_page(dashboard_input.get(CONF_ENERGY_PAGE))
-    positions = {
-        name: index for index, (kind, name) in enumerate(page_layout_slots(
-            [page["name"] for page in sorted(layout, key=lambda page: page["order"])],
-            {CONF_ENERGY_PAGE: energy, **optional_page_values(dashboard_input)},
-        ), start=1) if kind == "regular"
-    }
+    positions = page_form_positions(layout, dashboard_input)
 
     def shown(slot: int, field: str, saved: Any) -> Any:
         if posted is None:
@@ -219,7 +215,7 @@ def dashboard_pages_schema(
             )] = _page_name_selector()
         page_fields[_optional_suggested(
             PAGE_POSITION_FIELD,
-            shown(slot, PAGE_POSITION_FIELD, positions[page["name"]] if page else None),
+            shown(slot, PAGE_POSITION_FIELD, positions[page_section_key(slot)]),
         )] = _page_position_selector()
         page_fields[_optional_suggested(
             PAGE_ENTITIES_FIELD,
@@ -262,26 +258,28 @@ def dashboard_pages_schema(
         }),
         {"collapsed": not enabled},
     )
-    keys = list(fields)
-    return vol.Schema({
-        **{key: fields[key] for key in [keys[0], keys[-1], *keys[1:-1]]},
-        **optional_page_sections(dashboard_input, posted),
-    })
+    fields.update(optional_page_sections(dashboard_input, posted))
+    return vol.Schema(ordered_page_sections(
+        fields, page_form_positions(layout, dashboard_input, posted),
+    ))
 
 
 def dashboard_pages_placeholders(
     dashboard_input: dict[str, Any],
     user_input: dict[str, Any] | None = None,
 ) -> dict[str, str]:
-    """Return the page names the section titles show.
+    """Return the page names and positions the section titles show.
 
     A named page's section is titled with its name, as ": name" after the
-    page number; a section without a name keeps the number alone. A form
+    page number; unused sections have no display number. A form
     shown again with errors shows the names that were sent.
     """
 
     layout = dashboard_page_layout(dashboard_input)
-    placeholders: dict[str, str] = {}
+    placeholders = {
+        f"{key}_position": f" {position}" if position is not None else ""
+        for key, position in page_form_positions(layout, dashboard_input, user_input).items()
+    }
     for slot in range(2, DASHBOARD_PAGE_MAX_COUNT + 1):
         if user_input is not None:
             values = user_input.get(page_section_key(slot)) or {}

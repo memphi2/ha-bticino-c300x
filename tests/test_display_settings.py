@@ -1262,13 +1262,14 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     assert [(field["name"], field["type"]) for field in fields] == [
         ("page_1", "expandable"),
         ("energy_page", "expandable"),
-        *((f"page_{slot}", "expandable") for slot in range(2, 9)),
+        ("page_2", "expandable"),
         ("agenda_page", "expandable"),
         ("leave_home_page", "expandable"),
+        *((f"page_{slot}", "expandable") for slot in range(3, 9)),
     ]
     # Used pages are open, and so is the first free one to add a page; the
     # energy page is closed while it is switched off.
-    assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 7
+    assert [field["expanded"] for field in fields] == [True, False, True, False, False, True] + [False] * 5
     assert [item["name"] for item in fields[1]["schema"]] == [
         "enabled", "position", "view_now", "view_today", "view_power", "view_consumers", "view_balance",
     ]
@@ -1312,6 +1313,12 @@ def test_section_titles_carry_the_page_names():
     }
 
     assert dashboard_pages_placeholders(settings) == {
+        "page_1_position": " 1",
+        "page_2_position": " 2",
+        **{f"page_{slot}_position": "" for slot in range(3, 9)},
+        "energy_page_position": " 2",
+        "agenda_page_position": " 10",
+        "leave_home_page_position": " 11",
         "page_2_name": ": Room",
         **{f"page_{slot}_name": "" for slot in range(3, 9)},
     }

@@ -959,8 +959,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 saved=_current_connection_options(entry),
             )
             if not errors:
-                _, errors = await config_flow_auth.async_validate_connection(
-                    self.hass, self._reconfigure_connection,
+                _, errors = await config_flow_auth.async_validate_entry_connection(
+                    self.hass, entry, self._reconfigure_connection,
                 )
             if errors:
                 return self.async_show_form(
@@ -1358,8 +1358,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     ) -> FlowResult:
         """Finish a reconfigure flow after all feature pages."""
 
-        _, errors = await config_flow_auth.async_validate_connection(
-            self.hass, self._reconfigure_connection,
+        entry = self._get_reconfigure_entry()
+        _, errors = await config_flow_auth.async_validate_entry_connection(
+            self.hass, entry, self._reconfigure_connection,
         )
         if errors:
             return self._show_reconfigure_auth(errors)
@@ -1460,8 +1461,8 @@ class BticinoC300XOptionsFlow(
                 saved=_current_connection_options(self._config_entry),
             )
             if not errors:
-                _, errors = await config_flow_auth.async_validate_connection(
-                    self.hass, connection_options,
+                _, errors = await config_flow_auth.async_validate_entry_connection(
+                    self.hass, self._config_entry, connection_options,
                 )
             if not errors:
                 self._connection_options = connection_options

@@ -653,6 +653,7 @@
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
       "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480.",
       "invalid_auth": "The C300X rejected the access key. Enter the current key.",
+      "wrong_device": "This address belongs to a different C300X. The existing device was not changed.",
       "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
       "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again."
     }
@@ -1000,6 +1001,7 @@
       "required": "This field is required.",
       "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480.",
       "invalid_auth": "The C300X rejected the access key. Enter the current key.",
+      "wrong_device": "This address belongs to a different C300X. The existing device was not changed.",
       "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
       "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again."
     }

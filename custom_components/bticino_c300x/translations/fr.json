@@ -653,6 +653,7 @@
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
       "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480.",
       "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
+      "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
       "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez."
     }
@@ -1000,6 +1001,7 @@
       "required": "Ce champ est obligatoire.",
       "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480.",
       "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
+      "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
       "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez."
     }

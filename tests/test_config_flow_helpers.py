@@ -126,6 +126,11 @@ def authenticated_connection_boundary(monkeypatch):
 
     monkeypatch.setattr(config_flow_auth, "async_validate_connection", validate)
 
+    async def validate_entry(_hass, _entry, _connection):
+        return {}, {}
+
+    monkeypatch.setattr(config_flow_auth, "async_validate_entry_connection", validate_entry)
+
 
 def test_probe_agent_requires_event_subscription_endpoint(
     monkeypatch: pytest.MonkeyPatch,

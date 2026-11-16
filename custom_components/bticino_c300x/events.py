@@ -394,6 +394,7 @@ class _AgentEventRegistration:
         resources = getattr(runtime, "resources", None)
         if (
             self._stopped
+            or self._auth_failed
             or entry_id != self._entry.entry_id
             or getattr(runtime, "api", None) is not self._api
             or getattr(resources, "closed", False)
@@ -406,7 +407,7 @@ class _AgentEventRegistration:
         self._schedule_renewal()
 
     def _schedule_renewal(self) -> None:
-        if self._stopped or self._renewal_cancel is not None:
+        if self._stopped or self._auth_failed or self._renewal_cancel is not None:
             return
         self._renewal_cancel = async_call_later(
             self._hass,

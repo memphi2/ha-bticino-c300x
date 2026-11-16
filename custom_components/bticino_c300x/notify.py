@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
@@ -16,6 +17,7 @@ from .capabilities import entry_device_ui_enabled_or_patch_active
 from .const import DOMAIN
 from .display_alerts import async_send_display_alert
 from .entry_types import BticinoC300XConfigEntry
+from .notify_names import notify_names
 from .service_authorization import authorized_service
 
 _SERVICES = f"{DOMAIN}_notify_services"
@@ -54,9 +56,11 @@ def _async_set_notify_description(
 class C300XNotificationService(BaseNotificationService):
     """One fixed device target, with no URLs, audio files or commands."""
 
-    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry, name: str) -> None:
         self.entry = entry
+        self.name = name
         self.closed = False
+        self._unsubscribe: Callable[[], None] = lambda: None
         self._pending: set[asyncio.Task[Any]] = set()
 
     async def _async_notify_message_service(self, service: ServiceCall) -> None:
@@ -88,9 +92,31 @@ class C300XNotificationService(BaseNotificationService):
     @callback
     def close(self) -> None:
         """Stop waiting for in-flight delivery when this entry is unloaded."""
+        if self.closed:
+            return
         self.closed = True
+        self._unsubscribe()
         for task in self._pending:
             task.cancel()
+
+    def owns_service(self) -> bool:
+        """Check handler ownership before changing the public registry."""
+        registered = self.hass.services.async_services().get("notify", {}).get(self.name)
+        return registered is not None and registered.job.target == self._async_notify_message_service
+
+    async def async_update_description(
+        self, _hass: HomeAssistant, _entry: BticinoC300XConfigEntry,
+    ) -> None:
+        """Refresh the label after a title edit without renaming the action."""
+        if not self.closed and self.owns_service():
+            _async_set_notify_description(self.hass, self.name, self)
+
+    @callback
+    def remove(self) -> None:
+        """Remove only the handler this instance registered."""
+        self.close()
+        if self.owns_service():
+            self.hass.services.async_remove("notify", self.name)
 
 
 async def async_setup_notify(
@@ -99,23 +125,34 @@ async def async_setup_notify(
     """Register before native support is installed, but only for enabled UI."""
     if not entry_device_ui_enabled_or_patch_active(entry):
         return
-    if entry.entry_id in hass.data.get(_SERVICES, {}):
-        return
     if not await async_setup_component(hass, "notify", {}):
         raise ServiceValidationError("Could not set up Home Assistant notify")
-    name = f"{DOMAIN}_{entry.entry_id.lower()}"
+    names = notify_names(hass)
+    async with names.lock:
+        if entry.entry_id in hass.data.get(_SERVICES, {}):
+            return
+        name = await names.async_name(entry)
+        await _async_register_notify(hass, entry, name)
+
+
+async def _async_register_notify(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, name: str,
+) -> None:
+    """Register a reserved name without replacing any existing handler."""
     if hass.services.has_service("notify", name):
         raise ServiceValidationError(f"Notification service notify.{name} already exists")
-    service = C300XNotificationService(entry)
+    service = C300XNotificationService(entry, name)
     try:
         await service.async_setup(hass, name, name)
+        if hass.services.has_service("notify", name):
+            raise ServiceValidationError(f"Notification service notify.{name} already exists")
         await service.async_register_services()
         _async_set_notify_description(hass, name, service)
+        service._unsubscribe = entry.add_update_listener(service.async_update_description)
         hass.data.setdefault(_SERVICES, {})[entry.entry_id] = service
         entry.async_on_unload(lambda: async_unload_notify(hass, entry))
     except (Exception, asyncio.CancelledError):
-        service.close()
-        hass.services.async_remove("notify", name)
+        service.remove()
         services = hass.data.get(_SERVICES, {})
         services.pop(entry.entry_id, None)
         if not services:
@@ -128,7 +165,6 @@ def async_unload_notify(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> 
     """Synchronously remove only this entry's service, also on setup rollback."""
     services = hass.data.get(_SERVICES, {})
     if service := services.pop(entry.entry_id, None):
-        service.close()
-        hass.services.async_remove("notify", f"{DOMAIN}_{entry.entry_id.lower()}")
+        service.remove()
     if not services:
         hass.data.pop(_SERVICES, None)

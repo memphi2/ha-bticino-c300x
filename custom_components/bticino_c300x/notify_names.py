@@ -20,11 +20,24 @@ _NAMES = f"{DOMAIN}_notify_names"
 
 def _read_names(path: str) -> dict[str, str] | None:
     """Read and validate the physical HA storage envelope, never its cache."""
+    file = Path(path)
     try:
-        with Path(path).open(encoding="utf-8") as stream:
-            stored = json.load(stream)
-    except FileNotFoundError:
-        return None
+        try:
+            with file.open(encoding="utf-8") as stream:
+                stored = json.load(stream)
+        except FileNotFoundError:
+            try:
+                quarantined = any(
+                    item.name.startswith(f"{file.name}.corrupt.")
+                    for item in file.parent.iterdir()
+                )
+            except FileNotFoundError:
+                return None
+            if quarantined:
+                raise ServiceValidationError(
+                    "C300X notification action reservations were quarantined; restore the storage file"
+                ) from None
+            return None
     except (OSError, ValueError) as err:
         raise ServiceValidationError("Cannot read C300X notification action reservations") from err
     if (
@@ -58,17 +71,8 @@ class NotifyNames:
     async def _async_load(self) -> dict[str, str]:
         """Load validated ownership and finish any interrupted write."""
         if self._names is None:
-            names = await self._store.async_load()
-            if names is None:
-                names = {}
-            if not isinstance(names, dict) or any(
-                not isinstance(key, str) or not isinstance(name, str)
-                or not (name == DOMAIN or name.startswith(f"{DOMAIN}_"))
-                or slugify(name) != name
-                for key, name in names.items()
-            ) or len(set(names.values())) != len(names):
-                raise ServiceValidationError("Invalid C300X notification action reservations")
-            self._names = names
+            names = await self._hass.async_add_executor_job(_read_names, self._store.path)
+            self._names = names if names is not None else {}
         if self._unsaved:
             await self._async_save(self._names)
         return self._names

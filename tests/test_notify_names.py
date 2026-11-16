@@ -133,3 +133,110 @@ def test_cancelled_atomic_write_finishes_before_reservation_retry(tmp_path, monk
                 "first": service_name(hass, first),
             }
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("damage", [b"", b"{", b"{}", b"null", b"[]", b"\xff", None])
+def test_corrupt_name_file_blocks_restart_until_restored(tmp_path, monkeypatch, damage):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, first):
+            second = entry_for("second")
+            try:
+                await async_setup_notify(hass, second)
+                expected = {"first": service_name(hass, first), "second": service_name(hass, second)}
+                names = notify_names(hass)
+                path = Path(names._store.path)
+                backup = await hass.async_add_executor_job(path.read_bytes)
+                await hass.async_add_executor_job(path.write_bytes, b"{" if damage is None else damage)
+                if damage is None:
+                    # Reproduce a quarantine left by an earlier HA Store reader.
+                    assert await names._store.async_load() is None
+                    assert not await hass.async_add_executor_job(path.exists)
+            finally:
+                async_unload_notify(hass, second)
+                second.runtime_data.resources.close()
+        for attempt in range(2):
+            async with notify_context(tmp_path, monkeypatch, key="second", enabled=False) as (hass, second):
+                second.options["device_ui_enabled"] = True
+                first = entry_for("first")
+                try:
+                    for entry in (second, first):
+                        with pytest.raises(ServiceValidationError, match="C300X"):
+                            await async_setup_notify(hass, entry)
+                        assert not entry.unload_callbacks
+                        assert not entry.update_listeners
+                    assert "bticino_c300x_notify_services" not in hass.data
+                    assert notify_names(hass)._names is None
+                    files = await hass.async_add_executor_job(lambda: list(path.parent.iterdir()))
+                    quarantined = [file for file in files if file.name.startswith(f"{path.name}.corrupt.")]
+                    if damage is None:
+                        assert len(quarantined) == 1
+                        assert not await hass.async_add_executor_job(path.exists)
+                    else:
+                        assert not quarantined
+                        assert await hass.async_add_executor_job(path.read_bytes) == damage
+                    if attempt == 1:
+                        await hass.async_add_executor_job(path.write_bytes, backup)
+                        # The same HA instance can recover without losing ownership.
+                        for entry in (second, first):
+                            await async_setup_notify(hass, entry)
+                            assert service_name(hass, entry) == expected[entry.entry_id]
+                            await send(hass, entry)
+                            entry.runtime_data.api.async_send_display_alert.assert_awaited_once()
+                finally:
+                    async_unload_notify(hass, first)
+                    first.runtime_data.resources.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("field,value", [
+    ("version", 2), ("version", True), ("minor_version", 2), ("minor_version", True),
+    ("key", "other_store"), ("data", None), ("data", []),
+])
+def test_invalid_storage_envelope_is_preserved(tmp_path, monkeypatch, field, value):
+    path = tmp_path / ".storage" / "bticino_c300x_notify_names"
+    path.parent.mkdir()
+    envelope = {
+        "version": 1, "minor_version": 1, "key": path.name,
+        "data": {"first": "bticino_c300x_front_door"},
+    }
+    envelope[field] = value
+    before = json.dumps(envelope)
+    path.write_text(before)
+
+    async def run():
+        async with notify_context(tmp_path, monkeypatch, enabled=False) as (hass, first):
+            first.options["device_ui_enabled"] = True
+            with pytest.raises(ServiceValidationError, match="Invalid C300X"):
+                await async_setup_notify(hass, first)
+            assert not first.unload_callbacks
+            assert notify_names(hass)._names is None
+    asyncio.run(run())
+    assert path.read_text() == before
+
+
+def test_physical_reads_run_off_loop_only_on_load_or_change(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import notify_names as module
+
+    loop_thread = threading.get_ident()
+    reader = module._read_names
+    reads = []
+
+    def read(path):
+        assert threading.get_ident() != loop_thread
+        reads.append(path)
+        return reader(path)
+
+    monkeypatch.setattr(module, "_read_names", read)
+
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, first):
+            assert len(reads) == 2
+            await async_setup_notify(hass, first)
+            await send(hass, first)
+            async_unload_notify(hass, first)
+            await async_setup_notify(hass, first)
+            assert len(reads) == 2
+            async_unload_notify(hass, first)
+            await async_remove_name(hass, first.entry_id)
+            assert len(reads) == 3
+    asyncio.run(run())

@@ -248,22 +248,46 @@ export class C300XVisitorJournal extends HTMLElement {
 
   renderList() {
     const list = this.shadowRoot.querySelector(".list");
-    list.replaceChildren();
+    const focused = this.shadowRoot.activeElement;
+    const focusedVisit = focused?.classList.contains("visit") ? focused : null;
+    const focusedId = focusedVisit?.parentElement.dataset.visitId;
+    if (focusedId) {
+      const index = this.items.findIndex((item) => item.id === focusedId);
+      if (index >= 0) this.visible = Math.max(this.visible, index + 1);
+    }
+    const existing = new Map([...list.children].map((row) => [row.dataset.visitId, row]));
     for (const [index, item] of this.items.slice(0, this.visible).entries()) {
-      const row = document.createElement("li"), button = document.createElement("button");
-      button.type = "button";
-      button.className = "visit";
-      const time = document.createElement("time"), outcome = document.createElement("span"), icon = document.createElement("ha-icon");
+      let row = existing.get(item.id);
+      if (!row) {
+        row = document.createElement("li");
+        row.dataset.visitId = item.id;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "visit";
+        const outcome = document.createElement("span"), icon = document.createElement("ha-icon");
+        outcome.className = "outcome";
+        icon.setAttribute("aria-hidden", "true");
+        button.append(document.createElement("time"), outcome, icon);
+        button.addEventListener("click", () => {
+          const current = this.items.findIndex((visit) => visit.id === item.id);
+          if (current < 0) return;
+          this.dialog.showModal();
+          void this.show(current);
+        });
+        row.append(button);
+      }
+      existing.delete(item.id);
+      const time = row.querySelector("time"), outcome = row.querySelector(".outcome"), icon = row.querySelector("ha-icon");
       time.dateTime = new Date(item.at * 1000).toISOString();
       time.textContent = this.date(item);
-      outcome.className = "outcome";
       outcome.textContent = this.label(item.outcome === "answered" ? "journal_answered" : "journal_unknown");
       icon.setAttribute("icon", item.video ? "mdi:video-outline" : item.image ? "mdi:image-outline" : "mdi:image-off-outline");
-      icon.setAttribute("aria-hidden", "true");
-      button.append(time, outcome, icon);
-      button.addEventListener("click", () => { this.dialog.showModal(); void this.show(index); });
-      row.append(button);
-      list.append(row);
+      if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
+    }
+    for (const row of existing.values()) row.remove();
+    // Moving an existing node can blur it; don't steal focus from the modal.
+    if (focusedVisit && this.active && this.isConnected && this.shadowRoot.activeElement !== focusedVisit) {
+      (list.contains(focusedVisit) ? focusedVisit : this.shadowRoot.querySelector("summary")).focus({ preventScroll: true });
     }
     this.shadowRoot.querySelector(".more").hidden = this.visible >= this.items.length;
   }

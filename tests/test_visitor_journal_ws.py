@@ -10,8 +10,12 @@ from test_stream_snapshot_http import Request, setup
 
 from custom_components.bticino_c300x.const import DOMAIN
 from custom_components.bticino_c300x.media import async_setup_media_view
+from custom_components.bticino_c300x.schema_compat import vol
 from custom_components.bticino_c300x.visitor_journal import EVENT_JOURNAL_CHANGED
-from custom_components.bticino_c300x.visitor_journal_ws import SUBSCRIBE_TYPE, subscribe_journal
+from custom_components.bticino_c300x.visitor_journal_ws import (
+    SUBSCRIBE_TYPE,
+    subscribe_journal,
+)
 
 
 def subscription_fixture(tmp_path, monkeypatch):
@@ -159,7 +163,7 @@ def test_media_registration_registers_validated_subscription_command_once():
     handler, schema = hass.data["websocket_api"][SUBSCRIBE_TYPE]
     assert handler is subscribe_journal
     assert schema({"id": 1, "type": SUBSCRIBE_TYPE, "entry_id": "one"})["entry_id"] == "one"
-    with pytest.raises(Exception):
+    with pytest.raises(vol.Invalid):
         schema({"id": 1, "type": SUBSCRIBE_TYPE})
     async_setup_media_view(hass)
     assert hass.data["websocket_api"][SUBSCRIBE_TYPE][1] is schema

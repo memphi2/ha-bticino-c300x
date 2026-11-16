@@ -187,6 +187,51 @@ try {
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => !lab.journal.dialog.open && !lab.journal.url);
   assert.equal(await page.evaluate(() => lab.journal.url), "");
+  const focus = await page.evaluate(async () => {
+    lab.beforeFocusVisits = structuredClone(lab.visits);
+    lab.focusedVisit = lab.journal.shadowRoot.querySelectorAll(".visit")[1];
+    lab.focusedVisit.focus();
+    lab.visits[1].outcome = "answered";
+    await lab.journal.load();
+    const unchanged = lab.journal.shadowRoot.activeElement === lab.focusedVisit;
+    lab.visits.unshift({ ...lab.visits[0], id: "d".repeat(32), at: Date.now() / 1000 });
+    await lab.journal.load();
+    return { unchanged, reordered: lab.journal.shadowRoot.activeElement === lab.focusedVisit,
+      sameNode: lab.journal.shadowRoot.querySelectorAll(".visit")[2] === lab.focusedVisit };
+  });
+  assert.deepEqual(focus, { unchanged: true, reordered: true, sameNode: true });
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => lab.journal.dialog.open && !!lab.journal.url);
+  assert.equal(await page.evaluate(() => lab.journal.items[lab.journal.index].id), "b".repeat(32), "Reused row must not retain its old array index");
+  assert.equal(await page.evaluate(async () => {
+    const focused = lab.journal.shadowRoot.activeElement;
+    await lab.journal.load();
+    return lab.journal.shadowRoot.activeElement === focused;
+  }), true, "List updates must not steal modal focus");
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !lab.journal.dialog.open && !lab.journal.url);
+  assert.equal(await page.evaluate(() => lab.journal.shadowRoot.activeElement === lab.focusedVisit), true);
+  assert.equal(await page.evaluate(async () => {
+    lab.visits = lab.visits.filter((item) => item.id !== "b".repeat(32));
+    await lab.journal.load();
+    return lab.journal.shadowRoot.activeElement === lab.journal.shadowRoot.querySelector("summary");
+  }), true, "A removed focused visit returns focus to the journal summary");
+  const pagination = await page.evaluate(async () => {
+    const now = Date.now() / 1000;
+    lab.visits = Array.from({ length: 25 }, (_, index) => ({ ...lab.visits[0], id: index.toString(16).padStart(32, "0"), at: now - index }));
+    await lab.journal.load();
+    const focused = lab.journal.shadowRoot.querySelectorAll(".visit")[19];
+    focused.focus();
+    lab.visits.unshift({ ...lab.visits[0], id: "e".repeat(32), at: now + 1 });
+    await lab.journal.load();
+    return { retained: lab.journal.shadowRoot.activeElement === focused, count: lab.journal.shadowRoot.querySelectorAll(".visit").length };
+  });
+  assert.deepEqual(pagination, { retained: true, count: 21 });
+  await page.evaluate(async () => {
+    lab.visits = lab.beforeFocusVisits;
+    lab.journal.visible = 20;
+    await lab.journal.load();
+  });
   await page.evaluate(() => {
     lab.hass.fetchWithAuth = async () => new Promise((done) => { lab.finishMedia = done; });
     lab.journal.hass = lab.hass;

@@ -4,7 +4,7 @@ import test from "node:test";
 
 globalThis.HTMLElement = class {};
 globalThis.customElements = { get() {}, define() {} };
-const { journalBlob, C300XVisitorJournal } = await import("../../custom_components/bticino_c300x/frontend/c300x-visitor-journal.js");
+const { journalBlob, journalMediaKey, C300XVisitorJournal } = await import("../../custom_components/bticino_c300x/frontend/c300x-visitor-journal.js");
 
 test("journal has no device commands, live media acquisition or polling", () => {
   const source = readFileSync(new URL("../../custom_components/bticino_c300x/frontend/c300x-visitor-journal.js", import.meta.url), "utf8");
@@ -77,4 +77,42 @@ test("rejected subscription clears stale data and allows a later activation", as
   await new Promise(setImmediate);
   assert.equal(journal.active, false);
   assert.deepEqual(journal.items, []);
+});
+
+test("selected media identity ignores unrelated metadata but tracks availability and revision", () => {
+  const item = { id: "one", video: true, video_revision: "original", video_at: 10 };
+  const key = journalMediaKey(item, "video");
+  assert.equal(journalMediaKey({ ...item, outcome: "answered", image_revision: "other", video_at: 20 }, "video"), key);
+  assert.notEqual(journalMediaKey({ ...item, video_revision: "replacement" }, "video"), key);
+  assert.notEqual(journalMediaKey({ ...item, video: false }, "video"), key);
+  assert.notEqual(journalMediaKey({ ...item, id: "two" }, "video"), key);
+});
+
+test("list updates preserve playing media across reordering and reload only selected identity changes", () => {
+  const journal = new C300XVisitorJournal();
+  const item = { id: "one", video: true, video_revision: "original" };
+  Object.assign(journal, { dialog: { open: true }, index: 0, kind: "video", mediaKey: journalMediaKey(item, "video") });
+  const shows = [];
+  journal.show = (...args) => shows.push(args);
+  let labels = 0;
+  journal.viewerLabels = () => labels++;
+  journal.items = [{ id: "two" }, { ...item, outcome: "answered", image: true, image_revision: "new-image" }];
+  journal.syncViewer("one");
+  assert.equal(journal.index, 1);
+  assert.equal(labels, 1);
+  assert.deepEqual(shows, []);
+  journal.items[1].video_revision = "replacement";
+  journal.syncViewer("one");
+  assert.deepEqual(shows, [[1, "video"]]);
+});
+
+for (const kind of ["image", "video"]) test(`newly available ${kind} loads in an already open empty visit`, () => {
+  const journal = new C300XVisitorJournal();
+  const item = { id: "one", image: false, video: false };
+  Object.assign(journal, { dialog: { open: true }, index: 0, kind: "video", mediaKey: journalMediaKey(item, "video") });
+  journal.items = [{ ...item, [kind]: true, [`${kind}_revision`]: "new" }];
+  let shown;
+  journal.show = (...args) => { shown = args; };
+  journal.syncViewer("one");
+  assert.deepEqual(shown, [0, kind]);
 });

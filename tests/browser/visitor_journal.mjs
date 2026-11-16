@@ -49,7 +49,7 @@ try {
     const video = await (await fetch("/synthetic.mp4")).blob();
     const now = Date.now() / 1000;
     lab.visits = [
-      { id: "a".repeat(32), at: now, image_at: now + 2, video_at: now + 5, expires_at: now + 86400, outcome: "answered", image: true, video: true },
+      { id: "a".repeat(32), at: now, image_at: now + 2, video_at: now + 5, image_revision: "1".repeat(64), video_revision: "2".repeat(64), expires_at: now + 86400, outcome: "answered", image: true, video: true },
       { id: "b".repeat(32), at: now - 60, expires_at: now + 86400, outcome: "unknown", image: true, video: false },
       { id: "c".repeat(32), at: now - 120, expires_at: now + 86400, outcome: "unknown", image: false, video: false },
     ];
@@ -111,6 +111,48 @@ try {
     const video = lab.journal.shadowRoot.querySelector("video");
     return video.paused && !video.getAttribute("src");
   }), true);
+  await page.evaluate(async () => {
+    lab.originalVisits = structuredClone(lab.visits);
+    await lab.journal.show(0, "video");
+  });
+  await page.waitForFunction(() => lab.journal.shadowRoot.querySelector("video").readyState >= 2);
+  const playing = await page.evaluate(async () => {
+    const video = lab.journal.shadowRoot.querySelector("video");
+    video.loop = true;
+    await video.play();
+    const url = lab.journal.url;
+    const fetches = lab.fetches.length;
+    lab.visits[0].outcome = "unknown";
+    lab.visits[0].image_revision = "3".repeat(64);
+    lab.visits.unshift({ ...lab.visits[1], id: "d".repeat(32), at: Date.now() / 1000 });
+    await lab.journal.load();
+    return { sameUrl: lab.journal.url === url, paused: video.paused, index: lab.journal.index,
+      mediaFetches: lab.fetches.slice(fetches).filter(({ url }) => url.endsWith("/video") || url.endsWith("/image")).length };
+  });
+  assert.deepEqual(playing, { sameUrl: true, paused: false, index: 1, mediaFetches: 0 });
+  await page.evaluate(async () => {
+    await lab.journal.show(3);
+    lab.visits[3].video = true;
+    lab.visits[3].video_revision = "4".repeat(64);
+    lab.visits[3].video_at = Date.now() / 1000;
+    for (const callback of lab.journalListeners) callback({ entry_id: "entry-one" });
+  });
+  await page.waitForFunction(() => !!lab.journal.url && lab.journal.shadowRoot.querySelector("video").readyState >= 2);
+  assert.equal(await page.evaluate(() => lab.journal.shadowRoot.querySelector("video").paused), true);
+  const replacedUrl = await page.evaluate(() => {
+    const url = lab.journal.url;
+    lab.visits[3].video_revision = "5".repeat(64);
+    for (const callback of lab.journalListeners) callback({ entry_id: "entry-one" });
+    return url;
+  });
+  await page.waitForFunction((old) => !!lab.journal.url && lab.journal.url !== old, {}, replacedUrl);
+  assert.equal(await page.evaluate((old) => lab.revoked.includes(old) && lab.journal.shadowRoot.querySelector("video").paused, replacedUrl), true);
+  await page.evaluate(async () => {
+    lab.visits = lab.originalVisits;
+    lab.journal.shadowRoot.querySelector("video").loop = false;
+    await lab.journal.load();
+    await lab.journal.show(1);
+  });
   for (const width of [240, 320, 390, 1024]) {
     await page.setViewport({ width, height: 800 });
     for (const language of ["en", "de", "fr", "it"]) {
@@ -142,7 +184,7 @@ try {
     await page.screenshot({ path: resolve(artifacts, `visitor-journal-${width}.png`) });
   }
   await page.keyboard.press("Escape");
-  await page.waitForFunction(() => !lab.journal.dialog.open);
+  await page.waitForFunction(() => !lab.journal.dialog.open && !lab.journal.url);
   assert.equal(await page.evaluate(() => lab.journal.url), "");
   await page.evaluate(() => {
     lab.hass.fetchWithAuth = async () => new Promise((done) => { lab.finishMedia = done; });

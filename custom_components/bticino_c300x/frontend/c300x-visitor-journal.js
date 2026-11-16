@@ -3,6 +3,11 @@ import { c300xLocalize } from "./c300x-translations.js?v=5391b85a94f19d3c";
 const BASE = "/api/bticino_c300x/visitor-journal/";
 const SUBSCRIBE = "bticino_c300x/visitor_journal/subscribe";
 
+export function journalMediaKey(item, kind) {
+  return JSON.stringify([item.id, kind, item[kind] === true,
+    item[`${kind}_revision`] ?? item[`${kind}_at`] ?? null]);
+}
+
 export async function journalBlob(response, limit, signal) {
   if (!response.ok || Number(response.headers.get("Content-Length")) > limit) throw new Error("media");
   const reader = response.body.getReader();
@@ -199,11 +204,7 @@ export class C300XVisitorJournal extends HTMLElement {
       const selected = this.items[this.index]?.id;
       this.items = data.visits.filter((item) => /^[a-f0-9]{32}$/.test(item.id) && Number.isFinite(item.at)
         && Number.isFinite(item.expires_at) && item.expires_at * 1000 > Date.now());
-      if (this.dialog.open) {
-        const index = this.items.findIndex((item) => item.id === selected);
-        if (index < 0) this.dialog.close();
-        else { this.index = index; this.viewerLabels(); }
-      }
+      this.syncViewer(selected);
       this.renderList();
       this.expire();
       status.textContent = this.label("journal_empty");
@@ -232,11 +233,7 @@ export class C300XVisitorJournal extends HTMLElement {
     if (!this.active) return;
     const selected = this.items[this.index]?.id;
     this.items = this.items.filter((item) => item.expires_at * 1000 > Date.now());
-    if (this.dialog.open) {
-      const index = this.items.findIndex((item) => item.id === selected);
-      if (index < 0) this.dialog.close();
-      else { this.index = index; this.viewerLabels(); }
-    }
+    this.syncViewer(selected);
     this.renderList();
     if (this.items.length) {
       const next = Math.min(...this.items.map((item) => item.expires_at * 1000));
@@ -275,6 +272,17 @@ export class C300XVisitorJournal extends HTMLElement {
     if (next >= 0 && next < this.items.length) void this.show(next);
   }
 
+  syncViewer(selected) {
+    if (!this.dialog.open) return;
+    const index = this.items.findIndex((item) => item.id === selected);
+    if (index < 0) { this.dialog.close(); return; }
+    this.index = index;
+    const item = this.items[index];
+    const kind = item[this.kind] === true ? this.kind : item.image ? "image" : item.video ? "video" : this.kind;
+    if (journalMediaKey(item, kind) !== this.mediaKey) void this.show(index, kind);
+    else this.viewerLabels();
+  }
+
   viewerLabels() {
     const item = this.items[this.index];
     if (!item) return;
@@ -302,7 +310,8 @@ export class C300XVisitorJournal extends HTMLElement {
     const item = this.items[index];
     if (!item || !this.dialog.open) return;
     this.index = index;
-    this.kind = kind || (item.image ? "image" : "video");
+    const mediaKind = this.kind = kind || (item.image ? "image" : "video");
+    this.mediaKey = journalMediaKey(item, mediaKind);
     this.viewerLabels();
     if (item[this.kind] !== true) { this.mediaStatus("journal_media_missing"); return; }
     this.mediaStatus("journal_loading");
@@ -310,16 +319,16 @@ export class C300XVisitorJournal extends HTMLElement {
     this.mediaAbort = controller;
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await this.hass.fetchWithAuth(`${BASE}${encodeURIComponent(this.entryId)}/${item.id}/${this.kind}`, { signal: controller.signal });
-      const mime = this.kind === "image" ? "image/jpeg" : "video/mp4";
+      const response = await this.hass.fetchWithAuth(`${BASE}${encodeURIComponent(this.entryId)}/${item.id}/${mediaKind}`, { signal: controller.signal });
+      const mime = mediaKind === "image" ? "image/jpeg" : "video/mp4";
       if (response.headers.get("Content-Type")?.split(";")[0] !== mime) throw new Error("type");
-      const blob = await journalBlob(response, this.kind === "image" ? 512 * 1024 : 64 * 1024 * 1024, controller.signal);
+      const blob = await journalBlob(response, mediaKind === "image" ? 512 * 1024 : 64 * 1024 * 1024, controller.signal);
       if (controller !== this.mediaAbort || controller.signal.aborted || !this.dialog.open) return;
       this.url = URL.createObjectURL(blob);
-      const media = this.shadowRoot.querySelector(this.kind === "image" ? "img" : "video");
-      const label = `${this.label(`journal_${this.kind}`)}: ${this.date({ at: item[`${this.kind}_at`] || item.at })}`;
+      const media = this.shadowRoot.querySelector(mediaKind === "image" ? "img" : "video");
+      const label = `${this.label(`journal_${mediaKind}`)}: ${this.date({ at: item[`${mediaKind}_at`] || item.at })}`;
       media.setAttribute("aria-label", label);
-      if (this.kind === "image") media.alt = label;
+      if (mediaKind === "image") media.alt = label;
       media.src = this.url;
       media.hidden = false;
       this.mediaStatus("");
@@ -329,6 +338,7 @@ export class C300XVisitorJournal extends HTMLElement {
   }
 
   clearMedia() {
+    this.mediaKey = null;
     this.mediaAbort?.abort();
     this.mediaAbort = null;
     if (!this.shadowRoot) return;

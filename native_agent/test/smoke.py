@@ -485,9 +485,7 @@ def run_smoke(
 ) -> int:
     assert_runtime_bridge_binds_ui_when_disabled(binary, openwebnet, callback)
     assert_sigterm_shutdown_exits_cleanly(binary, openwebnet)
-    api_port = free_tcp_port()
-    ui_port = free_tcp_port()
-    rtsp_port = free_tcp_port()
+    api_port, ui_port, rtsp_port = free_tcp_ports(3)
     udp_port = free_udp_port()
     with tempfile.TemporaryDirectory(prefix="c300x-native-smoke-") as temp_dir:
         temp_path = Path(temp_dir)
@@ -2074,9 +2072,7 @@ def assert_sigterm_shutdown_exits_cleanly(
     binary: Path,
     openwebnet: OpenWebNetServer,
 ) -> None:
-    api_port = free_tcp_port()
-    ui_port = free_tcp_port()
-    rtsp_port = free_tcp_port()
+    api_port, ui_port, rtsp_port = free_tcp_ports(3)
     config = {
         "listen": {
             "host": "127.0.0.1",
@@ -2128,8 +2124,7 @@ def assert_runtime_bridge_binds_ui_when_disabled(
     openwebnet: OpenWebNetServer,
     callback: CallbackServer,
 ) -> None:
-    api_port = free_tcp_port()
-    ui_port = free_tcp_port()
+    api_port, ui_port = free_tcp_ports(2)
     config = {
         "listen": {
             "host": "127.0.0.1",
@@ -2229,9 +2224,21 @@ def managed_tcp_server(server: socketserver.BaseServer):
 
 
 def free_tcp_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+    return free_tcp_ports(1)[0]
+
+
+def free_tcp_ports(count: int) -> tuple[int, ...]:
+    """Select distinct unused ports after binding mocks, not a lasting reservation."""
+    if count < 1:
+        raise ValueError("At least one port is required")
+    with contextlib.ExitStack() as cleanup:
+        sockets = [
+            cleanup.enter_context(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+            for _ in range(count)
+        ]
+        for sock in sockets:
+            sock.bind(("127.0.0.1", 0))
+        return tuple(int(sock.getsockname()[1]) for sock in sockets)
 
 
 def free_udp_port() -> int:

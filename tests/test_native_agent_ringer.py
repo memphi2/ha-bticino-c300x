@@ -20,7 +20,7 @@ from native_agent.test.smoke import (
     api_get,
     api_post,
     callback_url,
-    free_tcp_port,
+    free_tcp_ports,
     free_udp_port,
     managed_tcp_server,
     read_frame,
@@ -127,7 +127,8 @@ def ringer_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture
 def lab(ringer_binary: Path, tmp_path: Path) -> Iterator[Lab]:
     with managed_tcp_server(Device()) as device, managed_tcp_server(CallbackServer()) as callback:
-        lab = Lab(device, free_tcp_port(), free_tcp_port(), free_udp_port())
+        api, ui = free_tcp_ports(2)
+        lab = Lab(device, api, ui, free_udp_port())
         config = {
             "listen": {"host": "127.0.0.1", "apiPort": lab.api_port, "uiPort": lab.ui_port},
             "api": {"token": TOKEN},

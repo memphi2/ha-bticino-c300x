@@ -2441,8 +2441,11 @@ def _options_flow(entry):
     """Return an options flow that saves into the given entry."""
 
     def update_entry(target, *, options):
+        changed = target.options != options
         target.options = dict(options)
+        return changed
 
+    entry.update_listeners = [object()]
     flow = BticinoC300XOptionsFlow(entry)
     flow.hass = SimpleNamespace(  # type: ignore[assignment]
         config_entries=SimpleNamespace(async_update_entry=update_entry),
@@ -2767,6 +2770,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
 ) -> None:
     calls: list[str] = []
     entry = SimpleNamespace(
+        update_listeners=[object()],
         unique_id="c300x-stable-id",
         data={
             CONF_AGENT_HOST: "old-agent.local",
@@ -2809,7 +2813,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     def abort_if_unique_id_mismatch() -> None:
         calls.append("mismatch_check")
 
-    def update_and_abort(target: object, *, data_updates: dict[str, object]) -> dict[str, object]:
+    def update_and_abort(target: object, *, data_updates: dict[str, object], options: dict[str, object]) -> dict[str, object]:
         calls.append("update")
         assert target is entry
         return {"type": "abort", "data_updates": data_updates}
@@ -2981,6 +2985,7 @@ def test_reconfigure_finish_rotates_secrets_and_clears_stale_options(
     option_updates: list[dict[str, object]] = []
     calls: list[str] = []
     entry = SimpleNamespace(
+        data={}, update_listeners=[object()],
         unique_id="c300x-stable-id",
         options={
             CONF_AGENT_HOST: "old-option.local",
@@ -3013,8 +3018,9 @@ def test_reconfigure_finish_rotates_secrets_and_clears_stale_options(
     def abort_if_unique_id_mismatch() -> None:
         calls.append("mismatch_check")
 
-    def update_and_abort(target: object, *, data_updates: dict[str, object]) -> dict[str, object]:
+    def update_and_abort(target: object, *, data_updates: dict[str, object], options: dict[str, object]) -> dict[str, object]:
         assert target is entry
+        option_updates.append(options)
         return {"type": "abort", "data_updates": data_updates}
 
     secret_values = iter(["shared-secret", "event-secret"])

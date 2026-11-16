@@ -30,6 +30,14 @@ from .discovery import discovery_matches_entry
 _KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
 
 
+def async_ensure_entry_reload(
+    hass: Any, entry: Any, *, changed: bool, had_listeners: bool, force: bool = False,
+) -> None:
+    """Let a notified listener reload; explicitly recover entries without one."""
+    if (changed or force) and not (changed and had_listeners):
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
 async def async_validate_connection(
     hass: Any, connection: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, str]]:
@@ -106,6 +114,21 @@ class AuthFlowSteps:
         setup, errors = await async_validate_connection(self.hass, self._setup_connection)
         return errors or cast(dict[str, str], self._setup_identity_error(setup))
 
+    def _async_update_reconfigured_entry(
+        self: Any, entry: Any, data_updates: dict[str, Any], clear_keys: frozenset[str],
+    ) -> ConfigFlowResult:
+        options = {
+            key: value for key, value in entry.options.items()
+            if key not in clear_keys or key not in data_updates
+        }
+        changed = options != dict(entry.options) or any(
+            entry.data.get(key) != value for key, value in data_updates.items()
+        )
+        had_listeners = bool(entry.update_listeners)
+        result = self.async_update_and_abort(entry, data_updates=data_updates, options=options)
+        async_ensure_entry_reload(self.hass, entry, changed=changed, had_listeners=had_listeners, force=True)
+        return cast(ConfigFlowResult, result)
+
     def _show_agent_auth(self: Any, errors: dict[str, str]) -> ConfigFlowResult:
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="agent_auth",
@@ -178,14 +201,11 @@ class AuthFlowSteps:
                 changed = options != dict(entry.options) or any(
                     entry.data.get(key) != value for key, value in keys.items()
                 )
-                # Loaded entries already reload via their update listener. Failed
-                # setup has no listener, and unchanged keys do not notify it.
-                needs_reload = not entry.update_listeners or not changed
+                had_listeners = bool(entry.update_listeners)
                 result = self.async_update_and_abort(
                     entry, data_updates=keys, options=options,
                 )
-                if needs_reload:
-                    self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                async_ensure_entry_reload(self.hass, entry, changed=changed, had_listeners=had_listeners, force=True)
                 return cast(ConfigFlowResult, result)
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="reauth_confirm", data_schema=_agent_auth_schema(False), errors=errors,

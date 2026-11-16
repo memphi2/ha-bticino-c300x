@@ -1355,8 +1355,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             data_updates[CONF_SHARED_SECRET] = secrets.token_urlsafe(32)
             data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
 
-        _clear_reconfigured_option_overrides(self.hass, entry, data_updates)
-        return self.async_update_and_abort(entry, data_updates=data_updates)
+        return self._async_update_reconfigured_entry(entry, data_updates, _RECONFIGURED_OPTION_KEYS)
 
     @staticmethod
     @callback

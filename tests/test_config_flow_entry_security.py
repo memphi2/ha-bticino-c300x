@@ -175,3 +175,49 @@ def test_connection_save_keeps_the_exact_validated_credential_pair(monkeypatch):
         assert current_connection_options(entry)[CONF_AGENT_TOKEN] == "old"
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("route", ["options", "finish", "reauth"])
+@pytest.mark.parametrize("listeners", [False, True])
+@pytest.mark.parametrize("changed", [False, True])
+def test_credential_recovery_reloads_exactly_once(monkeypatch, route, listeners, changed):
+    entry, hass = entry_hass()
+    entry.update_listeners = [object()] if listeners else []
+    entry.runtime_data = SimpleNamespace(connection_state=SimpleNamespace(authentication_failed=True))
+    flow = bound_flow(entry, hass, "options" if route == "options" else "reconfigure")
+    update = hass.config_entries.async_update_entry.side_effect
+
+    def with_listener(*args, **kwargs):
+        did_change = update(*args, **kwargs)
+        if listeners and did_change:
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+            # An eager HA update listener can start unloading before returning.
+            entry.update_listeners.clear()
+        return did_change
+
+    hass.config_entries.async_update_entry.side_effect = with_listener
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", AsyncMock(return_value=({"device_id": "device-a"}, {})))
+    connection = current_connection_options(entry)
+    entry.data.update(connection)
+    if changed:
+        entry.options[CONF_AGENT_TOKEN] = "override"
+        connection[CONF_AGENT_TOKEN] = "new-valid"
+    if route == "reauth":
+        flow.context["source"] = "reauth"
+        result = asyncio.run(flow.async_step_reauth_confirm({CONF_AGENT_TOKEN: connection[CONF_AGENT_TOKEN]}))
+    else:
+        result = asyncio.run(submit(flow, route, connection))
+    assert not result.get("errors")
+    hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
+    # Clearing shadowing options and writing data must be one atomic update.
+    assert hass.config_entries.async_update_entry.call_count <= 1
+
+
+def test_healthy_unchanged_connection_options_do_not_reload(monkeypatch):
+    entry, hass = entry_hass()
+    entry.update_listeners = [object()]
+    flow = bound_flow(entry, hass, "options")
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", AsyncMock(return_value=({"device_id": "device-a"}, {})))
+    asyncio.run(flow.async_step_connection(current_connection_options(entry)))
+    hass.config_entries.async_schedule_reload.assert_not_called()
+    hass.config_entries.async_update_entry.assert_not_called()

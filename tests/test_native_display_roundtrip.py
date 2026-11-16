@@ -3,10 +3,12 @@
 import asyncio
 import http.client
 import json
+import socket
 import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,11 +22,36 @@ from custom_components.bticino_c300x.executor import async_execute_dashboard_act
 from native_agent.test.smoke import (
     TOKEN,
     OpenWebNetServer,
-    free_tcp_port,
     wait_for_health,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@contextmanager
+def _reserved_listener_ports():
+    """Keep both native listener ports bound until just before process startup."""
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as api,
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ui,
+    ):
+        api.bind(("127.0.0.1", 0))
+        ui.bind(("127.0.0.1", 0))
+        yield api.getsockname()[1], ui.getsockname()[1]
+
+
+@contextmanager
+def _mock_servers(callback_handler):
+    """Bind the mocks before selecting native ports and always stop their threads."""
+    with ExitStack() as cleanup:
+        own = cleanup.enter_context(OpenWebNetServer())
+        callback = cleanup.enter_context(ThreadingHTTPServer(("127.0.0.1", 0), callback_handler))
+        for service in (own, callback):
+            thread = threading.Thread(target=service.serve_forever, daemon=True)
+            thread.start()
+            cleanup.callback(thread.join)
+            cleanup.callback(service.shutdown)
+        yield own, callback
 
 
 def request(port, path, data=None, *, headers=None):
@@ -73,10 +100,8 @@ def auth_config(request):
 
 @pytest.fixture
 def lab(native_binary, tmp_path, auth_config):
-    api_port, ui_port = free_tcp_port(), free_tcp_port()
     received, errors = [], []
     held, release = threading.Event(), threading.Event()
-    own = OpenWebNetServer()
 
     async def execute(payload):
         async with aiohttp.ClientSession() as session:
@@ -123,32 +148,33 @@ def lab(native_binary, tmp_path, auth_config):
                 errors.append(err)
                 self.send_error(500)
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Callback)
-    for service in (own, server):
-        threading.Thread(target=service.serve_forever, daemon=True).start()
-    config = {
-        "listen": {"host": "127.0.0.1", "apiPort": api_port, "uiPort": ui_port},
-        "api": {"token": TOKEN},
-        "openwebnet": {
-            "host": "127.0.0.1",
-            "port": own.server_address[1],
-            "timeoutMs": 100,
-        },
-        "activations": {"enabled": False, "autoDiscover": False},
-        "events": {"udp": {"enabled": False}},
-        "answeringMachine": {"messages": {"enabled": False}},
-        "memos": {"enabled": False},
-        "systemMetrics": {"enabled": False},
-        "video": {"enabled": False},
-        "maintenance": {"enabled": False},
-        "displayBridge": {"enabled": True, "homeAssistant": {"requestTimeoutMs": 3000}},
-        "mqtt": {"enabled": False},
-        "mdns": {"enabled": False},
-    }
-    config.update(auth_config)
-    config_path = tmp_path / "config.json"
-    config_path.write_text(json.dumps(config))
-    with (tmp_path / "agent.log").open("w") as log:
+    with (
+        _mock_servers(Callback) as (own, server),
+        (tmp_path / "agent.log").open("w") as log,
+    ):
+        with _reserved_listener_ports() as (api_port, ui_port):
+            config = {
+                "listen": {"host": "127.0.0.1", "apiPort": api_port, "uiPort": ui_port},
+                "api": {"token": TOKEN},
+                "openwebnet": {
+                    "host": "127.0.0.1",
+                    "port": own.server_address[1],
+                    "timeoutMs": 100,
+                },
+                "activations": {"enabled": False, "autoDiscover": False},
+                "events": {"udp": {"enabled": False}},
+                "answeringMachine": {"messages": {"enabled": False}},
+                "memos": {"enabled": False},
+                "systemMetrics": {"enabled": False},
+                "video": {"enabled": False},
+                "maintenance": {"enabled": False},
+                "displayBridge": {"enabled": True, "homeAssistant": {"requestTimeoutMs": 3000}},
+                "mqtt": {"enabled": False},
+                "mdns": {"enabled": False},
+            }
+            config.update(auth_config)
+            config_path = tmp_path / "config.json"
+            config_path.write_text(json.dumps(config))
         process = subprocess.Popen(
             [str(native_binary), "--config", str(config_path)], stdout=log, stderr=log
         )
@@ -183,9 +209,6 @@ def lab(native_binary, tmp_path, auth_config):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
-            for service in (server, own):
-                service.shutdown()
-                service.server_close()
     assert not errors
 
 

@@ -54,6 +54,19 @@ def test_native_agent_capabilities_module_stays_small() -> None:
     assert header.stat().st_size <= 1_500
 
 
+def test_native_mqtt_output_modules_stay_bounded() -> None:
+    limits = {
+        "mqtt_bridge.c": (21_000, 730),
+        "mqtt_bridge.h": (2_000, 80),
+        "mqtt_output.c": (3_000, 100),
+        "mqtt_output.h": (1_500, 40),
+    }
+    for name, (size, lines) in limits.items():
+        path = ROOT / "native_agent/src" / name
+        assert path.stat().st_size <= size, name
+        assert path.read_text(encoding="utf-8").count("\n") <= lines, name
+
+
 def test_native_agent_event_payload_module_stays_small() -> None:
     """Keep the event payload extraction from growing into another HTTP module."""
 

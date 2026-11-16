@@ -10118,7 +10118,7 @@ int c300x_run(struct c300x_config *config)
         if (c300x_mqtt_fd(&runtime->mqtt) >= 0) {
             mqtt_poll_index = (int)poll_count;
             poll_fds[poll_count].fd = c300x_mqtt_fd(&runtime->mqtt);
-            poll_fds[poll_count].events = POLLIN | POLLRDHUP;
+            poll_fds[poll_count].events = c300x_mqtt_poll_events(&runtime->mqtt);
             poll_fds[poll_count].revents = 0;
             poll_count++;
             poll_timeout_ms = min_timeout_ms(

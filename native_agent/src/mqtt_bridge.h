@@ -2,6 +2,7 @@
 #define C300X_MQTT_BRIDGE_H
 
 #include "c300x_agent.h"
+#include "mqtt_output.h"
 
 #include <stddef.h>
 #include <time.h>
@@ -12,7 +13,14 @@ struct c300x_mqtt {
     int subscribed;
     time_t next_connect_at;
     time_t next_ping_at;
+    time_t connect_started_at;
     int reconnect_delay_seconds;
+    struct c300x_mqtt_output output;
+    int phase;
+    unsigned char connack[4];
+    size_t connack_used;
+    long long connack_deadline_ms;
+    size_t ping_remaining; /* Remaining bytes through the queued PINGREQ. */
     unsigned char rx_buffer[4096];
     size_t rx_len;
     char pending_command[C300X_MAX_FRAME_LEN];
@@ -29,6 +37,7 @@ void c300x_mqtt_open_if_needed(
     time_t now
 );
 int c300x_mqtt_fd(const struct c300x_mqtt *mqtt);
+short c300x_mqtt_poll_events(const struct c300x_mqtt *mqtt);
 int c300x_mqtt_poll_timeout_ms(const struct c300x_mqtt *mqtt, time_t now);
 void c300x_mqtt_handle_poll(
     struct c300x_mqtt *mqtt,

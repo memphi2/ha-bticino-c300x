@@ -3,6 +3,7 @@
 import json
 import subprocess
 import time
+from http.client import RemoteDisconnected
 from pathlib import Path
 
 import pytest
@@ -16,8 +17,8 @@ REBOOT = "/api/v1/maintenance/reboot"
 REMOVE = "/api/v1/maintenance/agent/actions/remove"
 
 
-@pytest.fixture(scope="module")
-def binary(tmp_path_factory):
+@pytest.fixture(scope="module", params=[False, True], ids=["host", "asan-ubsan"])
+def binary(request, tmp_path_factory):
     build = tmp_path_factory.mktemp("service-command-build")
     flags = ("-std=c11 -O2 -Wall -Wextra -Werror -pedantic "
              "-D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L "
@@ -25,9 +26,14 @@ def binary(tmp_path_factory):
              '-DC300X_SSH_INIT_SCRIPT=\\\"./service-test.sh\\\" '
              '-DC300X_SSH_STATUS_COMMAND=\\\"./status-test.sh\\\" '
              '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\"')
+    if request.param:
+        flags += " -fsanitize=address,undefined -fno-omit-frame-pointer"
+    link = "-pthread -ldl " + str(ROOT / "native_agent/test/http_audio_codec_stub.c")
+    for function in ("apply", "restore", "read_status"):
+        link += " -Wl,--wrap=c300x_audio_codec_" + function
     result = subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
-         f"CFLAGS={flags}", "-j2", "all"], capture_output=True, text=True, timeout=60,
+         f"CFLAGS={flags}", f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return build / "host/c300x-agent-native"
@@ -92,6 +98,26 @@ def test_ssh_get_waits_in_input_pool_without_new_busy_status_or_deadline(lab):
     response(pending)
     for connection in waiting:
         assert response(connection) == {"ok": True, "enabled": True, "running": True}
+
+
+def test_deferred_status_keeps_input_capacity_and_ui_reservation(lab):
+    scripts(lab)
+    lab.script('while [ ! -e release ]; do sleep 0.02; done\nprintf "{}"\n')
+    pending = lab.request(QML)
+    lab.started()
+    waiting = [lab.request(SSH) for _ in range(6)]
+    time.sleep(0.1)
+    # The existing admission contract closes excess API connections, without
+    # consuming the two slots reserved for loopback UI requests.
+    with pytest.raises((RemoteDisconnected, ConnectionResetError, BrokenPipeError)):
+        response(lab.request(SSH))
+    api_get(lab.ui_port, "/ui/events/status", authorized=False)
+    assert not (lab.root / "status-pid").exists()
+    lab.release()
+    response(pending)
+    for connection in waiting:
+        assert response(connection)["running"]
+    assert api_get(lab.port, "/api/v1/health")["ok"]
 
 
 @pytest.mark.parametrize("path,payload", [
@@ -185,3 +211,49 @@ def test_disconnect_and_shutdown_do_not_advance_pending_action(lab):
             return True
 
     wait_until(exited)
+
+
+CODEC = "/api/v1/maintenance/audio-codec"
+
+
+def test_codec_reboot_tail_is_async_and_keeps_response_and_write_accounting(lab):
+    scripts(lab, service="while [ ! -e release ]; do sleep 0.02; done\n")
+    before = api_get(lab.port, "/api/v1/diagnostics")
+    pending = lab.request(CODEC + "/actions/apply", {"confirm": "apply_audio_codec_patch"})
+    wait_until(lambda: (lab.root / "service-pid").exists())
+    assert api_get(lab.port, "/api/v1/health")["ok"]
+    during = api_get(lab.port, "/api/v1/diagnostics")
+    assert during["agent_write_count"] == before["agent_write_count"] + 1
+    assert not (lab.root / "reboot-done").exists()
+    lab.release()
+    body = response(pending)
+    assert body == {"ok": True, "supported": True, "state": "speex", "configured_state": "pcmu",
+                    "running_state": "speex", "backup_present": True, "changed": True,
+                    "reboot_required": True, "root_writable": False, "rebooting": True}
+    wait_until(lambda: (lab.root / "reboot-done").exists())
+
+
+@pytest.mark.parametrize("action", ["apply", "restore"])
+def test_codec_failure_and_opt_out_start_no_service_jobs(lab, action):
+    scripts(lab)
+    path = CODEC + "/actions/" + action
+    payload = {"confirm": action + "_audio_codec_patch", "reboot": False}
+    assert response(lab.request(path, {}), 400)["error"] == "maintenance_confirmation_required"
+    assert response(lab.request(path, payload, headers={"Authorization": "Bearer " + TOKEN}),
+                    403)["error"] == "maintenance_unauthorized"
+    (lab.root / "codec-fail").touch()
+    assert response(lab.request(path, payload), 500) == {
+        "ok": False, "error": f"audio_codec_{action}_failed", "detail": "simulated codec failure"}
+    (lab.root / "codec-fail").unlink()
+    assert response(lab.request(path, payload))["rebooting"] is False
+    assert not (lab.root / "service-pid").exists()
+    assert not (lab.root / "reboot-done").exists()
+
+
+def test_codec_shutdown_frees_continuation_without_reboot(lab):
+    scripts(lab, service="exec sleep 30\n")
+    lab.request(CODEC + "/actions/apply", {"confirm": "apply_audio_codec_patch"})
+    wait_until(lambda: (lab.root / "service-pid").exists())
+    lab.process.terminate()
+    assert lab.process.wait(timeout=2) == 0
+    assert not (lab.root / "reboot-done").exists()

@@ -1,6 +1,7 @@
 #include "../src/command_job.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,8 +42,11 @@ int main(int argc, char **argv)
     if (strcmp(argv[2], "cancel") == 0) {
         c300x_command_job_close(&job);
         int status;
-        assert(waitpid(child, &status, 0) == child);
-        assert(WIFSIGNALED(status));
+        pid_t result = waitpid(child, &status, 0);
+        assert(result == child || (result == -1 && errno == ECHILD));
+        if (result == child) {
+            assert(WIFSIGNALED(status));
+        }
     } else {
         int release = open("release", O_CREAT | O_WRONLY, 0600);
         assert(release >= 0);

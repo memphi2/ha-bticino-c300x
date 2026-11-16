@@ -7,6 +7,7 @@
 #include "http_maintenance.h"
 #include "http_device_user.h"
 #include "http_service_commands.h"
+#include "http_audio_codec.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -412,20 +413,6 @@ static void handle_firewall_action(
     const char *confirmation
 );
 static int run_detached_command(const char *program, const char *argument, int delay_ms);
-static void handle_audio_codec_status(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct agent_runtime *runtime,
-    const struct request *request
-);
-static void handle_audio_codec_action(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request,
-    const char *action,
-    const char *confirmation
-);
 static int apply_gui_ringer_command(
     int client_fd, const struct c300x_ringer_command *command, void *ctx
 );
@@ -2730,30 +2717,6 @@ static void init_audio_codec_running_state(struct agent_runtime *runtime)
     );
 }
 
-static void handle_audio_codec_status(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct agent_runtime *runtime,
-    const struct request *request
-)
-{
-    struct c300x_audio_codec_status status;
-    char body[512];
-
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    (void)c300x_audio_codec_read_status(&status);
-    c300x_audio_codec_status_body(
-        &status,
-        runtime != NULL ? runtime->audio_codec_running_state : NULL,
-        body,
-        sizeof(body)
-    );
-    send_json(client_fd, 200, "OK", body);
-}
-
 static void handle_camera_resolution(
     int client_fd,
     struct c300x_config *config,
@@ -2791,92 +2754,6 @@ static void handle_camera_resolution(
     send_json(client_fd, 200, "OK", config->video_av_high_resolution
         ? "{\"ok\":true,\"high_resolution\":true}\n"
         : "{\"ok\":true,\"high_resolution\":false}\n");
-}
-
-static void handle_audio_codec_action(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request,
-    const char *action,
-    const char *confirmation
-)
-{
-    struct c300x_audio_codec_status status;
-    char error[C300X_MAX_ERROR_LEN] = "";
-    char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-    char body[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN) + 256];
-    int ok;
-
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!confirm_matches(request, confirmation)) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
-        return;
-    }
-    if (strcmp(action, "apply") == 0) {
-        ok = c300x_audio_codec_apply(&status, error, sizeof(error));
-    } else {
-        ok = c300x_audio_codec_restore(&status, error, sizeof(error));
-    }
-    if (!ok) {
-        c300x_json_string(error, error_json, sizeof(error_json));
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"audio_codec_%s_failed\",\"detail\":%s}\n",
-            action,
-            error_json
-        );
-        send_json(client_fd, 500, "Internal Server Error", body);
-        return;
-    }
-    /* No agent config to persist: the agent derives its codec mode from the
-     * device (stack_open.xml) at the next start, so the reboot below is what
-     * makes both the device and the agent adopt the new codec together. */
-    if (status.changed) {
-        record_agent_write(config, runtime, "audio_codec", action);
-    }
-    /* The codec change only takes effect after a reboot (the device's media
-     * service, linphone and the agent all read their config at start). Chain it by default so the
-     * one action lands the device in the new mode; gate on the reboot
-     * capability and let "reboot": false defer it. */
-    {
-        int reboot_requested = 1;
-        const char *running_state = runtime != NULL
-            ? runtime->audio_codec_running_state
-            : NULL;
-        int reboot_required = c300x_audio_codec_reboot_required(
-            &status,
-            running_state
-        );
-        int rebooting = 0;
-
-        (void)c300x_json_bool_field(request->body, "reboot", &reboot_requested);
-        if (reboot_required && reboot_requested && config->maintenance_reboot_enabled) {
-            /* Bring SSH up first, exactly like the explicit reboot and remove
-             * endpoints: this reboot is agent-initiated too, and a codec switch
-             * is when the user is most likely to need a way back in. */
-            if (config->maintenance_ssh_start_enabled) {
-                (void)run_detached_command("/etc/init.d/dropbear", "start", 0);
-            }
-            rebooting = run_detached_command(
-                "/sbin/reboot",
-                NULL,
-                config->maintenance_reboot_delay_ms
-            );
-        }
-        c300x_audio_codec_action_body(
-            &status,
-            running_state,
-            rebooting,
-            body,
-            sizeof(body)
-        );
-    }
-    send_json(client_fd, 200, "OK", body);
 }
 
 static void handle_diagnostics_get(int client_fd, const struct agent_runtime *runtime)
@@ -9374,6 +9251,8 @@ static void handle_api_request(
 
     if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
+        || c300x_http_audio_codec_route(&runtime->maintenance, client_fd, config,
+            runtime->audio_codec_running_state, request, run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
             run_detached_command)) {
         return;
@@ -9719,34 +9598,6 @@ static void handle_api_request(
     }
     if (strcmp(request->path, "/api/v1/maintenance/camera-resolution") == 0) {
         handle_camera_resolution(client_fd, config, runtime, request);
-        return;
-    }
-    if (strcmp(request->path, "/api/v1/maintenance/audio-codec") == 0) {
-        if (strcmp(request->method, "GET") == 0) {
-            handle_audio_codec_status(client_fd, config, runtime, request);
-            return;
-        }
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/audio-codec/actions/apply") == 0) {
-        handle_audio_codec_action(
-            client_fd,
-            config,
-            runtime,
-            request,
-            "apply",
-            "apply_audio_codec_patch"
-        );
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/audio-codec/actions/restore") == 0) {
-        handle_audio_codec_action(
-            client_fd,
-            config,
-            runtime,
-            request,
-            "restore",
-            "restore_audio_codec_patch"
-        );
         return;
     }
     if (strcmp(request->path, "/api/v1/maintenance/ipv6-firewall") == 0) {

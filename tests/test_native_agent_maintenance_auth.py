@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,15 +14,16 @@ def test_every_agent_initiated_reboot_starts_ssh_first() -> None:
     """
 
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    offsets = [match.start() for match in re.finditer(r'"/sbin/reboot"', text)]
-
-    assert offsets, "no reboot call found in http.c"
-    for offset in offsets:
-        window = text[max(0, offset - 600) : offset]
-        assert '"/etc/init.d/dropbear", "start"' in window, (
-            "an agent-initiated reboot must start SSH first so the device stays "
-            f"reachable; the reboot call at offset {offset} does not"
-        )
+    assert '"/sbin/reboot"' not in text
+    codec = (ROOT / "native_agent/src/http_audio_codec.c").read_text()
+    assert "c300x_http_service_reboot(owner, fd, config, schedule" in codec
+    service = (ROOT / "native_agent/src/http_service_commands.c").read_text()
+    begin = service.split("static int begin_shutdown", 1)[1].split("static int finish_service", 1)[0]
+    assert "maintenance_ssh_start_enabled" in begin
+    assert begin.index('start_command(owner, C300X_SSH_INIT_SCRIPT, "start")') < begin.index(
+        "schedule_action(owner, fd, state)"
+    )
+    assert service.count("begin_shutdown(owner, fd, state)") == 2
 
 
 def test_config_admin_does_not_bypass_maintenance_gate_with_no_auth() -> None:
@@ -171,7 +171,8 @@ def test_remove_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:
     assert 'confirmation = "remove_agent";' in route_body
     assert "maintenance_authorized(config, request)" in route_body
     assert "confirm_matches(request, confirmation)" in route_body
-    assert 'start_command(owner, C300X_SSH_INIT_SCRIPT, "start")' in route_body
+    assert "begin_shutdown(owner, fd, state)" in route_body
+    assert 'start_command(owner, C300X_SSH_INIT_SCRIPT, "start")' in text
     assert 'state->schedule(config->maintenance_agent_remove_script, "remove", 500)' in text
 
 

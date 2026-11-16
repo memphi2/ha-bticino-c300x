@@ -89,7 +89,8 @@ def lab(binary, tmp_path, maintenance_options):
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config))
-    env = {**os.environ, "C300X_QML_DYNAMIC_HOME_PAGE": "0"}
+    env = {**os.environ, "C300X_QML_DYNAMIC_HOME_PAGE": "0",
+           "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1", "UBSAN_OPTIONS": "halt_on_error=1"}
     with (tmp_path / "agent.log").open("w") as log:
         process = subprocess.Popen([str(binary), "--config", str(path)], cwd=tmp_path,
                                    stdout=log, stderr=log, env=env)
@@ -106,6 +107,7 @@ def lab(binary, tmp_path, maintenance_options):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=3)
+            assert process.returncode == 0, (tmp_path / "agent.log").read_text()
 
 
 def response(conn, status=200):

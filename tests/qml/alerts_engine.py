@@ -10,7 +10,14 @@ os.environ["QT_QUICK_BACKEND"] = "software"
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import check_display_layout as harness  # noqa: E402
-from PySide6.QtCore import QIODevice, QPoint, Qt, QTimer, QUrl, qInstallMessageHandler  # noqa: E402
+from PySide6.QtCore import (  # noqa: E402
+    QIODevice,
+    QPoint,
+    Qt,
+    QTimer,
+    QUrl,
+    qInstallMessageHandler,
+)
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply  # noqa: E402
 from PySide6.QtQml import QQmlEngine, QQmlNetworkAccessManagerFactory  # noqa: E402

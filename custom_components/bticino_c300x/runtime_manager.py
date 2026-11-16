@@ -74,7 +74,7 @@ from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Coroutine
 
     from homeassistant.core import HomeAssistant
 
@@ -457,7 +457,7 @@ class C300XRuntimeManager:
 
 def _entry_update_listener(
     entry: BticinoC300XConfigEntry,
-) -> Callable[[HomeAssistant, BticinoC300XConfigEntry], Awaitable[None]]:
+) -> Callable[[HomeAssistant, BticinoC300XConfigEntry], Coroutine[Any, Any, None]]:
     """Do not reload for the bookkeeping markers the integration writes itself.
 
     The recovery markers of an active update, and the record that the media
@@ -939,6 +939,19 @@ async def _async_configure_display_bridge(
 
     from .callback_url import async_generate_agent_callback_url
 
+    runtime_data = entry.runtime_data
+    resources = getattr(runtime_data, "resources", None)
+
+    def check_active() -> None:
+        if (
+            getattr(entry, "runtime_data", None) is not runtime_data
+            or getattr(resources, "closed", False)
+        ):
+            raise asyncio.CancelledError
+
+    check_active()
+    if resources is not None:
+        resources.display_bridge_registration_pending = True
     enabled = bool(_entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False))
     webhook_url = (
         await async_generate_agent_callback_url(
@@ -950,7 +963,8 @@ async def _async_configure_display_bridge(
         else ""
     )
     shared_secret = entry.data.get(CONF_SHARED_SECRET, "") if enabled else ""
-    diagnostics = entry.runtime_data.diagnostics.display_bridge_diagnostics
+    check_active()
+    diagnostics = runtime_data.diagnostics.display_bridge_diagnostics
     if enabled:
         diagnostics.mark_callback_attempt(webhook_url, datetime.now(UTC))
     else:
@@ -959,6 +973,7 @@ async def _async_configure_display_bridge(
         diagnostics.mark_attempt(datetime.now(UTC))
     try:
         status = await api.async_display_bridge_status()
+        check_active()
         configured = bool(status.get("configured"))
         if enabled:
             expected_hash = display_bridge_callback_fingerprint(
@@ -967,10 +982,14 @@ async def _async_configure_display_bridge(
                 shared_secret,
             )
             if configured and status.get("callback_hash") == expected_hash:
+                if resources is not None:
+                    resources.display_bridge_registration_pending = False
                 diagnostics.mark_success(datetime.now(UTC))
                 await _async_notify_display_configuration(api)
                 return
         elif not configured:
+            if resources is not None:
+                resources.display_bridge_registration_pending = False
             diagnostics.mark_success(datetime.now(UTC))
             return
         await api.async_configure_display_bridge(
@@ -978,10 +997,16 @@ async def _async_configure_display_bridge(
             webhook_url=webhook_url,
             shared_secret=shared_secret,
         )
+        check_active()
+        if resources is not None:
+            resources.display_bridge_registration_pending = False
         diagnostics.mark_success(datetime.now(UTC))
         if enabled:
             await _async_notify_display_configuration(api)
     except C300XAgentApiUnsupportedError:
+        check_active()
+        if resources is not None:
+            resources.display_bridge_registration_pending = False
         diagnostics.mark_failure(
             "device-agent endpoint is not available",
             datetime.now(UTC),
@@ -989,6 +1014,12 @@ async def _async_configure_display_bridge(
         if enabled:
             _LOGGER.debug("C300X device agent does not support display bridge registration")
     except C300XAgentApiError as err:
+        check_active()
+        if resources is not None:
+            from .events import async_notify_runtime_registration_failed
+
+            resources.display_bridge_registration_pending = True
+            async_notify_runtime_registration_failed(hass, entry)
         error = compact_error_text(err)
         diagnostics.mark_failure(error, datetime.now(UTC))
         if enabled:
@@ -1047,6 +1078,7 @@ def _async_track_display_bridge_updates(
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
     from .dashboard import _dashboard_state_entity_id
+    from .dashboard_agenda import async_setup_agenda_updates
     from .dashboard_config import (
         _DASHBOARD_DEFAULT_PAGE,
         configured_actions,
@@ -1056,6 +1088,7 @@ def _async_track_display_bridge_updates(
         configured_status_page_enabled,
         configured_weather_entity_id,
     )
+    from .dashboard_leave_home import leave_home_entity_ids
     from .dashboard_updates import dashboard_state_event_changes_display
 
     status_enabled = configured_status_page_enabled(entry)
@@ -1064,6 +1097,7 @@ def _async_track_display_bridge_updates(
         entity_id for entity_id in configured_dashboard_entities(entry)
         if status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
     }
+    selected_entity_ids.update(leave_home_entity_ids(entry))
     projected_entity_ids = selected_entity_ids.copy()
     alarm_page_entity_id = configured_alarm_page_entity_id(entry)
     if alarm_page_entity_id:
@@ -1128,6 +1162,11 @@ def _async_track_display_bridge_updates(
             _handle_alarmo_event,
         )
     )
+    stop_agenda = async_setup_agenda_updates(
+        hass, entry, lambda: _async_schedule_display_bridge_notify(hass, entry),
+    )
+    if stop_agenda is not None:
+        unsubscribers.append(stop_agenda)
 
     def _unsub_all() -> None:
         for unsubscribe in unsubscribers:
@@ -1241,6 +1280,8 @@ async def _async_notify_display_bridge_alarm_if_listening(
             # Coalesce a state-event burst without dropping changes during delivery.
             await asyncio.sleep(0.05)
             if getattr(entry, "runtime_data", None) is not runtime_data:
+                return
+            if runtime_data is None:
                 return
             runtime_data.display_bridge_notify_dirty = False
             topic = "notifications" if getattr(runtime_data, "display_bridge_notify_messages", False) else "alarm"

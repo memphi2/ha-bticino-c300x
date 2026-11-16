@@ -45,7 +45,7 @@ int c300x_capabilities_json(
         body_len,
         "{"
         "\"api_version\":\"1\","
-        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":4},"
+        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":5},"
         "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
@@ -71,6 +71,7 @@ int c300x_capabilities_json(
         "\"auth\":{\"supported\":true,\"configurable\":true,\"no_auth\":%s,\"api_token_configured\":%s,\"maintenance_token_configured\":%s},"
         "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s,\"audio_codec_status\":%s,\"audio_codec_apply\":%s,\"audio_codec_restore\":%s},"
         "\"touch_tone\":{\"supported\":true,\"requires_display_patch\":true},"
+        "\"display_alerts\":true,"
         "\"display_bridge\":{\"supported\":true,\"configurable\":true,\"configured\":%s}"
         "}"
         "}\n",

@@ -748,6 +748,90 @@ test("stale passive preview failure cannot suppress a replacement card session",
   }
 });
 
+for (const preview of [false, true]) {
+  for (const cancellation of ["reconfigure", "dispose", "hangup"]) {
+    for (const outcome of ["resolve", "reject"]) {
+      test(`stale notification answer ${preview ? "preview" : "talkback"} ${outcome} after ${cancellation} leaves replacement untouched`, async () => {
+        const registry = installFakeDom();
+        await import(`../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?notification-stale-${preview}-${cancellation}-${outcome}`);
+        const card = new (registry.get("c300x-doorbell-call-card"))();
+        card.setConfig({ entity: "camera.old" });
+        card._updateState = () => {};
+        card._lifecycle.ringPreviewActive = preview;
+        card._webrtc = { pc: preview ? {} : null, close() {} };
+        let settle;
+        const start = () => new Promise((resolve, reject) => {
+          settle = () => outcome === "resolve" ? resolve(true) : reject(new Error("old provider failed"));
+        });
+        card._startTalkback = start;
+        card._startAnsweredDoorbellStream = start;
+        card._ringAnswerLaunchPending = true;
+        let consumed = 0;
+        card._consumeRingAnswerLaunchRequest = () => { consumed++; };
+        const pending = card._startNotificationAnsweredDoorbellStream();
+        if (cancellation === "reconfigure") card.setConfig({ entity: "camera.replacement" });
+        else if (cancellation === "dispose") card.disconnectedCallback();
+        else card._cancelPendingMediaStart();
+        assert.equal(card._ringAnswerLaunchStarting, false, "cancel releases the old start synchronously");
+        assert.equal(card._ringAnswerLaunchPending, false);
+        assert.equal(consumed, cancellation === "hangup" ? 1 : 0, "disposal must preserve the URL for another card");
+        card._lifecycle.doorbellAnswered = true;
+        card._ringAnswerLaunchPending = true;
+        card._ringAnswerLaunchStarting = true;
+        card._ringAnswerLaunchClaimKey = "replacement-claim";
+        card._error = "replacement error";
+        consumed = 0;
+        let renders = 0;
+        card._updateState = () => { renders++; };
+        try {
+          settle();
+          await pending;
+          assert.equal(card._lifecycle.doorbellAnswered, true);
+          assert.equal(card._ringAnswerLaunchPending, true);
+          assert.equal(card._ringAnswerLaunchStarting, true);
+          assert.equal(card._ringAnswerLaunchClaimKey, "replacement-claim");
+          assert.equal(card._error, "replacement error");
+          assert.equal(consumed, 0, "old completion must not consume a new URL marker");
+          assert.equal(renders, 0, "old finally must not render a replacement or disposed card");
+        } finally {
+          card.disconnectedCallback();
+        }
+      });
+    }
+  }
+}
+
+test("notification answer transport failure releases its own start and consumes only its launch", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?notification-own-failure");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.old" });
+  card._updateState = () => {};
+  card._prepareMicrophone = async () => {};
+  let starts = 0;
+  card._webrtc = {
+    close() {},
+    async start() { starts++; throw new Error("provider unavailable"); },
+  };
+  let consumed = 0;
+  card._consumeRingAnswerLaunchRequest = () => { consumed++; };
+  card._ringAnswerLaunchPending = true;
+  card._ringAnswerLaunchClaimKey = "old-claim";
+  try {
+    await card._startNotificationAnsweredDoorbellStream();
+    assert.equal(card._error, "provider unavailable");
+    assert.equal(card._ringAnswerLaunchStarting, false);
+    assert.equal(card._ringAnswerLaunchPending, false);
+    assert.equal(card._ringAnswerLaunchClaimKey, "");
+    assert.equal(card._lifecycle.doorbellAnswered, false);
+    assert.equal(consumed, 1);
+    assert.equal(starts, 1);
+    assert.equal(card._shouldStartNotificationAnsweredDoorbellStream("ring_active"), false);
+  } finally {
+    card.disconnectedCallback();
+  }
+});
+
 test("failed old transition does not clear a replacement transition video", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?stale-transition-cleanup");

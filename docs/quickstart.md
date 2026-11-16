@@ -92,6 +92,11 @@ Recommended first-run choices:
 
 Feature choices can be changed later from the integration options.
 
+For **Connection paths for the live picture**, keep the default
+**IPv4 and local IPv6 (ULA) - recommended** unless your network needs another
+policy. See [all four ICE choices and their exceptions](media-troubleshooting.md#connection-paths-for-the-live-picture)
+before changing it; this field does not configure device callbacks or a firewall.
+
 ## 5. Check Media Readiness
 
 After setup, open the `Media readiness` diagnostic sensor.
@@ -176,10 +181,24 @@ Lovelace card or an embedded HA dashboard.
    **Configure > Display and Display patch**. Applying it restarts the device GUI.
 2. Open **Display pages**. Choose an optional weather entity, name your pages,
    set their order and select the entities for each. Up to eight pages are
-   available, including the status page. Drag entities to reorder their tiles.
-   The second section, below the independently switchable status page, adds the optional
+   available, including the status page, plus three optional pages. Set all
+   positions from 1 to 11; defaults are Energy 2, Agenda 10 and Leave home 11.
+   Equal positions put those optional pages in that order before regular pages.
+   Disabling an optional page keeps its selections and position.
+   Drag entities to reorder their tiles.
+   The **Energy** section adds the optional
    [energy page](feature-reference.md#energy-page), which shows Home
-   Assistant's Energy setup.
+   Assistant's Energy setup. Choose its views independently. **Consumers** lists
+   the top ten configured devices by current W without history queries.
+   Distribution has been removed: enable Consumers explicitly after upgrading;
+   the old selection is removed without enabling another view.
+   Page sections are numbered and sorted by their display position, including
+   Energy, Agenda and Leave home. Unused regular sections remain available at
+   the end. Optional **Agenda** and **Leave home** sections select calendars and departure
+   checks explicitly; they are disabled until you enable them. Agenda shows up
+   to five events in seven days, using a background HA cache. Leave home actions
+   require a second **Confirm** tap and never run when the page opens. The status page
+   links directly to every other visible page, below the optional weather card.
 3. Open **Display tiles** to set each tile's width, height, name and secondary
    line. Full-height tiles expose supported common controls directly; tap a
    tile with a chevron for its detail controls.
@@ -195,6 +214,13 @@ are read-only. Only configured entities can be operated from the display.
 After an integration update, update the agent and reapply the Display patch
 when prompted so the display receives the matching files. Page and tile
 settings themselves are stored in HA, not rewritten to the device on every change.
+The display pages and [standard Notify service](feature-reference.md#standard-notify-service)
+require the matching agent and display bundle. Notify defaults to 30 seconds of
+wake and sound for all three severities: `info`, `warning` and `error`. Set
+`sound_duration: 0` explicitly for a silent notification. Effects are limited to
+safe Home/HA screens, never queued until the next wake, and are supplementary,
+not fire-alarm functionality. A protected screen or call suppresses the effects
+and leaves the notice in HA; a missing GUI connection reports a delivery error.
 
 Details: [Display controls](feature-reference.md#display-device-controls),
 [pages and tiles](feature-reference.md#display-settings) and
@@ -216,6 +242,14 @@ Use [Feature reference](feature-reference.md) to decide what to enable next:
 - display pages,
 - Ring Capture and local Wyoming transcription,
 - maintenance controls.
+
+## Removing the Integration
+
+For removal rather than an update, follow the
+[HA entry and custom-integration removal guide](advanced-maintenance.md#remove-home-assistant-integration).
+It explains retained media/configuration and backups. Removing the native device
+agent is a separate, explicitly requested maintenance operation, not part of
+ordinary HA-entry deletion.
 
 ## If Something Fails
 

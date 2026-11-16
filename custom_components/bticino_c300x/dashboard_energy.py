@@ -18,19 +18,24 @@ from typing import Any, TypedDict
 
 from .dashboard_controls import finite_number
 from .dashboard_energy_charts import chart_axis
+from .dashboard_energy_consumers import (
+    EnergyConsumer,
+    consumer_sources,
+    consumers_payload,
+)
 from .dashboard_labels import ENERGY_LABELS_BY_LANGUAGE, decimal_text
 
 ENERGY_VIEW_NOW = "now"
 ENERGY_VIEW_TODAY = "today"
 ENERGY_VIEW_POWER = "power"
-ENERGY_VIEW_DISTRIBUTION = "distribution"
+ENERGY_VIEW_CONSUMERS = "consumers"
 ENERGY_VIEW_BALANCE = "balance"
 ENERGY_VIEWS = (
     ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_POWER,
-    ENERGY_VIEW_DISTRIBUTION, ENERGY_VIEW_BALANCE,
+    ENERGY_VIEW_CONSUMERS, ENERGY_VIEW_BALANCE,
 )
 ENERGY_DAY_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_TODAY, ENERGY_VIEW_BALANCE)
-ENERGY_LIVE_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_DISTRIBUTION)
+ENERGY_LIVE_VIEWS = (ENERGY_VIEW_NOW, ENERGY_VIEW_CONSUMERS)
 ENERGY_PAGE_DEFAULT_POSITION = 2
 
 # Light tones: the display background is a saturated blue.
@@ -78,13 +83,14 @@ class EnergySources:
     grid_power: tuple[str, ...] = ()
     solar_power: tuple[str, ...] = ()
     battery_power: tuple[str, ...] = ()
+    consumers: tuple[EnergyConsumer, ...] = ()
 
     @property
     def any(self) -> bool:
         """Return whether there is anything to show."""
 
         return bool(self.grid_from or self.grid_to or self.solar
-                    or self.battery_from or self.battery_to)
+                    or self.battery_from or self.battery_to or self.consumers)
 
     @property
     def energy_stats(self) -> set[str]:
@@ -109,9 +115,16 @@ class EnergySources:
 
     @property
     def power_entities(self) -> set[str]:
-        """Return the entity ids of all power sensors."""
+        """Return aggregate power entities used by Now and recorder history."""
 
         return {*self.grid_power, *self.solar_power, *self.battery_power}
+
+    def live_power_entities(self, views: list[str]) -> set[str]:
+        """Read and subscribe only to sensors used by the enabled live views."""
+        entities = self.power_entities if ENERGY_VIEW_NOW in views else set()
+        if ENERGY_VIEW_CONSUMERS in views:
+            entities.update(source.entity_id for source in self.consumers)
+        return entities
 
 
 @dataclass(slots=True)
@@ -141,7 +154,7 @@ def _text(value: Any) -> str:
 
 
 def energy_sources(
-    preferences: Any, cost_sensors: Any = None,
+    preferences: Any, cost_sensors: Any = None, *, include_consumers: bool = False,
 ) -> EnergySources:
     """Return the sources from Home Assistant's Energy preferences.
 
@@ -202,6 +215,7 @@ def energy_sources(
             add("battery_power", battery_power)
     return EnergySources(
         **{key: tuple(values) for key, values in groups.items()},
+        consumers=consumer_sources(preferences) if include_consumers else (),
     )
 
 
@@ -273,10 +287,9 @@ def _direction(watts: float | None) -> int:
 def energy_views(value: Any) -> tuple[str, ...]:
     """Return selected views in display order, preserving an explicit all-off."""
 
-    if isinstance(value, (list, tuple)) and not value:
-        return ()
-    chosen = [view for view in ENERGY_VIEWS if isinstance(value, (list, tuple)) and view in value]
-    return tuple(chosen) or ENERGY_VIEWS
+    if isinstance(value, (list, tuple)):
+        return tuple(view for view in ENERGY_VIEWS if view in value)
+    return ENERGY_VIEWS
 
 
 def normalize_energy_page(value: Any) -> dict[str, Any]:
@@ -329,13 +342,14 @@ def energy_page(
     language: str = "en",
     views: Any = None,
     currency: str = "",
+    consumer_states: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Return the display page for one day, or None without any source."""
 
-    if not sources.any or not energy_views(views):
+    shown = energy_views(views)
+    if not shown or (not sources.any and (views is None or ENERGY_VIEW_CONSUMERS not in shown)):
         return None
     labels = ENERGY_LABELS_BY_LANGUAGE.get(language, ENERGY_LABELS_BY_LANGUAGE["en"])
-    shown = energy_views(views)
 
     grid_in = day.hourly(sources.grid_from)
     grid_out = day.hourly(sources.grid_to)
@@ -428,10 +442,8 @@ def energy_page(
             })
         page["balance"] = rows
 
-    if ENERGY_VIEW_DISTRIBUTION in shown:
-        from .dashboard_energy_distribution import power_distribution_payload
-
-        page["distribution"] = power_distribution_payload(sources, power, language)
+    if ENERGY_VIEW_CONSUMERS in shown:
+        page["consumers"] = consumers_payload(sources.consumers, consumer_states or {}, language)
 
     return {"title": labels["title"], "energy": page}
 

@@ -457,8 +457,13 @@ def test_setup_failure_releases_callbacks_and_allows_retry(
 def test_remove_entry_clears_repair_issues_and_runtime_resources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from unittest.mock import AsyncMock
+
+    import custom_components.bticino_c300x.notify_names as notify_names
     import custom_components.bticino_c300x.repair_issues as repair_issues
 
+    remove_name = AsyncMock()
+    monkeypatch.setattr(notify_names, "async_remove_name", remove_name)
     cleared: list[str] = []
     cancelled: list[str] = []
     callbacks: list[str] = []
@@ -497,6 +502,7 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
 
     asyncio.run(integration.async_remove_entry(hass, entry))
 
+    remove_name.assert_awaited_once_with(hass, entry.entry_id)
     assert cleared == [entry.entry_id]
     assert callbacks == [
         "expire",
@@ -1578,6 +1584,15 @@ def test_display_bridge_notify_skips_offline_entries() -> None:
     runtime_manager._async_schedule_display_bridge_notify(hass, entry)
 
     assert jobs == []
+
+
+@pytest.mark.parametrize("explicit_none", [False, True])
+def test_display_bridge_notify_skips_missing_runtime(explicit_none: bool) -> None:
+    entry = SimpleNamespace()
+    if explicit_none:
+        entry.runtime_data = None
+
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
 
 
 def test_display_bridge_notify_preserves_revision_between_ui_waiters() -> None:

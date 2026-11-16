@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from native_agent.test.smoke import TOKEN, api_get, free_tcp_port, wait_for_health
+from native_agent.test.smoke import TOKEN, api_get, free_tcp_ports, wait_for_health
 
 ROOT = Path(__file__).resolve().parents[1]
 QML = "/api/v1/maintenance/qml-patch"
@@ -66,11 +66,11 @@ class Lab:
 
 @pytest.fixture
 def lab(binary, tmp_path):
-    port, ui_port = free_tcp_port(), free_tcp_port()
+    port, ui_port, own = free_tcp_ports(3)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
         "api": {"token": TOKEN},
-        "openwebnet": {"host": "127.0.0.1", "port": free_tcp_port(), "timeoutMs": 100},
+        "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
         "maintenance": {"enabled": True, "adminToken": "maintenance-token",
                         "qmlPatch": {"enabled": True, "script": str(tmp_path / "job.sh")},
                         "guiReload": {"enabled": True, "script": str(tmp_path / "job.sh")}},
@@ -164,13 +164,16 @@ def test_disconnect_keeps_one_job_and_does_not_reuse_its_client_fd(lab):
     assert response(lab.request())["ok"]
 
 
-def test_timeout_with_closed_stdout_does_not_block_and_reaps_child(lab):
+@pytest.mark.parametrize("path,payload", [(QML, None), (GUI, {"confirm": "reload_gui"})])
+def test_timeout_with_closed_stdout_does_not_block_and_reaps_child(lab, path, payload):
     lab.script("exec 1>&-\nexec sleep 30\n")
-    pending = lab.request()
+    pending = lab.request(path, payload)
     lab.started()
     pid = int((lab.root / "started").read_text())
     assert api_get(lab.port, "/api/v1/health")["ok"]
-    assert response(pending, 502)["state"] == "script_failed"
+    expected = {"error": "reload_failed"} if path == GUI else {"state": "script_failed"}
+    result = response(pending, 502)
+    assert all(result[key] == value for key, value in expected.items())
     wait_until(lambda: not Path(f"/proc/{pid}").exists())
     lab.script('printf \'{"ok":true}\'\n')
     assert response(lab.request())["ok"]

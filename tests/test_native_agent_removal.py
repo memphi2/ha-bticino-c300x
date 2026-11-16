@@ -135,6 +135,22 @@ def test_uninstall_leaves_an_unconfigured_device_untouched(device: dict[str, str
     assert Path(device["C300X_AUDIO_STACK_OPEN"]).read_text() == STACK
 
 
+def test_uninstall_keeps_agent_and_backups_after_gui_start_rollback(device: dict[str, str]) -> None:
+    source = Path(device["C300X_AGENT_DIR"]) / "qml"
+    shutil.copytree(ROOT / "device_qml", source)
+    env = {**device, "C300X_QML_SOURCE_DIR": str(source)}
+    subprocess.run([device["C300X_QML_PATCH_SCRIPT"], "apply"],
+                   env=env, check=True, capture_output=True, timeout=10)
+    gui = Path(device["C300X_QML_GUI_DIR"])
+    before = {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()}
+    device.update({"C300X_QML_RELOAD_GUI": "1", "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
+                   "C300X_QML_GUI_WRAPPER": str(source / "missing-wrapper")})
+    result = _remove(device)
+    _assert_kept(device, result)
+    assert "Failed to restore Display patch" in result.stderr
+    assert {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()} == before
+
+
 def test_restore_cli_restores_the_codec_config_idempotently(device: dict[str, str]) -> None:
     _set_pcmu_config(device)
     for _ in range(2):

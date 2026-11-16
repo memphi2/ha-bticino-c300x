@@ -35,11 +35,7 @@ def by_id(result):
 
 
 def watts(result, key, index=0):
-    point = by_id(result)[key]["points"][index]
-    if point is None:
-        return None
-    axis = result["axis"]
-    return point * (axis["max"] - axis["min"]) + axis["min"]
+    return by_id(result)[key]["values"][index]
 
 
 def sources_with_unconfigured_power(kind, sensors=2):
@@ -74,7 +70,7 @@ def test_real_ha_migration_preserves_grid_and_home_without_partial_designation()
     assert watts(result, "grid") == pytest.approx(750, abs=0.03)
     assert watts(result, "home") == pytest.approx(750, abs=0.03)
     assert by_id(result)["grid"]["dots"] == [0]
-    assert all(point is None for point in by_id(result)["grid"]["points"][1:])
+    assert all(value is None for value in by_id(result)["grid"]["values"][1:])
     assert source_power_watts(sources, {"sensor.grid_power": 750}) == {"grid": 750, "home": 750}
     before = payload(energy_sources({"energy_sources": [legacy]}), {"sensor.grid_power": (750,)})
     assert watts(before, "grid") == watts(result, "grid")
@@ -112,7 +108,7 @@ def test_sanitized_multi_meter_shape_uses_available_sensors_and_unconfigured_zer
     assert watts(result, "home", 1) is None
     assert watts(result, "home", 2) == 0
     assert [watts(result, "solar", index) for index in range(3)] == [0, 0, 0]
-    assert all(point is None for series in result["series"] for point in series["points"][3:])
+    assert all(value is None for series in result["series"] for value in series["values"][3:])
     now = energy_page(sources, EnergyDay(), {
         "sensor.grid_net": 100, "sensor.charger_power": 200, "sensor.battery_net": 0,
     }, views=["now"])["energy"]["nodes"]
@@ -137,10 +133,11 @@ def test_groups_keep_normal_labels_and_preserve_signed_sum_zero_and_holes(kind, 
     assert by_id(result)["home"]["label"] == labels["home"]
     assert [watts(result, kind, index) for index in range(3)] == pytest.approx([300, 0, -200], abs=0.03)
     assert [watts(result, "home", index) for index in range(3)] == pytest.approx([300, 0, 0], abs=0.03)
-    assert len(series["points"]) == 96
-    assert all(point is None for point in series["points"][3:])
-    assert all(point is None for point in by_id(result)["home"]["points"][3:])
-    assert all(0 <= point <= 1 for point in series["points"] if point is not None)
+    assert len(series["values"]) == 96
+    assert all(value is None for value in series["values"][3:])
+    assert all(value is None for value in by_id(result)["home"]["values"][3:])
+    assert all(result["axis"]["min"] <= value <= result["axis"]["max"]
+               for value in series["values"] if value is not None)
     json.dumps(result, allow_nan=False)
 
 
@@ -197,7 +194,7 @@ def test_unconfigured_zero_and_home_exist_only_in_observed_buckets(kind):
         assert watts(result, "home", index) == pytest.approx(expected, abs=0.03)
     for series in result["series"]:
         assert series["dots"] == [0, 2, 4]
-        assert all(point is None for point in series["points"][5:])
+        assert all(value is None for value in series["values"][5:])
 
 
 @pytest.mark.parametrize("kind", ["grid", "battery", "solar"])
@@ -235,4 +232,4 @@ def test_one_observed_group_does_not_fill_another_configured_groups_gap():
     assert [watts(result, "grid", index) for index in range(3)] == pytest.approx([100, None, 0], abs=0.03)
     assert [watts(result, "solar", index) for index in range(3)] == pytest.approx([None, 200, 0], abs=0.03)
     assert [watts(result, "home", index) for index in range(3)] == [None, None, 0]
-    assert all(point is None for series in result["series"] for point in series["points"][3:])
+    assert all(value is None for series in result["series"] for value in series["values"][3:])

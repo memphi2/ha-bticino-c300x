@@ -14,6 +14,7 @@ const Api = library("c300x_ha.js");
 Api.startEventWatch = () => {};
 const I18n = library("c300x_i18n.js");
 const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
+const detailQml = fs.readFileSync(path.join(root, "device_qml/C300XDetailControl.qml"), "utf8");
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", decimalComma: false, runtimeGeneration: 0,
     feedbackColorsEnabled: true, c300xDisplayPreferences: {load() {}},
@@ -92,10 +93,11 @@ assert.equal(queue[0].url, "/homeassistant", "offline recovery needs a full snap
 queue.shift().success(payload("four"));
 assert.equal(p.dashboardOnline, true);
 
-const sliderHandlers = qml.slice(qml.indexOf("id: sliderMouse"), qml.indexOf("id: optionGrid"));
-assert.match(sliderHandlers, /onPositionChanged: if \(pressed\) updatePreview\(mouse.x\)/);
-assert.match(sliderHandlers, /onReleased: \{[\s\S]*Api.dashboardControl/);
-assert.equal(sliderHandlers.split("onReleased:")[0].includes("Api.dashboardControl"), false);
+const sliderHandlers = detailQml.slice(detailQml.indexOf("id: sliderMouse"), detailQml.indexOf("id: optionGrid"));
+assert.match(sliderHandlers, /onPositionChanged: if \(pressed\) controlRow.updatePreview\(mouse.x, width\)/);
+assert.match(sliderHandlers, /onReleased: \{[\s\S]*controlRow.submitted/);
+assert.equal(sliderHandlers.split("onReleased:")[0].includes("controlRow.submitted"), false);
+assert.match(qml, /onSubmitted: Api.dashboardControl\(selectedItem, control, value, status, page\)/);
 assert.match(qml, /contentWidth: width/);
 assert.match(qml, /interactive: !interactionActive/);
 console.log("Dashboard QML production controls passed");
@@ -857,3 +859,87 @@ for (const [language, decimalComma, expected] of [
     assert.equal(p.numberText({command: "value"}, 7), "7");
 }
 console.log("Number texts passed");
+
+const detailMethods = [...detailQml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
+const submitted = [];
+let refreshes = 0;
+const detail = vm.createContext({hostPage: p, width: 752, preview: 0, control: {},
+    submitted: value => submitted.push(value), refreshRequested: () => refreshes++});
+detail.controlRow = detail;
+vm.runInContext(detailMethods, detail);
+for (const language of ["en", "de", "fr", "it"]) {
+    p.uiLanguage = language;
+    detail.control = {command: "hvac_mode", kind: "choice", options: ["off", "heat", "cool", "auto", "dry"]};
+    assert.equal(detail.choiceColumns(), 5, "five short climate modes fit one 800px landscape row: " + language);
+}
+detail.control = {command: "source", options: ["Living room television", "Network audio receiver", "HDMI 1", "HDMI 2"]};
+assert.equal(detail.choiceColumns(), 2, "named sources get 372px cells instead of four narrow cells");
+detail.control = {command: "option", options: ["a", "b"], labels: ["An exceptionally long custom source name in the living room", "Other"]};
+assert.equal(detail.choiceColumns(), 1, "layout considers display labels, not only raw option ids");
+detail.control = {command: "color", options: ["red", "green"], swatches: ["red", "green"]};
+assert.equal(detail.choiceColumns(), 4, "palette slots remain stable");
+detail.width = 300;
+assert.equal(detail.choiceColumns(), 2, "palette never produces undersized cells");
+detail.control = {command: "option", options: []};
+assert.equal(detail.choiceColumns(), 1, "empty choices have a valid divisor");
+detail.width = 752;
+
+for (const [command, min, max, step, value] of [
+    ["temperature", 5, 30, 0.5, 21.5], ["brightness", 0, 100, 1, 50],
+    ["position", 0, 100, 1, 70], ["volume_level", 0, 1, 0.01, 0.5],
+    ["value", 0, 1, 0.3, 0.6],
+]) {
+    detail.control = {command, kind: "number", min, max, step, value};
+    assert.equal(detail.initialValue(), value);
+    detail.updatePreview(-10, 592);
+    assert.equal(detail.preview, min);
+    detail.updatePreview(900, 592);
+    assert.equal(detail.preview, Number((min + p.controlLastStep(detail.control) * step).toFixed(6)));
+    detail.control.value = min;
+    assert.equal(detail.canAdjust(-1), false, command + " disables decrement at minimum");
+    assert.equal(detail.canAdjust(1), true);
+    detail.control.value = detail.preview;
+    assert.equal(detail.canAdjust(1), false, command + " disables increment at last legal step");
+    for (const unset of [null, undefined]) {
+        detail.control.value = unset;
+        assert.equal(detail.initialValue(), min);
+        assert.equal(detail.canAdjust(-1), false);
+        assert.equal(detail.canAdjust(1), false);
+    }
+}
+detail.control = {kind: "number", min: 0, max: 0, step: 0, value: 0};
+detail.preview = 17;
+detail.updatePreview(200, 592);
+assert.equal(detail.preview, 17, "invalid ranges do not produce NaN previews");
+detail.control = {kind: "number", min: 5, max: 30, step: 0.5, value: 20};
+detail.hostPage = undefined;
+assert.equal(detail.initialValue(), 0, "construction before hostPage is assigned is safe");
+assert.equal(detail.canAdjust(1), false);
+assert.equal(detail.choiceColumns(), 1);
+detail.hostPage = p;
+const releaseBody = detailQml.match(/onReleased: \{([\s\S]*?)\n                }/)[1];
+const cancelBody = detailQml.match(/onCanceled: \{([\s\S]*?)\n                }/)[1];
+p.interactionActive = true;
+detail.updatePreview(300, 592);
+assert.equal(submitted.length, 0, "preview never sends a command");
+vm.runInContext(releaseBody, detail);
+assert.equal(p.interactionActive, false);
+assert.deepEqual(submitted, [String(detail.preview)], "release submits one value");
+p.interactionActive = true;
+detail.updatePreview(500, 592);
+vm.runInContext(cancelBody, detail);
+assert.equal(p.interactionActive, false);
+assert.equal(detail.preview, 20, "cancel restores the confirmed value");
+assert.equal(submitted.length, 1, "cancel cannot send another command");
+assert.equal(refreshes, 1);
+
+assert.match(detailQml, /property int touchHeight: 56/);
+assert.match(detailQml, /x: direction < 0 \? 0 : numericControls.width - width/);
+assert.match(detailQml, /anchors.leftMargin: 80; anchors.rightMargin: 80/);
+assert.match(detailQml, /wrapMode: control.kind === "button" \|\| control.kind === "boolean" \? Text.Wrap : Text.NoWrap/);
+assert.match(qml, /width: 104; height: 56/);
+assert.match(qml, /summary.type === "media_player" \? 150/);
+const climateControlsHeight = (28 + 56) * 2 + 8;
+const landscapeAvailable = 480 - 78 - 88 - (48 + 8) - 12 - (36 + 12 + 8);
+assert.ok(climateControlsHeight <= landscapeAvailable, "target and five modes fit below summary and tabs at 800x480");
+console.log("Native detail touch layout, construction, numeric limits and gestures passed");

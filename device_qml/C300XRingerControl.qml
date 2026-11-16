@@ -1,20 +1,20 @@
 import QtQuick 1.1
 import BtClass 1.0
+import "js/c300x_ringer.js" as Ringer
 
 Item {
     id: control
-    property variant pendingRequest: null
     property bool stopped: false
 
     function waitForCommand(completed, muted) {
-        if (stopped || pendingRequest)
+        if (stopped || Ringer.currentRequest())
             return
         var request = new XMLHttpRequest()
-        pendingRequest = request
+        Ringer.setRequest(request)
         request.onreadystatechange = function() {
-            if (request.readyState !== XMLHttpRequest.DONE || stopped)
+            if (request.readyState !== XMLHttpRequest.DONE || stopped || Ringer.currentRequest() !== request)
                 return
-            pendingRequest = null
+            Ringer.setRequest(null)
             if (request.status === 200) {
                 try {
                     var command = JSON.parse(request.responseText)
@@ -54,7 +54,6 @@ Item {
     Component.onDestruction: {
         stopped = true
         reconnect.stop()
-        if (pendingRequest)
-            pendingRequest.abort()
+        Ringer.abort()
     }
 }

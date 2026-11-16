@@ -1,8 +1,8 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-15. Integration and native agent `2.4.0`, the successor
-to `v2.3.0`, adding the optional display energy page and configurable visitor
-images. This report covers the local source tree, not a newly published
+Source review: 2026-11-16. Integration and native agent `2.5.0`, the successor
+to `v2.4.1`, adding optional Agenda and Leave home pages, live Consumers,
+page navigation and bounded display notifications. This report covers the local source tree, not a newly published
 release.
 
 This is a technical provenance and packaging review, not a legal opinion,
@@ -65,6 +65,15 @@ The integration endpoint checks camera read permission, but HA's standard local
 media browser applies its own access rules. Camera restrictions alone do not
 protect that archive. Retention and storage limits are documented separately
 from backup retention.
+
+Agenda reads only explicitly selected HA calendars into bounded HA RAM caches.
+Leave home exposes explicitly selected contacts, lights and actions. Notify
+messages are retained in the existing HA notice store; the device keeps the
+active alert in RAM, with no queue for a disconnected display. Wake and sound
+are supplementary notifications, not certified life-safety alarm functions.
+The retired Distribution source is removed on update; the package-only inert
+bootstrap file preserves compatibility with the previous updater and is not
+part of the new active GUI.
 
 The English display examples are edited from maintainer-provided photographs,
 with AI-assisted perspective correction, color matching and localization.

@@ -18,6 +18,9 @@ const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
 const source = fs.readFileSync(process.argv[1], 'utf8');
+const Ringer = vm.createContext({});
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),
+    'js/c300x_ringer.js'), 'utf8'), Ringer);
 const handler = source.slice(source.indexOf('    function waitForCommand'), source.indexOf('\n    Timer {'));
 let requests = [], operations = [], reconnects = 0, mute = true;
 class Request {
@@ -37,7 +40,7 @@ const audioState = {
     disableState(state) { assert.equal(state, 4); mute = false; operations.push('disable'); },
     isStateEnabled(state) { assert.equal(state, 4); return mute; }
 };
-const context = vm.createContext({pendingRequest: null, stopped: false, XMLHttpRequest: Request,
+const context = vm.createContext({Ringer, stopped: false, XMLHttpRequest: Request,
     global: {audioState}, AudioState: {RingtoneMute: 4}, reconnect: {start() { reconnects++; }}});
 vm.runInContext(handler, context);
 context.waitForCommand();
@@ -71,10 +74,21 @@ requests.at(-1).reply(command(false));
 assert.equal(mute, true);
 assert.deepEqual(operations, ['disable', 'enable']);
 assert(source.includes('repeat: false'));
-assert(source.includes('pendingRequest.abort()'));
+assert(source.includes('Ringer.abort()'));
 """
     subprocess.run(
         [node, "-e", script, str(ROOT / "device_qml/C300XRingerControl.qml"),
          str(ROOT / "native_agent/config.example.json")],
         check=True, capture_output=True, text=True,
     )
+
+
+def test_qml_ringer_qt4_request_ownership_and_teardown() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    result = subprocess.run(
+        [node, str(ROOT / "tests/qml/ringer_control.cjs")],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

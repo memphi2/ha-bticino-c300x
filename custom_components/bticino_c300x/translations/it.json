@@ -272,10 +272,10 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nLa seconda sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.",
         "sections": {
           "page_1": {
-            "name": "Pagina 1: Pagina di stato",
+            "name": "Pagina{page_1_position}: Pagina di stato",
             "description": "La pagina di stato Home Assistant mostra gli indicatori HA, allarme e ora. Attivala o disattivala indipendentemente dalla scheda meteo facoltativa e dalle entità. Il titolo sul display è Home Assistant.",
             "data": {
               "enabled": "Mostra la pagina di stato",
@@ -291,7 +291,7 @@
             }
           },
           "page_2": {
-            "name": "Pagina 2{page_2_name}",
+            "name": "Pagina{page_2_position}{page_2_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -304,7 +304,7 @@
             }
           },
           "page_3": {
-            "name": "Pagina 3{page_3_name}",
+            "name": "Pagina{page_3_position}{page_3_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -317,7 +317,7 @@
             }
           },
           "page_4": {
-            "name": "Pagina 4{page_4_name}",
+            "name": "Pagina{page_4_position}{page_4_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -330,7 +330,7 @@
             }
           },
           "page_5": {
-            "name": "Pagina 5{page_5_name}",
+            "name": "Pagina{page_5_position}{page_5_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -343,7 +343,7 @@
             }
           },
           "page_6": {
-            "name": "Pagina 6{page_6_name}",
+            "name": "Pagina{page_6_position}{page_6_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -356,7 +356,7 @@
             }
           },
           "page_7": {
-            "name": "Pagina 7{page_7_name}",
+            "name": "Pagina{page_7_position}{page_7_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -369,7 +369,7 @@
             }
           },
           "page_8": {
-            "name": "Pagina 8{page_8_name}",
+            "name": "Pagina{page_8_position}{page_8_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -381,8 +381,42 @@
               "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
+          "agenda_page": {
+            "name": "Pagina{agenda_page_position}: Agenda",
+            "description": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
+            "data": {
+              "enabled": "Mostra agenda",
+              "position": "Posizione",
+              "calendars": "Calendari"
+            },
+            "data_description": {
+              "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
+              "calendars": "Seleziona fino a otto calendari.",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+            }
+          },
+          "leave_home_page": {
+            "name": "Pagina{leave_home_page_position}: Esci di casa",
+            "description": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+            "data": {
+              "enabled": "Mostra Esci di casa",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "lights": "Luci",
+              "actions": "Azioni",
+              "show_alarm": "Mostra disponibilità Alarmo"
+            },
+            "data_description": {
+              "enabled": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+              "contacts": "Seleziona fino a 24 sensori porta/finestra.",
+              "lights": "Seleziona fino a 24 luci.",
+              "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
+              "show_alarm": "Usa l'allarme già configurato per questo display.",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+            }
+          },
           "energy_page": {
-            "name": "Pagina energia",
+            "name": "Pagina{energy_page_position}: Energia",
             "description": "Una pagina aggiuntiva facoltativa. Mostra la configurazione Energia di Home Assistant (Impostazioni > Plance > Energia): contatori di rete, solare e batteria, i loro sensori di potenza, nomi e prezzi. Un tipo di sorgente non configurato lì viene omesso; senza alcuna sorgente la pagina non viene mostrata.",
             "data": {
               "enabled": "Mostra la pagina energia",
@@ -390,16 +424,16 @@
               "view_now": "Adesso",
               "view_today": "Oggi",
               "view_power": "Storico della potenza",
-              "view_distribution": "Distribuzione della potenza attuale",
+              "view_consumers": "Dispositivi",
               "view_balance": "Bilancio"
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
-              "view_distribution": "Diagramma Sankey delle misure attuali in W/kW; senza totali giornalieri o richieste dello storico",
+              "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
@@ -407,10 +441,10 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nLa seconda sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.",
         "sections": {
           "page_1": {
-            "name": "Pagina 1: Pagina di stato",
+            "name": "Pagina{page_1_position}: Pagina di stato",
             "description": "La pagina di stato Home Assistant mostra gli indicatori HA, allarme e ora. Attivala o disattivala indipendentemente dalla scheda meteo facoltativa e dalle entità. Il titolo sul display è Home Assistant.",
             "data": {
               "enabled": "Mostra la pagina di stato",
@@ -426,7 +460,7 @@
             }
           },
           "page_2": {
-            "name": "Pagina 2{page_2_name}",
+            "name": "Pagina{page_2_position}{page_2_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -439,7 +473,7 @@
             }
           },
           "page_3": {
-            "name": "Pagina 3{page_3_name}",
+            "name": "Pagina{page_3_position}{page_3_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -452,7 +486,7 @@
             }
           },
           "page_4": {
-            "name": "Pagina 4{page_4_name}",
+            "name": "Pagina{page_4_position}{page_4_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -465,7 +499,7 @@
             }
           },
           "page_5": {
-            "name": "Pagina 5{page_5_name}",
+            "name": "Pagina{page_5_position}{page_5_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -478,7 +512,7 @@
             }
           },
           "page_6": {
-            "name": "Pagina 6{page_6_name}",
+            "name": "Pagina{page_6_position}{page_6_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -491,7 +525,7 @@
             }
           },
           "page_7": {
-            "name": "Pagina 7{page_7_name}",
+            "name": "Pagina{page_7_position}{page_7_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -504,7 +538,7 @@
             }
           },
           "page_8": {
-            "name": "Pagina 8{page_8_name}",
+            "name": "Pagina{page_8_position}{page_8_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -516,8 +550,42 @@
               "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
+          "agenda_page": {
+            "name": "Pagina{agenda_page_position}: Agenda",
+            "description": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
+            "data": {
+              "enabled": "Mostra agenda",
+              "position": "Posizione",
+              "calendars": "Calendari"
+            },
+            "data_description": {
+              "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
+              "calendars": "Seleziona fino a otto calendari.",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+            }
+          },
+          "leave_home_page": {
+            "name": "Pagina{leave_home_page_position}: Esci di casa",
+            "description": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+            "data": {
+              "enabled": "Mostra Esci di casa",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "lights": "Luci",
+              "actions": "Azioni",
+              "show_alarm": "Mostra disponibilità Alarmo"
+            },
+            "data_description": {
+              "enabled": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+              "contacts": "Seleziona fino a 24 sensori porta/finestra.",
+              "lights": "Seleziona fino a 24 luci.",
+              "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
+              "show_alarm": "Usa l'allarme già configurato per questo display.",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+            }
+          },
           "energy_page": {
-            "name": "Pagina energia",
+            "name": "Pagina{energy_page_position}: Energia",
             "description": "Una pagina aggiuntiva facoltativa. Mostra la configurazione Energia di Home Assistant (Impostazioni > Plance > Energia): contatori di rete, solare e batteria, i loro sensori di potenza, nomi e prezzi. Un tipo di sorgente non configurato lì viene omesso; senza alcuna sorgente la pagina non viene mostrata.",
             "data": {
               "enabled": "Mostra la pagina energia",
@@ -525,16 +593,16 @@
               "view_now": "Adesso",
               "view_today": "Oggi",
               "view_power": "Storico della potenza",
-              "view_distribution": "Distribuzione della potenza attuale",
+              "view_consumers": "Dispositivi",
               "view_balance": "Bilancio"
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
-              "view_distribution": "Diagramma Sankey delle misure attuali in W/kW; senza totali giornalieri o richieste dello storico",
+              "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
@@ -578,6 +646,9 @@
     }
   },
   "options": {
+    "abort": {
+      "unique_id_mismatch": "Questo dispositivo è diverso da quello configurato. Riconfigura la sua voce o aggiungi un nuovo dispositivo."
+    },
     "step": {
       "connection": {
         "title": "Connessione al C300X",
@@ -729,10 +800,10 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale il numero della sezione.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nLa seconda sezione è la **pagina energia** facoltativa, una nona pagina che mostra la configurazione Energia di Home Assistant; con essa le posizioni vanno da 1 a 9.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina è una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.",
         "sections": {
           "page_1": {
-            "name": "Pagina 1: Pagina di stato",
+            "name": "Pagina{page_1_position}: Pagina di stato",
             "description": "La pagina di stato Home Assistant mostra gli indicatori HA, allarme e ora. Attivala o disattivala indipendentemente dalla scheda meteo facoltativa e dalle entità. Il titolo sul display è Home Assistant.",
             "data": {
               "enabled": "Mostra la pagina di stato",
@@ -748,7 +819,7 @@
             }
           },
           "page_2": {
-            "name": "Pagina 2{page_2_name}",
+            "name": "Pagina{page_2_position}{page_2_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -761,7 +832,7 @@
             }
           },
           "page_3": {
-            "name": "Pagina 3{page_3_name}",
+            "name": "Pagina{page_3_position}{page_3_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -774,7 +845,7 @@
             }
           },
           "page_4": {
-            "name": "Pagina 4{page_4_name}",
+            "name": "Pagina{page_4_position}{page_4_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -787,7 +858,7 @@
             }
           },
           "page_5": {
-            "name": "Pagina 5{page_5_name}",
+            "name": "Pagina{page_5_position}{page_5_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -800,7 +871,7 @@
             }
           },
           "page_6": {
-            "name": "Pagina 6{page_6_name}",
+            "name": "Pagina{page_6_position}{page_6_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -813,7 +884,7 @@
             }
           },
           "page_7": {
-            "name": "Pagina 7{page_7_name}",
+            "name": "Pagina{page_7_position}{page_7_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -826,7 +897,7 @@
             }
           },
           "page_8": {
-            "name": "Pagina 8{page_8_name}",
+            "name": "Pagina{page_8_position}{page_8_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
@@ -838,8 +909,42 @@
               "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
+          "agenda_page": {
+            "name": "Pagina{agenda_page_position}: Agenda",
+            "description": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
+            "data": {
+              "enabled": "Mostra agenda",
+              "position": "Posizione",
+              "calendars": "Calendari"
+            },
+            "data_description": {
+              "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
+              "calendars": "Seleziona fino a otto calendari.",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+            }
+          },
+          "leave_home_page": {
+            "name": "Pagina{leave_home_page_position}: Esci di casa",
+            "description": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+            "data": {
+              "enabled": "Mostra Esci di casa",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "lights": "Luci",
+              "actions": "Azioni",
+              "show_alarm": "Mostra disponibilità Alarmo"
+            },
+            "data_description": {
+              "enabled": "Stato delle entità selezionate esplicitamente. Le azioni richiedono conferma; l'allarme apre i controlli esistenti protetti da PIN.",
+              "contacts": "Seleziona fino a 24 sensori porta/finestra.",
+              "lights": "Seleziona fino a 24 luci.",
+              "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
+              "show_alarm": "Usa l'allarme già configurato per questo display.",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+            }
+          },
           "energy_page": {
-            "name": "Pagina energia",
+            "name": "Pagina{energy_page_position}: Energia",
             "description": "Una pagina aggiuntiva facoltativa. Mostra la configurazione Energia di Home Assistant (Impostazioni > Plance > Energia): contatori di rete, solare e batteria, i loro sensori di potenza, nomi e prezzi. Un tipo di sorgente non configurato lì viene omesso; senza alcuna sorgente la pagina non viene mostrata.",
             "data": {
               "enabled": "Mostra la pagina energia",
@@ -847,16 +952,16 @@
               "view_now": "Adesso",
               "view_today": "Oggi",
               "view_power": "Storico della potenza",
-              "view_distribution": "Distribuzione della potenza attuale",
+              "view_consumers": "Dispositivi",
               "view_balance": "Bilancio"
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; 2 per impostazione predefinita, prima di un'altra pagina con la stessa posizione",
+              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
-              "view_distribution": "Diagramma Sankey delle misure attuali in W/kW; senza totali giornalieri o richieste dello storico",
+              "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
             }
           }
@@ -884,7 +989,8 @@
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
       "required": "Questo campo è obbligatorio.",
-      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480."
+      "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480.",
+      "cannot_connect": "Impossibile verificare l'identità del dispositivo. Controlla indirizzo e connessione, poi riprova."
     }
   },
   "entity": {

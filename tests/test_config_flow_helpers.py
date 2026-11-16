@@ -116,6 +116,15 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
 from homeassistant.const import CONF_NAME  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def authenticated_identity_boundary(monkeypatch):
+    """Layout tests use a matching device; identity binding has dedicated tests."""
+    async def matching(*_args):
+        return None
+
+    monkeypatch.setattr(config_flow_module, "_async_entry_identity_error", matching)
+
+
 def test_probe_agent_requires_event_subscription_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1674,6 +1683,13 @@ def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
         probe_agent,
     )
 
+    async def read_saved_endpoint(_hass, connection, *, api_token):
+        assert connection[CONF_AGENT_HOST] == "192.0.2.60"
+        assert api_token == "known-token"
+        return {"device_id": "c300x-aabbcc001122"}
+
+    monkeypatch.setattr(config_flow_module, "_async_agent_setup_data", read_saved_endpoint)
+
     result = asyncio.run(
         flow.async_step_zeroconf(
             SimpleNamespace(
@@ -2410,8 +2426,11 @@ def _options_flow(entry):
     """Return an options flow that saves into the given entry."""
 
     def update_entry(target, *, options):
+        changed = target.options != options
         target.options = dict(options)
+        return changed
 
+    entry.update_listeners = [object()]
     flow = BticinoC300XOptionsFlow(entry)
     flow.hass = SimpleNamespace(  # type: ignore[assignment]
         config_entries=SimpleNamespace(async_update_entry=update_entry),
@@ -2736,6 +2755,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
 ) -> None:
     calls: list[str] = []
     entry = SimpleNamespace(
+        update_listeners=[object()],
         unique_id="c300x-stable-id",
         data={
             CONF_AGENT_HOST: "old-agent.local",
@@ -2778,7 +2798,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     def abort_if_unique_id_mismatch() -> None:
         calls.append("mismatch_check")
 
-    def update_and_abort(target: object, *, data_updates: dict[str, object]) -> dict[str, object]:
+    def update_and_abort(target: object, *, data_updates: dict[str, object], options: dict[str, object]) -> dict[str, object]:
         calls.append("update")
         assert target is entry
         return {"type": "abort", "data_updates": data_updates}
@@ -2950,6 +2970,7 @@ def test_reconfigure_finish_rotates_secrets_and_clears_stale_options(
     option_updates: list[dict[str, object]] = []
     calls: list[str] = []
     entry = SimpleNamespace(
+        data={}, update_listeners=[object()],
         unique_id="c300x-stable-id",
         options={
             CONF_AGENT_HOST: "old-option.local",
@@ -2982,8 +3003,9 @@ def test_reconfigure_finish_rotates_secrets_and_clears_stale_options(
     def abort_if_unique_id_mismatch() -> None:
         calls.append("mismatch_check")
 
-    def update_and_abort(target: object, *, data_updates: dict[str, object]) -> dict[str, object]:
+    def update_and_abort(target: object, *, data_updates: dict[str, object], options: dict[str, object]) -> dict[str, object]:
         assert target is entry
+        option_updates.append(options)
         return {"type": "abort", "data_updates": data_updates}
 
     secret_values = iter(["shared-secret", "event-secret"])

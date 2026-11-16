@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 from typing import Any, cast
@@ -17,6 +16,9 @@ from .alarm_state import (
 )
 from .capabilities import entry_device_ui_enabled_or_patch_active
 from .const import (
+    CONF_AGENDA_PAGE,
+    CONF_ENERGY_PAGE,
+    CONF_LEAVE_HOME_PAGE,
     DASHBOARD_ACTION_DOMAIN,
     DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
     DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
@@ -27,6 +29,7 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
 )
+from .dashboard_agenda import async_agenda_dashboard_page
 from .dashboard_config import (
     _DASHBOARD_ACTION_PAGE,
     _DASHBOARD_BUTTON_ENTITY_DOMAINS,
@@ -72,6 +75,17 @@ from .dashboard_labels import (
     _DASHBOARD_STATE_LABELS_EN,
     decimal_text,
 )
+from .dashboard_leave_home import leave_home_dashboard_page
+from .dashboard_optional_config import (
+    configured_agenda_page,
+    configured_leave_home_page,
+)
+from .dashboard_page_order import page_layout_slots
+from .dashboard_response import (
+    DASHBOARD_RESPONSE_MAX_BYTES,
+    dashboard_response_size,
+    display_json_size,
+)
 from .dashboard_select_texts import apply_select_texts
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
@@ -79,10 +93,6 @@ from .entry_types import BticinoC300XConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
-# The agent reads the display's answer, headers included, into one 32 KiB
-# buffer, and an answer that does not fit shows every page as Home Assistant
-# unavailable. The rest of the buffer is left for the headers.
-DASHBOARD_RESPONSE_MAX_BYTES = 30 * 1024
 _DASHBOARD_CHOICE_TRIM_LIMITS = (25, 12, 6, 3, 1)
 _OVERSIZED_DASHBOARDS: set[str] = set()
 
@@ -155,6 +165,8 @@ async def async_status(
             or visible_entities
             or status_enabled
             or bool(energy_settings["enabled"] and energy_settings["views"])
+            or configured_agenda_page(entry)["enabled"]
+            or configured_leave_home_page(entry)["enabled"]
             or bool(notification_payload(entry))
         ),
         "preventReturnToHomepage": configured_dashboard_prevent_return(entry),
@@ -261,21 +273,28 @@ async def async_dashboard_payload(
     if not status_enabled:
         pages.pop(_DASHBOARD_DEFAULT_PAGE, None)
     configured = configured_dashboard_pages(entry)
-    ordered = _ordered_dashboard_pages(pages, configured)
-    energy = await async_energy_dashboard_page(hass, entry, language)
-    if energy is not None:
-        # Its position counts as in the pages dialog. That also numbers a
-        # page the display leaves out for lack of content, and a configured
-        # page without any tile, which is not among the pages at all.
-        position = configured_energy_page(entry)["position"]
-        absent = sum(
-            1 for page in configured[:position - 1] if page["name"] not in pages
-        )
-        ordered.insert(max(0, min(position - 1 - absent, len(ordered))), energy)
+    special_pages = {
+        CONF_ENERGY_PAGE: await async_energy_dashboard_page(hass, entry, language),
+        CONF_AGENDA_PAGE: await async_agenda_dashboard_page(hass, entry, language),
+        CONF_LEAVE_HOME_PAGE: leave_home_dashboard_page(hass, entry, language),
+    }
+    regular_names = [page["name"] for page in configured]
+    regular_names.extend(name for name in pages if name not in regular_names)
+    ordered = []
+    for kind, name in page_layout_slots(regular_names, {
+        CONF_ENERGY_PAGE: configured_energy_page(entry),
+        CONF_AGENDA_PAGE: configured_agenda_page(entry),
+        CONF_LEAVE_HOME_PAGE: configured_leave_home_page(entry),
+    }):
+        rendered_page = pages.get(name) if kind == "regular" else special_pages.get(name)
+        if rendered_page is not None:
+            ordered.append(rendered_page)
     shown = [
         page for page in ordered
         if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
     ]
+    if status_enabled and len(shown) > 1:
+        main_page["items"].append({"_kind": "navigation", "_order": 1})
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
         shown = [main_page if status_enabled else {
@@ -292,22 +311,6 @@ async def async_dashboard_payload(
     })
 
 
-def _ordered_dashboard_pages(
-    pages: dict[str, dict[str, Any]], configured: tuple[dict[str, Any], ...]
-) -> list[dict[str, Any]]:
-    """Return the pages in their configured order.
-
-    Configured pages come first, by position. A page that is not configured,
-    such as one only an action names, follows in the order it first appeared.
-    Without configured pages every page keeps that order, the status page
-    first.
-    """
-
-    ordered = [pages[page["name"]] for page in configured if page["name"] in pages]
-    placed = {id(page) for page in ordered}
-    return ordered + [page for page in pages.values() if id(page) not in placed]
-
-
 def _fit_dashboard_response(
     entry: BticinoC300XConfigEntry, payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -318,7 +321,7 @@ def _fit_dashboard_response(
     all of which the executor still accepts.
     """
 
-    size = len(json.dumps(payload))
+    size = dashboard_response_size(payload)
     if size > DASHBOARD_RESPONSE_MAX_BYTES:
         lists = [
             holder
@@ -333,7 +336,7 @@ def _fit_dashboard_response(
         # answer fits, so a thermostat's modes and a select's few options
         # stay whole next to a player's favourites.
         def text_size(holder: dict[str, Any]) -> int:
-            return len(json.dumps(holder["options"])) + len(json.dumps(holder.get("labels", [])))
+            return display_json_size(holder["options"]) + display_json_size(holder.get("labels", []))
 
         lists.sort(key=text_size, reverse=True)
         for limit in _DASHBOARD_CHOICE_TRIM_LIMITS:
@@ -349,7 +352,7 @@ def _fit_dashboard_response(
                     break
             if size <= DASHBOARD_RESPONSE_MAX_BYTES:
                 break
-        size = len(json.dumps(payload))
+        size = dashboard_response_size(payload)
     if size <= DASHBOARD_RESPONSE_MAX_BYTES:
         _OVERSIZED_DASHBOARDS.discard(entry.entry_id)
         return payload
@@ -357,13 +360,13 @@ def _fit_dashboard_response(
         _OVERSIZED_DASHBOARDS.add(entry.entry_id)
         _LOGGER.warning(
             "The display dashboard of %s takes %d bytes, more than the %d the "
-            "device can read, so the display shows Home Assistant as "
-            "unavailable; remove entities, actions or messages from it",
+            "device can read; returning dashboard_too_large instead of an "
+            "incomplete dashboard. Reduce configured display content",
             entry.title,
             size,
             DASHBOARD_RESPONSE_MAX_BYTES,
         )
-    return payload
+    raise ValueError("dashboard_too_large")
 
 
 def _dashboard_alarm_state(state: Any, language: str) -> str:
@@ -1025,8 +1028,9 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
         finalized["items"] = items
     if isinstance(page.get("weather"), dict):
         finalized["weather"] = page["weather"]
-    if isinstance(page.get("energy"), dict):
-        finalized["energy"] = page["energy"]
+    for key in ("energy", "agenda", "leave_home"):
+        if isinstance(page.get(key), dict):
+            finalized[key] = page[key]
     return finalized
 
 
@@ -1071,4 +1075,4 @@ def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
     other pages need weather, tiles or energy content.
     """
 
-    return any(bool(page.get(key)) for key in ("items", "weather", "energy"))
+    return any(bool(page.get(key)) for key in ("items", "weather", "energy", "agenda", "leave_home"))

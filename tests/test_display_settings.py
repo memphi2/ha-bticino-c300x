@@ -2,6 +2,7 @@
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -158,15 +159,29 @@ class _OptionsAreas:
 
     def __init__(self, entry):
         self._entry = entry
+        entry.entry_id = getattr(entry, "entry_id", "display-settings")
+        entry.update_listeners = getattr(entry, "update_listeners", [])
+        self.listener_tasks = []
+
+        def update_entry(entry, *, options):
+            if entry.options == options:
+                return False
+            entry.options = dict(options)
+            for listener in entry.update_listeners:
+                self.listener_tasks.append(asyncio.create_task(listener(self.hass, entry)))
+            return True
+
+        self.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_update_entry=Mock(side_effect=update_entry),
+                async_schedule_reload=Mock(),
+                async_reload=AsyncMock(return_value=True),
+            ),
+        )
 
     def _flow(self):
-        def update_entry(entry, *, options):
-            entry.options = dict(options)
-
         flow = BticinoC300XOptionsFlow(self._entry)
-        flow.hass = SimpleNamespace(
-            config_entries=SimpleNamespace(async_update_entry=update_entry),
-        )
+        flow.hass = self.hass
         flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
         flow.add_suggested_values_to_schema = lambda schema, _values: schema
         return flow
@@ -192,6 +207,68 @@ class _OptionsAreas:
 
     async def entity_display(self, user_input=None):
         return await self._area("dashboard_entity_display", user_input)
+
+
+def test_options_entry_fake_notifies_only_for_changed_options():
+    listener = AsyncMock()
+    entry = SimpleNamespace(options={}, update_listeners=[listener])
+    areas = _OptionsAreas(entry)
+    update = areas.hass.config_entries.async_update_entry
+
+    async def exercise():
+        assert update(entry, options={}) is False
+        assert not areas.listener_tasks
+        options = {"dashboard_status_page_enabled": False}
+        assert update(entry, options=options) is True
+        assert entry.options == options and entry.options is not options
+        await asyncio.gather(*areas.listener_tasks)
+        listener.assert_awaited_once_with(areas.hass, entry)
+        assert update(entry, options=dict(options)) is False
+        assert len(areas.listener_tasks) == 1
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("with_listener", [False, True])
+@pytest.mark.parametrize("changed", [False, True])
+def test_display_options_save_reloads_only_changed_entries(with_listener, changed):
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    entry = SimpleNamespace(
+        data={"device_ui_enabled": True, "alarm_entity_id": "alarm_control_panel.home"},
+        options={}, runtime_data=None,
+    )
+    areas = _OptionsAreas(entry)
+    listener = AsyncMock(side_effect=_entry_update_listener(entry))
+    if with_listener:
+        entry.update_listeners.append(listener)
+    flow = areas._flow()
+
+    async def exercise():
+        form = await flow.async_step_dashboard_alarm()
+        changes = {"alarm_entity_id": "alarm_control_panel.other"} if changed else {}
+        result = await flow.async_step_dashboard_alarm(
+            post_like_home_assistant(form["data_schema"], changes)
+        )
+        assert result["type"] == "menu"
+        await asyncio.gather(*areas.listener_tasks)
+
+    asyncio.run(exercise())
+    entries = areas.hass.config_entries
+    assert entries.async_update_entry.call_count == int(changed)
+    if changed and with_listener:
+        listener.assert_awaited_once_with(areas.hass, entry)
+        entries.async_reload.assert_awaited_once_with(entry.entry_id)
+    else:
+        listener.assert_not_called()
+        entries.async_reload.assert_not_called()
+    if changed and not with_listener:
+        entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
+    else:
+        entries.async_schedule_reload.assert_not_called()
+    assert {**entry.data, **entry.options}["alarm_entity_id"] == (
+        "alarm_control_panel.other" if changed else "alarm_control_panel.home"
+    )
 
 
 def _display_flow(monkeypatch, flow_kind, entry):
@@ -551,13 +628,15 @@ def test_the_alarm_area_sets_alarmo_and_its_quick_action(monkeypatch, saved, cha
     saved = {**entry.data, **entry.options}
     for key, value in stored.items():
         assert saved[key] == value
-    # What the area does not show stays; the display settings of an entity
-    # that is no longer shown go.
+    # Only edited fields replace current settings; changing the alarm alone
+    # must not normalize away unrelated saved tile overrides.
     assert saved["dashboard_entities"] == ["light.room"]
     overrides = saved["dashboard_entity_display_overrides"]
     assert overrides["light.room"] == {"page": "Room"}
-    if not changes:
-        assert entry.options == {}
+    if "alarm_page_entity_id" not in changes:
+        assert overrides == entry.data["dashboard_entity_display_overrides"]
+        if not changes:
+            assert entry.options == {}
         return
     assert "switch.old" not in overrides
     assert ("switch.porch" in overrides) == (stored.get("alarm_page_entity_id") == "switch.porch")
@@ -725,6 +804,7 @@ def test_pages_and_positions_are_applied_without_changing_capabilities():
         "button.porch": SimpleNamespace(state="unknown", attributes={}),
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -755,7 +835,7 @@ def test_pages_and_positions_are_applied_without_changing_capabilities():
     status = asyncio.run(async_status(hass, entry))
     assert status["alarm_page_entity"]["name"] == "Outside light"
     assert all(
-        item["entity_id"] != "button.porch"
+        item.get("entity_id") != "button.porch"
         for page in pages.values()
         for item in page.get("items", [])
     )
@@ -830,6 +910,7 @@ def test_tile_sizes_reach_the_display_only_when_configured():
         "sensor.temp": SimpleNamespace(state="21.5", attributes={}),
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -850,6 +931,7 @@ def test_tile_sizes_reach_the_display_only_when_configured():
         item["entity_id"]: item
         for page in payload["data"]["pages"]
         for item in page.get("items", [])
+        if "entity_id" in item
     }
     assert (items["cover.shade"]["tile_width"], items["cover.shade"]["tile_height"]) == ("full", "full")
     assert items["sensor.temp"]["tile_height"] == "half"
@@ -882,6 +964,7 @@ def _weather_hass():
         "light.two": SimpleNamespace(state="off", attributes={"supported_color_modes": ["onoff"]}),
     }
     return SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get),
         config=SimpleNamespace(language="en"),
         services=SimpleNamespace(has_service=lambda *_: False),
@@ -899,7 +982,7 @@ def test_weather_card_stays_on_the_status_page_until_placed():
     pages = {page["title"]: page for page in payload["data"]["pages"]}
     assert list(pages) == ["C300X", ""]
     assert "weather" in pages["C300X"]
-    assert _kinds(pages["C300X"]) == ["weather"]
+    assert _kinds(pages["C300X"]) == ["weather", "navigation"]
     assert _kinds(pages[""]) == ["light.one", "light.two"]
 
 
@@ -949,6 +1032,7 @@ def test_pages_only_actions_use_follow_the_configured_pages():
         "switch.gate": SimpleNamespace(state="off", attributes={}),
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get),
         config=SimpleNamespace(language="en"),
         services=SimpleNamespace(has_service=lambda *_: True),
@@ -1083,6 +1167,7 @@ def test_media_player_item_reports_power_and_what_is_playing(
         )
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -1092,6 +1177,7 @@ def test_media_player_item_reports_power_and_what_is_playing(
     payload = asyncio.run(async_dashboard_payload(hass, entry))
     item = next(
         item for page in payload["data"]["pages"] for item in page.get("items", [])
+        if item.get("entity_id") == "media_player.kitchen"
     )
     assert item["kind"] == "entity"
     assert item["state"] is is_on
@@ -1114,6 +1200,7 @@ def test_media_player_title_respects_another_secondary_line(secondary, line):
         )
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -1125,7 +1212,8 @@ def test_media_player_title_respects_another_secondary_line(secondary, line):
         },
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "media_player.kitchen")
     assert item["state_label"] == line
     assert item["details"]["value"] == "Evening news"
 
@@ -1133,6 +1221,7 @@ def test_media_player_title_respects_another_secondary_line(secondary, line):
 def test_unavailable_media_player_is_offline_without_controls():
     states = {"media_player.kitchen": SimpleNamespace(state="unavailable", attributes={})}
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -1140,7 +1229,8 @@ def test_unavailable_media_player_is_offline_without_controls():
         options={"device_ui_enabled": True, "dashboard_entities": ["media_player.kitchen"]},
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "media_player.kitchen")
     assert item["available"] is False
     assert item["state"] is False
     assert item["controls"] == []
@@ -1172,13 +1262,16 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     assert [(field["name"], field["type"]) for field in fields] == [
         ("page_1", "expandable"),
         ("energy_page", "expandable"),
-        *((f"page_{slot}", "expandable") for slot in range(2, 9)),
+        ("page_2", "expandable"),
+        ("agenda_page", "expandable"),
+        ("leave_home_page", "expandable"),
+        *((f"page_{slot}", "expandable") for slot in range(3, 9)),
     ]
     # Used pages are open, and so is the first free one to add a page; the
     # energy page is closed while it is switched off.
-    assert [field["expanded"] for field in fields] == [True, False, True, True] + [False] * 5
+    assert [field["expanded"] for field in fields] == [True, False, True, False, False, True] + [False] * 5
     assert [item["name"] for item in fields[1]["schema"]] == [
-        "enabled", "position", "view_now", "view_today", "view_power", "view_distribution", "view_balance",
+        "enabled", "position", "view_now", "view_today", "view_power", "view_consumers", "view_balance",
     ]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "enabled", "weather_entity_id", "position", "entities",
@@ -1220,6 +1313,12 @@ def test_section_titles_carry_the_page_names():
     }
 
     assert dashboard_pages_placeholders(settings) == {
+        "page_1_position": " 1",
+        "page_2_position": " 2",
+        **{f"page_{slot}_position": "" for slot in range(3, 9)},
+        "energy_page_position": " 2",
+        "agenda_page_position": " 10",
+        "leave_home_page_position": " 11",
         "page_2_name": ": Room",
         **{f"page_{slot}_name": "" for slot in range(3, 9)},
     }
@@ -1414,7 +1513,7 @@ def test_the_tiles_form_names_the_untitled_page_as_such():
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
-@pytest.mark.parametrize("views", [["now", "today"], ["power"], ["distribution"], ["today", "balance"], []])
+@pytest.mark.parametrize("views", [["now", "today"], ["power"], ["consumers"], ["today", "balance"], []])
 def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind, views):
     dashboard = {"device_ui_enabled": True}
     entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
@@ -1426,7 +1525,7 @@ def test_every_flow_stores_the_energy_page(monkeypatch, flow_kind, views):
         "page_2": {"name": "Room", "entities": ["light.one"]},
         "energy_page": {
             "enabled": True,
-            **{f"view_{view}": view in views for view in ("now", "today", "power", "distribution", "balance")},
+            **{f"view_{view}": view in views for view in ("now", "today", "power", "consumers", "balance")},
         },
     })
     form = asyncio.run(pages_step(posted))

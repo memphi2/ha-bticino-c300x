@@ -22,8 +22,8 @@ from homeassistant.core import HomeAssistant
 from .dashboard_config import configured_energy_page
 from .dashboard_energy import (
     ENERGY_DAY_VIEWS,
-    ENERGY_LIVE_VIEWS,
     ENERGY_VIEW_BALANCE,
+    ENERGY_VIEW_CONSUMERS,
     ENERGY_VIEW_POWER,
     ENERGY_VIEW_TODAY,
     EnergyDay,
@@ -101,7 +101,7 @@ async def async_configured_energy_sources(
         return EnergySources()
     energy_data = hass.data.get("energy")
     cost_sensors = energy_data.get("cost_sensors") if isinstance(energy_data, dict) else None
-    return energy_sources(manager.data, cost_sensors)
+    return energy_sources(manager.data, cost_sensors, include_consumers=ENERGY_VIEW_CONSUMERS in _active_energy_views(entry))
 
 
 async def async_energy_dashboard_page(
@@ -127,7 +127,10 @@ async def async_energy_dashboard_page(
     sources = await async_configured_energy_sources(hass, entry)
     if not still_active():
         return None
-    if not sources.any:
+    if not sources.any and (
+        ENERGY_VIEW_CONSUMERS not in views
+        or "energy" not in getattr(getattr(hass, "config", None), "components", ())
+    ):
         forget_energy_day(entry.entry_id)
         forget_power_history(entry.entry_id)
         return None
@@ -140,20 +143,20 @@ async def async_energy_dashboard_page(
         )
     day = (
         await _async_energy_day(hass, entry.entry_id, day_sources, still_active)
-        if any(view in ENERGY_DAY_VIEWS for view in views) else EnergyDay()
+        if any(view in ENERGY_DAY_VIEWS for view in views) and (sources.energy_stats or sources.cost_stats) else EnergyDay()
     )
     if not still_active():
         return None
-    power = {
-        entity_id: power_watts(hass.states.get(entity_id))
-        for entity_id in sources.power_entities
-    } if any(view in ENERGY_LIVE_VIEWS for view in views) else {}
+    states = {entity_id: hass.states.get(entity_id) for entity_id in sources.live_power_entities(views)}
+    aggregate_ids = sources.power_entities
+    power = {entity_id: power_watts(state) for entity_id, state in states.items() if entity_id in aggregate_ids}
     currency = str(getattr(hass.config, "currency", "") or "")
     page = energy_page(
         sources, day, power,
         language=language,
         views=views,
         currency=_CURRENCY_SYMBOLS.get(currency, currency),
+        consumer_states=states,
     )
     if page is not None and ENERGY_VIEW_POWER in views:
         history = await async_power_history(hass, entry, sources)

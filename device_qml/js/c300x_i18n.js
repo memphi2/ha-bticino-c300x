@@ -1,6 +1,10 @@
 .pragma library
 
 var DE = {
+    "alert_info": "Info",
+    "alert_warning": "Warnung",
+    "alert_error": "Fehler",
+    "alert_ack_retry": "Nicht bestaetigt - erneut versuchen",
     "ha_feedback_colors": "HA-Rueckmeldungen",
     "display_settings_error": "Einstellung nicht verfuegbar",
     "notifications": "Hinweise",
@@ -59,6 +63,10 @@ var DE = {
 }
 
 var EN = {
+    "alert_info": "Info",
+    "alert_warning": "Warning",
+    "alert_error": "Error",
+    "alert_ack_retry": "Not confirmed - retry",
     "ha_feedback_colors": "HA feedback",
     "display_settings_error": "Setting unavailable",
     "notifications": "Notifications",
@@ -117,6 +125,10 @@ var EN = {
 }
 
 var IT = {
+    "alert_info": "Informazione",
+    "alert_warning": "Avviso",
+    "alert_error": "Errore",
+    "alert_ack_retry": "Non confermato - riprova",
     "ha_feedback_colors": "Conferme HA",
     "display_settings_error": "Opzione non disponibile",
     "notifications": "Avvisi",
@@ -175,6 +187,10 @@ var IT = {
 }
 
 var FR = {
+    "alert_info": "Information",
+    "alert_warning": "Avertissement",
+    "alert_error": "Erreur",
+    "alert_ack_retry": "Non confirme - reessayer",
     "ha_feedback_colors": "Retours HA",
     "display_settings_error": "Reglage indisponible",
     "notifications": "Notifications",

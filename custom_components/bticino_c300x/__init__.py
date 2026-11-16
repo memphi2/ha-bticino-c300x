@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 from typing import TYPE_CHECKING, Any
 
@@ -119,11 +120,22 @@ def _pin_dashboard_dynamic_homepage(
 async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
     """Set up a C300X config entry."""
 
-    setup_ok = await C300XRuntimeManager(hass, entry).async_prepare()
+    manager = C300XRuntimeManager(hass, entry)
+    setup_ok = await manager.async_prepare()
     if setup_ok:
         from .memory_diagnostics import async_start_memory_diagnostics
+        from .notify import async_setup_notify, async_unload_notify
 
-        async_start_memory_diagnostics(hass, entry)
+        try:
+            async_start_memory_diagnostics(hass, entry)
+            await async_setup_notify(hass, entry)
+        except (Exception, asyncio.CancelledError):
+            try:
+                await manager.async_unload()
+            finally:
+                async_unload_notify(hass, entry)
+                cleanup_entry_runtime_resources(hass, entry)
+            raise
     return setup_ok
 
 
@@ -145,7 +157,12 @@ def _ensure_generated_setup_secret(
 async def async_unload_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
     """Unload a C300X config entry."""
 
-    return await C300XRuntimeManager(hass, entry).async_unload()
+    from .notify import async_unload_notify
+
+    unload_ok = await C300XRuntimeManager(hass, entry).async_unload()
+    if unload_ok:
+        async_unload_notify(hass, entry)
+    return unload_ok
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
@@ -156,7 +173,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
     open issue would outlive the removed entry in the issue registry.
     """
 
+    from .notify_names import async_remove_name
     from .repair_issues import async_clear_entry_repair_issues
 
     cleanup_entry_runtime_resources(hass, entry)
     async_clear_entry_repair_issues(hass, entry.entry_id)
+    await async_remove_name(hass, entry.entry_id)

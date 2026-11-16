@@ -20,6 +20,11 @@ Home Assistant may store:
 - Entity state history if the recorder is enabled.
 - Diagnostics generated through Home Assistant.
 - Optional dashboard action configuration supplied by the user.
+- A mapping from config-entry IDs to reserved Notify action names in
+  `.storage/bticino_c300x_notify_names`. It contains no notification text or
+  credentials and prevents names from changing device ownership on reload.
+  Permanently removing an entry removes its reservation. An empty reservation
+  file can remain after removing the final entry.
 - Visitor images in the configured HA media directory. The per-device **Save
   images** switch is enabled by default. A ring or active video session requests
   one image after 3 seconds; images expire after 14 days by default. Delay and

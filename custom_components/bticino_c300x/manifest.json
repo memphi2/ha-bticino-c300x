@@ -10,7 +10,9 @@
   "categories": [
     "security_safety.doorbells_intercoms"
   ],
-  "codeowners": [],
+  "codeowners": [
+    "@memphi2"
+  ],
   "config_flow": true,
   "dependencies": [
     "frontend",
@@ -24,7 +26,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/memphi2/ha-bticino-c300x/issues",
   "requirements": [],
-  "version": "2.4.1",
+  "version": "2.5.0",
   "zeroconf": [
     "_bticino-c300x-agent._tcp.local."
   ]

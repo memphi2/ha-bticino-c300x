@@ -128,7 +128,11 @@ def test_every_display_file_keeps_exactly_its_code_lines(relative: str) -> None:
     assert len(stripped) < len(source)
     # Device files are plain ASCII; the strip must not change that.
     assert stripped.isascii()
-    if relative.endswith(".js"):
+    if relative == "js/c300x_ringer.js":
+        # The request must belong to one QML instance, not a shared JS library.
+        assert ".pragma library" not in stripped
+        assert stripped.startswith("var pendingRequest = null\n")
+    elif relative.endswith(".js"):
         assert stripped.startswith(".pragma library\n")
 
 

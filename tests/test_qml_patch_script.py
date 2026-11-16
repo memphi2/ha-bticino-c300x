@@ -20,6 +20,7 @@ ORIGINAL_MAIN_APP = "\n".join(
         "import QtQuick 1.1",
         "Item {",
         "    // original main",
+        "    EventManager { id: eventManager }",
         "            homePage,",
         "            memoPage,",
         "            settingsPage,",
@@ -192,6 +193,15 @@ ORIGINAL_EVENT_MANAGER = "\n".join(
         "    Connections {",
         "        id: vctConnection",
         "        target: vctModel.binder.getObject(0)",
+        "        onIncomingCall: {",
+        "            beginVideoCall()",
+        "        }",
+        "        onCallTypeChanged: {",
+        "            updateVideoCall()",
+        "        }",
+        "        onCallAnswered: {",
+        "            answerVideoCall()",
+        "        }",
         "        onCallEnded: {",
         "            privateProps.switchingState = 0",
         "            global.audioState.disableState(AudioState.ScsVideoCall)",
@@ -202,6 +212,15 @@ ORIGINAL_EVENT_MANAGER = "\n".join(
         "    Connections {",
         "        id: intercomConnection",
         "        target: intercomModel.binder.getObject(0)",
+        "        onIncomingCall: {",
+        "            beginIntercom()",
+        "        }",
+        "        onCallAnswered: {",
+        "            answerIntercom()",
+        "        }",
+        "        onCallStarted: {",
+        "            startIntercom()",
+        "        }",
         "        onCallEnded: {",
         "            if (intercomModel.isIntercomCall) {",
         "                global.audioState.disableState(AudioState.ScsIntercomCall)",
@@ -213,6 +232,23 @@ ORIGINAL_EVENT_MANAGER = "\n".join(
         "            privateProps.callEnded()",
         "        }",
         "    }",
+        "    Connections {",
+        "        onRingtoneStarted: {",
+        "            startRinging()",
+        "        }",
+        "        onRingtoneFinished: {",
+        "            finishRinging()",
+        "        }",
+        "        onScreenTurnedOn: {",
+        "            screenOn()",
+        "        }",
+        "        onPressed: {",
+        "            pressKey()",
+        "        }",
+        "        onReleased: {",
+        "            releaseKey()",
+        "        }",
+        "    }",
         "}",
         "",
     ]
@@ -221,8 +257,19 @@ SOURCE_INSTALLED_FILES = (
     "Alarm.qml",
     "HomeAssistant.qml",
     "C300XEnergy.qml",
-    "C300XEnergyDistribution.qml",
+    "C300XEnergyConsumers.qml",
+    "js/c300x_energy_consumers.js",
+    "C300XPageNavigation.qml",
+    "C300XAlerts.qml",
+    "js/c300x_alerts.js",
+    "C300XAgenda.qml",
+    "C300XLeaveHome.qml",
+    "C300XDetailControl.qml",
+    "C300XEnergyReadout.qml",
+    "C300XEnergySums.qml",
+    "js/c300x_energy.js",
     "C300XRingerControl.qml",
+    "js/c300x_ringer.js",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
     "js/c300x_memos.js",
@@ -260,17 +307,29 @@ Item {
 }
 """
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "8a1690531198b53c29c0c828272faca2f5be6af6e1cd55357e12c50305fb9699",
+    "MainApp.qml": "5db95b56810c7eda043c082c4e20ea2f306315ac4c2893fd8cd87b46e2acb279",
     "Components/Settings/GeneralsChoice.qml": "42ac9c6be930fe258a46cb847ec69ce0160ccc75e2d98049c4441e1208b41c87",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
-    "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
+    "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "bea481bb6384488d8cd369e21984fe046918378b2d45993b5d37bc2e0a6f7992",
-    "C300XEnergy.qml": "330622a775f746e607253b40cb4fc2a18029fa4db6cb22eedef8f7fd4b39c7a6",
-    "C300XEnergyDistribution.qml": "de645190befd8755de211eaac6d9104f0bc96df424820fcb191f53ff7f00f9fd",
-    "js/c300x_ha.js": "21585924604abd460d45e6e30c70285730f0335ade65afade561cd39a1243d7d",
-    "js/c300x_i18n.js": "e8a75ca586851478abcf7c9f915110022d335fcb02b50dbc2d308dfdc0527594",
+    "HomeAssistant.qml": "d719a16053d053501c6c94a2c1a1d7a0f6cd6bdfaa014875c2309e9798e94996",
+    "C300XEnergy.qml": "b66ebad088c787161c745f8b651b8b3671a0336077ff156ae1db2149cfa7b22b",
+    "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
+    "C300XAgenda.qml": "9bc5d2ff2d69250033323a4bc4696df85268ad761ed5b8446b56bf0325143711",
+    "C300XAlerts.qml": "d1bd1c10ebbe330ba76bb667a0a9b64f6ef6f76e190ec5033fcc7eb3ecad8837",
+    "C300XDetailControl.qml": "142c08d1a9b77b0f4fa6b55a4386be7dcc19f972ccab30ed6c037f60e0b85aeb",
+    "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
+    "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
+    "C300XLeaveHome.qml": "80cbba3535e7f3dee8dcb45a731ac9a7554c312e612ea5d096faffa735293f5d",
+    "C300XPageNavigation.qml": "7152e3a1ec13559a27c76fb4f8f0561188b91cd59d1cd7bf2ce4718164b0851c",
+    "C300XRingerControl.qml": "7e30781b7a43dcff6ab090d6dcc87c479b2284f073a98c314827ce23774310d9",
+    "js/c300x_alerts.js": "a06a136e24ba269ee49110d7586c5fb97deda137371e2f8a52a93696ec3ff3d1",
+    "js/c300x_energy.js": "d5f632b155df83a0738b9c76be528b9827d59f38386ba903b85142cf3ce21901",
+    "js/c300x_energy_consumers.js": "fb33ae30340a78c6b95efe04d5be19acf1df11e648895a96bff3a1f78742d3fc",
+    "js/c300x_ringer.js": "17c510ed56828affcd8eefc7a34068f2f34fe843b125f7c1167585252e5c3133",
+    "js/c300x_ha.js": "17a3499d6be78996ab312739f45eb3f089e97bf23d73d0e244cc63f9094a0865",
+    "js/c300x_i18n.js": "4e66685179ad1ba40cc93591426635f7dec03cc5fcccdcce166b94e4944eb883",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }
 
@@ -313,12 +372,13 @@ def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
     assert "c300xNotifyMediaClosed()" in (gui_dir / "EventManager.qml").read_text()
     assert not (gui_dir / "Alarm.qml").exists()
     assert not (gui_dir / "HomeAssistant.qml").exists()
-    assert not (gui_dir / "js").exists()
+    assert {path.name for path in (gui_dir / "js").iterdir()} == {"c300x_ringer.js"}
 
     core_restored_status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-restore")
     assert core_restored_status["state"] == "original"
     assert core_restored_status["core_state"] == "original"
-    assert core_restored_status["changed_files"] == 2
+    assert core_restored_status["changed_files"] == 3
+    assert not (gui_dir / "js").exists()
     assert not (gui_dir / "C300XRingerControl.qml").exists()
     assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
 
@@ -405,10 +465,11 @@ def test_qml_core_apply_installs_media_and_ringer_hooks(tmp_path: Path) -> None:
     assert status["patched"] is False
     assert status["core_state"] == "patched"
     assert status["core_patched"] is True
-    assert status["changed_files"] == 2
+    assert status["changed_files"] == 3
     assert (gui_dir / "C300XRingerControl.qml").read_bytes() == (
         SOURCE_DIR / "C300XRingerControl.qml"
     ).read_bytes()
+    assert (gui_dir / "js/c300x_ringer.js").read_bytes() == (SOURCE_DIR / "js/c300x_ringer.js").read_bytes()
     assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
@@ -456,7 +517,7 @@ def test_qml_core_upgrade_corrects_legacy_media_port(tmp_path: Path) -> None:
     assert event_manager.read_text() == ORIGINAL_EVENT_MANAGER
 
 
-@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml"])
 def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -470,7 +531,7 @@ def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path, fil
     assert not (gui_dir / filename).exists()
 
 
-@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml"])
 def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -485,7 +546,7 @@ def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: P
     assert (gui_dir / filename).exists()
 
 
-@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml"])
 def test_a_leftover_energy_page_file_counts_as_a_partial_patch(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -564,10 +625,27 @@ def test_qml_restore_all_handles_core_only_patch(tmp_path: Path) -> None:
 
     assert status["state"] == "original"
     assert status["core_state"] == "original"
-    assert status["changed_files"] == 2
+    assert status["changed_files"] == 3
     assert not (gui_dir / "C300XRingerControl.qml").exists()
+    assert not (gui_dir / "js").exists()
     assert not (backup_dir / "MainApp.qml").exists()
     assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
+
+
+def test_missing_ringer_helper_marks_core_partial_and_reapply_repairs_it(tmp_path: Path) -> None:
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    backup = tmp_path / "backups"
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "core-apply")
+    helper = gui / "js/c300x_ringer.js"
+    helper.unlink()
+    assert _run_qml_patch(tmp_path, gui, backup, "status")["core_state"] == "partial"
+    repaired = _run_qml_patch(tmp_path, gui, backup, "core-apply")
+    assert repaired["core_state"] == "patched"
+    assert repaired["changed_files"] == 1
+    assert helper.read_bytes() == (SOURCE_DIR / "js/c300x_ringer.js").read_bytes()
+    assert (backup / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
 
 
 def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
@@ -579,10 +657,41 @@ def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
     status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
 
     assert status["state"] == "patched"
+    assert set(PATCH_OUTPUT_SHA256) == set(SOURCE_INSTALLED_FILES) | {
+        "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
+        "Components/Settings/GeneralsChoice.qml",
+    }
     assert {
         relative_path: _sha256(gui_dir / relative_path)
         for relative_path in PATCH_OUTPUT_SHA256
     } == PATCH_OUTPUT_SHA256
+
+
+@pytest.mark.parametrize("hook", ["onIncomingCall", "onRingtoneStarted", "onPressed"])
+def test_unknown_alert_hooks_leave_active_gui_unchanged(tmp_path: Path, hook: str) -> None:
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    _write_original_gui(gui)
+    events = gui / "EventManager.qml"
+    events.write_text(events.read_text().replace(hook + ": {", hook + ":{", 1))
+    before = {file.relative_to(gui): file.read_bytes() for file in gui.rglob("*") if file.is_file()}
+    result = _run_qml_patch_raw(tmp_path, gui, tmp_path / "backups", "apply")
+    assert result.returncode != 0
+    assert "Unsupported EventManager alert takeover hooks" in result.stderr
+    assert {file.relative_to(gui): file.read_bytes() for file in gui.rglob("*") if file.is_file()} == before
+
+
+def test_upgrade_removes_retired_distribution_from_active_gui(tmp_path: Path) -> None:
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    _write_original_gui(gui)
+    retired = gui / "C300XEnergyDistribution.qml"
+    retired.write_text("Item {}\n")
+    backup = tmp_path / "backups"
+    assert _run_qml_patch(tmp_path, gui, backup, "apply")["state"] == "patched"
+    assert not retired.exists()
+    assert (gui / "C300XEnergyConsumers.qml").is_file()
+    assert _run_qml_patch(tmp_path, gui, backup, "apply")["changed_files"] == 0
 
 
 def test_shared_qml_scripts_do_not_create_qml_objects() -> None:
@@ -782,9 +891,10 @@ def test_home_assistant_tile_size_is_configurable_per_entity() -> None:
     height = delegate.split("height: ")[1].split("\n")[0]
     source = delegate.split("sourceComponent: ")[1].split("\n")[0]
     assert width.startswith(
-        'isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth)'
+        'isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth)'
     )
-    assert height.startswith("isSensor || hasControls ? (tall ? 94 : 64)")
+    assert 'isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10' in height
+    assert 'isSensor || hasControls ? (tall ? 94 : 64)' in height
     # Plain switch, button and entity tiles keep 58/64 px unless configured.
     assert height.endswith('(tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))')
     assert "mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview)" in source
@@ -975,14 +1085,17 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
         encoding="utf-8"
     )
+    home_assistant_qml += (ROOT / "device_qml" / "C300XDetailControl.qml").read_text(
+        encoding="utf-8"
+    )
 
     assert home_assistant_qml.count('source: "images/settings/list_btn.svg"') == 0
-    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 6
+    assert home_assistant_qml.count("images/settings/list_btn_p.svg") >= 6
     assert (
         home_assistant_qml.count(
             '? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"'
         )
-        == 3
+        >= 3
     )
     for mouse_id in (
         "notificationActionMouse",
@@ -991,6 +1104,8 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
         "controlButtonMouse",
         "adjustMouse",
         "notificationBannerMouse",
+        "optionMouse",
+        "presetMouse",
     ):
         assert f"id: {mouse_id}" in home_assistant_qml
         assert f"{mouse_id}.pressed ?" in home_assistant_qml
@@ -1012,7 +1127,8 @@ def test_the_media_player_page_has_one_row_of_action_buttons() -> None:
         in home_assistant_qml
     )
     # A button or switch row centres its label on the row.
-    assert 'verticalAlignment: control.kind === "button" || control.kind === "boolean"' in home_assistant_qml
+    detail_control = (ROOT / "device_qml" / "C300XDetailControl.qml").read_text(encoding="utf-8")
+    assert 'verticalAlignment: control.kind === "button" || control.kind === "boolean"' in detail_control
     assert home_assistant_qml.isascii()
 
 
@@ -1163,6 +1279,7 @@ def test_qml_patch_apply_reports_reload_failure_without_patched_state(
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
+    before = {p.relative_to(gui_dir): p.read_bytes() for p in gui_dir.rglob("*") if p.is_file()}
 
     result = _run_qml_patch_raw(
         tmp_path,
@@ -1180,7 +1297,8 @@ def test_qml_patch_apply_reports_reload_failure_without_patched_state(
     status = json.loads(result.stdout)
     assert status["state"] == "reload_failed"
     assert status["patched"] is None
-    _assert_complete_gui_patch(gui_dir)
+    assert {p.relative_to(gui_dir): p.read_bytes() for p in gui_dir.rglob("*") if p.is_file()} == before
+    assert not list(gui_dir.glob(".c300x-qml-transaction.*"))
 
 
 def test_qml_patch_starts_the_gui_outside_its_own_process_group(tmp_path: Path) -> None:
@@ -1212,7 +1330,7 @@ def test_qml_patch_starts_the_gui_outside_its_own_process_group(tmp_path: Path) 
     assert session == pid
 
 
-@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyDistribution.qml"])
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml"])
 def test_qml_patch_names_a_missing_display_file_and_leaves_no_staging(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     gui_dir.mkdir()

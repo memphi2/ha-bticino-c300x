@@ -73,16 +73,58 @@ def test_repository_security_and_privacy_docs_cover_required_topics() -> None:
     assert (ROOT / "NOTICE").exists()
 
 
-def test_manifest_does_not_publish_personal_owner_metadata() -> None:
+def test_manifest_identifies_public_maintainer_without_private_metadata() -> None:
     manifest = json.loads(
         (ROOT / "custom_components/bticino_c300x/manifest.json").read_text(
             encoding="utf-8"
         )
     )
 
-    assert manifest["codeowners"] == []
+    assert manifest["codeowners"] == ["@mem" + "phi2"]
     assert "bticino-c300x" in manifest["documentation"]
     assert "bticino-c300x" in manifest["issue_tracker"]
+
+
+def test_public_maintainer_handle_does_not_allow_private_owner_values(tmp_path, monkeypatch):
+    path = tmp_path / "README.md"
+    monkeypatch.setattr(check_repo, "ROOT", tmp_path)
+    handle = "@mem" + "phi2"
+    path.write_text(handle, encoding="utf-8")
+    assert check_repo.check_forbidden_text_patterns() == []
+    for value in (handle[1:], handle + "-private", "@" + handle):
+        path.write_text(value, encoding="utf-8")
+        assert check_repo.check_forbidden_text_patterns() == [
+            "possible secret/internal value (personal_owner) in README.md"
+        ]
+
+
+def test_config_entry_typing_checks_import_symbols_not_name_prefixes(tmp_path, monkeypatch):
+    component = tmp_path / "custom_components/bticino_c300x"
+    component.mkdir(parents=True)
+    (component / "entry_types.py").write_text(
+        "# type BticinoC300XConfigEntry = ConfigEntry[BticinoC300XRuntimeData]\n"
+        "# BticinoC300XConfigEntry = Any\n", encoding="utf-8"
+    )
+    module = component / "example.py"
+    monkeypatch.setattr(check_repo, "ROOT", tmp_path)
+    module.write_text(
+        "from homeassistant.config_entries import ConfigEntryState\n"
+        "state = config_entries.ConfigEntryState.LOADED\n"
+        "example_text = 'config_entries.ConfigEntry'\n"
+        "def example(state: 'config_entries.ConfigEntryState'): pass\n", encoding="utf-8"
+    )
+    assert check_repo.check_config_entry_typing() == []
+    for source in (
+        "from homeassistant.config_entries import (ConfigEntryState, ConfigEntry as Entry)\n",
+        "entry = config_entries.ConfigEntry\n",
+        "def example(entry: 'config_entries.ConfigEntry'): pass\n",
+        "def example() -> 'config_entries.ConfigEntry': pass\n",
+        "entries: list['config_entries.ConfigEntry']\n",
+        "type Entry = 'config_entries.ConfigEntry'\n",
+        '''def example(entry: "list['config_entries.ConfigEntry']"): pass\n''',
+    ):
+        module.write_text(source, encoding="utf-8")
+        assert len(check_repo.check_config_entry_typing()) == 1
 
 
 def test_manifest_loads_required_webhook_dependency() -> None:

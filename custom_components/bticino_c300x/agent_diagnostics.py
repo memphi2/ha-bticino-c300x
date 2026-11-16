@@ -160,11 +160,20 @@ async def async_refresh_agent_diagnostics(
     """Refresh safe write diagnostics once and notify interested entities."""
 
     runtime_data = getattr(entry, "runtime_data", None)
-    if runtime_data is None or not diagnostics_supported(runtime_data.capabilities):
+    if (
+        runtime_data is None
+        or getattr(getattr(runtime_data, "resources", None), "closed", False)
+        or not diagnostics_supported(runtime_data.capabilities)
+    ):
         return None
     try:
         diagnostics = cast(Mapping[str, Any], await runtime_data.api.async_diagnostics())
     except C300XAgentApiError:
+        return None
+    if (
+        getattr(entry, "runtime_data", None) is not runtime_data
+        or getattr(getattr(runtime_data, "resources", None), "closed", False)
+    ):
         return None
     _store_agent_diagnostics(
         hass,

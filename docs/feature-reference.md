@@ -46,6 +46,17 @@ Maintenance controls (SSH, noAuth, mDNS discovery, firewall patches, GUI
 reload, reboot, agent update/remove) are device entities, not a settings area;
 they write to the device only when the entity, button or Repair is used.
 
+**Connection paths for the live picture** is available in setup and under
+**Video and audio** in options. Its default is **IPv4 and local IPv6 (ULA) -
+recommended** (`prefer_ipv4_ula`). The
+[ICE policy reference](media-troubleshooting.md#connection-paths-for-the-live-picture)
+explains all four choices, the address filters and preserved relay/mDNS paths.
+No address or token is entered in this selector.
+
+To uninstall, use the [HA removal guide](advanced-maintenance.md#remove-home-assistant-integration).
+Deleting an HA entry, uninstalling the downloaded package and removing the device
+agent have different effects on settings, media and backups.
+
 ## Main User Features
 
 | Feature | User surface | Notes |
@@ -301,6 +312,12 @@ after the last thing happened to it, so a tile returns to showing its plain
 reading. Errors remain at the affected control; an uncertain transport result is
 not automatically retried. During a connection outage the
 last snapshot stays visible, explicitly marked as stale, with actions disabled.
+Dashboard responses use compact UTF-8 within the device's fixed response budget.
+If the combined configured content still cannot fit, HA logs the size and
+returns `dashboard_too_large`; the display stays offline/stale rather than
+showing an incomplete set of checks or fabricated history. Reduce the selected
+display content before retrying. Check states, actions and history values are
+not silently dropped to fit.
 Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling
 only runs while the page is active. Display changes require the matching bundled
@@ -350,19 +367,23 @@ HA selectors; Alarmo is set under **Alarm (Alarmo)**;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
-The pages dialog has up to 8 pages, one section each. A section's title shows
-the page's name, for example **Page 2: Living room**. Alarmo is not one of
+The pages dialog has up to 8 regular pages plus independently enabled Energy,
+Agenda and Leave home pages, one section each. Sections follow the display order;
+their titles show the page's position and name, for example **Page 2: Living room**.
+Unused regular sections remain at the end. Alarmo is not one of
 the pages: its Alarm page opens from the home page button and has an area of
 its own in the settings menu.
 
 | Field | Meaning |
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
-| **Position** | Order of the pages, 1 is the first page (1 to 9 counting the energy page). Left empty, the section's number is used; pages with the same position keep the order of their sections. |
+| **Position** | Order of all pages, 1 to 11. Left empty, the regular section's number is used. Equal positions put Energy, Agenda, then Leave home before regular pages; regular pages keep their section order. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
-The first section is the status page: it carries the weather card at its top,
-set in its **Weather** field, then its entities, and its heading on the display
+The status-page section carries the weather card at its top,
+set in its **Weather** field, followed by direct buttons for the other visible
+pages and then its entities. The buttons also appear without a weather entity;
+they use the already loaded dashboard and do not request fresh data. The heading
 stays Home Assistant. **Show the status page** switches the entire page on or
 off, independently of its optional weather card and entities. When enabled
 (the default), it also appears with only its HA, alarm and time badges.
@@ -374,10 +395,50 @@ any capitalization) and each entity can be used once. Page names are limited to
 60 characters; a longer one is cut, and a position is rounded to a whole
 number. Pages that only configured actions use follow the configured pages.
 Sections of used pages are open, and so is the first free one.
+The optional pages can be placed among regular pages, not just after them.
+Their default positions are Energy 2, Agenda 10 and Leave home 11. Disabling an
+optional page preserves its position and selections for later use.
+
+### Agenda
+
+Enable **Agenda** in **Display pages** and select up to eight HA calendars.
+It shows up to five ongoing or upcoming events within the next seven days,
+including all-day events. Calendar titles and event summaries stay in HA and
+the display's memory, with no new files on the C300X.
+
+The default position is 10, configurable from 1 to 11. HA fetches events in the
+background and caches bounded results for five minutes, invalidating them on
+calendar changes. A translated loading message appears during the first read;
+a slow calendar does not hold up the dashboard or its controls. A calendar read
+failure is shown explicitly, not as an empty diary. Disabling the page or
+selecting no calendars stops its reads and clears its cache; unloading the
+entry cancels pending work. No separate device polling or device-file writes
+are added.
+
+The [calendar reminder blueprint](blueprints.md) is separate: it sends a
+notification before an event. Merely showing an event in Agenda does not trigger
+a reminder or an action.
+
+### Leave Home
+
+Enable **Leave home** in **Display pages**, then explicitly select the door/window
+contacts, lights and existing configured display actions to include (up to 24
+contacts, 24 lights and eight actions). It does not
+automatically inspect every entity in HA. Unavailable contacts remain unknown,
+not safely closed. Opening or refreshing this page never executes an action.
+
+Its position defaults to 11 and can be set from 1 to 11. Selected actions require
+a second tap on **Confirm** within eight seconds and can be cancelled. Leaving
+the page, changed page data, a busy command or a lost connection clears pending
+confirmation; offline controls cannot execute commands. The first tap never
+executes an action. Only the existing configured action allowlist is used. The
+optional Alarmo section opens the existing Alarm page with its usual readiness
+checks and PIN rules; it does not arm the alarm automatically. Disarmed panels
+show readiness where supported; armed or arming panels show their actual state.
 
 ### Energy Page
 
-The second section, directly below the status page, switches on an optional ninth page that
+The **Energy** section switches on an optional page that
 shows Home Assistant's own Energy setup (**Settings → Dashboards → Energy**).
 Nothing is configured twice: meters, their names, prices and power sensors come
 from there.
@@ -385,30 +446,40 @@ from there.
 | Field | Meaning |
 | --- | --- |
 | **Show the energy page** | Off by default. |
-| **Position** | 1 to 9, 2 by default. At the same position the energy page comes before the other page. |
-| **Show Now / Today / Power / Distribution / Balance** | Each subpage has its own switch. With more than one enabled, buttons at the bottom switch between them. Switching all five off hides the Energy page and stops its updates without deleting its settings. Existing selections are preserved; enable Distribution explicitly for an existing setup. |
+| **Position** | 1 to 11, 2 by default. At the same position Energy comes before Agenda, Leave home and regular pages. |
+| **Show Now / Today / Power / Consumers / Balance** | Each subpage has its own switch. With more than one enabled, buttons at the bottom switch between them. Switching all five off hides the Energy page and stops its updates without deleting its settings. |
 
 | View | Shows |
 | --- | --- |
 | **Now** | One box each for solar, grid, battery and home with today's energy. Current W/kW values appear beneath the flow arrows. Sources without a configured power sensor contribute 0 W; configured sensors are summed normally. A configured sensor that becomes unavailable remains unknown rather than 0 W. Meters may share one power sensor; its reading is counted once. |
 | **Today** | Hourly bars with a labelled energy axis and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Grid meters have distinct colored segments matching the table; further meters are grouped as **Other meters** in both places. Values and costs occupy separate columns. |
 | **Power** | Today's power curves for grid, solar, battery and home from the power sensors configured in HA's Energy dashboard. The chart uses 15-minute means of recorded power statistics, a common W/kW scale and a visible zero line. Sources without a configured power sensor contribute zero without suppressing other curves. Export and battery charging appear below zero. Missing statistics from configured sensors leave gaps; no future or otherwise unrecorded samples are invented. |
-| **Distribution** | Sankey diagram of current W/kW measurements, with import, generation and discharge on the left and consumption, export and charging on the right. |
+| **Consumers** | The ten configured electrical devices with the highest current power in W, in two columns of five, sorted descending. |
 | **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |
 
-**Distribution** shows current power in **W/kW**, not daily energy in kWh. Its
-Sankey bands link grid import, solar and battery discharge through a common
-junction to home consumption, grid export and battery charging. They do not
-claim which individual source supplies a particular load. Sources without a
-configured power sensor contribute zero, without a partial-coverage label.
-Unavailable or inconsistent readings from configured sensors remain explicit;
-they do not produce fabricated flows. Individual appliances are not broken out
-in this view.
-The new display component requires the 2.4.1 device-agent package.
+**Consumers** uses the current power sensors explicitly configured for individual
+electrical devices in HA's Energy settings, with their configured names. It
+does not infer power from energy meters or guess sensor IDs. Missing power
+mappings and unavailable, invalid or negative readings are omitted; a measured
+0 W remains visible with an empty bar. Missing mapped readings produce an
+incomplete-data indication, and no usable readings produce an explicit empty
+state. Nested configured devices remain individual readings, not a computed
+household total. Each column scales its bars independently so smaller loads
+remain legible; compare the numeric W values across columns. Colors are stable
+per power sensor and drawn from an HA-like palette, not copied from an assigned
+HA device color.
+
+**Upgrade from 2.4.1:** Distribution has been removed. Enable **Consumers**
+explicitly once if wanted; it is not a replacement selection applied
+automatically. Other selected views are preserved. A selection containing only
+the removed view becomes empty, leaving Energy configured but hidden, with no
+view updates. Install the matching 2.5.0 agent and display bundle.
 
 A kind of source that is not set up in Home Assistant is left out, with its
-box, rows and bars. Without any electricity source the page is not shown. Gas
-and water meters are not part of the page.
+box, rows and bars. Without electricity sources the page is normally hidden;
+explicitly selecting Consumers keeps it available for device readings or its
+empty state, even without grid, solar or battery sources. Gas and water meters
+are not part of the page.
 
 Source colors are consistent across views: blue for grid, yellow for solar,
 green for battery, violet for export and coral for home. An energy meter in
@@ -424,10 +495,12 @@ data. Disabling a view discards data used only by that view; shared daily values
 remain only while another enabled view needs them. All caches live in HA's
 memory, not in additional files. These switches do not change or delete Home
 Assistant's existing recorder history.
-The **Now** and **Distribution** views share changed live power at most every ten
-seconds. Distribution alone does not read or cache recorder history or daily
-statistics. Disabling it removes its live subscriptions unless Now still uses
-them.
+Tap the Today or Power chart to inspect the selected recorded interval and its
+exact supplied values. Compact history retains the values and missing intervals;
+the display does not invent intermediate measurements.
+The **Now** and **Consumers** views publish changed live power at most every ten
+seconds. Consumers alone does not read or cache recorder history or daily
+statistics. Disabling a view removes subscriptions used only by that view.
 No charts are stored on the C300X and no extra device polling is added.
 The display file of the page is loaded only
 while the page is open. Texts follow the language of Home Assistant in German,
@@ -502,6 +575,77 @@ calendar, target C300X, lead time, reminder text and expiry. It uses a calendar
 event trigger rather than polling the device or adding a calendar provider.
 For a reliable test, create the event more than 15 minutes in advance, as noted
 in the [Home Assistant calendar documentation](https://www.home-assistant.io/integrations/calendar/#automation).
+
+### Standard Notify Service
+
+With the display integration enabled, each entry registers a named Notify action.
+The default first entry uses `notify.bticino_c300x`. Choose the action for your device in
+HA's action editor. It accepts the standard `message`, optional `title`
+(default **Home Assistant**) and nested `data` fields; the target is fixed to
+that entry, so do not supply `target`.
+
+```yaml
+action: notify.bticino_c300x
+data:
+  title: Front window
+  message: The front window is still open.
+  data:
+    notification_id: front_window
+    severity: warning
+    wake_duration: 30
+    sound_duration: 30
+    expires_in: 3600
+```
+
+Use the exact action ID shown in HA's action editor if your entry has a different
+name or you have multiple C300X devices. For example, an entry named **Front door**
+uses `notify.bticino_c300x_front_door`; a name collision adds a short unique
+suffix. HA remembers the chosen action ID across reloads and restarts. Renaming
+an entry updates its displayed label, not its action ID. Permanently removing
+the entry releases its name reservation.
+
+If HA cannot read or confirm the saved name reservations, the integration does
+not register a replacement action under another device's name. Resolve the HA
+storage problem or restore the reservations from a working HA backup before
+retrying setup.
+
+| Severity | Default wake duration | Default sound duration |
+| --- | --- | --- |
+| `info` (default) | 30 seconds | 30 seconds |
+| `warning` | 30 seconds | 30 seconds |
+| `error` | 30 seconds | 30 seconds |
+
+Each duration accepts whole seconds from 0 to 300; zero disables that effect.
+`notification_id` is optional and reuses the existing notice ID rules. Title,
+message and `expires_in` use the same limits as above, with a default expiry of
+one hour. There are no arbitrary URLs, audio files or executable actions in
+this service's data. This is supplementary information, **not a fire alarm or
+other life-safety alerting system**.
+
+Popup, wake and the bounded stock short-beep signal are permitted only on the
+stock Home or HA page when the GUI is ready and no call is active or ringing.
+Alarmo, PIN entry, settings and other protected pages block these effects.
+With the matching agent and Display patch, a live GUI explicitly reports this
+protection: the action completes without a delivery error, keeps the HA notice,
+and logs that popup, wake and sound were suppressed. This is not confirmation
+that an alert was shown or heard. A missing or disconnected GUI remains an error.
+User interaction, standby, a call or leaving an allowed context stops them;
+they are not queued for the next wake or replayed on return. Higher-severity
+alerts may replace lower-severity alerts, not vice versa.
+
+The integration stores the notice in HA memory, then sends exactly one POST to
+the agent. No waiting GUI connection means an error, not a native queue or
+automatic retry. The stored notice may still be read later on the HA page,
+without delayed wake or sound. Protection is tied to the live GUI connection,
+not a persistent flag; the connection adds no periodic status polling or device
+file writes. An accepted response confirms a write to the
+waiting GUI connection only; it does not prove GUI rendering, physical wake
+or audible output. A lost response does not prove non-delivery.
+
+This feature requires the matching **2.5.0 agent and display bundle**, including
+the reapplied Display patch. Test your notifications on the actual device before
+relying on an automation; a successful action is not proof of audible or visible
+delivery.
 
 ## Entity Reference
 

@@ -32,12 +32,13 @@ import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 LANGUAGES = ("de", "en", "fr", "it")
 
 
-def make_fixtures(include_distribution: bool = False) -> list[dict]:
+def make_fixtures(include_consumers: bool = False) -> list[dict]:
     """Use the production pure formatter in an existing HA Python environment."""
     sys.path.insert(0, str(ROOT))
     from custom_components.bticino_c300x.dashboard_energy import (
@@ -64,7 +65,9 @@ def make_fixtures(include_distribution: bool = False) -> list[dict]:
                 {"type": "solar", "stat_energy_from": "solar", "stat_rate": "solar_power"},
                 {"type": "battery", "stat_energy_from": "discharge", "stat_energy_to": "charge",
                  "stat_rate": "battery_power"},
-            ]})
+            ], "device_consumption": [{"stat_consumption": f"sensor.consumer_{i}_energy",
+                                       "stat_rate": f"sensor.consumer_{i}_power", "name": f"Consumer {i + 1}"}
+                                      for i in range(10)]}, include_consumers=include_consumers)
             scale = 500.0 if stress else 1.0
             hours = {f"grid{i}": [round(scale * (0.15 + (hour + i) % 7 * 0.14), 3)
                                   for hour in range(24)] for i in range(4)}
@@ -82,8 +85,10 @@ def make_fixtures(include_distribution: bool = False) -> list[dict]:
                       "solar_power": scale * 1250, "battery_power": scale * -280}
             page = energy_page(sources, day, powers,
                                language=language, currency="EUR",
-                               views=["now", "today", "power",
-                                      *(["distribution"] if include_distribution else []), "balance"])
+                               views=["now", "today", "power", *(["consumers"] if include_consumers else []), "balance"],
+                               consumer_states={f"sensor.consumer_{i}_power": SimpleNamespace(
+                                   state=str(scale * value), attributes={"unit_of_measurement": "W"})
+                                   for i, value in enumerate((22000, 11000, 2450, 1450, 620, 410, 210, 95, 62, 10))})
             assert page is not None
             assert len(page["energy"]["sums"]) == 8
             start = datetime(2026, 11, 15, tzinfo=UTC)
@@ -112,6 +117,26 @@ def adapt_qml(source: str) -> str:
     if count != 1:
         raise ValueError("Expected exactly one QtQuick 1.1 import")
     return re.sub(r"(?m)^import Components(?:\.Styles)? 1\.0\s*\n", "", source)
+
+
+def energy_dependencies(source: str, qml: Path, revision: str | None = None) -> dict[str, str]:
+    """Follow only Energy-local QML and JS, including temporary test overrides."""
+    result = {}
+    pending = [source]
+    while pending:
+        current = pending.pop()
+        names = {name + ".qml" for name in re.findall(r"\b(C300XEnergy[A-Z]\w*)\b", current)}
+        names.update(re.findall(r'import "(js/c300x_energy\w*\.js)"', current))
+        for name in sorted(names - result.keys()):
+            if revision:
+                body = subprocess.run(["git", "show", f"{revision}:device_qml/{name}"],
+                                      cwd=ROOT, capture_output=True, text=True, check=True).stdout
+            else:
+                path = qml.parent / name
+                body = (path if path.is_file() else ROOT / "device_qml" / name).read_text()
+            result[name] = body
+            pending.append(body)
+    return result
 
 
 def rect_intersection(a: list[float], b: list[float]) -> tuple[float, float]:
@@ -254,7 +279,9 @@ def render(args, fixtures: list[dict]) -> dict:
                        abs(actual.blue() - color.blue())) <= 35
 
         for entry, color in zip(series, colors, strict=True):
-            points = entry["points"]
+            axis = fixture["energy"]["power"]["axis"]
+            points = [None if value is None else (value - axis["min"]) / (axis["max"] - axis["min"])
+                      for value in entry["values"]]
             point = points[probe["isolated_index"]]
             if any(value is not None and not isinstance(value, (float, int)) for value in points):
                 issues.append({"kind": "power_points_not_scalars", "series": entry["id"]})
@@ -279,53 +306,16 @@ def render(args, fixtures: list[dict]) -> dict:
             if not visible:
                 issues.append({"kind": "power_segment_missing", "series": entry["id"]})
         for index in probe["gap_indices"]:
-            if any(entry["points"][index] is not None for entry in series):
+            if any(entry["values"][index] is not None for entry in series):
                 issues.append({"kind": "power_gap_contract", "index": index})
                 continue
-            x = round(origin.x() + (index + 0.5) / len(series[0]["points"]) * plot.width())
+            x = round(origin.x() + (index + 0.5) / len(series[0]["values"]) * plot.width())
             painted = any(matches(x, y, color) for color in colors
                           for y in range(math.ceil(origin.y()) + 2, math.floor(origin.y() + plot.height()) - 2))
             checks["gaps"].append({"index": index, "x": x, "clear": not painted})
             if painted:
                 issues.append({"kind": "power_gap_bridged", "index": index})
         return issues, checks
-
-    def distribution_pixels(component, frame, shot, payload, view):
-        """Check lazy lifetime, bounded ribbons and actual pixels of this subpage."""
-        objects = []
-
-        def visit(item):
-            if item.objectName() in {"energyDistribution", "distributionSlice"}:
-                objects.append(item)
-            for child in item.childItems():
-                visit(child)
-
-        visit(component)
-        roots = [item for item in objects if item.objectName() == "energyDistribution"]
-        slices = [item for item in objects if item.objectName() == "distributionSlice"]
-        distribution = payload.get("distribution") or {}
-        nodes = [node for side in ("left", "right") for node in distribution.get(side, [])[:3]]
-        expected = (24 * sum(isinstance(node.get("size"), (int, float)) and node["size"] > 0
-                             for node in nodes)
-                    if view == "distribution" and distribution.get("complete") is True else 0)
-        issues = []
-        if len(roots) != int(view == "distribution"):
-            issues.append({"kind": "distribution_loader_lifetime"})
-        if len(slices) != expected:
-            issues.append({"kind": "distribution_slice_count", "expected": expected, "actual": len(slices)})
-        checked = 0
-        for item in slices:
-            if item.height() < 2:
-                continue
-            center = item.mapToItem(frame, QPointF(item.width() / 2, item.height() / 2))
-            actual = shot.pixelColor(round(center.x()), round(center.y()))
-            color = item.property("color")
-            if max(abs(actual.red() - color.red()), abs(actual.green() - color.green()),
-                   abs(actual.blue() - color.blue())) > 35:
-                issues.append({"kind": "distribution_band_missing"})
-                break
-            checked += 1
-        return issues, {"loaded": len(roots), "slices": len(slices), "checked_pixels": checked}
 
     try:
         with tempfile.TemporaryDirectory(prefix="c300x-energy-layout-") as temp:
@@ -345,21 +335,14 @@ def render(args, fixtures: list[dict]) -> dict:
                     image.save(str(target))
                     adapted = adapted.replace(asset, str(Path(asset).with_suffix(".png")))
             (directory / "C300XEnergy.qml").write_text(adapted)
-            dependency = "C300XEnergyDistribution.qml"
-            if dependency in source:
-                if args.revision:
-                    dependency_source = subprocess.run(
-                        ["git", "show", f"{args.revision}:device_qml/{dependency}"],
-                        cwd=ROOT, capture_output=True, text=True, check=True,
-                    ).stdout
-                else:
-                    dependency_path = args.qml.parent / dependency
-                    if not dependency_path.is_file():
-                        dependency_path = ROOT / "device_qml" / dependency
-                    dependency_source = dependency_path.read_text()
-                (directory / dependency).write_text(adapt_qml(dependency_source))
+            report["dependencies"] = {}
+            for dependency, dependency_source in energy_dependencies(source, args.qml, args.revision).items():
+                target = directory / dependency
+                target.parent.mkdir(parents=True, exist_ok=True)
+                (args.output / dependency).parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(adapt_qml(dependency_source) if dependency.endswith(".qml") else dependency_source)
                 (args.output / dependency).write_text(dependency_source)
-                report["dependencies"] = {dependency: hashlib.sha256(dependency_source.encode()).hexdigest()}
+                report["dependencies"][dependency] = hashlib.sha256(dependency_source.encode()).hexdigest()
             (args.output / "source.qml").write_text(source)
             (directory / "UbuntuLightText.qml").write_text(
                 'import QtQuick 2.15\nText { textFormat: Text.PlainText; '
@@ -436,6 +419,23 @@ Rectangle {
                             settle()
                             if component.property("shown") != view["id"]:
                                 raise AssertionError(f'Tab did not select {view["id"]}')
+                            inspection = None
+                            if args.inspect is not None and view["id"] in ("today", "power"):
+                                from PySide6.QtQuick import QQuickItem
+                                is_power = view["id"] == "power"
+                                tap = component.findChild(QQuickItem, "energyPowerTap" if is_power else "energyHoursTap")
+                                count = component.property("powerBuckets") if is_power else 24
+                                selected = "selectedPower" if is_power else "selectedHour"
+                                index = min(args.inspect, count - 1)
+                                assert tap is not None and tap.isEnabled() and index >= 0
+                                point = tap.mapToItem(frame, QPointF((index + 0.5) * tap.width() / count, tap.height() / 2))
+                                QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(round(point.x()), round(point.y())))
+                                settle()
+                                assert component.property(selected) == index
+                                component.setProperty("energy", copy.deepcopy(payload))
+                                settle()
+                                assert component.property(selected) == index
+                                inspection = {"index": index, "same_payload_preserved": True}
                             shot = window.grabWindow()
                             if shot.isNull() or shot.size().width() != 800 or shot.size().height() != 480:
                                 raise RuntimeError("Offscreen framebuffer is missing or not 800x480")
@@ -445,12 +445,6 @@ Rectangle {
                             if view["id"] == "power":
                                 power_issues, power_checks = power_pixels(component, frame, shot, fixture)
                                 issues.extend(power_issues)
-                            distribution_checks = {}
-                            if "C300XEnergyDistribution.qml" in source:
-                                distribution_issues, distribution_checks = distribution_pixels(
-                                    component, frame, shot, payload, view["id"],
-                                )
-                                issues.extend(distribution_issues)
                             body_texts = [item for item in texts if item["ink"][1] < height - tab_height - 8]
                             if not body_texts:
                                 issues.append({"kind": "blank_view"})
@@ -477,11 +471,36 @@ Rectangle {
                                                     "sampled_colors": len(pixels),
                                                     "body_texts": len(body_texts),
                                                     "power_pixels": power_checks,
-                                                    "distribution_pixels": distribution_checks,
+                                                    "inspection": inspection,
                                                     "warnings": messages[start_messages:],
                                                     "screenshot": str(output)})
                             sys.stdout.write(f"{name}: {len(texts)} texts, {len(issues)} issues\n")
                             sys.stdout.flush()
+                            if inspection is not None:
+                                dismiss = next(item for item in component.findChildren(QQuickItem, "energyDismiss") if item.isVisible())
+                                point = dismiss.mapToItem(frame, QPointF(dismiss.width() / 2, dismiss.height() / 2))
+                                QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(round(point.x()), round(point.y())))
+                                settle()
+                                assert component.property(selected) == -1
+                                inspection["dismissed"] = True
+                                component.setProperty(selected, index)
+                                component.setProperty("visible", False)
+                                settle()
+                                assert component.property(selected) == -1
+                                component.setProperty("visible", True)
+                                if is_power:
+                                    component.setProperty(selected, index)
+                                    changed = copy.deepcopy(payload)
+                                    changed["power"]["revision"] += "-inspection-refresh"
+                                    component.setProperty("energy", changed)
+                                    settle()
+                                    assert component.property(selected) == -1
+                                if len(payload["views"]) > 1:
+                                    component.setProperty(selected, index)
+                                    other = next(item["id"] for item in payload["views"] if item["id"] != view["id"])
+                                    component.setProperty("view", other)
+                                    settle()
+                                    assert component.property(selected) == -1
             window.close()
             window.setSource(QUrl())
             app.processEvents()
@@ -499,24 +518,25 @@ def main() -> int:
     parser.add_argument("--fixture-python", default=sys.executable, help="Existing HA Python for pure backend fixtures")
     parser.add_argument("--fixtures", type=Path, help="External JSON fixtures, bypass backend imports")
     parser.add_argument("--emit-fixtures", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--distribution-fixtures", action="store_true", help="Include the current power distribution tab")
+    parser.add_argument("--consumers-fixtures", action="store_true", help="Include live consumer data from the production formatter")
     parser.add_argument("--stock-skin", type=Path, help="Optional read-only firmware skin directory")
     parser.add_argument("--languages", nargs="+", default=list(LANGUAGES))
     parser.add_argument("--views", nargs="+")
+    parser.add_argument("--inspect", type=int, help="Tap a chart bucket and verify local selection and dismissal")
     parser.add_argument("--scenarios", nargs="+", default=["normal", "stress"])
     parser.add_argument("--heights", nargs="+", type=int, default=[300, 230])
     parser.add_argument("--tabs", nargs="+", choices=["single", "multi"], default=["single", "multi"])
     parser.add_argument("--check", action="store_true", help="Fail for layout issues (baseline capture still writes artifacts)")
     args = parser.parse_args()
     if args.emit_fixtures:
-        sys.stdout.write(json.dumps(make_fixtures(args.distribution_fixtures), ensure_ascii=True) + "\n")
+        sys.stdout.write(json.dumps(make_fixtures(args.consumers_fixtures), ensure_ascii=True) + "\n")
         return 0
     args.output.mkdir(parents=True, exist_ok=True)
     if args.fixtures:
         fixtures = json.loads(args.fixtures.read_text())
     else:
         result = subprocess.run([args.fixture_python, str(Path(__file__).resolve()), "--emit-fixtures",
-                                 *(["--distribution-fixtures"] if args.distribution_fixtures else [])],
+                                 *(["--consumers-fixtures"] if args.consumers_fixtures else [])],
                                 capture_output=True, text=True, timeout=60, check=True)
         fixtures = json.loads(result.stdout)
     report = render(args, fixtures)

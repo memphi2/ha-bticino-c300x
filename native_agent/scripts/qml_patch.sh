@@ -12,13 +12,13 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
-CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
+CORE_PATCH_FILES="C300XRingerControl.qml js/c300x_ringer.js EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
 # The display files this integration adds; every list of them derives from here.
-GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyDistribution.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
-OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
+OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
 json_status() {
     changed_files="${1:-}"
@@ -100,6 +100,8 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MainApp.qml" 'alarmPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xDisplayPreferences' \
+        && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xAlerts' \
+        && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && general_settings_patch_present \
         && home_page_feature_patch_present \
         && file_contains "$GUI_DIR/HomePage.qml" 'MemoSync.syncHomeNotifications(page)' \
@@ -111,7 +113,17 @@ full_patch_present() {
         && file_contains "$GUI_DIR/Alarm.qml" 'headerLabel: uiText("alarm")' \
         && file_contains "$GUI_DIR/HomeAssistant.qml" 'Api.dashboard' \
         && [ -f "$GUI_DIR/C300XEnergy.qml" ] \
-        && [ -f "$GUI_DIR/C300XEnergyDistribution.qml" ] \
+        && [ -f "$GUI_DIR/C300XEnergyConsumers.qml" ] \
+        && [ -f "$GUI_DIR/js/c300x_energy_consumers.js" ] \
+        && [ -f "$GUI_DIR/C300XPageNavigation.qml" ] \
+        && [ -f "$GUI_DIR/C300XAlerts.qml" ] \
+        && [ -f "$GUI_DIR/js/c300x_alerts.js" ] \
+        && [ -f "$GUI_DIR/C300XAgenda.qml" ] \
+        && [ -f "$GUI_DIR/C300XLeaveHome.qml" ] \
+        && [ -f "$GUI_DIR/C300XDetailControl.qml" ] \
+        && [ -f "$GUI_DIR/C300XEnergyReadout.qml" ] \
+        && [ -f "$GUI_DIR/C300XEnergySums.qml" ] \
+        && [ -f "$GUI_DIR/js/c300x_energy.js" ] \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function homeButtons' \
         && file_contains "$GUI_DIR/js/c300x_ha.js" 'function loadDisplayPreferences' \
         && file_contains "$GUI_DIR/js/c300x_i18n.js" 'function weather' \
@@ -165,7 +177,9 @@ core_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         && file_contains "$GUI_DIR/EventManager.qml" 'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
         && file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && cmp -s "$SOURCE_DIR/C300XRingerControl.qml" "$GUI_DIR/C300XRingerControl.qml" \
+        && cmp -s "$SOURCE_DIR/js/c300x_ringer.js" "$GUI_DIR/js/c300x_ringer.js" \
         && core_call_end_hooks_present
 }
 
@@ -174,7 +188,8 @@ core_partial_patch_present() {
         || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
         || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()' \
         || file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
-        || [ -f "$GUI_DIR/C300XRingerControl.qml" ]
+        || [ -f "$GUI_DIR/C300XRingerControl.qml" ] \
+        || [ -f "$GUI_DIR/js/c300x_ringer.js" ]
 }
 
 media_user_label_present() {
@@ -192,6 +207,9 @@ core_call_end_hooks_present() {
     awk '
         $0 == "        onCallEnded: {" {
             count += 1
+            if ((getline next_line) <= 0 || next_line != "            c300xPreemptAlert()") {
+                bad = 1
+            }
             if ((getline next_line) <= 0 || next_line != "            c300xNotifyMediaClosed()") {
                 bad = 1
             }
@@ -232,8 +250,9 @@ reload_gui() {
     fi
     sleep "$GUI_RELOAD_DELAY_SECONDS"
     if ! command -v pidof >/dev/null 2>&1; then
-        return 0
+        return 1
     fi
+    # Process presence only: the firmware exposes no QML readiness handshake here.
     pidof BtClass >/dev/null 2>&1
 }
 
@@ -258,7 +277,9 @@ finish_write_action() {
         cleanup_staging
     fi
     recovery_ok=1
+    restart_previous=0
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
+        restart_previous="${WRITE_RELOAD_ATTEMPTED:-0}"
         for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
             if [ -f "$WRITE_TRANSACTION/$transaction_rel" ]; then
                 if ! mkdir -p "$(dirname "$GUI_DIR/$transaction_rel")" \
@@ -282,6 +303,11 @@ finish_write_action() {
         rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
     fi
     remount_ro || write_rc=1
+    if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
+        if ! reload_gui; then
+            printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
+        fi
+    fi
     return "$write_rc"
 }
 
@@ -294,6 +320,7 @@ run_write_action() {
     WRITE_TRANSACTION=
     WRITE_TRANSACTION_READY=0
     WRITE_TRANSACTION_COMMITTED=0
+    WRITE_RELOAD_ATTEMPTED=0
     REMOVE_EMPTY_JS=0
     trap finish_write_action EXIT
     trap abort_write_action HUP INT TERM
@@ -315,8 +342,22 @@ run_write_action() {
     done
     WRITE_TRANSACTION_READY=1
     "$@"
+    WRITE_RELOAD_ATTEMPTED=1
+    if ! reload_gui; then
+        GUI_RELOAD_FAILED=1
+        finish_write_action
+        return
+    fi
     WRITE_TRANSACTION_COMMITTED=1
     finish_write_action
+}
+
+json_write_status() {
+    if [ "${GUI_RELOAD_FAILED:-0}" = "1" ]; then
+        json_reload_failed
+    else
+        json_status "$changed_count"
+    fi
 }
 
 backup_file() {
@@ -953,11 +994,42 @@ patch_event_manager() {
             print "    }"
             print ""
             print "    C300XRingerControl {}"
+            print "    property bool c300xCallActive: typeof intercomModel === \"undefined\" || intercomModel.isVideoCall || intercomModel.isIntercomCall || intercomModel.isSipIntercomCall"
+            print "    property bool c300xRinging: false"
+            print "    function c300xPreemptAlert() {"
+            print "        if (typeof c300xAlerts !== \"undefined\") c300xAlerts.preempt()"
+            print "    }"
+            print "    function c300xAlertUserInteraction() {"
+            print "        if (typeof c300xAlerts !== \"undefined\") c300xAlerts.userInteraction()"
+            print "    }"
             next
         }
-        $0 == "        onCallEnded: {" {
+        /^        on(IncomingCall|CallStarted|CallAnswered|CallEnded|CallTypeChanged): \{$/ {
             print
-            print "            c300xNotifyMediaClosed()"
+            print "            c300xPreemptAlert()"
+            if ($0 == "        onCallEnded: {") print "            c300xNotifyMediaClosed()"
+            next
+        }
+        $0 == "        onRingtoneStarted: {" {
+            print
+            print "            c300xPreemptAlert()"
+            print "            c300xRinging = true"
+            next
+        }
+        $0 == "        onRingtoneFinished: {" {
+            print
+            print "            c300xPreemptAlert()"
+            print "            c300xRinging = false"
+            next
+        }
+        $0 == "        onScreenTurnedOn: {" {
+            print
+            print "            if (c300xCallActive || c300xRinging) c300xPreemptAlert()"
+            next
+        }
+        /^        on(Pressed|Released): \{$/ {
+            print
+            print "            c300xAlertUserInteraction()"
             next
         }
         { print }
@@ -971,6 +1043,31 @@ patch_event_manager() {
         'c300xNotifyMediaClosed()' \
         'onCallEnded:'
     mv "$temp_file" "$event_manager"
+}
+
+verify_alert_takeover_hooks() {
+    # A partial/unknown vendor layout must not install an active alert receiver.
+    awk '
+        /^        on(IncomingCall|CallStarted|CallAnswered|CallEnded|CallTypeChanged|RingtoneStarted|RingtoneFinished): \{$/ {
+            key=$1
+            counts[key]++
+            if ((getline next_line) <= 0 || next_line != "            c300xPreemptAlert()") bad=1
+        }
+        $0 == "        onScreenTurnedOn: {" {
+            screens++
+            if ((getline next_line) <= 0 || next_line != "            if (c300xCallActive || c300xRinging) c300xPreemptAlert()") bad=1
+        }
+        /^        on(Pressed|Released): \{$/ {
+            keys++
+            if ((getline next_line) <= 0 || next_line != "            c300xAlertUserInteraction()") bad=1
+        }
+        END {
+            if (bad || screens != 1 || keys != 2 || counts["onIncomingCall:"] != 2 || counts["onCallAnswered:"] != 2 || counts["onCallEnded:"] != 2 || counts["onCallStarted:"] != 1 || counts["onCallTypeChanged:"] != 1 || counts["onRingtoneStarted:"] != 1 || counts["onRingtoneFinished:"] != 1) exit 12
+        }
+    ' "$1" || {
+        printf 'Unsupported EventManager alert takeover hooks; active GUI unchanged\n' >&2
+        return 1
+    }
 }
 
 remove_obsolete_stock_source_files() {
@@ -1017,6 +1114,7 @@ generate_core_patch_stage() {
     export PATCH_OUTPUT_DIR
     patch_event_manager
     copy_generated_file "C300XRingerControl.qml"
+    copy_generated_file "js/c300x_ringer.js"
     unset PATCH_OUTPUT_DIR
 }
 
@@ -1047,7 +1145,9 @@ generate_full_patch_stage() {
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
     patch_event_manager
+    verify_alert_takeover_hooks "$STAGING_DIR/EventManager.qml"
     copy_generated_file "C300XRingerControl.qml"
+    copy_generated_file "js/c300x_ringer.js"
     patch_home_page
     patch_memo_page
     patch_general_settings
@@ -1157,6 +1257,14 @@ patch_main_app() {
         }
         $0 == "Item {" {
             print
+            print "    C300XAlerts {"
+            print "        id: c300xAlerts"
+            print "        anchors.fill: parent"
+            print "        z: 1000"
+            print "        property variant activePage: tabView.current"
+            print "        onActivePageChanged: userInteraction()"
+            print "        blocked: typeof eventManager === \"undefined\" || eventManager.c300xCallActive === undefined || eventManager.c300xCallActive || eventManager.c300xRinging || !global.guiReadyToReceiveCalls || (activePage !== homePage && activePage !== haPage)"
+            print "    }"
             print "    Item {"
             print "        id: c300xDisplayPreferences"
             print "        property bool feedbackEnabled: true"
@@ -1261,7 +1369,6 @@ apply_core_patch_files() {
     changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_core_patch_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 apply_media_user_label_files() {
@@ -1269,7 +1376,6 @@ apply_media_user_label_files() {
     changed_count="$(apply_stage_changed_count $MEDIA_USER_LABEL_FILES)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_media_user_label_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 apply_feature_patch_files() {
@@ -1277,7 +1383,6 @@ apply_feature_patch_files() {
     changed_count="$(apply_feature_stage_changed_count)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_feature_patch_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 apply_patch_files() {
@@ -1285,7 +1390,6 @@ apply_patch_files() {
     changed_count="$(apply_full_stage_changed_count)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_full_patch_files
     cleanup_staging
-    printf '%s\n' "$changed_count"
 }
 
 restore_file() {
@@ -1361,11 +1465,14 @@ restore_core_changed_count() {
     if [ -e "$GUI_DIR/C300XRingerControl.qml" ]; then
         changed=$((changed + 1))
     fi
+    if [ -e "$GUI_DIR/js/c300x_ringer.js" ]; then
+        changed=$((changed + 1))
+    fi
     printf '%s\n' "$changed"
 }
 
 is_generated_patch_file() {
-    for known_rel in $GENERATED_FEATURE_FILES C300XRingerControl.qml; do
+    for known_rel in $GENERATED_FEATURE_FILES C300XRingerControl.qml js/c300x_ringer.js; do
         if [ "$1" = "$known_rel" ]; then
             return 0
         fi
@@ -1423,6 +1530,8 @@ restore_core_patch_files() {
         restore_file "EventManager.qml"
     fi
     restore_file "C300XRingerControl.qml"
+    restore_file "js/c300x_ringer.js"
+    REMOVE_EMPTY_JS=1
 }
 
 restore_all_changed_count() {
@@ -1443,72 +1552,44 @@ case "$ACTION" in
         json_status
         ;;
     apply)
-        changed_count="$(apply_patch_files)"
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        apply_patch_files
+        json_write_status
         ;;
     core-apply)
-        changed_count="$(apply_core_patch_files)"
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        apply_core_patch_files
+        json_write_status
         ;;
     media-user-label-apply)
-        changed_count="$(apply_media_user_label_files)"
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        apply_media_user_label_files
+        json_write_status
         ;;
     restore)
         changed_count="$(restore_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_patch_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     core-restore)
         changed_count="$(restore_core_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_core_patch_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     media-user-label-restore)
         changed_count="$(restore_media_user_label_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_media_user_label_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     restore-all)
         changed_count="$(restore_all_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_all_patch_files
         fi
-        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
-            json_reload_failed
-            exit 0
-        fi
-        json_status "$changed_count"
+        json_write_status
         ;;
     reload)
         reload_gui

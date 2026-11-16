@@ -47,6 +47,15 @@ def _load_release_builder():
     return module
 
 
+def test_manifest_identifies_maintainer_without_claiming_an_official_quality_tier():
+    manifest = json.loads((ROOT / "custom_components/bticino_c300x/manifest.json").read_text())
+    assert manifest["codeowners"] == ["@memphi2"]
+    assert "quality_scale" not in manifest
+    readme = (ROOT / "README.md").read_text()
+    assert "Self%20assessment" in readme
+    assert "](docs/quality-scale.md)" in readme
+
+
 def _load_bundle_stager():
     spec = importlib.util.spec_from_file_location("stage_device_agent_bundle", STAGE_SCRIPT)
     assert spec is not None
@@ -755,7 +764,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     paths = {entry["path"] for entry in bundle["files"]}
     assert bundle["integration_version"] == version
     assert bundle["agent_version"] == version
-    assert bundle["update_file_set_version"] == 4
+    assert bundle["update_file_set_version"] == 5
     probe = tmp_path / "update_paths.c"
     probe.write_text(
         '#include <stdio.h>\n#include "agent_update_paths.h"\n'
@@ -776,6 +785,11 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     result = subprocess.run([str(executable)], check=True, capture_output=True, text=True)
     native_modes = dict(line.split() for line in result.stdout.splitlines())
     for entry in bundle["files"]:
+        if entry["path"] == stager.LEGACY_BOOTSTRAP_QML:
+            assert entry["path"] not in native_modes
+            assert entry["mode"] == "644"
+            assert (component_dir / entry["path"]).read_bytes() == stager.LEGACY_BOOTSTRAP_CONTENT
+            continue
         assert native_modes[entry["path"]] == entry["mode"]
     assert bundle["agent"] == "device_agent/armhf/c300x-agent-native"
     assert "device_agent/armhf/c300x-agent-native" in paths
@@ -797,6 +811,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert modes["device_agent/qml/HomeAssistant.qml"] == "644"
     assert modes["device_agent/qml/C300XEnergy.qml"] == "644"
     assert modes["device_agent/qml/C300XEnergyDistribution.qml"] == "644"
+    assert modes["device_agent/qml/C300XEnergyConsumers.qml"] == "644"
     assert modes["device_agent/qml/C300XRingerControl.qml"] == "644"
     assert modes["device_agent/qml/js/c300x_ha.js"] == "644"
     assert modes["device_agent/qml/js/c300x_i18n.js"] == "644"

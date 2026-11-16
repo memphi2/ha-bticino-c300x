@@ -86,23 +86,26 @@ struct update_backup {
 };
 
 struct update_transaction {
-    struct update_backup files[C300X_AGENT_UPDATE_FILE_COUNT + 1];
+    struct update_backup files[C300X_AGENT_UPDATE_FILE_COUNT + 2];
     size_t count;
     int root_touched;
 };
 
-static void update_remount(int writable)
+static int update_remount(int writable)
 {
     int status = system(writable ? "mount -o remount,rw / >/dev/null 2>&1"
                                  : "mount -o remount,ro / >/dev/null 2>&1");
-    (void)status;
+    if (status != 0) {
+        fprintf(stderr, "Agent update root remount %s failed (status %d)\n", writable ? "rw" : "ro", status);
+    }
+    return status == 0;
 }
 
 static int update_backup_target(struct update_transaction *transaction, const char *target)
 {
     C300X_UPDATE_STAT_STRUCT info;
     struct update_backup *file = &transaction->files[transaction->count];
-    if (transaction->count >= C300X_AGENT_UPDATE_FILE_COUNT + 1
+    if (transaction->count >= sizeof(transaction->files) / sizeof(transaction->files[0])
         || snprintf(file->target, sizeof(file->target), "%s", target) >= (int)sizeof(file->target)
         || snprintf(file->backup, sizeof(file->backup), "%s.update-backup", target) >= (int)sizeof(file->backup)) {
         return 0;
@@ -126,8 +129,10 @@ static int update_backup_target(struct update_transaction *transaction, const ch
 static int update_finish_transaction(struct update_transaction *transaction, int rollback)
 {
     int ok = 1;
-    if (transaction->root_touched) {
-        update_remount(1);
+    if (transaction->root_touched && !update_remount(1)) {
+        /* Do not consume recovery files when root writes are unavailable. */
+        (void)update_remount(0);
+        return 0;
     }
     for (size_t index = transaction->count; index > 0; index--) {
         struct update_backup *file = &transaction->files[index - 1];
@@ -144,10 +149,47 @@ static int update_finish_transaction(struct update_transaction *transaction, int
             ok = 0;
         }
     }
-    if (transaction->root_touched) {
-        update_remount(0);
+    /* Also confirm read-only state on a retry with no remaining root changes. */
+    if (!update_remount(0)) {
+        ok = 0;
     }
     return ok;
+}
+
+static int update_remove_obsolete_display_source(
+    const struct c300x_config *config,
+    struct update_transaction *transaction,
+    struct agent_update_change_summary *summary
+)
+{
+    char base[C300X_MAX_PATH_LEN], directory[C300X_MAX_PATH_LEN];
+    char target[C300X_MAX_PATH_LEN], backup[C300X_MAX_PATH_LEN + 24];
+    C300X_UPDATE_STAT_STRUCT info;
+    if (!agent_base_dir(config, base, sizeof(base))
+        || !c300x_join_path(directory, sizeof(directory), base, "qml")
+        || !c300x_join_path(target, sizeof(target), directory, "C300XEnergyDistribution.qml")
+        || snprintf(backup, sizeof(backup), "%s.update-backup", target) >= (int)sizeof(backup)) {
+        return 0;
+    }
+    if (update_lstat(directory, &info) != 0) {
+        return errno == ENOENT;
+    }
+    if (!S_ISDIR(info.st_mode) || update_lstat(backup, &info) == 0 || errno != ENOENT) {
+        return 0;
+    }
+    if (update_lstat(target, &info) != 0) {
+        return errno == ENOENT;
+    }
+    /* Only this retired project file is owned here; never follow a symlink. */
+    if (!S_ISREG(info.st_mode) || !update_backup_target(transaction, target)
+        || unlink(target) != 0) {
+        return 0;
+    }
+    if (summary != NULL) {
+        summary->changed_files++;
+        summary->qml_patch_changed = 1;
+    }
+    return 1;
 }
 
 static int update_prepare_transaction(const struct c300x_config *config, struct update_transaction *transaction)
@@ -170,7 +212,9 @@ static int update_prepare_transaction(const struct c300x_config *config, struct 
         }
         if (strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0) {
             transaction->root_touched = 1;
-            update_remount(1);
+            if (!update_remount(1)) {
+                return 0;
+            }
         }
         if (!update_backup_target(transaction, target)) {
             return 0;
@@ -182,15 +226,11 @@ static int update_prepare_transaction(const struct c300x_config *config, struct 
     }
     if (!agent_init_link_matches()) {
         transaction->root_touched = 1;
-        update_remount(1);
-        if (!update_backup_target(transaction, C300X_AGENT_INIT_LINK)) {
+        if (!update_remount(1) || !update_backup_target(transaction, C300X_AGENT_INIT_LINK)) {
             return 0;
         }
     }
-    if (transaction->root_touched) {
-        update_remount(0);
-    }
-    return 1;
+    return !transaction->root_touched || update_remount(0);
 }
 
 int agent_base_dir(const struct c300x_config *config, char *out, size_t out_len)
@@ -363,6 +403,9 @@ int apply_agent_update_files(
             "config_schema_hash"
         );
     }
+    if (!update_remove_obsolete_display_source(config, transaction, summary)) {
+        goto rollback;
+    }
     for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
         if (strcmp(C300X_AGENT_UPDATE_FILES[index].path, "device_agent/bundle.json") == 0) {
             if (!repair_agent_init_link_after_update(summary)) {
@@ -388,9 +431,11 @@ int apply_agent_update_files(
             goto rollback;
         }
     }
-    (void)update_finish_transaction(transaction, 0);
+    /* Installed files stay committed: cleanup may already have deleted backups.
+     * Report finalization failure without rollback or clearing the summary. */
+    int finalized = update_finish_transaction(transaction, 0);
     free(transaction);
-    return 1;
+    return finalized;
 
 rollback:
     if (update_finish_transaction(transaction, 1)) {
@@ -740,26 +785,14 @@ static int apply_agent_update_init_script(
         (void)unlink(rendered_path);
         return 1;
     }
-    {
-        int status = system("mount -o remount,rw / >/dev/null 2>&1");
-        (void)status;
-    }
-    if (
-        (content_changed && !copy_binary_file(rendered_path, C300X_AGENT_INIT_SCRIPT, 0700))
-        || !ensure_agent_init_link()
-    ) {
-        (void)unlink(rendered_path);
-        {
-            int status = system("mount -o remount,ro / >/dev/null 2>&1");
-            (void)status;
-        }
+    int ok = update_remount(1)
+        && (!content_changed || copy_binary_file(rendered_path, C300X_AGENT_INIT_SCRIPT, 0700))
+        && ensure_agent_init_link();
+    int readonly_ok = update_remount(0);
+    (void)unlink(rendered_path);
+    if (!ok || !readonly_ok) {
         return 0;
     }
-    {
-        int status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
-    }
-    (void)unlink(rendered_path);
     if (changed != NULL) {
         *changed = 1;
     }
@@ -768,23 +801,17 @@ static int apply_agent_update_init_script(
 
 static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary)
 {
-    int status;
-
     if (agent_init_link_matches()) {
         return 1;
     }
     if (access(C300X_AGENT_INIT_SCRIPT, X_OK) != 0) {
         return 1;
     }
-    status = system("mount -o remount,rw / >/dev/null 2>&1");
-    (void)status;
-    if (!ensure_agent_init_link()) {
-        status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
+    int ok = update_remount(1) && ensure_agent_init_link();
+    int readonly_ok = update_remount(0);
+    if (!ok || !readonly_ok) {
         return 0;
     }
-    status = system("mount -o remount,ro / >/dev/null 2>&1");
-    (void)status;
     if (summary != NULL) {
         summary->changed_files++;
         summary->script_changed = 1;

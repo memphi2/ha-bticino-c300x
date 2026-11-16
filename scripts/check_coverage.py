@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Run the current Python coverage gate.
 
-This is the local Home Assistant Platinum coverage ratchet.
+This is an aggregate repository floor, not proof of a Home Assistant tier.
+The HA per-module and config-flow requirements are tracked separately.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from zoneinfo import ZoneInfo
@@ -90,10 +90,10 @@ def test_recorder_query_and_buckets_cover_exact_local_day(monkeypatch, month, da
     payload = power.power_history_payload(SOURCES, result, "en")
     assert payload["times"][0] == {"position": 0, "label": "00:00"}
     assert payload["times"][-1] == {"position": 1, "label": "24:00"}
-    points = payload["series"][0]["points"]
-    assert len(points) == buckets
-    assert all(0 <= point <= 1 for point in points)
-    assert all(a < b for a, b in zip(points, points[1:], strict=False))
+    values = payload["series"][0]["values"]
+    assert len(values) == buckets
+    assert all(payload["axis"]["min"] <= value <= payload["axis"]["max"] for value in values)
+    assert all(a < b for a, b in zip(values, values[1:], strict=False))
 
 
 def test_incomplete_missing_and_duplicate_intervals_are_gaps():
@@ -140,9 +140,9 @@ def test_presentation_shares_axis_preserves_signs_gaps_and_revision(language):
     assert axis["min"] <= -1000 and axis["max"] >= 3000 and axis["unit"] == "kW"
     series = {item["id"]: item for item in result["series"]}
     for key, watts in {"grid": -1000, "solar": 3000, "battery": -500, "home": 1500}.items():
-        point = series[key]["points"][0]
-        assert point * (axis["max"] - axis["min"]) + axis["min"] == pytest.approx(watts, abs=0.03)
-        assert all(value is None for value in series[key]["points"][1:])
+        assert series[key]["values"][0] == watts
+        assert all(value is None for value in series[key]["values"][1:])
+        assert "points" not in series[key]
     labels = ENERGY_LABELS_BY_LANGUAGE.get(language, ENERGY_LABELS_BY_LANGUAGE["en"])
     assert result["label"] == labels["power_interval"]
     assert result["empty_text"] == labels["power_empty"]
@@ -151,7 +151,7 @@ def test_presentation_shares_axis_preserves_signs_gaps_and_revision(language):
     raw.values["sensor.power"] = (0,) + raw.values["sensor.power"][1:]
     changed = power.power_history_payload(sources, raw, language)
     assert changed["revision"] != result["revision"]
-    assert changed["series"][0]["points"][0] is not None
+    assert changed["series"][0]["values"][0] is not None
 
 
 @pytest.mark.parametrize("missing", ["sensor.second", "unconfigured_grid", "unconfigured_solar"])
@@ -169,11 +169,11 @@ def test_unconfigured_power_is_zero_but_configured_missing_history_stays_unknown
         assert "grid" not in series and "home" not in series
     else:
         assert set(series) == {"grid", "solar", "home"}
-        assert all(item["points"][0] is not None for item in series.values())
+        assert all(item["values"][0] is not None for item in series.values())
     for key, item in series.items():
         assert "partial" not in item
         assert item["label"] == ENERGY_LABELS_BY_LANGUAGE["en"][key]
-        assert all(point is None for point in item["points"][1:])
+        assert all(value is None for value in item["values"][1:])
 
 
 def test_dots_only_mark_isolated_points_including_both_ends():
@@ -182,7 +182,7 @@ def test_dots_only_mark_isolated_points_including_both_ends():
     })
     result = power.power_history_payload(SOURCES, raw, "en")
     for series in result["series"]:
-        points = series["points"]
+        points = series["values"]
         assert len(points) == 96
         assert series["dots"] == [0, 5, 95]
     tomorrow = power.PowerHistory(START + timedelta(days=1), START + timedelta(days=2), raw.values)
@@ -206,12 +206,13 @@ def test_out_of_range_extremes_are_gaps_not_zero_and_empty_groups_are_omitted(mo
         "sensor.power": (1e308, -1e308) + (None,) * 94,
     })
     result = power.power_history_payload(SOURCES, raw, "en")
-    assert all(0 <= point <= 1 for series in result["series"] for point in series["points"] if point is not None)
+    assert all(result["axis"]["min"] <= value <= result["axis"]["max"]
+               for series in result["series"] for value in series["values"] if value is not None)
     monkeypatch.setattr(power, "chart_axis", lambda *_args: {"min": 0, "max": 1, "unit": "W", "ticks": []})
     # The negative net home's actual zero is valid; extreme grid values are not.
     result = power.power_history_payload(SOURCES, raw, "en")
     assert not any(series["id"] == "grid" for series in result["series"])
-    assert result["series"][0]["points"][0] is None
+    assert result["series"][0]["values"][0] is None
     raw.values = {"sensor.power": (1e308,) + (None,) * 95}
     assert power.power_history_payload(SOURCES, raw, "en")["series"] == []
 
@@ -292,7 +293,7 @@ def test_missing_power_sensors_return_localized_empty_history_without_query(monk
     raw = asyncio.run(power.async_power_history(None, entry(), sources))
     result = power.power_history_payload(sources, raw, "de")
     assert result["empty_text"] == ENERGY_LABELS_BY_LANGUAGE["de"]["power_empty"]
-    assert all(point is None for series in result["series"] for point in series["points"])
+    assert all(value is None for series in result["series"] for value in series["values"])
     assert result["series"] == []
     query.assert_not_awaited()
 
@@ -379,10 +380,32 @@ def test_maximum_day_four_curves_fit_payload_budget(alternating_gaps):
                       for key, values in raw.values.items()}
     result = power.power_history_payload(sources, raw, "de")
     assert len(result["series"]) == 4
-    assert all(len(series["points"]) == 100 for series in result["series"])
     assert all(series["dots"] == (list(range(0, 100, 2)) if alternating_gaps else [])
                for series in result["series"])
-    assert len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()) < 6 * 1024
+    assert all(len(series["values"]) == 100 for series in result["series"])
+    assert result["time"]["count"] == 100
+    assert len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()) < 30 * 1024
+
+
+@pytest.mark.parametrize(("month", "day", "count", "before", "after"), [
+    (3, 29, 92, "2026-03-29 01:45 UTC+0100", "2026-03-29 03:00 UTC+0200"),
+    (10, 25, 100, "2026-10-25 02:45 UTC+0200", "2026-10-25 02:00 UTC+0100"),
+])
+def test_inspection_timestamps_follow_elapsed_buckets_across_dst(month, day, count, before, after):
+    start = datetime(2026, month, day, tzinfo=ZoneInfo("Europe/Berlin"))
+    raw = power.PowerHistory(start, start + timedelta(days=1), {"sensor.power": (1.23456789,) * count})
+    result = power.power_history_payload(SOURCES, raw, "en")
+    time = result["time"]
+    stamps = []
+    for index in range(time["count"]):
+        offset = next(value for begin, value in reversed(time["offsets"]) if begin <= index)
+        local = datetime.fromtimestamp(time["start"] + index * time["step"], UTC)
+        stamps.append(local.astimezone(timezone(timedelta(seconds=offset))).strftime("%Y-%m-%d %H:%M UTC%z"))
+    index = stamps.index(before)
+    assert stamps[index + 1] == after
+    assert len(stamps) == len(set(stamps)) == count
+    assert stamps[-1].startswith(f"2026-{month:02d}-{day:02d} 23:45")
+    assert result["series"][0]["values"] == [1.23456789] * count
 
 
 @pytest.mark.parametrize("target", [["now"], ["today"], ["balance"], ["power"], [], None])

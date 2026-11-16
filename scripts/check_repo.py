@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import compileall
 import json
 import re
@@ -96,6 +97,7 @@ PUBLIC_REPOSITORY_URLS = (
     "https://my.home-assistant.io/redirect/marketplace_repository/?owner="
     + "mem" + "phi2&repository=ha-bticino-c300x&category=integration",
 )
+PUBLIC_MAINTAINER = re.compile(r"(?<![\w@])@mem" + r"phi2(?![\w-])")
 
 DENY_PATTERNS = {
     "bearer_token": re.compile(r"Authorization:\s*Bearer\s+", re.IGNORECASE),
@@ -173,7 +175,18 @@ REQUIRED_PATHS = [
     "device_qml/README.md",
     "device_qml/HomeAssistant.qml",
     "device_qml/C300XEnergy.qml",
-    "device_qml/C300XEnergyDistribution.qml",
+    "device_qml/C300XEnergyConsumers.qml",
+    "device_qml/js/c300x_energy_consumers.js",
+    "device_qml/C300XPageNavigation.qml",
+    "device_qml/C300XAlerts.qml",
+    "device_qml/js/c300x_alerts.js",
+    "device_qml/js/c300x_ringer.js",
+    "device_qml/C300XAgenda.qml",
+    "device_qml/C300XLeaveHome.qml",
+    "device_qml/C300XDetailControl.qml",
+    "device_qml/C300XEnergyReadout.qml",
+    "device_qml/C300XEnergySums.qml",
+    "device_qml/js/c300x_energy.js",
     "device_qml/js/c300x_ha.js",
     "device_qml/js/c300x_i18n.js",
     "device_qml/js/c300x_memos.js",
@@ -375,7 +388,8 @@ def check_forbidden_text_patterns() -> list[str]:
         for public_url in PUBLIC_REPOSITORY_URLS:
             scan_text = scan_text.replace(public_url, "")
         for name, pattern in DENY_PATTERNS.items():
-            if pattern.search(scan_text):
+            candidate = PUBLIC_MAINTAINER.sub("", scan_text) if name == "personal_owner" else scan_text
+            if pattern.search(candidate):
                 failures.append(f"possible secret/internal value ({name}) in {relative(path)}")
     return failures
 
@@ -634,15 +648,57 @@ def check_config_entry_typing() -> list[str]:
         if path == alias_path:
             continue
         text = path.read_text(encoding="utf-8")
-        if "from homeassistant.config_entries import ConfigEntry" in text:
+        tree = ast.parse(text, filename=str(path))
+        if any(
+            isinstance(node, ast.ImportFrom)
+            and node.module == "homeassistant.config_entries"
+            and any(alias.name == "ConfigEntry" for alias in node.names)
+            for node in ast.walk(tree)
+        ):
             failures.append(
                 f"{relative(path)} must import BticinoC300XConfigEntry from entry_types.py"
             )
-        if "config_entries.ConfigEntry" in text:
+        if _uses_untyped_config_entry(tree):
             failures.append(
                 f"{relative(path)} must use BticinoC300XConfigEntry for entry annotations"
             )
     return failures
+
+
+def _uses_untyped_config_entry(tree: ast.AST) -> bool:
+    """Inspect exact attributes, including forward-reference annotations."""
+
+    nodes = list(ast.walk(tree))
+    annotations: list[ast.AST] = []
+    for node in nodes:
+        if isinstance(node, ast.arg | ast.AnnAssign) and node.annotation is not None:
+            annotations.append(node.annotation)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.returns is not None:
+            annotations.append(node.returns)
+        elif isinstance(node, ast.TypeAlias):
+            annotations.append(node.value)
+    seen_references: set[str] = set()
+    while annotations:
+        annotation = annotations.pop()
+        for node in ast.walk(annotation):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if node.value in seen_references:
+                    continue
+                seen_references.add(node.value)
+                try:
+                    reference = ast.parse(node.value, mode="eval")
+                except SyntaxError:
+                    # Invalid annotations are diagnosed by the typing gate.
+                    continue
+                nodes.extend(ast.walk(reference))
+                annotations.append(reference)
+    return any(
+        isinstance(node, ast.Attribute)
+        and node.attr == "ConfigEntry"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "config_entries"
+        for node in nodes
+    )
 
 
 def check_smoke_ha_versions() -> list[str]:

@@ -23,7 +23,7 @@ def test_update_paths_hashes_and_unchanged_file_writes(tmp_path, sanitize, legac
         shutil.copyfile(ROOT / "native_agent/test/agent_update_test.c", root / "test/agent_update_test.c")
         header = root / "src/agent_update_paths.h"
         before = header.read_text()
-        after = "\n".join(line for line in before.splitlines() if "C300XEnergyDistribution.qml" not in line) + "\n"
+        after = "\n".join(line for line in before.splitlines() if "C300XEnergyConsumers.qml" not in line) + "\n"
         assert before != after
         header.write_text(after)
     flags = ["-O1", "-g", "-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else ["-O2"]

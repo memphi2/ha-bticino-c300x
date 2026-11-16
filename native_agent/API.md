@@ -12,14 +12,17 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `2.4.0`
+- Current agent version: `2.5.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
 `agent.self_update_file_set_version` advertises the updater's supported payload
 file set (`1` when the field is missing). A bundle's `update_file_set_version`
 declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
-set `3` adds `C300XEnergy.qml`, and set `4` adds `C300XEnergyDistribution.qml`.
+set `3` adds `C300XEnergy.qml`, and set `4` is the retired 2.4.1 energy-view set.
+Set `5` adds the 2.5 display navigation, optional-page, Consumers and alert
+components. The matching native agent and complete display bundle are required;
+updating the HA integration alone does not install these GUI components.
 When the installed self-updater cannot install the target file set, Home
 Assistant first installs and verifies the new executable, then completes the
 payload once through that updater using the same maintenance token. A matching
@@ -157,6 +160,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/display-bridge` | API | None. |
 | `POST` | `/api/v1/display-bridge` | API | Updates runtime display bridge callback config. |
 | `POST` | `/api/v1/display-bridge/events` | API | Wakes local display listeners for one topic. |
+| `POST` | `/api/v1/display/alert` | API | One immediate delivery to a waiting GUI alert connection; no deferred queue. |
 | `GET` | `/api/v1/events/recent` | API | None. |
 | `GET` | `/api/v1/events/subscriptions` | API | None. |
 | `POST` | `/api/v1/events/subscriptions` | API | Adds or replaces a runtime event subscription. |
@@ -495,6 +499,59 @@ Request fields:
 ```
 
 Response status: `202 Accepted` on success.
+
+### `POST /api/v1/display/alert`
+
+Authentication: normal API token. Requires capability `display_alerts` and the
+matching Display patch. The HA standard Notify service prepares this payload;
+it is not an arbitrary command or media endpoint.
+
+Only these fields are accepted, all required:
+
+| Field | Constraint |
+| --- | --- |
+| `id`, `revision` | 32 lowercase hexadecimal characters each; delivery ID and HA notice revision. |
+| `notification_id` | 1 to 64 lowercase letters, digits, `_` or `-`. |
+| `severity` | `info`, `warning` or `error`. |
+| `title`, `message` | Text, at most 80 and 500 Unicode characters respectively; the HA service rejects empty text. |
+| `wake_duration`, `sound_duration` | Integer seconds from 0 to 300; 0 disables that effect. |
+| `expires_in` | Integer seconds from 1 to 604800 for the notice lifetime. |
+
+The body is limited to 7680 bytes. Query parameters, extra fields, arbitrary
+URLs, audio files and commands are rejected. HA supplies defaults: severity
+`info`, wake 30 seconds, sound 30 seconds for every severity, expiry
+3600 seconds. These defaults belong to the HA service, not the native schema.
+
+Success is `200 {"ok":true,"accepted":true}` after writing to the already
+waiting GUI connection. This is **transport acceptance only**, not a GUI
+acknowledgement or proof of rendering, physical wake or audible output. The
+GUI can discard blocked, stale or lower-priority alerts. HA performs one POST
+without automatic retries; a lost response does not establish non-delivery.
+
+A live GUI listener that reports a protected context instead returns
+`200 {"ok":true,"accepted":false,"suppressed":true,"reason":"display_protected"}`.
+No command is delivered and the sleeping listener stays connected. HA keeps
+the notice without raising an action error. This outcome is also retained in
+the receipt table, so repeating it after leaving the protected screen cannot
+replay the effects.
+
+No waiting GUI returns `503 display_alerts_gui_unavailable`; nothing is queued
+for a later connection or wake. A failed delivery returns
+`503 display_alerts_delivery_failed`. The in-memory deduplication table retains
+64 delivery receipts for five minutes. Repeating the same ID and normalized
+payload returns the recorded result without replay; a different payload with
+that ID returns `409 display_alert_id_conflict`. A full receipt table returns
+`503 display_alerts_dedup_full`. Other errors include
+`400 invalid_display_alert`, `413 display_alert_too_large` and
+`503 display_alerts_unavailable`. There are no runtime notification-file writes
+or idle expiry timers.
+
+Wake and bounded stock short-beep effects are restricted to ready, safe Home/HA
+screens. Calls, ringing, Alarmo and other protected pages block them. User
+interaction or a protected context stops effects, with no deferred replay.
+These alerts are supplementary information, not fire-alarm or life-safety
+functionality. Local strict simulations do not establish physical behavior on
+every device or firmware version.
 
 ## Device Actions
 
@@ -999,7 +1056,9 @@ Validation examples:
 ## Maintenance Actions
 
 QML status/patch and GUI reload keep their HTTP connection open until the script
-finishes, with a 10-second script deadline and without blocking the event loop. Only one
+finishes without blocking the event loop. Status and standalone GUI reload have
+a 10-second script deadline; QML writes allow 30 seconds for rollback and a
+restart of the previous GUI if the initial start check fails. Only one
 such job runs at a time. While it is active, additional script jobs and
 maintenance POST requests return `409` with `error: maintenance_busy` after
 authentication. Retrying must wait for the current job to finish. A client
@@ -1305,6 +1364,7 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/events/next` | Long-poll next QML event. |
 | `GET` | `/ui/media-closed` | Reports device media-close event. |
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
+| `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
@@ -1317,6 +1377,20 @@ requests to Home Assistant require an active display bridge.
 Home Assistant proxy endpoints use the display bridge and shared secret
 configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
+
+`GET /ui/alerts/next` requires loopback and `X-C300X-GUI: alerts-v1`, with no
+`Origin` or request body. The optional exact query `protected=1` reports a
+protected screen or call; all other query strings are rejected. Only one waiter
+is retained; another receives
+`409 display_alerts_listener_busy`. Idle waiting has no polling timer. Delivery
+closes the connection and adds `remaining_ms`, `expires` (Unix milliseconds)
+and `message_expires` (Unix milliseconds) to the validated alert. Delivery
+freshness is limited to five seconds or the shorter notice lifetime. The GUI
+checks freshness, deduplication, revision and safe-context rules before effects;
+the connection is not a physical-effect acknowledgement. Failed listener
+connections reconnect after a delay, without replaying past alerts.
+The GUI reconnects when its protection state changes. Protection belongs to
+that live connection and is cleared when it closes; it is not a persistent flag.
 
 `GET /ui/preferences` returns `{"ok":true,"feedback_enabled":true}` by default.
 Both `/ui/touch-tone/` routes require loopback, `X-C300X-UI: 1` and no `Origin`
@@ -1352,5 +1426,5 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.4.0` serves self-test contract `api_version: "1.1"` for firmware family
+Agent `2.5.0` retains self-test contract `api_version: "1.1"` for firmware family
 `1.7.x`. The release notes list the agent changes of each version.

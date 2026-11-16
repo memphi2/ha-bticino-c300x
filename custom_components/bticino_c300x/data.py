@@ -212,6 +212,7 @@ class C300XRuntimeResources:
     unregister_event_webhook: Callable[[], None] | None = None
     unregister_event_registration: Callable[[], None] | None = None
     on_runtime_registration_created: Callable[[], Awaitable[None]] | None = None
+    display_bridge_registration_pending: bool = False
     unregister_display_bridge_updates: Callable[[], None] | None = None
     close_display_notifications: Callable[[], None] | None = None
     prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None
@@ -252,6 +253,7 @@ class C300XRuntimeResources:
         self.unregister_event_webhook = None
         self.unregister_webhook = None
         self.on_runtime_registration_created = None
+        self.display_bridge_registration_pending = False
         self.prepare_doorbell_video_stop = None
         self.prepare_home_call_stop = None
         self.media_session_count = None

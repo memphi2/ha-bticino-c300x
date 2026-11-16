@@ -15,7 +15,7 @@ import pytest
 from native_agent.test.smoke import (
     TOKEN,
     OpenWebNetServer,
-    free_tcp_port,
+    free_tcp_ports,
     managed_tcp_server,
     wait_for_health,
     write_memo,
@@ -68,8 +68,8 @@ def test_download_backpressure_capacity_disconnect_and_shutdown(native_binary, t
         "/api/v1/answering-machine/messages/" if kind == "video" else "/api/v1/memos/voice/"
     )
     suffix = "/video" if kind == "video" else "/audio"
-    api_port, ui_port = free_tcp_port(), free_tcp_port()
     with managed_tcp_server(OpenWebNetServer()) as own:
+        api_port, ui_port = free_tcp_ports(2)
         config = {
             "listen": {"host": "127.0.0.1", "apiPort": api_port, "uiPort": ui_port},
             "api": {"token": TOKEN},

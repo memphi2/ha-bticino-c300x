@@ -31,8 +31,10 @@ go through `executor.py`, also used by the existing service use cases. Both use
 readiness and code policy; neither shared module imports the command executor.
 
 The optional energy page uses pure formatters in `dashboard_energy.py` and
-`dashboard_energy_charts.py`. `dashboard_energy_distribution.py` prepares a
-bounded Sankey payload from current power, without recorder queries.
+`dashboard_energy_charts.py`. `dashboard_energy_consumers.py` selects up to ten
+consumers from the live power sensors explicitly configured in HA Energy,
+without recorder queries or inferred sensor mappings. Values are current watts,
+not accumulated energy; unavailable sensors are omitted.
 `dashboard_energy_data.py` reads HA's Energy setup
 and daily recorder statistics; `dashboard_energy_power.py` aggregates recorded
 power into 15-minute curves. These reads share bounded, five-minute caches in
@@ -40,11 +42,13 @@ HA RAM, only while their views are enabled. Shared daily data is retained when
 another enabled view still needs it; disabling all views releases both caches
 and stops new reads. Nothing is recorded or stored additionally on the C300X.
 `dashboard_energy_updates.py` owns subscriptions and the existing five-minute
-refresh; Now and Distribution share live power subscriptions, throttled to ten
+refresh; Now and Consumers share live power subscriptions, throttled to ten
 seconds. Unloading releases these resources. `C300XEnergy.qml` draws the page
 only while open and creates curve segments only for the visible Power view.
-The separate `C300XEnergyDistribution.qml` component is loaded only for the
-visible Distribution view and uses bounded native rectangles for its ribbons.
+The separate `C300XEnergyConsumers.qml` component is loaded only for the
+visible Consumers view. It draws two columns of five bars with independently
+scaled logarithmic axes and explicit W/kW tick labels. Colors are stable per
+entity; the component releases its scale timer when hidden.
 
 Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
 agent API. `resources` owns its tasks, subscriptions and media preparation
@@ -81,10 +85,17 @@ Responsibilities:
 
 QML status/patch scripts and GUI reload run as a single bounded child-process
 job in `command_job.c`. The main poll loop continues serving events and requests;
-it never waits synchronously for these scripts. Jobs have a 10-second deadline,
-bounded output and no extra wakeups while idle. Concurrent maintenance writes
+it never waits synchronously for these scripts. Status and standalone GUI reload
+jobs have a 10-second deadline; QML writes allow 30 seconds for a failed start,
+file rollback and restart of the previous GUI. Output is bounded and there are
+no extra wakeups while idle. Concurrent maintenance writes
 are rejected as busy. A disconnected client does not restart or duplicate its
 job. Other legacy maintenance operations are not yet asynchronous.
+
+QML write transactions retain their previous active files until the GUI process
+start check succeeds. A failed start restores those files before attempting to
+restart the previous GUI. Process presence is not a QML-readiness handshake:
+offline compatibility checks and the pre-merge device test remain necessary.
 
 ### Device QML UI
 

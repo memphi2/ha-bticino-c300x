@@ -12,7 +12,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from native_agent.test.smoke import TOKEN, free_tcp_port, wait_for_health
+from native_agent.test.smoke import (
+    TOKEN,
+    free_tcp_port,
+    free_tcp_ports,
+    wait_for_health,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADER = {"X-C300X-UI": "1"}
@@ -75,11 +80,11 @@ def file_state(path):
 @pytest.fixture
 def lab(native_preferences_binary, tmp_path):
     binary, preload = native_preferences_binary
-    api, ui = free_tcp_port(), free_tcp_port()
+    api, ui, own = free_tcp_ports(3)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
         "api": {"token": TOKEN},
-        "openwebnet": {"host": "127.0.0.1", "port": free_tcp_port(), "timeoutMs": 100},
+        "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
         "activations": {"enabled": False, "autoDiscover": False},
         "events": {"udp": {"enabled": False}}, "memos": {"enabled": False},
         "answeringMachine": {"messages": {"enabled": False}},

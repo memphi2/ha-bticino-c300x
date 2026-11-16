@@ -61,10 +61,8 @@ def test_battery_unconfigured_zero_and_configured_unknown_match_live_and_history
     assert all("partial" not in item for item in series.values())
     if expected is not None:
         assert series["battery"]["label"] == "Battery"
-        axis = payload["axis"]
         for key, value in (("battery", expected), ("home", 1000 + expected)):
-            actual = series[key]["points"][0] * (axis["max"] - axis["min"]) + axis["min"]
-            assert actual == pytest.approx(value, abs=0.03)
+            assert series[key]["values"][0] == value
 
 
 def test_empty_battery_source_does_not_require_a_power_sensor():

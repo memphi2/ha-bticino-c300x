@@ -31,6 +31,7 @@ from custom_components.bticino_c300x.dashboard_controls import (
     entity_controls,
     finite_number,
 )
+from custom_components.bticino_c300x.dashboard_response import display_json_dumps
 from custom_components.bticino_c300x.executor import async_execute_dashboard_action
 
 
@@ -40,6 +41,7 @@ def state(value="on", **attributes):
 
 def hass_for(snapshot):
     return SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=lambda _: snapshot),
         services=SimpleNamespace(async_call=AsyncMock()),
         bus=SimpleNamespace(async_fire=lambda *_: None),
@@ -753,6 +755,7 @@ def test_a_select_tile_offers_the_first_options_of_its_submenu():
     snapshot = state(long_names[0], options=long_names, friendly_name="Station")
     submenu = entity_controls("select.station", snapshot)[0]["options"]
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get={"select.station": snapshot}.get),
         config=SimpleNamespace(language="en"),
     )
@@ -761,7 +764,8 @@ def test_a_select_tile_offers_the_first_options_of_its_submenu():
         options={"device_ui_enabled": True, "dashboard_entities": ["select.station"]},
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    tile = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    tile = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "select.station")
     assert len(submenu) < len(long_names)
     assert [option["value"] for option in tile["options"]] == submenu
 
@@ -783,6 +787,7 @@ def _player(number, names):
 
 def _dashboard(states, *, notifications=()):
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en"),
     )
     store = SimpleNamespace(payload=lambda: list(notifications))
@@ -802,9 +807,9 @@ def _agent_response_buffer():
 
 
 def _sent_bytes(payload):
-    """Return the body the webhook sends: aiohttp's json_response default."""
+    """Return the compact UTF-8 body sent by the webhook."""
 
-    return len(web.json_response({**payload, "revision": "0" * 16}).body)
+    return len(web.json_response({**payload, "revision": "0" * 16}, dumps=display_json_dumps).body)
 
 
 def _choice_lists(payload):
@@ -906,13 +911,14 @@ def test_a_dashboard_too_large_without_lists_is_logged_once(caplog):
     many = {f"light.l{n}": _light(n) for n in range(40)}
     caplog.set_level(logging.WARNING, logger="custom_components.bticino_c300x.dashboard")
     for _ in range(2):
-        payload = _dashboard(many)
-    assert len(payload["data"]["pages"][-1]["items"]) == 40
+        with pytest.raises(ValueError, match="^dashboard_too_large$"):
+            _dashboard(many)
     warnings = [record for record in caplog.records if "display dashboard" in record.getMessage()]
     assert len(warnings) == 1
     _dashboard({"light.l0": _light(0)})
     caplog.clear()
-    _dashboard(many)
+    with pytest.raises(ValueError, match="^dashboard_too_large$"):
+        _dashboard(many)
     assert [record for record in caplog.records if "display dashboard" in record.getMessage()]
 
 
@@ -1184,7 +1190,8 @@ def test_a_lock_is_a_tile_with_a_detail_page_and_only_runs_selected_entities():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "lock.front")
 
     assert item["kind"] == "entity"
     assert item["entity_id"] == "lock.front"
@@ -1279,7 +1286,8 @@ def test_a_vacuum_is_a_tile_with_a_detail_page():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "vacuum.robot")
 
     assert item["kind"] == "entity"
     assert item["glyph"] == "↺"
@@ -1343,7 +1351,8 @@ def test_a_valve_is_a_tile_that_reads_its_position_or_its_state():
             data={}, options={"device_ui_enabled": True, "dashboard_entities": ["valve.water"]}, entry_id="entry",
         )
         payload = asyncio.run(async_dashboard_payload(hass, entry))
-        return next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+        return next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                    if item.get("entity_id") == "valve.water")
 
     with_position = tile(40)
     assert with_position["kind"] == "entity"
@@ -1421,7 +1430,8 @@ def test_a_humidifier_is_a_switch_tile_that_reads_the_room_humidity():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "humidifier.room")
 
     assert item["kind"] == "switch"
     assert item["state"] is True
@@ -1486,7 +1496,8 @@ def test_a_water_heater_is_a_tile_that_reads_the_water_temperature():
     )
 
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "water_heater.boiler")
 
     assert item["kind"] == "entity"
     assert item["glyph"] == "♨"

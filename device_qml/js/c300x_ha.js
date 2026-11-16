@@ -532,6 +532,24 @@ function dashboardNextPage(statusItem, pageItem) {
     loadDashboardPage(statusItem, pageItem)
 }
 
+function dashboardSelectPage(index, statusItem, pageItem) {
+    if (typeof index !== "number" || index !== Math.floor(index)
+            || index < 0 || index >= pageItem.pageCount) return
+    pageItem.currentPageIndex = index
+    loadDashboardPage(statusItem, pageItem)
+}
+
+function dashboardPageLinks(pageItem) {
+    var pages = listOrEmpty(pageItem.dashboardPages)
+    var links = []
+    for (var i = 0; i < pages.length; i++) {
+        if (i !== pageItem.currentPageIndex) {
+            links.push({index: i, title: pages[i].title || pages[i].name || String(i + 1)})
+        }
+    }
+    return links
+}
+
 function dashboardPreviousPage(statusItem, pageItem) {
     if (pageItem.pageCount <= 1) {
         return
@@ -1013,6 +1031,10 @@ function loadDashboardPage(statusItem, pageItem) {
     applyWeather(pageItem, pageData.weather)
     assignDashboardValue(pageItem, "energy", energy || {})
     pageItem.energyVisible = energy !== null
+    assignDashboardValue(pageItem, "agenda", pageData.agenda || {})
+    pageItem.agendaVisible = !!pageData.agenda
+    assignDashboardValue(pageItem, "leaveHome", pageData.leave_home || {})
+    pageItem.leaveHomeVisible = !!pageData.leave_home
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {
@@ -1124,8 +1146,8 @@ function dashboardMixedItems(source) {
             normalized = dashboardChoices([source[i]])
         } else if (kind === "image") {
             normalized = dashboardImages([source[i]])
-        } else if (kind === "weather") {
-            normalized = [{kind: "weather"}]
+        } else if (kind === "weather" || kind === "navigation") {
+            normalized = [{kind: kind}]
         } else {
             normalized = dashboardItems([source[i]], kind || "entity")
         }
@@ -1631,11 +1653,18 @@ function sendForward(entry) {
             finishForward(xhr)
         }
     }
-    xhr.open("GET", BASE_URL + entry.path)
-    xhr.send()
+    try {
+        xhr.open("GET", BASE_URL + entry.path)
+        xhr.send()
+    } catch (error) {
+        xhr.onreadystatechange = function() {}
+        try { xhr.abort() } catch (abortError) {}
+        removeConnection(xhr)
+        try { deliverForward(xhr, "transport error") } finally { finishForward(xhr) }
+    }
 }
 
-function deliverForward(xhr) {
+function deliverForward(xhr, transportError) {
     var waiters = xhr.waiters
     // Taken before the first callback runs: a callback can start the next
     // request, and an answered read must not still collect waiters.
@@ -1643,16 +1672,16 @@ function deliverForward(xhr) {
     xhr.sharedPath = ""
     if (!commandScopeCurrent(xhr.scope)) return
     var data = null
-    var failure = ""
+    var failure = transportError || ""
     if (xhr.scope && Date.now() >= xhr.scope.expires) {
         failure = "command expired"
-    } else if (xhr.status === 200) {
+    } else if (!failure && xhr.status === 200) {
         try {
             data = JSON.parse(xhr.responseText)
         } catch (error) {
             failure = "Invalid JSON"
         }
-    } else {
+    } else if (!failure) {
         failure = "API error: " + xhr.status
     }
     for (var i = 0; i < waiters.length; i++) {

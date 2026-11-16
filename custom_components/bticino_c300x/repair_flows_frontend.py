@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import suppress
 from typing import Any, cast
 
+from homeassistant.components.lovelace.const import ConfigNotFound
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -150,8 +151,10 @@ async def _async_setup_lovelace_cards(
     dashboard_path, dashboard = _storage_lovelace_dashboard(hass, dashboard_path)
     try:
         config = await dashboard.async_load(False)
-    except Exception:  # noqa: BLE001 - storage dashboards may still be auto-generated
+    except ConfigNotFound:
         config = {"views": []}
+    except Exception as err:
+        raise _LovelaceCardSetupError("lovelace_config_invalid") from err
     if not isinstance(config, dict):
         raise _LovelaceCardSetupError("lovelace_config_invalid")
     views = config.setdefault("views", [])
@@ -351,14 +354,18 @@ def _is_empty_placeholder_view(view: dict[str, Any]) -> bool:
 def _cards_for_view(view: dict[str, Any]) -> list[dict[str, Any]]:
     """Return the card list where generated cards should be added."""
 
-    sections = view.setdefault("sections", [{"type": "grid", "cards": []}])
-    if isinstance(sections, list) and sections:
+    if view.get("type") == "sections":
+        sections = view.setdefault("sections", [])
+        if not isinstance(sections, list):
+            raise _LovelaceCardSetupError("lovelace_config_invalid")
+        if not sections:
+            sections.append({"type": "grid", "cards": []})
         section = sections[0]
-        if isinstance(section, dict):
-            cards = section.setdefault("cards", [])
-            if isinstance(cards, list):
-                return cards
-    cards = view.setdefault("cards", [])
+        if not isinstance(section, dict):
+            raise _LovelaceCardSetupError("lovelace_config_invalid")
+        cards = section.setdefault("cards", [])
+    else:
+        cards = view.setdefault("cards", [])
     if isinstance(cards, list):
         return cards
     raise _LovelaceCardSetupError("lovelace_config_invalid")

@@ -47,6 +47,7 @@ from .dashboard import (
     async_dashboard_payload,
     async_status,
 )
+from .dashboard_response import display_json_dumps
 from .data import C300XEventState
 from .doorbell_state import raw_doorbell_state_value
 from .entity import entry_config_value
@@ -192,6 +193,7 @@ async def _async_handle_webhook(
 ) -> web.Response:
     """Handle a webhook request from the local C300X display bridge."""
 
+    runtime_data = getattr(entry, "runtime_data", None)
     expected_secret = entry.data.get(CONF_SHARED_SECRET, "")
     supplied_secret = request.headers.get(HEADER_SHARED_SECRET, "")
     if not _secrets_match(expected_secret, supplied_secret):
@@ -201,6 +203,13 @@ async def _async_handle_webhook(
         payload = await request.json()
     except Exception:  # noqa: BLE001 - request body parsing must not leak details
         return _json_error("invalid_json", status=400)
+
+    # Removing the route cannot cancel a request already reading its body.
+    if (
+        getattr(entry, "runtime_data", None) is not runtime_data
+        or getattr(getattr(runtime_data, "resources", None), "closed", False)
+    ):
+        return _json_error("entry_unloaded", status=503)
 
     if not isinstance(payload, dict):
         return _json_error("invalid_payload", status=400)
@@ -212,7 +221,8 @@ async def _async_handle_webhook(
 
     try:
         return web.json_response(
-            await handler(_DisplayBridgeContext(hass, entry, payload))
+            await handler(_DisplayBridgeContext(hass, entry, payload)),
+            dumps=display_json_dumps,
         )
     except KeyError:
         return _json_error("unknown_action", status=404)
@@ -320,6 +330,12 @@ async def _async_handle_agent_event(
         return _json_error("unauthorized", status=401)
 
     payload = await _event_payload(request)
+    # Unregistering the route does not stop requests already reading their body.
+    if (
+        getattr(entry, "runtime_data", None) is not runtime_data
+        or getattr(getattr(runtime_data, "resources", None), "closed", False)
+    ):
+        return _json_error("entry_unloaded", status=503)
     event_type = _normalize_event_type(_event_type_value(payload))
     if not event_type:
         return _json_error("unsupported_event", status=400)

@@ -1,5 +1,58 @@
 # Changelog
 
+## v2.5.0 - 2026-11-16
+
+- Direct page buttons below the weather on the status page, including when no
+  weather entity is selected. Navigation reuses the loaded dashboard.
+- Independently enabled Agenda and Leave home pages. Agenda shows five events
+  in seven days from explicitly selected calendars, with bounded background HA
+  caching. Leave home checks selected contacts and lights; selected allowlisted
+  actions require a second Confirm tap and never run when opening the page.
+- Configure all page positions from 1 to 11, including regular pages and Energy,
+  Agenda and Leave home (defaults 2, 10 and 11). Disabled pages keep their
+  selections and position; equal positions use that optional-page order before
+  regular pages. The configuration sections show each page's position and
+  follow the display order, including Energy, Agenda and Leave home.
+- Capability-based native controls with clearer state and offline feedback;
+  exact Energy chart interval/value selection and compact HA history.
+- Replace the removed Distribution view with explicitly enabled **Consumers**:
+  ten configured electrical devices by current W, descending in two columns of
+  five, with independently scaled bars and stable colors. Measured zero remains
+  visible; unavailable readings are omitted. No recorder reads for this view.
+  The retired selection is removed without enabling Consumers or any other
+  view; other selected views remain unchanged.
+- Standard per-entry Notify service with severity and bounded wake/stock-beep
+  durations (maximum 300 seconds). Defaults: 30 seconds wake and sound for
+  all three severities. Effects only on safe Home/HA screens, never
+  queued for a later wake, and never a fire-alarm substitute. One POST, with
+  transport acceptance distinct from physical-effect confirmation. Protected
+  screens and calls explicitly suppress effects without an action error;
+  unavailable GUI connections still report delivery failures. Actions have
+  readable names rather than config-entry IDs.
+- Preserve the previous display files when a GUI restart fails, and report
+  update cleanup or read-only remount failures instead of claiming success.
+- Keep display requests and cleanup compatible with the device's Qt 4 runtime;
+  failed notification acknowledgements remain visible and can be retried.
+- Restrict Notify calls to administrators and trusted automations. Ignore stale
+  webhook and card completions after their runtime or call has been replaced.
+- Reject agent HTTP redirects instead of forwarding credentials, bind connection
+  changes to the confirmed device identity, and verify the saved device before
+  adopting a discovered identity.
+- Preserve newer connection settings when saving an older options dialog,
+  and reload recovered entries once after an atomic configuration update.
+  Native-camera microphone support stays disabled when video is disabled or
+  the Home Assistant version does not support it, including concurrent edits.
+- Discard late display commands and diagnostic responses after unload, and retry
+  failed display-bridge registration on renewal without polling healthy bridges.
+  Late discovery responses cannot restart a closed event subscription.
+- Preserve dashboard configuration when a Lovelace repair cannot read it.
+  Bound calendar work and display payloads, and stop calendar resources when
+  their page is disabled or reconfigured.
+- Document the HA quality scale as a per-rule self-assessment, not an awarded
+  tier, with explicit remaining gaps and removal and connection guidance.
+- Requires the matching 2.5.0 agent and display bundle. Update the packaged
+  agent and apply the Display patch when prompted after restarting HA.
+
 ## v2.4.1 - 2026-11-15
 
 ### Added

@@ -88,6 +88,7 @@ from .const import (
     WEBRTC_ICE_POLICIES,
 )
 from .dashboard_energy import normalize_energy_page
+from .dashboard_optional_config import optional_page_values
 from .device_activations import (
     DeviceActivationConfigError,
     normalize_device_activations,
@@ -449,6 +450,7 @@ def _dashboard_feature_input(
         dashboard_dynamic_homepage = True
     return {
         CONF_ALARM_ENTITY_ID: alarm_entity_id,
+        **optional_page_values(user_input if device_ui_enabled else {}),
         CONF_ALARM_PAGE_ENTITY_ID: alarm_page_entity_id,
         CONF_WEATHER_ENTITY_ID: weather_entity_id,
         CONF_DASHBOARD_ENTITIES: dashboard_entities,
@@ -548,6 +550,7 @@ def _feature_input(
     return (
         {
             **snapshots,
+            **optional_page_values(dashboard),
             CONF_ALARM_ENTITY_ID: dashboard[CONF_ALARM_ENTITY_ID],
             CONF_ALARM_PAGE_ENTITY_ID: dashboard[CONF_ALARM_PAGE_ENTITY_ID],
             CONF_WEATHER_ENTITY_ID: dashboard[CONF_WEATHER_ENTITY_ID],

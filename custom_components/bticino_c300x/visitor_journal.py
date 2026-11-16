@@ -13,6 +13,7 @@ from typing import Any
 from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 
+from .capture_history import CaptureHistory
 from .config_snapshots import snapshot_options
 from .const import DOMAIN, EVENT_AGENT_EVENT_RECEIVED
 from .event_payload import agent_event_key
@@ -62,6 +63,7 @@ class VisitorJournal:
             private=True, atomic_writes=True,
         )
         self.records: dict[str, dict[str, Any]] = {}
+        self.captures = CaptureHistory()
         self._active: str | None = None
         self._active_until = 0.0
         self.latest_source: str | None = None
@@ -84,6 +86,8 @@ class VisitorJournal:
 
     async def load(self) -> None:
         data = await self.store.async_load()
+        if isinstance(data, dict):
+            self.captures.load(data.get("captures"))
         if isinstance(data, dict) and isinstance(data.get("visits"), list):
             for raw in data["visits"][-MAX_VISITS:]:
                 item = _validated_record(raw)
@@ -159,33 +163,52 @@ class VisitorJournal:
 
     async def attach_clip(self, key: str | None, metadata: Mapping[str, Any]) -> None:
         """Link only a completed default-path capture, never a mutable latest alias."""
-        if self.closed or key is None or key != self.active or key not in self.records:
+        if self.closed:
             return
-        if metadata.get("entry_id") != self.entry.entry_id or metadata.get("capture_mode") != "ring":
+        if (metadata.get("entry_id") != self.entry.entry_id
+                or metadata.get("capture_mode") not in {"ring", "on_demand"}):
             return
+        from .snapshots import get_snapshots
         from .visitor_journal_media import describe_clip
 
+        manager = get_snapshots(self.hass, self.entry.entry_id)
         try:
-            clip = await self.hass.async_add_executor_job(describe_clip, self.hass, metadata)
+            if manager is not None:
+                async with manager.lock:
+                    if self.closed or manager.closed or manager.journal is not self:
+                        return
+                    clip = await manager.disk_job(describe_clip, self.hass, metadata)
+            else:
+                clip = await self.hass.async_add_executor_job(describe_clip, self.hass, metadata)
         except (KeyError, OSError, TypeError, ValueError):
             return
-        if clip and not self.closed and key == self.active and key in self.records:
-            self.records[key]["clip"] = clip
+        if clip and not self.closed and (manager is None or (
+            not manager.closed and get_snapshots(self.hass, self.entry.entry_id) is manager
+            and manager.journal is self
+        )):
+            self.captures.add(clip, metadata.get("captured_at"))
+            if metadata.get("capture_mode") == "ring" and key == self.active and key in self.records:
+                self.records[key]["clip"] = clip
+            self.prune()
             self.changed()
 
     def prune(self) -> None:
+        captures_changed = self.captures.prune(snapshot_options(self.entry).retention_days)
         cutoff = time.time() - snapshot_options(self.entry).retention_days * 86400
         kept = sorted(
             (item for item in self.records.values() if cutoff < item["at"] <= time.time()),
             key=lambda item: (item["at"], item["id"]),
         )[-MAX_VISITS:]
         records = {item["id"]: item for item in kept}
-        while len(json.dumps({"visits": list(records.values())})) > MAX_JOURNAL_BYTES:
+        while records and len(json.dumps({"visits": list(records.values()),
+                                          "captures": list(self.captures.records.values())})) > MAX_JOURNAL_BYTES:
             records.pop(next(iter(records)))
         if records != self.records:
             self.records = records
             if self.active not in records:
                 self.active = None
+            self.changed()
+        elif captures_changed:
             self.changed()
 
     def items(self) -> list[dict[str, Any]]:
@@ -195,11 +218,19 @@ class VisitorJournal:
     def changed(self) -> None:
         if not self.closed:
             self.store.async_delay_save(self._payload, 1)
+            self.invalidate()
+
+    def invalidate(self) -> None:
+        """Notify history readers without persisting unchanged journal metadata."""
+        if not self.closed:
             # Only invalidation crosses the event bus, never visitor/media data.
             self.hass.bus.async_fire(EVENT_JOURNAL_CHANGED, {"entry_id": self.entry.entry_id})
 
     def _payload(self) -> dict[str, Any]:
-        return {"visits": list(self.records.values())}
+        result = {"visits": list(self.records.values())}
+        if self.captures.records:
+            result["captures"] = list(self.captures.records.values())
+        return result
 
     def close(self) -> None:
         self.closed = True

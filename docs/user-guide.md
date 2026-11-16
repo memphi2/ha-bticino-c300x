@@ -28,19 +28,31 @@ Most users only need:
 | Add notification or capture automations | [Blueprints](blueprints.md) |
 | Set up native display pages, tiles and Alarmo | [Display setup](quickstart.md#9-optional-native-display) |
 | Save visitor images and control retention | [Visitor images](feature-reference.md#visitor-images) |
-| Browse a visit's saved image or video in the card | [Visitor journal](visitor-journal.md) |
+| Browse saved HA images and videos in the card | [Media history](visitor-journal.md) |
 | Upgrade from 2.3.0 or 2.1.3 | [Upgrade guide](advanced-maintenance.md#updates) |
 | Update, remove or repair the device agent | [Advanced maintenance](advanced-maintenance.md) |
 
 ## Daily Use
 
 - **Save images** enables automatic visitor images independently of an open
-  dashboard. Size, delay, retention and the date and time in the image are
-  configured under **Configure > Visitor Snapshot**; defaults are 688x480,
+  dashboard, on doorbell rings and HA video streams. Size, delay, retention and
+  the date and time in the image are configured under **Configure > Visitor
+  Snapshot**; defaults are 688x480,
   3 seconds, 14 days and date and time on. Images and their shared camera/card preview are
   stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
 - Use the **C300X Doorbell Call Card** in **Doorstation + Home Call** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.
+- **Browse saved images and videos** is on by default (`show_media_history: true`). Browse
+  saved HA snapshots and capture videos with previous/next in the same media
+  window; videos have play/pause, a timeline, volume/mute and fullscreen, with
+  their timestamp at the lower right. Live video and incoming rings take
+  priority. Browsing never starts, answers or stops a device call.
+- History does not record videos or include the device's answering-machine
+  recordings. Use the bundled **C300X Ring capture** blueprint to configure
+  automatic clips; its default audio capture answers the Ring Call. Follow
+  [Media history](visitor-journal.md#recording-videos) for setup and constraints.
+- Set `show_media_history: false` to hide history on one card without changing
+  live/call controls, image saving, capture automations or storage retention.
 - Keep the card's Media Readiness line visible unless you intentionally want to
   hide all readiness status from that card.
 - Keep **Forwarding** set to **Home Assistant** when you want Ring Calls to be
@@ -59,7 +71,7 @@ Most users only need:
 | Doorbell and Ring Call | C300X Doorbell Call Card, Forwarding select, Doorbell event, Doorbell state, Answer/Hang Up services. |
 | On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`. |
 | Visitor images | Device-wide Save images switch; size, capture delay, retention and date and time under Visitor Snapshot; archive in HA Media and last-image previews. |
-| Visitor journal | Optional card viewer for observed visits and their available saved images and clips; browsing never starts a live stream or recording. |
+| Media history | Enabled by default in the doorstation card; previous/next browses HA snapshots and indexed capture videos inline. Independent visibility switch; no recording or device-call action from browsing. |
 | Talkback | Secure browser frontend with microphone permission; HTTPS or Home Assistant Cloud is expected. |
 | Home Call | Auto card, dedicated Home Call mode or `start_home_call` / `stop_home_call`. |
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |

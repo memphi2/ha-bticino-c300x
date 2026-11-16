@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from homeassistant.core import HomeAssistant
+from test_stream_snapshot_store import jpeg
 from test_stream_snapshots import manager_for
 
 from custom_components.bticino_c300x import visitor_journal as journal_module
@@ -30,6 +31,58 @@ def fixture(tmp_path, monkeypatch):
     journal = manager.journal = VisitorJournal(manager.hass, manager.entry)
     journal.store = SimpleNamespace(async_load=AsyncMock(return_value=None), async_save=AsyncMock(), async_delay_save=Mock())
     return manager, journal
+
+
+def test_invalidation_notifies_without_storage_and_changes_still_persist(tmp_path, monkeypatch):
+    _, journal = fixture(tmp_path, monkeypatch)
+    before = json.dumps(journal._payload())
+    journal.invalidate()
+    assert json.dumps(journal._payload()) == before
+    journal.store.async_delay_save.assert_not_called()
+    journal.hass.bus.async_fire.assert_called_once_with(
+        journal_module.EVENT_JOURNAL_CHANGED, {"entry_id": "one"},
+    )
+    journal.hass.bus.async_fire.reset_mock()
+    journal.event(event())
+    journal.store.async_delay_save.assert_called_once_with(journal._payload, 1)
+    journal.hass.bus.async_fire.assert_called_once_with(
+        journal_module.EVENT_JOURNAL_CHANGED, {"entry_id": "one"},
+    )
+    assert len(journal._payload()["visits"]) == 1
+    journal.store.async_delay_save.reset_mock()
+    journal.hass.bus.async_fire.reset_mock()
+    journal.close()
+    journal.invalidate()
+    journal.changed()
+    journal.store.async_delay_save.assert_not_called()
+    journal.hass.bus.async_fire.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["notify", "save", "switch", "refresh"])
+def test_snapshot_only_changes_invalidate_without_persisting_journal(tmp_path, monkeypatch, operation):
+    async def run():
+        manager, journal = fixture(tmp_path, monkeypatch)
+        before = json.dumps(journal._payload())
+        if operation == "notify":
+            manager.notify()
+        elif operation == "save":
+            await manager.save(jpeg(), "on-demand")
+        elif operation == "switch":
+            await manager.async_set_enabled(False)
+        else:
+            manager.store.save(jpeg(), "existing", 14)
+            await manager.refresh()
+        assert json.dumps(journal._payload()) == before
+        journal.store.async_delay_save.assert_not_called()
+        journal.hass.bus.async_fire.assert_called_once_with(
+            journal_module.EVENT_JOURNAL_CHANGED, {"entry_id": "one"},
+        )
+        manager.close()
+        journal.hass.bus.async_fire.reset_mock()
+        manager.notify()
+        journal.hass.bus.async_fire.assert_not_called()
+
+    asyncio.run(run())
 
 
 def test_ring_only_entry_isolation_deduplication_and_no_backfill(tmp_path, monkeypatch):

@@ -204,6 +204,8 @@ class StreamSnapshots:
     def notify(self) -> None:
         if not self.closed:
             async_dispatcher_send(self.hass, SIGNAL_SNAPSHOT_CHANGED, self.entry.entry_id)
+            if self.journal is not None:
+                self.journal.invalidate()
 
     def close(self) -> None:
         self.closed = True

@@ -1,7 +1,7 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=7247e37ddea5ab43";
+} from "./c300x-translations.js?v=1402c4dbdb9334ff";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
@@ -9,7 +9,7 @@ import {
   c300xEntryId,
   c300xFirstEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=7247e37ddea5ab43";
+} from "./c300x-entity-resolver.js?v=1402c4dbdb9334ff";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 
@@ -78,7 +78,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
       show_media_readiness: this._config.show_media_readiness !== false,
       show_door_unlock: this._config.show_door_unlock !== false,
       show_stair_light: this._config.show_stair_light !== false,
-      show_visitor_journal: this._config.show_visitor_journal === true,
+      show_media_history: this._config.show_media_history !== false,
     };
     form.schema = [
       {
@@ -118,7 +118,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
         selector: { boolean: {} },
       },
       {
-        name: "show_visitor_journal",
+        name: "show_media_history",
         selector: { boolean: {} },
       },
       ...(doorbellOnlyMode ? [] : [
@@ -148,7 +148,6 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
 
   _setConfig(config) {
     const nextConfig = { ...config };
-    if (nextConfig.show_visitor_journal !== true) delete nextConfig.show_visitor_journal;
     const modeChanged = this._config.mode !== nextConfig.mode;
     const entityChanged = (nextConfig.entity || "") !== this._displayedEntity;
     for (const [key, value] of Object.entries(nextConfig)) {
@@ -156,7 +155,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
         delete nextConfig[key];
       }
     }
-    for (const key of ["show_media_readiness", "show_door_unlock", "show_stair_light"]) {
+    for (const key of ["show_media_readiness", "show_door_unlock", "show_stair_light", "show_media_history"]) {
       if (nextConfig[key] !== false) {
         delete nextConfig[key];
       }

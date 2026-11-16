@@ -2,7 +2,7 @@
 
 Source review: 2026-11-16. Integration and native agent `2.6.0` development builds
 on the `2.5.0` release line with credential recovery and an HA-only
-visitor journal. The latest stable release is `v2.5.0`. This report covers
+media history. The latest stable release is `v2.5.0`. This report covers
 the local source tree, not a newly published release.
 
 This is a technical provenance and packaging review, not a legal opinion,

@@ -71,6 +71,8 @@ function installAudioContextMock({ resumeState = "running", compressor = true, f
       this.state = "suspended";
       this.source = new MockSourceNode();
       this.gain = { gain: { value: 1 }, connectedTo: null };
+      this.output = { gain: { value: 1 }, connectedTo: null };
+      this.gainCount = 0;
       this.limiter = {
         threshold: { value: 0 },
         knee: { value: 0 },
@@ -92,7 +94,7 @@ function installAudioContextMock({ resumeState = "running", compressor = true, f
     }
 
     createGain() {
-      const gain = this.gain;
+      const gain = this.gainCount++ === 0 ? this.gain : this.output;
       gain.connect = (node) => {
         gain.connectedTo = node;
       };
@@ -142,6 +144,60 @@ function fakeMediaElement() {
 function streamWithAudio() {
   return { id: "remote-stream", getAudioTracks: () => [{ kind: "audio" }] };
 }
+
+test("listening volume and mute survive play, gain changes and retargeting", async () => {
+  const audio = installAudioContextMock();
+  try {
+    let gain = 0;
+    const playback = { volume: 0.35, muted: true };
+    const element = fakeMediaElement();
+    const attachment = new C300XMediaAttachment(element, streamWithAudio(), {
+      getGainDb: () => gain, getPlayback: () => playback,
+    });
+    await attachment.play();
+    assert.equal(element.volume, 0.35);
+    assert.equal(element.muted, true);
+    assert.equal(audio.created.length, 0);
+    gain = 12;
+    await attachment.refreshGain();
+    const ctx = audio.created[0];
+    assert.equal(ctx.output.gain.value, 0);
+    playback.muted = false;
+    attachment.refreshPlayback();
+    assert.equal(ctx.output.gain.value, 0.35);
+    assert.equal(element.muted, true, "Web Audio must not double the direct sound");
+    assert.equal(ctx.gain.gain.value, Math.pow(10, 12 / 20));
+    const target = fakeMediaElement();
+    await attachment.retarget(target);
+    assert.equal(target.volume, 0.35);
+    assert.equal(target.muted, true);
+    playback.muted = true;
+    gain = 0;
+    await attachment.refreshGain();
+    assert.equal(target.muted, true, "Fallback must preserve intentional silence");
+    await attachment.play();
+    assert.equal(target.muted, true);
+    attachment.detach();
+  } finally { audio.restore(); }
+});
+
+test("autoplay gain fallback respects mute and bounded listening volume", async () => {
+  const audio = installAudioContextMock({ resumeState: "suspended" });
+  try {
+    const playback = { volume: -5, muted: true };
+    const element = fakeMediaElement();
+    const attachment = new C300XMediaAttachment(element, streamWithAudio(), {
+      getGainDb: () => 6, getPlayback: () => playback,
+    });
+    await attachment.play();
+    assert.equal(element.volume, 0);
+    assert.equal(element.muted, true);
+    playback.volume = 5;
+    attachment.refreshPlayback();
+    assert.equal(element.volume, 1);
+    attachment.detach();
+  } finally { audio.restore(); }
+});
 
 test("gain of 0 dB stays passthrough: no Web Audio graph, element audible", () => {
   const audio = installAudioContextMock();
@@ -197,7 +253,8 @@ test("non-zero gain routes through a GainNode and mutes the element", async () =
     assert.equal(ctx.source.connections[0], ctx.gain);
     // gain -> soft limiter -> destination
     assert.equal(ctx.gain.connectedTo, ctx.limiter);
-    assert.equal(ctx.limiter.connectedTo, ctx.destination);
+    assert.equal(ctx.limiter.connectedTo, ctx.output);
+    assert.equal(ctx.output.connectedTo, ctx.destination);
     assert.ok(ctx.limiter.ratio.value > 1);
     assert.ok(Math.abs(ctx.gain.gain.value - Math.pow(10, 6 / 20)) < 1e-9);
     assert.equal(mediaElement.muted, true);
@@ -239,7 +296,8 @@ test("without a DynamicsCompressor the gain connects straight to destination", a
 
     const ctx = audio.created[0];
     assert.equal(ctx.source.connections[0], ctx.gain);
-    assert.equal(ctx.gain.connectedTo, ctx.destination);
+    assert.equal(ctx.gain.connectedTo, ctx.output);
+    assert.equal(ctx.output.connectedTo, ctx.destination);
     assert.equal(ctx.limiter.connectedTo, null);
     assert.equal(mediaElement.muted, true);
   } finally {

@@ -14,11 +14,20 @@
   an unreachable agent, with translated form errors and entry-bound reauthentication.
   Existing entries can still start offline; one-time SSH installation remains
   available. Event registration logs each outage and recovery once.
-- Optional visitor journal in the doorstation card, off by default. Browse
-  existing visit images and videos with previous/next buttons, keyboard or image swipes;
-  opening the viewer never starts a live stream or a recording. HA retains
-  bounded per-entry metadata using the snapshot retention setting. The card
-  toggle controls visibility, not collection; uncertain call outcomes stay unknown.
+- Unified media window in the doorstation card for live video, saved HA
+  snapshots and saved HA capture videos. Media history is on by default
+  (`show_media_history: true`) and can be hidden independently. Previous/next
+  browses media chronologically inline; saved videos offer play/pause, timeline,
+  volume/mute and fullscreen, with a lower-right recording timestamp.
+  Live video and incoming rings take priority; browsing never starts, answers
+  or stops a device call. Existing Home Call, door/light, name and status
+  options remain available.
+- Media history uses existing HA storage and device-specific indexing for new
+  completed default-path ring and on-demand captures, without importing
+  arbitrary historic MP4s or device answering-machine recordings. Automatic
+  images still require **Save images**; clips require a separate capture
+  automation. Hiding history or expiring its links does not delete MP4 files.
+  See [Media history](docs/visitor-journal.md) for setup and retention.
 
 ## v2.5.0 - 2026-11-16
 

@@ -37,6 +37,7 @@ def _signature(info: os.stat_result) -> list[int]:
 def _read(
     store: SnapshotStore, name: str, retention_days: int,
     expected: list[int] | None = None,
+    changed_ns: int | None = None,
 ) -> tuple[bytes, list[int]] | None:
     match = _FILE_NAME.fullmatch(name)
     if (match is None or int(match[1]) / 1000 <= time.time() - retention_days * 86400
@@ -50,12 +51,17 @@ def _read(
         if (not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= MAX_SNAPSHOT_BYTES
                 or (expected is not None and signature != expected)):
             return None
+        if changed_ns is not None and info.st_ctime_ns != changed_ns:
+            return None
         content = source.read(MAX_SNAPSHOT_BYTES + 1)
-        if len(content) != info.st_size or _signature(os.fstat(source.fileno())) != signature:
+        after = os.fstat(source.fileno())
+        if (len(content) != info.st_size or _signature(after) != signature
+                or after.st_ctime_ns != info.st_ctime_ns):
             return None
         # Also reject rename/unlink races while the original descriptor is open.
         current = path.stat(follow_symlinks=False)
         if (not stat.S_ISREG(current.st_mode) or _signature(current) != signature
+                or current.st_ctime_ns != info.st_ctime_ns
                 or not store._check_root()):
             return None
     return content, signature

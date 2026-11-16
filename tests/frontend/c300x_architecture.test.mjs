@@ -40,13 +40,16 @@ test("frontend module ownership keeps orchestration out of the card renderer", (
   assert.equal(webrtc.includes("C300XMediaAttachment"), true);
 });
 
-test("the card footer is one row at every width, with the readiness beside the status", () => {
+test("the card footer preserves actions and readable text at narrow widths", () => {
   const template = source("c300x-card-template.js");
 
-  // Buttons left, text, buttons right: no width may move the text below them.
+  // Normal cards stay in one row; narrow cards put text above the actions.
   assert.match(template, /grid-template-areas: "controls text devices";/);
-  assert.equal(template.match(/grid-template-areas:/g).length, 1);
-  assert.equal(template.includes('"text text"'), false);
+  assert.match(template, /@container \(max-width: 239px\)/);
+  assert.match(template, /grid-template-areas: "text text" "controls devices";/);
+  assert.match(template, /@container \(max-width: 199px\)/);
+  assert.match(template, /\.body\.doorstation:has\(\.mic-action:not\(\.hidden\)\)/);
+  assert.match(template, /grid-template-areas: "text text" "controls controls" "devices devices";/);
   // The readiness sits on the status line, not on a line of its own.
   const statusLine = template.slice(template.indexOf('<div class="status-line">'));
   assert.ok(statusLine.indexOf('<div class="secondary">') < statusLine.indexOf('<div class="readiness hidden">'));

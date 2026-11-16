@@ -24,7 +24,7 @@ def manager_for(tmp_path, monkeypatch, entry_id="one"):
     monkeypatch.setattr(snapshots, "async_dispatcher_send", lambda *args: None)
     monkeypatch.setattr(snapshots, "VisitorJournal", lambda *args: SimpleNamespace(
         load=AsyncMock(), start=lambda: None, close=lambda: None,
-        shutdown=AsyncMock(), prune=lambda: None,
+        shutdown=AsyncMock(), prune=lambda: None, invalidate=lambda: None,
     ))
     manager = snapshots.StreamSnapshots(hass, entry)
     manager.settings = SimpleNamespace(async_load=AsyncMock(return_value=None), async_save=AsyncMock())

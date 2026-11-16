@@ -30,11 +30,14 @@ Home Assistant may store:
   one image after 3 seconds; images expire after 14 days by default. Delay and
   retention are configurable. Storage is additionally limited to 1,000 images
   and 128 MiB per device.
-- Per-entry visitor journal metadata in HA's private `.storage`: ring times,
-  confirmed or unknown outcomes, and links to existing images or clips. It is
-  bounded to 1,000 visits or 1 MiB and follows the snapshot retention setting
-  (14 days by default). The card's journal toggle hides/shows the view, not
-  collection. No media is duplicated and no additional device writes occur.
+- Per-entry media-history metadata in HA's private `.storage`: observed ring
+  times and outcomes, links to existing images, and entry-owned completed HA
+  capture clips with their recording times. Visits and capture references are
+  bounded and share a 1 MiB metadata budget. History follows the snapshot
+  retention setting (14 days by default); expiring a video reference does not
+  delete its MP4. The card's **Browse saved images and videos** option is on by
+  default and controls the view, not collection. No media is duplicated and no
+  additional device writes occur.
   Removing the integration entry removes journal metadata, not media or backups.
 
 Turning **Save images** off prevents new captures and hides previews, but does

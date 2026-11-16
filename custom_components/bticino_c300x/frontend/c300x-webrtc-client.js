@@ -1,17 +1,18 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=7247e37ddea5ab43";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=1402c4dbdb9334ff";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=7247e37ddea5ab43";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=1402c4dbdb9334ff";
 
 export class C300XWebrtcClient {
-  constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb }) {
+  constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb, getPlayback }) {
     this._getHass = getHass;
     this._getEntityId = getEntityId;
     this._isHomeCallMode = isHomeCallMode;
     this._onClosed = onClosed;
     this._onTrack = onTrack;
     this._getCardGainDb = getCardGainDb || null;
+    this._getPlayback = getPlayback || null;
     this._mediaAttachment = null;
     this._pc = null;
     this._remoteStream = null;
@@ -43,6 +44,10 @@ export class C300XWebrtcClient {
   // gain changes while a stream is playing).
   refreshGain() {
     return this._mediaAttachment?.refreshGain();
+  }
+
+  refreshPlayback() {
+    return this._mediaAttachment?.refreshPlayback();
   }
 
   // Move the client-side gain/muting to the element that now renders the
@@ -79,6 +84,7 @@ export class C300XWebrtcClient {
     this._remoteStream = new MediaStream();
     const mediaAttachment = new C300XMediaAttachment(mediaElement, this._remoteStream, {
       getGainDb: this._getCardGainDb,
+      getPlayback: this._getPlayback,
     });
     this._mediaAttachment = mediaAttachment;
     if (!attachOnFirstTrack) {

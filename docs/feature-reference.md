@@ -76,6 +76,7 @@ agent have different effects on settings, media and backups.
 | Ring Call answer/hangup | C300X card, mobile blueprints, `answer_doorbell_call`, `hangup_doorbell_call`. | Requires Forwarding set to Home Assistant and media readiness without blocking failures. |
 | Talkback | Browser microphone through the card, or optionally the native HA camera player on HA 2026.11+. | Native HA control is off by default. Enable **Talk through the Home Assistant camera view** under **Configure > Video and audio** and Two-way audio in HA Labs. Requires WebRTC, HTTPS and microphone permission. Card talkback is unchanged. |
 | Home Call | C300X card, Home Call websocket path, `start_home_call`, `stop_home_call`. | Audio-only call from Home Assistant to the C300X display. |
+| Media history | Previous/next in the doorstation card's media window. | On by default; HA snapshots and indexed HA capture videos only. Live video and incoming rings take priority. No built-in answering-machine recordings. |
 | Door unlock | Button entity, service, optional dashboard action. | Sends one configured unlock command through the native agent. |
 | Stair light | Button entity, service, optional generated activation. | Manual mode uses P/N parts to generate the stair-light activation address. |
 | Device activations | Button entities, `run_device_activation`. | Supports `lock`, `light`, `stair_light`, `scenario`, and `generic` activation types. |
@@ -94,10 +95,33 @@ independently. Both are shown by default. In YAML, set `show_door_unlock: false`
 or `show_stair_light: false` to hide the corresponding button. This only changes
 that card; the Home Assistant entities and services remain available.
 
+### Card Media History
+
+**Browse saved images and videos** is on by default (`show_media_history: true`). The
+doorstation card combines saved HA snapshots and saved HA capture videos in
+one chronological sequence, newest first, in the same window as live video.
+Use previous/next inline; there is no separate visitor list or modal. Saved
+videos offer play/pause, a seek timeline, volume/mute and fullscreen where
+supported, with their recording timestamp at the lower right. Snapshots keep
+their configured date/time stamp without a second card overlay.
+
+Live video and incoming rings take precedence. Archive navigation and playback
+never start, answer or stop device calls, request a microphone or capture new
+media. Existing Home Call, door/light, card name, status and enable options
+remain available. History is not shown in dedicated Home Call mode.
+
+Set `show_media_history: false` to hide history on one card independently of
+`show_media_readiness`, `show_door_unlock` and `show_stair_light`. This does not
+stop image saving or recording automations, change retention or delete files.
+History does not record clips: use the bundled Ring capture blueprint or an
+explicit capture service automation. Built-in C300X answering-machine videos
+remain separate. See [Media history](visitor-journal.md) for setup, storage,
+multi-device indexing and access rules.
+
 ### Visitor Images
 
 The **Save images** switch belongs to the C300X device and is on by default.
-It controls automatic images for doorbell rings and video sessions, regardless
+It controls automatic images for doorbell rings and HA video streams, regardless
 of whether a Home Assistant dashboard is open. No browser capture is used.
 **Configure > Visitor Snapshot** holds the image width and height (default
 **688×480**), the image delay (default **3 seconds**), retention (default **14
@@ -136,16 +160,17 @@ The preview is a saved image, not live video. Snapshot and live video share
 the same display area, so switching between them does not resize the card.
 Until the first successful capture, no preview is shown.
 
-Turning **Save images** off stops new captures and hides these previews,
-without reloading the integration. Existing images remain available in Media
+Turning **Save images** off stops new automatic images and hides snapshots in
+the card, including media history, without reloading the integration. It does
+not disable clip capture or saved-video history. Existing images remain in Media
 until they expire. Cleanup also runs while the switch is off. Storage is
 limited to **1,000 images or 128 MiB per device**, whichever is reached first;
 the oldest images are removed first. Retention limits are enforced while HA
 is running and again after startup.
 
-The optional [Visitor Journal](visitor-journal.md) in the doorstation card links
-observed rings to these saved images and existing ring recordings. It is off in
-the card by default and never starts additional recording or live video.
+The card's [Media history](visitor-journal.md) browses these retained images
+alongside indexed HA capture recordings, not just images associated with rings.
+It is on by default and never starts additional recording or live video.
 
 ## Alarmo Display
 
@@ -771,6 +796,15 @@ hangup is skipped when the captured call cannot be identified reliably. The
 device API has no atomic call-specific hangup, so a call change between the last
 status check and the hangup request cannot be excluded entirely.
 
+For automatic recording on rings, use the bundled **C300X Ring capture**
+blueprint rather than treating **Browse saved images and videos** as a recording switch.
+Select the C300X device; the blueprint matches its ring events and requires
+readiness `ready` or `warning`. Its duration defaults to 5 seconds (range 1-15)
+and **Include audio** defaults to on, so it answers the active Ring Call.
+Video-only capture does not answer. The blueprint's capture file directory
+selects the WAV/JPEG/metadata workspace, not the MP4 output path. See
+[Recording videos](visitor-journal.md#recording-videos) for the setup steps.
+
 Example action for a script or automation; replace `YOUR_C300X_ENTRY_ID` with the
 integration entry id:
 
@@ -792,6 +826,13 @@ requested mode; native media ownership is not continuously verified. The optiona
 `response_variable` provides the exact per-recording paths, such as
 `{{ capture.output_path }}` and `{{ capture.metadata_path }}`; use these in
 follow-up actions instead of the mutable `latest` pointers.
+
+Successful new captures in either mode are indexed in that device's card
+history when `output_path` is left unset. The shared MP4 directory is not
+scanned to guess device ownership or import arbitrary historic recordings;
+custom output paths are not indexed. History visibility and its retention
+window do not delete MP4s. Manage those files separately from snapshot and
+capture-workspace cleanup. See [Storage and access](visitor-journal.md#storage-and-access).
 
 On-demand capture checks for idle media before opening its recording client and
 rejects a reported busy or unclear state. The native API does not reserve the

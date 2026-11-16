@@ -31,12 +31,14 @@ forwarding controls, messages and optional display pages.
 - **Control the door station.** Door unlock, stair light, ringer mute,
   forwarding and answering-machine controls, plus stored video messages,
   voice memos and text memos where supported by the agent.
-- **Review visits and saved media.** Automatic [visitor images](docs/feature-reference.md#visitor-images)
-  provide the shared camera/card preview, with configurable retention and no
-  image files written to the C300X. The optional
-  [visitor journal](docs/visitor-journal.md) groups observed rings with their
-  available saved images and clips. Browse by buttons, keyboard or image swipes
-  without opening another live stream; it does not create recordings itself.
+- **Browse saved images and videos.** [Media history](docs/visitor-journal.md)
+  is on by default in the doorstation card: previous/next browses HA snapshots
+  and saved capture videos chronologically in the same window as live video.
+  Live video and incoming rings take priority; browsing never starts, answers
+  or stops a device call. Automatic [visitor images](docs/feature-reference.md#visitor-images)
+  require **Save images** and need no open dashboard or image files on the C300X.
+  Clips require a separate capture automation, such as the bundled Ring capture
+  blueprint. History does not include the device's answering-machine recordings.
 - **Use the C300X as a home-control display.** Keep the native blue interface
   with configurable controls for lights, covers, climate, media and locks,
   plus weather and Alarmo. Four built-in pages (Status, Energy, Agenda and
@@ -170,7 +172,7 @@ feature or firmware version.
 | Install and configure | [Quickstart](docs/quickstart.md) |
 | Task-focused user guide | [User guide](docs/user-guide.md) |
 | Complete feature and entity/service reference | [Feature reference](docs/feature-reference.md) |
-| Browse saved visit images and clips | [Visitor journal](docs/visitor-journal.md) |
+| Browse saved HA images and clips in the card | [Media history](docs/visitor-journal.md) |
 | Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
 | Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |
 | Ready-made automations | [Blueprints](docs/blueprints.md) |

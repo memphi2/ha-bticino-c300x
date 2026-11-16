@@ -12,6 +12,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           flex-direction: column;
         }
         .media {
+          --c300x-media-toolbar-height: 76px;
           position: relative;
           width: 100%;
           flex: 1 1 auto;
@@ -19,6 +20,21 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           background: #111;
           min-height: 0;
         }
+        c300x-media-controls {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+        }
+        .media > video:not(.transition-video), .media > .snapshot-preview {
+          height: calc(100% - var(--c300x-media-toolbar-height));
+        }
+        ha-card:fullscreen {
+          width: 100%;
+          height: 100%;
+          border-radius: 0;
+          background: var(--card-background-color, #fff);
+        }
+        ha-card:fullscreen .media { flex: 1 1 0; aspect-ratio: auto; }
         video {
           position: absolute;
           inset: 0;
@@ -327,6 +343,22 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
             --mdc-icon-size: 20px;
           }
         }
+        @container (max-width: 239px) {
+          .media {
+            --c300x-media-toolbar-height: 112px;
+            min-height: 176px;
+          }
+          .body {
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-areas: "text text" "controls devices";
+            row-gap: 4px;
+          }
+        }
+        @container (max-width: 199px) {
+          .body.doorstation:has(.mic-action:not(.hidden)) {
+            grid-template-areas: "text text" "controls controls" "devices devices";
+          }
+        }
       </style>
       <ha-card>
         <audio class="remote-audio" autoplay playsinline></audio>
@@ -335,6 +367,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           <video class="transition-video" playsinline autoplay></video>
           <div class="empty"></div>
           <img class="snapshot-preview" alt="" hidden>
+          <c300x-media-controls></c300x-media-controls>
         </div>
         <div class="body">
           <div class="row-actions">
@@ -367,6 +400,5 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
             </button>
           </div>
         </div>
-        <c300x-visitor-journal hidden></c300x-visitor-journal>
       </ha-card>
     `;

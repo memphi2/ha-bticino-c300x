@@ -179,5 +179,16 @@ async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
 
     cleanup_entry_runtime_resources(hass, entry)
     async_clear_entry_repair_issues(hass, entry.entry_id)
-    await async_remove_journal(hass, entry.entry_id)
-    await async_remove_name(hass, entry.entry_id)
+    errors: list[Exception] = []
+    for remove in (async_remove_journal, async_remove_name):
+        try:
+            await remove(hass, entry.entry_id)
+        except asyncio.CancelledError as err:
+            # Stop on cancellation, retaining any earlier ordinary failure.
+            if errors:
+                raise err from ExceptionGroup("Failed to remove C300X entry data", errors)
+            raise
+        except Exception as err:
+            errors.append(err)
+    if errors:
+        raise ExceptionGroup("Failed to remove C300X entry data", errors)

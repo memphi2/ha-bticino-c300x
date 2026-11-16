@@ -258,16 +258,17 @@ def test_foreign_default_service_does_not_create_reservation(tmp_path, monkeypat
 
 
 def test_permanent_removal_frees_only_deleted_entry_name(tmp_path, monkeypatch):
-    from custom_components.bticino_c300x.notify_names import async_remove_name
+    from custom_components.bticino_c300x import async_remove_entry
 
     async def run():
         async with notify_context(tmp_path, monkeypatch, title="BTicino C300X") as (hass, first):
+            first.runtime_data.connection_state = SimpleNamespace(expire_unavailable=lambda: None)
             second = entry_for("second")
             try:
                 await async_setup_notify(hass, second)
                 async_unload_notify(hass, first)
-                await async_remove_name(hass, first.entry_id)
-                await async_remove_name(hass, first.entry_id)
+                await async_remove_entry(hass, first)
+                await async_remove_entry(hass, first)
                 assert service_name(hass, second) == "bticino_c300x_front_door"
                 await send(hass, second)
             finally:

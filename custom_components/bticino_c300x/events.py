@@ -66,7 +66,10 @@ def async_request_agent_event_registration(
     """Restart runtime event registration after the agent is rediscovered."""
 
     runtime_data = getattr(entry, "runtime_data", None)
-    if runtime_data is None:
+    if (
+        runtime_data is None
+        or getattr(getattr(runtime_data, "resources", None), "closed", False)
+    ):
         return False
     runtime = cast(Any, runtime_data)
     api = getattr(runtime, "api", None)

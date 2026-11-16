@@ -725,6 +725,7 @@ def test_pages_and_positions_are_applied_without_changing_capabilities():
         "button.porch": SimpleNamespace(state="unknown", attributes={}),
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -830,6 +831,7 @@ def test_tile_sizes_reach_the_display_only_when_configured():
         "sensor.temp": SimpleNamespace(state="21.5", attributes={}),
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -883,6 +885,7 @@ def _weather_hass():
         "light.two": SimpleNamespace(state="off", attributes={"supported_color_modes": ["onoff"]}),
     }
     return SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get),
         config=SimpleNamespace(language="en"),
         services=SimpleNamespace(has_service=lambda *_: False),
@@ -950,6 +953,7 @@ def test_pages_only_actions_use_follow_the_configured_pages():
         "switch.gate": SimpleNamespace(state="off", attributes={}),
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get),
         config=SimpleNamespace(language="en"),
         services=SimpleNamespace(has_service=lambda *_: True),
@@ -1084,6 +1088,7 @@ def test_media_player_item_reports_power_and_what_is_playing(
         )
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -1116,6 +1121,7 @@ def test_media_player_title_respects_another_secondary_line(secondary, line):
         )
     }
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(
@@ -1136,6 +1142,7 @@ def test_media_player_title_respects_another_secondary_line(secondary, line):
 def test_unavailable_media_player_is_offline_without_controls():
     states = {"media_player.kitchen": SimpleNamespace(state="unavailable", attributes={})}
     hass = SimpleNamespace(
+        data={},
         states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
     )
     entry = SimpleNamespace(

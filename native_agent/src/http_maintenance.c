@@ -55,6 +55,7 @@ void c300x_http_maintenance_tick(struct c300x_http_maintenance *owner)
 void c300x_http_maintenance_close(struct c300x_http_maintenance *owner)
 {
     c300x_command_job_close(&owner->job);
+    c300x_command_job_init(&owner->job);
     release_request(owner);
 }
 

@@ -5,7 +5,7 @@
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "http_maintenance.h"
-#include "device_user.h"
+#include "http_device_user.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -19,7 +19,6 @@
 #include "https_client.h"
 #include "json_util.h"
 #include "local_action_events.h"
-#include "device_routing.h"
 #include "audio_codec.h"
 #include "memo_store.h"
 #include "media_bridge.h"
@@ -75,7 +74,6 @@
 #define C300X_MAX_VOICEMAIL_REASON_LEN 48
 #define C300X_MAX_MEMO_TEXT_JSON_LEN ((C300X_MAX_MEMO_TEXT_LEN * 6) + 1)
 #define C300X_MAX_PATH_JSON_LEN ((C300X_MAX_PATH_LEN * 6) + 1)
-#define C300X_DEVICE_USER_STATUS_BODY_LEN 8192
 #define C300X_TOKEN_FINGERPRINT_LEN 32
 #define C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE 0
 #define C300X_ANSWERING_DIRECTORY_VOICE_MEMO 2
@@ -291,19 +289,6 @@ static void handle_display_bridge_event_post(
     const struct request *request
 );
 static void handle_diagnostics_get(int client_fd, const struct agent_runtime *runtime);
-static void handle_device_user_get(int client_fd, const struct c300x_config *config);
-static void handle_device_user_ensure(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request
-);
-static void handle_device_user_restore(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request
-);
 static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
 static const char *flexisip_reference_state(void);
@@ -2725,252 +2710,6 @@ static void handle_ui_media_closed(
         ui_event_notify(runtime, "media.closed");
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true,\"event\":\"media.closed\"}\n");
-}
-
-static void device_user_status_body(
-    const struct c300x_config *config,
-    const struct c300x_device_user_status *status,
-    char *body,
-    size_t body_len
-)
-{
-    struct c300x_device_routing_status routing_status;
-    char qml_output[4096];
-    char qml_state[32] = "unknown";
-    int qml_patched = 0;
-    int qml_available = 0;
-    char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
-    char account_label_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_LABEL_LEN)];
-    char routing_state_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_ROUTING_STATE_LEN)];
-    char routing_error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_ROUTING_ERROR_LEN)];
-    char qml_state_json[C300X_JSON_QUOTED_LEN(sizeof(qml_state))];
-
-    memset(&routing_status, 0, sizeof(routing_status));
-    (void)c300x_device_routing_read_status(&routing_status);
-    if (
-        config != NULL
-        && !c300x_device_display_is_qt5()
-        && access(config->maintenance_qml_patch_script, X_OK) == 0
-        && c300x_command_capture(
-            config->maintenance_qml_patch_script,
-            "status",
-            qml_output,
-            sizeof(qml_output),
-            10000,
-            NULL
-        )
-    ) {
-        char *start = (char *)trim_ascii(qml_output);
-        if (start[0] == '{') {
-            qml_available = 1;
-            c300x_json_string_field(start, "media_user_label_state", qml_state, sizeof(qml_state));
-            if (qml_state[0] == '\0') {
-                c300x_copy_string(qml_state, sizeof(qml_state), "unknown");
-            }
-            if (!c300x_json_bool_field(start, "media_user_label_patched", &qml_patched)) {
-                qml_patched = 0;
-            }
-        }
-    }
-    c300x_json_string(status->error, error_json, sizeof(error_json));
-    c300x_json_string(status->account_label, account_label_json, sizeof(account_label_json));
-    c300x_json_string(routing_status.state, routing_state_json, sizeof(routing_state_json));
-    c300x_json_string(routing_status.error, routing_error_json, sizeof(routing_error_json));
-    c300x_json_string(qml_state, qml_state_json, sizeof(qml_state_json));
-    snprintf(
-        body,
-        body_len,
-        "{"
-        "\"ok\":%s,"
-        "\"status_available\":%s,"
-        "\"supported\":%s,"
-        "\"domain_present\":%s,"
-        "\"device_user_present\":%s,"
-        "\"homeassistant_user_present\":%s,"
-        "\"accounts_homeassistant_present\":%s,"
-        "\"route_int_homeassistant_present\":%s,"
-        "\"route_ext_homeassistant_present\":%s,"
-        "\"route_conf_homeassistant_present\":%s,"
-        "\"route_conf_is_symlink\":%s,"
-        "\"writable_files_present\":%s,"
-        "\"media_identity_available\":%s,"
-        "\"routes_consistent\":%s,"
-        "\"device_routing_supported\":%s,"
-        "\"device_routing_applied\":%s,"
-        "\"device_routing_state\":%s,"
-        "\"device_routing_backup_present\":%s,"
-        "\"device_routing_error\":%s,"
-        "\"media_user_label_available\":%s,"
-        "\"media_user_label_applied\":%s,"
-        "\"media_user_label_state\":%s,"
-        "\"account_label\":%s,"
-        "\"error\":%s"
-        "}\n",
-        status->status_available ? "true" : "false",
-        status->status_available ? "true" : "false",
-        status->supported ? "true" : "false",
-        status->domain_present ? "true" : "false",
-        status->device_user_present ? "true" : "false",
-        status->homeassistant_user_present ? "true" : "false",
-        status->accounts_homeassistant_present ? "true" : "false",
-        status->route_int_homeassistant_present ? "true" : "false",
-        status->route_ext_homeassistant_present ? "true" : "false",
-        status->route_conf_homeassistant_present ? "true" : "false",
-        status->route_conf_is_symlink ? "true" : "false",
-        status->writable_files_present ? "true" : "false",
-        status->media_identity_available ? "true" : "false",
-        status->routes_consistent ? "true" : "false",
-        routing_status.supported ? "true" : "false",
-        routing_status.patched ? "true" : "false",
-        routing_state_json,
-        routing_status.backup_present ? "true" : "false",
-        routing_error_json,
-        qml_available ? "true" : "false",
-        qml_patched ? "true" : "false",
-        qml_state_json,
-        account_label_json,
-        error_json
-    );
-}
-
-static void handle_device_user_get(int client_fd, const struct c300x_config *config)
-{
-    struct c300x_device_user_status status;
-    char body[C300X_DEVICE_USER_STATUS_BODY_LEN];
-
-    (void)c300x_device_user_read_status(&status);
-    device_user_status_body(config, &status, body, sizeof(body));
-    send_json(client_fd, 200, "OK", body);
-}
-
-static void handle_device_user_ensure(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request
-)
-{
-    struct c300x_device_user_status status;
-    char error[C300X_DEVICE_USER_ERROR_LEN] = "";
-    char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
-    char account_label[C300X_DEVICE_USER_LABEL_LEN] = "";
-    struct c300x_device_routing_status routing_status;
-    char body[C300X_DEVICE_USER_STATUS_BODY_LEN];
-
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!confirm_matches(request, "ensure_homeassistant_user")) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
-        return;
-    }
-    c300x_json_string_field(request->body, "account_label", account_label, sizeof(account_label));
-    if (!c300x_device_routing_apply(&routing_status, error, sizeof(error))) {
-        c300x_json_string(error, error_json, sizeof(error_json));
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"device_routing_failed\",\"detail\":%s}\n",
-            error_json
-        );
-        send_json(client_fd, 500, "Internal Server Error", body);
-        return;
-    }
-    if (!c300x_device_user_ensure_homeassistant(&status, account_label, error, sizeof(error))) {
-        c300x_json_string(error, error_json, sizeof(error_json));
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"device_user_update_failed\",\"detail\":%s}\n",
-            error_json
-        );
-        send_json(client_fd, 500, "Internal Server Error", body);
-        return;
-    }
-    if (!c300x_device_display_is_qt5()) {
-        /* The label is written into the display's QML files. A Qt 5 display
-         * has none on disk: the media user and routing are set up, only the
-         * label on the device is not shown. */
-        char *qml_body;
-        int qml_ok = 0;
-
-        if (
-            access(config->maintenance_qml_patch_script, X_OK) != 0
-            || !c300x_command_capture(
-                config->maintenance_qml_patch_script,
-                "media-user-label-apply",
-                body,
-                sizeof(body),
-                C300X_COMMAND_NO_DEADLINE,
-                NULL
-            )
-        ) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"media_user_label_setup_failed\"}\n");
-            return;
-        }
-        qml_body = (char *)trim_ascii(body);
-        if (qml_body[0] != '{' || !c300x_json_bool_field(qml_body, "ok", &qml_ok) || !qml_ok) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"media_user_label_setup_failed\"}\n");
-            return;
-        }
-    }
-    record_agent_write(config, runtime, "device_user", "ensure_homeassistant_user");
-    (void)c300x_device_user_read_status(&status);
-    device_user_status_body(config, &status, body, sizeof(body));
-    send_json(client_fd, 200, "OK", body);
-}
-
-static void handle_device_user_restore(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request
-)
-{
-    struct c300x_device_routing_status routing_status;
-    struct c300x_device_user_status status;
-    char error[C300X_DEVICE_USER_ERROR_LEN] = "";
-    char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
-    char body[C300X_DEVICE_USER_STATUS_BODY_LEN];
-
-    if (!maintenance_authorized(config, request)) {
-        send_maintenance_unauthorized(client_fd);
-        return;
-    }
-    if (!confirm_matches(request, "restore_ha_user_setup")) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
-        return;
-    }
-    if (
-        access(config->maintenance_qml_patch_script, X_OK) == 0
-        && !c300x_command_capture(
-            config->maintenance_qml_patch_script,
-            "media-user-label-restore",
-            body,
-            sizeof(body),
-            C300X_COMMAND_NO_DEADLINE,
-            NULL
-        )
-    ) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"media_user_label_restore_failed\"}\n");
-        return;
-    }
-    if (!c300x_device_routing_restore(&routing_status, error, sizeof(error))) {
-        c300x_json_string(error, error_json, sizeof(error_json));
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"device_routing_restore_failed\",\"detail\":%s}\n",
-            error_json
-        );
-        send_json(client_fd, 500, "Internal Server Error", body);
-        return;
-    }
-    record_agent_write(config, runtime, "device_user", "restore_homeassistant_media_user_setup");
-    (void)c300x_device_user_read_status(&status);
-    device_user_status_body(config, &status, body, sizeof(body));
-    send_json(client_fd, 200, "OK", body);
 }
 
 static void init_audio_codec_running_state(struct agent_runtime *runtime)
@@ -9820,7 +9559,8 @@ static void handle_api_request(
         return;
     }
 
-    if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)) {
+    if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)
+        || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)) {
         return;
     }
 
@@ -9878,16 +9618,6 @@ static void handle_api_request(
         handle_diagnostics_get(client_fd, runtime);
         return;
     }
-    if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/device-user") == 0) {
-        /* This legacy read invokes the same QML script synchronously. */
-        if (c300x_http_maintenance_busy(&runtime->maintenance)) {
-            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"maintenance_busy\"}\n");
-            return;
-        }
-        handle_device_user_get(client_fd, config);
-        return;
-    }
-
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/stair-light/actions/activate") == 0) {
         handle_stair_light(client_fd, config, request);
         return;
@@ -10136,14 +9866,6 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/config/actions/normalize") == 0) {
         handle_config_normalize(client_fd, config, runtime, request);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/device-user/actions/ensure-homeassistant") == 0) {
-        handle_device_user_ensure(client_fd, config, runtime, request);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/device-user/actions/restore-homeassistant-setup") == 0) {
-        handle_device_user_restore(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/mqtt/actions/migrate-legacy") == 0) {

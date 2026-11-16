@@ -1,6 +1,5 @@
 #include "command_job.h"
 #include "time_util.h"
-#include "http_util.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -100,6 +99,19 @@ fail_pipe:
     return 0;
 }
 
+int c300x_command_job_start_capture(struct c300x_command_job *job, const char *program,
+    const char *argument, char *out, size_t out_len, int timeout_ms)
+{
+    if (out == NULL || out_len == 0
+        || !c300x_command_job_start(job, program, argument, 0, timeout_ms)) {
+        return 0;
+    }
+    out[0] = '\0';
+    job->capture_output = out;
+    job->capture_size = out_len;
+    return 1;
+}
+
 int c300x_command_job_prepare(const struct c300x_command_job *job, struct pollfd *fd)
 {
     long long remaining;
@@ -135,12 +147,14 @@ void c300x_command_job_tick(struct c300x_command_job *job)
         char chunk[1024];
         ssize_t size = read(job->output_fd, chunk, sizeof(chunk));
         if (size > 0) {
-            size_t capacity = sizeof(job->output) - job->used - 1;
+            char *output = job->capture_output != NULL ? job->capture_output : job->output;
+            size_t size_limit = job->capture_output != NULL ? job->capture_size : sizeof(job->output);
+            size_t capacity = size_limit - job->used - 1;
             size_t copied = (size_t)size < capacity ? (size_t)size : capacity;
-            memcpy(job->output + job->used, chunk, copied);
+            memcpy(output + job->used, chunk, copied);
             job->used += copied;
-            job->output[job->used] = '\0';
-            if (copied != (size_t)size) {
+            output[job->used] = '\0';
+            if (copied != (size_t)size && job->capture_output == NULL) {
                 job->failed = 1;
             }
         } else if (size == 0 || (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
@@ -173,125 +187,3 @@ void c300x_command_job_close(struct c300x_command_job *job)
     }
     close_output(job);
 }
-
-int c300x_command_capture(
-    const char *program,
-    const char *argument,
-    char *out,
-    size_t out_len,
-    int timeout_ms,
-    int *exit_code
-)
-{
-    const int interval_ms = 50;
-    int pipe_fd[2];
-    int status = 0;
-    int waited_ms = 0;
-    int child_done = 0;
-    size_t used = 0;
-    pid_t pid;
-
-    if (out_len > 0) {
-        out[0] = '\0';
-    }
-    if (exit_code != NULL) {
-        *exit_code = -1;
-    }
-    if (program == NULL || program[0] == '\0' || access(program, X_OK) != 0) {
-        return 0;
-    }
-    if (pipe(pipe_fd) != 0) {
-        return 0;
-    }
-    pid = fork();
-    if (pid < 0) {
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return 0;
-    }
-    if (pid == 0) {
-        int null_fd;
-        close(pipe_fd[0]);
-        (void)dup2(pipe_fd[1], STDOUT_FILENO);
-        null_fd = open("/dev/null", O_WRONLY);
-        if (null_fd >= 0) {
-            (void)dup2(null_fd, STDERR_FILENO);
-            close(null_fd);
-        }
-        close(pipe_fd[1]);
-        for (int fd = STDERR_FILENO + 1; fd < C300X_COMMAND_INHERITED_FD_LIMIT; fd++) {
-            close(fd);
-        }
-        execl(program, program, argument, (char *)NULL);
-        _exit(127);
-    }
-    close(pipe_fd[1]);
-    set_fd_nonblocking(pipe_fd[0]);
-
-    while (!child_done) {
-        for (;;) {
-            char discard[256];
-            size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-            ssize_t read_size = read(
-                pipe_fd[0],
-                capacity > 0 ? out + used : discard,
-                capacity > 0 ? capacity : sizeof(discard)
-            );
-            if (read_size > 0) {
-                if (capacity > 0) {
-                    used += (size_t)read_size;
-                }
-                continue;
-            }
-            if (read_size < 0 && errno == EINTR) {
-                continue;
-            }
-            break;
-        }
-        if (waitpid(pid, &status, WNOHANG) == pid) {
-            child_done = 1;
-            break;
-        }
-        if (timeout_ms != C300X_COMMAND_NO_DEADLINE && waited_ms >= timeout_ms) {
-            (void)kill(pid, SIGKILL);
-            (void)waitpid(pid, &status, 0);
-            close(pipe_fd[0]);
-            if (out_len > 0) {
-                out[used < out_len ? used : out_len - 1] = '\0';
-            }
-            return 0;
-        }
-        (void)poll(NULL, 0, interval_ms);
-        if (timeout_ms != C300X_COMMAND_NO_DEADLINE) {
-            waited_ms += interval_ms;
-        }
-    }
-    for (;;) {
-        char discard[256];
-        size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-        ssize_t read_size = read(
-            pipe_fd[0],
-            capacity > 0 ? out + used : discard,
-            capacity > 0 ? capacity : sizeof(discard)
-        );
-        if (read_size > 0) {
-            if (capacity > 0) {
-                used += (size_t)read_size;
-            }
-            continue;
-        }
-        if (read_size < 0 && errno == EINTR) {
-            continue;
-        }
-        break;
-    }
-    close(pipe_fd[0]);
-    if (out_len > 0) {
-        out[used < out_len ? used : out_len - 1] = '\0';
-    }
-    if (exit_code != NULL && WIFEXITED(status)) {
-        *exit_code = WEXITSTATUS(status);
-    }
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-

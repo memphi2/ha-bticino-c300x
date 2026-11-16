@@ -219,3 +219,31 @@ def test_confirmation_and_missing_script_do_not_start_jobs(lab):
     assert response(lab.request(), 502)["state"] == "script_missing"
     lab.script("printf ready\n")
     assert response(lab.request(GUI, {"confirm": "reload_gui"}))["action"] == "reload_gui"
+
+
+@pytest.mark.parametrize("suffix,confirmation,action", [
+    ("apply", "apply_qml_patch", "apply"),
+    ("apply-core", "apply_qml_core_patch", "core-apply"),
+    ("restore-core", "restore_qml_core_patch", "core-restore"),
+    ("restore", "restore_qml_patch", "restore"),
+])
+def test_extracted_qml_routes_preserve_actions_and_confirmation(lab, suffix, confirmation, action):
+    lab.script('printf \'{"action":"%s","changed_files":0,"dynamic":"%s"}\' '
+               '"$1" "$C300X_QML_DYNAMIC_HOME_PAGE"\n')
+    path = QML + "/actions/" + suffix
+    assert response(lab.request(path, {"confirm": "wrong"}), 400)["error"] == "maintenance_confirmation_required"
+    assert not (lab.root / "started").exists()
+    body = response(lab.request(path, {"confirm": confirmation,
+                                      "dynamic_homepage": True, "dynamicHomepage": False}))
+    assert body["action"] == action
+    assert body["dynamic"] == "0"
+
+
+@pytest.mark.parametrize("path,payload", [
+    (QML + "/", None), (QML, {}), (QML + "/actions/apply", None),
+    (QML + "/actions/apply/extra", {"confirm": "apply_qml_patch"}), (GUI, None),
+])
+def test_extracted_routes_keep_exact_method_path_matching(lab, path, payload):
+    lab.script('printf "{}"\n')
+    assert response(lab.request(path, payload), 501)["error"] == "not_implemented"
+    assert not (lab.root / "started").exists()

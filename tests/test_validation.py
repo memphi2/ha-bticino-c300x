@@ -36,5 +36,18 @@ def test_validation_runs_pytest_once_with_coverage(monkeypatch, pytest_result):
     assert f"--cov-fail-under={check_coverage.MINIMUM_COVERAGE}" in command
     assert check_coverage.MINIMUM_COVERAGE == 95
     assert ("Python typing ratchet" in steps) is (pytest_result == 0)
-    for name in ("Repository checks", "Legal/provenance audit", "Native agent ARMHF stack check", "Quality scale checks", "Ruff"):
+    for name in ("TurboJPEG runtime", "Repository checks", "Legal/provenance audit", "Native agent ARMHF stack check", "Quality scale checks", "Ruff"):
         assert name in steps
+
+
+def test_validation_fails_before_suite_on_missing_turbojpeg(monkeypatch):
+    steps = []
+
+    def run_step(step):
+        steps.append(step)
+        return 1
+
+    monkeypatch.setattr(check_validate, "_run_step", run_step)
+    assert check_validate.main() == 1
+    assert len(steps) == 1
+    assert steps[0].command == (check_validate.sys.executable, "scripts/check_turbojpeg.py")

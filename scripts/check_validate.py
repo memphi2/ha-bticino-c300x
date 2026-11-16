@@ -26,6 +26,7 @@ def main() -> int:
     """Run the full local validation sequence."""
 
     steps: list[ValidationStep] = [
+        ValidationStep("TurboJPEG runtime", (sys.executable, "scripts/check_turbojpeg.py")),
         ValidationStep("Repository checks", (sys.executable, "scripts/check_repo.py")),
         ValidationStep(
             "Legal/provenance audit",

@@ -59,11 +59,13 @@ Most users only need:
 | Doorbell and Ring Call | C300X Doorbell Call Card, Forwarding select, Doorbell event, Doorbell state, Answer/Hang Up services. |
 | On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`. |
 | Visitor images | Device-wide Save images switch; size, capture delay, retention and date and time under Visitor Snapshot; archive in HA Media and last-image previews. |
+| Visitor journal | Optional card viewer for observed visits and their available saved images and clips; browsing never starts a live stream or recording. |
 | Talkback | Secure browser frontend with microphone permission; HTTPS or Home Assistant Cloud is expected. |
 | Home Call | Auto card, dedicated Home Call mode or `start_home_call` / `stop_home_call`. |
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |
 | Messages and memos | Video-message, text-memo and voice-memo sensors plus playback/write/delete services. |
-| Display pages | Up to eight ordered native pages plus an optional Energy page, weather, configurable tiles and supported entity controls; a separate Alarmo subpage with an optional quick action. |
+| Display pages | Up to eight regular pages plus independently enabled Energy, Agenda and Leave home pages, all with configurable positions; weather, entity controls and a separate Alarmo subpage with an optional quick action. |
+| Notifications | Standard Notify action with info, warning and error notices and bounded wake/sound on safe screens; protected screens and calls suppress effects. Not a life-safety alarm. |
 | Maintenance | Agent update/remove, SSH/noAuth, firewall, mDNS, GUI reload and reboot controls. |
 
 See [Feature reference](feature-reference.md) for the full entity and service

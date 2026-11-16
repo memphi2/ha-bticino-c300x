@@ -9,9 +9,11 @@ from typing import Any, cast
 
 from homeassistant.config_entries import ConfigFlowResult
 
+from .camera_media.ha_compat import HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
 from .config_flow_entry_update import async_ensure_entry_reload
 from .config_flow_features import current_connection_options
 from .config_flow_input import _feature_input
+from .const import CONF_NATIVE_TWO_WAY_AUDIO, CONF_VIDEO_ENABLED
 from .entry_config import entry_config_value
 
 
@@ -66,6 +68,12 @@ class OptionsMenuSteps:
                     for key, value in options.items()
                 },
             }
+            # Preserved values must still satisfy the current media prerequisites.
+            merged[CONF_NATIVE_TWO_WAY_AUDIO] = (
+                HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
+                and merged.get(CONF_VIDEO_ENABLED) is True
+                and merged.get(CONF_NATIVE_TWO_WAY_AUDIO) is True
+            )
             if merged != dict(entry.options):
                 changed = flow.hass.config_entries.async_update_entry(entry, options=merged)
         state = getattr(getattr(entry, "runtime_data", None), "connection_state", None)

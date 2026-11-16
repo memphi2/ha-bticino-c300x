@@ -36,6 +36,8 @@
   adopting a discovered identity.
 - Preserve newer connection settings when saving an older options dialog,
   and reload recovered entries once after an atomic configuration update.
+  Native-camera microphone support stays disabled when video is disabled or
+  the Home Assistant version does not support it, including concurrent edits.
 - Discard late display commands and diagnostic responses after unload, and retry
   failed display-bridge registration on renewal without polling healthy bridges.
   Late discovery responses cannot restart a closed event subscription.

@@ -646,6 +646,9 @@
     }
   },
   "options": {
+    "abort": {
+      "unique_id_mismatch": "Dies ist ein anderes als das eingerichtete Gerät. Konfiguriere den passenden Eintrag oder füge das Gerät neu hinzu."
+    },
     "step": {
       "connection": {
         "title": "Verbindung zum C300X",
@@ -986,7 +989,8 @@
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
       "required": "Dieses Feld ist erforderlich.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480."
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480.",
+      "cannot_connect": "Die Geräteidentität konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut."
     }
   },
   "entity": {

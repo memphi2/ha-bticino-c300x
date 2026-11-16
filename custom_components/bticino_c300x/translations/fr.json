@@ -646,6 +646,9 @@
     }
   },
   "options": {
+    "abort": {
+      "unique_id_mismatch": "Cet appareil est différent de celui configuré. Reconfigurez son entrée ou ajoutez un nouvel appareil."
+    },
     "step": {
       "connection": {
         "title": "Connexion au C300X",
@@ -986,7 +989,8 @@
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
       "required": "Ce champ est obligatoire.",
-      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480."
+      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480.",
+      "cannot_connect": "L'identité de l'appareil n'a pas pu être vérifiée. Vérifiez l'adresse et la connexion, puis réessayez."
     }
   },
   "entity": {

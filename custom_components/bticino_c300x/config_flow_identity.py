@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from .const import CONF_AGENT_HOST, CONF_AGENT_PORT, DEFAULT_AGENT_PORT, DOMAIN
+from .api_errors import C300XAgentApiError
+from .const import (
+    CONF_AGENT_HOST,
+    CONF_AGENT_PORT,
+    CONF_AGENT_TOKEN,
+    CONF_MAINTENANCE_TOKEN,
+    DEFAULT_AGENT_PORT,
+    DOMAIN,
+)
+from .discovery import discovery_matches_entry
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 
@@ -49,3 +59,51 @@ def stable_unique_id_from_setup_data(setup_data: dict[str, Any]) -> str | None:
 
     device_id = setup_data.get("device_id")
     return discovery_unique_id({"id": device_id}) if device_id else None
+
+
+def entry_identity_connection(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
+    """Snapshot the effective endpoint and credentials, not unrelated settings."""
+    return {
+        key: entry_config_value(entry, key, default)
+        for key, default in (
+            (CONF_AGENT_HOST, ""), (CONF_AGENT_PORT, DEFAULT_AGENT_PORT),
+            (CONF_AGENT_TOKEN, ""), (CONF_MAINTENANCE_TOKEN, ""),
+        )
+    }
+
+
+async def async_entry_identity_error(
+    hass: Any,
+    entry: BticinoC300XConfigEntry,
+    connection: dict[str, Any],
+    read_setup: Callable[..., Awaitable[dict[str, Any]]],
+) -> str | None:
+    """Verify a replacement against the saved identity before changing an entry."""
+    saved = entry_identity_connection(entry)
+    saved_id = getattr(entry, "unique_id", None)
+    expected = None if entry_uses_manual_setup_unique_id(entry) else saved_id
+    candidate = {key: connection.get(key, value) for key, value in saved.items()}
+    moving_legacy = expected is None and not entry_connection_matches_discovery(entry, candidate)
+    try:
+        if moving_legacy:
+            original = await read_setup(hass, saved, api_token=saved[CONF_AGENT_TOKEN])
+            expected = stable_unique_id_from_setup_data(original)
+            if expected is None:
+                return "cannot_connect"
+        setup = await read_setup(hass, candidate, api_token=candidate[CONF_AGENT_TOKEN])
+    except C300XAgentApiError:
+        # Feature-only reconfiguration of an existing offline entry remains usable.
+        # Never use the offline allowance to save new credentials or an endpoint.
+        return None if (
+            candidate == saved == entry_identity_connection(entry)
+            and saved_id == getattr(entry, "unique_id", None)
+        ) else "cannot_connect"
+    if saved != entry_identity_connection(entry) or saved_id != getattr(entry, "unique_id", None):
+        return "cannot_connect"
+    if expected is not None:
+        actual = stable_unique_id_from_setup_data(setup)
+        if actual is None:
+            return "cannot_connect"
+        if not discovery_matches_entry(actual, expected):
+            return "unique_id_mismatch"
+    return None

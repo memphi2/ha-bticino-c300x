@@ -116,6 +116,15 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
 from homeassistant.const import CONF_NAME  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def authenticated_identity_boundary(monkeypatch):
+    """Layout tests use a matching device; identity binding has dedicated tests."""
+    async def matching(*_args):
+        return None
+
+    monkeypatch.setattr(config_flow_module, "_async_entry_identity_error", matching)
+
+
 def test_probe_agent_requires_event_subscription_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

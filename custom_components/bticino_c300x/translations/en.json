@@ -646,6 +646,9 @@
     }
   },
   "options": {
+    "abort": {
+      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry."
+    },
     "step": {
       "connection": {
         "title": "Connection to the C300X",
@@ -986,7 +989,8 @@
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
       "required": "This field is required.",
-      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480."
+      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480.",
+      "cannot_connect": "The device identity could not be verified. Check the address and connection, then try again."
     }
   },
   "entity": {

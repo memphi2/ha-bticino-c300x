@@ -106,6 +106,9 @@ from .config_flow_forms import (
     actions_json as _actions_json,
 )
 from .config_flow_identity import (
+    async_entry_identity_error as _async_entry_identity_error,
+)
+from .config_flow_identity import (
     entry_connection_matches_discovery as _entry_connection_matches_discovery,
 )
 from .config_flow_identity import (
@@ -979,6 +982,14 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
                 include_rotate=True,
                 saved=_current_connection_options(entry),
             )
+            if not errors:
+                identity_error = await _async_entry_identity_error(
+                    self.hass, entry, self._reconfigure_connection, _async_agent_setup_data,
+                )
+                if identity_error == "unique_id_mismatch":
+                    return self.async_abort(reason=identity_error)
+                if identity_error:
+                    errors["base"] = identity_error
             if errors:
                 return self.async_show_form(
                     step_id="reconfigure",
@@ -1376,6 +1387,17 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
         """Finish a reconfigure flow after all feature pages."""
 
         entry = self._get_reconfigure_entry()
+        identity_error = await _async_entry_identity_error(
+            self.hass, entry, self._reconfigure_connection, _async_agent_setup_data,
+        )
+        if identity_error == "unique_id_mismatch":
+            return self.async_abort(reason=identity_error)
+        if identity_error:
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=_reconfigure_connection_schema_from_current(entry),
+                errors={"base": identity_error},
+            )
         await self.async_set_unique_id(_reconfigure_unique_id(entry))
         self._abort_if_unique_id_mismatch()
 
@@ -1470,6 +1492,14 @@ class BticinoC300XOptionsFlow(
                 user_input,
                 saved=_current_connection_options(self._config_entry),
             )
+            if not errors:
+                identity_error = await _async_entry_identity_error(
+                    self.hass, self._config_entry, connection_options, _async_agent_setup_data,
+                )
+                if identity_error == "unique_id_mismatch":
+                    return self.async_abort(reason=identity_error)
+                if identity_error:
+                    errors["base"] = identity_error
             if not errors:
                 self._connection_options = connection_options
                 return await self._async_save_options(feature_defaults)

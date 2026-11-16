@@ -659,6 +659,9 @@
     }
   },
   "options": {
+    "abort": {
+      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry."
+    },
     "step": {
       "connection": {
         "title": "Connection to the C300X",

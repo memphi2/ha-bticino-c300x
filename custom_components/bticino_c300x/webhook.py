@@ -193,6 +193,7 @@ async def _async_handle_webhook(
 ) -> web.Response:
     """Handle a webhook request from the local C300X display bridge."""
 
+    runtime_data = getattr(entry, "runtime_data", None)
     expected_secret = entry.data.get(CONF_SHARED_SECRET, "")
     supplied_secret = request.headers.get(HEADER_SHARED_SECRET, "")
     if not _secrets_match(expected_secret, supplied_secret):
@@ -202,6 +203,13 @@ async def _async_handle_webhook(
         payload = await request.json()
     except Exception:  # noqa: BLE001 - request body parsing must not leak details
         return _json_error("invalid_json", status=400)
+
+    # Removing the route cannot cancel a request already reading its body.
+    if (
+        getattr(entry, "runtime_data", None) is not runtime_data
+        or getattr(getattr(runtime_data, "resources", None), "closed", False)
+    ):
+        return _json_error("entry_unloaded", status=503)
 
     if not isinstance(payload, dict):
         return _json_error("invalid_payload", status=400)

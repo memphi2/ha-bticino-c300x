@@ -59,6 +59,11 @@ users trusted to access these recordings; see [PRIVACY.md](PRIVACY.md).
 
 ## Token Handling
 
+Authenticated agent requests do not follow HTTP redirects, including redirects
+to another path on the same origin. Connection changes are checked against the
+entry's confirmed device identity; discovery identity adoption verifies the
+saved endpoint instead of trusting an mDNS identifier alone.
+
 Home Assistant stores the configured agent token, maintenance token, webhook id,
 and webhook secret in its config entry storage. The native agent stores its
 local API token and maintenance token in its local JSON config unless the API

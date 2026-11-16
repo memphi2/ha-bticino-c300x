@@ -659,6 +659,9 @@
     }
   },
   "options": {
+    "abort": {
+      "unique_id_mismatch": "Cet appareil est différent de celui configuré. Reconfigurez son entrée ou ajoutez un nouvel appareil."
+    },
     "step": {
       "connection": {
         "title": "Connexion au C300X",

@@ -9,6 +9,10 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import C300XAgentApi, build_agent_base_url
 from .api_errors import C300XAgentApiAuthError, C300XAgentApiError
+from .config_flow_entry_update import (
+    async_ensure_entry_reload,
+    async_update_reconfigured_entry,
+)
 from .config_flow_features import current_connection_options
 from .config_flow_identity import (
     entry_connection_matches_discovery,
@@ -28,14 +32,6 @@ from .const import (
 from .discovery import discovery_matches_entry
 
 _KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
-
-
-def async_ensure_entry_reload(
-    hass: Any, entry: Any, *, changed: bool, had_listeners: bool, force: bool = False,
-) -> None:
-    """Let a notified listener reload; explicitly recover entries without one."""
-    if (changed or force) and not (changed and had_listeners):
-        hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
 async def async_validate_connection(
@@ -117,17 +113,9 @@ class AuthFlowSteps:
     def _async_update_reconfigured_entry(
         self: Any, entry: Any, data_updates: dict[str, Any], clear_keys: frozenset[str],
     ) -> ConfigFlowResult:
-        options = {
-            key: value for key, value in entry.options.items()
-            if key not in clear_keys or key not in data_updates
-        }
-        changed = options != dict(entry.options) or any(
-            entry.data.get(key) != value for key, value in data_updates.items()
+        return async_update_reconfigured_entry(
+            self, entry, data_updates, clear_keys, force_reload=True,
         )
-        had_listeners = bool(entry.update_listeners)
-        result = self.async_update_and_abort(entry, data_updates=data_updates, options=options)
-        async_ensure_entry_reload(self.hass, entry, changed=changed, had_listeners=had_listeners, force=True)
-        return cast(ConfigFlowResult, result)
 
     def _show_agent_auth(self: Any, errors: dict[str, str]) -> ConfigFlowResult:
         return cast(ConfigFlowResult, self.async_show_form(

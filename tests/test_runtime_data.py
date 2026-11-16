@@ -74,6 +74,7 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         resources.prepare_doorbell_video_stop = device_action
         resources.prepare_home_call_stop = device_action
         resources.on_runtime_registration_created = device_action
+        resources.display_bridge_registration_pending = True
         resources.pending_message_refreshes.add("memos")
         resources.on_demand_capture_active = True
         resources.media_session_count = lambda: 1
@@ -93,10 +94,11 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         assert not resources.pending_message_refreshes
         assert not resources.media_stop_counts
         assert not resources.on_demand_capture_active
+        assert not resources.display_bridge_registration_pending
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name not in {"closed", "pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
+            if item.name not in {"closed", "pending_message_refreshes", "media_stop_counts", "on_demand_capture_active", "display_bridge_registration_pending"}
         )
 
     asyncio.run(run())
@@ -115,6 +117,7 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
             unregister_webhook=lambda: calls.append("webhook"),
             startup_sync_task=task,
             pending_message_refreshes={"memos"},
+            display_bridge_registration_pending=True,
             media_stop_counts={"home_call": 1},
         )
         with pytest.raises(ExceptionGroup) as error:
@@ -129,10 +132,11 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
         assert not resources.pending_message_refreshes
         assert not resources.media_stop_counts
         assert not resources.on_demand_capture_active
+        assert not resources.display_bridge_registration_pending
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name not in {"closed", "pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
+            if item.name not in {"closed", "pending_message_refreshes", "media_stop_counts", "on_demand_capture_active", "display_bridge_registration_pending"}
         )
 
     asyncio.run(run())

@@ -59,18 +59,48 @@ Containers run without network access, with a read-only checkout and root
 filesystem, and temporary test files only. These synthetic clips do not replace
 reproduction with a reporter's original failing recording.
 
-Development hosts and all CI runners use Ubuntu 26.04. Install the native
-TurboJPEG library before running the HA camera tests or typing gate:
-`sudo apt-get install libturbojpeg0`.
+Development hosts and CI runners use Ubuntu 26.04. Its `libturbojpeg0` candidate
+is still 2.1.5, but HA's PyTurboJPEG 2.x requires native TurboJPEG 3 or newer.
+Installing the Python wrapper or Ubuntu package alone does not resolve this.
+Do not downgrade HA's wrapper or suppress its camera fallback warning.
 
-The Python wrapper alone does not provide the native library. Validate and
-Release CI install the package explicitly; it is not bundled with the
-integration or device agent.
-Verify the development environment with:
+On Linux amd64, prepare an isolated library before camera tests or typing:
 
 ```bash
-.venv/bin/python -c "from turbojpeg import TurboJPEG; TurboJPEG(); print('TurboJPEG OK')"
+PYTHON=/path/to/ha-validation-venv/bin/python
+TURBOJPEG_LIB_DIR="$("$PYTHON" scripts/setup_turbojpeg.py)" || exit 1
+export LD_LIBRARY_PATH="$TURBOJPEG_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+"$PYTHON" scripts/check_turbojpeg.py
 ```
+
+`setup_turbojpeg.py` downloads the official
+[libjpeg-turbo 3.2.1 release](https://github.com/libjpeg-turbo/libjpeg-turbo/releases/tag/3.2.1)
+asset `libjpeg-turbo-official_3.2.1_amd64.deb`. Its SHA256 is
+`21c7af6e505386dda0fa05e9eab5a8d288947f2e09ade8d7a48ff393ed08182d`,
+verified against GitHub's published asset digest (asset ID `682859044`). The
+checked-in pin, not a live release lookup, authorizes the bytes on every run.
+Only the regular TurboJPEG shared-library payload is copied; package scripts,
+symlinks, tools and the separate libjpeg library are never installed/extracted.
+`dpkg-deb` is required, but no root access or package installation is used.
+
+The cache defaults to `$XDG_CACHE_HOME/c300x-dev` (otherwise
+`~/.cache/c300x-dev`), or `$RUNNER_TEMP/c300x-dev` on CI. `--cache-dir` can select
+another directory outside the checkout. A corrupt cached package fails closed;
+remove that cached `.deb` explicitly before retrying a verified download.
+No binaries or upstream sources are vendored, bundled or installed in HA/C300X.
+System libraries and Python dependency pins are unchanged. The loader export
+applies only to the development shell and its children; start a fresh Python
+process after exporting it. Do not apply it to a running HA installation.
+
+Both Validate and Release use this setup in **both minimum/current HA matrix
+legs**. `--github-env` verifies the loaded cache path in a fresh subprocess before
+exporting it for later steps. `check_validate.py` also checks the default loader,
+TurboJPEG 3 API, actual mapped library, JPEG encode/decode pixels and HA camera
+singleton before other gates. Missing/incompatible libraries fail the gate;
+no warning filters or fallback-success exceptions are added. A supported system
+TurboJPEG 3 can pass the same check without the cache; the configured Ubuntu
+26.04 repository currently does not provide that alternative. The official HA
+container checks remain independent and use the container's own libraries.
 
 `pytest tests/test_ha_runtime.py` starts real Home Assistant in a subprocess
 with temporary configuration and an authenticated loopback-only fake agent.

@@ -90,7 +90,7 @@ async def async_send_display_alert(
         "title": stored["title"],
         "message": stored["message"],
         "wake_duration": options["wake_duration"],
-        "sound_duration": options.get("sound_duration", 0 if severity == "info" else 30),
+        "sound_duration": options.get("sound_duration", 30),
         "expires_in": notice["expires_in"],
     }
     try:

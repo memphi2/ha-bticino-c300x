@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from homeassistant.config_entries import ConfigFlowResult
 
-from .config_flow_auth import async_ensure_entry_reload
+from .config_flow_entry_update import async_ensure_entry_reload
 from .config_flow_features import current_connection_options
 from .config_flow_input import _feature_input
 from .entry_config import entry_config_value

@@ -104,7 +104,7 @@ rule mismatch or missing evidence, not necessarily a runtime defect.
 | `stale-devices` | Gold | exempt | One physical device per entry, no independent child-device lifecycle. Removing the entry removes the device. Stale entity cleanup is separate in `runtime_manager.py`, covered by `test_init_runtime.py`. |
 | `async-dependency` | Platinum | todo | `_api_core.py` uses async aiohttp; optional SSH uses AsyncSSH, not WebRTC packages. However `device_installer.py:async_install_device_agent` uses `asyncio.to_thread` around a synchronous facade/private `asyncio.Runner`. Resolve that path's conformance to the HA-event-loop requirement; `test_device_ssh.py` / `test_device_installer.py` show current behavior, not a blocking-HA-loop finding. |
 | `inject-websession` | Platinum | done | `runtime_manager.py`, `config_flow.py` and `mqtt_migration.py` pass `async_get_clientsession(hass)` into `C300XAgentApi`; no private aiohttp session is constructed. `test_api.py`, `test_init_runtime.py`. SSH/raw sockets are not HTTP-session consumers. |
-| `strict-typing` | Platinum | todo | `scripts/check_typing.py` uses strict mode for explicit targets but follows other imports silently; `runtime_manager.py`, `_api_core.py` and several extracted helpers are not targets. Audit the complete module inventory/dependency typing, then run the expanded gate. Runtime tests cannot substitute for this proof. |
+| `strict-typing` | Platinum | todo | `scripts/check_typing.py` uses strict mode for explicit targets but follows other imports silently; `_api_core.py` and several extracted helpers are not targets. Audit the complete module inventory/dependency typing, then run the expanded gate. Runtime tests cannot substitute for this proof. |
 
 ## Rule-Specific Sources
 

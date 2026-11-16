@@ -659,6 +659,9 @@
     }
   },
   "options": {
+    "abort": {
+      "unique_id_mismatch": "Dies ist ein anderes als das eingerichtete Gerät. Konfiguriere den passenden Eintrag oder füge das Gerät neu hinzu."
+    },
     "step": {
       "connection": {
         "title": "Verbindung zum C300X",

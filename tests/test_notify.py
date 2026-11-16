@@ -121,7 +121,7 @@ def test_notify_preserves_admin_and_context_free_automation_access(
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("severity,sound,priority", [("info", 0, "normal"), ("warning", 30, "important"), ("error", 30, "urgent")])
+@pytest.mark.parametrize("severity,sound,priority", [("info", 30, "normal"), ("warning", 30, "important"), ("error", 30, "urgent")])
 def test_standard_notify_payload_replacement_and_ack(tmp_path, monkeypatch, severity, sound, priority):
     async def run():
         async with notify_context(tmp_path, monkeypatch) as (hass, entry):

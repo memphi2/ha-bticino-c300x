@@ -214,8 +214,9 @@ when prompted so the display receives the matching files. Page and tile
 settings themselves are stored in HA, not rewritten to the device on every change.
 The new 2.5.0 pages and [standard Notify service](feature-reference.md#standard-notify-service)
 require the matching agent and display bundle. Notify defaults to 30 seconds of
-wake and no sound for `info`; `warning` and `error` default to 30 seconds of
-each. Effects are limited to safe Home/HA screens, never queued until the next
+wake and sound for all three severities: `info`, `warning` and `error`. Set
+`sound_duration: 0` explicitly for a silent notification. Effects are limited to
+safe Home/HA screens, never queued until the next
 wake, and are supplementary, not fire-alarm functionality. Local simulations
 are not hardware proof; Notify hardware validation is pending.
 

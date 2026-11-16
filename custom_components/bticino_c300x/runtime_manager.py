@@ -74,7 +74,7 @@ from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Coroutine
 
     from homeassistant.core import HomeAssistant
 
@@ -457,7 +457,7 @@ class C300XRuntimeManager:
 
 def _entry_update_listener(
     entry: BticinoC300XConfigEntry,
-) -> Callable[[HomeAssistant, BticinoC300XConfigEntry], Awaitable[None]]:
+) -> Callable[[HomeAssistant, BticinoC300XConfigEntry], Coroutine[Any, Any, None]]:
     """Do not reload for the bookkeeping markers the integration writes itself.
 
     The recovery markers of an active update, and the record that the media
@@ -1280,6 +1280,8 @@ async def _async_notify_display_bridge_alarm_if_listening(
             # Coalesce a state-event burst without dropping changes during delivery.
             await asyncio.sleep(0.05)
             if getattr(entry, "runtime_data", None) is not runtime_data:
+                return
+            if runtime_data is None:
                 return
             runtime_data.display_bridge_notify_dirty = False
             topic = "notifications" if getattr(runtime_data, "display_bridge_notify_messages", False) else "alarm"

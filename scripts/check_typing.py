@@ -131,6 +131,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/ring_decision.py",
     "custom_components/bticino_c300x/ring_capture_ledger.py",
     "custom_components/bticino_c300x/ring_talkback.py",
+    "custom_components/bticino_c300x/runtime_manager.py",
     "custom_components/bticino_c300x/select.py",
     "custom_components/bticino_c300x/sensor.py",
     "custom_components/bticino_c300x/service_schema.py",

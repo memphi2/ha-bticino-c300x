@@ -1580,6 +1580,15 @@ def test_display_bridge_notify_skips_offline_entries() -> None:
     assert jobs == []
 
 
+@pytest.mark.parametrize("explicit_none", [False, True])
+def test_display_bridge_notify_skips_missing_runtime(explicit_none: bool) -> None:
+    entry = SimpleNamespace()
+    if explicit_none:
+        entry.runtime_data = None
+
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
+
+
 def test_display_bridge_notify_preserves_revision_between_ui_waiters() -> None:
     calls: list[str] = []
 

@@ -522,6 +522,9 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
         "event_at": event_at,
         "data": context.data,
     }
+    source_id = context.payload.get("event_id")
+    if isinstance(source_id, str) and 1 <= len(source_id) <= 128:
+        event_data["source_event_id"] = source_id
     if context.event_type in {
         "doorbell_pressed",
         "doorbell_view_requested",

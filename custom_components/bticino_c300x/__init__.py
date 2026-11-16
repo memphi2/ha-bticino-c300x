@@ -174,6 +174,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
     """
 
     from .repair_issues import async_clear_entry_repair_issues
+    from .visitor_journal import async_remove_journal
 
     cleanup_entry_runtime_resources(hass, entry)
     async_clear_entry_repair_issues(hass, entry.entry_id)
+    await async_remove_journal(hass, entry.entry_id)

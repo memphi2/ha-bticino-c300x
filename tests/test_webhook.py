@@ -752,7 +752,7 @@ def test_real_doorbell_event_fires_public_event() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "doorbell.pressed", "data": {"doorbell": "ringing"}},
+        {"event": "doorbell.pressed", "event_id": "native-boot-42", "data": {"doorbell": "ringing"}},
     )
 
     original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
@@ -776,6 +776,7 @@ def test_real_doorbell_event_fires_public_event() -> None:
             event_state.last_event_data,
         )
     ]
+    assert event_state.last_event_data["source_event_id"] == "native-boot-42"
 
 
 def test_ringer_event_updates_state_and_public_event_data() -> None:

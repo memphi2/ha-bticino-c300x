@@ -458,6 +458,10 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import custom_components.bticino_c300x.repair_issues as repair_issues
+    import custom_components.bticino_c300x.visitor_journal as visitor_journal
+
+    remove_journal = AsyncMock()
+    monkeypatch.setattr(visitor_journal, "async_remove_journal", remove_journal)
 
     cleared: list[str] = []
     cancelled: list[str] = []
@@ -496,6 +500,7 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     )
 
     asyncio.run(integration.async_remove_entry(hass, entry))
+    remove_journal.assert_awaited_once_with(hass, entry.entry_id)
 
     assert cleared == [entry.entry_id]
     assert callbacks == [

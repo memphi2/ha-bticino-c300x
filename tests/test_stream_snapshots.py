@@ -22,6 +22,10 @@ def manager_for(tmp_path, monkeypatch, entry_id="one"):
     hass.async_add_executor_job = execute
     entry = SimpleNamespace(entry_id=entry_id, data={}, options={})
     monkeypatch.setattr(snapshots, "async_dispatcher_send", lambda *args: None)
+    monkeypatch.setattr(snapshots, "VisitorJournal", lambda *args: SimpleNamespace(
+        load=AsyncMock(), start=lambda: None, close=lambda: None,
+        shutdown=AsyncMock(), prune=lambda: None,
+    ))
     manager = snapshots.StreamSnapshots(hass, entry)
     manager.settings = SimpleNamespace(async_load=AsyncMock(return_value=None), async_save=AsyncMock())
     return manager
@@ -238,5 +242,27 @@ def test_close_during_read_does_not_repopulate_cache(tmp_path, monkeypatch):
         await manager.save(jpeg(), "session")
         assert manager.image is None
         assert manager.latest is None
+
+    asyncio.run(run())
+
+
+def test_unavailable_journal_does_not_break_existing_snapshots(tmp_path, monkeypatch):
+    async def run():
+        manager = manager_for(tmp_path, monkeypatch)
+        failed = SimpleNamespace(load=AsyncMock(side_effect=OSError("unreadable")))
+        monkeypatch.setattr(snapshots, "VisitorJournal", lambda *args: failed)
+
+        class Factory:
+            def __new__(cls, *args):
+                return manager
+
+        monkeypatch.setattr(snapshots, "StreamSnapshots", Factory)
+        monkeypatch.setattr(snapshots, "async_track_time_interval", lambda *args: lambda: None)
+        manager.entry.async_on_unload = lambda callback: None
+        await snapshots.async_setup_snapshots(manager.hass, manager.entry)
+        assert manager.journal is None
+        await manager.save(jpeg(), "unaffected")
+        assert manager.preview
+        await snapshots.async_shutdown_snapshots(manager.hass, manager.entry.entry_id)
 
     asyncio.run(run())

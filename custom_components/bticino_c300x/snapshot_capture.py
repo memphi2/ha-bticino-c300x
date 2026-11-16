@@ -97,6 +97,7 @@ class SnapshotCapture:
         self.stream_key: str | None = None
         self.ring_seen = False
         self.last_ring: str | None = None
+        self.visitor_id: str | None = None
         self.unsubscribe: Any = None
 
     def start(self) -> None:
@@ -116,13 +117,15 @@ class SnapshotCapture:
         if key in {"doorbell_media_closed", "agent_restarted"}:
             self.cancel()
         elif key == "doorbell_pressed":
-            stamp = event.data.get("event_at")
+            stamp = event.data.get("source_event_id") or event.data.get("event_at")
             if stamp and stamp == self.last_ring:
                 return
             self.last_ring = stamp
             if self.identity is not None and self.ring_seen:
                 self.cancel()
-            self._request()
+            from .visitor_journal import visit_id
+
+            self._request(visit_id(event.data))
             self.ring_seen = True
         elif key == "doorbell_view_requested":
             self._request()
@@ -144,11 +147,12 @@ class SnapshotCapture:
         if session_key == self.stream_key:
             self.cancel()
 
-    def _request(self) -> None:
+    def _request(self, visitor_id: str | None = None) -> None:
         if (self.blocked or self.manager.closed or not self.manager.enabled
                 or not self._supported() or self.identity is not None):
             return
         self.identity = uuid4().hex
+        self.visitor_id = visitor_id
         self.generation += 1
         if self.task is not None and not self.task.done():
             # Keep only the newest request while cancelled executor work drains.
@@ -195,6 +199,7 @@ class SnapshotCapture:
         return entry_video_enabled(entry) and supports_capability(entry, "doorbell_video")
 
     async def _capture(self, generation: int, identity: str) -> None:
+        visitor_id = self.visitor_id
         try:
             options = snapshot_options(self.manager.entry)
             await asyncio.sleep(options.delay_seconds)
@@ -223,7 +228,9 @@ class SnapshotCapture:
                 )
                 image = await self.manager.disk_job(framebuffer_jpeg, content, content_type, stamp)
                 if self._current(generation):
-                    await self.manager.save(image, identity, is_current=lambda: self._current(generation))
+                    item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
+                    if self._current(generation) and self.manager.journal is not None:
+                        self.manager.journal.attach_snapshot(visitor_id, item.name)
         except asyncio.CancelledError:
             raise
         except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError):

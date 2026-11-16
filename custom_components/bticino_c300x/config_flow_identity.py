@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from .api_errors import C300XAgentApiError
 from .const import (
@@ -137,3 +137,30 @@ async def async_adopt_discovery_identity(
     ):
         return
     hass.config_entries.async_update_entry(entry, unique_id=actual)
+
+
+async def async_existing_manual_discovery(
+    flow: Any,
+    discovered_unique_id: str | None,
+    connection: dict[str, Any],
+    matches: Callable[[str | None, str | None], bool],
+    read_setup: Callable[..., Awaitable[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    """Deduplicate discovery and adopt only identity read from the saved endpoint."""
+    if discovered_unique_id is None:
+        return None
+    current_entries = getattr(flow, "_async_current_entries", None)
+    if current_entries is None:
+        return None
+    for entry in current_entries():
+        entry_unique_id = str(getattr(entry, "unique_id", "") or "")
+        if matches(discovered_unique_id, entry_unique_id):
+            return None
+        if not entry_uses_manual_setup_unique_id(entry):
+            continue
+        if not entry_connection_matches_discovery(entry, connection):
+            continue
+        await async_adopt_discovery_identity(flow.hass, entry, read_setup, current_entries)
+        flow._async_request_event_registration(entry)
+        return cast(dict[str, Any], flow.async_abort(reason="already_configured"))
+    return None

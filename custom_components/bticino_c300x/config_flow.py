@@ -106,16 +106,13 @@ from .config_flow_forms import (
     actions_json as _actions_json,
 )
 from .config_flow_identity import (
-    async_adopt_discovery_identity as _async_adopt_discovery_identity,
-)
-from .config_flow_identity import (
     async_entry_identity_error as _async_entry_identity_error,
 )
 from .config_flow_identity import (
-    entry_connection_matches_discovery as _entry_connection_matches_discovery,
+    async_existing_manual_discovery as _async_existing_manual_discovery,
 )
 from .config_flow_identity import (
-    entry_uses_manual_setup_unique_id as _entry_uses_manual_setup_unique_id,
+    entry_connection_matches_discovery as _entry_connection_matches_discovery,
 )
 from .config_flow_identity import manual_setup_unique_id as _manual_setup_unique_id
 from .config_flow_identity import reconfigure_unique_id as _reconfigure_unique_id
@@ -558,26 +555,10 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
     ) -> FlowResult | None:
         """Merge a later mDNS identity into an existing manual setup entry."""
 
-        if discovered_unique_id is None:
-            return None
-        current_entries = getattr(self, "_async_current_entries", None)
-        if current_entries is None:
-            return None
-
-        for entry in current_entries():
-            entry_unique_id = str(getattr(entry, "unique_id", "") or "")
-            if discovery_matches_entry(discovered_unique_id, entry_unique_id):
-                return None
-            if not _entry_uses_manual_setup_unique_id(entry):
-                continue
-            if not _entry_connection_matches_discovery(entry, connection):
-                continue
-            await _async_adopt_discovery_identity(
-                self.hass, entry, _async_agent_setup_data, current_entries,
-            )
-            self._async_request_event_registration(entry)
-            return self.async_abort(reason="already_configured")
-        return None
+        return cast(FlowResult | None, await _async_existing_manual_discovery(
+            self, discovered_unique_id, connection,
+            discovery_matches_entry, _async_agent_setup_data,
+        ))
 
     @callback
     def _async_request_existing_entry_event_registration(

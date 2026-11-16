@@ -8,7 +8,7 @@
   Existing entries can still start offline; one-time SSH installation remains
   available. Event registration logs each outage and recovery once.
 - Optional visitor journal in the doorstation card, off by default. Browse
-  existing visit images and videos with previous/next buttons, keyboard or swipe;
+  existing visit images and videos with previous/next buttons, keyboard or image swipes;
   opening the viewer never starts a live stream or a recording. HA retains
   bounded per-entry metadata using the snapshot retention setting. The card
   toggle controls visibility, not collection; uncertain call outcomes stay unknown.

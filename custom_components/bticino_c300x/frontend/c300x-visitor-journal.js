@@ -1,4 +1,4 @@
-import { c300xLocalize } from "./c300x-translations.js?v=2d135ec258c1624e";
+import { c300xLocalize } from "./c300x-translations.js?v=7247e37ddea5ab43";
 
 const BASE = "/api/bticino_c300x/visitor-journal/";
 const SUBSCRIBE = "bticino_c300x/visitor_journal/subscribe";
@@ -114,7 +114,8 @@ export class C300XVisitorJournal extends HTMLElement {
     });
     const frame = root.querySelector(".frame");
     frame.addEventListener("pointerdown", (event) => {
-      this.touch = event.pointerType === "touch" ? { x: event.clientX, y: event.clientY, id: event.pointerId } : null;
+      this.touch = event.pointerType === "touch" && event.target.tagName !== "VIDEO"
+        ? { x: event.clientX, y: event.clientY, id: event.pointerId } : null;
     });
     frame.addEventListener("pointercancel", () => { this.touch = null; });
     frame.addEventListener("pointerup", (event) => {

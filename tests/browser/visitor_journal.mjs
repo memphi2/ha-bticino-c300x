@@ -102,9 +102,23 @@ try {
     frame.dispatchEvent(new PointerEvent("pointerup", { pointerType: "touch", pointerId: 2, clientX: 110, clientY: 54 }));
   });
   await page.waitForFunction(() => lab.journal.index === 1 && !!lab.journal.url);
+  await page.evaluate(() => {
+    const image = lab.journal.shadowRoot.querySelector("img");
+    image.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", pointerId: 4, clientX: 30, clientY: 50 }));
+    image.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", pointerId: 4, clientX: 120, clientY: 50 }));
+  });
+  await page.waitForFunction(() => lab.journal.index === 0 && !!lab.journal.url);
   await page.evaluate(() => lab.journal.show(0, "video"));
   await page.waitForFunction(() => lab.journal.shadowRoot.querySelector("video").readyState >= 2);
   assert.equal(await page.evaluate(() => lab.journal.shadowRoot.querySelector("video").paused), true, "No autoplay");
+  const videoGesture = await page.evaluate(() => {
+    const video = lab.journal.shadowRoot.querySelector("video");
+    const url = lab.journal.url;
+    video.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", pointerId: 3, clientX: 120, clientY: 50 }));
+    video.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", pointerId: 3, clientX: 30, clientY: 50 }));
+    return { index: lab.journal.index, sameMedia: lab.journal.url === url };
+  });
+  assert.deepEqual(videoGesture, { index: 0, sameMedia: true }, "Video controls must not also navigate between visits");
   await page.evaluate(() => lab.journal.shadowRoot.querySelector("video").play());
   await page.evaluate(() => lab.journal.step(1));
   await page.waitForFunction(() => !!lab.journal.url);

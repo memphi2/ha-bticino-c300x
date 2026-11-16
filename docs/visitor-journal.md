@@ -4,7 +4,8 @@ Enable **Show visitor journal** in the doorstation card editor. It is off by
 default and is not shown in Home Call mode. Open **Visitor journal** and select
 a visit to view its saved image or video. Use the image/video icons when both
 are available. Previous/next buttons, keyboard arrows and horizontal mobile
-swipes browse visits; Escape or Close returns to the list. Video playback is
+swipes on images browse visits; Escape or Close returns to the list. Gestures
+on a video keep controlling that video, without changing visits. Video playback is
 manual. The viewer shows the image capture/video file completion time; visits
 without media show the ring's HA observation time. Opening or browsing the journal never starts a live stream, requests a
 microphone, records a clip or asks the C300X for another image.

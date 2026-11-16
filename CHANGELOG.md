@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.6.0 - Unreleased
+
+- Validate agent and supplied maintenance credentials before saving normal
+  setup, reconfiguration or connection options. Distinguish rejected keys from
+  an unreachable agent, with translated form errors and entry-bound reauthentication.
+  Existing entries can still start offline; one-time SSH installation remains
+  available. Event registration logs each outage and recovery once.
+- Optional visitor journal in the doorstation card, off by default. Browse
+  existing visit images and videos with previous/next buttons, keyboard or swipe;
+  opening the viewer never starts a live stream or a recording. HA retains
+  bounded per-entry metadata using the snapshot retention setting. The card
+  toggle controls visibility, not collection; uncertain call outcomes stay unknown.
+- This development version builds on unreleased 2.5.0. Neither version is merged
+  or published by this preparation; device Notify validation remains pending.
+
 ## v2.5.0 - Unreleased
 
 - Direct page buttons below the weather on the status page, including when no

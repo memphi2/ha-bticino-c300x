@@ -368,8 +368,9 @@ control types come from their actual capabilities, not a manually chosen
 widget.
 
 The pages dialog has up to 8 regular pages plus independently enabled Energy,
-Agenda and Leave home pages, one section each. A section's title shows
-the page's name, for example **Page 2: Living room**. Alarmo is not one of
+Agenda and Leave home pages, one section each. Sections follow the display order;
+their titles show the page's position and name, for example **Page 2: Living room**.
+Unused regular sections remain at the end. Alarmo is not one of
 the pages: its Alarm page opens from the home page button and has an area of
 its own in the settings menu.
 
@@ -379,7 +380,7 @@ its own in the settings menu.
 | **Position** | Order of all pages, 1 to 11. Left empty, the regular section's number is used. Equal positions put Energy, Agenda, then Leave home before regular pages; regular pages keep their section order. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
-The first section is the status page: it carries the weather card at its top,
+The status-page section carries the weather card at its top,
 set in its **Weather** field, followed by direct buttons for the other visible
 pages and then its entities. The buttons also appear without a weather entity;
 they use the already loaded dashboard and do not request fresh data. The heading
@@ -437,7 +438,7 @@ show readiness where supported; armed or arming panels show their actual state.
 
 ### Energy Page
 
-The second section, directly below the status page, switches on an optional page that
+The **Energy** section switches on an optional page that
 shows Home Assistant's own Energy setup (**Settings → Dashboards → Energy**).
 Nothing is configured twice: meters, their names, prices and power sensors come
 from there.
@@ -577,14 +578,14 @@ in the [Home Assistant calendar documentation](https://www.home-assistant.io/int
 
 ### Standard Notify Service
 
-With the display integration enabled, each entry registers
-`notify.bticino_c300x_<entry_id_in_lowercase>`. Choose that entry's service in
+With the display integration enabled, each entry registers a named Notify action.
+The default first entry uses `notify.bticino_c300x`. Choose the action for your device in
 HA's action editor. It accepts the standard `message`, optional `title`
 (default **Home Assistant**) and nested `data` fields; the target is fixed to
 that entry, so do not supply `target`.
 
 ```yaml
-action: notify.bticino_c300x_your_entry_id
+action: notify.bticino_c300x
 data:
   title: Front window
   message: The front window is still open.
@@ -596,7 +597,17 @@ data:
     expires_in: 3600
 ```
 
-Replace `your_entry_id` with the lowercase ID of the configured entry.
+Use the exact action ID shown in HA's action editor if your entry has a different
+name or you have multiple C300X devices. For example, an entry named **Front door**
+uses `notify.bticino_c300x_front_door`; a name collision adds a short unique
+suffix. HA remembers the chosen action ID across reloads and restarts. Renaming
+an entry updates its displayed label, not its action ID. Permanently removing
+the entry releases its name reservation.
+
+If HA cannot read or confirm the saved name reservations, the integration does
+not register a replacement action under another device's name. Resolve the HA
+storage problem or restore the reservations from a working HA backup before
+retrying setup.
 
 | Severity | Default wake duration | Default sound duration |
 | --- | --- | --- |
@@ -632,11 +643,9 @@ waiting GUI connection only; it does not prove GUI rendering, physical wake
 or audible output. A lost response does not prove non-delivery.
 
 This feature requires the matching **2.5.0 agent and display bundle**, including
-the reapplied Display patch. The unreleased implementation is validated by
-local tests and strict simulations, not hardware proof. Wake, timed sound,
-acknowledgement and call protection were manually tested on the previous 2.5.0
-candidate; the updated protection-status protocol still requires a device test
-before merge.
+the reapplied Display patch. Test your notifications on the actual device before
+relying on an automation; a successful action is not proof of audible or visible
+delivery.
 
 ## Entity Reference
 

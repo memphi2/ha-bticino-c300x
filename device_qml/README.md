@@ -69,10 +69,9 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
 
 ## Packaging
 
-The unreleased 2.5.0 features require the matching native agent and complete
-display bundle, followed by reapplying the Display patch. Local strict
-simulations do not prove physical wake or sound; Notify hardware validation
-is pending.
+The 2.5.0 features require the matching native agent and complete display
+bundle, followed by reapplying the Display patch. Local strict simulations
+do not prove physical wake or sound on every device or firmware version.
 
 These sources are not written to the device as they stand. Packaging
 (`scripts/stage_device_agent_bundle.py`) and the development installer

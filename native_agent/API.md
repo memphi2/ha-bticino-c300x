@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current development agent version: `2.5.0` (unreleased)
+- Current agent version: `2.5.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -519,7 +519,7 @@ Only these fields are accepted, all required:
 
 The body is limited to 7680 bytes. Query parameters, extra fields, arbitrary
 URLs, audio files and commands are rejected. HA supplies defaults: severity
-`info`, wake 30 seconds, sound 0 for `info` or 30 for `warning`/`error`, expiry
+`info`, wake 30 seconds, sound 30 seconds for every severity, expiry
 3600 seconds. These defaults belong to the HA service, not the native schema.
 
 Success is `200 {"ok":true,"accepted":true}` after writing to the already
@@ -527,6 +527,13 @@ waiting GUI connection. This is **transport acceptance only**, not a GUI
 acknowledgement or proof of rendering, physical wake or audible output. The
 GUI can discard blocked, stale or lower-priority alerts. HA performs one POST
 without automatic retries; a lost response does not establish non-delivery.
+
+A live GUI listener that reports a protected context instead returns
+`200 {"ok":true,"accepted":false,"suppressed":true,"reason":"display_protected"}`.
+No command is delivered and the sleeping listener stays connected. HA keeps
+the notice without raising an action error. This outcome is also retained in
+the receipt table, so repeating it after leaving the protected screen cannot
+replay the effects.
 
 No waiting GUI returns `503 display_alerts_gui_unavailable`; nothing is queued
 for a later connection or wake. A failed delivery returns
@@ -543,8 +550,8 @@ Wake and bounded stock short-beep effects are restricted to ready, safe Home/HA
 screens. Calls, ringing, Alarmo and other protected pages block them. User
 interaction or a protected context stops effects, with no deferred replay.
 These alerts are supplementary information, not fire-alarm or life-safety
-functionality. Local strict simulations do not establish hardware behavior;
-Notify hardware validation is pending.
+functionality. Local strict simulations do not establish physical behavior on
+every device or firmware version.
 
 ## Device Actions
 
@@ -1372,7 +1379,9 @@ configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
 
 `GET /ui/alerts/next` requires loopback and `X-C300X-GUI: alerts-v1`, with no
-`Origin`, query or request body. Only one waiter is retained; another receives
+`Origin` or request body. The optional exact query `protected=1` reports a
+protected screen or call; all other query strings are rejected. Only one waiter
+is retained; another receives
 `409 display_alerts_listener_busy`. Idle waiting has no polling timer. Delivery
 closes the connection and adds `remaining_ms`, `expires` (Unix milliseconds)
 and `message_expires` (Unix milliseconds) to the validated alert. Delivery
@@ -1380,6 +1389,8 @@ freshness is limited to five seconds or the shorter notice lifetime. The GUI
 checks freshness, deduplication, revision and safe-context rules before effects;
 the connection is not a physical-effect acknowledgement. Failed listener
 connections reconnect after a delay, without replaying past alerts.
+The GUI reconnects when its protection state changes. Protection belongs to
+that live connection and is cleared when it closes; it is not a persistent flag.
 
 `GET /ui/preferences` returns `{"ok":true,"feedback_enabled":true}` by default.
 Both `/ui/touch-tone/` routes require loopback, `X-C300X-UI: 1` and no `Origin`
@@ -1415,5 +1426,5 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.5.0` (unreleased) retains self-test contract `api_version: "1.1"` for firmware family
+Agent `2.5.0` retains self-test contract `api_version: "1.1"` for firmware family
 `1.7.x`. The release notes list the agent changes of each version.

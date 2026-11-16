@@ -2,6 +2,7 @@
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -158,15 +159,29 @@ class _OptionsAreas:
 
     def __init__(self, entry):
         self._entry = entry
+        entry.entry_id = getattr(entry, "entry_id", "display-settings")
+        entry.update_listeners = getattr(entry, "update_listeners", [])
+        self.listener_tasks = []
+
+        def update_entry(entry, *, options):
+            if entry.options == options:
+                return False
+            entry.options = dict(options)
+            for listener in entry.update_listeners:
+                self.listener_tasks.append(asyncio.create_task(listener(self.hass, entry)))
+            return True
+
+        self.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_update_entry=Mock(side_effect=update_entry),
+                async_schedule_reload=Mock(),
+                async_reload=AsyncMock(return_value=True),
+            ),
+        )
 
     def _flow(self):
-        def update_entry(entry, *, options):
-            entry.options = dict(options)
-
         flow = BticinoC300XOptionsFlow(self._entry)
-        flow.hass = SimpleNamespace(
-            config_entries=SimpleNamespace(async_update_entry=update_entry),
-        )
+        flow.hass = self.hass
         flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
         flow.add_suggested_values_to_schema = lambda schema, _values: schema
         return flow
@@ -192,6 +207,68 @@ class _OptionsAreas:
 
     async def entity_display(self, user_input=None):
         return await self._area("dashboard_entity_display", user_input)
+
+
+def test_options_entry_fake_notifies_only_for_changed_options():
+    listener = AsyncMock()
+    entry = SimpleNamespace(options={}, update_listeners=[listener])
+    areas = _OptionsAreas(entry)
+    update = areas.hass.config_entries.async_update_entry
+
+    async def exercise():
+        assert update(entry, options={}) is False
+        assert not areas.listener_tasks
+        options = {"dashboard_status_page_enabled": False}
+        assert update(entry, options=options) is True
+        assert entry.options == options and entry.options is not options
+        await asyncio.gather(*areas.listener_tasks)
+        listener.assert_awaited_once_with(areas.hass, entry)
+        assert update(entry, options=dict(options)) is False
+        assert len(areas.listener_tasks) == 1
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("with_listener", [False, True])
+@pytest.mark.parametrize("changed", [False, True])
+def test_display_options_save_reloads_only_changed_entries(with_listener, changed):
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    entry = SimpleNamespace(
+        data={"device_ui_enabled": True, "alarm_entity_id": "alarm_control_panel.home"},
+        options={}, runtime_data=None,
+    )
+    areas = _OptionsAreas(entry)
+    listener = AsyncMock(side_effect=_entry_update_listener(entry))
+    if with_listener:
+        entry.update_listeners.append(listener)
+    flow = areas._flow()
+
+    async def exercise():
+        form = await flow.async_step_dashboard_alarm()
+        changes = {"alarm_entity_id": "alarm_control_panel.other"} if changed else {}
+        result = await flow.async_step_dashboard_alarm(
+            post_like_home_assistant(form["data_schema"], changes)
+        )
+        assert result["type"] == "menu"
+        await asyncio.gather(*areas.listener_tasks)
+
+    asyncio.run(exercise())
+    entries = areas.hass.config_entries
+    assert entries.async_update_entry.call_count == int(changed)
+    if changed and with_listener:
+        listener.assert_awaited_once_with(areas.hass, entry)
+        entries.async_reload.assert_awaited_once_with(entry.entry_id)
+    else:
+        listener.assert_not_called()
+        entries.async_reload.assert_not_called()
+    if changed and not with_listener:
+        entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
+    else:
+        entries.async_schedule_reload.assert_not_called()
+    assert {**entry.data, **entry.options}["alarm_entity_id"] == (
+        "alarm_control_panel.other" if changed else "alarm_control_panel.home"
+    )
 
 
 def _display_flow(monkeypatch, flow_kind, entry):
@@ -551,13 +628,15 @@ def test_the_alarm_area_sets_alarmo_and_its_quick_action(monkeypatch, saved, cha
     saved = {**entry.data, **entry.options}
     for key, value in stored.items():
         assert saved[key] == value
-    # What the area does not show stays; the display settings of an entity
-    # that is no longer shown go.
+    # Only edited fields replace current settings; changing the alarm alone
+    # must not normalize away unrelated saved tile overrides.
     assert saved["dashboard_entities"] == ["light.room"]
     overrides = saved["dashboard_entity_display_overrides"]
     assert overrides["light.room"] == {"page": "Room"}
-    if not changes:
-        assert entry.options == {}
+    if "alarm_page_entity_id" not in changes:
+        assert overrides == entry.data["dashboard_entity_display_overrides"]
+        if not changes:
+            assert entry.options == {}
         return
     assert "switch.old" not in overrides
     assert ("switch.porch" in overrides) == (stored.get("alarm_page_entity_id") == "switch.porch")

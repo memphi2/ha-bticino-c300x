@@ -34,6 +34,12 @@
 #define C300X_DEVICE_PATCH_STOCK_SHA256 "605a808f1ed0c826c06bbf1eb4131b9198007a7ab822e7541a6666e79816c810"
 #endif
 
+/* The 2.0.2 firmware ships a rebuild of the same routing binary: the patched
+ * code moved by a few bytes, the patched bytes themselves are unchanged. */
+#ifndef C300X_DEVICE_PATCH_STOCK_SHA256_2_0_2
+#define C300X_DEVICE_PATCH_STOCK_SHA256_2_0_2 "18a555afcfb3c1d163cdb649cdd7a61e9526e08aec8275f88dd78df4bc5f2ec7"
+#endif
+
 #define ARRAY_LEN(values) (sizeof(values) / sizeof((values)[0]))
 
 static int device_patch_file_name(char *buffer, size_t buffer_len)
@@ -169,6 +175,31 @@ static const struct c300x_patch_range PATCHES[] = {
     {"patch_range_8", 0x285ac, 4, "a883b9c4475398a5852aaf4ef0b4cbd8bd0557c4206c4d8bafd69832c8d56a47", "a828ca69c6e94a3592c35b9989123858720ac9b114514e040d53a604f87e1d6d", PATCH_8_WRITES, ARRAY_LEN(PATCH_8_WRITES)},
 };
 
+/* Firmware 2.0.2: same writes as above, at the offsets of that build. Only
+ * range 4 has a different stock hash, its call moved with the code. */
+static const struct c300x_patch_range PATCHES_2_0_2[] = {
+    {"patch_range_0", 0x28300, 12, "ed451a5b137b7b59ebfd3f4bb8ff6598a18abce58603b72eed97f50b8d6391b8", "59e44ff04f935f33e91e44d52771e6188e7a50c735c07b54f236087a818925d7", PATCH_0_WRITES, ARRAY_LEN(PATCH_0_WRITES)},
+    {"patch_range_1", 0xda08, 16, "cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b", "9bf52da965bdf744685e93b31353826af7bc74bc1fc3248d91f3b89f493444fe", PATCH_1_WRITES, ARRAY_LEN(PATCH_1_WRITES)},
+    {"patch_range_2", 0x35fe8, 4, "85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_2_WRITES, ARRAY_LEN(PATCH_2_WRITES)},
+    {"patch_range_3", 0x35ffc, 4, "4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_3_WRITES, ARRAY_LEN(PATCH_3_WRITES)},
+    {"patch_range_4", 0x36008, 16, "e5843cd556cbbd9fc95fa4ae7b7291050d9a66615285f82804755eaf14039f2a", "801b48661d2b117e9d4c1065f5b27b8e68938ac8efaf47e5a1db1211d495f592", PATCH_4_WRITES, ARRAY_LEN(PATCH_4_WRITES)},
+    {"patch_range_5", 0x363e0, 4, "578b7e8e1392acf5b7a042f27140fdff16d967de87b359c4629374f363061deb", "588247adc40731e7dac725b7c418ce8dedc2a7318e61f12836086f31d5d41520", PATCH_5_WRITES, ARRAY_LEN(PATCH_5_WRITES)},
+    {"patch_range_6", 0x28428, 60, "4a113f9e80b59325c236497a1f60eb4c25ecfc818d846bc838d30d7a9d153d48", "16f1f5712d28c39b0e2ddf193b57ea53b9d8f498d42cee86625f2ff2792eef5c", PATCH_6_WRITES, ARRAY_LEN(PATCH_6_WRITES)},
+    {"patch_range_7", 0x285a8, 4, "c77ead30bd3f6cae55371b8695c71e4c28de7b2006d3f17cd0a2629cdc98a5df", "27d18ebd92839189526cb6345d7f2d5e043d7551446dd60407975ef0e46e5cc4", PATCH_7_WRITES, ARRAY_LEN(PATCH_7_WRITES)},
+    {"patch_range_8", 0x285b4, 4, "a883b9c4475398a5852aaf4ef0b4cbd8bd0557c4206c4d8bafd69832c8d56a47", "a828ca69c6e94a3592c35b9989123858720ac9b114514e040d53a604f87e1d6d", PATCH_8_WRITES, ARRAY_LEN(PATCH_8_WRITES)},
+};
+
+struct routing_variant {
+    const char *stock_sha256;
+    const struct c300x_patch_range *patches;
+    size_t patch_count;
+};
+
+static const struct routing_variant VARIANTS[] = {
+    {C300X_DEVICE_PATCH_STOCK_SHA256, PATCHES, ARRAY_LEN(PATCHES)},
+    {C300X_DEVICE_PATCH_STOCK_SHA256_2_0_2, PATCHES_2_0_2, ARRAY_LEN(PATCHES_2_0_2)},
+};
+
 static void set_error(char *error, size_t error_len, const char *message)
 {
     if (error != NULL && error_len > 0) {
@@ -192,14 +223,15 @@ static int remount_root_ro_or_error(char *error, size_t error_len)
     return 0;
 }
 
-static int all_patch_ranges_match(
+static int variant_ranges_match(
+    const struct routing_variant *variant,
     const unsigned char *data,
     size_t len,
     int patched
 )
 {
-    for (size_t index = 0; index < ARRAY_LEN(PATCHES); index++) {
-        const struct c300x_patch_range *patch = &PATCHES[index];
+    for (size_t index = 0; index < variant->patch_count; index++) {
+        const struct c300x_patch_range *patch = &variant->patches[index];
         const char *expected_sha256 = patched
             ? patch->patched_range_sha256
             : patch->expected_range_sha256;
@@ -209,6 +241,31 @@ static int all_patch_ranges_match(
         }
     }
     return 1;
+}
+
+/* The variant whose ranges all hold the stock (or patched) bytes, if any. */
+static const struct routing_variant *variant_matching(
+    const unsigned char *data,
+    size_t len,
+    int patched
+)
+{
+    for (size_t index = 0; index < ARRAY_LEN(VARIANTS); index++) {
+        if (variant_ranges_match(&VARIANTS[index], data, len, patched)) {
+            return &VARIANTS[index];
+        }
+    }
+    return NULL;
+}
+
+static const struct routing_variant *variant_for_stock_sha(const char *sha256)
+{
+    for (size_t index = 0; index < ARRAY_LEN(VARIANTS); index++) {
+        if (strcmp(sha256, VARIANTS[index].stock_sha256) == 0) {
+            return &VARIANTS[index];
+        }
+    }
+    return NULL;
 }
 
 /* A backup is only worth restoring when it is the stock file: a truncated copy,
@@ -221,7 +278,7 @@ static int backup_is_stock(const char *backup_path, const char *target_path)
     int stock;
 
     if (c300x_sha256_file_hex(backup_path, sha256, sizeof(sha256))
-        && strcmp(sha256, C300X_DEVICE_PATCH_STOCK_SHA256) == 0) {
+        && variant_for_stock_sha(sha256) != NULL) {
         return 1;
     }
     if (!c300x_patch_read_file(backup_path, &data, &len)) {
@@ -234,7 +291,7 @@ static int backup_is_stock(const char *backup_path, const char *target_path)
         free(data);
         return 0;
     }
-    stock = all_patch_ranges_match(data, len, 0);
+    stock = variant_matching(data, len, 0) != NULL;
     free(data);
     return stock;
 }
@@ -269,7 +326,7 @@ int c300x_device_routing_read_status(
         status->backup_present = 1;
         (void)c300x_sha256_file_hex(backup_path, status->backup_sha256, sizeof(status->backup_sha256));
     }
-    if (strcmp(status->file_sha256, C300X_DEVICE_PATCH_STOCK_SHA256) == 0) {
+    if (variant_for_stock_sha(status->file_sha256) != NULL) {
         c300x_copy_string(status->state, sizeof(status->state), "stock");
         return 1;
     }
@@ -278,13 +335,13 @@ int c300x_device_routing_read_status(
         set_status_error(status, "routing_target_read_failed");
         return 0;
     }
-    if (all_patch_ranges_match(data, len, 1)) {
+    if (variant_matching(data, len, 1) != NULL) {
         status->patched = 1;
         c300x_copy_string(status->state, sizeof(status->state), "patched");
         free(data);
         return 1;
     }
-    if (all_patch_ranges_match(data, len, 0)) {
+    if (variant_matching(data, len, 0) != NULL) {
         c300x_copy_string(status->state, sizeof(status->state), "stock");
         free(data);
         return 1;
@@ -306,6 +363,7 @@ int c300x_device_routing_apply(
     char target_tmp_path[C300X_MAX_PATH_LEN];
     unsigned char *data = NULL;
     size_t len = 0;
+    const struct routing_variant *variant;
     mode_t original_mode;
     uid_t original_uid;
     gid_t original_gid;
@@ -350,8 +408,17 @@ int c300x_device_routing_apply(
         set_error(error, error_len, "routing_target_read_failed");
         return 0;
     }
-    for (size_t index = 0; index < sizeof(PATCHES) / sizeof(PATCHES[0]); index++) {
-        const struct c300x_patch_range *patch = &PATCHES[index];
+    variant = variant_for_stock_sha(status->file_sha256);
+    if (variant == NULL) {
+        variant = variant_matching(data, len, 0);
+    }
+    if (variant == NULL) {
+        free(data);
+        set_error(error, error_len, "unsupported_routing_target_hash");
+        return 0;
+    }
+    for (size_t index = 0; index < variant->patch_count; index++) {
+        const struct c300x_patch_range *patch = &variant->patches[index];
         if (!c300x_patch_range_matches(data, len, patch, patch->expected_range_sha256)) {
             free(data);
             set_error(error, error_len, patch->name);

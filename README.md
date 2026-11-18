@@ -53,7 +53,7 @@ forwarding controls, messages and optional display pages.
 ## Requirements
 
 - Home Assistant `2026.10.0` or newer.
-- BTicino Classe 300X / C300X firmware `1.7.x`.
+- BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
 

@@ -1,10 +1,12 @@
 static char g_target_dir[256];
 static char g_backup_dir[256];
 static char g_stock_sha[65];
+static char g_stock_sha_2_0_2[65];
 static int test_remount(const char *mode);
 #define C300X_DEVICE_PATCH_TARGET_DIR g_target_dir
 #define C300X_DEVICE_PATCH_BACKUP_DIR g_backup_dir
 #define C300X_DEVICE_PATCH_STOCK_SHA256 g_stock_sha
+#define C300X_DEVICE_PATCH_STOCK_SHA256_2_0_2 g_stock_sha_2_0_2
 #define c300x_patch_remount_root test_remount
 #define c300x_patch_range_matches test_range_matches
 #include "../src/device_routing.c"
@@ -87,6 +89,23 @@ int main(int argc, char **argv)
     assert(strcmp(error, "routing_backup_invalid") == 0);
     expect(target, "modified-123");
     g_ranges_match = 0;
+
+    /* The stock 2.0.2 file is recognised by its own hash. */
+    put(target, "stock-2-0-2");
+    assert(c300x_sha256_file_hex(target, g_stock_sha_2_0_2, sizeof(g_stock_sha_2_0_2)));
+    assert(c300x_device_routing_read_status(&status));
+    assert(strcmp(status.state, "stock") == 0);
+
+    /* So is its backup. */
+    put(backup, "stock-2-0-2");
+    put(target, "modified-202");
+    assert(c300x_device_routing_restore(&status, error, sizeof(error)));
+    expect(target, "stock-2-0-2");
+
+    /* A file that is neither build stays unsupported. */
+    put(target, "another-file");
+    assert(c300x_device_routing_read_status(&status));
+    assert(strcmp(status.state, "unsupported") == 0);
 
     /* Applying over a stock target replaces a backup that is not stock. */
     put(target, "stock-binary");

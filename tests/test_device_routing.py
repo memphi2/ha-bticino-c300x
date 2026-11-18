@@ -154,6 +154,50 @@ def test_python_and_agent_patch_tables_match() -> None:
     assert 'set_error(error, error_len, "remount_ro_failed");' in source
 
 
+def test_python_and_agent_2_0_2_patch_tables_match() -> None:
+    patcher = _load_patcher()
+    source = (ROOT / "native_agent" / "src" / "device_routing.c").read_text(
+        encoding="utf-8"
+    )
+    table = source[source.index("PATCHES_2_0_2[] = {"):]
+    table = table[: table.index("};")]
+
+    assert patcher.STOCK_SHA256_2_0_2 in source
+    for index, patch in enumerate(patcher.PATCHES_2_0_2):
+        row = (
+            f'{{"{patch.name}", 0x{patch.offset:x}, {patch.range_len}, '
+            f'"{patch.expected_range_sha256}", "{patch.patched_range_sha256}", '
+            f"PATCH_{index}_WRITES, ARRAY_LEN(PATCH_{index}_WRITES)}}"
+        )
+        assert row in table
+        assert patch.writes == patcher.PATCHES[index].writes
+
+
+def test_patch_routing_selects_the_2_0_2_table(tmp_path: Path) -> None:
+    patcher = _load_patcher()
+    data = bytearray(b"0123456789abcdef")
+    expected = bytearray(data)
+    expected[8:10] = b"XY"
+    patcher.PATCHES = ()
+    patcher.PATCHES_2_0_2 = (
+        patcher.Patch(
+            name="test_range_0",
+            offset=8,
+            range_len=4,
+            expected_range_sha256=patcher.sha256(data[8:12]),
+            patched_range_sha256=patcher.sha256(expected[8:12]),
+            writes=(patcher.Write(0, b"XY"),),
+        ),
+    )
+    source = tmp_path / "bt_answering_machine"
+    target = tmp_path / "bt_answering_machine.routing"
+    source.write_bytes(data)
+    patcher.STOCK_SHA256_2_0_2 = patcher.sha256(data)
+
+    assert patcher.patch_routing(source, target) == patcher.sha256(expected)
+    assert target.read_bytes() == expected
+
+
 def test_patch_tables_are_hash_guarded_minimal_writes() -> None:
     patcher = _load_patcher()
     agent = (ROOT / "native_agent" / "src" / "device_routing.c").read_text(

@@ -1,4 +1,4 @@
-import "./c300x-doorbell-call-card.js?v=42fb1c2a81e69f09";
+import "./c300x-doorbell-call-card.js?v=8cfee17e2e7b2905";
 
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
@@ -9,19 +9,15 @@ const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doo
 
 const C300X_METADATA_TRANSLATIONS = {
   en: {
-    card_description: "Doorbell video and Home Call controls for BTicino C300X.",
     doorstation_card: "Doorstation card",
   },
   de: {
-    card_description: "Türvideo- und Home-Call-Bedienung für BTicino C300X.",
     doorstation_card: "Türstation-Card",
   },
   fr: {
-    card_description: "Contrôles vidéo de sonnette et Home Call pour BTicino C300X.",
     doorstation_card: "Carte platine",
   },
   it: {
-    card_description: "Controlli video campanello e Home Call per BTicino C300X.",
     doorstation_card: "Scheda postazione porta",
   },
 };
@@ -101,7 +97,7 @@ window.customCards.push({
   type: C300X_CARD_TAG,
   name: "C300X Doorbell Call Card",
   preview: false,
-  description: C300X_METADATA_TRANSLATIONS.en.card_description,
+  description: "Doorbell video and Home Call controls for BTicino C300X.",
   documentationURL: C300X_DOCUMENTATION_URL,
   getEntitySuggestion: c300xMetadataEntitySuggestion,
 });

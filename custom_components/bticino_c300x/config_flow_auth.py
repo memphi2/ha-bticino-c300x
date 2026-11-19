@@ -118,6 +118,18 @@ class AuthFlowSteps:
             self, entry, data_updates, clear_keys, force_reload=True,
         )
 
+    def _setup_retry_keys(self: Any) -> dict[str, Any] | None:
+        """Keys an empty field keeps: generated ones, or those entered before the final check."""
+        if self._setup_bootstrapped:
+            return cast(dict[str, Any], self._setup_connection)
+        if self._setup_pending_features is None:
+            return None
+        if getattr(self, "_setup_retry_error", None) == "invalid_maintenance_auth":
+            # An empty field must be able to remove the rejected key.
+            return {key: value for key, value in self._setup_connection.items()
+                    if key != CONF_MAINTENANCE_TOKEN}
+        return cast(dict[str, Any], self._setup_connection)
+
     def _show_agent_auth(self: Any, errors: dict[str, str]) -> ConfigFlowResult:
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="agent_auth",
@@ -134,10 +146,7 @@ class AuthFlowSteps:
         if user_input is not None:
             auth_data, errors = _agent_auth_input(
                 user_input, require_agent_token=self._setup_agent_needs_token,
-                # A retry after the final check keeps what was entered before.
-                saved=self._setup_connection if (
-                    self._setup_bootstrapped or self._setup_pending_features is not None
-                ) else None,
+                saved=self._setup_retry_keys(),
             )
             if not errors:
                 candidate = {**self._setup_connection, **auth_data}

@@ -121,3 +121,40 @@ def test_manual_final_validation_retry_keeps_the_typed_maintenance_key(monkeypat
         assert result["data"][CONF_MAINTENANCE_TOKEN] == "typed-maintenance"
 
     asyncio.run(exercise())
+
+
+
+def test_manual_retry_after_a_rejected_maintenance_key_can_clear_it(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.context = {"source": "user"}
+    flow._setup_connection = {
+        "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
+        CONF_AGENT_TOKEN: "typed-access", CONF_MAINTENANCE_TOKEN: "rejected-maintenance",
+    }
+    flow._async_abort_if_manual_setup_duplicate = AsyncMock()
+    flow._async_adopt_agent_unique_id = AsyncMock()
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = Mock()
+    monkeypatch.setattr(config_flow, "async_migrate_legacy_mqtt_for_connection", AsyncMock())
+    validator = AsyncMock(return_value=({}, {"base": "invalid_maintenance_auth"}))
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", validator)
+
+    async def exercise():
+        feature_data, errors = config_flow._feature_input({CONF_VIDEO_ENABLED: False})
+        assert not errors
+        result = await flow._async_create_setup_entry(feature_data)
+        assert result["errors"] == {"base": "invalid_maintenance_auth"}
+        submitted = result["data_schema"]({})
+
+        async def validated(_hass, candidate):
+            assert candidate[CONF_AGENT_TOKEN] == "typed-access"
+            assert candidate[CONF_MAINTENANCE_TOKEN] == ""
+            return {"device_id": "device-a"}, {}
+
+        validator.side_effect = validated
+        result = await flow.async_step_agent_auth(submitted)
+        assert result["type"] == "create_entry"
+        assert result["data"][CONF_MAINTENANCE_TOKEN] == ""
+
+    asyncio.run(exercise())

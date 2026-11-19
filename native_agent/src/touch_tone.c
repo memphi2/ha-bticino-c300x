@@ -24,17 +24,21 @@ static void finish(struct c300x_touch_tone *tone)
     tone->deadline_ms = 0;
 }
 
-static void changed(struct c300x_touch_tone *tone)
+static void notify(struct c300x_touch_tone *tone, int confirmed)
 {
-    if (tone->changed) tone->changed(tone->ctx);
+    int available = tone->enabled >= 0 && (tone->gui_fd >= 0 || tone->client_fd >= 0);
+    enum c300x_setting_transition transition = c300x_setting_observe(
+        &tone->state, available, confirmed ? (uint64_t)tone->enabled : tone->state.last_valid);
+    int changed = transition == C300X_SETTING_CHANGED;
+    if (tone->notify) tone->notify(tone->ctx, changed);
 }
 
-void c300x_touch_tone_init(struct c300x_touch_tone *tone, void (*notify)(void *), void *ctx)
+void c300x_touch_tone_init(struct c300x_touch_tone *tone, void (*notify)(void *, int), void *ctx)
 {
     memset(tone, 0, sizeof(*tone));
     tone->gui_fd = tone->client_fd = tone->enabled = -1;
     tone->revision = -1;
-    tone->changed = notify;
+    tone->notify = notify;
     tone->ctx = ctx;
 }
 
@@ -52,7 +56,7 @@ int c300x_touch_tone_report(struct c300x_touch_tone *tone, const char *session, 
     tone->revision = revision;
     if (tone->enabled != enabled) {
         tone->enabled = enabled;
-        changed(tone);
+        notify(tone, 1);
     }
     return 1;
 }
@@ -124,7 +128,7 @@ int c300x_touch_tone_next(struct c300x_touch_tone *tone, int fd, const char *que
         } else fail(tone->client_fd, 409, "touch_tone_not_applied");
         finish(tone);
     }
-    changed(tone);
+    notify(tone, 1);
     return 0;
 }
 
@@ -144,18 +148,18 @@ void c300x_touch_tone_tick(struct c300x_touch_tone *tone, const struct pollfd *f
         close_agent_socket(tone->gui_fd);
         tone->gui_fd = -1;
         tone->enabled = -1;
-        changed(tone);
+        notify(tone, 0);
     }
     if (tone->client_fd >= 0 && fds[1].fd == tone->client_fd
         && (fds[1].revents & (POLLIN | C300X_SOCKET_CLOSED_REVENTS))) {
         finish(tone);
-        changed(tone);
+        notify(tone, 0);
     }
     if (tone->client_fd >= 0 && c300x_monotonic_ms() >= tone->deadline_ms) {
         fail(tone->client_fd, 504, "touch_tone_gui_timeout");
         finish(tone);
         tone->enabled = -1;
-        changed(tone);
+        notify(tone, 0);
     }
 }
 

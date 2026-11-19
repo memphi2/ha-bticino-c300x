@@ -15,6 +15,7 @@ def async_ensure_entry_reload(
 
 def async_update_reconfigured_entry(
     flow: Any, entry: Any, data_updates: dict[str, Any], clear_keys: frozenset[str],
+    *, force_reload: bool = False,
 ) -> ConfigFlowResult:
     """Clear shadowing options and write data in one listener notification."""
     options = {
@@ -26,5 +27,8 @@ def async_update_reconfigured_entry(
     )
     had_listeners = bool(entry.update_listeners)
     result = flow.async_update_and_abort(entry, data_updates=data_updates, options=options)
-    async_ensure_entry_reload(flow.hass, entry, changed=changed, had_listeners=had_listeners, force=not had_listeners)
+    async_ensure_entry_reload(
+        flow.hass, entry, changed=changed, had_listeners=had_listeners,
+        force=force_reload or not had_listeners,
+    )
     return cast(ConfigFlowResult, result)

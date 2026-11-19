@@ -175,6 +175,23 @@ def test_healthy_or_unsupported_startup_has_no_idle_poll(monkeypatch, unsupporte
     asyncio.run(run())
 
 
+def test_late_bridge_failure_does_not_rearm_rejected_credentials(monkeypatch):
+    async def run():
+        hass, entry, _, worker = setup_idle(monkeypatch)
+        worker.start()
+        try:
+            await _drain_hass_tasks(hass)
+            worker._auth_failed = True
+            entry.runtime_data.resources.display_bridge_registration_pending = True
+            events.async_notify_runtime_registration_failed(hass, entry)
+            worker._schedule_renewal()
+            assert _active_scheduled_delays() == []
+        finally:
+            entry.runtime_data.resources.close()
+
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("close_before_delivery", [False, True])
 def test_real_dispatcher_is_entry_scoped_and_detached_on_unload(monkeypatch, tmp_path, close_before_delivery):
     async def run():

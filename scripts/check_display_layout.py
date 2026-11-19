@@ -134,11 +134,13 @@ def fixtures() -> list[dict]:
         "consumers-normal": normal, "consumers-long": normal, "consumers-zero": [0] * 10,
         "consumers-unknown": [100, 20, 0, None, None], "consumers-identical": [15] * 10,
         "consumers-fractional": [0.9, 0.5, 0.4, 0.3, 0.25, 0.2, 0.1, 0.05, 0.01, 0.005],
-        "consumers-extreme": [sys.float_info.max, 1e100, 1e25, 1e10, 1e-5, 1e-10, 1e-100, 1e-300, 5e-324, 0],
+        "consumers-extreme": [sys.float_info.max, 1.2345678901234567e200, 1e21, 999999999999999900000.0,
+                              1e10, 1e-10, 1e-100, 1e-300, 5e-324, 0],
         "consumers-empty": [],
     }.items():
         items = [{"entity_id": f"sensor.consumer_{index:02}", "label": LONG if scenario == "consumers-long" else names[index],
-                  "watts": value, "value": "--" if value is None else str(value) + " W", "color": colors[index]}
+                  "watts": value, "value": "--" if value is None else
+                  (str(round(value)) if value < 1e21 else str(value)) + " W", "color": colors[index]}
                  for index, value in enumerate(values)]
         add("C300XEnergy", scenario, view="consumers", energy={
             "views": [{"id": key, "label": label} for key, label in
@@ -687,8 +689,9 @@ def render(args):
                                     row_data = row_data.toVariant()
                                 check(f"consumer identity {index}", row_data["entity_id"], entry["entity_id"])
                                 value = named(row, "consumerValue")
-                                check(f"exact watts {index}", value.property("text"), entry["value"])
-                                check(f"exact watts never elided {index}", bool(value.property("truncated")), False)
+                                check(f"display watts {index}", value.property("text"), entry["value"])
+                                check(f"raw watts {index}", row_data["watts"], entry["watts"])
+                                check(f"display watts never elided {index}", bool(value.property("truncated")), False)
                                 bar = named(row, "consumerBar")
                                 positive = entry["watts"] is not None and entry["watts"] > 0
                                 check(f"positive bar {index}", bar.isVisible() and bar.width() > 0, positive)

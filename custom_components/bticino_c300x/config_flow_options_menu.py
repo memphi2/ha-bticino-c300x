@@ -76,10 +76,11 @@ class OptionsMenuSteps:
             )
             if merged != dict(entry.options):
                 changed = flow.hass.config_entries.async_update_entry(entry, options=merged)
-        async_ensure_entry_reload(
-            flow.hass, entry, changed=changed, had_listeners=had_listeners,
-            force=self._connection_validated and not had_listeners,
+        state = getattr(getattr(entry, "runtime_data", None), "connection_state", None)
+        recover = self._connection_validated and (
+            not had_listeners or getattr(state, "authentication_failed", False)
         )
+        async_ensure_entry_reload(flow.hass, entry, changed=changed, had_listeners=had_listeners, force=recover)
         # The next area starts from what is saved now.
         self._unchanged_options = None
         self._connection_validated = False

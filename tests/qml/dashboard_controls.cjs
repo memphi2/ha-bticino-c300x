@@ -943,3 +943,43 @@ const climateControlsHeight = (28 + 56) * 2 + 8;
 const landscapeAvailable = 480 - 78 - 88 - (48 + 8) - 12 - (36 + 12 + 8);
 assert.ok(climateControlsHeight <= landscapeAvailable, "target and five modes fit below summary and tabs at 800x480");
 console.log("Native detail touch layout, construction, numeric limits and gestures passed");
+
+p.dashboardOnline = true; p.pendingEntity = "climate.room"; p.controlInFlight = false; queue.length = 0;
+Api.dashboardControl({entity_id: "climate.room", domain: "climate"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 0, "the pressed control stays locked until its state is confirmed");
+Api.dashboardControl({entity_id: "light.other", domain: "light"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 1, "another control is free once the command is answered");
+assert.equal(p.pendingEntity, "light.other");
+Api.dashboardControl({entity_id: "switch.third", domain: "switch"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 1, "every control waits while a command is in flight");
+
+// A press a list takes over is a scroll, never a delayed tap: Qt 4.8 does not
+// report the finger, so a delivered tap could not tell a wobble from a swipe.
+for (const file of ["HomeAssistant", "C300XLeaveHome", "C300XDetailControl", "C300XPageNavigation", "C300XEnergy"]) {
+    const text = fs.readFileSync(path.join(__dirname, `../../device_qml/${file}.qml`), "utf8");
+    assert.doesNotMatch(text, /clicked\(null\)|\btap(Press|Cancel|End)\b/, `${file} delivers no taps on its own`);
+}
+
+// A control stays locked until its own state is confirmed.
+Object.assign(p, {pendingSettling: []});
+queue.length = 0; p.pendingEntity = ""; p.controlInFlight = false;
+Api.dashboardControl({entity_id: "light.a", domain: "light"}, {command: ""}, null, p.status, p);
+queue.shift().success({ok: true});
+queue.length = 0;
+Api.dashboardControl({entity_id: "light.b", domain: "light"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 1);
+queue.shift().success({ok: true});
+queue.length = 0;
+Api.dashboardControl({entity_id: "light.a", domain: "light"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 0, "an answered but unconfirmed control stays locked when another is pressed");
+assert.equal(p.controlFree({entity_id: "light.a"}), false);
+assert.equal(p.controlFree({entity_id: "light.c"}), true);
+p.dashboardRefreshAgain = false; p.controlInFlight = false;
+Api.finishDashboardRefresh(p.status, p);
+assert.deepEqual(Array.from(p.pendingSettling), []);
+assert.equal(p.controlFree({entity_id: "light.a"}), true);
+assert.match(qml, /onPendingEntityChanged: if \(pageActive && pendingEntity.length > 0\) pendingExpiry.restart\(\)/,
+    "every new command gets its own ten seconds, started outside the timer's own handler");
+assert.match(qml, /id: pendingExpiry[^}]*onTriggered: expirePendingControl\(\)/);
+assert.doesNotMatch(qml, /onTriggered:[^\n]*restart|pendingExpiryTick/, "Qt 4.8 drops a restart made inside onTriggered");
+console.log("No delayed taps and per-control lock passed");

@@ -1262,29 +1262,28 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     assert [(field["name"], field["type"]) for field in fields] == [
         ("page_1", "expandable"),
         ("energy_page", "expandable"),
-        ("page_2", "expandable"),
         ("agenda_page", "expandable"),
         ("leave_home_page", "expandable"),
-        *((f"page_{slot}", "expandable") for slot in range(3, 9)),
+        *((f"page_{slot}", "expandable") for slot in range(2, 9)),
     ]
     # Used pages are open, and so is the first free one to add a page; the
-    # energy page is closed while it is switched off.
-    assert [field["expanded"] for field in fields] == [True, False, True, False, False, True] + [False] * 5
+    # optional built-in pages are closed while switched off.
+    assert [field["expanded"] for field in fields] == [True, False, False, False, True, True] + [False] * 5
     assert [item["name"] for item in fields[1]["schema"]] == [
         "enabled", "position", "view_now", "view_today", "view_power", "view_consumers", "view_balance",
     ]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "enabled", "weather_entity_id", "position", "entities",
     ]
-    assert [item["name"] for item in fields[2]["schema"]] == ["name", "position", "entities"]
-    assert fields[2]["schema"][0]["description"] == {"suggested_value": "Room"}
+    assert [item["name"] for item in fields[4]["schema"]] == ["name", "position", "entities"]
+    assert fields[4]["schema"][0]["description"] == {"suggested_value": "Room"}
 
 
 
 @pytest.mark.parametrize(
     ("status_position", "page_position", "first"),
     [
-        # Out of range: 8 and 1.
+        # Out of range: 11 and 1.
         (20, 0, "Room"),
         # Rounded: 3 and 2.
         (2.6, 2.4, "Room"),
@@ -1294,7 +1293,7 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
         (2, 2, "C300X"),
     ],
 )
-def test_page_positions_are_whole_numbers_from_one_to_eight(status_position, page_position, first):
+def test_page_positions_are_whole_numbers_from_one_to_eleven(status_position, page_position, first):
     result, errors = dashboard_pages_input({}, {
         "page_1": {"position": status_position},
         "page_2": {"name": "Room", "position": page_position, "entities": ["light.one"]},

@@ -11,6 +11,17 @@ class C300XAgentApiConnectionError(C300XAgentApiError):
     """Raised when the device agent cannot be reached."""
 
 
+class C300XAgentApiAuthError(C300XAgentApiError):
+    """A credential was rejected, independently of transport availability."""
+
+    def __init__(self, *, maintenance: bool = False) -> None:
+        self.maintenance = maintenance
+        super().__init__(
+            "device agent rejected the maintenance key"
+            if maintenance else "device agent rejected the access key"
+        )
+
+
 class C300XAgentApiResponseError(C300XAgentApiError):
     """Raised when the device agent returns an invalid response."""
 

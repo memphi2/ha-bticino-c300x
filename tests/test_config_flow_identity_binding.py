@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from custom_components.bticino_c300x import config_flow
+from custom_components.bticino_c300x import config_flow, config_flow_auth
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError
 from custom_components.bticino_c300x.config_flow import (
     BticinoC300XConfigFlow,
@@ -18,7 +18,22 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_TOKEN,
     CONF_MAINTENANCE_TOKEN,
     CONF_ROTATE_SHARED_SECRET,
+    CONF_VIDEO_ENABLED,
 )
+
+
+@pytest.fixture
+def agent_api(monkeypatch):
+    """Replace only authenticated I/O, retaining 2.6 validation and identity checks."""
+    api = SimpleNamespace(
+        async_validate_setup=AsyncMock(),
+        async_list_event_subscriptions=AsyncMock(return_value=[]),
+        async_validate_maintenance_auth=AsyncMock(),
+    )
+    api.factory = Mock(return_value=api)
+    monkeypatch.setattr(config_flow_auth, "C300XAgentApi", api.factory)
+    monkeypatch.setattr(config_flow_auth, "async_get_clientsession", lambda _: object())
+    return api
 
 
 def existing_entry():
@@ -54,13 +69,12 @@ async def submit(flow, route, connection):
 
 @pytest.mark.parametrize("route", ["options", "reconfigure", "finish"])
 @pytest.mark.parametrize("identity", ["device-b", None])
-def test_wrong_or_missing_stable_identity_never_persists(monkeypatch, route, identity):
+def test_wrong_or_missing_stable_identity_never_persists(agent_api, route, identity):
     entry = existing_entry()
     flow = bound_flow(entry, route)
-    read = AsyncMock(return_value={"device_id": identity})
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", read)
+    agent_api.async_validate_setup.return_value = {"device_id": identity}
     result = asyncio.run(submit(flow, route, {**entry.data, CONF_AGENT_HOST: "b.local"}))
-    assert result.get("reason") == "unique_id_mismatch" or result.get("errors") == {"base": "cannot_connect"}
+    assert result["errors"] == {"base": "wrong_device" if identity else "cannot_connect"}
     flow.async_update_and_abort.assert_not_called()
     flow._async_save_options.assert_not_called()
     flow.async_step_reconfigure_features.assert_not_called()
@@ -70,38 +84,61 @@ def test_wrong_or_missing_stable_identity_never_persists(monkeypatch, route, ide
 
 
 @pytest.mark.parametrize("route", ["options", "reconfigure", "finish"])
-def test_matching_identity_accepts_address_change(monkeypatch, route):
+def test_matching_identity_accepts_address_change(agent_api, route):
     entry = existing_entry()
     flow = bound_flow(entry, route)
-    read = AsyncMock(return_value={"device_id": "device-a"})
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", read)
+    agent_api.async_validate_setup.return_value = {"device_id": "device-a"}
     result = asyncio.run(submit(flow, route, {**entry.data, CONF_AGENT_HOST: "new.local"}))
     assert result["type"] in {"saved", "features"}
-    assert read.call_args.kwargs["api_token"] == "access-a"
+    assert agent_api.factory.call_args.args[2:] == ("access-a", "admin-a")
+    agent_api.async_list_event_subscriptions.assert_awaited_once()
+    agent_api.async_validate_maintenance_auth.assert_awaited_once()
 
 
+@pytest.mark.parametrize("route", ["options", "reconfigure", "finish"])
 @pytest.mark.parametrize("changed", [False, True])
-def test_offline_unchanged_connection_is_retained_but_new_keys_are_not_saved(monkeypatch, changed):
+def test_offline_connection_validation_retains_saved_connection(agent_api, changed, route):
     entry = existing_entry()
-    flow = bound_flow(entry, "finish")
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", AsyncMock(side_effect=C300XAgentApiConnectionError("offline")))
-    result = asyncio.run(submit(flow, "finish", {**entry.data, CONF_AGENT_TOKEN: "new" if changed else "access-a"}))
-    assert result.get("errors") == ({"base": "cannot_connect"} if changed else None)
-    assert flow.async_update_and_abort.call_count == (0 if changed else 1)
+    flow = bound_flow(entry, route)
+    agent_api.async_validate_setup.side_effect = C300XAgentApiConnectionError("offline")
+    result = asyncio.run(submit(flow, route, {**entry.data, CONF_AGENT_TOKEN: "new" if changed else "access-a"}))
+    assert result["errors"] == {"base": "cannot_connect"}
+    flow.async_update_and_abort.assert_not_called()
+    flow._async_save_options.assert_not_called()
+    flow.async_step_reconfigure_features.assert_not_called()
+    flow.hass.config_entries.async_update_entry.assert_not_called()
+    assert entry.data[CONF_AGENT_TOKEN] == "access-a"
+
+
+def test_offline_feature_edit_keeps_saved_connection_without_validation(agent_api):
+    entry = existing_entry()
+    entry.data[CONF_VIDEO_ENABLED] = True
+    flow = BticinoC300XOptionsFlow(entry)
+    flow.hass = SimpleNamespace(config_entries=SimpleNamespace(
+        async_update_entry=Mock(), async_schedule_reload=Mock(),
+    ))
+    agent_api.async_validate_setup.side_effect = C300XAgentApiConnectionError("offline")
+    result = asyncio.run(flow.async_step_features({CONF_VIDEO_ENABLED: False}))
+    assert result["type"] == "menu"
+    saved = flow.hass.config_entries.async_update_entry.call_args.kwargs["options"]
+    assert saved[CONF_AGENT_TOKEN] == "access-a"
+    assert saved[CONF_AGENT_HOST] == "a.local"
+    assert saved[CONF_VIDEO_ENABLED] is False
+    agent_api.factory.assert_not_called()
 
 
 @pytest.mark.parametrize("original_id,candidate_id", [("device-a", "device-b"), (None, "device-b"), ("device-a", "device-a")])
-def test_legacy_address_change_requires_original_device_identity(monkeypatch, original_id, candidate_id):
+def test_legacy_address_change_requires_original_device_identity(agent_api, original_id, candidate_id):
     entry = existing_entry()
     entry.unique_id = "bticino_c300x:a.local:8091"
     flow = bound_flow(entry, "options")
-    read = AsyncMock(side_effect=[{"device_id": original_id}, {"device_id": candidate_id}])
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", read)
+    agent_api.async_validate_setup.side_effect = [{"device_id": original_id}, {"device_id": candidate_id}]
     result = asyncio.run(submit(flow, "options", {**entry.data, CONF_AGENT_HOST: "new.local"}))
     assert (result["type"] == "saved") is (original_id == candidate_id)
+    assert agent_api.factory.call_args_list[0].args[1] == "http://a.local:8091"
 
 
-def test_entry_change_during_identity_read_cannot_persist(monkeypatch):
+def test_entry_change_during_identity_read_cannot_persist(agent_api):
     entry = existing_entry()
     flow = bound_flow(entry, "options")
 
@@ -109,7 +146,7 @@ def test_entry_change_during_identity_read_cannot_persist(monkeypatch):
         entry.options[CONF_AGENT_TOKEN] = "newer-key"
         return {"device_id": "device-a"}
 
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", read)
+    agent_api.async_validate_setup.side_effect = read
     result = asyncio.run(submit(flow, "options", dict(entry.data)))
     assert result["errors"] == {"base": "cannot_connect"}
     flow._async_save_options.assert_not_called()

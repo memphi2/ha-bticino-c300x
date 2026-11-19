@@ -63,7 +63,15 @@ Page {
     property int commandGeneration: 0
     property variant controlFeedback: []
     onControlFeedbackChanged: scheduleFeedbackExpiry()
+    onPendingEntityChanged: if (pageActive && pendingEntity.length > 0) pendingExpiry.restart()
     property bool interactionActive: false
+    property variant pendingSettling: []
+    property bool feedbackDue: false
+    function controlFree(item) {
+        if (pendingEntity.length === 0) return true
+        if (controlInFlight) return false
+        return !item || (pendingEntity !== item.entity_id && pendingSettling.indexOf(item.entity_id) < 0)
+    }
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
     // its bindings. Doing that inside a flick drops frames on the device, and the
     // existing interactionActive gate only covers a dragged slider. This gate
@@ -107,6 +115,7 @@ Page {
         dashboardRefreshAgain = false
         dashboardOnline = false
         pendingEntity = ""
+        pendingSettling = []
         controlInFlight = false
         interactionActive = false
         Api.stopDashboardRuntime()
@@ -268,7 +277,8 @@ Page {
     Timer {
         id: feedbackExpiry
         repeat: false
-        onTriggered: refreshFeedbackExpiry()
+        onTriggered: feedbackDue = true
+        onRunningChanged: if (!running && feedbackDue) { feedbackDue = false; refreshFeedbackExpiry() }
     }
 
     function replayDeferredRefresh() {
@@ -348,6 +358,7 @@ Page {
     }
 
     Timer {
+        id: pendingExpiry
         interval: 10000
         repeat: false
         running: pageActive && pendingEntity.length > 0
@@ -492,7 +503,7 @@ Page {
         Item {
             property variant tileItem: parent ? parent.tileItem : ({})
             property bool hasToggle: Api.dashboardControlByCommand(tileItem, "toggle") ? true : false
-            property bool controlsEnabled: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0
+            property bool controlsEnabled: dashboardOnline && tileItem.available !== false && controlFree(tileItem)
             anchors.fill: parent
             Image {
                 anchors.fill: parent
@@ -500,6 +511,7 @@ Page {
                 fillMode: Image.Stretch
             }
             BeepingMouseArea {
+                id: tileTap
                 anchors.fill: parent
                 onClicked: openDetails(tileItem)
             }
@@ -581,7 +593,7 @@ Page {
                 verticalAlignment: Text.AlignVCenter
             }
             UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
-            BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
+            BeepingMouseArea { id: tileTap; anchors.fill: parent; onClicked: openDetails(tileItem) }
         }
     }
 
@@ -607,7 +619,7 @@ Page {
                 color: detailColor(tileItem); elide: Text.ElideRight
             }
             UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
-            BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
+            BeepingMouseArea { id: tileTap; anchors.fill: parent; onClicked: openDetails(tileItem) }
         }
     }
 
@@ -617,7 +629,7 @@ Page {
             id: tallTile
             property variant tileItem: parent ? parent.tileItem : ({})
             property bool hasToggle: Api.dashboardControlByCommand(tileItem, "toggle") ? true : false
-            property bool controlsEnabled: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0
+            property bool controlsEnabled: dashboardOnline && tileItem.available !== false && controlFree(tileItem)
             property variant quickButtons: Api.dashboardQuickControls(tileItem)
             anchors.fill: parent
             Image {
@@ -626,6 +638,7 @@ Page {
                 fillMode: Image.Stretch
             }
             BeepingMouseArea {
+                id: tallTap
                 anchors.fill: parent
                 onClicked: openDetails(tallTile.tileItem)
             }
@@ -765,7 +778,7 @@ Page {
                     Flow {
                         width: parent.width
                         spacing: 8
-                        enabled: dashboardOnline && pendingEntity.length === 0
+                        enabled: dashboardOnline && controlFree(null)
                         Repeater {
                             model: notification.actions.concat([{action_id: null, label: uiText("dismiss_notification")}])
                             Item {
@@ -860,7 +873,7 @@ Page {
                 visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player" || entitySummary.summary.type === "humidifier")
                 anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 24
                 width: 104; height: 56
-                enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
+                enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
                 opacity: enabled ? 1 : 0.45
                 checkable: false
                 checked: selectedItem && selectedItem.state === true ? true : false
@@ -882,13 +895,13 @@ Page {
                     Item {
                         property variant control: modelData
                         width: (summaryActions.width - 16) / 3; height: 56
-                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
+                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem) ? 1 : 0.45
                         Image { anchors.fill: parent; source: coverControlMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                         UbuntuLightText { anchors.centerIn: parent; text: controlLabel(control); font.pixelSize: 26; color: "white" }
                         BeepingMouseArea {
                             id: coverControlMouse
                             anchors.fill: parent
-                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
+                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
                             onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
                         }
                     }
@@ -971,7 +984,7 @@ Page {
                         property variant control: actionRow.actions[index]
                         width: (actionRow.width - (actionRow.actions.length - 1) * 8) / actionRow.actions.length
                         height: 56
-                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
+                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem) ? 1 : 0.45
                         Image { anchors.fill: parent; source: actionMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                         UbuntuLightText {
                             anchors.fill: parent; anchors.margins: 6
@@ -984,7 +997,7 @@ Page {
                         BeepingMouseArea {
                             id: actionMouse
                             anchors.fill: parent
-                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
+                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
                             onClicked: pressAction(selectedItem, control)
                         }
                     }
@@ -997,7 +1010,7 @@ Page {
                     hostPage: page
                     paletteTab: control.command === "color" && detailSections.length > 0
                     width: controlColumn.width
-                    enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
+                    enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
                     onSubmitted: Api.dashboardControl(selectedItem, control, value, status, page)
                     onAdjusted: adjustControl(selectedItem, control, direction)
                     onRefreshRequested: Api.dashboard(status, page)
@@ -1158,7 +1171,7 @@ Page {
                 Binding {
                     target: leaveHomeLoader.item
                     property: "busy"
-                    value: !page.dashboardOnline || page.pendingEntity.length > 0
+                    value: !page.dashboardOnline || !page.controlFree(null)
                     when: leaveHomeLoader.status === Loader.Ready
                 }
                 Binding {
@@ -1770,7 +1783,7 @@ Page {
 
                             Loader {
                                 anchors.fill: parent
-                                enabled: mixedTile.isNavigation || mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
+                                enabled: mixedTile.isNavigation || mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && controlFree(tileItem))
                                 opacity: enabled ? 1 : 0.45
                                 property variant tileItem: mixedTile.tileItem
                                 sourceComponent: mixedTile.isNavigation ? pageNavigationComponent : mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview) : mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview) : (mixedTile.isWeather ? weatherTileComponent : mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))

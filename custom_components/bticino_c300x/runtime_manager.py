@@ -8,9 +8,12 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.exceptions import ConfigEntryAuthFailed
+
 from .activation_address import stair_light_where_from_entry_values
 from .api import (
     C300XAgentApi,
+    C300XAgentApiAuthError,
     C300XAgentApiError,
     C300XAgentApiUnsupportedError,
     build_agent_base_url,
@@ -72,6 +75,7 @@ from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
+from .runtime_auth import async_request_reauth
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
@@ -201,6 +205,8 @@ class C300XRuntimeManager:
         api = self._api()
         try:
             self.setup_data = await api.async_validate_setup()
+        except C300XAgentApiAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
         except C300XAgentApiError as err:
             _LOGGER.info("C300X device agent is offline during setup: %s", err)
             self.setup_data = _offline_setup_data(err)
@@ -684,13 +690,19 @@ def _async_start_setup_recovery(
     probe_task: asyncio.Task[Any] | None = None
 
     async def _retry(now: Any = None) -> None:
-        nonlocal retry_cancel, retry_delay_seconds, probe_task
+        nonlocal retry_cancel, retry_delay_seconds, probe_task, stopped
         if stopped or probe_task is not None:
             return
         retry_cancel = None
         probe_task = asyncio.current_task()
         try:
             await api.async_validate_setup()
+        except C300XAgentApiAuthError as err:
+            if not stopped:
+                stopped = True
+                async_request_reauth(hass, entry, connection_state, err)
+                async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
+            return
         except C300XAgentApiError as err:
             if stopped:
                 return

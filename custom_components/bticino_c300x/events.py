@@ -18,6 +18,7 @@ from homeassistant.helpers.event import async_call_later
 
 from .agent_diagnostics import async_refresh_agent_diagnostics
 from .api import C300XAgentApi
+from .api_errors import C300XAgentApiAuthError
 from .callback_transport import CallbackTransport
 from .callback_url import async_generate_agent_callback_url
 from .capabilities import EVENT_ENTITY_EXCLUDED_TYPES, events_for_capabilities
@@ -33,6 +34,7 @@ from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .event_types import HA_EVENT_TYPES
 from .fingerprint import fnv1a64_fingerprint
+from .runtime_auth import async_classify_runtime_auth_error, async_request_reauth
 from .system_metrics import invalidate_system_metrics
 
 _LOGGER = logging.getLogger(__name__)
@@ -146,6 +148,7 @@ class _AgentEventRegistration:
         self._on_runtime_registration_created = on_runtime_registration_created
         self._subscription_id: str | None = None
         self._stopped = False
+        self._auth_failed = False
         self._retry_cancel: CALLBACK_TYPE | None = None
         self._renewal_cancel: CALLBACK_TYPE | None = None
         self._registry_refresh_cancel: CALLBACK_TYPE | None = None
@@ -207,6 +210,11 @@ class _AgentEventRegistration:
                 self._registration_pending = False
                 try:
                     await self._register_once()
+                except C300XAgentApiAuthError as err:
+                    if self._stopped:
+                        return
+                    failure = await async_classify_runtime_auth_error(self._api, err)
+                    self._handle_registration_failure(failure)
                 except Exception as err:  # noqa: BLE001 - keep HA running if agent is offline
                     self._handle_registration_failure(err)
                 if not self._registration_pending:
@@ -215,12 +223,16 @@ class _AgentEventRegistration:
             self._active_tasks.discard(task)
 
     def _begin_register_attempt(self) -> bool:
-        if self._stopped:
+        if self._stopped or self._auth_failed:
             return False
         self._cancel_retry()
         self._cancel_renewal()
         self._cancel_registry_refresh()
         return True
+
+    def _check_active(self) -> None:
+        if self._stopped:
+            raise asyncio.CancelledError
 
     async def _register_once(self) -> None:
         self._registration_stage = "callback_url"
@@ -231,6 +243,7 @@ class _AgentEventRegistration:
             self._entry,
             self._entry.data[CONF_EVENT_WEBHOOK_ID],
         )
+        self._check_active()
         token = self._entry.data[CONF_EVENT_WEBHOOK_TOKEN]
         registration_events = _active_events_for_capabilities(
             self._hass,
@@ -244,10 +257,18 @@ class _AgentEventRegistration:
             datetime.now(UTC),
         )
         self._registration_stage = "callback_transport"
+        if (
+            getattr(self._connection_state, "authentication_failed", False)
+            and self._connection_state.last_reconnect_reason == "maintenance_auth"
+        ):
+            await self._api.async_validate_maintenance_auth()
+            self._check_active()
         transport_changed = await self._callback_transport.async_prepare(base_url)
+        self._check_active()
         if registration_events:
             self._registration_stage = "event_subscription_list"
             subscriptions = await self._api.async_list_event_subscriptions()
+            self._check_active()
             self._registration_stage = "event_subscription_create"
             self._subscription_id, registration_created = await _ensure_subscription(
                 self._api,
@@ -256,11 +277,16 @@ class _AgentEventRegistration:
                 token=token,
                 events=registration_events,
             )
+            self._check_active()
             self._schedule_renewal()
         else:
             self._registration_stage = "subscription_cleanup"
-            await _remove_inactive_subscriptions(self._api, callback_url=base_url)
+            await _remove_inactive_subscriptions(
+                self._api, callback_url=base_url, check_active=self._check_active,
+            )
+            self._check_active()
             self._subscription_id = None
+        recovering = self._connection_state.event_subscription_last_error is not None
         self._connection_state.mark_event_subscription_success(
             self._subscription_id,
             len(registration_events),
@@ -274,8 +300,11 @@ class _AgentEventRegistration:
             and runtime.system_metrics is prior_metrics
         ):
             invalidate_system_metrics(self._entry)
+        self._connection_state.authentication_failed = False
         self._connection_state.mark_connected()
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
+        if recovering:
+            _LOGGER.info("C300X event registration recovered")
         self._send_connection_state_changed()
         resources = getattr(runtime, "resources", None)
         if (
@@ -283,13 +312,18 @@ class _AgentEventRegistration:
             or getattr(resources, "display_bridge_registration_pending", False)
         ):
             await self._handle_runtime_registration_created()
+        self._check_active()
         if (
             getattr(resources, "display_bridge_registration_pending", False)
             and self._renewal_cancel is None
         ):
             self._schedule_renewal()
         self._registration_stage = "diagnostics"
-        await async_refresh_agent_diagnostics(self._hass, self._entry)
+        try:
+            await async_refresh_agent_diagnostics(self._hass, self._entry)
+        except Exception as err:  # noqa: BLE001 - optional diagnostics are not registration
+            if not self._stopped:
+                _LOGGER.debug("C300X post-registration diagnostics failed: %s", compact_error_text(err))
 
     async def _handle_runtime_registration_created(self) -> None:
         """Refresh runtime-only agent features after a new agent subscription."""
@@ -299,19 +333,35 @@ class _AgentEventRegistration:
         try:
             await self._on_runtime_registration_created()
         except Exception as err:  # noqa: BLE001 - event registration itself succeeded
-            _LOGGER.warning(
-                "C300X runtime callback registration refresh failed: %s",
-                compact_error_text(err),
-            )
+            if not self._stopped:
+                _LOGGER.warning(
+                    "C300X runtime callback registration refresh failed: %s",
+                    compact_error_text(err),
+                )
 
     def _handle_registration_failure(self, err: Exception) -> None:
+        if self._stopped:
+            return
         if hasattr(getattr(self._entry, "runtime_data", None), "system_metrics"):
             invalidate_system_metrics(self._entry)
         error = compact_error_text(err)
-        _LOGGER.warning(
+        log = (
+            _LOGGER.warning if self._connection_state.event_subscription_last_error is None
+            else _LOGGER.debug
+        )
+        log(
             "C300X event registration failed (%s): %s", self._registration_stage, error
         )
         self._connection_state.mark_event_subscription_failure(datetime.now(UTC), error)
+        if isinstance(err, C300XAgentApiAuthError):
+            self._auth_failed = True
+            self._registration_pending = False
+            self._cancel_retry()
+            self._cancel_renewal()
+            self._cancel_registry_refresh()
+            async_request_reauth(self._hass, self._entry, self._connection_state, err)
+            self._send_connection_state_changed()
+            return
         self._connection_state.mark_reconnecting(
             "event_subscription_registration",
             self._retry_delay_seconds,
@@ -344,6 +394,7 @@ class _AgentEventRegistration:
         resources = getattr(runtime, "resources", None)
         if (
             self._stopped
+            or self._auth_failed
             or entry_id != self._entry.entry_id
             or getattr(runtime, "api", None) is not self._api
             or getattr(resources, "closed", False)
@@ -356,7 +407,7 @@ class _AgentEventRegistration:
         self._schedule_renewal()
 
     def _schedule_renewal(self) -> None:
-        if self._stopped or self._renewal_cancel is not None:
+        if self._stopped or self._auth_failed or self._renewal_cancel is not None:
             return
         self._renewal_cancel = async_call_later(
             self._hass,
@@ -366,7 +417,7 @@ class _AgentEventRegistration:
 
     @callback
     def _schedule_registry_refresh(self, event: Any = None) -> None:
-        if self._stopped or self._registry_refresh_cancel is not None:
+        if self._stopped or self._auth_failed or self._registry_refresh_cancel is not None:
             return
         if not _entity_registry_update_affects_entry(self._hass, event, self._entry):
             return
@@ -626,10 +677,12 @@ async def _remove_inactive_subscriptions(
     api: C300XAgentApi,
     *,
     callback_url: str,
+    check_active: Callable[[], None],
 ) -> None:
     """Remove runtime subscriptions for this HA webhook when no events are active."""
 
     for subscription in _subscriptions(await api.async_list_event_subscriptions()):
+        check_active()
         if not _subscription_belongs_to_webhook(subscription, callback_url):
             continue
         subscription_id = _subscription_id({"subscription": subscription})

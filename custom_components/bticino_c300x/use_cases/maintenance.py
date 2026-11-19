@@ -17,10 +17,10 @@ class MaintenanceUseCase:
         """Reboot the C300X through the maintenance API."""
 
         ensure_maintenance_action(self._entry, "reboot")
-        await raise_agent_command_failed(self._entry.runtime_data.api.async_reboot())
+        await raise_agent_command_failed(self._entry.runtime_data.api.async_reboot(), entry=self._entry)
 
     async def reload_gui(self) -> None:
         """Reload the device GUI through the maintenance API."""
 
         ensure_maintenance_action(self._entry, "gui_reload")
-        await raise_agent_command_failed(self._entry.runtime_data.api.async_reload_gui())
+        await raise_agent_command_failed(self._entry.runtime_data.api.async_reload_gui(), entry=self._entry)

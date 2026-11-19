@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -137,6 +138,9 @@ def test_ringer_refreshes_once_after_connection_loss(monkeypatch, kind, removed)
         monkeypatch.setattr(entity, "async_on_remove", callbacks.append)
         monkeypatch.setattr(entity, "async_write_ha_state", lambda: writes.append(True))
         monkeypatch.setattr(entity_module, "async_dispatcher_connect", lambda *_: lambda: None)
+        monkeypatch.setattr(
+            sys.modules[type(entity).__module__], "async_dispatcher_connect", lambda *_: lambda: None
+        )
         await entity.async_update()
         await entity.async_added_to_hass()
         entity._handle_c300x_connection_state_changed(entry.entry_id)

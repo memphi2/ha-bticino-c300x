@@ -5,6 +5,31 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           height: 100%;
           container-type: inline-size;
         }
+        dialog.window {
+          display: block;
+          position: static;
+          width: auto;
+          height: 100%;
+          max-width: none;
+          max-height: none;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: none;
+          color: inherit;
+          overflow: visible;
+        }
+        dialog.window[open] {
+          position: fixed;
+          inset: 0;
+          margin: auto;
+          width: min(96vw, 1280px, calc((94vh - 64px) * 688 / 480));
+          height: fit-content;
+          max-height: 94vh;
+          container-type: inline-size;
+        }
+        dialog.window[open] ha-card { height: auto; }
+        dialog.window::backdrop { background: rgb(0 0 0 / .72); }
         ha-card {
           overflow: hidden;
           height: 100%;
@@ -19,6 +44,18 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           background: #111;
           min-height: 0;
         }
+        c300x-media-controls {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+        }
+        ha-card:fullscreen {
+          width: 100%;
+          height: 100%;
+          border-radius: 0;
+          background: var(--card-background-color, #fff);
+        }
+        ha-card:fullscreen .media { flex: 1 1 0; aspect-ratio: auto; }
         video {
           position: absolute;
           inset: 0;
@@ -327,7 +364,20 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
             --mdc-icon-size: 20px;
           }
         }
+        @container (max-width: 239px) {
+          .body {
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-areas: "text text" "controls devices";
+            row-gap: 4px;
+          }
+        }
+        @container (max-width: 199px) {
+          .body.doorstation:has(.mic-action:not(.hidden)) {
+            grid-template-areas: "text text" "controls controls" "devices devices";
+          }
+        }
       </style>
+      <dialog class="window" role="none">
       <ha-card>
         <audio class="remote-audio" autoplay playsinline></audio>
         <div class="media">
@@ -335,6 +385,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           <video class="transition-video" playsinline autoplay></video>
           <div class="empty"></div>
           <img class="snapshot-preview" alt="" hidden>
+          <c300x-media-controls></c300x-media-controls>
         </div>
         <div class="body">
           <div class="row-actions">
@@ -368,4 +419,5 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           </div>
         </div>
       </ha-card>
+      </dialog>
     `;

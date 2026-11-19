@@ -49,11 +49,14 @@ def page_form_positions(
 
 
 def ordered_page_sections(fields: dict[Any, Any], positions: dict[str, int | None]) -> dict[Any, Any]:
-    """Sort meaningful sections by position, retaining stable form section keys."""
-    def order(marker: Any) -> tuple[bool, int, int]:
+    """Promote built-in pages; sort custom sections without changing device order."""
+    built_in = ("page_1", *SPECIAL_PAGE_ORDER)
+
+    def order(marker: Any) -> tuple[int, int, int]:
         key = str(marker)
+        if key in built_in:
+            return 0, built_in.index(key), 0
         position = positions[key]
-        priority = SPECIAL_PAGE_ORDER.index(key) if key in SPECIAL_PAGE_ORDER else len(SPECIAL_PAGE_ORDER)
-        return position is None, position or 0, priority
+        return 1, int(position is None), position or 0
 
     return {key: fields[key] for key in sorted(fields, key=order)}

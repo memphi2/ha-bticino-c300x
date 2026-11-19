@@ -32,6 +32,19 @@ pages and display tiles are offered while the Display patch is on, the tiles
 only once there is an entity on a page or an Alarmo quick action. Every field
 has a help text.
 
+Normal credential entry is checked before saving: rejected agent keys and
+rejected supplied maintenance keys have separate errors from an unreachable
+agent. Correct the keys through Home Assistant's reauthentication flow when
+prompted; the existing entry and unrelated settings are retained. A rejected
+maintenance key locks only maintenance actions such as restart, update and
+repair: calls, video, door and events continue, and the prompt then requires a
+maintenance key. A rejected agent key takes the entry offline until it is
+corrected. Blank key
+fields for an existing connection retain the saved key. An existing entry can
+still start while its device is offline and reconnect later. This does not
+bypass credential validation for a new entry or a changed connection, and the
+one-time SSH installation remains a separate explicit step.
+
 | Area | Purpose | Writes to device |
 | --- | --- | --- |
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
@@ -67,6 +80,7 @@ agent have different effects on settings, media and backups.
 | Ring Call answer/hangup | C300X card, mobile blueprints, `answer_doorbell_call`, `hangup_doorbell_call`. | Requires Forwarding set to Home Assistant and media readiness without blocking failures. |
 | Talkback | Browser microphone through the card, or optionally the native HA camera player on HA 2026.11+. | Native HA control is off by default. Enable **Talk through the Home Assistant camera view** under **Configure > Video and audio** and Two-way audio in HA Labs. Requires WebRTC, HTTPS and microphone permission. Card talkback is unchanged. |
 | Home Call | C300X card, Home Call websocket path, `start_home_call`, `stop_home_call`. | Audio-only call from Home Assistant to the C300X display. |
+| Media history | Previous/next in the doorstation card's media window. | On by default; HA snapshots and indexed HA capture videos only. Live video and incoming rings take priority. No built-in answering-machine recordings. |
 | Door unlock | Button entity, service, optional dashboard action. | Sends one configured unlock command through the native agent. |
 | Stair light | Button entity, service, optional generated activation. | Manual mode uses P/N parts to generate the stair-light activation address. |
 | Device activations | Button entities, `run_device_activation`. | Supports `lock`, `light`, `stair_light`, `scenario`, and `generic` activation types. |
@@ -85,10 +99,34 @@ independently. Both are shown by default. In YAML, set `show_door_unlock: false`
 or `show_stair_light: false` to hide the corresponding button. This only changes
 that card; the Home Assistant entities and services remain available.
 
+### Card Media History
+
+**Browse saved images and videos** is on by default (`show_media_history: true`). The
+doorstation card combines saved HA snapshots and saved HA capture videos in
+one chronological sequence, newest first, in the same window as live video.
+Use the arrows on the picture; there is no separate visitor list. A click on
+the picture opens the card as a large window with the same controls; full
+screen is available there. Saved videos offer play/pause, a seek timeline and
+volume/mute, with their recording timestamp at the lower right. Snapshots keep
+their configured date/time stamp without a second card overlay.
+
+Live video and incoming rings take precedence. Archive navigation and playback
+never start, answer or stop device calls, request a microphone or capture new
+media. Existing Home Call, door/light, card name, status and enable options
+remain available. History is not shown in dedicated Home Call mode.
+
+Set `show_media_history: false` to hide history on one card independently of
+`show_media_readiness`, `show_door_unlock` and `show_stair_light`. This does not
+stop image saving or recording automations, change retention or delete files.
+History does not record clips: use the bundled Ring capture blueprint or an
+explicit capture service automation. Built-in C300X answering-machine videos
+remain separate. See [Media history](visitor-journal.md) for setup, storage,
+multi-device indexing and access rules.
+
 ### Visitor Images
 
 The **Save images** switch belongs to the C300X device and is on by default.
-It controls automatic images for doorbell rings and video sessions, regardless
+It controls automatic images for doorbell rings and HA video streams, regardless
 of whether a Home Assistant dashboard is open. No browser capture is used.
 **Configure > Visitor Snapshot** holds the image width and height (default
 **688×480**), the image delay (default **3 seconds**), retention (default **14
@@ -127,12 +165,17 @@ The preview is a saved image, not live video. Snapshot and live video share
 the same display area, so switching between them does not resize the card.
 Until the first successful capture, no preview is shown.
 
-Turning **Save images** off stops new captures and hides these previews,
-without reloading the integration. Existing images remain available in Media
+Turning **Save images** off stops new automatic images and hides snapshots in
+the card, including media history, without reloading the integration. It does
+not disable clip capture or saved-video history. Existing images remain in Media
 until they expire. Cleanup also runs while the switch is off. Storage is
 limited to **1,000 images or 128 MiB per device**, whichever is reached first;
 the oldest images are removed first. Retention limits are enforced while HA
 is running and again after startup.
+
+The card's [Media history](visitor-journal.md) browses these retained images
+alongside indexed HA capture recordings, not just images associated with rings.
+It is on by default and never starts additional recording or live video.
 
 ## Alarmo Display
 
@@ -342,8 +385,19 @@ device setting and follows changes made on the C300X. HA waits for the GUI's
 confirmed value; without the GUI connection the switch is unavailable. The
 agent uses a sleeping local connection, not periodic device reads, and does
 not write a second copy of this setting to its configuration.
-Touch-tone status updates also appear in **Device event** as **Touch tone
+Confirmed touch-tone value changes appear in **Device event** as **Touch tone
 changed**, with the stable event type `display_touch_tone_changed` for automations.
+The initial reading, loss of the GUI connection and recovery with the same
+value only refresh the switch. Starting HA does not set the touch tone.
+
+With the matching 2.6.0 agent bundle, the same distinction applies to ringer
+mute, ringer volume and forwarding: initial values and availability updates
+synchronize their entities without firing change events. Message and memo
+collections retain their last valid content identity across an access failure;
+unchanged recovery is a state refresh, while actual content changes still
+produce events. A changed value first observed after an outage describes the
+new state, not who changed it. Repeated physical actions, doorbell rings and
+call transitions remain separate events, even when their data is identical.
 
 Changing the feedback setting saves it in the agent configuration, so it survives
 GUI and agent restarts. Reading it and choosing the already saved value do not
@@ -367,10 +421,11 @@ HA selectors; Alarmo is set under **Alarm (Alarmo)**;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
-The pages dialog has up to 8 regular pages plus independently enabled Energy,
-Agenda and Leave home pages, one section each. Sections follow the display order;
-their titles show the page's position and name, for example **Page 2: Living room**.
-Unused regular sections remain at the end. Alarmo is not one of
+The pages dialog has four built-in pages (Status, Energy, Agenda and Leave home)
+and up to seven custom pages, one section each. The four built-in sections
+always appear first, even when disabled; custom sections follow in display order.
+Titles show the page's display position and name, for example **Page 2: Living room**,
+not its place in the form. Unused custom sections remain at the end. Alarmo is not one of
 the pages: its Alarm page opens from the home page button and has an area of
 its own in the settings menu.
 
@@ -452,7 +507,7 @@ from there.
 | View | Shows |
 | --- | --- |
 | **Now** | One box each for solar, grid, battery and home with today's energy. Current W/kW values appear beneath the flow arrows. Sources without a configured power sensor contribute 0 W; configured sensors are summed normally. A configured sensor that becomes unavailable remains unknown rather than 0 W. Meters may share one power sensor; its reading is counted once. |
-| **Today** | Hourly bars with a labelled energy axis and a table with up to eight rows: solar, battery, export and each grid meter with its cost. Grid meters have distinct colored segments matching the table; further meters are grouped as **Other meters** in both places. Values and costs occupy separate columns. |
+| **Today** | Hourly bars with a labelled energy axis: grid import, solar and battery discharge stack above zero; grid export extends below zero without cancelling the positive stack. Tapping an hour also shows the negative export value. The table has up to eight rows with costs. Grid meters have distinct colored segments matching the table; further meters are grouped as **Other meters** in both places. Values and costs occupy separate columns. |
 | **Power** | Today's power curves for grid, solar, battery and home from the power sensors configured in HA's Energy dashboard. The chart uses 15-minute means of recorded power statistics, a common W/kW scale and a visible zero line. Sources without a configured power sensor contribute zero without suppressing other curves. Export and battery charging appear below zero. Missing statistics from configured sensors leave gaps; no future or otherwise unrecorded samples are invented. |
 | **Consumers** | The ten configured electrical devices with the highest current power in W, in two columns of five, sorted descending. |
 | **Balance** | Share of solar energy used at home, self-sufficiency, net energy from the grid and today's cost. |
@@ -467,7 +522,8 @@ state. Nested configured devices remain individual readings, not a computed
 household total. Each column scales its bars independently so smaller loads
 remain legible; compare the numeric W values across columns. Colors are stable
 per power sensor and drawn from an HA-like palette, not copied from an assigned
-HA device color.
+HA device color. Displayed values are rounded to whole watts, including readings
+converted from kW. Ranking and bar lengths retain the unrounded measurements.
 
 **Upgrade from 2.4.1:** Distribution has been removed. Enable **Consumers**
 explicitly once if wanted; it is not a replacement selection applied
@@ -756,6 +812,15 @@ hangup is skipped when the captured call cannot be identified reliably. The
 device API has no atomic call-specific hangup, so a call change between the last
 status check and the hangup request cannot be excluded entirely.
 
+For automatic recording on rings, use the bundled **C300X Ring capture**
+blueprint rather than treating **Browse saved images and videos** as a recording switch.
+Select the C300X device; the blueprint matches its ring events and requires
+readiness `ready` or `warning`. Its duration defaults to 5 seconds (range 1-15)
+and **Include audio** defaults to on, so it answers the active Ring Call.
+Video-only capture does not answer. The blueprint's capture file directory
+selects the WAV/JPEG/metadata workspace, not the MP4 output path. See
+[Recording videos](visitor-journal.md#recording-videos) for the setup steps.
+
 Example action for a script or automation; replace `YOUR_C300X_ENTRY_ID` with the
 integration entry id:
 
@@ -777,6 +842,13 @@ requested mode; native media ownership is not continuously verified. The optiona
 `response_variable` provides the exact per-recording paths, such as
 `{{ capture.output_path }}` and `{{ capture.metadata_path }}`; use these in
 follow-up actions instead of the mutable `latest` pointers.
+
+Successful new captures in either mode are indexed in that device's card
+history when `output_path` is left unset. The shared MP4 directory is not
+scanned to guess device ownership or import arbitrary historic recordings;
+custom output paths are not indexed. History visibility and its retention
+window do not delete MP4s. Manage those files separately from snapshot and
+capture-workspace cleanup. See [Storage and access](visitor-journal.md#storage-and-access).
 
 On-demand capture checks for idle media before opening its recording client and
 rejects a reported busy or unclear state. The native API does not reserve the
@@ -822,9 +894,10 @@ Audio gain options:
 
 - **Live audio level (dB)** affects on-demand and Ring Call downstream
   audio. Default is `0 dB`.
-- **Volume of ring recordings (dB)** affects Ring Capture WAV/MP4 processing. Default
-  is `6 dB`. At `0 dB` the level of the device audio is left unchanged: neither
-  the gain nor the limiter that guards it is applied.
+- **Volume of ring recordings (dB)** affects the audio in Ring Capture MP4 files.
+  Default is `6 dB`. At `0 dB` the level of the device audio is left unchanged:
+  neither the gain nor the limiter that guards it is applied. The separate
+  16 kHz mono WAV used for transcription is not affected by this setting.
 - The allowed range is `-20 dB` to `+20 dB`.
 - At `0 dB`, live audio stays on the neutral path and the integration avoids
   unnecessary gain updates.

@@ -117,12 +117,19 @@ from homeassistant.const import CONF_NAME  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def authenticated_identity_boundary(monkeypatch):
-    """Layout tests use a matching device; identity binding has dedicated tests."""
-    async def matching(*_args):
-        return None
+def authenticated_connection_boundary(monkeypatch):
+    """Wizard layout tests assume a reachable agent; auth has separate regressions."""
+    from custom_components.bticino_c300x import config_flow_auth
 
-    monkeypatch.setattr(config_flow_module, "_async_entry_identity_error", matching)
+    async def validate(_hass, _connection):
+        return {}, {}
+
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", validate)
+
+    async def validate_entry(_hass, _entry, _connection):
+        return {}, {}
+
+    monkeypatch.setattr(config_flow_auth, "async_validate_entry_connection", validate_entry)
 
 
 def test_probe_agent_requires_event_subscription_endpoint(
@@ -1542,6 +1549,10 @@ def test_zeroconf_probes_agent_before_auth_form(
 def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    async def validated_identity(_hass, _connection):
+        return {"device_id": "ABCDEF"}, {}
+
+    monkeypatch.setattr(config_flow_module.config_flow_auth, "async_validate_connection", validated_identity)
     calls: list[str] = []
     flow = BticinoC300XConfigFlow()
     flow.hass = SimpleNamespace()
@@ -1785,6 +1796,10 @@ def test_zeroconf_rediscovery_requests_runtime_event_registration(
 def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    async def validated_identity(_hass, _connection):
+        return {"device_id": "c300xaabbcc001122"}, {}
+
+    monkeypatch.setattr(config_flow_module.config_flow_auth, "async_validate_connection", validated_identity)
     calls: list[str] = []
     pending_flows = [{"flow_id": "zeroconf-flow"}]
     flow = BticinoC300XConfigFlow()

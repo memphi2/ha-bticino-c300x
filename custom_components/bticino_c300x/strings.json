@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -441,7 +441,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -607,13 +607,23 @@
             }
           }
         }
+      },
+      "reauth_confirm": {
+        "title": "Update C300X keys",
+        "description": "Enter the current keys for {name}. Leave a key empty to keep its saved value.",
+        "data": {
+          "agent_token": "Access key",
+          "maintenance_token": "Maintenance key"
+        }
       }
     },
     "abort": {
       "already_configured": "BTicino C300X is already configured.",
       "reconfigure_successful": "BTicino C300X was reconfigured. Update the local device-agent or display-bridge config if you rotated credentials.",
       "cannot_connect": "The device agent could not be reached. Check the address and that the agent is running.",
-      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry."
+      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry.",
+      "reauth_wrong_device": "The agent has a different identity. The saved entry was not changed.",
+      "reauth_successful": "The credentials were updated."
     },
     "error": {
       "agent_bundle_missing": "The packaged ARMHF agent bundle is missing. Build/package the release bundle before using the installer.",
@@ -642,7 +652,11 @@
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
-      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480."
+      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480.",
+      "invalid_auth": "The C300X rejected the access key. Enter the current key.",
+      "wrong_device": "This address belongs to a different C300X. The existing device was not changed.",
+      "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
+      "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again."
     }
   },
   "options": {
@@ -800,7 +814,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.",
+        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -990,7 +1004,10 @@
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
       "required": "This field is required.",
       "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480.",
-      "cannot_connect": "The device identity could not be verified. Check the address and connection, then try again."
+      "invalid_auth": "The C300X rejected the access key. Enter the current key.",
+      "wrong_device": "This address belongs to a different C300X. The existing device was not changed.",
+      "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
+      "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again."
     }
   },
   "entity": {

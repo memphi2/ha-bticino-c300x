@@ -48,7 +48,8 @@ def test_device_homeassistant_page_has_no_refresh_timer() -> None:
     assert "running: pageActive && pendingEntity.length > 0" in text
     feedback_timer = text[text.index("id: feedbackExpiry"):].split("}", 1)[0]
     assert "repeat: false" in feedback_timer
-    assert "onTriggered: refreshFeedbackExpiry()" in feedback_timer
+    assert "onTriggered: feedbackDue = true" in feedback_timer
+    assert "refreshFeedbackExpiry()" in feedback_timer.split("onRunningChanged:", 1)[1]
     expiry = helper[
         helper.index("function expireDashboardFeedback("):
         helper.index("function dashboardExpectation(")

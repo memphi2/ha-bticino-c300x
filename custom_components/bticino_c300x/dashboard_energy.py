@@ -399,7 +399,7 @@ def energy_page(
         page["nodes"] = nodes
 
     if ENERGY_VIEW_TODAY in shown:
-        # A meter correction can make an hour negative; a bar cannot be.
+        # Negative meter corrections are not export; only grid_to points down.
         series: list[_EnergyBarSeries] = _grid_bar_series(sources, day) + [
             {"color": color, "values": [round(max(0.0, value), 3) for value in values]}
             for present, color, values in (
@@ -408,10 +408,13 @@ def energy_page(
             ) if present
         ]
         stacked = [sum(entry["values"][hour] for entry in series) for hour in range(24)]
+        exported = [-round(max(0.0, value), 3) + 0.0 for value in grid_out]
+        if sources.grid_to:
+            series.append({"color": COLOR_EXPORT, "values": exported})
         page["hours"] = {
             "max": round(max(stacked), 3),
             "label": format_energy(max(stacked), language),
-            "axis": chart_axis(0.0, max(stacked), language, "kWh"),
+            "axis": chart_axis(min(exported), max(stacked), language, "kWh"),
             "series": series,
         }
         page["sums"] = _sum_rows(sources, day, labels, language, currency, {

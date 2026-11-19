@@ -1,5 +1,51 @@
 # Changelog
 
+## v2.6.0 - 2026-11-19
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+- Separate initial state and availability updates from confirmed setting and
+  collection changes in the agent. Keep HA entities synchronized without false
+  touch-tone, forwarding, ringer, memo or message change events on startup or
+  unchanged recovery. Startup does not set these device settings; real changes
+  and repeated physical actions remain observable. Requires the matching
+  2.6.0 agent bundle.
+- Show grid export below zero in Energy's Today chart, with separate positive
+  stacks, a signed axis and negative values in the hourly readout.
+- Round Consumers values to whole watts while retaining measurement precision
+  for ranking and bar lengths.
+- Keep the four built-in display-page sections (Status, Energy, Agenda and
+  Leave home) together at the top of the configuration form, before the seven
+  custom pages. Headings retain their configured display positions.
+- Validate agent and supplied maintenance credentials before saving normal
+  setup, reconfiguration or connection options. Distinguish rejected keys from
+  an unreachable agent, with translated form errors and entry-bound reauthentication.
+  A rejected maintenance key locks only maintenance actions; the entry stays online.
+  Existing entries can still start offline; one-time SSH installation remains
+  available. Event registration logs each outage and recovery once.
+- Unified media window in the doorstation card for live video, saved HA
+  snapshots and saved HA capture videos. Media history is on by default
+  (`show_media_history: true`) and can be hidden independently. Arrows on the
+  picture browse media chronologically; saved videos offer play/pause, timeline
+  and volume/mute, with a lower-right recording timestamp. A click on the
+  picture opens the card as a large window with the same controls, including
+  two-way audio, door and light; full screen is available there.
+  Live video and incoming rings take priority; browsing never starts, answers
+  or stops a device call. Existing Home Call, door/light, name and status
+  options remain available.
+- Media history uses existing HA storage and device-specific indexing for new
+  completed default-path ring and on-demand captures, without importing
+  arbitrary historic MP4s or device answering-machine recordings. Automatic
+  images still require **Save images**; clips require a separate capture
+  automation. Hiding history or expiring its links does not delete MP4 files.
+  See [Media history](docs/visitor-journal.md) for setup and retention.
+- Keep a running stream or call in the doorstation card when a dashboard with
+  columns rebuilds its layout, for example after the browser window is resized
+  or enters full screen.
+- Expire the display's control feedback reliably. After the first expiry a
+  later "sending" or "not confirmed" text could stay on a tile until the next
+  dashboard change.
+
 ## v2.5.1 - 2026-11-19
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

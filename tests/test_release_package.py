@@ -481,6 +481,20 @@ def test_release_requires_browser_checks_at_the_verified_commit() -> None:
     assert not smoke.get("continue-on-error", False)
 
 
+def test_browser_gate_requires_media_controls_and_its_video_fixture_tool() -> None:
+    browser = yaml.safe_load((ROOT / ".github/workflows/browser.yml").read_text())
+    steps = browser["jobs"]["browser"]["steps"]
+    controls = next(step for step in steps if step.get("run") == "node tests/browser/media_controls.mjs")
+    fixture_tool = next(step for step in steps if "apt-get install -y --no-install-recommends ffmpeg" in step.get("run", ""))
+    assert steps.index(fixture_tool) < steps.index(controls)
+    assert (ROOT / "tests/browser/media_controls.mjs").is_file()
+    assert not (ROOT / "tests/browser/visitor_journal.mjs").exists()
+    assert not any("visitor_journal.mjs" in step.get("run", "") for step in steps)
+    for step in (fixture_tool, controls):
+        assert "if" not in step
+        assert not step.get("continue-on-error", False)
+
+
 def test_native_agent_release_gate_requires_version_bump_for_bundle_changes() -> None:
     checker = _load_repo_checker()
 

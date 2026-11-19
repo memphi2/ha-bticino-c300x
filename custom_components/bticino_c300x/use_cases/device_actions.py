@@ -45,7 +45,8 @@ class DeviceActionsUseCase:
         """Run one configured C300X device activation."""
 
         await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_run_device_activation(activation_id)
+            self._entry.runtime_data.api.async_run_device_activation(activation_id),
+            entry=self._entry,
         )
 
     async def alarm_command(
@@ -86,12 +87,14 @@ class DeviceActionsUseCase:
         """Trigger the configured stair-light command."""
 
         await raise_agent_command_failed(
-            async_trigger_stair_light(self._hass, self._entry, address)
+            async_trigger_stair_light(self._hass, self._entry, address),
+            entry=self._entry,
         )
 
     async def unlock(self, lock_id: str = "default") -> None:
         """Trigger the configured door-unlock command."""
 
         await raise_agent_command_failed(
-            async_unlock_door(self._hass, self._entry, lock_id)
+            async_unlock_door(self._hass, self._entry, lock_id),
+            entry=self._entry,
         )

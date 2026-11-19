@@ -85,7 +85,8 @@ int main(int argc, char **argv)
     assert(runtime);
     runtime->config = &config;
     runtime->ringer_control.client_fd = -1;
-    runtime->ringer_muted_known = 1;
+    runtime->ringer_muted_state = (struct c300x_setting_state){.known = 1, .available = 1, .last_valid = 1};
+    runtime->ringer_volume_state = (struct c300x_setting_state){.known = 1, .available = 1, .last_valid = 0};
     c300x_ui_events_init(&runtime->ui_events);
     const char *request = only_muted ? "{\"muted\":false}"
         : include_muted ? "{\"muted\":false,\"volume\":1}" : "{\"volume\":1}";

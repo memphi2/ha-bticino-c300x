@@ -24,6 +24,7 @@ from ..ring_capture import (
     raise_if_ring_answer_would_block_capture,
     raise_if_ring_capture_blocked,
 )
+from ..visitor_journal import get_journal
 from .common import (
     ensure_doorbell_call_supported,
     ensure_doorbell_video_supported,
@@ -64,6 +65,8 @@ class RingCaptureUseCase:
         if capture_mode not in {"ring", "on_demand"}:
             raise ValueError("Invalid C300X capture mode")
         on_demand = capture_mode == "on_demand"
+        journal = get_journal(self._hass, self._entry.entry_id)
+        visitor_id = journal.active if journal is not None and not on_demand else None
         if on_demand:
             if announcement_path is not None:
                 raise service_validation_error("capture_announcement_requires_ring")
@@ -127,7 +130,7 @@ class RingCaptureUseCase:
                 if not on_demand:
                     self._ensure_ring_capture_runtime(runtime)
 
-                return await async_capture_doorbell_ring_call(
+                result = await async_capture_doorbell_ring_call(
                     self._hass,
                     self._entry,
                     output_path=output_path,
@@ -137,6 +140,11 @@ class RingCaptureUseCase:
                     announcement_path=announcement_path,
                     capture_mode=capture_mode,
                 )
+                if call_guard is not None:
+                    call_guard.finished = True
+                if journal is not None and output_path is None:
+                    await journal.attach_clip(visitor_id, result)
+                return result
             except (Exception, asyncio.CancelledError) as err:
                 capture_error = err
                 raise
@@ -195,7 +203,7 @@ class RingCaptureUseCase:
         if _ring_answer_media_ready(status) or _status_bridge(status).get("ring_answer_requested"):
             return False
         ensure_doorbell_call_supported(self._entry)
-        await raise_agent_command_failed(runtime.api.async_answer_doorbell_call())
+        await raise_agent_command_failed(runtime.api.async_answer_doorbell_call(), entry=self._entry)
         return True
 
     def _raise_if_ring_answer_blocked(self, runtime: Any, status: Mapping[str, Any]) -> None:

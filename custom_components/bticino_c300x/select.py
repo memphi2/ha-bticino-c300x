@@ -24,6 +24,7 @@ from .const import (
     SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
     SIGNAL_FORWARDING_CHANGED,
+    SIGNAL_SETTING_STATE,
     SMARTPHONE_FORWARDING_MODES,
 )
 from .entity import C300XEntity, supports_capability
@@ -77,6 +78,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         self._mode: int | None = None
         self._state = "unknown"
         self._attr_available = True
+        self._state_generation = 0
 
     @property
     def current_option(self) -> str | None:
@@ -95,24 +97,30 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 
         if option not in SMARTPHONE_FORWARDING_MODES:
             return
+        generation = self._state_generation
         try:
             status = await self._entry.runtime_data.api.async_set_smartphone_forwarding_mode(
                 option
             )
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X smartphone forwarding update failed") from err
-        self._apply_status(status)
+        if generation == self._state_generation:
+            self._state_generation += 1
+            self._apply_status(status)
         self.async_write_ha_state()
 
     async def async_update(self) -> None:
         """Refresh forwarding state through the active read-only endpoint."""
 
+        generation = self._state_generation
         try:
             status = await self._entry.runtime_data.api.async_smartphone_forwarding_status()
         except C300XAgentApiError:
-            self._attr_available = False
+            if generation == self._state_generation:
+                self._attr_available = False
             return
-        self._apply_status(status)
+        if generation == self._state_generation:
+            self._apply_status(status)
 
     def _apply_status(self, status: Mapping[str, Any]) -> None:
         """Take a reading from the agent, whether asked for or pushed."""
@@ -139,12 +147,15 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
                 async_dispatcher_send(
                     self.hass, SIGNAL_FORWARDING_CHANGED, self._entry.entry_id
                 )
-        self._attr_available = True
+        self._attr_available = forwarding_state is not None and status.get("available") is not False
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to push state updates."""
 
         await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_SETTING_STATE, self._handle_setting_state,
+        ))
         self.async_on_remove(
             self.hass.bus.async_listen(
                 EVENT_AGENT_EVENT_RECEIVED,
@@ -174,12 +185,23 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 
     @callback
     def _handle_agent_event(self, event: Event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
         event_type = agent_event_key(event.data) or ""
-        if not event_type.startswith("smartphone_forwarding_"):
+        self._handle_setting_state(event.data.get("entry_id"), event_type, event.data)
+
+    @callback
+    def _handle_setting_state(self, entry_id: str | None, event_type: str, data: Any) -> None:
+        if entry_id != self._entry.entry_id or not isinstance(data, Mapping):
             return
-        self._apply_status(_normalize_smartphone_forwarding_event(event.data))
+        if event_type != "smartphone_forwarding_changed":
+            return
+        status = _normalize_smartphone_forwarding_event(data)
+        if data.get("available") is not False and status["state"] == "unknown":
+            return
+        self._state_generation += 1
+        if data.get("available") is False:
+            self._attr_available = False
+        else:
+            self._apply_status(status)
         self.async_write_ha_state()
 
 

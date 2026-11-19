@@ -10,6 +10,7 @@ from datetime import timedelta
 from typing import Any, cast
 from urllib.parse import quote
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -18,6 +19,7 @@ from .config_snapshots import snapshot_options
 from .const import DOMAIN
 from .snapshot_capture import SnapshotCapture
 from .snapshot_store import SnapshotStore, StoredSnapshot
+from .visitor_journal import VisitorJournal
 
 SIGNAL_SNAPSHOT_CHANGED = f"{DOMAIN}_snapshot_changed"
 _LOGGER = logging.getLogger(__name__)
@@ -45,6 +47,7 @@ class StreamSnapshots:
         self.latest: StoredSnapshot | None = None
         self.image: bytes | None = None
         self.closed = False
+        self.journal: VisitorJournal | None = None
         self.capture = SnapshotCapture(self)
         self._jobs: set[asyncio.Future[Any]] = set()
         self._cancel_retention: Callable[[], None] | None = None
@@ -132,6 +135,8 @@ class StreamSnapshots:
     async def refresh(self, _now: Any = None) -> None:
         """Run retention even when saving and previews are switched off."""
 
+        if self.journal is not None and not self.closed:
+            self.journal.prune()
         async with self.lock:
             if self.closed:
                 return
@@ -199,9 +204,13 @@ class StreamSnapshots:
     def notify(self) -> None:
         if not self.closed:
             async_dispatcher_send(self.hass, SIGNAL_SNAPSHOT_CHANGED, self.entry.entry_id)
+            if self.journal is not None:
+                self.journal.invalidate()
 
     def close(self) -> None:
         self.closed = True
+        if self.journal is not None:
+            self.journal.close()
         self.capture.close()
         self.image = None
         self.latest = None
@@ -223,6 +232,8 @@ class StreamSnapshots:
             # Wait for disk-job callers to unwind their critical sections too.
             async with self.lock:
                 pass
+            if self.journal is not None:
+                await self.journal.shutdown()
 
         await self._finish_job(drain(), track=False)
 
@@ -241,6 +252,12 @@ async def async_setup_snapshots(hass: Any, entry: Any) -> None:
     await async_shutdown_snapshots(hass, entry.entry_id)
     manager = StreamSnapshots(hass, entry)
     await manager.async_load_settings()
+    manager.journal = VisitorJournal(hass, entry)
+    try:
+        await manager.journal.load()
+    except (HomeAssistantError, OSError, ValueError):
+        _LOGGER.warning("Could not load C300X visitor journal", exc_info=True)
+        manager.journal = None
     managers[entry.entry_id] = manager
 
     def unload() -> None:
@@ -249,6 +266,8 @@ async def async_setup_snapshots(hass: Any, entry: Any) -> None:
     entry.async_on_unload(unload)
     manager._cancel_retention = async_track_time_interval(hass, manager.refresh, timedelta(hours=1))
     await manager.refresh()
+    if manager.journal is not None:
+        manager.journal.start()
     manager.capture.start()
 
 

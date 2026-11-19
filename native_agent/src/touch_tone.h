@@ -4,6 +4,7 @@
 #include <poll.h>
 #include <stddef.h>
 #include "http_request.h"
+#include "setting_state.h"
 
 #define C300X_TOUCH_TONE_POLL_FDS 2
 struct c300x_touch_tone {
@@ -12,11 +13,12 @@ struct c300x_touch_tone {
     char id[33];
     char session[33];
     int revision;
-    void (*changed)(void *ctx);
+    struct c300x_setting_state state;
+    void (*notify)(void *ctx, int changed);
     void *ctx;
 };
 
-void c300x_touch_tone_init(struct c300x_touch_tone *tone, void (*changed)(void *), void *ctx);
+void c300x_touch_tone_init(struct c300x_touch_tone *tone, void (*notify)(void *, int), void *ctx);
 void c300x_touch_tone_status(const struct c300x_touch_tone *tone, char *body, size_t size);
 void c300x_touch_tone_request(struct c300x_touch_tone *tone, int fd, int enabled);
 int c300x_touch_tone_next(struct c300x_touch_tone *tone, int fd, const char *query);

@@ -62,7 +62,7 @@ def test_native_chart_click_readouts_geometry_and_dismissal(tmp_path, view, inde
                  else f"{index:02d}:00 - {index + 1:02d}:00")
         assert any(item["text"] == title and not item["truncated"] for item in case["texts"])
         values = [item for item in case["texts"] if item["id"] == "sumValue"]
-        assert len(values) == (4 if view == "power" else 5)
+        assert len(values) == (4 if view == "power" else 6)
         assert all(not item["truncated"] for item in values)
         if view == "power" and index == 43:
             assert all(item["text"] == "--" for item in values)

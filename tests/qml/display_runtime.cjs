@@ -16,7 +16,8 @@ function runtime(name = "c300x_ha.js") {
             stop() { this.running = false; },
             destroy() { this.stop(); },
             triggered: {connect(fn) { handler = fn; }},
-            fire() { this.running = false; handler(); },
+            // Qt 4.8 order: the handler runs first, then the one-shot timer is marked stopped.
+            fire() { handler(); this.running = false; if (this.stopped) this.stopped(); },
         };
         timers.push(t);
         return t;
@@ -301,7 +302,10 @@ console.log("Dashboard stock hidden lifecycle passed");
     const p = methods(dashboardQml, {Api: r.Api, Date: r.clock, I18n: {text: (_, key) => key},
         uiLanguage: "en", pendingEntity: "", controlInFlight: false, dashboardOnline: true});
     const trigger = dashboardQml.match(/id: feedbackExpiry\s+repeat: false\s+onTriggered: ([^\n]+)/)[1];
+    const stopped = dashboardQml.match(/id: feedbackExpiry[^}]*onRunningChanged: ([^\n]+)/)[1];
+    p.feedbackDue = false;
     p.feedbackExpiry = r.timer(() => vm.runInContext(trigger, p));
+    p.feedbackExpiry.stopped = () => { p.running = p.feedbackExpiry.running; vm.runInContext(stopped, p); };
     assert.match(dashboardQml, /onControlFeedbackChanged: scheduleFeedbackExpiry\(\)/);
     assert.match(dashboardQml, /onPageActiveChanged: refreshFeedbackExpiry\(\)/);
     Object.defineProperty(p, "controlFeedback", {get: () => feedback, set(value) {

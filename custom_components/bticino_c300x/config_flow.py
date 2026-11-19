@@ -11,9 +11,10 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow
 
+from . import config_flow_auth
 from .api import (
     C300XAgentApi,
-    C300XAgentApiConnectionError,
+    C300XAgentApiAuthError,
     C300XAgentApiError,
     C300XAgentApiUnsupportedError,
     build_agent_base_url,
@@ -77,7 +78,6 @@ from .config_flow_dashboard_pages import (
 from .config_flow_dashboard_pages import (
     dashboard_pages_schema as _dashboard_pages_schema,
 )
-from .config_flow_entry_update import async_update_reconfigured_entry
 from .config_flow_features import (
     current_connection_options as _current_connection_options,
 )
@@ -105,9 +105,6 @@ from .config_flow_features import (
 )
 from .config_flow_forms import (
     actions_json as _actions_json,
-)
-from .config_flow_identity import (
-    async_entry_identity_error as _async_entry_identity_error,
 )
 from .config_flow_identity import (
     async_existing_manual_discovery as _async_existing_manual_discovery,
@@ -266,7 +263,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
 )
 
 
-class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
+class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 1
@@ -279,6 +276,8 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
         self._setup_connection: dict[str, Any] = {}
         self._setup_unique_id: str | None = None
         self._setup_agent_needs_token = False
+        self._setup_bootstrapped = False
+        self._setup_pending_features: dict[str, Any] | None = None
         self._setup_device_ui_default = False
         self._setup_feature_data: dict[str, Any] = {}
         self._setup_device_activations: list[dict[str, Any]] = []
@@ -301,6 +300,7 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
 
         errors: dict[str, str] = {}
         if user_input is not None:
+            self._setup_bootstrapped = False
             self._setup_connection, errors = _initial_connection_input(
                 user_input,
                 include_name=True,
@@ -392,6 +392,7 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
             else:
                 self._setup_connection[CONF_AGENT_TOKEN] = api_token
                 self._setup_connection[CONF_MAINTENANCE_TOKEN] = maintenance_token
+                self._setup_bootstrapped = True
                 probe = await _async_probe_agent(
                     self.hass,
                     self._setup_connection,
@@ -432,34 +433,6 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
         for entry in self._async_current_entries():
             if _entry_connection_matches_discovery(entry, self._setup_connection):
                 raise AbortFlow("already_configured")
-
-    async def async_step_agent_auth(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Collect agent tokens after a reachable agent has been found."""
-
-        if not self._setup_connection:
-            return await self.async_step_user()
-
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            auth_data, errors = _agent_auth_input(
-                user_input,
-                require_agent_token=self._setup_agent_needs_token,
-            )
-            if not errors:
-                self._setup_connection.update(auth_data)
-                await self._async_adopt_agent_unique_id(
-                    api_token=auth_data[CONF_AGENT_TOKEN]
-                )
-                return await self.async_step_user_features()
-
-        return self.async_show_form(
-            step_id="agent_auth",
-            data_schema=_agent_auth_schema(self._setup_agent_needs_token),
-            errors=errors,
-        )
 
     async def _async_adopt_agent_unique_id(self, *, api_token: str = "") -> None:
         """Use the agent's mDNS identity before creating the config entry."""
@@ -511,7 +484,6 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
 
         discovered_unique_id = discovery_unique_id(properties)
         unique_id = discovered_unique_id or DOMAIN
-        self._setup_unique_id = unique_id
         await self.async_set_unique_id(unique_id)
         self._async_request_existing_entry_event_registration(
             discovered_unique_id,
@@ -909,6 +881,13 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
     ) -> FlowResult:
         """Create the initial config entry after feature collection."""
 
+        errors = await self._async_validate_setup_identity()
+        if errors:
+            self._setup_pending_features = feature_data
+            self._note_setup_rejection(errors, self._setup_connection)
+            return self._show_agent_auth(errors)
+        self._setup_pending_features = None
+
         if self._setup_unique_id is not None:
             self._async_abort_duplicate_setup_flows(self._setup_unique_id)
             await self.async_set_unique_id(
@@ -967,13 +946,9 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
                 saved=_current_connection_options(entry),
             )
             if not errors:
-                identity_error = await _async_entry_identity_error(
-                    self.hass, entry, self._reconfigure_connection, _async_agent_setup_data,
+                _, errors = await config_flow_auth.async_validate_entry_connection(
+                    self.hass, entry, self._reconfigure_connection,
                 )
-                if identity_error == "unique_id_mismatch":
-                    return self.async_abort(reason=identity_error)
-                if identity_error:
-                    errors["base"] = identity_error
             if errors:
                 return self.async_show_form(
                     step_id="reconfigure",
@@ -1371,17 +1346,13 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
         """Finish a reconfigure flow after all feature pages."""
 
         entry = self._get_reconfigure_entry()
-        identity_error = await _async_entry_identity_error(
-            self.hass, entry, self._reconfigure_connection, _async_agent_setup_data,
+        _, errors = await config_flow_auth.async_validate_entry_connection(
+            self.hass, entry, self._reconfigure_connection,
         )
-        if identity_error == "unique_id_mismatch":
-            return self.async_abort(reason=identity_error)
-        if identity_error:
-            return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=_reconfigure_connection_schema_from_current(entry),
-                errors={"base": identity_error},
-            )
+        if errors:
+            return self._show_reconfigure_auth(errors)
+
+        entry = self._get_reconfigure_entry()
         await self.async_set_unique_id(_reconfigure_unique_id(entry))
         self._abort_if_unique_id_mismatch()
 
@@ -1391,7 +1362,7 @@ class BticinoC300XConfigFlow(SnapshotWizardSteps, config_entries.ConfigFlow, dom
             data_updates[CONF_SHARED_SECRET] = secrets.token_urlsafe(32)
             data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
 
-        return async_update_reconfigured_entry(self, entry, data_updates, _RECONFIGURED_OPTION_KEYS)
+        return self._async_update_reconfigured_entry(entry, data_updates, _RECONFIGURED_OPTION_KEYS)
 
     @staticmethod
     @callback
@@ -1476,13 +1447,9 @@ class BticinoC300XOptionsFlow(
                 saved=_current_connection_options(self._config_entry),
             )
             if not errors:
-                identity_error = await _async_entry_identity_error(
-                    self.hass, self._config_entry, connection_options, _async_agent_setup_data,
+                _, errors = await config_flow_auth.async_validate_entry_connection(
+                    self.hass, self._config_entry, connection_options,
                 )
-                if identity_error == "unique_id_mismatch":
-                    return self.async_abort(reason=identity_error)
-                if identity_error:
-                    errors["base"] = identity_error
             if not errors:
                 self._connection_options = connection_options
                 self._connection_validated = True
@@ -1815,11 +1782,8 @@ async def _async_probe_agent(
 
     try:
         await _async_agent_ready_for_setup(hass, connection, api_token=api_token)
-    except C300XAgentApiConnectionError as err:
-        message = str(err)
-        if "HTTP 401" in message or "HTTP 403" in message:
-            return "auth_required"
-        return "missing"
+    except C300XAgentApiAuthError:
+        return "auth_required"
     except C300XAgentApiError:
         return "missing"
     return "reachable"
@@ -1880,6 +1844,8 @@ async def _async_agent_ready_for_setup(
     setup_data = cast(dict[str, Any], await api.async_validate_setup())
     try:
         await api.async_self_test()
+    except C300XAgentApiAuthError:
+        raise
     except C300XAgentApiUnsupportedError:
         pass
     except C300XAgentApiError:

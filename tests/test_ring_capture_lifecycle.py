@@ -448,3 +448,32 @@ def test_call_event_during_cleanup_does_not_cancel_a_finished_capture(capture, e
     # The call changed: no automatic hangup of what may be a new call.
     api.async_hangup_doorbell_call.assert_not_awaited()
     assert bus.listeners == []
+
+
+def test_journal_attachment_cannot_cancel_a_finished_capture(capture, monkeypatch):
+    use_case, entry, bus, recording, _ = capture
+
+    async def attach(key, result):
+        assert key == "visit"
+        assert result == recording.return_value
+        bus.fire(entry.entry_id, "doorbell_pressed")
+        await asyncio.sleep(0)
+
+    journal = SimpleNamespace(active="visit", attach_clip=AsyncMock(side_effect=attach))
+    monkeypatch.setattr(ring_capture, "get_journal", lambda *args: journal)
+
+    async def run():
+        result = await use_case.capture()
+        assert result == recording.return_value
+        journal.attach_clip.assert_awaited_once()
+        entry.runtime_data.api.async_hangup_doorbell_call.assert_not_awaited()
+
+    asyncio.run(run())
+
+
+def test_journal_does_not_claim_user_supplied_output_paths(capture, monkeypatch):
+    use_case, _, _, recording, _ = capture
+    journal = SimpleNamespace(active="visit", attach_clip=AsyncMock())
+    monkeypatch.setattr(ring_capture, "get_journal", lambda *args: journal)
+    assert asyncio.run(use_case.capture(output_path="/media/c300x/user.mp4", include_audio=False)) == recording.return_value
+    journal.attach_clip.assert_not_awaited()

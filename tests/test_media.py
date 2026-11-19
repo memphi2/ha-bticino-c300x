@@ -94,6 +94,11 @@ def test_video_message_transcode_decision_targets_non_browser_containers() -> No
 
 
 def test_media_view_registration_is_idempotent() -> None:
+    from custom_components.bticino_c300x.media_history_http import C300XMediaHistoryView
+    from custom_components.bticino_c300x.visitor_journal_http import (
+        C300XVisitorJournalView,
+    )
+
     registered: list[object] = []
     hass = SimpleNamespace(
         data={},
@@ -105,6 +110,8 @@ def test_media_view_registration_is_idempotent() -> None:
 
     assert [type(view) for view in registered] == [
         C300XSnapshotView,
+        C300XMediaHistoryView,
+        C300XVisitorJournalView,
         C300XVideoMessageMediaView,
         C300XVoiceMemoMediaView,
         C300XRingCaptureMediaView,

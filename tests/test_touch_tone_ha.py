@@ -18,7 +18,10 @@ from custom_components.bticino_c300x.api_errors import (
     C300XAgentApiResponseError,
 )
 from custom_components.bticino_c300x.capabilities import events_for_capabilities
-from custom_components.bticino_c300x.const import EVENT_AGENT_EVENT_RECEIVED
+from custom_components.bticino_c300x.const import (
+    EVENT_AGENT_EVENT_RECEIVED,
+    SIGNAL_SETTING_STATE,
+)
 from custom_components.bticino_c300x.switch import async_setup_entry
 from custom_components.bticino_c300x.switch_display import C300XTouchToneSwitch
 
@@ -106,6 +109,44 @@ def test_setup_adds_switch_and_its_event_only_for_capable_agent():
     assert "display.touch_tone_changed" not in events_for_capabilities({})
 
 
+def test_legacy_first_change_is_applied_without_an_initial_read():
+    entry, switch = make_switch()
+    switch._handle_event(SimpleNamespace(data={
+        "entry_id": entry.entry_id, "event_key": "display_touch_tone_changed",
+        "data": {"enabled": False, "available": True},
+    }))
+    assert switch.available and switch.is_on is False
+    entry.runtime_data.api.async_touch_tone_status.assert_not_awaited()
+    entry.runtime_data.api.async_set_touch_tone.assert_not_awaited()
+
+
+def test_snapshot_subscription_applies_payload_without_api_reads_or_writes(monkeypatch):
+    import custom_components.bticino_c300x.switch_display as module
+
+    listeners = {}
+    def connect(hass, signal, handler):
+        listeners[signal] = handler
+        return lambda: listeners.pop(signal)
+    monkeypatch.setattr(module, "async_dispatcher_connect", connect)
+    entry, switch = make_switch()
+    switch.hass = SimpleNamespace(bus=_EventBus())
+    asyncio.run(switch.async_added_to_hass())
+    entry.runtime_data.api.async_touch_tone_status.reset_mock()
+    def handler(entry_id, data):
+        listeners[SIGNAL_SETTING_STATE](entry_id, "display_touch_tone_changed", data)
+    handler("elsewhere", {"enabled": False, "available": True})
+    assert switch.available and switch.is_on is True
+    for value, available in ((None, False), (False, True), (True, True)):
+        handler(entry.entry_id, {"enabled": value, "available": available})
+        assert switch.available is available and switch.is_on is value
+    handler(entry.entry_id, "invalid")
+    assert switch.available and switch.is_on is True
+    entry.runtime_data.api.async_touch_tone_status.assert_not_awaited()
+    entry.runtime_data.api.async_set_touch_tone.assert_not_awaited()
+    switch._remove_callback()
+    assert not listeners
+
+
 class _EventBus:
     def __init__(self):
         self.listeners = []
@@ -167,7 +208,8 @@ def test_added_switch_recovers_push_lost_during_other_initial_reads():
 
 @pytest.mark.parametrize("read_fails", [False, True])
 @pytest.mark.parametrize("push_available", [False, True])
-def test_push_during_added_resync_wins_over_delayed_read(read_fails, push_available):
+@pytest.mark.parametrize("snapshot", [False, True])
+def test_push_during_added_resync_wins_over_delayed_read(read_fails, push_available, snapshot):
     async def run():
         entry, switch = make_switch()
         await switch.async_update()
@@ -186,7 +228,12 @@ def test_push_during_added_resync_wins_over_delayed_read(read_fails, push_availa
         added = asyncio.create_task(switch.async_added_to_hass())
         try:
             await asyncio.wait_for(entered.wait(), 1)
-            bus.push(entry, enabled=False if push_available else None, available=push_available)
+            if snapshot:
+                switch._handle_state(entry.entry_id, {
+                    "enabled": False if push_available else None, "available": push_available,
+                })
+            else:
+                bus.push(entry, enabled=False if push_available else None, available=push_available)
         finally:
             release.set()
             await added
@@ -235,7 +282,8 @@ def test_confirmed_set_supersedes_an_inflight_status_read():
 
 
 @pytest.mark.parametrize("set_fails", [False, True])
-def test_new_push_wins_over_delayed_set_result(set_fails):
+@pytest.mark.parametrize("snapshot", [False, True])
+def test_new_push_wins_over_delayed_set_result(set_fails, snapshot):
     async def run():
         entry, switch = make_switch()
         entered, release = asyncio.Event(), asyncio.Event()
@@ -256,7 +304,10 @@ def test_new_push_wins_over_delayed_set_result(set_fails):
         setting = asyncio.create_task(switch.async_turn_off())
         try:
             await asyncio.wait_for(entered.wait(), 1)
-            bus.push(entry, enabled=True)
+            if snapshot:
+                switch._handle_state(entry.entry_id, {"enabled": True, "available": True})
+            else:
+                bus.push(entry, enabled=True)
         finally:
             release.set()
             if set_fails:

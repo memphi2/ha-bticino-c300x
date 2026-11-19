@@ -1,10 +1,8 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-19. Integration and native agent `2.5.1`, a maintenance
-release that adds C300X firmware `2.0.2` to `2.5.0`. Version `2.5.0` is the successor
-to `v2.4.1`, adding optional Agenda and Leave home pages, live Consumers,
-page navigation and bounded display notifications. This report covers the local source tree, not a newly published
-release.
+Source review: 2026-11-19. Integration and native agent `2.6.0`, the successor
+of `2.5.1`, with credential recovery and an HA-only media history. This report
+covers the release source tree.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.

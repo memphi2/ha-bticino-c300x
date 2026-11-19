@@ -40,7 +40,7 @@ class DoorbellVideoUseCase:
         if before_activate is not None:
             before_activate()
         await raise_agent_command_failed(
-            runtime.api.async_activate_doorbell_video(audio=audio)
+            runtime.api.async_activate_doorbell_video(audio=audio), entry=self._entry,
         )
 
     async def stop(self) -> None:
@@ -63,7 +63,7 @@ class DoorbellVideoUseCase:
             if was_idle:
                 return
             await raise_agent_command_failed(
-                runtime.api.async_stop_doorbell_video()
+                runtime.api.async_stop_doorbell_video(), entry=self._entry,
             )
 
 

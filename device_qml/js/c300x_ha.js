@@ -310,7 +310,7 @@ function dashboard(statusItem, pageItem) {
         pageItem.dashboardOnline = false
         pageItem.watchFailed = true
         dashboardRevision = ""
-        if (!pageItem.controlInFlight) pageItem.pendingEntity = ""
+        if (!pageItem.controlInFlight) clearPendingControl(pageItem)
         setStatus(statusItem, uiText(pageItem, "stale_state"), "#f1c40f")
     })
 }
@@ -320,7 +320,7 @@ function finishDashboardRefresh(statusItem, pageItem) {
         pageItem.dashboardRefreshAgain = false
         dashboard(statusItem, pageItem)
     } else if (!pageItem.controlInFlight) {
-        pageItem.pendingEntity = ""
+        clearPendingControl(pageItem)
         confirmDashboardFeedback(pageItem)
     }
 }
@@ -474,11 +474,21 @@ function confirmDashboardFeedback(pageItem) {
     if (changed) pageItem.controlFeedback = updated
 }
 
+function clearPendingControl(pageItem) {
+    pageItem.pendingEntity = ""
+    pageItem.pendingSettling = []
+}
+
 function dashboardControl(item, control, value, statusItem, pageItem) {
-    if (!item || !control || item.available === false || !pageItem.dashboardOnline || pageItem.pendingEntity) return
+    if (!item || !control || item.available === false || !pageItem.dashboardOnline) return
+    var settling = pageItem.pendingSettling || []
+    if (pageItem.pendingEntity && (pageItem.controlInFlight || pageItem.pendingEntity === item.entity_id
+            || settling.indexOf(item.entity_id) >= 0)) return
     var generation = pageItem.runtimeGeneration
     var commandGeneration = ++pageItem.commandGeneration
     var expected = dashboardExpectation(item, control, value)
+    // An answered command stays locked until the refresh confirms its state.
+    if (pageItem.pendingEntity) pageItem.pendingSettling = settling.concat([pageItem.pendingEntity])
     pageItem.pendingEntity = item.entity_id
     pageItem.controlInFlight = true
     setDashboardFeedback(pageItem, item.entity_id, "sending", expected)
@@ -489,7 +499,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
         if (generation !== pageItem.runtimeGeneration || commandGeneration !== pageItem.commandGeneration) return
         pageItem.controlInFlight = false
         if (!data || data.ok !== true) {
-            pageItem.pendingEntity = ""
+            clearPendingControl(pageItem)
             setDashboardFeedback(pageItem, item.entity_id, "action_error")
             setStatus(statusItem, uiText(pageItem, "action_error"), "#ff6b6b")
             return
@@ -499,7 +509,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
     }, function() {
         if (generation !== pageItem.runtimeGeneration || commandGeneration !== pageItem.commandGeneration) return
         pageItem.controlInFlight = false
-        pageItem.pendingEntity = ""
+        clearPendingControl(pageItem)
         setDashboardFeedback(pageItem, item.entity_id, "state_unconfirmed")
         setStatus(statusItem, uiText(pageItem, "state_unconfirmed"), "#f1c40f")
     }, commandScope(pageItem, "commandGeneration"))

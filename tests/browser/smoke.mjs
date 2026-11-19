@@ -60,11 +60,20 @@ try {
       const center = (top + bottom) / 2;
       const failures = [];
       if (document.documentElement.scrollWidth > innerWidth) failures.push("page overflow");
+      const text = root.querySelector(".entity-text").getBoundingClientRect();
+      const narrow = outer.width < 240;
+      const rowRect = root.querySelector(".row-actions").getBoundingClientRect();
+      const rowCenter = (rowRect.top + rowRect.bottom) / 2;
+      if (narrow && (text.width <= 0 || text.height <= 0 || text.top < top - 1
+        || text.left < outer.left || text.right > outer.right + 1)) failures.push("narrow footer text bounds");
       for (const selector of [".row-actions", ".device-actions"]) {
         const element = root.querySelector(selector);
         const rect = element.getBoundingClientRect();
-        if (rect.width && rect.height && Math.abs((rect.top + rect.bottom) / 2 - center) > 1) {
-          failures.push(`${selector} not vertically centered`);
+        if (rect.width && rect.height) {
+          if (Math.abs((rect.top + rect.bottom) / 2 - (narrow ? rowCenter : center)) > 1) {
+            failures.push(`${selector} not vertically centered${narrow ? " in action row" : ""}`);
+          }
+          if (narrow && (rect.top < text.bottom - 1 || rect.bottom > bottom + 1)) failures.push(`${selector} not below text within footer`);
         }
       }
       const buttons = [...root.querySelectorAll("button")].filter((button) => button.getBoundingClientRect().width);
@@ -78,7 +87,6 @@ try {
           if (rect.left < otherRect.right && rect.right > otherRect.left
             && rect.top < otherRect.bottom && rect.bottom > otherRect.top) failures.push("overlapping buttons");
         }
-        const text = root.querySelector(".entity-text").getBoundingClientRect();
         if (rect.left < text.right && rect.right > text.left
           && rect.top < text.bottom && rect.bottom > text.top) failures.push("button overlaps text");
       }

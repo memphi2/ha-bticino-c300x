@@ -39,7 +39,9 @@ from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
+    SIGNAL_FORWARDING_CHANGED,
     SIGNAL_MEMOS_CHANGED,
+    SIGNAL_SETTING_STATE,
     SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
@@ -73,6 +75,7 @@ from .value_parsing import (
     DEFAULT_TRUE_VALUES,
     optional_mapping,
     optional_string,
+    ringer_volume,
 )
 from .value_parsing import (
     optional_bool as _parse_optional_bool,
@@ -376,7 +379,7 @@ async def _async_handle_agent_event(
     )
 
     if snapshot:
-        _apply_snapshot_entity_refresh(hass, entry, event_type)
+        _apply_snapshot_entity_refresh(hass, entry, event_type, data)
     else:
         event_state.last_event = event_type
         event_state.last_event_time = event_at
@@ -435,14 +438,21 @@ def _apply_call_event(context: _AgentEventContext) -> None:
 
 
 def _apply_ringer_event(context: _AgentEventContext) -> None:
+    if context.data.get("available") is False:
+        return
     context.event_state.ringer_muted = context.event_type == "ringer_muted"
 
 
 def _apply_ringer_volume_event(context: _AgentEventContext) -> None:
-    context.event_state.ringer_volume = _optional_int(context.data.get("volume"))
+    volume = ringer_volume(context.data.get("volume"))
+    if context.data.get("available") is not False and volume is not None:
+        context.event_state.ringer_volume = volume
 
 
 def _apply_smartphone_forwarding_event(context: _AgentEventContext) -> None:
+    if context.data.get("available") is False:
+        context.event_state.smartphone_forwarding_mode = None
+        return
     mode = _optional_forwarding_mode(context.data.get("mode"))
     if mode is None and context.event_state.smartphone_forwarding_mode is not None:
         # A push we cannot parse carries no reading, so it must not overwrite a
@@ -530,6 +540,9 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
         "event_at": event_at,
         "data": context.data,
     }
+    source_id = context.payload.get("event_id")
+    if isinstance(source_id, str) and 1 <= len(source_id) <= 128:
+        event_data["source_event_id"] = source_id
     if context.event_type in {
         "doorbell_pressed",
         "doorbell_view_requested",
@@ -557,7 +570,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
     elif context.event_type in {"ringer_muted", "ringer_unmuted"}:
         event_data["muted"] = context.event_state.ringer_muted
     elif context.event_type == "ringer_volume_changed":
-        event_data["volume"] = context.event_state.ringer_volume
+        event_data["volume"] = ringer_volume(context.data.get("volume"))
     elif context.event_type == "smartphone_forwarding_changed":
         # From the push, not from the store: the store deliberately keeps the
         # last known mode when a push cannot be parsed, and an automation
@@ -622,8 +635,16 @@ def _apply_snapshot_entity_refresh(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
     event_type: str,
+    data: dict[str, Any],
 ) -> None:
     """Refresh stateful entities for subscription snapshots without firing events."""
+
+    if event_type in {"display_touch_tone_changed", "smartphone_forwarding_changed",
+                      "ringer_muted", "ringer_unmuted", "ringer_volume_changed"}:
+        async_dispatcher_send(hass, SIGNAL_SETTING_STATE, entry.entry_id, event_type, data)
+        if event_type == "smartphone_forwarding_changed":
+            async_dispatcher_send(hass, SIGNAL_FORWARDING_CHANGED, entry.entry_id)
+        return
 
     # A snapshot carries the counters only; the cache was just stored with an
     # empty item list. The signal re-publishes that, the scheduled read brings

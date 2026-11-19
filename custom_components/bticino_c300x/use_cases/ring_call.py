@@ -30,7 +30,7 @@ class RingCallUseCase:
         await async_ensure_doorstation_audio_gain(self._entry, status=status)
         ensure_current_runtime(self._entry, runtime)
         await raise_agent_command_failed(
-            runtime.api.async_answer_doorbell_call()
+            runtime.api.async_answer_doorbell_call(), entry=self._entry,
         )
 
     async def hangup(self) -> None:
@@ -49,5 +49,5 @@ class RingCallUseCase:
                 await prepare_stop()
                 ensure_current_runtime(self._entry, runtime)
             await raise_agent_command_failed(
-                runtime.api.async_hangup_doorbell_call()
+                runtime.api.async_hangup_doorbell_call(), entry=self._entry,
             )

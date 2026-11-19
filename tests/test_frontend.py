@@ -49,9 +49,14 @@ FRONTEND_MODULE_SOURCES = (
     CARD_ACTIONS_SOURCE,
     CARD_EDITOR_SOURCE,
     CARD_LIFECYCLE_SOURCE,
+    FRONTEND_DIR / "c300x-card-media.js",
     CARD_TEMPLATE_SOURCE,
     CARD_RESOLVER_SOURCE,
     CARD_MEDIA_ATTACH_SOURCE,
+    FRONTEND_DIR / "c300x-media-controls.js",
+    FRONTEND_DIR / "c300x-media-controls-template.js",
+    FRONTEND_DIR / "c300x-media-history.js",
+    FRONTEND_DIR / "c300x-media-translations.js",
     CARD_RINGBACK_SOURCE,
     CARD_RING_PREVIEW_STATE_SOURCE,
     CARD_STATE_SOURCE,
@@ -452,10 +457,10 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "_cardHeightRows" not in source
     assert "rows," not in source
     assert "columns: 12" in source
-    assert "min_rows: 3" in source
+    assert "min_rows: 6" in source
     assert "max_rows: 10" in source
     assert "min_columns: 6" in source
-    assert "return this._isHomeCallMode() ? 1 : 7;" in source
+    assert "return this._isHomeCallMode() ? 2 : 7;" in source
     assert 'name: "card_height"' not in source
     assert 'getEntitySuggestion: (hass, entityId)' in source
     assert 'documentationURL: C300X_DOCUMENTATION_URL' in source

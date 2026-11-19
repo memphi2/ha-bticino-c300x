@@ -43,6 +43,7 @@ Item {
     }
 
     Flickable {
+        id: list
         anchors.fill: parent
         contentWidth: width
         contentHeight: content.height
@@ -164,7 +165,7 @@ Item {
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
                         }
-                        BeepingMouseArea { anchors.fill: parent; onClicked: root.clearConfirmation() }
+                        BeepingMouseArea { id: cancelMouse; anchors.fill: parent; onClicked: root.clearConfirmation() }
                     }
                 }
             }

@@ -37,6 +37,7 @@
 #include "ui_homeassistant.h"
 #include "ui_events.h"
 #include "touch_tone.h"
+#include "setting_state.h"
 #include "display_alerts.h"
 #include "video_audio_settings.h"
 #include "video_rtsp.h"
@@ -175,7 +176,7 @@ struct voicemail_runtime {
     int inotify_fd;
     int watch_count;
     struct voicemail_watch watches[C300X_MAX_VOICEMAIL_WATCHES];
-    unsigned long long last_signature;
+    struct c300x_setting_state content_state;
 };
 struct agent_runtime {
     const struct c300x_config *config;
@@ -210,7 +211,6 @@ struct agent_runtime {
     struct voicemail_runtime voicemail;
     struct voicemail_runtime text_memos;
     struct voicemail_runtime voice_memos;
-    unsigned long long memos_last_signature;
     struct c300x_ui_events ui_events;
     struct c300x_touch_tone touch_tone;
     struct c300x_display_alerts display_alerts;
@@ -223,12 +223,9 @@ struct agent_runtime {
     int maintenance_records_write;
     char maintenance_action[16];
     struct c300x_system_metrics_monitor metrics;
-    int smartphone_forwarding_mode_known;
-    int smartphone_forwarding_mode_code;
-    int ringer_muted_known;
-    int ringer_muted;
-    int ringer_volume_known;
-    int ringer_volume;
+    struct c300x_setting_state forwarding_state;
+    struct c300x_setting_state ringer_muted_state;
+    struct c300x_setting_state ringer_volume_state;
     struct c300x_local_action_events local_action_events;
     int network_online;
     time_t network_checked_at;
@@ -1743,7 +1740,6 @@ static unsigned long long signature_hash_bytes(unsigned long long hash, const vo
 static unsigned long long voicemail_signature(const struct voicemail_snapshot *snapshot)
 {
     unsigned long long hash = 1469598103934665603ULL;
-    hash = signature_hash_bytes(hash, &snapshot->available, sizeof(snapshot->available));
     hash = signature_hash_bytes(hash, &snapshot->total, sizeof(snapshot->total));
     hash = signature_hash_bytes(hash, &snapshot->unread, sizeof(snapshot->unread));
     hash = signature_hash_bytes(hash, &snapshot->read, sizeof(snapshot->read));
@@ -1929,7 +1925,8 @@ static void voicemail_runtime_init(
     int enabled,
     int watch_enabled,
     int max_messages,
-    const char *root
+    const char *root,
+    const char *kind
 )
 {
     struct voicemail_snapshot *snapshot;
@@ -1946,8 +1943,10 @@ static void voicemail_runtime_init(
 
     snapshot = calloc(1, sizeof(*snapshot));
     if (snapshot != NULL) {
-        voicemail_read_snapshot(voicemail, snapshot);
-        voicemail->last_signature = voicemail_signature(snapshot);
+        message_collection_read_snapshot(voicemail, kind, snapshot);
+        (void)c300x_setting_observe(
+            &voicemail->content_state, snapshot->available, voicemail_signature(snapshot)
+        );
         free(snapshot);
     }
     if (!voicemail->enabled || !voicemail->watch_enabled) {
@@ -1974,45 +1973,9 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
         config->answering_machine_messages_enabled,
         config->answering_machine_messages_watch,
         config->answering_machine_messages_max,
-        config->answering_machine_messages_root
+        config->answering_machine_messages_root,
+        ""
     );
-}
-
-static unsigned long long memos_signature_for_snapshots(
-    const struct voicemail_snapshot *text,
-    const struct voicemail_snapshot *voice
-)
-{
-    unsigned long long hash = voicemail_signature(text);
-
-    hash = signature_hash_bytes(hash, &voice->available, sizeof(voice->available));
-    hash = signature_hash_bytes(hash, &voice->total, sizeof(voice->total));
-    hash = signature_hash_bytes(hash, &voice->unread, sizeof(voice->unread));
-    hash = signature_hash_bytes(hash, &voice->read, sizeof(voice->read));
-    hash = signature_hash_bytes(hash, voice->newest_at, strlen(voice->newest_at));
-    for (int index = 0; index < voice->message_count; index++) {
-        const struct voicemail_message *message = &voice->messages[index];
-        hash = signature_hash_bytes(hash, message->id, strlen(message->id));
-        hash = signature_hash_bytes(hash, &message->read, sizeof(message->read));
-        hash = signature_hash_bytes(hash, &message->unix_time, sizeof(message->unix_time));
-    }
-    return hash;
-}
-
-static unsigned long long memos_signature(struct agent_runtime *runtime)
-{
-    struct voicemail_snapshot *text = calloc(1, sizeof(*text));
-    struct voicemail_snapshot *voice = calloc(1, sizeof(*voice));
-    unsigned long long hash = 0;
-
-    if (text != NULL && voice != NULL) {
-        message_collection_read_snapshot(&runtime->text_memos, "text", text);
-        message_collection_read_snapshot(&runtime->voice_memos, "voice", voice);
-        hash = memos_signature_for_snapshots(text, voice);
-    }
-    free(text);
-    free(voice);
-    return hash;
 }
 
 static void memos_init(struct agent_runtime *runtime, const struct c300x_config *config)
@@ -2022,16 +1985,17 @@ static void memos_init(struct agent_runtime *runtime, const struct c300x_config 
         config->memos_enabled,
         config->memos_watch,
         config->memos_max,
-        config->memos_text_root
+        config->memos_text_root,
+        "text"
     );
     voicemail_runtime_init(
         &runtime->voice_memos,
         config->memos_enabled,
         config->memos_watch,
         config->memos_max,
-        config->memos_voice_root
+        config->memos_voice_root,
+        "voice"
     );
-    runtime->memos_last_signature = memos_signature(runtime);
 }
 
 static char *allocate_response_buffer(int client_fd, size_t size)
@@ -2120,7 +2084,7 @@ static void voicemail_event_dispatch_snapshot(
 )
 {
     struct voicemail_snapshot *snapshot = calloc(1, sizeof(*snapshot));
-    unsigned long long signature;
+    enum c300x_setting_transition transition;
     char data[512];
     char newest_at_escaped[96];
     char newest_at_quoted[100];
@@ -2130,12 +2094,13 @@ static void voicemail_event_dispatch_snapshot(
         return;
     }
     voicemail_read_snapshot(&runtime->voicemail, snapshot);
-    signature = voicemail_signature(snapshot);
-    if (!force && signature == runtime->voicemail.last_signature) {
+    transition = c300x_setting_observe(
+        &runtime->voicemail.content_state, snapshot->available, voicemail_signature(snapshot)
+    );
+    if (!force && transition == C300X_SETTING_SAME) {
         free(snapshot);
         return;
     }
-    runtime->voicemail.last_signature = signature;
     if (snapshot->newest_at[0] != '\0') {
         c300x_json_escape_string(snapshot->newest_at, newest_at_escaped, sizeof(newest_at_escaped));
         snprintf(newest_at_quoted, sizeof(newest_at_quoted), "\"%s\"", newest_at_escaped);
@@ -2153,7 +2118,7 @@ static void voicemail_event_dispatch_snapshot(
     );
     free(snapshot);
     ui_event_notify(runtime, "answering_machine.messages");
-    if (force) {
+    if (force || transition != C300X_SETTING_CHANGED) {
         dispatch_event_snapshot(config, runtime, "answering_machine.messages_changed", data, 30);
     } else {
         dispatch_event(config, runtime, "answering_machine.messages_changed", data, 30);
@@ -2189,7 +2154,8 @@ static void memos_event_dispatch_snapshot(
 {
     struct voicemail_snapshot *text = calloc(1, sizeof(*text));
     struct voicemail_snapshot *voice = calloc(1, sizeof(*voice));
-    unsigned long long signature;
+    enum c300x_setting_transition text_transition;
+    enum c300x_setting_transition voice_transition;
     char data[2048];
     char newest_at_escaped[96];
     char newest_at_quoted[100];
@@ -2203,13 +2169,17 @@ static void memos_event_dispatch_snapshot(
     }
     message_collection_read_snapshot(&runtime->text_memos, "text", text);
     message_collection_read_snapshot(&runtime->voice_memos, "voice", voice);
-    signature = memos_signature_for_snapshots(text, voice);
-    if (!force && signature == runtime->memos_last_signature) {
+    text_transition = c300x_setting_observe(
+        &runtime->text_memos.content_state, text->available, voicemail_signature(text)
+    );
+    voice_transition = c300x_setting_observe(
+        &runtime->voice_memos.content_state, voice->available, voicemail_signature(voice)
+    );
+    if (!force && text_transition == C300X_SETTING_SAME && voice_transition == C300X_SETTING_SAME) {
         free(text);
         free(voice);
         return;
     }
-    runtime->memos_last_signature = signature;
 
     newest_at = newest_memo_time(text, voice);
     if (newest_at[0] != '\0') {
@@ -2232,7 +2202,7 @@ static void memos_event_dispatch_snapshot(
     free(text);
     free(voice);
     ui_event_notify(runtime, "memos");
-    if (force) {
+    if (force || (text_transition != C300X_SETTING_CHANGED && voice_transition != C300X_SETTING_CHANGED)) {
         dispatch_event_snapshot(config, runtime, "memos.changed", data, 30);
     } else {
         dispatch_event(config, runtime, "memos.changed", data, 30);
@@ -5257,53 +5227,39 @@ static void dispatch_lock_activation_event(
     dispatch_event(config, runtime, event_type, event_data, 0);
 }
 
-static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code)
+static void dispatch_setting_state(struct agent_runtime *runtime, const char *type,
+                                   const char *data, enum c300x_setting_transition transition)
 {
-    if (runtime == NULL || c300x_smartphone_mode_from_code(code) == NULL) {
-        return;
-    }
-    runtime->smartphone_forwarding_mode_known = 1;
-    runtime->smartphone_forwarding_mode_code = code;
+    if (runtime == NULL || runtime->config == NULL) return;
+    if (transition == C300X_SETTING_CHANGED)
+        dispatch_event(runtime->config, runtime, type, data, 0);
+    else if (transition != C300X_SETTING_SAME)
+        dispatch_event_snapshot(runtime->config, runtime, type, data, 0);
 }
 
-static int note_smartphone_forwarding_changed(struct agent_runtime *runtime, int code)
+static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code, const char *raw)
 {
-    if (runtime == NULL) {
-        return c300x_smartphone_mode_from_code(code) != NULL;
-    }
-    /* A first reading counts as a change: nobody knows this mode yet. */
-    if (runtime->smartphone_forwarding_mode_known
-        && runtime->smartphone_forwarding_mode_code == code) {
-        return 0;
-    }
-    remember_smartphone_forwarding_mode(runtime, code);
-    return 1;
+    if (runtime == NULL) return;
+    const char *mode = c300x_smartphone_mode_from_code(code);
+    char body[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN) + 160], quoted[48], raw_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    enum c300x_setting_transition transition = c300x_setting_observe(&runtime->forwarding_state, mode != NULL, code);
+    snprintf(body, sizeof(body), "{\"available\":%s,\"mode\":%s,\"raw\":%s}", mode ? "true" : "false",
+             c300x_json_string_or_null(mode, quoted, sizeof(quoted)),
+             c300x_json_string_or_null(raw, raw_json, sizeof(raw_json)));
+    dispatch_setting_state(runtime, "smartphone_forwarding.changed", body, transition);
 }
 
-static void remember_ringer_muted(struct agent_runtime *runtime, int muted)
+static void remember_ringer_muted(struct agent_runtime *runtime, int muted, const char *raw, const char *source)
 {
-    if (runtime == NULL) {
-        return;
-    }
-    runtime->ringer_muted_known = 1;
-    runtime->ringer_muted = muted ? 1 : 0;
-}
-
-static int note_ringer_muted_changed(struct agent_runtime *runtime, int muted)
-{
-    muted = muted ? 1 : 0;
-    if (runtime == NULL) {
-        return 1;
-    }
-    if (!runtime->ringer_muted_known) {
-        remember_ringer_muted(runtime, muted);
-        return 0;
-    }
-    if (runtime->ringer_muted == muted) {
-        return 0;
-    }
-    remember_ringer_muted(runtime, muted);
-    return 1;
+    if (runtime == NULL) return;
+    int available = muted == 0 || muted == 1;
+    char body[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN) + 160], raw_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)], source_json[48];
+    enum c300x_setting_transition transition = c300x_setting_observe(&runtime->ringer_muted_state, available, muted);
+    snprintf(body, sizeof(body), "{\"available\":%s,\"muted\":%s,\"raw\":%s,\"source\":%s}", available ? "true" : "false",
+             available ? (muted ? "true" : "false") : "null",
+             c300x_json_string_or_null(raw, raw_json, sizeof(raw_json)),
+             c300x_json_string_or_null(source, source_json, sizeof(source_json)));
+    dispatch_setting_state(runtime, runtime->ringer_muted_state.last_valid ? "ringer.muted" : "ringer.unmuted", body, transition);
 }
 
 static int ringer_mute_is_ring_answer_transition(struct agent_runtime *runtime, int muted)
@@ -5317,35 +5273,25 @@ static int ringer_mute_is_ring_answer_transition(struct agent_runtime *runtime, 
     return status.ring_audio_active || status.ring_answer_requested || status.ring_answered;
 }
 
-static void remember_ringer_volume(struct agent_runtime *runtime, int volume)
+static void remember_ringer_volume(struct agent_runtime *runtime, int volume, const char *raw)
 {
-    if (runtime == NULL) {
-        return;
-    }
-    if (volume < C300X_RINGER_VOLUME_MIN || volume > C300X_RINGER_VOLUME_MAX) {
-        return;
-    }
-    runtime->ringer_volume_known = 1;
-    runtime->ringer_volume = volume;
+    if (runtime == NULL) return;
+    int available = volume >= C300X_RINGER_VOLUME_MIN && volume <= C300X_RINGER_VOLUME_MAX;
+    char body[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN) + 160], value[16], raw_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    enum c300x_setting_transition transition = c300x_setting_observe(&runtime->ringer_volume_state, available, volume);
+    snprintf(value, sizeof(value), "%d", volume);
+    snprintf(body, sizeof(body), "{\"available\":%s,\"volume\":%s,\"raw\":%s}", available ? "true" : "false", available ? value : "null",
+             c300x_json_string_or_null(raw, raw_json, sizeof(raw_json)));
+    dispatch_setting_state(runtime, "ringer.volume_changed", body, transition);
 }
 
-static int note_ringer_volume_changed(struct agent_runtime *runtime, int volume)
+static void remember_ringer_status(struct agent_runtime *runtime, const char *body, int muted, int volume)
 {
-    if (volume < C300X_RINGER_VOLUME_MIN || volume > C300X_RINGER_VOLUME_MAX) {
-        return 0;
-    }
-    if (runtime == NULL) {
-        return 1;
-    }
-    if (!runtime->ringer_volume_known) {
-        remember_ringer_volume(runtime, volume);
-        return 0;
-    }
-    if (runtime->ringer_volume == volume) {
-        return 0;
-    }
-    remember_ringer_volume(runtime, volume);
-    return 1;
+    char muted_raw[C300X_MAX_FRAME_LEN], volume_raw[C300X_MAX_FRAME_LEN];
+    c300x_json_string_field(body, "raw", muted_raw, sizeof(muted_raw));
+    c300x_json_string_field(body, "volume_raw", volume_raw, sizeof(volume_raw));
+    remember_ringer_muted(runtime, muted, muted_raw[0] ? muted_raw : NULL, NULL);
+    remember_ringer_volume(runtime, volume, volume_raw[0] ? volume_raw : NULL);
 }
 
 static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime);
@@ -5363,19 +5309,20 @@ static void refresh_smartphone_forwarding_mode(
         return;
     }
     if (!c300x_openwebnet_send(config, "*#8**37##", reply, sizeof(reply), error, sizeof(error))) {
+        remember_smartphone_forwarding_mode(runtime, -1, NULL);
         return;
     }
     if (c300x_smartphone_code_from_reply(reply, &code)) {
-        remember_smartphone_forwarding_mode(runtime, code);
+        remember_smartphone_forwarding_mode(runtime, code, reply);
         sync_ring_receiver_for_forwarding(runtime);
-    }
+    } else remember_smartphone_forwarding_mode(runtime, -1, reply);
 }
 
 static int smartphone_forwarding_allows_ring_receiver(const struct agent_runtime *runtime)
 {
     return runtime != NULL
-        && runtime->smartphone_forwarding_mode_known
-        && runtime->smartphone_forwarding_mode_code == 1;
+        && runtime->forwarding_state.known
+        && runtime->forwarding_state.last_valid == 1;
 }
 
 static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime)
@@ -5409,15 +5356,10 @@ static int map_openwebnet_event(
     c300x_json_string(msg, raw_json, sizeof(raw_json));
 
     if (c300x_ringer_volume_from_reply(msg, &code)) {
-        size_t used = 0;
-        if (!note_ringer_volume_changed(runtime, code)) {
-            return 0;
-        }
-        c300x_copy_string(type, type_len, "ringer.volume_changed");
-        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"volume\":%d}", raw_json, code);
+        remember_ringer_volume(runtime, code, msg);
+        return 0;
     }
     if (sscanf(msg, "*#8**33*%d##", &code) == 1 || sscanf(msg, "*#8**#33*%d##", &code) == 1) {
-        size_t used = 0;
         int muted;
         if (code != 0 && code != 1) {
             return 0;
@@ -5426,22 +5368,13 @@ static int map_openwebnet_event(
         if (ringer_mute_is_ring_answer_transition(runtime, muted)) {
             return 0;
         }
-        if (!note_ringer_muted_changed(runtime, muted)) {
-            return 0;
-        }
-        c300x_copy_string(type, type_len, muted ? "ringer.muted" : "ringer.unmuted");
-        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"muted\":%s}", raw_json, muted ? "true" : "false");
+        remember_ringer_muted(runtime, muted, msg, NULL);
+        return 0;
     }
     if (c300x_smartphone_code_from_reply(msg, &code)) {
-        const char *mode = c300x_smartphone_mode_from_code(code);
-        size_t used = 0;
-        int changed = note_smartphone_forwarding_changed(runtime, code);
+        remember_smartphone_forwarding_mode(runtime, code, msg);
         sync_ring_receiver_for_forwarding(runtime);
-        if (!changed) {
-            return 0;
-        }
-        c300x_copy_string(type, type_len, "smartphone_forwarding.changed");
-        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"mode\":\"%s\"}", raw_json, mode);
+        return 0;
     }
     if (parse_openwebnet_address_event(msg, "*8*19*", address, sizeof(address))) {
         size_t used = 0;
@@ -5931,8 +5864,8 @@ static void api_state(
         c300x_video_status(runtime->video, &video_status);
         video_available = video_status.enabled;
     }
-    if (runtime != NULL && runtime->smartphone_forwarding_mode_known) {
-        smartphone_forwarding = c300x_smartphone_mode_from_code(runtime->smartphone_forwarding_mode_code);
+    if (runtime != NULL && runtime->forwarding_state.known) {
+        smartphone_forwarding = c300x_smartphone_mode_from_code((int)runtime->forwarding_state.last_valid);
     }
     if (config->video_enabled) {
         video_path = config->video_rtsp_video_path;
@@ -5942,13 +5875,13 @@ static void api_state(
     } else {
         snprintf(smartphone_forwarding_json, sizeof(smartphone_forwarding_json), "null");
     }
-    if (runtime != NULL && runtime->ringer_muted_known) {
-        snprintf(ringer_muted_json, sizeof(ringer_muted_json), "%s", runtime->ringer_muted ? "true" : "false");
+    if (runtime != NULL && runtime->ringer_muted_state.known) {
+        snprintf(ringer_muted_json, sizeof(ringer_muted_json), "%s", runtime->ringer_muted_state.last_valid ? "true" : "false");
     } else {
         snprintf(ringer_muted_json, sizeof(ringer_muted_json), "null");
     }
-    if (runtime != NULL && runtime->ringer_volume_known) {
-        snprintf(ringer_volume_json, sizeof(ringer_volume_json), "%d", runtime->ringer_volume);
+    if (runtime != NULL && runtime->ringer_volume_state.known) {
+        snprintf(ringer_volume_json, sizeof(ringer_volume_json), "%d", (int)runtime->ringer_volume_state.last_valid);
     } else {
         snprintf(ringer_volume_json, sizeof(ringer_volume_json), "null");
     }
@@ -7068,16 +7001,18 @@ static void handle_smartphone_get(
     char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
 
     if (!c300x_openwebnet_send(config, "*#8**37##", reply, sizeof(reply), error, sizeof(error))) {
+        remember_smartphone_forwarding_mode(runtime, -1, NULL);
         send_device_error(client_fd, error);
         return;
     }
     c300x_json_string(reply, reply_json, sizeof(reply_json));
     mode = c300x_smartphone_mode_from_reply(reply);
     if (mode == NULL) {
+        remember_smartphone_forwarding_mode(runtime, -1, reply);
         snprintf(body, sizeof(body), "{\"ok\":true,\"mode\":null,\"status\":\"unknown\",\"raw\":%s}\n", reply_json);
     } else {
         if (c300x_smartphone_code_from_reply(reply, &code)) {
-            remember_smartphone_forwarding_mode(runtime, code);
+            remember_smartphone_forwarding_mode(runtime, code, reply);
             sync_ring_receiver_for_forwarding(runtime);
         }
         snprintf(body, sizeof(body), "{\"ok\":true,\"mode\":\"%s\",\"raw\":%s}\n", mode, reply_json);
@@ -7116,12 +7051,26 @@ static void handle_smartphone_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_smartphone_forwarding_mode\"}\n");
         return;
     }
+    if (!runtime->forwarding_state.known) {
+        int baseline;
+        if (!c300x_openwebnet_send(config, "*#8**37##", readback_reply, sizeof(readback_reply), error, sizeof(error))) {
+            send_device_error(client_fd, error);
+            return;
+        }
+        if (!c300x_smartphone_code_from_reply(readback_reply, &baseline)) {
+            send_json(client_fd, 503, "Unavailable", "{\"ok\":false,\"error\":\"smartphone_forwarding_baseline_unavailable\"}\n");
+            return;
+        }
+        remember_smartphone_forwarding_mode(runtime, baseline, readback_reply);
+        sync_ring_receiver_for_forwarding(runtime);
+    }
     if (!c300x_openwebnet_write_readback(
         config, command, 0, "*#8**37##",
         reply, sizeof(reply),
         readback_reply, sizeof(readback_reply),
         error, sizeof(error)
     )) {
+        remember_smartphone_forwarding_mode(runtime, -1, NULL);
         send_device_error(client_fd, error);
         return;
     }
@@ -7133,7 +7082,7 @@ static void handle_smartphone_post(
         if (map_openwebnet_event(runtime, readback_reply, type, sizeof(type), data, sizeof(data))) {
             dispatch_event(config, runtime, type, data, 0);
         }
-    }
+    } else remember_smartphone_forwarding_mode(runtime, -1, readback_reply);
     c300x_json_string(reply, reply_json, sizeof(reply_json));
     c300x_json_string(readback_reply, readback_json, sizeof(readback_json));
     if (
@@ -7163,12 +7112,15 @@ static void handle_smartphone_post(
     send_json(client_fd, status, status == 200 ? "OK" : status == 409 ? "Conflict" : "Bad Gateway", body);
 }
 
-static void touch_tone_changed(void *ctx)
+static void touch_tone_changed(void *ctx, int changed)
 {
     struct agent_runtime *runtime = ctx;
     char body[128];
     c300x_touch_tone_status(&runtime->touch_tone, body, sizeof(body));
-    dispatch_event(runtime->config, runtime, "display.touch_tone_changed", body, 0);
+    if (changed)
+        dispatch_event(runtime->config, runtime, "display.touch_tone_changed", body, 0);
+    else
+        dispatch_event_snapshot(runtime->config, runtime, "display.touch_tone_changed", body, 0);
 }
 
 static int handle_ui_touch_tone(int fd, struct agent_runtime *runtime, const struct request *request)
@@ -7209,14 +7161,28 @@ static void handle_ringer_get(
         return;
     }
     if (!c300x_ringer_read_json(config, body, sizeof(body), &muted, &volume, error, sizeof(error))) {
+        remember_ringer_muted(runtime, -1, NULL, NULL);
+        remember_ringer_volume(runtime, -1, NULL);
         send_device_error(client_fd, error);
         return;
     }
-    if (muted >= 0) {
-        remember_ringer_muted(runtime, muted);
-    }
-    if (volume >= 0) {
-        remember_ringer_volume(runtime, volume);
+    if (ringer_mute_is_ring_answer_transition(runtime, muted == 1)) {
+        /* The device mutes the ringer while a ring is answered; that is not the setting. */
+        char volume_raw[C300X_MAX_FRAME_LEN];
+        c300x_json_string_field(body, "volume_raw", volume_raw, sizeof(volume_raw));
+        remember_ringer_volume(runtime, volume, volume_raw[0] ? volume_raw : NULL);
+        /* Report the setting, not the call's mute, so a reading client keeps it. */
+        static const char call_muted[] = "{\"ok\":true,\"muted\":true,";
+        if (strncmp(body, call_muted, sizeof(call_muted) - 1) == 0) {
+            char reported[sizeof(body)];
+            const char *setting = !runtime->ringer_muted_state.known ? "null"
+                : runtime->ringer_muted_state.last_valid ? "true" : "false";
+            int length = snprintf(reported, sizeof(reported), "{\"ok\":true,\"muted\":%s,%s",
+                                  setting, body + sizeof(call_muted) - 1);
+            if (length > 0 && (size_t)length < sizeof(reported)) memcpy(body, reported, (size_t)length + 1);
+        }
+    } else {
+        remember_ringer_status(runtime, body, muted, volume);
     }
     send_json(client_fd, 200, "OK", body);
 }
@@ -7272,6 +7238,21 @@ static int handle_ringer_post(
         return 1;
     }
 
+    /* A first explicit write needs a confirmed before-value, not a guessed change. */
+    if ((has_muted && !runtime->ringer_muted_state.known)
+        || (has_volume && !runtime->ringer_volume_state.known)) {
+        int baseline_muted, baseline_volume;
+        if (!c300x_ringer_read_json(config, body, sizeof(body), &baseline_muted, &baseline_volume, error, sizeof(error))) {
+            send_device_error(client_fd, error);
+            return 1;
+        }
+        remember_ringer_status(runtime, body, baseline_muted, baseline_volume);
+        if ((has_muted && baseline_muted < 0) || (has_volume && baseline_volume < 0)) {
+            send_json(client_fd, 503, "Unavailable", "{\"ok\":false,\"error\":\"ringer_baseline_unavailable\"}\n");
+            return 1;
+        }
+    }
+
     if (has_muted) {
         if (!gui_confirmed) {
             struct c300x_ringer_command pending = {muted, has_volume, volume};
@@ -7279,11 +7260,13 @@ static int handle_ringer_post(
             return 0;
         }
         if (!c300x_openwebnet_send(config, "*#8**33##", muted_reply, sizeof(muted_reply), error, sizeof(error))) {
+            remember_ringer_muted(runtime, -1, NULL, NULL);
             send_device_error(client_fd, error);
             return 1;
         }
         /* Never override the GUI's audio-state priorities with a raw write. */
         if (!c300x_ringer_muted_from_reply(muted_reply, &muted_readback)) {
+            remember_ringer_muted(runtime, -1, muted_reply, NULL);
             send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"ringer_readback_failed\"}\n");
             return 1;
         }
@@ -7291,12 +7274,7 @@ static int handle_ringer_post(
             /* The stock GUI queues its write on a Qt timer; await its state event. */
             return 0;
         }
-        if (note_ringer_muted_changed(runtime, muted_readback)) {
-            char event_data[96];
-            snprintf(event_data, sizeof(event_data), "{\"muted\":%s,\"source\":\"gui_command\"}",
-                     muted_readback ? "true" : "false");
-            dispatch_event(config, runtime, muted_readback ? "ringer.muted" : "ringer.unmuted", event_data, 0);
-        }
+        remember_ringer_muted(runtime, muted_readback, muted_reply, "gui_command");
         c300x_json_string(muted_reply, muted_reply_json, sizeof(muted_reply_json));
     }
 
@@ -7314,12 +7292,14 @@ static int handle_ringer_post(
             error,
             sizeof(error)
         )) {
+            remember_ringer_volume(runtime, -1, NULL);
             send_device_error(client_fd, error);
             return 1;
         }
         c300x_json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
         c300x_json_string(volume_readback_reply, volume_readback_reply_json, sizeof(volume_readback_reply_json));
         if (!c300x_ringer_volume_from_reply(volume_readback_reply, &volume_readback)) {
+            remember_ringer_volume(runtime, -1, volume_readback_reply);
             written = snprintf(
                 body,
                 sizeof(body),
@@ -7331,7 +7311,7 @@ static int handle_ringer_post(
             send_json(client_fd, 502, "Bad Gateway", body);
             return 1;
         }
-        remember_ringer_volume(runtime, volume_readback);
+        remember_ringer_volume(runtime, volume_readback, volume_readback_reply);
         if (volume_readback != volume) {
             written = snprintf(
                 body,

@@ -204,6 +204,7 @@ class _FakeConnectionState:
     ) -> None:
         self.event_subscription_event_count = event_count
         self.event_subscription_last_success_at = now
+        self.event_subscription_last_error = None
 
     def mark_event_subscription_failure(
         self,

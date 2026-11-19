@@ -107,7 +107,7 @@ def entity_ha_boundary(monkeypatch):
     monkeypatch.setattr(entity_registry, "async_get", lambda _: SimpleNamespace(async_get=lambda _: None))
     for name in (
         "entity", "binary_sensor", "button", "number", "select", "sensor",
-        "switch", "services", "agent_diagnostics", "use_cases.common",
+        "switch", "switch_display", "services", "agent_diagnostics", "use_cases.common",
     ):
         module = sys.modules.get(f"custom_components.bticino_c300x.{name}")
         if module is None:

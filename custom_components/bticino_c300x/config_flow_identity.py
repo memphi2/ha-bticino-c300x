@@ -72,42 +72,6 @@ def entry_identity_connection(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     }
 
 
-async def async_entry_identity_error(
-    hass: Any,
-    entry: BticinoC300XConfigEntry,
-    connection: dict[str, Any],
-    read_setup: Callable[..., Awaitable[dict[str, Any]]],
-) -> str | None:
-    """Verify a replacement against the saved identity before changing an entry."""
-    saved = entry_identity_connection(entry)
-    saved_id = getattr(entry, "unique_id", None)
-    expected = None if entry_uses_manual_setup_unique_id(entry) else saved_id
-    candidate = {key: connection.get(key, value) for key, value in saved.items()}
-    moving_legacy = expected is None and not entry_connection_matches_discovery(entry, candidate)
-    try:
-        if moving_legacy:
-            original = await read_setup(hass, saved, api_token=saved[CONF_AGENT_TOKEN])
-            expected = stable_unique_id_from_setup_data(original)
-            if expected is None:
-                return "cannot_connect"
-        setup = await read_setup(hass, candidate, api_token=candidate[CONF_AGENT_TOKEN])
-    except C300XAgentApiError:
-        # Feature-only reconfiguration of an existing offline entry remains usable.
-        # Never use the offline allowance to save new credentials or an endpoint.
-        return None if (
-            candidate == saved == entry_identity_connection(entry)
-            and saved_id == getattr(entry, "unique_id", None)
-        ) else "cannot_connect"
-    if saved != entry_identity_connection(entry) or saved_id != getattr(entry, "unique_id", None):
-        return "cannot_connect"
-    if expected is not None:
-        actual = stable_unique_id_from_setup_data(setup)
-        if actual is None:
-            return "cannot_connect"
-        if not discovery_matches_entry(actual, expected):
-            return "unique_id_mismatch"
-    return None
-
 
 async def async_adopt_discovery_identity(
     hass: Any,

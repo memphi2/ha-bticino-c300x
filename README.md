@@ -2,11 +2,11 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/quality-scale.md)
-[![Release](https://img.shields.io/badge/release-v2.5.1-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.6.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Version: **2.5.1**.
+Version: **2.6.0**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.
@@ -22,33 +22,47 @@ forwarding controls, messages and optional display pages.
 [Installation](#installation) | [Quickstart](docs/quickstart.md) |
 [User guide](docs/user-guide.md) | [Troubleshooting](docs/media-troubleshooting.md)
 
+<p align="center">
+  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
+</p>
+
 ## What You Get
 
-- Doorbell ring events and local camera viewing.
-- Automatic visitor images stored in Home Assistant, with a shared camera/card
-  preview and configurable retention. See [Images](docs/feature-reference.md#visitor-images).
-- Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
-  Assistant.
-- Audio-only Home Call from Home Assistant to the C300X display.
-- Talkback through the bundled C300X card. Optional native HA camera talkback
-  requires enabling it in the integration options and HA 2026.11+ Labs.
-- Door unlock, stair light, ringer mute, forwarding and answering-machine
-  controls.
-- Stored video messages, voice memos and text memos when the agent reports
-  those capabilities.
-- Optional native C300X display with up to eight regular pages, weather and
-  independently enabled Energy, Agenda and Leave home pages. All page positions
-  are configurable. Direct navigation, Alarmo and HA-driven notifications are
-  included. Control lights, covers, climate, media,
-  locks and other supported entities, with configurable tile sizes and labels.
+- **See and answer the door.** Local live video and talkback through the bundled
+  card, doorbell events, and Ring Call answer/hang-up when forwarding is set to
+  Home Assistant. Audio-only Home Call reaches the C300X display.
+- **Control the door station.** Door unlock, stair light, ringer mute,
+  forwarding and answering-machine controls, plus stored video messages,
+  voice memos and text memos where supported by the agent.
+- **Browse saved images and videos.** [Media history](docs/visitor-journal.md)
+  is on by default in the doorstation card: previous/next browses HA snapshots
+  and saved capture videos chronologically in the same window as live video.
+  Live video and incoming rings take priority; browsing never starts, answers
+  or stops a device call. Automatic [visitor images](docs/feature-reference.md#visitor-images)
+  require **Save images** and need no open dashboard or image files on the C300X.
+  Clips require a separate capture automation, such as the bundled Ring capture
+  blueprint. History does not include the device's answering-machine recordings.
+- **Use the C300X as a home-control display.** Keep the native blue interface
+  with configurable controls for lights, covers, climate, media and locks,
+  plus weather and Alarmo. Four built-in pages (Status, Energy, Agenda and
+  Leave home) and up to seven custom pages have configurable positions. Energy
+  includes live power, history and up to ten consumers configured in HA's
+  Energy dashboard, ranked by current W. Agenda shows upcoming calendar events; Leave home checks
+  selected contacts and lights, with explicitly confirmed actions.
   See [Display setup](docs/quickstart.md#9-optional-native-display).
-- Energy's **Consumers** view lists the top ten configured
-  devices by current W; enable it explicitly after upgrading from the removed
-  Distribution view. A standard [Notify service](docs/feature-reference.md#standard-notify-service)
-  adds bounded wake/sound on safe Home/HA screens. It is not a life-safety alarm.
-- Media readiness diagnostics with guided Repairs for the common setup problems.
-- Optional automation blueprints for notifications, Ring Capture, local Wyoming
-  transcription and strict phrase decisions.
+- **Connect notifications and automations.** The standard
+  [Notify service](docs/feature-reference.md#standard-notify-service) offers
+  info, warning and error notices with bounded display wake and sound, without
+  interrupting protected screens or calls. It is not a life-safety alarm.
+  Optional [blueprints](docs/blueprints.md) cover notifications, Ring Capture,
+  local transcription and phrase-based decisions.
+- **Diagnose and recover connections.** Media readiness diagnostics and guided
+  Repairs explain setup problems. Credential checks
+  distinguish rejected keys from unreachable devices and guide reauthentication,
+  while existing entries can still start offline.
+
+Talkback in the native HA camera view is separate from card talkback: it is
+off by default and requires HA 2026.11+ Labs and the integration option.
 
 ## Requirements
 
@@ -73,10 +87,6 @@ Classe 300X / C300X (`344642` or `344643`): please start a
 [discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
 Every contribution is voluntary and very welcome. Support and new features
 stay open to everyone either way.
-
-<p align="center">
-  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
-</p>
 
 ## Installation
 
@@ -176,6 +186,7 @@ feature or firmware version.
 | Install and configure | [Quickstart](docs/quickstart.md) |
 | Task-focused user guide | [User guide](docs/user-guide.md) |
 | Complete feature and entity/service reference | [Feature reference](docs/feature-reference.md) |
+| Browse saved HA images and clips in the card | [Media history](docs/visitor-journal.md) |
 | Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
 | Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |
 | Ready-made automations | [Blueprints](docs/blueprints.md) |
@@ -197,7 +208,7 @@ feature or firmware version.
 
 - IoT class: `local_push`
 - HACS: default repository, installed as a custom integration with `zip_release`
-- Quality target: Home Assistant Quality Scale Platinum track
+- Quality scale: per-rule [self-assessment](docs/quality-scale.md), not an awarded tier
 - License: Apache-2.0
 - Support scope: community project, not an official BTicino/Legrand or Home
   Assistant Core integration

@@ -178,7 +178,7 @@ Item {
         anchors.right: parent.right; width: 136; height: touchHeight
         Rectangle { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; width: 30; height: 30; radius: 3; color: control.value === true ? "#58d68d" : "transparent"; border.color: !hostPage || hostPage.controlValueUnset(control) ? "#f1c40f" : "white"; border.width: 2 }
         UbuntuLightText { anchors.left: parent.left; anchors.leftMargin: 44; anchors.verticalCenter: parent.verticalCenter; text: !hostPage || hostPage.controlValueUnset(control) ? "?" : hostPage.uiText(control.value ? "on" : "off"); font.pixelSize: 18; color: "white" }
-        BeepingMouseArea { anchors.fill: parent; onClicked: controlRow.submitted(control.value === true ? "false" : "true") }
+        BeepingMouseArea { id: booleanMouse; anchors.fill: parent; onClicked: controlRow.submitted(control.value === true ? "false" : "true") }
     }
     BeepingMouseArea {
         id: controlButtonMouse

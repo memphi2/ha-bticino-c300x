@@ -151,8 +151,8 @@ def _agent_auth_schema(require_agent_token: bool) -> vol.Schema:
     )
     return vol.Schema(
         {
-            token_key: str,
-            vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): str,
+            token_key: _password_selector(),
+            vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): _password_selector(),
         }
     )
 
@@ -268,19 +268,18 @@ def _agent_auth_input(
     user_input: dict[str, Any],
     *,
     require_agent_token: bool,
+    saved: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Validate setup auth values after the agent has been detected."""
 
     errors: dict[str, str] = {}
-    agent_token = str(user_input.get(CONF_AGENT_TOKEN, "")).strip()
+    agent_token = _key_or_saved(user_input, saved, CONF_AGENT_TOKEN)
     if require_agent_token and not agent_token:
         errors[CONF_AGENT_TOKEN] = "required"
     return (
         {
             CONF_AGENT_TOKEN: agent_token,
-            CONF_MAINTENANCE_TOKEN: str(
-                user_input.get(CONF_MAINTENANCE_TOKEN, "")
-            ).strip(),
+            CONF_MAINTENANCE_TOKEN: _key_or_saved(user_input, saved, CONF_MAINTENANCE_TOKEN),
         },
         errors,
     )

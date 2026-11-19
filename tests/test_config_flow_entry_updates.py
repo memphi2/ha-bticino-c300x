@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from homeassistant.config_entries import UNDEFINED
 
-from custom_components.bticino_c300x import config_flow
+from custom_components.bticino_c300x import config_flow, config_flow_auth
 from custom_components.bticino_c300x.camera_media.ha_compat import (
     HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO,
 )
@@ -69,8 +69,8 @@ def test_stale_feature_form_cannot_restore_old_endpoint_or_credentials(monkeypat
     entry, hass = entry_hass()
     first = flow_for(entry, hass, "options")
     second = flow_for(entry, hass, route)
-    read = AsyncMock(return_value={"device_id": "device-a"})
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", read)
+    read = AsyncMock(return_value=({"device_id": "device-a"}, {}))
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", read)
 
     async def exercise():
         await first.async_step_features()
@@ -90,7 +90,7 @@ def test_stale_feature_form_cannot_restore_old_endpoint_or_credentials(monkeypat
 def test_connection_save_keeps_exact_validated_pair(monkeypatch):
     entry, hass = entry_hass()
     flow = flow_for(entry, hass, "options")
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", AsyncMock(return_value={"device_id": "device-a"}))
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", AsyncMock(return_value=({"device_id": "device-a"}, {})))
 
     async def exercise():
         await flow.async_step_connection()
@@ -119,7 +119,7 @@ def test_recovery_reload_is_listener_aware_and_atomic(monkeypatch, route, listen
         return did_change
 
     hass.config_entries.async_update_entry.side_effect = with_listener
-    monkeypatch.setattr(config_flow, "_async_agent_setup_data", AsyncMock(return_value={"device_id": "device-a"}))
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", AsyncMock(return_value=({"device_id": "device-a"}, {})))
     connection = current_connection_options(entry)
     entry.data.update(connection)
     if changed:
@@ -127,7 +127,9 @@ def test_recovery_reload_is_listener_aware_and_atomic(monkeypatch, route, listen
         connection[CONF_AGENT_TOKEN] = "corrected"
     result = asyncio.run(submit(flow, route, connection))
     assert not result.get("errors")
-    assert hass.config_entries.async_schedule_reload.call_count == (0 if listeners and not changed else 1)
+    # 2.6 reconfigure explicitly recovers authentication even with unchanged keys.
+    unchanged_healthy_options = route == "options" and listeners and not changed
+    assert hass.config_entries.async_schedule_reload.call_count == (0 if unchanged_healthy_options else 1)
     assert hass.config_entries.async_update_entry.call_count <= 1
 
 

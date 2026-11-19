@@ -154,6 +154,7 @@ async def _async_capture_to_output(
     # fails or is cancelled before that would otherwise sit until it expires and
     # count against the limit of workspaces.
     published = False
+    captured_at = datetime.now(UTC).timestamp()
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -209,6 +210,7 @@ async def _async_capture_to_output(
             capture_mode=capture_mode,
         )
         metadata["entry_id"] = entry.entry_id
+        metadata["captured_at"] = captured_at
         await async_write_json_file(hass, _capture_metadata_path(work_dir), metadata)
         published = True
         await asyncio.to_thread(publish_capture_aliases, root, work_dir)

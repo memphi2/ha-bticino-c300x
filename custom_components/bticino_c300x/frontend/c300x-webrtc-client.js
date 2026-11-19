@@ -1,17 +1,19 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=bd0cd9e35e35624e";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=42fb1c2a81e69f09";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=bd0cd9e35e35624e";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=42fb1c2a81e69f09";
 
 export class C300XWebrtcClient {
-  constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb }) {
+  constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb, getPlayback, onGainChanged }) {
     this._getHass = getHass;
     this._getEntityId = getEntityId;
     this._isHomeCallMode = isHomeCallMode;
     this._onClosed = onClosed;
     this._onTrack = onTrack;
     this._getCardGainDb = getCardGainDb || null;
+    this._getPlayback = getPlayback || null;
+    this._onGainChanged = onGainChanged || null;
     this._mediaAttachment = null;
     this._pc = null;
     this._remoteStream = null;
@@ -43,6 +45,16 @@ export class C300XWebrtcClient {
   // gain changes while a stream is playing).
   refreshGain() {
     return this._mediaAttachment?.refreshGain();
+  }
+
+  refreshPlayback() {
+    return this._mediaAttachment?.refreshPlayback();
+  }
+
+  // True while the received audio plays through the card's own gain stage,
+  // whose volume works even where the platform fixes the media volume.
+  get gainEngaged() {
+    return this._mediaAttachment?.gainEngaged === true;
   }
 
   // Move the client-side gain/muting to the element that now renders the
@@ -79,6 +91,8 @@ export class C300XWebrtcClient {
     this._remoteStream = new MediaStream();
     const mediaAttachment = new C300XMediaAttachment(mediaElement, this._remoteStream, {
       getGainDb: this._getCardGainDb,
+      getPlayback: this._getPlayback,
+      onGainChanged: this._onGainChanged,
     });
     this._mediaAttachment = mediaAttachment;
     if (!attachOnFirstTrack) {

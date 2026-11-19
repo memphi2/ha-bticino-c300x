@@ -272,7 +272,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
+        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -441,7 +441,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
+        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -607,13 +607,23 @@
             }
           }
         }
+      },
+      "reauth_confirm": {
+        "title": "C300X-Schlüssel aktualisieren",
+        "description": "Gib die aktuellen Schlüssel für {name} ein. Ein leeres Feld behält den gespeicherten Schlüssel.",
+        "data": {
+          "agent_token": "Zugriffsschlüssel",
+          "maintenance_token": "Wartungsschlüssel"
+        }
       }
     },
     "abort": {
       "already_configured": "BTicino C300X ist bereits konfiguriert.",
       "reconfigure_successful": "BTicino C300X wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
       "cannot_connect": "Der Device-Agent ist nicht erreichbar. Pruefe die Adresse und ob der Agent laeuft.",
-      "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu."
+      "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu.",
+      "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert.",
+      "reauth_successful": "Die Zugangsdaten wurden aktualisiert."
     },
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",
@@ -642,7 +652,11 @@
       "dashboard_entity_on_several_pages": "Eine Entität ist auf mehreren Seiten gewählt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480."
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480.",
+      "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
+      "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
+      "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
+      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut."
     }
   },
   "options": {
@@ -800,7 +814,7 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Lege bis zu 8 Seiten für das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.",
+        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -990,7 +1004,10 @@
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
       "required": "Dieses Feld ist erforderlich.",
       "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480.",
-      "cannot_connect": "Die Geräteidentität konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut."
+      "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
+      "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
+      "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
+      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut."
     }
   },
   "entity": {

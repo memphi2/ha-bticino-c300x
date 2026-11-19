@@ -7,9 +7,10 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .api_errors import C300XAgentApiError
-from .const import EVENT_AGENT_EVENT_RECEIVED
+from .const import EVENT_AGENT_EVENT_RECEIVED, SIGNAL_SETTING_STATE
 from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
@@ -69,8 +70,24 @@ class C300XTouchToneSwitch(C300XEntity, SwitchEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self.async_on_remove(self.hass.bus.async_listen(EVENT_AGENT_EVENT_RECEIVED, self._handle_event))
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_SETTING_STATE, self._handle_snapshot,
+        ))
         # Initial platform reads precede subscription; recover changes in that gap.
         await self.async_update()
+
+    @callback
+    def _handle_snapshot(self, entry_id: str, event_type: str, data: Any) -> None:
+        if event_type == "display_touch_tone_changed":
+            self._handle_state(entry_id, data)
+
+    @callback
+    def _handle_state(self, entry_id: str, data: Any) -> None:
+        if entry_id != self._entry.entry_id or not isinstance(data, Mapping):
+            return
+        self._state_generation += 1
+        self._apply(data)
+        self.async_write_ha_state()
 
     @callback
     def _handle_event(self, event: Any) -> None:
@@ -78,8 +95,4 @@ class C300XTouchToneSwitch(C300XEntity, SwitchEntity):
             return
         if agent_event_key(event.data) != "display_touch_tone_changed":
             return
-        data = event.data.get("data")
-        if isinstance(data, Mapping):
-            self._state_generation += 1
-            self._apply(data)
-            self.async_write_ha_state()
+        self._handle_state(self._entry.entry_id, event.data.get("data"))

@@ -45,6 +45,10 @@ function installFakeDom() {
       return Promise.resolve();
     }
 
+    configure(value) { this.configuration = value; }
+    clearMedia() { this.browsing = false; this.cleared = true; }
+    deactivate() { this.clearMedia(); this.deactivated = true; }
+
     querySelector(selector) {
       return this.children?.get(selector) || null;
     }
@@ -84,6 +88,9 @@ function installFakeDom() {
           ".readiness",
           ".readiness-icon",
           ".readiness-text",
+          "c300x-media-controls",
+          "ha-card",
+          "dialog",
         ].map((selector) => [selector, new FakeElement(selector)]),
       );
     }
@@ -181,6 +188,180 @@ function fakeHass({ cameraEntity, connection } = {}) {
     },
   };
 }
+
+test("inline media controls preserve card actions and give calls priority", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?inline-media");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  const hass = fakeHass();
+  card.hass = hass;
+  const controls = card.shadowRoot.querySelector("c300x-media-controls");
+  try {
+    assert.equal(controls.configuration.enabled, true);
+    assert.equal(controls.configuration.busy, false);
+    assert.equal(card._titleEl.textContent, "Door");
+    controls.browsing = true;
+    hass.states["camera.bticino_c300x_doorbell_camera"].attributes.media_state = "ring_pending";
+    hass.states["camera.bticino_c300x_doorbell_camera"].attributes.media_primary_action = "answer_ring";
+    card._ensureDoorbellPreview = () => {};
+    card.hass = hass;
+    assert.equal(controls.configuration.busy, true);
+    assert.equal(card._actionButtonEl.disabled, false);
+    assert.equal(card._actionButtonEl.title, "Answer");
+    card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera", mode: "home_call" });
+    assert.equal(controls.configuration.enabled, false);
+    assert.equal(controls.deactivated, true);
+    assert.equal(card._mediaEl.style.display, "none");
+  } finally { card.disconnectedCallback(); }
+});
+
+test("playback volume reaches both stream clients without changing the microphone", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?inline-volume");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  let refreshes = 0;
+  card._webrtc.refreshPlayback = () => { refreshes++; };
+  card._transitionWebrtc = { refreshPlayback: () => { refreshes++; }, close() {} };
+  const controls = card.shadowRoot.querySelector("c300x-media-controls");
+  try {
+    controls.listeners.get("media-volume")({ detail: { volume: 0.25, muted: true }, stopPropagation() {} });
+    assert.equal(refreshes, 2);
+    assert.equal(card._playbackVolume, 0.25);
+    assert.equal(card._playbackMuted, true);
+    assert.equal(card._micMuted, false);
+  } finally { card.disconnectedCallback(); }
+});
+
+test("an audio track arriving after video makes listening controls available", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-audio-controls");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  const tracks = [];
+  card._webrtc = { running: true, remoteStream: { getAudioTracks: () => tracks, getVideoTracks: () => tracks.filter((track) => track.kind === "video") }, close() {} };
+  const controls = card.shadowRoot.querySelector("c300x-media-controls");
+  try {
+    card._updateState();
+    assert.equal(controls.configuration.hasAudio, false);
+    tracks.push({ kind: "audio" });
+    card._scheduleUpdate();
+    assert.equal(controls.configuration.hasAudio, true);
+    assert.equal(controls.configuration.live, false);
+    tracks.push({ kind: "video" });
+    card._scheduleUpdate();
+    assert.equal(controls.configuration.live, true);
+  } finally { card.disconnectedCallback(); }
+});
+
+test("a pending fullscreen request is exited after card reconfiguration", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-fullscreen");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  const target = card.shadowRoot.querySelector("ha-card");
+  let complete, exits = 0;
+  target.requestFullscreen = () => new Promise(resolve => { complete = resolve; });
+  target.ownerDocument = { exitFullscreen: async () => {
+    exits++; card.shadowRoot.fullscreenElement = null;
+  } };
+  try {
+    const pending = card._cardMedia.toggleFullscreen();
+    card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera", mode: "home_call" });
+    card.shadowRoot.fullscreenElement = target;
+    complete();
+    await pending;
+    assert.equal(exits, 1);
+    assert.equal(card.shadowRoot.fullscreenElement, null);
+  } finally { card.disconnectedCallback(); }
+});
+
+test("door audio volume and mute do not carry over to the next session", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?playback-reset");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  try {
+    card._playbackVolume = 0.2;
+    card._playbackMuted = true;
+    card._closePeer(true);
+    assert.equal(card._playbackVolume, 1);
+    assert.equal(card._playbackMuted, false);
+  } finally { card.disconnectedCallback(); }
+});
+
+test("the picture opens the card as a window and offers full screen only there", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?window");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  const root = card.shadowRoot, frame = root.querySelector("dialog"), target = root.querySelector("ha-card");
+  const controls = root.querySelector("c300x-media-controls"), video = root.querySelector("video");
+  let exits = 0;
+  target.requestFullscreen = async () => {};
+  target.ownerDocument = { exitFullscreen: async () => { exits++; root.fullscreenElement = null; } };
+  frame.open = false;
+  frame.showModal = () => { frame.open = true; };
+  frame.close = () => { frame.open = false; };
+  const send = (element, type, event = {}) => element.listeners.get(type)?.({ type, ...event });
+  try {
+    card._updateState();
+    assert.match(root.innerHTML, /<dialog class="window" role="none">\s*<ha-card>/);
+    assert.equal(controls.configuration.expandAvailable, true);
+    assert.equal(controls.configuration.expanded, false);
+    assert.equal(controls.configuration.fullscreenAvailable, false);
+    const focused = [];
+    controls.focusControl = (name) => focused.push(name);
+    send(controls, "media-expand");
+    assert.equal(frame.open, true);
+    assert.equal(frame.attributes.has("role"), false);
+    assert.equal(frame.attributes.get("aria-label"), card._titleEl.textContent);
+    assert.deepEqual(focused, ["close"]);
+    assert.equal(controls.configuration.expanded, true);
+    assert.equal(controls.configuration.fullscreenAvailable, true);
+    assert.equal(root.querySelector("video"), video);
+    send(frame, "click", { target });
+    assert.equal(frame.open, true);
+    send(frame, "pointerdown", { target });
+    send(frame, "click", { target: frame });
+    assert.equal(frame.open, true);
+    root.fullscreenElement = target;
+    send(frame, "pointerdown", { target: frame });
+    send(frame, "click", { target: frame });
+    assert.equal(frame.open, false);
+    assert.equal(exits, 1);
+    assert.equal(frame.attributes.get("role"), "none");
+    assert.equal(frame.attributes.has("aria-label"), false);
+    assert.deepEqual(focused, ["close", "expand"]);
+    send(frame, "close");
+    assert.deepEqual(focused, ["close", "expand"]);
+    send(controls, "media-expand");
+    let entered;
+    target.requestFullscreen = () => new Promise((resolve) => { entered = resolve; });
+    const request = card._cardMedia.toggleFullscreen();
+    send(controls, "media-collapse");
+    root.fullscreenElement = target;
+    entered();
+    await request;
+    assert.equal(exits, 2);
+    assert.equal(root.fullscreenElement, null);
+    target.requestFullscreen = async () => {};
+    assert.equal(controls.configuration.expanded, false);
+    assert.equal(controls.configuration.fullscreenAvailable, false);
+    send(controls, "media-expand");
+    send(controls, "media-collapse");
+    assert.equal(frame.open, false);
+    send(controls, "media-expand");
+    card.disconnectedCallback();
+    assert.equal(frame.open, false);
+  } finally { card.disconnectedCallback(); }
+});
 
 test("snapshot preview has an accessible timestamp without an overlay and hides during live video", async () => {
   const registry = installFakeDom();
@@ -554,6 +735,35 @@ test("doorbell card updates from direct camera state events without page reload"
   assert.equal(card.shadowRoot.querySelector(".row-action").disabled, false);
   card.disconnectedCallback();
   assert.equal(subscriptions[0].active, false);
+});
+
+test("a removed card that is configured again starts nothing until it is attached", async () => {
+  const registry = installFakeDom();
+  const subscriptions = [];
+  const connection = {
+    subscribeEvents(callback, eventType) {
+      subscriptions.push({ eventType, active: true });
+      return () => { subscriptions.at(-1).active = false; };
+    },
+  };
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?detached-config");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass({ connection });
+  await Promise.resolve();
+  card.isConnected = false;
+  card.disconnectedCallback();
+  await Promise.resolve();
+  assert.equal(card._disposed, true);
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass({ connection });
+  await Promise.resolve();
+  assert.equal(subscriptions.filter((item) => item.active).length, 0, "no subscription while detached");
+  assert.equal(card._locationChangeHandler ?? null, null, "no location listener while detached");
+  card.isConnected = true;
+  card.connectedCallback();
+  await Promise.resolve();
+  assert.equal(subscriptions.filter((item) => item.active).length, 1, "attaching starts it again");
 });
 
 test("reconfiguration disposes media, timers and subscriptions before replacing resources", async () => {
@@ -1712,6 +1922,37 @@ test("doorbell card coalesces unchanged hass updates into one animation frame", 
   assert.equal(renderCalls, 2);
 });
 
+test("media controls get connection replacements without rendering, but not after disposal", async () => {
+  const registry = installFakeDom();
+  const frames = [];
+  globalThis.requestAnimationFrame = callback => { frames.push(callback); return frames.length; };
+  globalThis.cancelAnimationFrame = () => {};
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?journal-connection");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  const configurations = [];
+  card.shadowRoot.querySelector("c300x-media-controls").configure = value => configurations.push(value);
+  const hass = fakeHass({ connection: {} });
+  card.hass = hass;
+  frames.shift()();
+  const signature = card._lastRenderSignature;
+  let renders = 0;
+  const updateState = card._updateState.bind(card);
+  card._updateState = () => { renders++; updateState(); };
+  const replacement = { ...hass, connection: {} };
+  card.hass = replacement;
+  assert.equal(configurations.at(-1).hass, replacement);
+  assert.equal(configurations.at(-1).entryId, "entry-1");
+  assert.equal(configurations.at(-1).enabled, true);
+  frames.shift()();
+  assert.equal(card._lastRenderSignature, signature);
+  assert.equal(renders, 0);
+  card.disconnectedCallback();
+  const count = configurations.length;
+  card.hass = { ...replacement, connection: {} };
+  assert.equal(configurations.length, count);
+});
+
 test("primary hangup remains available while ring answer waits for microphone permission", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?primary-hangup-pending-microphone");
@@ -1908,4 +2149,50 @@ test("a card attached again during the same ring starts the preview again", asyn
   } finally {
     card.disconnectedCallback();
   }
+});
+
+test("a card that is attached again at once keeps its call, a removed card ends it", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?reattach");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  let closed = 0;
+  card._webrtc = { running: true, remoteStream: { getAudioTracks: () => [], getVideoTracks: () => [] }, close() { closed += 1; } };
+  const frame = card.shadowRoot.querySelector("dialog");
+  let windowClosed = 0;
+  frame.open = true;
+  frame.close = () => { windowClosed += 1; frame.open = false; };
+  // A dashboard that rebuilds its columns detaches and attaches in one step.
+  card.isConnected = false;
+  card.disconnectedCallback();
+  card.isConnected = true;
+  card.connectedCallback();
+  await Promise.resolve();
+  assert.equal(closed, 0);
+  assert.equal(card._disposed, false);
+  assert.equal(windowClosed, 1);
+  card.isConnected = false;
+  card.disconnectedCallback();
+  await Promise.resolve();
+  assert.equal(card._disposed, true);
+  assert.ok(closed >= 1);
+});
+
+test("a card moved in one DOM call keeps its call", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?move-one-call");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  let closed = 0;
+  card._webrtc = { running: true, remoteStream: { getAudioTracks: () => [], getVideoTracks: () => [] }, close() { closed += 1; } };
+  // appendChild of a connected element: the callbacks run after the move,
+  // so the element is already connected again when it hears of the removal.
+  card.isConnected = true;
+  card.disconnectedCallback();
+  card.connectedCallback();
+  await Promise.resolve();
+  assert.equal(closed, 0);
+  assert.equal(card._disposed, false);
 });

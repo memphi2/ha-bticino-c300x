@@ -17,11 +17,15 @@ function gainDbToLinear(gainDb) {
 }
 
 export class C300XMediaAttachment {
-  constructor(mediaElement, stream, { getGainDb = null } = {}) {
+  constructor(mediaElement, stream, { getGainDb = null, getPlayback = null, onGainChanged = null } = {}) {
     this._mediaElement = mediaElement;
     this._stream = stream;
     this._attached = false;
     this._getGainDb = getGainDb;
+    this._getPlayback = getPlayback;
+    this._onGainChanged = onGainChanged;
+    this._gainEngaged = false;
+    this._outputNode = null;
     this._audioContext = null;
     this._sourceNode = null;
     this._gainNode = null;
@@ -46,8 +50,7 @@ export class C300XMediaAttachment {
     }
     this.attach();
     this._mediaElement.autoplay = true;
-    this._mediaElement.muted = false;
-    this._mediaElement.volume = 1;
+    this.refreshPlayback();
     this._mediaElement.play?.().catch?.(() => {});
     return this.refreshGain();
   }
@@ -87,8 +90,29 @@ export class C300XMediaAttachment {
     }
     this._sourceNode.connect(this._gainNode);
     this._gainNode.gain.value = gainDbToLinear(gainDb);
+    this._setGainEngaged(true);
+    this.refreshPlayback();
+  }
+
+  get gainEngaged() { return this._gainEngaged; }
+
+  // The gain stage engages after an asynchronous resume; tell the owner so
+  // controls that depend on it (the volume slider on iOS) update at once.
+  _setGainEngaged(engaged) {
+    if (this._gainEngaged === engaged) return;
+    this._gainEngaged = engaged;
+    this._onGainChanged?.();
+  }
+
+  refreshPlayback() {
+    const playback = this._getPlayback?.() || {};
+    const value = Number(playback.volume ?? 1);
+    const volume = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+    const muted = playback.muted === true;
+    if (this._outputNode) this._outputNode.gain.value = muted ? 0 : volume;
     if (this._mediaElement) {
-      this._mediaElement.muted = true;
+      this._mediaElement.volume = volume;
+      this._mediaElement.muted = this._gainEngaged || muted;
     }
   }
 
@@ -124,6 +148,7 @@ export class C300XMediaAttachment {
     this._sourceNode = null;
     this._gainNode = null;
     this._limiterNode = null;
+    this._outputNode = null;
   }
 
   _currentGainDb() {
@@ -135,6 +160,7 @@ export class C300XMediaAttachment {
   }
 
   _disengageGain() {
+    this._setGainEngaged(false);
     if (this._sourceNode) {
       try {
         this._sourceNode.disconnect();
@@ -142,9 +168,7 @@ export class C300XMediaAttachment {
         // already disconnected
       }
     }
-    if (this._mediaElement) {
-      this._mediaElement.muted = false;
-    }
+    this.refreshPlayback();
   }
 
   _ensureAudioGraph() {
@@ -166,15 +190,18 @@ export class C300XMediaAttachment {
       this._audioContext = new AudioContextCtor();
       this._sourceNode = this._audioContext.createMediaStreamSource(this._stream);
       this._gainNode = this._audioContext.createGain();
+      // Listening volume follows the limiter so it does not change compression.
+      this._outputNode = this._audioContext.createGain();
+      this._outputNode.connect(this._audioContext.destination);
       // gain -> soft limiter -> destination. If the limiter cannot be built,
       // fall back to gain -> destination (the previous behaviour) so gain still
       // works; only the anti-clip safety net is lost.
       this._limiterNode = this._buildLimiter(this._audioContext);
       if (this._limiterNode) {
         this._gainNode.connect(this._limiterNode);
-        this._limiterNode.connect(this._audioContext.destination);
+        this._limiterNode.connect(this._outputNode);
       } else {
-        this._gainNode.connect(this._audioContext.destination);
+        this._gainNode.connect(this._outputNode);
       }
     } catch (_error) {
       this.detach();

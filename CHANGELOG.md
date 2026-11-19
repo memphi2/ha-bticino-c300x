@@ -13,6 +13,9 @@
   rooted a C300X on firmware `2.0.2`, contributed the routing table for it in
   [#113](https://github.com/memphi2/ha-bticino-c300x/pull/113) and found the
   installer problem.
+- Support the project: hardware donations for a second test device and a
+  [Ko-fi](https://ko-fi.com/oliver7557) page are described in the README. A
+  donation gives no claim to support or to a feature.
 
 ## v2.5.0 - 2026-11-16
 

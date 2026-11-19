@@ -3,7 +3,7 @@
 ## Supported Release Line
 
 - `2.6.x`: local development, not released
-- `2.5.x`: current stable (2.5.0)
+- `2.5.x`: current stable (2.5.1)
 - `2.4.x`: previous stable; upgrade to 2.5.x for maintenance fixes
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 
@@ -13,7 +13,7 @@
 - Home Assistant validation baseline: `2026.10.x` and `2026.11.x`
 - CI tests the fixed minimum and resolves the latest stable Home Assistant on every run.
 - Python: `3.14`
-- C300X firmware: `1.7.x`
+- C300X firmware: `1.7.x or 2.0.2`
 
 ## Maintenance Scope
 

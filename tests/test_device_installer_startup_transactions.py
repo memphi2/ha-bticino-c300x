@@ -21,8 +21,6 @@ class LocalClient:
         self.mounts: list[str] = []
 
     def run(self, command: str, input_data: bytes | None = None) -> str:
-        if command.startswith("python - "):
-            command = shlex.quote(sys.executable) + command[len("python"):]
         prefix = 'mount() { printf "MOCK_MOUNT %s\\n" "$*" >&2; }; '
         if self.fail_writes:
             # EXDEV makes mv copy too. Limit real cp/mv writes, not the upload,

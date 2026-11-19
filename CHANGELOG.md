@@ -35,6 +35,26 @@
   automation. Hiding history or expiring its links does not delete MP4 files.
   See [Media history](docs/visitor-journal.md) for setup and retention.
 
+## v2.5.1 - 2026-11-19
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+- A second test device is wanted: contribute on
+  [Ko-fi](https://ko-fi.com/oliver7557) or with hardware, see the README.
+  Every contribution is voluntary and very welcome; support and new features
+  stay open to everyone either way.
+- Support C300X firmware `2.0.2` in addition to `1.7.x`. The routing patch
+  knows the `2.0.2` build of its target; agent binary and display files are
+  the same for both versions. Ring Call on `2.0.2` is not yet confirmed on a
+  device.
+- Install on a rooted stock device without extra Python modules. The installer
+  no longer runs Python on the C300X, whose stock Python lacks `json` and
+  `hashlib`; before, the installation stopped with `device_install_failed`.
+- Thanks to Dave ([@davemajor](https://github.com/davemajor)), who
+  rooted a C300X on firmware `2.0.2`, contributed the routing table for it in
+  [#113](https://github.com/memphi2/ha-bticino-c300x/pull/113) and found the
+  installer problem.
+
 ## v2.5.0 - 2026-11-16
 
 - Direct page buttons below the weather on the status page, including when no

@@ -594,7 +594,7 @@ def test_release_assets_are_reproducible_for_same_zip(
         "current_homeassistant": "2026.11.1",
         "validated_homeassistant": ["2026.10.0", "2026.11.1"],
         "python": "3.14",
-        "firmware_target": "1.7.x",
+        "firmware_target": "1.7.x or 2.0.2",
         "native_agent_rebuilt": True,
         "native_agent_reused_from": None,
         "native_agent_sysroot": {

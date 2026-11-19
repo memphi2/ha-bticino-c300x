@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Create a local C300X bt_answering_machine compatibility patch copy.
 
-This tool is intentionally narrow: it only accepts the known 1.7.19 stock
-bt_answering_machine routing target and writes a patched copy to an explicit output path.
+This tool is intentionally narrow: it only accepts the known 1.7.19 and 2.0.2
+stock bt_answering_machine routing targets and writes a patched copy to an explicit output path.
 It never modifies the input file in place and it verifies expected patch ranges by
 hash instead of storing byte ranges in this repository.
 """
@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 STOCK_SHA256 = "605a808f1ed0c826c06bbf1eb4131b9198007a7ab822e7541a6666e79816c810"
+STOCK_SHA256_2_0_2 = "18a555afcfb3c1d163cdb649cdd7a61e9526e08aec8275f88dd78df4bc5f2ec7"
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,35 @@ PATCHES: tuple[Patch, ...] = (
 )
 
 
+# Firmware 2.0.2 rebuilt the same binary: the writes are unchanged, only the
+# offsets moved. Range 4 has another stock hash because its call moved too.
+PATCHES_2_0_2: tuple[Patch, ...] = tuple(
+    Patch(
+        name=patch.name,
+        offset=offset,
+        range_len=patch.range_len,
+        expected_range_sha256=expected,
+        patched_range_sha256=patch.patched_range_sha256,
+        writes=patch.writes,
+    )
+    for patch, offset, expected in zip(
+        PATCHES,
+        (0x28300, 0xDA08, 0x35FE8, 0x35FFC, 0x36008, 0x363E0, 0x28428, 0x285A8, 0x285B4),
+        (
+            "ed451a5b137b7b59ebfd3f4bb8ff6598a18abce58603b72eed97f50b8d6391b8",
+            "cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b",
+            "85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547",
+            "4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391",
+            "e5843cd556cbbd9fc95fa4ae7b7291050d9a66615285f82804755eaf14039f2a",
+            "578b7e8e1392acf5b7a042f27140fdff16d967de87b359c4629374f363061deb",
+            "4a113f9e80b59325c236497a1f60eb4c25ecfc818d846bc838d30d7a9d153d48",
+            "c77ead30bd3f6cae55371b8695c71e4c28de7b2006d3f17cd0a2629cdc98a5df",
+            "a883b9c4475398a5852aaf4ef0b4cbd8bd0557c4206c4d8bafd69832c8d56a47",
+        ),
+        strict=True,
+    )
+)
+
 class PatchError(Exception):
     """Raised when the routing target cannot be patched safely."""
 
@@ -164,13 +194,17 @@ def patch_routing(source: Path, target: Path) -> str:
         raise PatchError("Target must not be a symbolic link")
     data = bytearray(source.read_bytes())
     digest = sha256(bytes(data))
-    if digest != STOCK_SHA256:
+    if digest == STOCK_SHA256:
+        patches = PATCHES
+    elif digest == STOCK_SHA256_2_0_2:
+        patches = PATCHES_2_0_2
+    else:
         raise PatchError(
             f"Unsupported bt_answering_machine SHA-256: {digest}; "
-            f"expected {STOCK_SHA256}"
+            f"expected {STOCK_SHA256} or {STOCK_SHA256_2_0_2}"
         )
 
-    for patch in PATCHES:
+    for patch in patches:
         if not _verify_range(bytes(data), patch, patch.expected_range_sha256):
             raise PatchError(
                 f"Patch precondition failed for {patch.name} at 0x{patch.offset:x}: "

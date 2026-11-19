@@ -13,12 +13,13 @@ Install integration -> add device -> install/update agent -> check Media readine
 You need:
 
 - Home Assistant `2026.10.0` or newer.
-- A BTicino Classe 300X / C300X on firmware `1.7.x`.
+- A BTicino Classe 300X / C300X on firmware `1.7.x` or `2.0.2`.
 - Root or SSH access on the C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
 
 This integration cannot root a stock device. If a separate rooting or
-SSH-enablement workflow asks for a firmware target, use `1.7.19`.
+SSH-enablement workflow asks for a firmware target, use `1.7.19`. A device on
+firmware `2.0.2` needs a rooting workflow made for that firmware.
 
 ## 1. Install Through Marketplace or HACS
 

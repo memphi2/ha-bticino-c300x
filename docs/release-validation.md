@@ -227,6 +227,34 @@ does not establish that the device remained healthy. Record cold-boot and
 short-gap tests separately rather than inferring them from long-idle runs.
 Keep raw captures and device identifiers private.
 
+## Firmware Versions
+
+Supported firmware versions share one agent binary and one set of display
+files. Before a release, and before a version is added:
+
+1. Run `scripts/check_firmware_rootfs.py` with the `1.7.19` root file system
+   as baseline against each other supported version. It must pass.
+2. Build the ARMHF agent once against each root file system
+   (`C300X_DEVICE_SYSROOT`) and compare the binaries. They must be identical.
+3. Apply `scripts/device_routing_builder.py` to the stock routing target of
+   each version. It must accept the file and report the patched hash.
+
+Device tests per firmware version, because the vendor media, SIP and D-Bus
+programs differ between versions:
+
+| Check | Expected result |
+| --- | --- |
+| First installation on a rooted stock device | Installs without extra Python modules on the device; no `device_install_failed`. |
+| Self-test | `device_routing` reports `stock` before and `patched` after the routing patch; restoring the backup returns the stock hash. |
+| Display patch | The Home Assistant page and the other display pages appear; the Repair reports the current file set. |
+| Ring Call, default codec | Real doorbell ring: preview, answer, two-way audio, hang-up. Needs a device paired with the vendor app. |
+| Ring Call, PCMU | Same with PCMU; boot ID and uptime unchanged afterwards. |
+| On-demand video and Home Call | Start, audio in both directions, stop; device stays up. |
+
+Firmware `2.0.2`: steps 1 to 3 pass. The device tests are open; the
+contributor of the `2.0.2` routing table runs the agent on such a device, and
+Ring Call was not tested there because the device is not paired.
+
 ## Readiness and Repairs
 
 Verify each repair path when possible:

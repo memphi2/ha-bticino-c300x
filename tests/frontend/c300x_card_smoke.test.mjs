@@ -276,6 +276,21 @@ test("a pending fullscreen request is exited after card reconfiguration", async 
   } finally { card.disconnectedCallback(); }
 });
 
+test("door audio volume and mute do not carry over to the next session", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?playback-reset");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  try {
+    card._playbackVolume = 0.2;
+    card._playbackMuted = true;
+    card._closePeer(true);
+    assert.equal(card._playbackVolume, 1);
+    assert.equal(card._playbackMuted, false);
+  } finally { card.disconnectedCallback(); }
+});
+
 test("the picture opens the card as a window and offers full screen only there", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?window");

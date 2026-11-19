@@ -89,6 +89,12 @@ def fixtures() -> list[dict]:
         add(COMPONENTS[0], name, links=[{"index": index, "title": label + " " + title}
                                       for index, title in zip((7, 2, 11, 5),
                                                              ("Agenda", "Energy", "Departure", "Lights"), strict=True)])
+        # The favourites bar: the same component as one row of four buttons,
+        # the third one marked as the current page.
+        add(COMPONENTS[0], name + "-bar", bar=True, columns=4, current=11,
+            links=[{"index": index, "title": label + " " + title}
+                   for index, title in zip((7, 2, 11, -1),
+                                          ("Home", "Energy", "Climate", "More"), strict=True)])
         add(COMPONENTS[1], name, agenda={"events": [
             {"summary": label + f" appointment {i}", "when": "Tomorrow 10:30 - 12:00",
              "calendar": label} for i in range(8)]})

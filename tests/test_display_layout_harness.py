@@ -59,7 +59,7 @@ def test_geometry_uses_visible_ink_for_overlap_and_viewport_bounds():
 def test_fixtures_cover_actual_contracts_and_three_viewports():
     fixtures = HARNESS.fixtures()
     assert {fixture["component"] for fixture in fixtures} == set(HARNESS.COMPONENTS)
-    assert len([fixture for fixture in fixtures if fixture["component"] in HARNESS.COMPONENTS[:4]]) * 3 == 57
+    assert len([fixture for fixture in fixtures if fixture["component"] in HARNESS.COMPONENTS[:4]]) * 3 == 63
     assert HARNESS.VIEWPORTS["native"] == (800, 480, 748, 300)
     assert len(HARNESS.VIEWPORTS) == 3
     assert HARNESS.VIEWPORTS["narrow"][2] < 748

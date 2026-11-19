@@ -11,9 +11,10 @@ Page {
     onBackClicked: {
         if (notificationsOpen) notificationsOpen = false
         else if (selectedItem) selectedItem = null
+        else if (morePagesOpen) morePagesOpen = false
         else tabView.activateTab(homePage)
     }
-    headerLabel: headerTitle(notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
+    headerLabel: headerTitle(notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : morePagesOpen ? uiText("more") : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
     property bool feedbackColorsEnabled: c300xDisplayPreferences.feedbackEnabled
@@ -33,6 +34,8 @@ Page {
     property bool decimalComma: false
     property string pageTitle: ""
     property string pageLabel: ""
+    property bool tabNavigation: false
+    property bool morePagesOpen: false
     property bool weatherVisible: false
     property string weatherCondition: ""
     property string weatherConditionKey: ""
@@ -109,6 +112,7 @@ Page {
     function aboutToHide() {
         if (pendingEntity) Api.setDashboardFeedback(page, pendingEntity, "state_unconfirmed")
         pageActive = false
+        morePagesOpen = false
         armedCommand = ""
         runtimeGeneration += 1
         dashboardLoading = false
@@ -1050,7 +1054,7 @@ Page {
     }
 
     Column {
-        visible: !detailOpen && !notificationsOpen
+        visible: !detailOpen && !notificationsOpen && !morePagesOpen
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -1058,7 +1062,7 @@ Page {
         anchors.topMargin: 18
         anchors.leftMargin: 36
         anchors.rightMargin: 36
-        anchors.bottomMargin: 18
+        anchors.bottomMargin: tabBar.visible ? 65 : 18
         spacing: 9
 
         Item {
@@ -1806,8 +1810,8 @@ Page {
         Row {
             id: pagerRow
             width: parent.width
-            height: pageCount > 1 ? 38 : 0
-            visible: pageCount > 1
+            height: pageCount > 1 && !tabNavigation ? 38 : 0
+            visible: pageCount > 1 && !tabNavigation
             spacing: 10
 
             Item {
@@ -1868,6 +1872,33 @@ Page {
                 }
             }
         }
+    }
+
+    C300XPageNavigation {
+        id: tabBar
+        visible: tabNavigation && pageCount > 1 && !detailOpen && !notificationsOpen
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        bar: true
+        links: visible ? Api.dashboardPageTabs(dashboardPages, uiText("start_page"), uiText("more")) : []
+        columns: Math.max(1, links.length)
+        current: Api.dashboardTabCurrent(pageCount, currentPageIndex, morePagesOpen)
+        onSelected: Api.dashboardSelectTab(pageIndex, status, page)
+    }
+
+    C300XPageNavigation {
+        visible: morePagesOpen && tabBar.visible
+        anchors.top: header.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: 18
+        anchors.leftMargin: 36
+        anchors.rightMargin: 36
+        columns: 3
+        links: visible ? Api.dashboardMoreLinks(dashboardPages, uiText("start_page")) : []
+        current: currentPageIndex
+        onSelected: Api.dashboardSelectTab(pageIndex, status, page)
     }
 
     Item {

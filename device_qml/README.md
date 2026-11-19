@@ -15,7 +15,10 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   images, switches and buttons without a refresh timer. See
   [Display Device Controls](../docs/feature-reference.md#display-device-controls).
 - `C300XPageNavigation.qml`: direct navigation to other visible dashboard pages,
-  using the existing snapshot without new requests.
+  using the existing snapshot without new requests. The same component draws
+  the page buttons of the status page, the optional favourites bar along the
+  bottom edge (`bar: true`, one row, current page marked) and the bar's More
+  list. See [Page navigation](../docs/feature-reference.md#page-navigation).
 - `C300XAgenda.qml` and `C300XLeaveHome.qml`: optional calendar and departure
   pages. HA prepares at most five events in seven days from selected calendars
   in a bounded background cache. Leave home uses explicit contacts, lights and

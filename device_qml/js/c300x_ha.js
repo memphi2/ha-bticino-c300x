@@ -295,6 +295,8 @@ function dashboard(statusItem, pageItem) {
         pageItem.decimalComma = data.decimalComma === true
         assignDashboardValue(pageItem, "dashboardPages", pages)
         pageItem.pageCount = pages.length
+        pageItem.tabNavigation = data.navigation === "tabs"
+        if (!pageItem.tabNavigation || pages.length <= TAB_SLOTS) pageItem.morePagesOpen = false
         if (pageItem.currentPageIndex >= pages.length) {
             pageItem.currentPageIndex = 0
         }
@@ -558,6 +560,46 @@ function dashboardPageLinks(pageItem) {
         }
     }
     return links
+}
+
+var TAB_SLOTS = 4
+
+function dashboardTabTitle(pageData, index, startTitle) {
+    return dashboardPageTitle(pageData) || startTitle || String(index + 1)
+}
+
+function dashboardPageTabs(pages, startTitle, moreTitle) {
+    pages = listOrEmpty(pages)
+    var direct = pages.length > TAB_SLOTS ? TAB_SLOTS - 1 : pages.length
+    var tabs = []
+    for (var i = 0; i < direct; i++) {
+        tabs.push({index: i, title: dashboardTabTitle(pages[i], i, startTitle)})
+    }
+    if (direct < pages.length) tabs.push({index: -1, title: moreTitle})
+    return tabs
+}
+
+function dashboardMoreLinks(pages, startTitle) {
+    pages = listOrEmpty(pages)
+    var links = []
+    if (pages.length <= TAB_SLOTS) return links
+    for (var i = TAB_SLOTS - 1; i < pages.length; i++) {
+        links.push({index: i, title: dashboardTabTitle(pages[i], i, startTitle)})
+    }
+    return links
+}
+
+function dashboardTabCurrent(pageCount, index, moreOpen) {
+    return pageCount > TAB_SLOTS && (moreOpen || index >= TAB_SLOTS - 1) ? -1 : index
+}
+
+function dashboardSelectTab(index, statusItem, pageItem) {
+    if (index === -1) {
+        pageItem.morePagesOpen = !pageItem.morePagesOpen
+        return
+    }
+    pageItem.morePagesOpen = false
+    dashboardSelectPage(index, statusItem, pageItem)
 }
 
 function dashboardPreviousPage(statusItem, pageItem) {

@@ -454,6 +454,27 @@ The optional pages can be placed among regular pages, not just after them.
 Their default positions are Energy 2, Agenda 10 and Leave home 11. Disabling an
 optional page preserves its position and selections for later use.
 
+#### Page navigation
+
+**Page navigation** in the display settings chooses how the display changes
+pages. It is one setting for all pages.
+
+| Choice | On the display |
+| --- | --- |
+| **Arrows (previous / next)** | The row with `<`, the page number and `>` under the tiles. This is the default. |
+| **Favourites bar** | A bar along the bottom edge with one button per page. The current page is marked in yellow. |
+
+The bar has four places and follows the page positions. With up to four pages
+every page has its button. With more pages the first three have one and the
+fourth is **More**: it opens the list of the other pages, and **More** stays
+marked while one of those is shown. The device's back button closes the open
+list first. The status page is labelled **Home**; every other page shows its
+name, on up to two lines.
+
+With the bar the status page has no direct page buttons of its own, and the
+tiles keep the height they have above the arrows. Changing the page uses the
+dashboard that is already loaded and requests no data.
+
 ### Agenda
 
 Enable **Agenda** in **Display pages** and select up to eight HA calendars.

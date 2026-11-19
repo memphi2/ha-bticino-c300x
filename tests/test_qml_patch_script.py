@@ -313,7 +313,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "a00457ca4502549a2008d067e78fff858cfb0abe2ff3708c6b09b884e1580743",
+    "HomeAssistant.qml": "bc46467550d333401ac960ca48033e71b221395002f1108c5054d0537fe11c39",
     "C300XEnergy.qml": "896e8f92715dd84d54c09082702a36735f00c17e60dbd43dc807ad598c8a16a8",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
     "C300XAgenda.qml": "9bc5d2ff2d69250033323a4bc4696df85268ad761ed5b8446b56bf0325143711",
@@ -322,14 +322,14 @@ PATCH_OUTPUT_SHA256 = {
     "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
     "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
     "C300XLeaveHome.qml": "5c9a7ac02f3e0e2f6642b48ed76006adfa32a88240d527c75f5c13522d72ddb7",
-    "C300XPageNavigation.qml": "7152e3a1ec13559a27c76fb4f8f0561188b91cd59d1cd7bf2ce4718164b0851c",
+    "C300XPageNavigation.qml": "958aee89fe169d819c3abfd94cfecac0a2fb335845303282100f35b9f52ea638",
     "C300XRingerControl.qml": "7e30781b7a43dcff6ab090d6dcc87c479b2284f073a98c314827ce23774310d9",
     "js/c300x_alerts.js": "a06a136e24ba269ee49110d7586c5fb97deda137371e2f8a52a93696ec3ff3d1",
     "js/c300x_energy.js": "02fb96fe0befd3c9347a267619cefe615e91239a05071e529c574a4accb594e4",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "17c510ed56828affcd8eefc7a34068f2f34fe843b125f7c1167585252e5c3133",
-    "js/c300x_ha.js": "849ebdf2c44b82e7879238383f6fc97f2e5224153f29db11e874ba1424c6fab6",
-    "js/c300x_i18n.js": "4e66685179ad1ba40cc93591426635f7dec03cc5fcccdcce166b94e4944eb883",
+    "js/c300x_ha.js": "e194bbe9cbbe96da8d73b3b88c085559b3e514a0d4a909985955bedb24697208",
+    "js/c300x_i18n.js": "d1ed4561d23335c026a892b825a1ecade6163fd1f00a475b9fe8b7ba41a41ea3",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }
 
@@ -1025,10 +1025,12 @@ def test_home_assistant_status_sits_in_the_header() -> None:
     # The firmware page is 480 px high under a 78 px header bar. With the 18 px
     # margins, the 38 px pager row and the 9 px column spacing the tiles keep
     # 319 px; four rows of half-height tiles, 64 px high and 10 px apart, fit.
+    # The favourites bar, 56 px high at the bottom edge, takes the place of the
+    # pager row and its margin: 56 + 9 is the same 65 px as 18 + 38 + 9.
     assert "anchors.topMargin: 18" in home_assistant_qml
-    assert "anchors.bottomMargin: 18" in home_assistant_qml
+    assert "anchors.bottomMargin: tabBar.visible ? 65 : 18" in home_assistant_qml
+    assert "height: pageCount > 1 && !tabNavigation ? 38 : 0" in home_assistant_qml
     assert "spacing: 9" in home_assistant_qml
-    assert "height: pageCount > 1 ? 38 : 0" in home_assistant_qml
     assert "(tall ? 94 : 64)" in home_assistant_qml
     assert 480 - 78 - 18 - 18 - (38 + 9) >= 4 * 64 + 3 * 10
 

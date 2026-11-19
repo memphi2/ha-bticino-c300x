@@ -196,9 +196,10 @@ not on a device. A second test unit would change that.
 
 Hardware donations are welcome: a used BTicino Classe 300X / C300X (`344642`
 or `344643`), also one with a defect or stuck in a boot loop, or a matching
-door station. If you have one to spare, please open an
-[issue](https://github.com/memphi2/ha-bticino-c300x/issues/new/choose). A
-donation is voluntary and gives no claim to support or to a feature.
+door station. If you have one to spare, please start a
+[discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general);
+do not post an address there. A donation is voluntary and gives no claim to
+support or to a feature.
 
 ## AI Assistance
 

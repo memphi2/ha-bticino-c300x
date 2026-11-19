@@ -9,3 +9,6 @@ contact_links:
   - name: Releases and update notes
     url: https://github.com/memphi2/ha-bticino-c300x/releases
     about: Review current release notes, update instructions and known migration notes.
+  - name: Discussions
+    url: https://github.com/memphi2/ha-bticino-c300x/discussions
+    about: Questions, ideas and hardware donation offers that are not a bug report.

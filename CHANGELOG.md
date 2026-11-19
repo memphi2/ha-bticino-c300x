@@ -1,6 +1,8 @@
 # Changelog
 
-## v2.6.0 - Unreleased
+## v2.6.0 - 2026-11-19
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
 
 - Separate initial state and availability updates from confirmed setting and
   collection changes in the agent. Keep HA entities synchronized without false

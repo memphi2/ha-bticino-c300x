@@ -1,9 +1,8 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-19. Integration and native agent `2.6.0` development builds
-on the `2.5.1` release line with credential recovery and an HA-only
-media history. The latest stable release is `v2.5.1`. This report covers
-the local source tree, not a newly published release.
+Source review: 2026-11-19. Integration and native agent `2.6.0`, the successor
+of `2.5.1`, with credential recovery and an HA-only media history. This report
+covers the release source tree.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.

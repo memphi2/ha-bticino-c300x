@@ -2,9 +2,9 @@
 
 ## Supported Release Line
 
-- `2.6.x`: local development, not released
-- `2.5.x`: current stable (2.5.1)
-- `2.4.x`: previous stable; upgrade to 2.5.x for maintenance fixes
+- `2.6.x`: current stable (2.6.0)
+- `2.5.x`: previous stable; upgrade to 2.6.x for maintenance fixes
+- `2.4.x`: no longer maintained; upgrade to 2.6.x
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 
 ## Compatibility Baseline

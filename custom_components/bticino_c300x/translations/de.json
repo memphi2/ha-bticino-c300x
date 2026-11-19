@@ -622,7 +622,8 @@
       "reconfigure_successful": "BTicino C300X wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
       "cannot_connect": "Der Device-Agent ist nicht erreichbar. Pruefe die Adresse und ob der Agent laeuft.",
       "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu.",
-      "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert."
+      "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert.",
+      "reauth_successful": "Die Zugangsdaten wurden aktualisiert."
     },
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",

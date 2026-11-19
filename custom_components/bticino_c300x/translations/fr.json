@@ -622,7 +622,8 @@
       "reconfigure_successful": "BTicino C300X a été reconfigure. Mettez à jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvelé les identifiants.",
       "cannot_connect": "L'agent appareil est injoignable. Verifiez l'adresse et que l'agent fonctionne.",
       "unique_id_mismatch": "Ce n'est pas l'appareil configure. Reconfigurez l'entree correspondante ou ajoutez l'appareil comme nouvelle entree.",
-      "reauth_wrong_device": "L'agent a une identité différente. L'entrée enregistrée n'a pas été modifiée."
+      "reauth_wrong_device": "L'agent a une identité différente. L'entrée enregistrée n'a pas été modifiée.",
+      "reauth_successful": "Les identifiants ont été mis à jour."
     },
     "error": {
       "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",

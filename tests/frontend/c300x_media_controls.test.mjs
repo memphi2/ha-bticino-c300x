@@ -331,7 +331,7 @@ test("the picture requests the window, navigation lies on the picture and close 
   assert.match(stage, /button\("previous nav"/);
   assert.match(stage, /button\("next nav"/);
   assert.match(stage, /button\("close"/);
-  assert.match(template, /\.nav:disabled \{ opacity: 0; \}/);
+  assert.match(template, /\.nav:disabled \{ opacity: 0; pointer-events: none; \}/);
   assert.match(stage, /button\("fullscreen"/);
   assert.match(stage, /class="mode"/);
   assert.equal(template.includes('"current"'), false);
@@ -414,13 +414,14 @@ test("with a fixed media volume the slider stays for a live stream scaled by the
   assert.equal(c.nodes.volume.hidden, true);
 });
 
-test("the next arrow is not on the picture while no saved media is open", async (t) => {
+test("an arrow that cannot be used lets clicks through to the picture", async (t) => {
+  const template = readFileSync(new URL("../../custom_components/bticino_c300x/frontend/c300x-media-controls-template.js", import.meta.url), "utf8");
+  assert.match(template, /\.nav:disabled \{[^}]*pointer-events: none/);
   const s = harness(t, [item()]), c = s.controls;
   await tick();
-  assert.equal(c.nodes.previous.hidden, false);
-  assert.equal(c.nodes.next.hidden, true);
+  assert.equal(c.nodes.next.disabled, true, "nothing newer while no saved item is open");
   s.click("previous");
   await tick();
   assert.equal(c.browsing, true);
-  assert.equal(c.nodes.next.hidden, false);
+  assert.equal(c.nodes.previous.disabled, true, "the oldest item has nothing older");
 });

@@ -68,6 +68,8 @@ class VisitorJournal:
         self._active_until = 0.0
         self.latest_source: str | None = None
         self.closed = False
+        # Set by every change; the size check serializes the whole journal.
+        self._unsized = True
         self.removed = False
         self._unsubscribe: Any = None
 
@@ -204,7 +206,7 @@ class VisitorJournal:
             key=lambda item: (item["at"], item["id"]),
         )[-MAX_VISITS:]
         records = {item["id"]: item for item in kept}
-        while records and len(json.dumps({"visits": list(records.values()),
+        while self._unsized and records and len(json.dumps({"visits": list(records.values()),
                                           "captures": list(self.captures.records.values())})) > MAX_JOURNAL_BYTES:
             records.pop(next(iter(records)))
         if records != self.records:
@@ -214,12 +216,14 @@ class VisitorJournal:
             self.changed()
         elif captures_changed:
             self.changed()
+        self._unsized = False
 
     def items(self) -> list[dict[str, Any]]:
         self.prune()
         return sorted(self.records.values(), key=lambda item: (item["at"], item["id"]), reverse=True)
 
     def changed(self) -> None:
+        self._unsized = True
         if not self.closed:
             self.store.async_delay_save(self._payload, 1)
             self.invalidate()

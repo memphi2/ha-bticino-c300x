@@ -405,3 +405,20 @@ def test_ring_adopts_the_image_already_requested_for_an_open_stream(tmp_path, mo
         manager.close()
 
     asyncio.run(run())
+
+
+def test_reading_an_unchanged_journal_does_not_serialize_it_again(tmp_path, monkeypatch):
+    manager, journal = fixture(tmp_path, monkeypatch)
+    journal.event(event())
+    journal.items()
+    dumps = Mock(side_effect=json.dumps)
+    monkeypatch.setattr(journal_module.json, "dumps", dumps)
+    for _ in range(5):
+        assert len(journal.items()) == 1
+    dumps.assert_not_called()
+    journal.event(event(sequence=2))
+    assert len(journal.items()) == 2
+    assert dumps.call_count
+    monkeypatch.setattr(journal_module, "MAX_JOURNAL_BYTES", 1)
+    journal.changed()
+    assert journal.items() == []

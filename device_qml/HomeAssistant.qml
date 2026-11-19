@@ -71,6 +71,8 @@ Page {
     property real tapOrigin: 0
     property bool tapFlicked: false
     property bool tapStolen: false
+    property bool tapShifted: false
+    property bool tapEdge: false
     property variant pendingSettling: []
     property bool feedbackDue: false
     function controlFree(item) {
@@ -96,15 +98,20 @@ Page {
         if (!tapArea || tapStolen || Date.now() - tapAt > 2000) return
         tapList = index
         tapOrigin = flick.contentY
+        tapShifted = false
+        tapEdge = false
     }
     function tapScrolled(index, flick) {
-        if (tapList === index && Math.abs(flick.contentY - tapOrigin) > 16) tapFlicked = true
+        if (tapList !== index) return
+        tapShifted = true
+        if (flick.atYBeginning || flick.atYEnd) tapEdge = true
+        if (Math.abs(flick.contentY - tapOrigin) > 16) tapFlicked = true
     }
     function tapEnd(index, flick) {
         if (tapList >= 0 && tapList !== index) return
         var claimed = tapList === index
         var area = tapArea
-        var deliver = claimed && tapStolen && !tapFlicked && Date.now() - tapAt <= 2000 && Math.abs(flick.contentY - tapOrigin) <= 16
+        var deliver = claimed && tapStolen && tapShifted && !tapEdge && !tapFlicked && Date.now() - tapAt <= 2000 && Math.abs(flick.contentY - tapOrigin) <= 16
         tapArea = null
         tapList = -1
         tapStolen = false

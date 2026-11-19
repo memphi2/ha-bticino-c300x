@@ -956,48 +956,55 @@ assert.equal(queue.length, 1, "every control waits while a command is in flight"
 // Tap tolerance: one state for every list; only a press a list took over is delivered, once.
 // Qt 4.8 order when a list takes a press over: contentY change, movementStarted, then canceled.
 function fakeArea() { const a = {clicks: 0, visible: true, enabled: true, parent: {enabled: true}, clicked() { a.clicks += 1; }}; return a; }
-Object.assign(p, {tapArea: null, tapAt: 0, tapList: -1, tapOrigin: 0, tapFlicked: false, tapStolen: false});
-const outer = {contentY: 0}, inner = {contentY: 0};
+Object.assign(p, {tapArea: null, tapAt: 0, tapList: -1, tapOrigin: 0, tapFlicked: false, tapStolen: false, tapShifted: false, tapEdge: false});
+const outer = {contentY: 20, atYBeginning: false, atYEnd: false}, inner = {contentY: 20, atYBeginning: false, atYEnd: false};
 function takeOver(list, index) { p.tapScrolled(index, list); p.tapMoving(index, list); p.tapCancel(); }
 function steal(area, list, index, moved) {
     p.tapPress(area); takeOver(list, index);
     list.contentY += moved; p.tapScrolled(index, list); p.tapEnd(index, list);
 }
 let a = fakeArea();
-p.tapPress(a); p.tapMoving(0, outer); outer.contentY = 6; p.tapEnd(0, outer);
+p.tapPress(a); p.tapMoving(0, outer); outer.contentY = 26; p.tapScrolled(0, outer); p.tapEnd(0, outer);
 assert.equal(a.clicks, 0, "a press the list did not take over was already a normal tap");
-outer.contentY = 0;
+outer.contentY = 20;
 steal(a, outer, 0, 10);
 assert.equal(a.clicks, 1, "a press taken over by a small scroll is delivered");
-assert.equal(outer.contentY, 0, "the list returns to where the press started");
+assert.equal(outer.contentY, 20, "the list returns to where the press started");
 p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "the delivered press is used up");
 p.tapPress(a); takeOver(outer, 0);
-outer.contentY = 80; p.tapScrolled(0, outer); outer.contentY = 0; p.tapEnd(0, outer);
+outer.contentY = 100; p.tapScrolled(0, outer); outer.contentY = 20; p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "a drag out and back is a scroll, not a tap");
-p.tapPress(a); takeOver(outer, 0); outer.contentY = 40; p.tapScrolled(0, outer); p.tapEnd(0, outer);
-outer.contentY = 0;
-p.tapMoving(3, inner); inner.contentY = 12; p.tapScrolled(3, inner); p.tapEnd(3, inner);
+p.tapPress(a); takeOver(outer, 0); outer.contentY = 60; p.tapScrolled(0, outer); p.tapEnd(0, outer);
+outer.contentY = 20;
+p.tapMoving(3, inner); inner.contentY = 32; p.tapScrolled(3, inner); p.tapEnd(3, inner);
 assert.equal(a.clicks, 1, "a rejected press is used up for every list, also Leave home's");
-inner.contentY = 0;
+inner.contentY = 20;
 p.tapPress(a); takeOver(inner, 3); p.tapMoving(0, outer);
-inner.contentY = 5; p.tapEnd(3, inner); p.tapEnd(0, outer);
+inner.contentY = 25; p.tapScrolled(3, inner); p.tapEnd(3, inner); p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "a press that moved two lists is a scroll");
-inner.contentY = 0;
-p.tapPress(a); p.tapCancel(); p.tapMoving(0, outer); outer.contentY = 5; p.tapEnd(0, outer);
+inner.contentY = 20;
+p.tapPress(a); p.tapCancel(); p.tapMoving(0, outer); outer.contentY = 25; p.tapScrolled(0, outer); p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "a cancel without a moving list (control hidden while pressed) arms nothing");
-outer.contentY = 0;
-p.tapPress(a); p.tapEnd(0, outer); p.tapMoving(0, outer); p.tapCancel(); outer.contentY = 5; p.tapEnd(0, outer);
+outer.contentY = 20;
+p.tapPress(a); p.tapMoving(0, outer); outer.contentY = 5; p.tapScrolled(0, outer); p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "a later gesture from a blank spot does not click an earlier control");
-outer.contentY = 0;
+outer.contentY = 20;
+p.tapPress(a); takeOver(inner, 3); p.tapEnd(3, inner);
+assert.equal(a.clicks, 1, "a list that took the press over without moving (content fits) is a swipe, not a tap");
+inner.atYEnd = true;
+p.tapPress(a); takeOver(inner, 3); inner.contentY += 8; p.tapScrolled(3, inner); p.tapEnd(3, inner);
+assert.equal(a.clicks, 1, "a list that hit its end may hide a longer finger movement");
+inner.atYEnd = false; inner.contentY = 20;
+outer.contentY = 20;
 a.visible = false; steal(a, outer, 0, 5);
 assert.equal(a.clicks, 1, "a control hidden while pressed gets no tap");
-a.visible = true; a.parent.enabled = false; outer.contentY = 0; steal(a, outer, 0, 5);
+a.visible = true; a.parent.enabled = false; outer.contentY = 20; steal(a, outer, 0, 5);
 assert.equal(a.clicks, 1, "a control in a disabled container gets no tap");
-a.parent.enabled = true; outer.contentY = 0;
-p.tapPress(a); p.tapAt = Date.now() - 3000; takeOver(outer, 0); outer.contentY = 5; p.tapEnd(0, outer);
+a.parent.enabled = true; outer.contentY = 20;
+p.tapPress(a); p.tapAt = Date.now() - 3000; takeOver(outer, 0); outer.contentY = 25; p.tapScrolled(0, outer); p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "a press older than two seconds is not delivered");
-outer.contentY = 0;
+outer.contentY = 20;
 p.tapPress(null); takeOver(outer, 0); p.tapEnd(0, outer);
 assert.equal(p.tapStolen, false, "a destroyed control leaves nothing armed");
 const leaveHomeQml = fs.readFileSync(path.join(__dirname, "../../device_qml/C300XLeaveHome.qml"), "utf8");

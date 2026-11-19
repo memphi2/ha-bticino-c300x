@@ -188,13 +188,8 @@ def dashboard_pages_schema(
         return values.get(field) if isinstance(values, dict) else None
 
     fields: dict[Any, Any] = {}
-    free_section_shown = False
     for slot in range(1, DASHBOARD_PAGE_MAX_COUNT + 1):
         page = layout[slot - 1] if slot <= len(layout) else None
-        collapsed = False
-        if page is None:
-            collapsed = free_section_shown
-            free_section_shown = True
         page_fields: dict[Any, Any] = {}
         if slot == 1:
             page_fields[vol.Required(
@@ -227,7 +222,7 @@ def dashboard_pages_schema(
         )] = _page_entity_selector()
         fields[vol.Required(page_section_key(slot))] = section(
             vol.Schema(page_fields),
-            {"collapsed": collapsed},
+            {"collapsed": slot > len(layout) + 1},
         )
     def energy_shown(field: str, saved: Any) -> Any:
         if posted is None:
@@ -271,14 +266,16 @@ def dashboard_pages_placeholders(
     """Return the page names and positions the section titles show.
 
     A named page's section is titled with its name, as ": name" after the
-    page number; unused sections have no display number. A form
-    shown again with errors shows the names that were sent.
+    page number. A built-in page that is switched off has no number. A
+    free section, where a page can be added, is titled with a plus sign. A
+    form shown again with errors shows the names that were sent.
     """
 
     layout = dashboard_page_layout(dashboard_input)
+    positions = page_form_positions(layout, dashboard_input, user_input)
     placeholders = {
         f"{key}_position": f" {position}" if position is not None else ""
-        for key, position in page_form_positions(layout, dashboard_input, user_input).items()
+        for key, position in positions.items()
     }
     for slot in range(2, DASHBOARD_PAGE_MAX_COUNT + 1):
         if user_input is not None:
@@ -286,7 +283,8 @@ def dashboard_pages_placeholders(
             name = normalize_dashboard_page_name(values.get(PAGE_NAME_FIELD, ""))
         else:
             name = layout[slot - 1]["name"] if slot <= len(layout) else ""
-        placeholders[page_name_placeholder(slot)] = f": {name}" if name else ""
+        free = slot > len(layout) and positions[page_section_key(slot)] is None
+        placeholders[page_name_placeholder(slot)] = f": {name}" if name else " +" if free else ""
     return placeholders
 
 

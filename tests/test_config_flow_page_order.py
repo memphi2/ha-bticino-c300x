@@ -1,4 +1,4 @@
-"""Built-in page controls stay visible without changing the saved display order."""
+"""The pages form follows the display order without changing what is saved."""
 
 import json
 from copy import deepcopy
@@ -33,17 +33,14 @@ def test_saved_headings_and_section_order_match_resolved_slots(positions, enable
         key = regular[name] if kind == "regular" else name
         active.append(key)
         assert placeholders[f"{key}_position"] == f" {position}"
-    assert keys[:5] == ["page_1", *SPECIAL_PAGE_ORDER]
-    assert [key for key in keys[5:] if key in active] == [
-        key for key in active if key.startswith("page_") and key != "page_1"
-    ]
-    assert keys[-5:] == [f"page_{i}" for i in range(4, 9)]
+    # Shown pages in display order, then the built-in pages that are off, then the free sections.
+    off = [key for key in SPECIAL_PAGE_ORDER if key not in active]
+    assert keys == [*active, *off, *[f"page_{i}" for i in range(4, 9)]]
+    assert "situations_page" in off
+    assert [key for key, is_enabled in zip(SPECIAL_PAGE_ORDER[:3], enabled, strict=True) if not is_enabled] == off[:-1]
+    assert all(placeholders[f"{key}_position"] == "" for key in off)
     assert all(placeholders[f"page_{i}_position"] == "" for i in range(4, 9))
-    # Situations is not in this input and stays switched off at its default.
-    assert placeholders["situations_page_position"] == " 12"
-    for key, is_enabled in zip(SPECIAL_PAGE_ORDER[:3], enabled, strict=True):
-        if not is_enabled:
-            assert placeholders[f"{key}_position"] == f" {saved[key]['position']}"
+    assert all(placeholders[f"page_{i}_name"] == " +" for i in range(4, 9))
     reopened, errors = dashboard_pages_input(saved, post_pages_like_home_assistant(schema))
     assert not errors
     assert reopened == saved == original
@@ -64,31 +61,33 @@ def test_retry_orders_requested_positions_and_keeps_section_identity_and_fields(
     assert errors and unchanged == saved
     schema = dashboard_pages_schema(saved, posted)
     assert [str(key) for key in schema.schema] == [
-        "page_1", "energy_page", "agenda_page", "leave_home_page", "situations_page", "page_3", "page_7", "page_2",
-        "page_4", "page_5", "page_6", "page_8",
+        "agenda_page", "page_3", "leave_home_page", "page_7", "energy_page", "page_2", "page_1",
+        "situations_page", "page_4", "page_5", "page_6", "page_8",
     ]
     placeholders = dashboard_pages_placeholders(saved, posted)
     assert placeholders["page_2_name"] == ": Renamed"
+    assert posted["situations_page"]["enabled"] is False and placeholders["situations_page_position"] == ""
     for key, values in posted.items():
-        assert placeholders[f"{key}_position"] == (f" {int(values['position'])}" if "position" in values else "")
+        if key != "situations_page":
+            assert placeholders[f"{key}_position"] == (f" {int(values['position'])}" if "position" in values else "")
     assert post_pages_like_home_assistant(schema) == posted
 
 
-def test_default_form_promotes_disabled_built_in_pages_above_seven_custom_pages():
+def test_default_form_lists_the_off_built_in_pages_above_the_seven_free_sections():
     schema = dashboard_pages_schema({})
     keys = [str(key) for key in schema.schema]
     assert keys == ["page_1", *SPECIAL_PAGE_ORDER, *[f"page_{i}" for i in range(2, 9)]]
     placeholders = dashboard_pages_placeholders({})
     assert placeholders["page_1_position"] == " 1"
-    assert placeholders["energy_page_position"] == " 2"
-    assert placeholders["agenda_page_position"] == " 10"
-    assert placeholders["leave_home_page_position"] == " 11"
-    assert placeholders["situations_page_position"] == " 12"
-    for key in SPECIAL_PAGE_ORDER:
-        assert post_pages_like_home_assistant(schema)[key]["enabled"] is False
+    posted = post_pages_like_home_assistant(schema)
+    for key, position in zip(SPECIAL_PAGE_ORDER, (2, 10, 11, 12), strict=True):
+        # No number in the title while the page is off; its position stays in its section.
+        assert placeholders[f"{key}_position"] == ""
+        assert posted[key]["enabled"] is False
+        assert posted[key]["position"] == position
 
 
-def test_hidden_logical_pages_and_inactive_energy_keep_configured_positions():
+def test_hidden_logical_pages_keep_their_number_and_inactive_energy_its_position():
     saved, _ = dashboard_pages_input({}, form_input())
     saved["dashboard_status_page_enabled"] = False
     saved["dashboard_entities"] = []
@@ -96,7 +95,8 @@ def test_hidden_logical_pages_and_inactive_energy_keep_configured_positions():
     placeholders = dashboard_pages_placeholders(saved)
     assert placeholders["page_1_position"] == " 1"
     assert placeholders["page_2_position"] == " 2"
-    assert placeholders["energy_page_position"] == " 11"
+    # Switched on without a view, the energy page is not shown: no number in the title.
+    assert placeholders["energy_page_position"] == ""
     posted = post_pages_like_home_assistant(dashboard_pages_schema(saved))
     assert posted["page_1"]["enabled"] is False
     assert posted["energy_page"]["enabled"] is True
@@ -123,16 +123,16 @@ def test_disabled_optional_retry_with_cleared_position_matches_saved_fallback(ke
     assert unchanged == saved and errors == {"page_2": "dashboard_page_name_missing"}
 
     placeholders = dashboard_pages_placeholders(saved, posted)
-    assert placeholders[f"{key}_position"] == " 3"
+    assert placeholders[f"{key}_position"] == ""
     retry = dashboard_pages_schema(saved, posted)
     keys = [str(marker) for marker in retry.schema]
-    assert keys.index(key) < keys.index("page_2")
+    assert keys.index("page_3") < keys.index(key) < keys.index("page_4")
     corrected = post_pages_like_home_assistant(retry, {"page_2": {"name": "Room 2"}})
     assert "position" not in corrected[key]
     result, errors = dashboard_pages_input(saved, corrected)
     assert not errors
     assert result[key] == saved[key]
-    assert placeholders[f"{key}_position"] == f" {result[key]['position']}"
+    assert result[key]["position"] == 3
 
 
 @pytest.mark.parametrize("name", ["strings.json", *[f"translations/{lang}.json" for lang in ("en", "de", "fr", "it")]])

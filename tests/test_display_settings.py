@@ -330,7 +330,8 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     assert form["step_id"].endswith("dashboard_pages")
     # The section of a named page carries its name in its title.
     assert form["description_placeholders"]["page_2_name"] == ": Study"
-    assert form["description_placeholders"]["page_3_name"] == ""
+    # A free section is titled with a plus sign.
+    assert form["description_placeholders"]["page_3_name"] == " +"
     form = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
     assert list(form["data_schema"].schema) == ["Study \u203a Room"]
     # The name shows the typed text; emptied, it is left out of the post.
@@ -1261,26 +1262,27 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
 
     assert [(field["name"], field["type"]) for field in fields] == [
         ("page_1", "expandable"),
+        ("page_2", "expandable"),
         ("energy_page", "expandable"),
         ("agenda_page", "expandable"),
         ("leave_home_page", "expandable"),
         ("situations_page", "expandable"),
-        *((f"page_{slot}", "expandable") for slot in range(2, 9)),
+        *((f"page_{slot}", "expandable") for slot in range(3, 9)),
     ]
     # Used pages are open, and so is the first free one to add a page; the
     # optional built-in pages are closed while switched off.
-    assert [field["expanded"] for field in fields] == [True, False, False, False, False, True, True] + [False] * 5
-    assert [item["name"] for item in fields[1]["schema"]] == [
+    assert [field["expanded"] for field in fields] == [True, True, False, False, False, False, True] + [False] * 5
+    assert [item["name"] for item in fields[2]["schema"]] == [
         "enabled", "position", "view_now", "view_today", "view_power", "view_consumers", "view_balance",
     ]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "enabled", "weather_entity_id", "position", "entities",
     ]
-    assert [item["name"] for item in fields[4]["schema"]] == [
+    assert [item["name"] for item in fields[5]["schema"]] == [
         "enabled", "position", "contacts", "garages", "lights", "tasks",
     ]
-    assert [item["name"] for item in fields[5]["schema"]] == ["name", "position", "entities"]
-    assert fields[5]["schema"][0]["description"] == {"suggested_value": "Room"}
+    assert [item["name"] for item in fields[1]["schema"]] == ["name", "position", "entities"]
+    assert fields[1]["schema"][0]["description"] == {"suggested_value": "Room"}
 
 
 
@@ -1319,12 +1321,13 @@ def test_section_titles_carry_the_page_names():
         "page_1_position": " 1",
         "page_2_position": " 2",
         **{f"page_{slot}_position": "" for slot in range(3, 9)},
-        "energy_page_position": " 2",
-        "agenda_page_position": " 10",
-        "leave_home_page_position": " 11",
-        "situations_page_position": " 12",
+        # The built-in pages are off: no number.
+        "energy_page_position": "",
+        "agenda_page_position": "",
+        "leave_home_page_position": "",
+        "situations_page_position": "",
         "page_2_name": ": Room",
-        **{f"page_{slot}_name": "" for slot in range(3, 9)},
+        **{f"page_{slot}_name": " +" for slot in range(3, 9)},
     }
     # Shown again after an error, the titles follow the names that were sent.
     sent = {"page_2": {"name": " Hall "}, "page_3": {"entities": ["light.a"]}}

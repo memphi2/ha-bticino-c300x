@@ -174,11 +174,11 @@ class AuthFlowSteps:
                 candidate = {**self._setup_connection, **auth_data}
                 setup, errors = await async_validate_connection(self.hass, candidate)
                 self._note_setup_rejection(errors, candidate)
+                if not errors:
+                    errors = self._setup_identity_error(setup)
                 if errors and self._setup_pending_features is not None and not self._setup_bootstrapped:
                     # Keys typed on this retry stay for the next one.
                     self._setup_connection = candidate
-                if not errors:
-                    errors = self._setup_identity_error(setup)
                 if not errors:
                     self._setup_connection = candidate
                     unique_id = stable_unique_id_from_setup_data(setup)

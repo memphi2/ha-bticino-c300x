@@ -289,3 +289,46 @@ def test_a_rejected_key_the_device_later_accepts_is_kept(monkeypatch):
         assert result["data"][CONF_AGENT_TOKEN] == "access"
 
     asyncio.run(exercise())
+
+
+def test_keys_accepted_before_a_wrong_device_answer_are_kept(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.context = {"source": "user"}
+    flow._setup_connection = {
+        "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
+        CONF_AGENT_TOKEN: "rejected-access", CONF_MAINTENANCE_TOKEN: "",
+    }
+    flow._async_abort_if_manual_setup_duplicate = AsyncMock()
+    flow._async_adopt_agent_unique_id = AsyncMock()
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = Mock()
+    monkeypatch.setattr(config_flow, "async_migrate_legacy_mqtt_for_connection", AsyncMock())
+    seen = []
+    wrong_device = Mock(side_effect=[{"base": "wrong_device"}, {}])
+    flow._setup_identity_error = wrong_device
+
+    async def validated(_hass, candidate):
+        seen.append(candidate[CONF_AGENT_TOKEN])
+        if candidate[CONF_AGENT_TOKEN] != "good-access":
+            return {}, {"base": "invalid_auth"}
+        return {"device_id": "device-a"}, {}
+
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", validated)
+    monkeypatch.setattr(flow, "_async_validate_setup_identity", AsyncMock(side_effect=[{"base": "invalid_auth"}, {}]))
+
+    async def exercise():
+        feature_data, errors = config_flow._feature_input({CONF_VIDEO_ENABLED: False})
+        assert not errors
+        flow._note_setup_rejection({"base": "invalid_auth"}, flow._setup_connection)
+        result = await flow._async_create_setup_entry(feature_data)
+        assert result["errors"] == {"base": "invalid_auth"}
+        submitted = result["data_schema"]({})
+        submitted[CONF_AGENT_TOKEN] = "good-access"
+        result = await flow.async_step_agent_auth(submitted)
+        assert result["errors"] == {"base": "wrong_device"}
+        result = await flow.async_step_agent_auth(result["data_schema"]({}))
+        assert seen == ["good-access", "good-access"]
+        assert result["type"] == "create_entry"
+
+    asyncio.run(exercise())

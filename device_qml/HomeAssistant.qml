@@ -68,6 +68,7 @@ Page {
     property variant tapAt: 0
     property variant tapOrigin: [0, 0, 0]
     property bool tapFlicked: false
+    property bool tapStolen: false
     function controlFree(item) {
         return pendingEntity.length === 0 || (!controlInFlight && (!item || pendingEntity !== item.entity_id))
     }
@@ -75,13 +76,30 @@ Page {
         tapArea = area
         tapAt = Date.now()
         tapFlicked = false
+        tapStolen = false
         tapOrigin = [scroll.contentY, details.contentY, notificationDetails.contentY]
     }
+    function tapCancel() {
+        tapStolen = true
+    }
+    function tapForget() {
+        tapStolen = false
+        tapArea = null
+    }
+    function tapScrolled(flick, index) {
+        if (tapStolen && Math.abs(flick.contentY - tapOrigin[index]) > 16) tapFlicked = true
+    }
     function tapEnd(flick, index) {
+        var stolen = tapStolen
+        tapStolen = false
+        if (!stolen || tapFlicked || Date.now() - tapAt > 2000 || Math.abs(flick.contentY - tapOrigin[index]) > 16) {
+            tapArea = null
+            return
+        }
         var area = tapArea
         tapArea = null
-        if (!area || tapFlicked || Date.now() - tapAt > 2000 || Math.abs(flick.contentY - tapOrigin[index]) > 16) return
         flick.contentY = tapOrigin[index]
+        try { if (leaveHomeLoader.item) leaveHomeLoader.item.tapForget() } catch (error) {}
         try { area.clicked(null) } catch (error) {}
     }
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
@@ -523,6 +541,7 @@ Page {
                 id: tileTap
                 anchors.fill: parent
                 onPressed: tapPress(tileTap)
+                onCanceled: tapCancel()
                 onClicked: openDetails(tileItem)
             }
             UbuntuLightText {
@@ -603,7 +622,7 @@ Page {
                 verticalAlignment: Text.AlignVCenter
             }
             UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
-            BeepingMouseArea { id: tileTap; anchors.fill: parent; onPressed: tapPress(tileTap); onClicked: openDetails(tileItem) }
+            BeepingMouseArea { id: tileTap; anchors.fill: parent; onPressed: tapPress(tileTap); onCanceled: tapCancel(); onClicked: openDetails(tileItem) }
         }
     }
 
@@ -629,7 +648,7 @@ Page {
                 color: detailColor(tileItem); elide: Text.ElideRight
             }
             UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
-            BeepingMouseArea { id: tileTap; anchors.fill: parent; onPressed: tapPress(tileTap); onClicked: openDetails(tileItem) }
+            BeepingMouseArea { id: tileTap; anchors.fill: parent; onPressed: tapPress(tileTap); onCanceled: tapCancel(); onClicked: openDetails(tileItem) }
         }
     }
 
@@ -651,6 +670,7 @@ Page {
                 id: tallTap
                 anchors.fill: parent
                 onPressed: tapPress(tallTap)
+                onCanceled: tapCancel()
                 onClicked: openDetails(tallTile.tileItem)
             }
             UbuntuLightText {
@@ -728,6 +748,7 @@ Page {
                             id: quickMouse
                             anchors.fill: parent
                             onPressed: tapPress(quickMouse)
+                            onCanceled: tapCancel()
                             enabled: quickUsable(quick, control)
                             onClicked: if (usable) quickAction(tallTile.tileItem, quick)
                         }
@@ -752,6 +773,7 @@ Page {
     Flickable {
         id: notificationDetails
         onFlickStarted: tapFlicked = true
+        onContentYChanged: tapScrolled(notificationDetails, 2)
         onMovementEnded: tapEnd(notificationDetails, 2)
         visible: notificationsOpen
         anchors.top: header.bottom
@@ -806,7 +828,7 @@ Page {
                                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                     elide: Text.ElideRight
                                 }
-                                BeepingMouseArea { id: notificationActionMouse; anchors.fill: parent; onPressed: tapPress(notificationActionMouse); onClicked: notificationAction(notification, modelData.action_id) }
+                                BeepingMouseArea { id: notificationActionMouse; anchors.fill: parent; onPressed: tapPress(notificationActionMouse); onCanceled: tapCancel(); onClicked: notificationAction(notification, modelData.action_id) }
                             }
                         }
                     }
@@ -916,6 +938,7 @@ Page {
                             id: coverControlMouse
                             anchors.fill: parent
                             onPressed: tapPress(coverControlMouse)
+                            onCanceled: tapCancel()
                             enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
                             onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
                         }
@@ -952,6 +975,7 @@ Page {
     Flickable {
         id: details
         onFlickStarted: tapFlicked = true
+        onContentYChanged: tapScrolled(details, 1)
         onMovementEnded: tapEnd(details, 1)
         visible: detailOpen && !notificationsOpen
         anchors.top: detailTabs.bottom
@@ -1015,6 +1039,7 @@ Page {
                             id: actionMouse
                             anchors.fill: parent
                             onPressed: tapPress(actionMouse)
+                            onCanceled: tapCancel()
                             enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
                             onClicked: pressAction(selectedItem, control)
                         }
@@ -1135,6 +1160,7 @@ Page {
         Flickable {
             id: scroll
             onFlickStarted: tapFlicked = true
+            onContentYChanged: tapScrolled(scroll, 0)
             onMovementEnded: tapEnd(scroll, 0)
             width: parent.width
             height: parent.height - (notificationBanner.visible ? notificationBanner.height + 9 : 0) - (badgeGrid.visible ? badgeGrid.height + 9 : 0) - (pagerRow.visible ? pagerRow.height + 9 : 0)
@@ -1205,10 +1231,13 @@ Page {
                     onActionRequested: Api.dashboardAction(item, status, page)
                     onAlarmRequested: tabView.activateTab(alarmPage)
                     onPressing: tapPress(area)
+                    onCanceling: tapCancel()
+                    onTapUsed: tapForget()
                 }
                 Connections {
                     target: energyLoader.item
                     onPressing: tapPress(area)
+                    onCanceling: tapCancel()
                 }
 
                 Flow {
@@ -1225,6 +1254,7 @@ Page {
                             links: Api.dashboardPageLinks(page)
                             onSelected: Api.dashboardSelectPage(pageIndex, status, page)
                             onPressing: tapPress(area)
+                            onCanceling: tapCancel()
                         }
                     }
 
@@ -1593,6 +1623,7 @@ Page {
                                 id: tileMouse
                                 anchors.fill: parent
                                 onPressed: tapPress(tileMouse)
+                                onCanceled: tapCancel()
                                 onClicked: Api.dashboardAction(tileItem, status, page)
                             }
                         }
@@ -1662,6 +1693,7 @@ Page {
                                     id: minusMouse
                                     anchors.fill: parent
                                     onPressed: tapPress(minusMouse)
+                                    onCanceled: tapCancel()
                                     onClicked: Api.dashboardSliderAction(tileItem, "decrement", status, page)
                                 }
                             }
@@ -1691,6 +1723,7 @@ Page {
                                     id: plusMouse
                                     anchors.fill: parent
                                     onPressed: tapPress(plusMouse)
+                                    onCanceled: tapCancel()
                                     onClicked: Api.dashboardSliderAction(tileItem, "increment", status, page)
                                 }
                             }
@@ -1778,6 +1811,7 @@ Page {
                                             id: optionMouse
                                             anchors.fill: parent
                                             onPressed: tapPress(optionMouse)
+                                            onCanceled: tapCancel()
                                             onClicked: Api.dashboardChoiceAction(tileItem, Api.dashboardChoiceOptionValue(modelData), status, page)
                                         }
                                     }

@@ -952,3 +952,31 @@ assert.equal(queue.length, 1, "another control is free once the command is answe
 assert.equal(p.pendingEntity, "light.other");
 Api.dashboardControl({entity_id: "switch.third", domain: "switch"}, {command: ""}, null, p.status, p);
 assert.equal(queue.length, 1, "every control waits while a command is in flight");
+
+// Tap tolerance: only a press the list took over is delivered, once.
+function fakeArea() { const a = {clicks: 0, clicked() { a.clicks += 1; }}; return a; }
+Object.assign(p, {tapArea: null, tapAt: 0, tapOrigin: [0, 0, 0], tapFlicked: false, tapStolen: false,
+    scroll: {contentY: 0}, details: {contentY: 0}, notificationDetails: {contentY: 0}});
+let a = fakeArea();
+p.tapPress(a);
+p.scroll.contentY = 6; p.tapEnd(p.scroll, 0);
+assert.equal(a.clicks, 0, "a press the list did not take over was already a normal tap");
+p.tapPress(a);
+p.scroll.contentY = 10; p.tapEnd(p.scroll, 0);
+assert.equal(a.clicks, 0, "a normal tap is not delivered again by a later small scroll");
+p.scroll.contentY = 0;
+p.tapPress(a); p.tapCancel();
+p.scroll.contentY = 10; p.tapScrolled(p.scroll, 0); p.tapEnd(p.scroll, 0);
+assert.equal(a.clicks, 1, "a press taken over by a small scroll is delivered");
+assert.equal(p.scroll.contentY, 0);
+p.tapEnd(p.scroll, 0);
+assert.equal(a.clicks, 1, "the delivered press is used up");
+p.tapPress(a); p.tapCancel();
+p.scroll.contentY = 80; p.tapScrolled(p.scroll, 0);
+p.scroll.contentY = 0; p.tapScrolled(p.scroll, 0); p.tapEnd(p.scroll, 0);
+assert.equal(a.clicks, 1, "a drag out and back is a scroll, not a tap");
+p.tapPress(a); p.tapCancel(); p.tapForget();
+p.tapEnd(p.scroll, 0);
+assert.equal(a.clicks, 1, "a press another list delivered is not delivered again");
+
+console.log("Tap delivery passed");

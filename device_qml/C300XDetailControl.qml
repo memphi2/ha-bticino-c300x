@@ -90,7 +90,7 @@ Item {
                     text: hostPage ? hostPage.uiText(preset.label) : ""; textFormat: Text.PlainText; font.pixelSize: 16; color: "white"
                     wrapMode: Text.Wrap; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                 }
-                BeepingMouseArea { id: presetMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(presetMouse); onClicked: controlRow.submitted(String(preset.value)) }
+                BeepingMouseArea { id: presetMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(presetMouse); onCanceled: if (hostPage) hostPage.tapCancel(); onClicked: controlRow.submitted(String(preset.value)) }
             }
         }
     }
@@ -109,7 +109,7 @@ Item {
                 opacity: enabled ? 1 : 0.45
                 Image { anchors.fill: parent; source: adjustMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                 UbuntuLightText { anchors.centerIn: parent; text: direction < 0 ? "-" : "+"; font.pixelSize: 28; color: "white" }
-                BeepingMouseArea { id: adjustMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(adjustMouse); onClicked: controlRow.adjusted(direction) }
+                BeepingMouseArea { id: adjustMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(adjustMouse); onCanceled: if (hostPage) hostPage.tapCancel(); onClicked: controlRow.adjusted(direction) }
             }
         }
         Item {
@@ -169,7 +169,7 @@ Item {
                     text: hostPage ? hostPage.optionLabel(control, modelData, index) : ""; textFormat: Text.PlainText; font.pixelSize: 18; color: "white"
                     wrapMode: Text.Wrap; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                 }
-                BeepingMouseArea { id: optionMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(optionMouse); onClicked: controlRow.submitted(modelData) }
+                BeepingMouseArea { id: optionMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(optionMouse); onCanceled: if (hostPage) hostPage.tapCancel(); onClicked: controlRow.submitted(modelData) }
             }
         }
     }
@@ -178,13 +178,14 @@ Item {
         anchors.right: parent.right; width: 136; height: touchHeight
         Rectangle { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; width: 30; height: 30; radius: 3; color: control.value === true ? "#58d68d" : "transparent"; border.color: !hostPage || hostPage.controlValueUnset(control) ? "#f1c40f" : "white"; border.width: 2 }
         UbuntuLightText { anchors.left: parent.left; anchors.leftMargin: 44; anchors.verticalCenter: parent.verticalCenter; text: !hostPage || hostPage.controlValueUnset(control) ? "?" : hostPage.uiText(control.value ? "on" : "off"); font.pixelSize: 18; color: "white" }
-        BeepingMouseArea { id: booleanMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(booleanMouse); onClicked: controlRow.submitted(control.value === true ? "false" : "true") }
+        BeepingMouseArea { id: booleanMouse; anchors.fill: parent; onPressed: if (hostPage) hostPage.tapPress(booleanMouse); onCanceled: if (hostPage) hostPage.tapCancel(); onClicked: controlRow.submitted(control.value === true ? "false" : "true") }
     }
     BeepingMouseArea {
         id: controlButtonMouse
         visible: control.kind === "button"
         anchors.fill: parent
         onPressed: if (hostPage) hostPage.tapPress(controlButtonMouse)
+        onCanceled: if (hostPage) hostPage.tapCancel()
         onClicked: controlRow.submitted(null)
     }
 }

@@ -300,7 +300,10 @@ in the file system, other routing target) and is not supported.
 
 The routing target is the one file that differs between the supported
 versions. `device_routing.c` holds one patch table per known stock build and
-selects it by the file's SHA-256; an unknown build is refused. Firmware `2.0.2`
+selects it by the file's SHA-256, or by the stock bytes of all its patch
+ranges; a file of neither build is refused. A backup is restored only when it
+is the stock file of the build the device runs, so the backup an earlier
+firmware left behind is replaced and never written back. Firmware `2.0.2`
 ships the `1.7.19` routing target rebuilt with shifted offsets, so its table
 has the same writes at other positions.
 

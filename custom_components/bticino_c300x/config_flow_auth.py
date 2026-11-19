@@ -133,7 +133,10 @@ class AuthFlowSteps:
         if user_input is not None:
             auth_data, errors = _agent_auth_input(
                 user_input, require_agent_token=self._setup_agent_needs_token,
-                saved=self._setup_connection if self._setup_bootstrapped else None,
+                # A retry after the final check keeps what was entered before.
+                saved=self._setup_connection if (
+                    self._setup_bootstrapped or self._setup_pending_features is not None
+                ) else None,
             )
             if not errors:
                 candidate = {**self._setup_connection, **auth_data}

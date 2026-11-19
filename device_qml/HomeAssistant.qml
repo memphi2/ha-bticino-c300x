@@ -64,6 +64,23 @@ Page {
     property variant controlFeedback: []
     onControlFeedbackChanged: scheduleFeedbackExpiry()
     property bool interactionActive: false
+    property variant tapArea
+    property variant tapAt: 0
+    property variant tapOrigin: [0, 0, 0]
+    property bool tapFlicked: false
+    function tapPress(area) {
+        tapArea = area
+        tapAt = Date.now()
+        tapFlicked = false
+        tapOrigin = [scroll.contentY, details.contentY, notificationDetails.contentY]
+    }
+    function tapEnd(flick, index) {
+        var area = tapArea
+        tapArea = null
+        if (!area || tapFlicked || Date.now() - tapAt > 2000 || Math.abs(flick.contentY - tapOrigin[index]) > 16) return
+        flick.contentY = tapOrigin[index]
+        try { area.clicked(null) } catch (error) {}
+    }
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
     // its bindings. Doing that inside a flick drops frames on the device, and the
     // existing interactionActive gate only covers a dragged slider. This gate
@@ -500,7 +517,9 @@ Page {
                 fillMode: Image.Stretch
             }
             BeepingMouseArea {
+                id: tileTap
                 anchors.fill: parent
+                onPressed: tapPress(tileTap)
                 onClicked: openDetails(tileItem)
             }
             UbuntuLightText {
@@ -581,7 +600,7 @@ Page {
                 verticalAlignment: Text.AlignVCenter
             }
             UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
-            BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
+            BeepingMouseArea { id: tileTap; anchors.fill: parent; onPressed: tapPress(tileTap); onClicked: openDetails(tileItem) }
         }
     }
 
@@ -607,7 +626,7 @@ Page {
                 color: detailColor(tileItem); elide: Text.ElideRight
             }
             UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
-            BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
+            BeepingMouseArea { id: tileTap; anchors.fill: parent; onPressed: tapPress(tileTap); onClicked: openDetails(tileItem) }
         }
     }
 
@@ -626,7 +645,9 @@ Page {
                 fillMode: Image.Stretch
             }
             BeepingMouseArea {
+                id: tallTap
                 anchors.fill: parent
+                onPressed: tapPress(tallTap)
                 onClicked: openDetails(tallTile.tileItem)
             }
             UbuntuLightText {
@@ -703,6 +724,7 @@ Page {
                         BeepingMouseArea {
                             id: quickMouse
                             anchors.fill: parent
+                            onPressed: tapPress(quickMouse)
                             enabled: quickUsable(quick, control)
                             onClicked: if (usable) quickAction(tallTile.tileItem, quick)
                         }
@@ -726,6 +748,8 @@ Page {
 
     Flickable {
         id: notificationDetails
+        onFlickStarted: tapFlicked = true
+        onMovementEnded: tapEnd(notificationDetails, 2)
         visible: notificationsOpen
         anchors.top: header.bottom
         anchors.left: parent.left
@@ -779,7 +803,7 @@ Page {
                                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                     elide: Text.ElideRight
                                 }
-                                BeepingMouseArea { id: notificationActionMouse; anchors.fill: parent; onClicked: notificationAction(notification, modelData.action_id) }
+                                BeepingMouseArea { id: notificationActionMouse; anchors.fill: parent; onPressed: tapPress(notificationActionMouse); onClicked: notificationAction(notification, modelData.action_id) }
                             }
                         }
                     }
@@ -888,6 +912,7 @@ Page {
                         BeepingMouseArea {
                             id: coverControlMouse
                             anchors.fill: parent
+                            onPressed: tapPress(coverControlMouse)
                             enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
                             onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
                         }
@@ -923,6 +948,8 @@ Page {
 
     Flickable {
         id: details
+        onFlickStarted: tapFlicked = true
+        onMovementEnded: tapEnd(details, 1)
         visible: detailOpen && !notificationsOpen
         anchors.top: detailTabs.bottom
         anchors.left: parent.left
@@ -984,6 +1011,7 @@ Page {
                         BeepingMouseArea {
                             id: actionMouse
                             anchors.fill: parent
+                            onPressed: tapPress(actionMouse)
                             enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
                             onClicked: pressAction(selectedItem, control)
                         }
@@ -1103,6 +1131,8 @@ Page {
 
         Flickable {
             id: scroll
+            onFlickStarted: tapFlicked = true
+            onMovementEnded: tapEnd(scroll, 0)
             width: parent.width
             height: parent.height - (notificationBanner.visible ? notificationBanner.height + 9 : 0) - (badgeGrid.visible ? badgeGrid.height + 9 : 0) - (pagerRow.visible ? pagerRow.height + 9 : 0)
             contentWidth: width
@@ -1553,6 +1583,7 @@ Page {
                             BeepingMouseArea {
                                 id: tileMouse
                                 anchors.fill: parent
+                                onPressed: tapPress(tileMouse)
                                 onClicked: Api.dashboardAction(tileItem, status, page)
                             }
                         }
@@ -1621,6 +1652,7 @@ Page {
                                 BeepingMouseArea {
                                     id: minusMouse
                                     anchors.fill: parent
+                                    onPressed: tapPress(minusMouse)
                                     onClicked: Api.dashboardSliderAction(tileItem, "decrement", status, page)
                                 }
                             }
@@ -1649,6 +1681,7 @@ Page {
                                 BeepingMouseArea {
                                     id: plusMouse
                                     anchors.fill: parent
+                                    onPressed: tapPress(plusMouse)
                                     onClicked: Api.dashboardSliderAction(tileItem, "increment", status, page)
                                 }
                             }
@@ -1735,6 +1768,7 @@ Page {
                                         BeepingMouseArea {
                                             id: optionMouse
                                             anchors.fill: parent
+                                            onPressed: tapPress(optionMouse)
                                             onClicked: Api.dashboardChoiceAction(tileItem, Api.dashboardChoiceOptionValue(modelData), status, page)
                                         }
                                     }

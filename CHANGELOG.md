@@ -3,8 +3,9 @@
 ## v2.5.1 - 2026-11-19
 
 - A second test device is wanted: contribute on
-  [Ko-fi](https://ko-fi.com/oliver7557) or with hardware, see the README. A
-  donation gives no claim to support or to a feature.
+  [Ko-fi](https://ko-fi.com/oliver7557) or with hardware, see the README.
+  Every contribution is voluntary and very welcome; support and new features
+  stay open to everyone either way.
 - Support C300X firmware `2.0.2` in addition to `1.7.x`. The routing patch
   knows the `2.0.2` build of its target; agent binary and display files are
   the same for both versions. Ring Call on `2.0.2` is not yet confirmed on a

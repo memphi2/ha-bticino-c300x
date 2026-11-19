@@ -71,7 +71,8 @@ versions can only be checked against their firmware files. A second test unit
 would change that. A contribution towards it is welcome, as is a used or defective
 Classe 300X / C300X (`344642` or `344643`): please start a
 [discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
-A donation is voluntary and gives no claim to support or to a feature.
+Every contribution is voluntary and very welcome. Support and new features
+stay open to everyone either way.
 
 <p align="center">
   <a href="https://ko-fi.com/oliver7557"><img src="https://img.shields.io/badge/Ko--fi-Support%20the%20test%20device-FF5E5B?style=for-the-badge" alt="Support the test device on Ko-fi" height="40"></a>

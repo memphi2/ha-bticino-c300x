@@ -413,3 +413,14 @@ test("with a fixed media volume the slider stays for a live stream scaled by the
   s.configure({ live: true, hasAudio: true, scaledVolume: false });
   assert.equal(c.nodes.volume.hidden, true);
 });
+
+test("the next arrow is not on the picture while no saved media is open", async (t) => {
+  const s = harness(t, [item()]), c = s.controls;
+  await tick();
+  assert.equal(c.nodes.previous.hidden, false);
+  assert.equal(c.nodes.next.hidden, true);
+  s.click("previous");
+  await tick();
+  assert.equal(c.browsing, true);
+  assert.equal(c.nodes.next.hidden, false);
+});

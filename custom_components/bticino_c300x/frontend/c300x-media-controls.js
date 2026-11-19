@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=1e39561f207f1934";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=1e39561f207f1934";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=1e39561f207f1934";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=3d63fa11748f5330";
+import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=3d63fa11748f5330";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=3d63fa11748f5330";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -182,7 +182,10 @@ export class C300XMediaControls extends HTMLElement {
     n.archive.hidden = !this.browsing;
     n.archive.setAttribute("aria-busy", String(!!h.mediaAbort));
     const available = c.enabled && h.active && !c.busy;
-    for (const name of ["previous", "next"]) n[name].hidden = !available;
+    n.previous.hidden = !available;
+    // Without an open saved item there is nothing newer; a hidden arrow keeps
+    // its place on the picture free for opening the large view.
+    n.next.hidden = !available || !this.browsing;
     const index = h.items.findIndex((item) => item.id === h.selected?.id);
     n.previous.disabled = !!h.listPromise || (!h.dirty && index === h.items.length - 1);
     n.next.disabled = !this.browsing || !!h.listPromise;

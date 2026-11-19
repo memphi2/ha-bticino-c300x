@@ -120,10 +120,21 @@ class AuthFlowSteps:
         )
 
     def _note_setup_rejection(self: Any, errors: dict[str, str], candidate: dict[str, Any]) -> None:
-        """Remember the key value the device rejected, per field."""
-        key = _REJECTED_KEY.get(errors.get("base", ""))
+        """Remember the key value the device rejected, per field.
+
+        A check that got past a key accepted it: a rejected maintenance key
+        means the access key was accepted, and a passed check accepts both.
+        """
+        base = errors.get("base", "")
+        rejected = dict(getattr(self, "_setup_rejected", {}))
+        if not errors:
+            rejected.clear()
+        elif base == "invalid_maintenance_auth":
+            rejected.pop(CONF_AGENT_TOKEN, None)
+        key = _REJECTED_KEY.get(base)
         if key is not None:
-            self._setup_rejected = {**getattr(self, "_setup_rejected", {}), key: candidate.get(key)}
+            rejected[key] = candidate.get(key)
+        self._setup_rejected = rejected
 
     def _setup_retry_keys(self: Any) -> dict[str, Any] | None:
         """Keys an empty retry field keeps.

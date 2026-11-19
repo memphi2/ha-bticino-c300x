@@ -126,6 +126,7 @@ class VisitorJournal:
                 "id": key, "at": time.time(), "source": source, "outcome": "unknown",
                 "snapshot": None, "clip": None,
             }
+            self._unsized = True
             self.prune()
             self.changed()
         elif kind in {"doorbell_media_closed", "agent_restarted", "home_call_started", "call_ended"}:
@@ -195,6 +196,7 @@ class VisitorJournal:
                     and key in self.records
                     and (key == self.active or self.records[key]["clip"] is None)):
                 self.records[key]["clip"] = clip
+            self._unsized = True
             self.prune()
             self.changed()
 

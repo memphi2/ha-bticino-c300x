@@ -427,3 +427,27 @@ def test_reading_an_unchanged_journal_does_not_serialize_it_again(tmp_path, monk
     journal.changed()
     assert journal.items() == []
 
+
+@pytest.mark.parametrize("change", ["ring", "clip"])
+def test_a_change_is_trimmed_to_the_size_limit_before_it_is_saved(tmp_path, monkeypatch, change):
+    async def run():
+        manager, journal = fixture(tmp_path, monkeypatch)
+        for number in range(1, 6):
+            journal.event(event(sequence=number))
+        journal.items()
+        limit = len(json.dumps(journal._payload())) + 20
+        monkeypatch.setattr(journal_module, "MAX_JOURNAL_BYTES", limit)
+        journal.items()
+        if change == "ring":
+            journal.event(event(sequence=6))
+        else:
+            key = journal.active
+            path = tmp_path / "media" / "c300x" / ("doorbell_20261116_120000_" + "f" * 32 + ".mp4")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"clip")
+            await journal.attach_clip(key, {"output_path": str(path), "entry_id": "one", "capture_mode": "ring"})
+        # What the delayed save writes, without a read in between.
+        assert len(json.dumps(journal._payload())) <= limit
+
+    asyncio.run(run())
+

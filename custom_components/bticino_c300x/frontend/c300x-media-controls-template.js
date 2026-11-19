@@ -39,7 +39,7 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .nav, .close, .fullscreen { background: rgb(0 0 0 / .5); transition: opacity 140ms ease; }
     .nav:hover, .close:hover, .fullscreen:hover { background: rgb(0 0 0 / .75); }
     .nav { top: calc(50% - 20px); }
-    .nav:disabled { opacity: 0; pointer-events: none; }
+    .nav:disabled { opacity: 0; }
     .previous { left: 8px; }
     .next, .close { right: 8px; }
     .close, .fullscreen { top: 8px; }

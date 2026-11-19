@@ -331,6 +331,7 @@ test("the picture requests the window, navigation lies on the picture and close 
   assert.match(stage, /button\("previous nav"/);
   assert.match(stage, /button\("next nav"/);
   assert.match(stage, /button\("close"/);
+  assert.match(template, /\.nav:disabled \{ opacity: 0; \}/);
   assert.match(stage, /button\("fullscreen"/);
   assert.match(stage, /class="mode"/);
   assert.equal(template.includes('"current"'), false);

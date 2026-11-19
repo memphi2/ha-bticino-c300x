@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Support C300X firmware `2.0.2` in addition to `1.7.x`. The routing patch
+  knows the `2.0.2` build of its target; agent binary and display files are
+  the same for both versions. Ring Call on `2.0.2` is not yet confirmed on a
+  device. Thanks to @davemajor.
+- Install on a rooted stock device without extra Python modules. The installer
+  no longer runs Python on the C300X, whose stock Python lacks `json` and
+  `hashlib`; before, the installation stopped with `device_install_failed`.
+
 ## v2.5.0 - 2026-11-16
 
 - Direct page buttons below the weather on the status page, including when no

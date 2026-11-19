@@ -278,3 +278,35 @@ so they still compile the ARMHF target and run `armhf-stack-check`, while local
 release builds must run the ABI check against the real device sysroot.
 `armhf-stack-check` rejects oversized or dynamic stack usage records for the
 ARMHF build.
+
+## Supported firmware versions
+
+The agent is built and ABI-checked against the firmware `1.7.19` root file
+system. Firmware `2.0.2` is served by the same binary and the same display
+files, because everything they depend on is unchanged there:
+
+- the libraries the agent links against (`libc`, `ld-linux-armhf`,
+  `libpthread`, `libdl`) and loads at run time (`libcurl`, `libsrtp`,
+  `libspeex`) are byte-identical,
+- the vendor GUI tree that the Display patch edits is byte-identical,
+- the device tools used by the installer and the agent scripts are present.
+
+`scripts/check_firmware_rootfs.py <1.7.19 rootfs> <other rootfs>` proves this
+for a locally extracted root file system and fails on any difference. Run it
+before a firmware version is added to the supported list; a version that fails
+needs its own build or display files and is not supported by adding a routing
+table alone. Firmware `3.0.6` fails this check (other C library, no GUI files
+in the file system, other routing target) and is not supported.
+
+The routing target is the one file that differs between the supported
+versions. `device_routing.c` holds one patch table per known stock build and
+selects it by the file's SHA-256; an unknown build is refused. Firmware `2.0.2`
+ships the `1.7.19` routing target rebuilt with shifted offsets, so its table
+has the same writes at other positions.
+
+The check lists the vendor programs that differ. They cannot be compared
+statically and are covered by the device tests in
+[release-validation.md](release-validation.md#firmware-versions).
+
+The installer runs no Python on the device. The stock Python of these firmware
+versions has neither `json` nor `hashlib`.

@@ -60,8 +60,9 @@ forwarding controls, messages and optional display pages.
 If your device is still stock, root or SSH-enable it first with a separate
 workflow. This repository does not provide firmware images, firmware extraction
 output, APKs, exploits, rooting instructions or vendor files. If another
-workflow asks for a firmware target, use `1.7.19`. Everything is used at your
-own risk and without warranty.
+workflow asks for a firmware target, use `1.7.19`; a device on `2.0.2` needs a
+workflow made for that firmware. Everything is used at your own risk and
+without warranty.
 
 ## Installation
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.5.1 - 2026-11-19
 
 - Support C300X firmware `2.0.2` in addition to `1.7.x`. The routing patch
   knows the `2.0.2` build of its target; agent binary and display files are

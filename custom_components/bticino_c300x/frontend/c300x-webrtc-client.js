@@ -1,8 +1,8 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=67556d52dc7f420e";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=1e39561f207f1934";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=67556d52dc7f420e";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=1e39561f207f1934";
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb, getPlayback }) {
@@ -48,6 +48,12 @@ export class C300XWebrtcClient {
 
   refreshPlayback() {
     return this._mediaAttachment?.refreshPlayback();
+  }
+
+  // True while the received audio plays through the card's own gain stage,
+  // whose volume works even where the platform fixes the media volume.
+  get gainEngaged() {
+    return this._mediaAttachment?.gainEngaged === true;
   }
 
   // Move the client-side gain/muting to the element that now renders the

@@ -93,6 +93,8 @@ export class C300XMediaAttachment {
     this.refreshPlayback();
   }
 
+  get gainEngaged() { return this._gainEngaged; }
+
   refreshPlayback() {
     const playback = this._getPlayback?.() || {};
     const value = Number(playback.volume ?? 1);

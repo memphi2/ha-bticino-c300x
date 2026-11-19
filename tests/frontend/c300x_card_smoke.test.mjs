@@ -2121,3 +2121,31 @@ test("a card attached again during the same ring starts the preview again", asyn
     card.disconnectedCallback();
   }
 });
+
+test("a card that is attached again at once keeps its call, a removed card ends it", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?reattach");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  let closed = 0;
+  card._webrtc = { running: true, remoteStream: { getAudioTracks: () => [], getVideoTracks: () => [] }, close() { closed += 1; } };
+  const frame = card.shadowRoot.querySelector("dialog");
+  let windowClosed = 0;
+  frame.open = true;
+  frame.close = () => { windowClosed += 1; frame.open = false; };
+  // A dashboard that rebuilds its columns detaches and attaches in one step.
+  card.isConnected = false;
+  card.disconnectedCallback();
+  card.isConnected = true;
+  card.connectedCallback();
+  await Promise.resolve();
+  assert.equal(closed, 0);
+  assert.equal(card._disposed, false);
+  assert.equal(windowClosed, 1);
+  card.isConnected = false;
+  card.disconnectedCallback();
+  await Promise.resolve();
+  assert.equal(card._disposed, true);
+  assert.ok(closed >= 1);
+});

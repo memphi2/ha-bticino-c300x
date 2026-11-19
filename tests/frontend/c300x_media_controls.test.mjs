@@ -102,10 +102,7 @@ for (const boundary of ["deactivate", "closed", "reconnect"]) {
     await tick();
     assert.equal(c.nodes.previous.hidden, false);
     if (boundary === "closed") s.callback({ entry_id: "entry", closed: true });
-    else if (boundary === "reconnect") {
-      c.isConnected = false;
-      c.disconnectedCallback();
-    } else c.deactivate();
+    else c.deactivate();  // "reconnect": a removed card ends its controls
     assert.equal(c.history.active, false);
     assert.equal(c.nodes.previous.hidden, true);
     let renders = 0;
@@ -269,8 +266,7 @@ test("ring busy, clear and detach synchronously stop playback and reset the over
   c.clearMedia();
   assert.equal(c.video.src, null);
   await c.history.step(1);
-  c.isConnected = false;
-  c.disconnectedCallback();
+  c.deactivate();  // the card was removed
   assert.equal(c.video.src, null);
   assert.equal(c.browsing, false);
   assert.equal(c.history.active, false);
@@ -424,4 +420,17 @@ test("an arrow that cannot be used lets clicks through to the picture", async (t
   await tick();
   assert.equal(c.browsing, true);
   assert.equal(c.nodes.previous.disabled, true, "the oldest item has nothing older");
+});
+
+test("the controls keep the open saved item when the card is moved", async (t) => {
+  const s = harness(t, [item()]), c = s.controls;
+  await tick();
+  s.click("previous");
+  await tick();
+  assert.equal(c.browsing, true);
+  assert.equal(c.disconnectedCallback, undefined, "only the card decides when its controls end");
+  c.isConnected = true;
+  c.connectedCallback();
+  assert.equal(c.browsing, true);
+  assert.equal(c.history.active, true);
 });

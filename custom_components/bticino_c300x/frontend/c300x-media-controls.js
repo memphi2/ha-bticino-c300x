@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=aa2128bc673d5bc6";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=aa2128bc673d5bc6";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=aa2128bc673d5bc6";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=8f9a8f783049d6f4";
+import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=8f9a8f783049d6f4";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=8f9a8f783049d6f4";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -114,7 +114,6 @@ export class C300XMediaControls extends HTMLElement {
   clearMedia() { this.history.clearMedia(); }
   focusControl(name) { this.nodes?.[name]?.focus?.(); }
   deactivate() { this.history.deactivate(); }
-  disconnectedCallback() { this.deactivate(); }
   get isVideo() { return this.history.selected?.kind === "video"; }
   get audioVolume() { return this.browsing ? this.archiveVolume : this.config.volume; }
   get audioMuted() { return this.browsing ? this.archiveMuted : this.config.muted; }

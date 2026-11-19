@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "agent_version": "2.7.0",
-  "inputs_sha256": "49ef452a4de559e6f854da0b139de06df5a8ec72d863d4d655a5a135d7f666e9",
-  "binary_sha256": "c70a01dd84b844dce1404d9ae1799093be9b8845ae50eb57a5f61c83d8ca2be4",
+  "inputs_sha256": "d0f8e80c29cb4c493ff50192e90433186be7b6116847702f37959414cba978f4",
+  "binary_sha256": "d84f9922ca03c46950a7cc89c41b7fbe98327d7a8fb4e98fa36b6750878ad763",
   "local_build_settings_sha256": "2c27c9c1a247d5b15b068b2c58b8ad4ff7d99a225f51e19dca40dd4183d61339"
 }

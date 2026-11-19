@@ -320,7 +320,11 @@ test("the picture opens the card as a window and offers full screen only there",
     assert.equal(root.querySelector("video"), video);
     send(frame, "click", { target });
     assert.equal(frame.open, true);
+    send(frame, "pointerdown", { target });
+    send(frame, "click", { target: frame });
+    assert.equal(frame.open, true);
     root.fullscreenElement = target;
+    send(frame, "pointerdown", { target: frame });
     send(frame, "click", { target: frame });
     assert.equal(frame.open, false);
     assert.equal(exits, 1);

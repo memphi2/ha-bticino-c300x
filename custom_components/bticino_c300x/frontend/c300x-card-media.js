@@ -1,5 +1,5 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=14537393d3ba7bd7";
-import "./c300x-media-controls.js?v=14537393d3ba7bd7";
+import { c300xMediaState } from "./c300x-state-model.js?v=4ffef6bab4feeb86";
+import "./c300x-media-controls.js?v=4ffef6bab4feeb86";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -13,7 +13,12 @@ export class C300XCardMedia {
     this.frame = card.shadowRoot.querySelector("dialog");
     this.controls?.addEventListener("media-expand", () => this.setExpanded(true));
     this.controls?.addEventListener("media-collapse", () => this.setExpanded(false));
-    this.frame?.addEventListener("click", (event) => { if (event.target === this.frame) this.setExpanded(false); });
+    // A drag that starts on a control and ends beside the window is not a dismissal.
+    this.frame?.addEventListener("pointerdown", (event) => { this.pressedBeside = event.target === this.frame; });
+    this.frame?.addEventListener("click", (event) => {
+      if (event.target === this.frame && this.pressedBeside) this.setExpanded(false);
+      this.pressedBeside = false;
+    });
     this.frame?.addEventListener("close", () => this.collapsed());
     this.controls?.addEventListener("archive-changed", () => card._scheduleUpdate());
     this.controls?.addEventListener("media-volume", (event) => {

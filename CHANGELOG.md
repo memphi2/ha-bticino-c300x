@@ -36,6 +36,9 @@
   images still require **Save images**; clips require a separate capture
   automation. Hiding history or expiring its links does not delete MP4 files.
   See [Media history](docs/visitor-journal.md) for setup and retention.
+- Keep a running stream or call in the doorstation card when a dashboard with
+  columns rebuilds its layout, for example after the browser window is resized
+  or enters full screen.
 
 ## v2.5.1 - 2026-11-19
 

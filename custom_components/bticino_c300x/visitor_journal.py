@@ -191,10 +191,12 @@ class VisitorJournal:
         )):
             self.captures.add(clip, metadata.get("captured_at"))
             # The key was taken from the ring when the capture started; the
-            # call may have closed while the recording was still being written.
+            # call may have closed while the recording was still being written,
+            # but a newer ring makes the recording overlap another visit.
             if (metadata.get("capture_mode") == "ring" and key is not None
                     and key in self.records
-                    and (key == self.active or self.records[key]["clip"] is None)):
+                    and (key == self.active
+                         or (self.active is None and self.records[key]["clip"] is None))):
                 self.records[key]["clip"] = clip
             self._unsized = True
             self.prune()

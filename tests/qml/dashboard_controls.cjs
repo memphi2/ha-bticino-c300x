@@ -953,31 +953,52 @@ assert.equal(p.pendingEntity, "light.other");
 Api.dashboardControl({entity_id: "switch.third", domain: "switch"}, {command: ""}, null, p.status, p);
 assert.equal(queue.length, 1, "every control waits while a command is in flight");
 
-// Tap tolerance: only a press the list took over is delivered, once.
-function fakeArea() { const a = {clicks: 0, clicked() { a.clicks += 1; }}; return a; }
-Object.assign(p, {tapArea: null, tapAt: 0, tapOrigin: [0, 0, 0], tapFlicked: false, tapStolen: false,
-    scroll: {contentY: 0}, details: {contentY: 0}, notificationDetails: {contentY: 0}});
+// Tap tolerance: one state for every list; only a press a list took over is delivered, once.
+function fakeArea() { const a = {clicks: 0, visible: true, enabled: true, clicked() { a.clicks += 1; }}; return a; }
+Object.assign(p, {tapArea: null, tapAt: 0, tapList: -1, tapOrigin: 0, tapFlicked: false, tapStolen: false});
+const outer = {contentY: 0}, inner = {contentY: 0};
+function steal(area, list, index, moved) {
+    p.tapPress(area); p.tapCancel(); p.tapMoving(index, list);
+    list.contentY += moved; p.tapScrolled(index, list); p.tapEnd(index, list);
+}
 let a = fakeArea();
-p.tapPress(a);
-p.scroll.contentY = 6; p.tapEnd(p.scroll, 0);
+p.tapPress(a); p.tapMoving(0, outer); outer.contentY = 6; p.tapEnd(0, outer);
 assert.equal(a.clicks, 0, "a press the list did not take over was already a normal tap");
-p.tapPress(a);
-p.scroll.contentY = 10; p.tapEnd(p.scroll, 0);
-assert.equal(a.clicks, 0, "a normal tap is not delivered again by a later small scroll");
-p.scroll.contentY = 0;
-p.tapPress(a); p.tapCancel();
-p.scroll.contentY = 10; p.tapScrolled(p.scroll, 0); p.tapEnd(p.scroll, 0);
+outer.contentY = 0;
+steal(a, outer, 0, 10);
 assert.equal(a.clicks, 1, "a press taken over by a small scroll is delivered");
-assert.equal(p.scroll.contentY, 0);
-p.tapEnd(p.scroll, 0);
+assert.equal(outer.contentY, 0, "the list returns to where the press started");
+p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "the delivered press is used up");
-p.tapPress(a); p.tapCancel();
-p.scroll.contentY = 80; p.tapScrolled(p.scroll, 0);
-p.scroll.contentY = 0; p.tapScrolled(p.scroll, 0); p.tapEnd(p.scroll, 0);
+p.tapPress(a); p.tapCancel(); p.tapMoving(0, outer);
+outer.contentY = 80; p.tapScrolled(0, outer); outer.contentY = 0; p.tapEnd(0, outer);
 assert.equal(a.clicks, 1, "a drag out and back is a scroll, not a tap");
-p.tapPress(a); p.tapCancel(); p.tapForget();
-p.tapEnd(p.scroll, 0);
-assert.equal(a.clicks, 1, "a press another list delivered is not delivered again");
+p.tapPress(a); p.tapCancel(); p.tapMoving(0, outer); outer.contentY = 40; p.tapScrolled(0, outer); p.tapEnd(0, outer);
+outer.contentY = 0;
+p.tapMoving(3, inner); inner.contentY = 12; p.tapScrolled(3, inner); p.tapEnd(3, inner);
+assert.equal(a.clicks, 1, "a rejected press is used up for every list, also Leave home's");
+inner.contentY = 0;
+p.tapPress(a); p.tapCancel(); p.tapMoving(3, inner); p.tapMoving(0, outer);
+inner.contentY = 5; p.tapEnd(3, inner); p.tapEnd(0, outer);
+assert.equal(a.clicks, 1, "a press that moved two lists is a scroll");
+inner.contentY = 0;
+a.visible = false; steal(a, outer, 0, 5);
+assert.equal(a.clicks, 1, "a control hidden while pressed gets no tap");
+a.visible = true; a.enabled = false; outer.contentY = 0; steal(a, outer, 0, 5);
+assert.equal(a.clicks, 1, "a control disabled while pressed gets no tap");
+a.enabled = true; outer.contentY = 0;
+p.tapPress(a); p.tapCancel(); p.tapAt = Date.now() - 3000; p.tapMoving(0, outer); outer.contentY = 5; p.tapEnd(0, outer);
+assert.equal(a.clicks, 1, "a cancel without a list movement does not arm a later one");
+outer.contentY = 0;
+p.tapPress(null); p.tapCancel(); p.tapMoving(0, outer); p.tapEnd(0, outer);
+assert.equal(p.tapStolen, false, "a destroyed control leaves nothing armed");
+const leaveHomeQml = fs.readFileSync(path.join(__dirname, "../../device_qml/C300XLeaveHome.qml"), "utf8");
+assert.doesNotMatch(leaveHomeQml, /tapArea|tapStolen|tapEnd/, "Leave home keeps no tap state of its own");
+for (const signal of ["listFlicking", "listMoving", "listScrolled", "listEnded"])
+    assert.match(leaveHomeQml, new RegExp("root\\." + signal + "\\("), `Leave home forwards ${signal}`);
+assert.match(qml, /onListMoving: tapMoving\(3, flick\)/);
+assert.match(qml, /onListEnded: tapEnd\(3, flick\)/);
+assert.match(qml, /property Item tapArea/, "a destroyed control clears the held press");
 
 // A control stays locked until its own state is confirmed.
 Object.assign(p, {pendingSettling: []});

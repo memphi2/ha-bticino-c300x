@@ -65,9 +65,10 @@ Page {
     onControlFeedbackChanged: scheduleFeedbackExpiry()
     onPendingEntityChanged: if (pageActive && pendingEntity.length > 0) pendingExpiry.restart()
     property bool interactionActive: false
-    property variant tapArea
+    property Item tapArea
     property variant tapAt: 0
-    property variant tapOrigin: [0, 0, 0]
+    property int tapList: -1
+    property real tapOrigin: 0
     property bool tapFlicked: false
     property bool tapStolen: false
     property variant pendingSettling: []
@@ -80,31 +81,33 @@ Page {
     function tapPress(area) {
         tapArea = area
         tapAt = Date.now()
+        tapList = -1
         tapFlicked = false
         tapStolen = false
-        tapOrigin = [scroll.contentY, details.contentY, notificationDetails.contentY]
     }
     function tapCancel() {
-        tapStolen = true
+        if (tapArea) tapStolen = true
     }
-    function tapForget() {
-        tapStolen = false
-        tapArea = null
+    function tapMoving(index, flick) {
+        if (!tapStolen || Date.now() - tapAt > 2000) return
+        if (tapList < 0) {
+            tapList = index
+            tapOrigin = flick.contentY
+        } else if (tapList !== index) tapFlicked = true
     }
-    function tapScrolled(flick, index) {
-        if (tapStolen && Math.abs(flick.contentY - tapOrigin[index]) > 16) tapFlicked = true
+    function tapScrolled(index, flick) {
+        if (tapList === index && Math.abs(flick.contentY - tapOrigin) > 16) tapFlicked = true
     }
-    function tapEnd(flick, index) {
-        var stolen = tapStolen
-        tapStolen = false
-        if (!stolen || tapFlicked || Date.now() - tapAt > 2000 || Math.abs(flick.contentY - tapOrigin[index]) > 16) {
-            tapArea = null
-            return
-        }
+    function tapEnd(index, flick) {
+        if (tapList !== index) return
         var area = tapArea
+        var deliver = tapStolen && !tapFlicked && Date.now() - tapAt <= 2000 && Math.abs(flick.contentY - tapOrigin) <= 16
         tapArea = null
-        flick.contentY = tapOrigin[index]
-        try { if (leaveHomeLoader.item) leaveHomeLoader.item.tapForget() } catch (error) {}
+        tapList = -1
+        tapStolen = false
+        tapFlicked = false
+        if (!deliver || !area || !area.visible || !area.enabled) return
+        flick.contentY = tapOrigin
         try { area.clicked(null) } catch (error) {}
     }
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
@@ -781,8 +784,9 @@ Page {
     Flickable {
         id: notificationDetails
         onFlickStarted: tapFlicked = true
-        onContentYChanged: tapScrolled(notificationDetails, 2)
-        onMovementEnded: tapEnd(notificationDetails, 2)
+        onMovementStarted: tapMoving(2, notificationDetails)
+        onContentYChanged: tapScrolled(2, notificationDetails)
+        onMovementEnded: tapEnd(2, notificationDetails)
         visible: notificationsOpen
         anchors.top: header.bottom
         anchors.left: parent.left
@@ -983,8 +987,9 @@ Page {
     Flickable {
         id: details
         onFlickStarted: tapFlicked = true
-        onContentYChanged: tapScrolled(details, 1)
-        onMovementEnded: tapEnd(details, 1)
+        onMovementStarted: tapMoving(1, details)
+        onContentYChanged: tapScrolled(1, details)
+        onMovementEnded: tapEnd(1, details)
         visible: detailOpen && !notificationsOpen
         anchors.top: detailTabs.bottom
         anchors.left: parent.left
@@ -1168,8 +1173,9 @@ Page {
         Flickable {
             id: scroll
             onFlickStarted: tapFlicked = true
-            onContentYChanged: tapScrolled(scroll, 0)
-            onMovementEnded: tapEnd(scroll, 0)
+            onMovementStarted: tapMoving(0, scroll)
+            onContentYChanged: tapScrolled(0, scroll)
+            onMovementEnded: tapEnd(0, scroll)
             width: parent.width
             height: parent.height - (notificationBanner.visible ? notificationBanner.height + 9 : 0) - (badgeGrid.visible ? badgeGrid.height + 9 : 0) - (pagerRow.visible ? pagerRow.height + 9 : 0)
             contentWidth: width
@@ -1240,7 +1246,10 @@ Page {
                     onAlarmRequested: tabView.activateTab(alarmPage)
                     onPressing: tapPress(area)
                     onCanceling: tapCancel()
-                    onTapUsed: tapForget()
+                    onListFlicking: tapFlicked = true
+                    onListMoving: tapMoving(3, flick)
+                    onListScrolled: tapScrolled(3, flick)
+                    onListEnded: tapEnd(3, flick)
                 }
                 Connections {
                     target: energyLoader.item

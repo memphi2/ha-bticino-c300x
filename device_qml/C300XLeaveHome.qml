@@ -15,41 +15,10 @@ Item {
     signal alarmRequested()
     signal pressing(variant area)
     signal canceling(variant area)
-    signal tapUsed()
-    property variant tapArea
-    property variant tapAt: 0
-    property real tapOrigin: 0
-    property bool tapFlicked: false
-    property bool tapStolen: false
-    function tapPress(area) {
-        tapArea = area
-        tapAt = Date.now()
-        tapFlicked = false
-        tapStolen = false
-        tapOrigin = list.contentY
-        pressing(area)
-    }
-    function tapCancel(area) {
-        tapStolen = true
-        canceling(area)
-    }
-    function tapForget() {
-        tapStolen = false
-        tapArea = null
-    }
-    function tapEnd() {
-        var stolen = tapStolen
-        tapStolen = false
-        if (!stolen || tapFlicked || Date.now() - tapAt > 2000 || Math.abs(list.contentY - tapOrigin) > 16) {
-            tapArea = null
-            return
-        }
-        var area = tapArea
-        tapArea = null
-        list.contentY = tapOrigin
-        tapUsed()
-        try { area.clicked(null) } catch (error) {}
-    }
+    signal listFlicking()
+    signal listMoving(variant flick)
+    signal listScrolled(variant flick)
+    signal listEnded(variant flick)
     clip: true
     onLeaveHomeChanged: clearConfirmation()
     onBusyChanged: clearConfirmation()
@@ -81,9 +50,10 @@ Item {
 
     Flickable {
         id: list
-        onFlickStarted: root.tapFlicked = true
-        onContentYChanged: if (root.tapStolen && Math.abs(contentY - root.tapOrigin) > 16) root.tapFlicked = true
-        onMovementEnded: root.tapEnd()
+        onFlickStarted: root.listFlicking()
+        onMovementStarted: root.listMoving(list)
+        onContentYChanged: root.listScrolled(list)
+        onMovementEnded: root.listEnded(list)
         anchors.fill: parent
         contentWidth: width
         contentHeight: content.height
@@ -153,8 +123,8 @@ Item {
                 BeepingMouseArea {
                     id: alarmMouse
                     anchors.fill: parent
-                    onPressed: root.tapPress(alarmMouse)
-                    onCanceled: root.tapCancel(alarmMouse)
+                    onPressed: root.pressing(alarmMouse)
+                    onCanceled: root.canceling(alarmMouse)
                     enabled: !root.busy && root.online && root.alarm && root.alarm.available
                     onClicked: { root.clearConfirmation(); root.alarmRequested() }
                 }
@@ -186,8 +156,8 @@ Item {
                     }
                     BeepingMouseArea {
                         id: actionMouse
-                        onPressed: root.tapPress(actionMouse)
-                        onCanceled: root.tapCancel(actionMouse)
+                        onPressed: root.pressing(actionMouse)
+                        onCanceled: root.canceling(actionMouse)
                         width: confirming ? parent.width * 0.68 - 8 : parent.width
                         height: parent.height
                         enabled: !root.busy && root.online
@@ -209,7 +179,7 @@ Item {
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
                         }
-                        BeepingMouseArea { id: cancelMouse; anchors.fill: parent; onPressed: root.tapPress(cancelMouse); onCanceled: root.tapCancel(cancelMouse); onClicked: root.clearConfirmation() }
+                        BeepingMouseArea { id: cancelMouse; anchors.fill: parent; onPressed: root.pressing(cancelMouse); onCanceled: root.canceling(cancelMouse); onClicked: root.clearConfirmation() }
                     }
                 }
             }

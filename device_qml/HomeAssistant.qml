@@ -86,27 +86,30 @@ Page {
         tapStolen = false
     }
     function tapCancel() {
-        if (tapArea) tapStolen = true
+        if (tapArea && tapList >= 0) tapStolen = true
     }
     function tapMoving(index, flick) {
-        if (!tapStolen || Date.now() - tapAt > 2000) return
-        if (tapList < 0) {
-            tapList = index
-            tapOrigin = flick.contentY
-        } else if (tapList !== index) tapFlicked = true
+        if (tapList >= 0) {
+            if (tapList !== index) tapFlicked = true
+            return
+        }
+        if (!tapArea || tapStolen || Date.now() - tapAt > 2000) return
+        tapList = index
+        tapOrigin = flick.contentY
     }
     function tapScrolled(index, flick) {
         if (tapList === index && Math.abs(flick.contentY - tapOrigin) > 16) tapFlicked = true
     }
     function tapEnd(index, flick) {
-        if (tapList !== index) return
+        if (tapList >= 0 && tapList !== index) return
+        var claimed = tapList === index
         var area = tapArea
-        var deliver = tapStolen && !tapFlicked && Date.now() - tapAt <= 2000 && Math.abs(flick.contentY - tapOrigin) <= 16
+        var deliver = claimed && tapStolen && !tapFlicked && Date.now() - tapAt <= 2000 && Math.abs(flick.contentY - tapOrigin) <= 16
         tapArea = null
         tapList = -1
         tapStolen = false
         tapFlicked = false
-        if (!deliver || !area || !area.visible || !area.enabled) return
+        if (!deliver || !area || !area.visible || !area.enabled || (area.parent && !area.parent.enabled)) return
         flick.contentY = tapOrigin
         try { area.clicked(null) } catch (error) {}
     }

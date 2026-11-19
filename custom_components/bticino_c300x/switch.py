@@ -30,6 +30,7 @@ from .const import (
     SIGNAL_AUTH_CONFIG_CHANGED,
     SIGNAL_MQTT_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
+    SIGNAL_SETTING_STATE,
 )
 from .device_user import homeassistant_account_label
 from .entity import (
@@ -255,6 +256,7 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
         super().__init__(entry, "ringer_mute")
         self._muted: bool | None = None
         self._attr_available = True
+        self._state_generation = 0
 
     @property
     def is_on(self) -> bool | None:
@@ -277,28 +279,37 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
     async def async_update(self) -> None:
         """Refresh ringer mute state."""
 
+        generation = self._state_generation
         try:
             status = await self._entry.runtime_data.api.async_ringer_status()
         except C300XAgentApiError:
-            self._attr_available = False
+            if generation == self._state_generation:
+                self._attr_available = False
             return
-        self._apply_status(status)
+        if generation == self._state_generation:
+            self._apply_status(status)
 
     async def _set_muted(self, muted: bool) -> None:
+        generation = self._state_generation
         try:
             status = await self._entry.runtime_data.api.async_set_ringer_muted(muted)
         except C300XAgentApiError as err:
             raise HomeAssistantError(f"C300X ringer mute update failed: {err}") from err
-        self._apply_status(status)
+        if generation == self._state_generation:
+            self._state_generation += 1
+            self._apply_status(status)
 
     def _apply_status(self, status: dict[str, Any]) -> None:
         self._muted = status.get("muted")
-        self._attr_available = True
+        self._attr_available = isinstance(self._muted, bool) and status.get("available") is not False
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to push state updates."""
 
         await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_SETTING_STATE, self._handle_setting_state,
+        ))
         self.async_on_remove(
             self.hass.bus.async_listen(
                 EVENT_AGENT_EVENT_RECEIVED,
@@ -308,13 +319,18 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
         event_type = agent_event_key(event.data)
+        self._handle_setting_state(event.data.get("entry_id"), event_type, event.data.get("data", {}))
+
+    @callback
+    def _handle_setting_state(self, entry_id: str, event_type: str | None, data: Any) -> None:
+        if entry_id != self._entry.entry_id or not isinstance(data, Mapping):
+            return
         if event_type not in {"ringer_muted", "ringer_unmuted"}:
             return
+        self._state_generation += 1
         self._muted = event_type == "ringer_muted"
-        self._attr_available = True
+        self._attr_available = data.get("available") is not False
         self.async_write_ha_state()
 
 

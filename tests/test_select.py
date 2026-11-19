@@ -263,9 +263,10 @@ def test_smartphone_forwarding_select_subscribes_to_agent_events() -> None:
     assert listeners == [("bticino_c300x_agent_event_received", entity._handle_agent_event)]
     assert removers[0] == entity._cancel_reconnect_refresh
     assert callable(removers[1])
-    assert removers[2] == "unsub"
+    assert callable(removers[2])
+    assert removers[3] == "unsub"
     # The restart signal of the agent.
-    assert len(removers) == 4 and callable(removers[3])
+    assert len(removers) == 5 and callable(removers[4])
 
 
 def test_smartphone_forwarding_select_ignores_unrelated_events() -> None:

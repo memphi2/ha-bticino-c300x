@@ -125,7 +125,7 @@ def ringer_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture
-def lab(ringer_binary: Path, tmp_path: Path) -> Iterator[Lab]:
+def lab(ringer_binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Lab]:
     with managed_tcp_server(Device()) as device, managed_tcp_server(CallbackServer()) as callback:
         api, ui = free_tcp_ports(2)
         lab = Lab(device, api, ui, free_udp_port())
@@ -148,10 +148,11 @@ def lab(ringer_binary: Path, tmp_path: Path) -> Iterator[Lab]:
                                        stdout=log, stderr=log, cwd=tmp_path)
             try:
                 wait_for_health(lab.api_port)
-                assert api_get(lab.api_port, PATH)["muted"] is False
+                if getattr(request, "param", True):
+                    assert api_get(lab.api_port, PATH)["muted"] is False
                 api_post(lab.api_port, "/api/v1/events/subscriptions", {
                     "callback_url": callback_url(callback), "token": "ringer-test-token",
-                    "events": ["ringer.muted", "ringer.unmuted"],
+                    "events": ["ringer.muted", "ringer.unmuted", "ringer.volume_changed"],
                 }, expected_status=201)
                 device.frames.clear()
                 yield lab
@@ -432,6 +433,10 @@ def test_unconfirmed_hardware_does_not_report_success(lab: Lab, reply: str) -> N
 def test_volume_only_does_not_require_gui(lab: Lab) -> None:
     assert api_post(lab.api_port, PATH, {"volume": 4})["volume"] == 4
     assert lab.device.frames == ["*#8**#41*40##", "*#8**41##"]
+    events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+    assert len(events) == 1 and events[0]["snapshot"] is False
+    assert events[0]["data"]["volume"] == 4
+    assert events[0]["data"]["raw"] == "*#8**41*40##"
 
 
 def test_combined_volume_waits_for_gui_confirmation(lab: Lab) -> None:
@@ -444,3 +449,66 @@ def test_combined_volume_waits_for_gui_confirmation(lab: Lab) -> None:
     send_udp_event(lab.udp_port, "*#8**33*0##")
     data = response(post)
     assert data["muted"] is True and data["volume"] == 4
+
+
+def test_ringer_changed_get_before_queued_udp_publishes_once_per_value(lab):
+    lab.device.muted, lab.device.volume = True, 4
+    assert api_get(lab.api_port, PATH)["muted"] is True
+    send_udp_event(lab.udp_port, "*#8**33*0##")
+    send_udp_event(lab.udp_port, "*#8**41*40##")
+    send_udp_event(lab.udp_port, "*#8**41*50##")
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+        if len(events) >= 3:
+            break
+        time.sleep(0.01)
+    assert [event["type"] for event in events] == ["ringer.muted", "ringer.volume_changed", "ringer.volume_changed"]
+    assert all(not event["snapshot"] for event in events)
+    assert [event["data"]["raw"] for event in events] == ["*#8**33*0##", "*#8**41*40##", "*#8**41*50##"]
+    assert lab.device.frames == ["*#8**33##", "*#8**41##"]
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_ringer_availability_recovery_compares_last_confirmed_value(lab, changed):
+    lab.device.read_reply = "*#8**33*invalid##"
+    assert api_get(lab.api_port, PATH)["muted"] is None
+    lab.device.read_reply = None
+    lab.device.muted = changed
+    assert api_get(lab.api_port, PATH)["muted"] is changed
+    events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+    assert [event["snapshot"] for event in events] == [True, not changed]
+    assert events[0]["data"]["available"] is False
+    assert events[1]["data"]["available"] is True
+    assert all(frame in {"*#8**33##", "*#8**41##"} for frame in lab.device.frames)
+
+
+@pytest.mark.parametrize("lab", [False], indirect=True)
+def test_first_ringer_read_is_snapshot_and_same_read_is_quiet(lab):
+    api_get(lab.api_port, PATH)
+    api_get(lab.api_port, PATH)
+    events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+    assert [event["snapshot"] for event in events] == [True, True]
+    assert [event["type"] for event in events] == ["ringer.unmuted", "ringer.volume_changed"]
+    assert lab.device.frames == ["*#8**33##", "*#8**41##"] * 2
+
+
+@pytest.mark.parametrize("lab", [False], indirect=True)
+def test_first_explicit_volume_write_reads_baseline_before_mutation(lab):
+    assert api_post(lab.api_port, PATH, {"volume": 4})["volume"] == 4
+    assert lab.device.frames == ["*#8**33##", "*#8**41##", "*#8**#41*40##", "*#8**41##"]
+    events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+    assert [event["snapshot"] for event in events] == [True, True, False]
+
+
+@pytest.mark.parametrize("lab", [False], indirect=True)
+def test_first_explicit_mute_reads_baseline_before_gui_command(lab):
+    gui = lab.next()
+    post = lab.post({"muted": True})
+    command = response(gui)
+    assert lab.device.frames == ["*#8**33##", "*#8**41##"]
+    lab.device.muted = True
+    lab.next(command["id"], True)
+    assert response(post)["muted"] is True
+    events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+    assert [event["snapshot"] for event in events] == [True, True, False]

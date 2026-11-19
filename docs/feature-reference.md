@@ -380,8 +380,19 @@ device setting and follows changes made on the C300X. HA waits for the GUI's
 confirmed value; without the GUI connection the switch is unavailable. The
 agent uses a sleeping local connection, not periodic device reads, and does
 not write a second copy of this setting to its configuration.
-Touch-tone status updates also appear in **Device event** as **Touch tone
+Confirmed touch-tone value changes appear in **Device event** as **Touch tone
 changed**, with the stable event type `display_touch_tone_changed` for automations.
+The initial reading, loss of the GUI connection and recovery with the same
+value only refresh the switch. Starting HA does not set the touch tone.
+
+With the matching 2.6.0 agent bundle, the same distinction applies to ringer
+mute, ringer volume and forwarding: initial values and availability updates
+synchronize their entities without firing change events. Message and memo
+collections retain their last valid content identity across an access failure;
+unchanged recovery is a state refresh, while actual content changes still
+produce events. A changed value first observed after an outage describes the
+new state, not who changed it. Repeated physical actions, doorbell rings and
+call transitions remain separate events, even when their data is identical.
 
 Changing the feedback setting saves it in the agent configuration, so it survives
 GUI and agent restarts. Reading it and choosing the already saved value do not

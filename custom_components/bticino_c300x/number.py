@@ -8,16 +8,18 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.number import NumberEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import C300XAgentApiError
-from .const import EVENT_AGENT_EVENT_RECEIVED
+from .const import EVENT_AGENT_EVENT_RECEIVED, SIGNAL_SETTING_STATE
 from .entity import C300XEntity
 from .entity import (
     async_refresh_initial_states as _async_refresh_initial_states,
 )
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
+from .value_parsing import ringer_volume as _coerce_active_ringer_volume
 
 if TYPE_CHECKING:
     from homeassistant.core import Event
@@ -57,6 +59,7 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
         super().__init__(entry, "ringer_volume")
         self._volume: int | None = None
         self._attr_available = True
+        self._state_generation = 0
 
     @property
     def native_value(self) -> int | None:
@@ -70,34 +73,44 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
         volume = _coerce_active_ringer_volume(value)
         if volume is None:
             raise HomeAssistantError("Ringer volume must be between 0 and 10")
+        generation = self._state_generation
         try:
             status = await self._entry.runtime_data.api.async_set_ringer_volume(volume)
         except C300XAgentApiError as err:
-            await self.async_update()
+            if generation == self._state_generation:
+                await self.async_update()
             self.async_write_ha_state()
             raise HomeAssistantError("C300X ringer volume update failed") from err
-        self._apply_status(status)
+        if generation == self._state_generation:
+            self._state_generation += 1
+            self._apply_status(status)
         self.async_write_ha_state()
 
     async def async_update(self) -> None:
         """Refresh ringer volume through the agent read-only endpoint."""
 
+        generation = self._state_generation
         try:
             status = await self._entry.runtime_data.api.async_ringer_status()
         except C300XAgentApiError:
-            self._attr_available = False
+            if generation == self._state_generation:
+                self._attr_available = False
             return
-        self._apply_status(status)
+        if generation == self._state_generation:
+            self._apply_status(status)
 
     def _apply_status(self, status: Mapping[str, Any]) -> None:
         volume = _coerce_active_ringer_volume(status.get("volume"))
         self._volume = volume
-        self._attr_available = volume is not None
+        self._attr_available = volume is not None and status.get("available") is not False
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to push state updates."""
 
         await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_SETTING_STATE, self._handle_setting_state,
+        ))
         self.async_on_remove(
             self.hass.bus.async_listen(
                 EVENT_AGENT_EVENT_RECEIVED,
@@ -107,13 +120,23 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
 
     @callback
     def _handle_agent_event(self, event: Event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
+        self._handle_setting_state(event.data.get("entry_id"), agent_event_key(event.data), event.data)
+
+    @callback
+    def _handle_setting_state(self, entry_id: str, event_type: str | None, data: Any) -> None:
+        if entry_id != self._entry.entry_id or not isinstance(data, Mapping):
             return
-        if agent_event_key(event.data) != "ringer_volume_changed":
+        if event_type != "ringer_volume_changed":
             return
-        volume = _coerce_active_ringer_volume(event.data.get("volume"))
+        if data.get("available") is False:
+            self._state_generation += 1
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+        volume = _coerce_active_ringer_volume(data.get("volume"))
         if volume is None:
             return
+        self._state_generation += 1
         self._volume = volume
         self._attr_available = True
         self.async_write_ha_state()
@@ -127,18 +150,3 @@ def _supports_ringer_volume(entry: BticinoC300XConfigEntry) -> bool:
         and ringer.get("supported") is True
         and ringer.get("volume") is True
     )
-
-
-def _coerce_active_ringer_volume(value: Any) -> int | None:
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    if not number.is_integer():
-        return None
-    volume = int(number)
-    if _RINGER_VOLUME_MIN <= volume <= _RINGER_VOLUME_MAX:
-        return volume
-    return None

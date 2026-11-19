@@ -200,6 +200,25 @@ PySide6 is a development-only tool, not an integration dependency.
 | On-demand capture with an announcement | `announcement_path` is rejected before media starts; Ring Call announcements retain their existing behavior. |
 | Home Call start/stop | Display rings, state updates, hangup cleans up. |
 | On-demand after Home Call | First stream attempt works after Home Call cleanup. |
+| Saved media browsing | Older/newer navigates entry-owned snapshots and recordings in the same window without device requests. Play, seek, volume, mute and fullscreen work; leaving the recording stops playback. |
+| Ring arrives during archive playback | Archive playback stops and the existing Ring Call controls take priority; Home Call and door/light actions retain their configured behavior. |
+| Narrow media card | Controls, name and status remain visible at the supported HA grid minimum, including an active microphone and Home Call-only mode. |
+
+## Event Semantics
+
+- First confirmed touch-tone, ringer and forwarding values synchronize the
+  corresponding entities without public change events or setting writes.
+- Availability loss and same-value recovery update those entities without
+  replacing their last valid comparison value or triggering change events.
+- Confirmed value changes, including a different value observed on recovery,
+  produce one event; a following identical device notification adds none.
+- Message-directory access loss and unchanged recovery are state snapshots.
+  Actual additions, deletions and read-state changes still produce events,
+  including changes in an accessible memo collection while the other is offline.
+- Repeated doorbell, door/light, activation and call occurrences are not
+  suppressed merely because their payload values match.
+
+## Media Device Checks
 
 For the PCMU reboot regression, verify the running agent version and active
 device codec first. Observe boot ID, uptime and the answering-machine/media

@@ -556,32 +556,24 @@ def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
     remember_body = text.split(
         "static void remember_smartphone_forwarding_mode",
         maxsplit=1,
-    )[1].split("static int note_smartphone_forwarding_changed", maxsplit=1)[0]
-    note_body = text.split(
-        "static int note_smartphone_forwarding_changed",
-        maxsplit=1,
-    )[1].split("static void refresh_smartphone_forwarding_mode", maxsplit=1)[0]
+    )[1].split("static void remember_ringer_muted", maxsplit=1)[0]
     state_body = text.split("static void api_state", maxsplit=1)[1].split(
         "static void handle_doorbell_video_get",
         maxsplit=1,
     )[0]
 
-    assert "int smartphone_forwarding_mode_known;" in text
-    assert "int smartphone_forwarding_mode_code;" in text
+    assert "struct c300x_setting_state forwarding_state;" in text
     assert "c300x_smartphone_code_from_reply(msg, &code)" in event_body
-    assert "note_smartphone_forwarding_changed(runtime, code)" in event_body
-    assert "return 0;" in note_body
-    assert "runtime->smartphone_forwarding_mode_code == code" in note_body
-    # A first reading that arrives as a device event is reported: only a
-    # known, equal mode is "not changed".
-    assert "runtime->smartphone_forwarding_mode_known\n        && " in note_body
+    assert "remember_smartphone_forwarding_mode(runtime, code, msg)" in event_body
+    assert "c300x_setting_observe(&runtime->forwarding_state" in remember_body
+    assert "dispatch_setting_state" in remember_body
     assert "c300x_video_set_ring_forwarding_enabled" not in remember_body
     assert '\\"smartphone_forwarding\\":%s' in state_body
     assert "refresh_smartphone_forwarding_mode(config, runtime)" in text
     assert 'return "unprovisioned";' in smartphone_forwarding
     assert '*#8**#37*3##' not in text
     assert "invalid_smartphone_forwarding_mode" in text
-    assert "runtime->smartphone_forwarding_mode_code == 1" in text
+    assert "runtime->forwarding_state.last_valid == 1" in text
 
 
 def test_native_agent_ringer_events_are_change_based() -> None:
@@ -594,11 +586,11 @@ def test_native_agent_ringer_events_are_change_based() -> None:
         maxsplit=1,
     )[0]
     note_body = text.split(
-        "static int note_ringer_muted_changed",
+        "static void remember_ringer_muted",
         maxsplit=1,
     )[1].split("static void refresh_smartphone_forwarding_mode", maxsplit=1)[0]
     volume_note_body = text.split(
-        "static int note_ringer_volume_changed",
+        "static void remember_ringer_volume",
         maxsplit=1,
     )[1].split("static void sync_ring_receiver_for_forwarding", maxsplit=1)[0]
     state_body = text.split("static void api_state", maxsplit=1)[1].split(
@@ -606,10 +598,8 @@ def test_native_agent_ringer_events_are_change_based() -> None:
         maxsplit=1,
     )[0]
 
-    assert "int ringer_muted_known;" in text
-    assert "int ringer_muted;" in text
-    assert "int ringer_volume_known;" in text
-    assert "int ringer_volume;" in text
+    assert "struct c300x_setting_state ringer_muted_state;" in text
+    assert "struct c300x_setting_state ringer_volume_state;" in text
     assert "#define C300X_RINGER_VOLUME_MIN 0" in text
     assert "#define C300X_RINGER_VOLUME_ACTIVE_MIN 0" in text
     assert "#define C300X_RINGER_VOLUME_MAX 10" in text
@@ -628,20 +618,16 @@ def test_native_agent_ringer_events_are_change_based() -> None:
     assert "status.ring_audio_active" in ringer_answer_body
     assert "status.ring_answer_requested" in ringer_answer_body
     assert "status.ring_answered" in ringer_answer_body
-    assert "note_ringer_muted_changed(runtime, muted)" in event_body
+    assert "remember_ringer_muted(runtime, muted, msg, NULL)" in event_body
     assert event_body.index("ringer_mute_is_ring_answer_transition(runtime, muted)") < event_body.index(
-        "note_ringer_muted_changed(runtime, muted)"
+        "remember_ringer_muted(runtime, muted, msg, NULL)"
     )
     assert "ringer_volume_from_reply(msg, &code)" in event_body
-    assert "note_ringer_volume_changed(runtime, code)" in event_body
-    assert 'c300x_copy_string(type, type_len, "ringer.volume_changed")' in event_body
-    assert "return 0;" in note_body
-    assert "runtime->ringer_muted == muted" in note_body
-    assert "remember_ringer_muted(runtime, muted)" in note_body
-    assert "runtime->ringer_volume == volume" in volume_note_body
-    assert "remember_ringer_volume(runtime, volume)" in volume_note_body
-    assert "note_ringer_muted_changed(runtime, muted_readback)" in text
-    assert "remember_ringer_volume(runtime, volume_readback)" in text
+    assert "remember_ringer_volume(runtime, code, msg)" in event_body
+    assert "c300x_setting_observe(&runtime->ringer_muted_state" in note_body
+    assert "c300x_setting_observe(&runtime->ringer_volume_state" in volume_note_body
+    assert 'remember_ringer_muted(runtime, muted_readback, muted_reply, "gui_command")' in text
+    assert "remember_ringer_volume(runtime, volume_readback, volume_readback_reply)" in text
     assert "ringer_volume_not_applied" in text
     assert "ringer_volume_readback_failed" in text
     assert "#define C300X_RINGER_VOLUME_SETTLE_MS 1000" in text

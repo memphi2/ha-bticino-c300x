@@ -19,6 +19,8 @@ from test_native_ui_preferences import (
     native_preferences_binary as native_preferences_binary,
 )
 
+from native_agent.test.smoke import CallbackServer, callback_url, managed_tcp_server
+
 API = "/api/v1/display/touch-tone"
 NEXT = "/ui/touch-tone/next"
 STATE = "/ui/touch-tone/state"
@@ -28,10 +30,10 @@ def status(lab):
     return request(lab.api, headers=AUTH_HEADERS, path=API)[1]
 
 
-def connect(lab, enabled=True, completed=None):
+def connect(lab, enabled=True, completed=None, session="b" * 32):
     connection = http.client.HTTPConnection("127.0.0.1", lab.ui, timeout=8)
     lab.sequence = getattr(lab, "sequence", 0) + 1
-    query = f"?enabled={int(enabled)}&session={'b' * 32}&revision={lab.sequence}"
+    query = f"?enabled={int(enabled)}&session={session}&revision={lab.sequence}"
     if completed is not None:
         query += "&completed=" + completed
     connection.request("GET", NEXT + query, headers=HEADER)
@@ -62,6 +64,66 @@ def set_tone(lab, enabled):
         connection.close()
 
 
+@pytest.fixture
+def tone_events(lab):
+    with managed_tcp_server(CallbackServer()) as callback:
+        assert request(lab.api, "POST", json.dumps({
+            "callback_url": callback_url(callback), "token": "touch-tone-test",
+            "events": ["display.touch_tone_changed"],
+        }), AUTH_HEADERS, path="/api/v1/events/subscriptions")[0] == 201
+
+        def recent():
+            data = request(lab.api, headers=AUTH_HEADERS, path="/api/v1/events/recent")[1]
+            return [event for event in data["events"] if event["type"] == "display.touch_tone_changed"]
+
+        yield recent
+
+
+def wait_unavailable(lab):
+    for _ in range(100):
+        if status(lab)["available"] is False:
+            return
+        time.sleep(0.01)
+    pytest.fail("GUI disconnect was not published")
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("session", ["b" * 32, "c" * 32])
+def test_baseline_disconnect_and_same_value_reconnect_are_snapshots(lab, tone_events, enabled, session):
+    gui = connect(lab, enabled)
+    try:
+        wait_available(lab, enabled)
+    finally:
+        gui.close()
+    wait_unavailable(lab)
+    gui = connect(lab, enabled, session=session)
+    try:
+        wait_available(lab, enabled)
+        events = tone_events()
+        assert [event["snapshot"] for event in events] == [True, True, True]
+        assert [event["data"]["available"] for event in events] == [True, False, True]
+        assert [event["data"]["enabled"] for event in events] == [enabled, None, enabled]
+    finally:
+        gui.close()
+
+
+def test_reconnect_with_different_confirmed_value_is_one_real_change(lab, tone_events):
+    gui = connect(lab, True)
+    try:
+        wait_available(lab, True)
+    finally:
+        gui.close()
+    wait_unavailable(lab)
+    gui = connect(lab, False, session="c" * 32)
+    try:
+        wait_available(lab, False)
+        events = tone_events()
+        assert [event["snapshot"] for event in events] == [True, True, False]
+        assert events[-1]["data"]["enabled"] is False
+    finally:
+        gui.close()
+
+
 def test_touch_tone_requires_gui_and_auth(lab):
     assert request(lab.api, path=API)[0] == 401
     assert request(lab.api, "POST", '{"enabled":false}', path=API)[0] == 401
@@ -70,7 +132,7 @@ def test_touch_tone_requires_gui_and_auth(lab):
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_touch_tone_waits_for_matching_gui_ack_and_does_not_write_config(lab, enabled):
+def test_touch_tone_waits_for_matching_gui_ack_and_does_not_write_config(lab, tone_events, enabled):
     before = file_state(lab.path)
     gui = connect(lab, not enabled)
     ack = None
@@ -86,6 +148,7 @@ def test_touch_tone_waits_for_matching_gui_ack_and_does_not_write_config(lab, en
             assert response.result(timeout=2)[:2] == (200, {"ok": True, "available": True, "enabled": enabled})
         assert status(lab)["enabled"] is enabled
         assert file_state(lab.path) == before
+        assert [event["snapshot"] for event in tone_events()] == [True, False]
     finally:
         gui.close()
         if ack:
@@ -109,7 +172,7 @@ def test_touch_tone_rejects_wrong_readback_and_accepts_later_command(lab):
             ack.close()
 
 
-def test_touch_tone_physical_changes_are_published_without_file_writes(lab):
+def test_touch_tone_physical_changes_are_published_without_file_writes(lab, tone_events):
     gui = connect(lab)
     try:
         wait_available(lab)
@@ -117,6 +180,8 @@ def test_touch_tone_physical_changes_are_published_without_file_writes(lab):
         assert request(lab.ui, "POST", report_body(lab, False), HEADER, path=STATE)[0] == 200
         assert status(lab)["enabled"] is False
         assert file_state(lab.path) == before
+        assert request(lab.ui, "POST", report_body(lab, False), HEADER, path=STATE)[0] == 200
+        assert [event["snapshot"] for event in tone_events()] == [True, False]
         duplicate = connect(lab)
         try:
             assert duplicate.getresponse().status == 409
@@ -153,7 +218,7 @@ def test_touch_tone_requires_strict_boolean(lab, body):
     assert request(lab.ui, "POST", body, HEADER, path=STATE)[0] == 400
 
 
-def test_touch_tone_missing_ack_times_out_and_late_ack_is_rejected(lab):
+def test_touch_tone_missing_ack_times_out_and_late_ack_is_rejected(lab, tone_events):
     gui = connect(lab)
     try:
         wait_available(lab)
@@ -167,6 +232,13 @@ def test_touch_tone_missing_ack_times_out_and_late_ack_is_rejected(lab):
         finally:
             late.close()
         assert status(lab)["available"] is False
+        assert [event["snapshot"] for event in tone_events()] == [True, True]
+        reconnected = connect(lab, True)
+        try:
+            wait_available(lab, True)
+            assert [event["snapshot"] for event in tone_events()] == [True, True, True]
+        finally:
+            reconnected.close()
     finally:
         gui.close()
 
@@ -219,7 +291,7 @@ def test_delayed_physical_report_cannot_replace_newer_command_ack(lab):
 
 
 @pytest.mark.parametrize("newer", [False, True])
-def test_newer_report_before_command_ack_keeps_latest_state(lab, newer):
+def test_newer_report_before_command_ack_keeps_latest_state(lab, tone_events, newer):
     gui = connect(lab)
     ack = None
     try:
@@ -233,7 +305,47 @@ def test_newer_report_before_command_ack_keeps_latest_state(lab, newer):
             ack = connect(lab, False, command["id"])
             assert response.result(timeout=2)[0] == (409 if newer else 200)
         assert status(lab)["enabled"] is newer
+        changes = [event for event in tone_events() if not event["snapshot"]]
+        assert len(changes) == (0 if newer else 1)
     finally:
         gui.close()
         if ack:
             ack.close()
+
+
+def test_same_value_command_ack_is_snapshot_not_change(lab, tone_events):
+    gui = connect(lab, True)
+    ack = None
+    try:
+        wait_available(lab, True)
+        with ThreadPoolExecutor() as executor:
+            response = executor.submit(set_tone, lab, True)
+            command = json.loads(gui.getresponse().read())
+            ack = connect(lab, True, command["id"])
+            assert response.result(timeout=2)[0] == 200
+        assert [event["snapshot"] for event in tone_events()] == [True, True]
+    finally:
+        gui.close()
+        if ack:
+            ack.close()
+
+
+def test_abandoned_command_publishes_unavailability_not_a_change(lab, tone_events):
+    gui = connect(lab, True)
+    client = http.client.HTTPConnection("127.0.0.1", lab.api, timeout=8)
+    try:
+        wait_available(lab, True)
+        client.request("POST", API, json.dumps({"enabled": False}), AUTH_HEADERS)
+        assert json.loads(gui.getresponse().read())["enabled"] is False
+        client.close()
+        wait_unavailable(lab)
+        assert [event["snapshot"] for event in tone_events()] == [True, True]
+        reconnected = connect(lab, True)
+        try:
+            wait_available(lab, True)
+            assert [event["snapshot"] for event in tone_events()] == [True, True, True]
+        finally:
+            reconnected.close()
+    finally:
+        gui.close()
+        client.close()

@@ -54,6 +54,20 @@ def optional_mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+def ringer_volume(value: Any) -> int | None:
+    """Accept only integral ringer levels in the native 0..10 range."""
+
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if number.is_integer() and 0 <= number <= 10:
+        return int(number)
+    return None
+
+
 def freeze_state_value(value: Any) -> Any:
     """Return a hashable, order-stable snapshot of an entity state value."""
 

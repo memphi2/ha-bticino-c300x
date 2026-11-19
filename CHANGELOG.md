@@ -2,6 +2,12 @@
 
 ## v2.6.0 - Unreleased
 
+- Separate initial state and availability updates from confirmed setting and
+  collection changes in the agent. Keep HA entities synchronized without false
+  touch-tone, forwarding, ringer, memo or message change events on startup or
+  unchanged recovery. Startup does not set these device settings; real changes
+  and repeated physical actions remain observable. Requires the matching
+  2.6.0 agent bundle.
 - Show grid export below zero in Energy's Today chart, with separate positive
   stacks, a signed axis and negative values in the hourly readout.
 - Round Consumers values to whole watts while retaining measurement precision

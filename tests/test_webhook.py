@@ -60,6 +60,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
     SIGNAL_MEMOS_CHANGED,
+    SIGNAL_SETTING_STATE,
     SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
@@ -1215,6 +1216,43 @@ def test_snapshot_doorbell_event_updates_state_without_public_event() -> None:
     assert event_state.event_sequence == 0
     assert event_state.last_event_data == {}
     assert hass.bus.events == []
+
+
+@pytest.mark.parametrize("snapshot", [None, False, True])
+@pytest.mark.parametrize("enabled", [None, False, True])
+def test_touch_tone_snapshots_refresh_only_internal_state(monkeypatch, snapshot, enabled):
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1", title="C300X", options={},
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    data = {"ok": True, "available": enabled is not None, "enabled": enabled}
+    payload = {"type": "display.touch_tone_changed", "data": data}
+    if snapshot is not None:
+        payload["snapshot"] = snapshot
+    signals = []
+    monkeypatch.setattr(webhook_module, "async_dispatcher_send",
+                        lambda _hass, *args: signals.append(args))
+    response = asyncio.run(_async_handle_agent_event(
+        hass, entry, event_state, _FakeRequest("event-token", payload),
+    ))
+    assert response.status == 200
+    if snapshot:
+        assert signals == [(SIGNAL_SETTING_STATE, entry.entry_id, "display_touch_tone_changed", data)]
+        assert hass.bus.events == []
+        assert event_state.event_sequence == 0
+        assert event_state.last_event is None
+        assert event_state.last_event_data == {}
+    else:
+        assert signals == []
+        assert len(hass.bus.events) == 1
+        topic, event = hass.bus.events[0]
+        assert topic == EVENT_AGENT_EVENT_RECEIVED
+        assert event["event_key"] == "display_touch_tone_changed"
+        assert event["data"] == data
+        assert event_state.event_sequence == 1
 
 
 def test_snapshot_memo_event_refreshes_memo_entities_without_public_event() -> None:

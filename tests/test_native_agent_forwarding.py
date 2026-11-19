@@ -90,7 +90,7 @@ def forwarding_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture
 def forwarding_agent(
-    forwarding_binary: Path, tmp_path: Path
+    forwarding_binary: Path, tmp_path: Path, request: pytest.FixtureRequest
 ) -> Iterator[tuple[ForwardingDevice, int]]:
     with (
         managed_tcp_server(ForwardingDevice()) as device,
@@ -127,7 +127,8 @@ def forwarding_agent(
             )
             try:
                 wait_for_health(api_port)
-                assert api_get(api_port, FORWARDING_PATH)["mode"] == "enabled"
+                if getattr(request, "param", True):
+                    assert api_get(api_port, FORWARDING_PATH)["mode"] == "enabled"
                 api_post(
                     api_port, "/api/v1/events/subscriptions",
                     {
@@ -256,7 +257,7 @@ def test_forwarding_mismatch_updates_cache_without_claiming_success(
     assert (
         api_get(port, "/api/v1/state")["state"]["smartphone_forwarding"] == actual_mode
     )
-    assert [event["data"]["mode"] for event in _forwarding_events(port)] == [actual_mode]
+    assert [event["data"]["mode"] for event in _forwarding_events(port)] == ["homeassistant", actual_mode]
 
 
 @pytest.mark.parametrize(
@@ -319,3 +320,70 @@ def test_forwarding_unprovisioned_is_not_a_writable_mode(
     )
     assert response["error"] == "invalid_smartphone_forwarding_mode"
     assert device.frames == []
+
+
+@pytest.mark.parametrize("forwarding_agent", [False], indirect=True)
+def test_first_udp_baseline_is_snapshot_without_any_own_queries(forwarding_agent):
+    device, port = forwarding_agent
+    send_udp_event(device.udp_port, "*#8**37*0##")
+    send_udp_event(device.udp_port, "*#8**37*0##")
+    send_udp_event(device.udp_port, "*#8**37*2##")
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        events = _forwarding_events(port)
+        if len(events) >= 2:
+            break
+        time.sleep(0.01)
+    assert [event["snapshot"] for event in events] == [True, False]
+    assert [event["data"]["raw"] for event in events] == ["*#8**37*0##", "*#8**37*2##"]
+    assert device.frames == []
+
+
+def test_changed_get_then_equal_udp_keeps_exactly_one_transition(forwarding_agent):
+    device, port = forwarding_agent
+    device.mode = 2
+    assert api_get(port, FORWARDING_PATH)["mode"] == "blocked"
+    send_udp_event(device.udp_port, "*#8**37*2##")
+    send_udp_event(device.udp_port, "*#8**37*1##")
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        events = _forwarding_events(port)
+        if len(events) >= 2:
+            break
+        time.sleep(0.01)
+    assert [event["data"]["mode"] for event in events] == ["blocked", "homeassistant"]
+    assert all(not event["snapshot"] for event in events)
+    assert device.frames == ["*#8**37##"]
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_forwarding_unavailable_preserves_baseline_and_classifies_recovery(forwarding_agent, changed):
+    device, port = forwarding_agent
+    device.readback_reply = "*#8**37*invalid##"
+    assert api_get(port, FORWARDING_PATH)["mode"] is None
+    assert api_get(port, "/api/v1/state")["state"]["smartphone_forwarding"] == "enabled"
+    device.readback_reply = None
+    device.mode = 2 if changed else 0
+    api_get(port, FORWARDING_PATH)
+    events = _forwarding_events(port)
+    assert [event["snapshot"] for event in events] == [True, not changed]
+    assert events[0]["data"]["available"] is False
+    assert events[1]["data"]["available"] is True
+    assert device.frames == ["*#8**37##"] * 2
+
+
+@pytest.mark.parametrize("forwarding_agent", [False], indirect=True)
+def test_first_explicit_forwarding_write_reads_baseline_then_publishes_once(forwarding_agent):
+    device, port = forwarding_agent
+    assert api_post(port, FORWARDING_PATH, {"mode": "homeassistant"})["mode"] == "homeassistant"
+    assert device.frames == ["*#8**37##", "*#8**#37*1##", "*#8**37##"]
+    assert [event["snapshot"] for event in _forwarding_events(port)] == [True, False]
+
+
+@pytest.mark.parametrize("forwarding_agent", [False], indirect=True)
+def test_unknown_explicit_forwarding_write_requires_a_real_baseline(forwarding_agent):
+    device, port = forwarding_agent
+    device.readback_reply = "*#8**37*invalid##"
+    assert api_post(port, FORWARDING_PATH, {"mode": "homeassistant"}, expected_status=503)["error"] == "smartphone_forwarding_baseline_unavailable"
+    assert device.frames == ["*#8**37##"]
+    assert _forwarding_events(port) == []

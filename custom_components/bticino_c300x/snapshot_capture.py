@@ -125,7 +125,11 @@ class SnapshotCapture:
                 self.cancel()
             from .visitor_journal import visit_id
 
-            self._request(visit_id(event.data))
+            visitor = visit_id(event.data)
+            if self.identity is not None and self.visitor_id is None:
+                # An image already requested for an open stream belongs to this ring.
+                self.visitor_id = visitor
+            self._request(visitor)
             self.ring_seen = True
         elif key == "doorbell_view_requested":
             self._request()

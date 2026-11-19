@@ -386,3 +386,22 @@ def test_clip_links_to_its_ring_after_the_call_has_closed(tmp_path, monkeypatch)
 
     asyncio.run(run())
 
+
+def test_ring_adopts_the_image_already_requested_for_an_open_stream(tmp_path, monkeypatch):
+    from test_stream_snapshot_capture import drain, setup
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        manager.hass.bus.async_fire = Mock()
+        journal = manager.journal = VisitorJournal(manager.hass, manager.entry)
+        journal.store = SimpleNamespace(async_delay_save=Mock())
+        manager.capture.capture_requested("stream-1")
+        ring = event()
+        journal.event(ring)
+        manager.capture._event(ring)
+        await drain(manager)
+        manager.entry.runtime_data.api.async_doorbell_snapshot.assert_awaited_once()
+        assert journal.items()[0]["snapshot"]["name"] == manager.latest.name
+        manager.close()
+
+    asyncio.run(run())

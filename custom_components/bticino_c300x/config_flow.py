@@ -884,7 +884,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         errors = await self._async_validate_setup_identity()
         if errors:
             self._setup_pending_features = feature_data
-            self._setup_retry_error = errors.get("base")
+            self._note_setup_rejection(errors)
             return self._show_agent_auth(errors)
         self._setup_pending_features = None
 

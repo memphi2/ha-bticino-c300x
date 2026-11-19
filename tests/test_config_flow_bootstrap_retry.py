@@ -158,3 +158,47 @@ def test_manual_retry_after_a_rejected_maintenance_key_can_clear_it(monkeypatch)
         assert result["data"][CONF_MAINTENANCE_TOKEN] == ""
 
     asyncio.run(exercise())
+
+
+def test_a_key_rejected_on_the_retry_itself_can_be_cleared(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.context = {"source": "user"}
+    flow._setup_connection = {
+        "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
+        CONF_AGENT_TOKEN: "old-access", CONF_MAINTENANCE_TOKEN: "old-maintenance",
+    }
+    flow._async_abort_if_manual_setup_duplicate = AsyncMock()
+    flow._async_adopt_agent_unique_id = AsyncMock()
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = Mock()
+    monkeypatch.setattr(config_flow, "async_migrate_legacy_mqtt_for_connection", AsyncMock())
+    seen = []
+
+    async def validated(_hass, candidate):
+        seen.append(candidate[CONF_MAINTENANCE_TOKEN])
+        if len(seen) == 1:
+            return {}, {"base": "cannot_connect"}
+        if candidate[CONF_MAINTENANCE_TOKEN]:
+            return {}, {"base": "invalid_maintenance_auth"}
+        return {"device_id": "device-a"}, {}
+
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", validated)
+
+    async def exercise():
+        feature_data, errors = config_flow._feature_input({CONF_VIDEO_ENABLED: False})
+        assert not errors
+        result = await flow._async_create_setup_entry(feature_data)
+        assert result["errors"] == {"base": "cannot_connect"}
+        submitted = result["data_schema"]({})
+        submitted[CONF_AGENT_TOKEN] = "new-access"
+        result = await flow.async_step_agent_auth(submitted)
+        assert result["errors"] == {"base": "invalid_maintenance_auth"}
+        submitted = result["data_schema"]({})
+        submitted[CONF_AGENT_TOKEN] = "new-access"
+        result = await flow.async_step_agent_auth(submitted)
+        assert result["type"] == "create_entry"
+        # final check, first retry, second retry, final check after it
+        assert seen == ["old-maintenance", "old-maintenance", "", ""]
+
+    asyncio.run(exercise())

@@ -475,7 +475,8 @@ function confirmDashboardFeedback(pageItem) {
 }
 
 function dashboardControl(item, control, value, statusItem, pageItem) {
-    if (!item || !control || item.available === false || !pageItem.dashboardOnline || pageItem.pendingEntity) return
+    if (!item || !control || item.available === false || !pageItem.dashboardOnline) return
+    if (pageItem.pendingEntity && (pageItem.controlInFlight || pageItem.pendingEntity === item.entity_id)) return
     var generation = pageItem.runtimeGeneration
     var commandGeneration = ++pageItem.commandGeneration
     var expected = dashboardExpectation(item, control, value)

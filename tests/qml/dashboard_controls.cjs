@@ -943,3 +943,12 @@ const climateControlsHeight = (28 + 56) * 2 + 8;
 const landscapeAvailable = 480 - 78 - 88 - (48 + 8) - 12 - (36 + 12 + 8);
 assert.ok(climateControlsHeight <= landscapeAvailable, "target and five modes fit below summary and tabs at 800x480");
 console.log("Native detail touch layout, construction, numeric limits and gestures passed");
+
+p.dashboardOnline = true; p.pendingEntity = "climate.room"; p.controlInFlight = false; queue.length = 0;
+Api.dashboardControl({entity_id: "climate.room", domain: "climate"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 0, "the pressed control stays locked until its state is confirmed");
+Api.dashboardControl({entity_id: "light.other", domain: "light"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 1, "another control is free once the command is answered");
+assert.equal(p.pendingEntity, "light.other");
+Api.dashboardControl({entity_id: "switch.third", domain: "switch"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 1, "every control waits while a command is in flight");

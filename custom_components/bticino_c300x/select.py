@@ -189,7 +189,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         self._handle_setting_state(event.data.get("entry_id"), event_type, event.data)
 
     @callback
-    def _handle_setting_state(self, entry_id: str, event_type: str, data: Any) -> None:
+    def _handle_setting_state(self, entry_id: str | None, event_type: str, data: Any) -> None:
         if entry_id != self._entry.entry_id or not isinstance(data, Mapping):
             return
         if event_type != "smartphone_forwarding_changed":

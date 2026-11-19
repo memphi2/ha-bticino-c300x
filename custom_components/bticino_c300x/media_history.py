@@ -77,11 +77,14 @@ def inventory(hass: Any, entry_id: str, enabled: bool, days: int,
     )[:MAX_HISTORY_ITEMS]
 
 
-def read_item(hass: Any, entry_id: str, item: dict[str, Any], days: int) -> bytes | None:
+def read_item(
+    hass: Any, entry_id: str, item: dict[str, Any], days: int,
+    window: tuple[int, int] | None = None,
+) -> bytes | None:
     """Reject replacement, rewrite (even restored mtime), unlink and symlink races."""
     identity = item["identity"]
     if item["kind"] == "video":
-        return read_clip(hass, identity)
+        return read_clip(hass, identity, window)
     result = _read(SnapshotStore(hass, entry_id), identity["name"], days,
                    identity["signature"], identity["changed_ns"])
     return result[0] if result is not None else None

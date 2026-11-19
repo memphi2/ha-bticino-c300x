@@ -57,7 +57,8 @@ def describe_clip(hass: Any, metadata: Any) -> dict[str, Any] | None:
                        "changed_ns": info.st_ctime_ns}) if stat.S_ISREG(info.st_mode) else None
 
 
-def read_clip(hass: Any, clip: Any) -> bytes | None:
+def read_clip(hass: Any, clip: Any, window: tuple[int, int] | None = None) -> bytes | None:
+    """Read the unchanged clip, or only the byte range of a range request."""
     clip = valid_clip(clip)
     if clip is None:
         return None
@@ -68,7 +69,12 @@ def read_clip(hass: Any, clip: Any) -> bytes | None:
         if (not stat.S_ISREG(info.st_mode) or _signature(info) != clip["signature"]
                 or ("changed_ns" in clip and info.st_ctime_ns != clip["changed_ns"])):
             return None
-        content = source.read(MAX_MEDIA_BYTES + 1)
+        if info.st_size > MAX_MEDIA_BYTES:
+            return None
+        start, stop = window or (0, info.st_size)
+        if start:
+            source.seek(start)
+        content = source.read(stop - start)
         after = os.fstat(source.fileno())
         current = _path(hass, clip["name"]).stat(follow_symlinks=False)
         if (not stat.S_ISREG(current.st_mode)
@@ -77,4 +83,4 @@ def read_clip(hass: Any, clip: Any) -> bytes | None:
                 or after.st_ctime_ns != info.st_ctime_ns
                 or current.st_ctime_ns != info.st_ctime_ns):
             return None
-    return content if len(content) == clip["signature"][2] else None
+    return content if len(content) == stop - start else None

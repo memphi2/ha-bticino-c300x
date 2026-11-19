@@ -11,7 +11,7 @@ from homeassistant.auth.permissions.const import POLICY_READ
 
 from .config_snapshots import snapshot_options
 from .const import DOMAIN
-from .media import _media_response
+from .media import _media_response, _media_window
 from .snapshot_http import C300XSnapshotView
 from .snapshot_identity import read_snapshot, valid_snapshot
 from .visitor_journal_media import read_clip, valid_clip
@@ -54,6 +54,8 @@ class C300XVisitorJournalView(C300XSnapshotView):
             raise web.HTTPNotFound()
         if kind not in {"image", "video"} or not item["snapshot" if kind == "image" else "clip"]:
             raise web.HTTPNotFound()
+        size = item["clip"]["signature"][2] if kind == "video" else 0
+        window = _media_window(request, size) if kind == "video" else None
         # Bound concurrent local file reads using the existing entry disk lock.
         if manager.lock.locked():
             raise web.HTTPTooManyRequests(headers={"Retry-After": "2"})
@@ -66,7 +68,7 @@ class C300XVisitorJournalView(C300XSnapshotView):
                         snapshot_options(manager.entry).retention_days,
                     )
                 else:
-                    content = await manager.disk_job(read_clip, manager.hass, item["clip"])
+                    content = await manager.disk_job(read_clip, manager.hass, item["clip"], window)
             except (OSError, ValueError):
                 content = None
         # Permission/lifecycle/retention can change while the executor was running.
@@ -75,7 +77,7 @@ class C300XVisitorJournalView(C300XSnapshotView):
             raise web.HTTPNotFound()
         response = (
             web.Response(body=content, content_type="image/jpeg") if kind == "image"
-            else _media_response(request, content, "video/mp4")
+            else _media_response(request, content, "video/mp4", size=size)
         )
         response.headers.update(_HEADERS)
         return response

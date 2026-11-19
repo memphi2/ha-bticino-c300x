@@ -243,11 +243,9 @@ def _should_transcode_video_message(content_type: str) -> bool:
     return normalized in _ORIGINAL_VIDEO_CONTENT_TYPES
 
 
-def _media_response(
-    request: web.Request, content: bytes, content_type: str
-) -> web.Response:
-    headers = {"Cache-Control": "no-store", "Accept-Ranges": "bytes"}
-    size = len(content)
+def _media_window(request: web.Request, size: int) -> tuple[int, int] | None:
+    """Return the requested byte range of a file of this size, None for all of it."""
+
     try:
         requested = getattr(request, "http_range", slice(None))
     except ValueError as err:
@@ -255,7 +253,7 @@ def _media_response(
             headers={"Content-Range": f"bytes */{size}"}
         ) from err
     if requested.start is None and requested.stop is None:
-        return web.Response(body=content, content_type=content_type, headers=headers)
+        return None
     start = requested.start or 0
     if start < 0:
         start = max(0, size + start)
@@ -264,9 +262,24 @@ def _media_response(
         raise web.HTTPRequestRangeNotSatisfiable(
             headers={"Content-Range": f"bytes */{size}"}
         )
-    headers["Content-Range"] = f"bytes {start}-{stop - 1}/{size}"
+    return start, stop
+
+
+def _media_response(
+    request: web.Request, content: bytes, content_type: str, *, size: int | None = None,
+) -> web.Response:
+    """Answer with the content; with a size, the content is already the requested range."""
+
+    headers = {"Cache-Control": "no-store", "Accept-Ranges": "bytes"}
+    total = len(content) if size is None else size
+    window = _media_window(request, total)
+    if window is None:
+        return web.Response(body=content, content_type=content_type, headers=headers)
+    start, stop = window
+    headers["Content-Range"] = f"bytes {start}-{stop - 1}/{total}"
     return web.Response(
-        body=content[start:stop], status=206, content_type=content_type, headers=headers
+        body=content[start:stop] if size is None else content,
+        status=206, content_type=content_type, headers=headers,
     )
 
 

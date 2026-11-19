@@ -11,7 +11,7 @@ from homeassistant.auth.permissions.const import POLICY_READ
 
 from .config_snapshots import snapshot_options
 from .const import DOMAIN
-from .media import _media_response
+from .media import _media_response, _media_window
 from .media_history import PUBLIC_FIELDS, inventory, read_item, video_records
 from .snapshot_http import C300XSnapshotView
 
@@ -71,14 +71,16 @@ class C300XMediaHistoryView(C300XSnapshotView):
                 item = next((item for item in items if item["id"] == media_id), None)
                 if item is None:
                     raise web.HTTPNotFound()
+                size = item["identity"]["signature"][2] if item["kind"] == "video" else None
                 content = await manager.disk_job(
                     read_item, manager.hass, entry_id, item, snapshot_options(entry).retention_days,
+                    None if size is None else _media_window(request, size),
                 )
             except (OSError, ValueError) as err:
                 raise web.HTTPNotFound() from err
             if not recheck([item]) or content is None:
                 raise web.HTTPNotFound()
         response = (web.Response(body=content, content_type="image/jpeg")
-                    if item["kind"] == "image" else _media_response(request, content, "video/mp4"))
+                    if item["kind"] == "image" else _media_response(request, content, "video/mp4", size=size))
         response.headers.update(_HEADERS)
         return response

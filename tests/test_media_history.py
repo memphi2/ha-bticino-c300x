@@ -80,8 +80,28 @@ def test_mixed_existing_snapshots_and_standalone_videos_are_stable_and_private(t
         assert not hasattr(view, "post") and view.requires_auth
         video = next(item for item in items if item["kind"] == "video")
         request.http_range = slice(0, 4)
+        job, read = manager.disk_job, []
+
+        async def measured(function, *args):
+            result = await job(function, *args)
+            if isinstance(result, bytes):
+                read.append(len(result))
+            return result
+
+        manager.disk_job = measured
         response = await view.get(request, "one", video["id"])
         assert response.status == 206 and response.body == b"comp"
+        assert response.headers["Content-Range"] == f"bytes 0-3/{path.stat().st_size}"
+        # A range request reads the requested bytes, not the whole recording.
+        assert read == [4]
+        request.http_range = slice(-5, None)
+        response = await view.get(request, "one", video["id"])
+        assert response.body == b"video" and read == [4, 5]
+        request.http_range = slice(99, None)
+        with pytest.raises(web.HTTPRequestRangeNotSatisfiable):
+            await view.get(request, "one", video["id"])
+        assert read == [4, 5]
+        manager.disk_job = job
         assert video["at"] == captured_at != path.stat().st_mtime
 
     asyncio.run(run())
@@ -385,7 +405,7 @@ def test_video_read_rechecks_descriptor_and_path_after_read(tmp_path, monkeypatc
                 return self.source.fileno()
 
             def read(self, size):
-                assert size == media.MAX_MEDIA_BYTES + 1
+                assert size == len(b"completed video")
                 content = self.source.read(size)
                 info = path.stat()
                 if change == "rewrite":

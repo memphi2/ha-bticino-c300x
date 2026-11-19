@@ -1,5 +1,5 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=4ffef6bab4feeb86";
-import "./c300x-media-controls.js?v=4ffef6bab4feeb86";
+import { c300xMediaState } from "./c300x-state-model.js?v=e4229fcdb054c1e4";
+import "./c300x-media-controls.js?v=e4229fcdb054c1e4";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -47,15 +47,22 @@ export class C300XCardMedia {
     if (!expanded) { frame.close(); this.collapsed(); return; }
     this.card.style?.setProperty?.("min-height", `${this.card.offsetHeight || 0}px`);
     frame.removeAttribute("role");
+    frame.setAttribute("aria-label", this.card._titleEl?.textContent || "");
     try { frame.showModal(); } catch (_error) { this.collapsed(); return; }
+    this.wasExpanded = true;
     this.configure();
+    this.controls?.focusControl?.("close");
   }
 
   collapsed() {
+    this.fullscreenGeneration++;
     this.exitFullscreen();
     this.card.style?.removeProperty?.("min-height");
     this.frame?.setAttribute("role", "none");
+    this.frame?.removeAttribute("aria-label");
     this.configure();
+    if (this.wasExpanded) this.controls?.focusControl?.("expand");
+    this.wasExpanded = false;
   }
 
   exitFullscreen() {

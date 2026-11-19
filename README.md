@@ -75,7 +75,7 @@ Every contribution is voluntary and very welcome. Support and new features
 stay open to everyone either way.
 
 <p align="center">
-  <a href="https://ko-fi.com/oliver7557"><img src="https://img.shields.io/badge/Ko--fi-Support%20the%20test%20device-FF5E5B?style=for-the-badge" alt="Support the test device on Ko-fi" height="40"></a>
+  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
 </p>
 
 ## Installation

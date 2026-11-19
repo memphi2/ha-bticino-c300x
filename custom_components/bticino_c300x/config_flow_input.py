@@ -54,6 +54,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_NAVIGATION,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -89,6 +90,7 @@ from .const import (
 )
 from .dashboard_energy import normalize_energy_page
 from .dashboard_optional_config import optional_page_values
+from .dashboard_page_order import dashboard_navigation
 from .device_activations import (
     DeviceActivationConfigError,
     normalize_device_activations,
@@ -454,6 +456,9 @@ def _dashboard_feature_input(
         CONF_WEATHER_ENTITY_ID: weather_entity_id,
         CONF_DASHBOARD_ENTITIES: dashboard_entities,
         CONF_DASHBOARD_PAGES: dashboard_pages,
+        CONF_DASHBOARD_NAVIGATION: dashboard_navigation(
+            user_input.get(CONF_DASHBOARD_NAVIGATION) if device_ui_enabled else None
+        ),
         CONF_DASHBOARD_STATUS_PAGE_ENABLED: user_input.get(
             CONF_DASHBOARD_STATUS_PAGE_ENABLED, True
         ) is True,
@@ -555,6 +560,7 @@ def _feature_input(
             CONF_WEATHER_ENTITY_ID: dashboard[CONF_WEATHER_ENTITY_ID],
             CONF_DASHBOARD_ENTITIES: dashboard[CONF_DASHBOARD_ENTITIES],
             CONF_DASHBOARD_PAGES: dashboard[CONF_DASHBOARD_PAGES],
+            CONF_DASHBOARD_NAVIGATION: dashboard[CONF_DASHBOARD_NAVIGATION],
             CONF_ENERGY_PAGE: dashboard[CONF_ENERGY_PAGE],
             CONF_DASHBOARD_STATUS_PAGE_ENABLED: dashboard[CONF_DASHBOARD_STATUS_PAGE_ENABLED],
             CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],

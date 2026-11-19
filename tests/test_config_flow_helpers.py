@@ -1911,6 +1911,7 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
     assert _schema_key_names(dashboard_schema) == [
         CONF_DEVICE_UI_ENABLED,
         CONF_DASHBOARD_PREVENT_RETURN,
+        "dashboard_navigation",
         CONF_ACTIONS_JSON,
     ]
     # Alarmo and the weather are set with the pages.

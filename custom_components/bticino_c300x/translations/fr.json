@@ -122,13 +122,15 @@
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action"
+          "dashboard_prevent_return": "Rester sur la page après une action",
+          "dashboard_navigation": "Navigation entre les pages"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
       "user_dashboard_entity_display": {
@@ -233,13 +235,15 @@
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action"
+          "dashboard_prevent_return": "Rester sur la page après une action",
+          "dashboard_navigation": "Navigation entre les pages"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -761,13 +765,15 @@
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action"
+          "dashboard_prevent_return": "Rester sur la page après une action",
+          "dashboard_navigation": "Navigation entre les pages"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
       "dashboard_entity_display": {
@@ -1531,6 +1537,12 @@
         "drop_link_local": "Sans adresses link-local (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 et IPv6 local (ULA) - recommandé",
         "ipv4_only": "IPv4 uniquement"
+      }
+    },
+    "dashboard_navigation": {
+      "options": {
+        "pager": "Flèches (précédent / suivant)",
+        "tabs": "Barre de favoris"
       }
     }
   },

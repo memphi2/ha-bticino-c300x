@@ -28,6 +28,7 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED,
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+    DASHBOARD_NAVIGATION_TABS,
 )
 from .dashboard_agenda import async_agenda_dashboard_page
 from .dashboard_config import (
@@ -47,6 +48,7 @@ from .dashboard_config import (
     configured_alarm_page_entity_id,
     configured_dashboard_entities,
     configured_dashboard_entity_display_overrides,
+    configured_dashboard_navigation,
     configured_dashboard_pages,
     configured_dashboard_prevent_return,
     configured_energy_page,
@@ -293,7 +295,9 @@ async def async_dashboard_payload(
         page for page in ordered
         if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
     ]
-    if status_enabled and len(shown) > 1:
+    tabs = configured_dashboard_navigation(entry) == DASHBOARD_NAVIGATION_TABS
+    if status_enabled and len(shown) > 1 and not tabs:
+        # The favourites bar reaches every page; the page list would repeat it.
         main_page["items"].append({"_kind": "navigation", "_order": 1})
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
@@ -306,6 +310,7 @@ async def async_dashboard_payload(
         # The numbers in the texts follow Home Assistant's language; the
         # display writes its own numbers the same way.
         "decimalComma": language != "en",
+        **({"navigation": DASHBOARD_NAVIGATION_TABS} if tabs else {}),
         "notifications": notifications,
         "data": {"pages": [_finalize_dashboard_page(page) for page in shown]},
     })

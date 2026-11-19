@@ -43,6 +43,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_NAVIGATION,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -75,6 +76,7 @@ from .const import (
 from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import normalize_dashboard_pages
 from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
+from .dashboard_page_order import dashboard_navigation
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
@@ -226,6 +228,9 @@ def current_feature_options(
         CONF_DASHBOARD_PAGES: list(normalize_dashboard_pages(
             _config_default(config_entry, CONF_DASHBOARD_PAGES, [])
         )),
+        CONF_DASHBOARD_NAVIGATION: dashboard_navigation(
+            _config_default(config_entry, CONF_DASHBOARD_NAVIGATION, None)
+        ),
         CONF_ENERGY_PAGE: normalize_energy_page(
             _config_default(config_entry, CONF_ENERGY_PAGE, {})
         ),
@@ -425,6 +430,7 @@ def feature_input_defaults(
     data.setdefault(CONF_WEATHER_ENTITY_ID, defaults[CONF_WEATHER_ENTITY_ID])
     data.setdefault(CONF_DASHBOARD_ENTITIES, defaults.get(CONF_DASHBOARD_ENTITIES, []))
     data.setdefault(CONF_DASHBOARD_PAGES, defaults.get(CONF_DASHBOARD_PAGES, []))
+    data.setdefault(CONF_DASHBOARD_NAVIGATION, dashboard_navigation(defaults.get(CONF_DASHBOARD_NAVIGATION)))
     data.setdefault(CONF_ENERGY_PAGE, defaults.get(CONF_ENERGY_PAGE, {}))
     data.setdefault(CONF_DASHBOARD_STATUS_PAGE_ENABLED, defaults.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True))
     data.setdefault(

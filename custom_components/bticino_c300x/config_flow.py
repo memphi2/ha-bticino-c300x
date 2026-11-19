@@ -163,6 +163,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_NAVIGATION,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -241,6 +242,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+        CONF_DASHBOARD_NAVIGATION,
         CONF_DASHBOARD_PAGES,
         CONF_ENERGY_PAGE,
         CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -846,6 +848,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         self._setup_device_ui_default,
                     )
                 ),
+                default_dashboard_navigation=(user_input or {}).get(CONF_DASHBOARD_NAVIGATION),
             ),
             errors=errors,
             description_placeholders={
@@ -918,6 +921,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 ],
                 CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
                 CONF_DASHBOARD_PAGES: feature_data[CONF_DASHBOARD_PAGES],
+                CONF_DASHBOARD_NAVIGATION: feature_data[CONF_DASHBOARD_NAVIGATION],
                 CONF_ENERGY_PAGE: feature_data[CONF_ENERGY_PAGE],
                 **optional_page_values(feature_data),
                 CONF_DASHBOARD_STATUS_PAGE_ENABLED: feature_data[CONF_DASHBOARD_STATUS_PAGE_ENABLED],
@@ -1304,6 +1308,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         CONF_DEVICE_UI_ENABLED,
                         feature_defaults[CONF_DEVICE_UI_ENABLED],
                     )
+                ),
+                default_dashboard_navigation=(user_input or {}).get(
+                    CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
                 ),
             ),
             errors=errors,
@@ -1737,6 +1744,9 @@ class BticinoC300XOptionsFlow(
                         CONF_DEVICE_UI_ENABLED,
                         feature_defaults[CONF_DEVICE_UI_ENABLED],
                     )
+                ),
+                default_dashboard_navigation=(user_input or {}).get(
+                    CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
                 ),
             ),
             errors=errors,

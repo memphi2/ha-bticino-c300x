@@ -35,6 +35,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_NAVIGATION,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -56,6 +57,7 @@ from .dashboard_entities import (
     normalize_dashboard_entity_ids,
     normalize_dashboard_pages,
 )
+from .dashboard_page_order import DASHBOARD_NAVIGATIONS, dashboard_navigation
 from .schema_compat import vol
 
 DASHBOARD_PREVENT_RETURN_DEFAULT = False
@@ -242,6 +244,7 @@ def dashboard_schema(
     *,
     default_dashboard_dynamic_homepage: bool = DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
     default_device_ui_enabled: bool = False,
+    default_dashboard_navigation: Any = None,
 ) -> vol.Schema:
     """Return the display and Display patch schema.
 
@@ -259,6 +262,14 @@ def dashboard_schema(
                 CONF_DASHBOARD_PREVENT_RETURN,
                 default=default_dashboard_prevent_return,
             ): bool,
+            vol.Optional(
+                CONF_DASHBOARD_NAVIGATION,
+                default=dashboard_navigation(default_dashboard_navigation),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(
+                options=list(DASHBOARD_NAVIGATIONS),
+                translation_key=CONF_DASHBOARD_NAVIGATION,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )),
             _optional_suggested(
                 CONF_ACTIONS_JSON,
                 default_actions_json,
@@ -407,6 +418,10 @@ def dashboard_input_defaults(
     data.setdefault(
         CONF_DASHBOARD_PAGES,
         [] if defaults is None else defaults.get(CONF_DASHBOARD_PAGES, []),
+    )
+    data.setdefault(
+        CONF_DASHBOARD_NAVIGATION,
+        dashboard_navigation(None if defaults is None else defaults.get(CONF_DASHBOARD_NAVIGATION)),
     )
     data.setdefault(
         CONF_ENERGY_PAGE,

@@ -64,6 +64,20 @@ workflow asks for a firmware target, use `1.7.19`; a device on `2.0.2` needs a
 workflow made for that firmware. Everything is used at your own risk and
 without warranty.
 
+## Support the Test Device
+
+Every release is tested on one C300X with firmware `1.7.19`; other firmware
+versions can only be checked against their firmware files. A second test unit
+would change that. A contribution towards it is welcome, as is a used or defective
+Classe 300X / C300X (`344642` or `344643`): please start a
+[discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general)
+and do not post an address there. A donation is voluntary and gives no claim to
+support or to a feature.
+
+<p align="center">
+  [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20test%20device-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/oliver7557)
+</p>
+
 ## Installation
 
 ### Home Assistant Marketplace
@@ -187,22 +201,6 @@ feature or firmware version.
 - License: Apache-2.0
 - Support scope: community project, not an official BTicino/Legrand or Home
   Assistant Core integration
-
-## Support the Project
-
-Every release is tested on one C300X with firmware `1.7.19`. Other firmware
-versions, such as `2.0.2`, can only be checked against their firmware files,
-not on a device. A second test unit would change that.
-
-Hardware donations are welcome: a used BTicino Classe 300X / C300X (`344642`
-or `344643`), also one with a defect or stuck in a boot loop, or a matching
-door station. If you have one to spare, please start a
-[discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general);
-do not post an address there.
-
-Money for the test hardware is welcome on
-[Ko-fi](https://ko-fi.com/oliver7557). A donation is voluntary and gives no
-claim to support or to a feature.
 
 ## AI Assistance
 

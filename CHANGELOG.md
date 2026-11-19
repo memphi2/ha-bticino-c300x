@@ -2,6 +2,9 @@
 
 ## v2.5.1 - 2026-11-19
 
+- A second test device is wanted: contribute on
+  [Ko-fi](https://ko-fi.com/oliver7557) or with hardware, see the README. A
+  donation gives no claim to support or to a feature.
 - Support C300X firmware `2.0.2` in addition to `1.7.x`. The routing patch
   knows the `2.0.2` build of its target; agent binary and display files are
   the same for both versions. Ring Call on `2.0.2` is not yet confirmed on a
@@ -13,9 +16,6 @@
   rooted a C300X on firmware `2.0.2`, contributed the routing table for it in
   [#113](https://github.com/memphi2/ha-bticino-c300x/pull/113) and found the
   installer problem.
-- Support the project: hardware donations for a second test device and a
-  [Ko-fi](https://ko-fi.com/oliver7557) page are described in the README. A
-  donation gives no claim to support or to a feature.
 
 ## v2.5.0 - 2026-11-16
 

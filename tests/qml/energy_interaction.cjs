@@ -65,6 +65,12 @@ for (const [index, y, height] of [[0, 20, 20], [1, 40, 30], [2, 10, 10], [3, 70,
     assert.deepEqual(rows(ctx.barSegment(stackedBars, 0, index, signedAxis, 80)), {y, height});
 }
 assert.deepEqual(rows(ctx.barSegment([{values: [-3]}], 0, 0, {min: -4, max: 0}, 80)), {y: 0, height: 60});
+assert.equal(ctx.zeroTick([{value: -0.2}, {value: -0.1}, {value: 0}, {value: 0.1}]), 2);
+assert.equal(ctx.zeroTick([{value: 0}, {value: 0.1}]), 0);
+for (const ticks of [[{value: 0.1}, {value: 0.2}], [], undefined, null, 'ticks', [null, {value: 0}].slice(0, 1)]) {
+    assert.equal(ctx.zeroTick(ticks), 0);
+}
+assert.match(qml, /property int tickLabelBase: EnergyChart\.zeroTick\(root\.listOf\(hoursAxis\.ticks\)\)\n/);
 assert.deepEqual(rows(ctx.barSegment([{values: [2]}], 0, 0, {min: 0, max: 4}, 80)), {y: 40, height: 40});
 for (const value of [0, null, undefined, NaN, Infinity, '2']) {
     assert.deepEqual(rows(ctx.barSegment([{values: [value]}], 0, 0, signedAxis, 80)), {y: 0, height: 0});

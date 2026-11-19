@@ -387,15 +387,19 @@ def test_clip_links_to_its_ring_after_the_call_has_closed(tmp_path, monkeypatch)
     asyncio.run(run())
 
 
-def test_ring_adopts_the_image_already_requested_for_an_open_stream(tmp_path, monkeypatch):
+@pytest.mark.parametrize("ring_after", [None, 0, 0.02])
+def test_ring_adopts_the_image_already_requested_for_an_open_stream(tmp_path, monkeypatch, ring_after):
     from test_stream_snapshot_capture import drain, setup
 
     async def run():
-        manager = setup(tmp_path, monkeypatch)
+        manager = setup(tmp_path, monkeypatch, delay=0.05)
         manager.hass.bus.async_fire = Mock()
         journal = manager.journal = VisitorJournal(manager.hass, manager.entry)
         journal.store = SimpleNamespace(async_delay_save=Mock())
         manager.capture.capture_requested("stream-1")
+        if ring_after is not None:
+            # The capture task has started and waits for the settling delay.
+            await asyncio.sleep(ring_after)
         ring = event()
         journal.event(ring)
         manager.capture._event(ring)
@@ -422,3 +426,4 @@ def test_reading_an_unchanged_journal_does_not_serialize_it_again(tmp_path, monk
     monkeypatch.setattr(journal_module, "MAX_JOURNAL_BYTES", 1)
     journal.changed()
     assert journal.items() == []
+

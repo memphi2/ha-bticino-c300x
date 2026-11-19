@@ -203,7 +203,6 @@ class SnapshotCapture:
         return entry_video_enabled(entry) and supports_capability(entry, "doorbell_video")
 
     async def _capture(self, generation: int, identity: str) -> None:
-        visitor_id = self.visitor_id
         try:
             options = snapshot_options(self.manager.entry)
             await asyncio.sleep(options.delay_seconds)
@@ -234,7 +233,8 @@ class SnapshotCapture:
                 if self._current(generation):
                     item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
                     if self._current(generation) and self.manager.journal is not None:
-                        await self.manager.journal.attach_snapshot(visitor_id, item.name, image)
+                        # Read now: a ring during the settling delay adopts this image.
+                        await self.manager.journal.attach_snapshot(self.visitor_id, item.name, image)
         except asyncio.CancelledError:
             raise
         except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError):

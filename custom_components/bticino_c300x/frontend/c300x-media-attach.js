@@ -17,12 +17,13 @@ function gainDbToLinear(gainDb) {
 }
 
 export class C300XMediaAttachment {
-  constructor(mediaElement, stream, { getGainDb = null, getPlayback = null } = {}) {
+  constructor(mediaElement, stream, { getGainDb = null, getPlayback = null, onGainChanged = null } = {}) {
     this._mediaElement = mediaElement;
     this._stream = stream;
     this._attached = false;
     this._getGainDb = getGainDb;
     this._getPlayback = getPlayback;
+    this._onGainChanged = onGainChanged;
     this._gainEngaged = false;
     this._outputNode = null;
     this._audioContext = null;
@@ -89,11 +90,19 @@ export class C300XMediaAttachment {
     }
     this._sourceNode.connect(this._gainNode);
     this._gainNode.gain.value = gainDbToLinear(gainDb);
-    this._gainEngaged = true;
+    this._setGainEngaged(true);
     this.refreshPlayback();
   }
 
   get gainEngaged() { return this._gainEngaged; }
+
+  // The gain stage engages after an asynchronous resume; tell the owner so
+  // controls that depend on it (the volume slider on iOS) update at once.
+  _setGainEngaged(engaged) {
+    if (this._gainEngaged === engaged) return;
+    this._gainEngaged = engaged;
+    this._onGainChanged?.();
+  }
 
   refreshPlayback() {
     const playback = this._getPlayback?.() || {};
@@ -151,7 +160,7 @@ export class C300XMediaAttachment {
   }
 
   _disengageGain() {
-    this._gainEngaged = false;
+    this._setGainEngaged(false);
     if (this._sourceNode) {
       try {
         this._sourceNode.disconnect();

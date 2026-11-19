@@ -1,5 +1,5 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=8f9a8f783049d6f4";
-import "./c300x-media-controls.js?v=8f9a8f783049d6f4";
+import { c300xMediaState } from "./c300x-state-model.js?v=1ae62ae9dcd63b40";
+import "./c300x-media-controls.js?v=1ae62ae9dcd63b40";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.

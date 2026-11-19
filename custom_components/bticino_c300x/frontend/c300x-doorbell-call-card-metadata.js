@@ -1,4 +1,4 @@
-import "./c300x-doorbell-call-card.js?v=8f9a8f783049d6f4";
+import "./c300x-doorbell-call-card.js?v=1ae62ae9dcd63b40";
 
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;

@@ -281,6 +281,28 @@ test("detaching while the AudioContext resumes leaves nothing to engage and does
   }
 });
 
+test("the owner hears when the gain stage engages and when it falls back", async () => {
+  const audio = installAudioContextMock();
+  try {
+    let gainDb = 6, changes = 0;
+    const attachment = new C300XMediaAttachment(fakeMediaElement(), streamWithAudio(), {
+      getGainDb: () => gainDb,
+      onGainChanged: () => { changes += 1; },
+    });
+    await attachment.play();
+    assert.equal(attachment.gainEngaged, true);
+    assert.equal(changes, 1, "engaging after the asynchronous resume is reported");
+    await attachment.refreshGain();
+    assert.equal(changes, 1, "an unchanged state is not reported again");
+    gainDb = 0;
+    await attachment.refreshGain();
+    assert.equal(attachment.gainEngaged, false);
+    assert.equal(changes, 2, "falling back to passthrough is reported");
+  } finally {
+    audio.restore();
+  }
+});
+
 test("without a DynamicsCompressor the gain connects straight to destination", async () => {
   // Graceful fallback: the makeup gain must still work on browsers that lack
   // DynamicsCompressorNode; only the anti-clip limiter is skipped.

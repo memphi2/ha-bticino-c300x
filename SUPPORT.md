@@ -2,6 +2,7 @@
 
 ## Supported Release Line
 
+- `2.7.x`: local development, not released
 - `2.6.x`: current stable (2.6.0)
 - `2.5.x`: previous stable; upgrade to 2.6.x for maintenance fixes
 - `2.4.x`: no longer maintained; upgrade to 2.6.x

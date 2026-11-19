@@ -421,8 +421,8 @@ HA selectors; Alarmo is set under **Alarm (Alarmo)**;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
-The pages dialog has four built-in pages (Status, Energy, Agenda and Leave home)
-and up to seven custom pages, one section each. The four built-in sections
+The pages dialog has five built-in pages (Status, Energy, Agenda, Leave home and
+Situations) and up to seven custom pages, one section each. The five built-in sections
 always appear first, even when disabled; custom sections follow in display order.
 Titles show the page's display position and name, for example **Page 2: Living room**,
 not its place in the form. Unused custom sections remain at the end. Alarmo is not one of
@@ -432,7 +432,7 @@ its own in the settings menu.
 | Field | Meaning |
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
-| **Position** | Order of all pages, 1 to 11. Left empty, the regular section's number is used. Equal positions put Energy, Agenda, then Leave home before regular pages; regular pages keep their section order. |
+| **Position** | Order of all pages, 1 to 12. Left empty, the regular section's number is used. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
 The status-page section carries the weather card at its top,
@@ -451,7 +451,7 @@ any capitalization) and each entity can be used once. Page names are limited to
 number. Pages that only configured actions use follow the configured pages.
 Sections of used pages are open, and so is the first free one.
 The optional pages can be placed among regular pages, not just after them.
-Their default positions are Energy 2, Agenda 10 and Leave home 11. Disabling an
+Their default positions are Energy 2, Agenda 10, Leave home 11 and Situations 12. Disabling an
 optional page preserves its position and selections for later use.
 
 #### Page navigation
@@ -503,7 +503,7 @@ contacts, 24 lights and eight actions). It does not
 automatically inspect every entity in HA. Unavailable contacts remain unknown,
 not safely closed. Opening or refreshing this page never executes an action.
 
-Its position defaults to 11 and can be set from 1 to 11. Selected actions require
+Its position defaults to 11 and can be set from 1 to 12. Selected actions require
 a second tap on **Confirm** within eight seconds and can be cancelled. Leaving
 the page, changed page data, a busy command or a lost connection clears pending
 confirmation; offline controls cannot execute commands. The first tap never
@@ -511,6 +511,29 @@ executes an action. Only the existing configured action allowlist is used. The
 optional Alarmo section opens the existing Alarm page with its usual readiness
 checks and PIN rules; it does not arm the alarm automatically. Disarmed panels
 show readiness where supported; armed or arming panels show their actual state.
+
+### Situations
+
+Enable **Situations** in **Display pages** and pick the entities to watch. The
+page lists only those that need attention, one row each with the state on the
+right:
+
+| Field | Shown when |
+| --- | --- |
+| **Windows and doors** | A contact with device class door, window, opening or garage door is open. |
+| **Garage doors** | A cover with device class garage is open, opening or closing. |
+| **Lights** | The light is on. |
+| **Task lists** | The to-do list has pending items; the row shows their number. |
+
+Up to 24 entities in total across the four fields. An unknown or unavailable
+entity stays on the page, in yellow, and is never counted as closed or off. An
+entity of another kind is shown as unsupported. With nothing to show the page
+says so in one line.
+
+The page is read-only: it runs no action, does not wake the display and does
+not change the page by itself. It uses the dashboard updates that are sent
+anyway and watches only the selected entities. It is off by default; its
+position defaults to 12 and can be set from 1 to 12.
 
 ### Energy Page
 
@@ -522,7 +545,7 @@ from there.
 | Field | Meaning |
 | --- | --- |
 | **Show the energy page** | Off by default. |
-| **Position** | 1 to 11, 2 by default. At the same position Energy comes before Agenda, Leave home and regular pages. |
+| **Position** | 1 to 12, 2 by default. At the same position Energy comes before Agenda, Leave home, Situations and regular pages. |
 | **Show Now / Today / Power / Consumers / Balance** | Each subpage has its own switch. With more than one enabled, buttons at the bottom switch between them. Switching all five off hides the Energy page and stops its updates without deleting its settings. |
 
 | View | Shows |

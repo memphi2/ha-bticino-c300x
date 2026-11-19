@@ -79,7 +79,7 @@ Most users only need:
 | Home Call | Auto card, dedicated Home Call mode or `start_home_call` / `stop_home_call`. |
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |
 | Messages and memos | Video-message, text-memo and voice-memo sensors plus playback/write/delete services. |
-| Display pages | Four built-in pages (Status, Energy, Agenda and Leave home) plus up to seven custom pages, all with configurable positions; weather, entity controls and a separate Alarmo subpage with an optional quick action. |
+| Display pages | Five built-in pages (Status, Energy, Agenda, Leave home and Situations) plus up to seven custom pages, all with configurable positions; weather, entity controls and a separate Alarmo subpage with an optional quick action. |
 | Page navigation | Previous/next arrows (default) or a favourites bar along the bottom edge of the display: one button per page for up to four pages, otherwise three pages and More. Set in the display settings. |
 | Notifications | Standard Notify action with info, warning and error notices and bounded wake/sound on safe screens; protected screens and calls suppress effects. Not a life-safety alarm. |
 | Maintenance | Agent update/remove, SSH/noAuth, firewall, mDNS, GUI reload and reboot controls. |

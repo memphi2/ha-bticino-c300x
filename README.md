@@ -6,7 +6,7 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Version: **2.6.0**.
+Development version: **2.7.0 (unreleased)**. Latest stable release: **2.6.0**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.
@@ -44,11 +44,13 @@ forwarding controls, messages and optional display pages.
   blueprint. History does not include the device's answering-machine recordings.
 - **Use the C300X as a home-control display.** Keep the native blue interface
   with configurable controls for lights, covers, climate, media and locks,
-  plus weather and Alarmo. Four built-in pages (Status, Energy, Agenda and
-  Leave home) and up to seven custom pages have configurable positions. Energy
+  plus weather and Alarmo. Five built-in pages (Status, Energy, Agenda,
+  Leave home and Situations) and up to seven custom pages have configurable positions. Energy
   includes live power, history and up to ten consumers configured in HA's
   Energy dashboard, ranked by current W. Agenda shows upcoming calendar events; Leave home checks
-  selected contacts and lights, with explicitly confirmed actions.
+  selected contacts and lights, with explicitly confirmed actions. Situations
+  lists what is open, on or pending among the entities you pick. Change pages
+  with arrows or a favourites bar.
   See [Display setup](docs/quickstart.md#9-optional-native-display).
 - **Connect notifications and automations.** The standard
   [Notify service](docs/feature-reference.md#standard-notify-service) offers

@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.7.0 - Unreleased
+
+- Optional favourites bar on the display. **Page navigation** in the display
+  settings chooses between the previous/next arrows (default) and a bar along
+  the bottom edge with one button per page, the current page marked. Up to
+  four pages each get a button; with more pages the fourth is **More** and
+  lists the rest. The tiles keep their height.
+- Optional **Situations** display page: lists, from the contacts, garage
+  doors, lights and task lists you select, those that are open, on or have
+  pending items. Read-only; unknown and unavailable entities stay visible. Off
+  by default, with its own position among the pages (1 to 12).
+- Setting up or removing the Home Assistant media user no longer stops the
+  display label script after ten seconds. A slow write used to be killed
+  without its cleanup, which could leave the device's root filesystem writable.
+- Requires the 2.7.0 agent bundle; run the agent-update Repair once. It
+  installs the agent and the three new display files.
+
 ## v2.6.0 - 2026-11-19
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

@@ -622,6 +622,14 @@ def test_native_agent_ringer_events_are_change_based() -> None:
     assert event_body.index("ringer_mute_is_ring_answer_transition(runtime, muted)") < event_body.index(
         "remember_ringer_muted(runtime, muted, msg, NULL)"
     )
+    read_body = text.split("static void handle_ringer_get(", maxsplit=1)[1].split(
+        "static int handle_ringer_post(", maxsplit=1,
+    )[0]
+    # A read during an answered ring must not record the call's mute as the setting.
+    assert read_body.index("ringer_mute_is_ring_answer_transition(runtime, muted == 1)") < read_body.index(
+        "remember_ringer_status(runtime, body, muted, volume)"
+    )
+    assert "remember_ringer_volume(runtime, volume," in read_body
     assert "ringer_volume_from_reply(msg, &code)" in event_body
     assert "remember_ringer_volume(runtime, code, msg)" in event_body
     assert "c300x_setting_observe(&runtime->ringer_muted_state" in note_body

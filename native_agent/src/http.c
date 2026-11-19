@@ -7166,7 +7166,14 @@ static void handle_ringer_get(
         send_device_error(client_fd, error);
         return;
     }
-    remember_ringer_status(runtime, body, muted, volume);
+    if (ringer_mute_is_ring_answer_transition(runtime, muted == 1)) {
+        /* The device mutes the ringer while a ring is answered; that is not the setting. */
+        char volume_raw[C300X_MAX_FRAME_LEN];
+        c300x_json_string_field(body, "volume_raw", volume_raw, sizeof(volume_raw));
+        remember_ringer_volume(runtime, volume, volume_raw[0] ? volume_raw : NULL);
+    } else {
+        remember_ringer_status(runtime, body, muted, volume);
+    }
     send_json(client_fd, 200, "OK", body);
 }
 

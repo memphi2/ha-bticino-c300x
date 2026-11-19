@@ -87,8 +87,8 @@ def test_compare_agent_bundle_requires_compatible_updater_file_set(
     assert state.update_required
 
 
-@pytest.mark.parametrize("installed_file_set", [None, 1, 2, 3, 4, 5, True, "5"])
-@pytest.mark.parametrize("target_file_set", [4, 5])
+@pytest.mark.parametrize("installed_file_set", [None, 1, 2, 3, 4, 5, 6, True, "6"])
+@pytest.mark.parametrize("target_file_set", [4, 5, 6])
 @pytest.mark.parametrize("matching_hash", [False, True])
 def test_distribution_bundle_requires_new_updater_even_with_matching_hash(
     installed_file_set: Any, matching_hash: bool, target_file_set: int,

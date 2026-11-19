@@ -10,20 +10,21 @@ ROOT = Path(__file__).resolve().parents[1]
 LEGACY_COMMIT = "4ce1a48"
 
 
-def _compile_updater(tmp_path, legacy, sanitize):
+def _compile_updater(tmp_path, legacy, sanitize, *, commit=None):
     tree = tmp_path / ("legacy" if legacy else "current")
     (tree / "src").mkdir(parents=True)
     (tree / "test").mkdir()
     for source in (ROOT / "native_agent/src").glob("*.[ch]"):
         shutil.copyfile(source, tree / "src" / source.name)
-    if legacy:
+    if legacy or commit:
         for name in ("agent_update.c", "agent_update.h", "agent_update_paths.h"):
             historical = subprocess.run(
-                ["git", "show", f"{LEGACY_COMMIT}:native_agent/src/{name}"],
+                ["git", "show", f"{commit or LEGACY_COMMIT}:native_agent/src/{name}"],
                 cwd=ROOT, capture_output=True, check=True,
             ).stdout
             (tree / "src" / name).write_bytes(historical)
-        assert '{"device_agent/qml/C300XEnergyDistribution.qml", 0644, 0}' in (tree / "src/agent_update_paths.h").read_text()
+        if legacy:
+            assert '{"device_agent/qml/C300XEnergyDistribution.qml", 0644, 0}' in (tree / "src/agent_update_paths.h").read_text()
     shutil.copyfile(ROOT / "native_agent/test/agent_update_upgrade_test.c", tree / "test/agent_update_upgrade_test.c")
     binary = tree / "updater"
     flags = ["-O1", "-g", "-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else ["-O2"]

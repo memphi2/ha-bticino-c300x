@@ -169,6 +169,32 @@ Qt Quick 1.1 imports and two vendor components are adapted for the local Qt 6
 renderer. This verifies layout, not Qt 4 firmware or device performance.
 PySide6 is a development-only tool, not an integration dependency.
 
+## Display Bundle Upgrade Tests
+
+File-set 6 adds `C300XChecks.qml`, `C300XSituations.qml` and
+`C300XOptionalPages.qml`. Both the staged manifest and the native capability
+must advertise 6: a file-set-5 updater cannot install these paths and needs
+the HA repair's second pass before the active display is patched or reloaded.
+
+`tests/test_agent_update_display_bootstrap.py` compiles the unchanged updater
+from `e1192c7f4abfaad508f46a9add6402a5eb530856` and starts with its actual
+display sources already patched into temporary GUI files. It exercises the
+HA upload, verification, bootstrap completion and QML restoration code. Only
+transport, agent restart, GUI process control and unrelated HA services are
+simulated. Missing/corrupt new files and activation failure must preserve the
+old GUI and pending repair flags; retry completes installation before reload.
+Every generated source is compared with the package, then `restore-all` must
+recover the original GUI. The separate legacy-bootstrap test retains the inert
+Distribution input required by file-set 4; it must not become an active view.
+
+Local compile-only evidence (2026-11-16): the three new components compiled
+unchanged under QEMU ARM against the private firmware 1.7.19 Qt 4.8.7 libraries
+and stock Styles module (`compile_failed=0`). `C300XLeaveHome.qml` and the full
+`HomeAssistant.qml` also compiled with stock QML dependencies and an import-only
+`BtObjects` placeholder. The probe did not instantiate or render the GUI, execute
+the vendor plugin, or test device startup/reboot behavior. This is separate from
+the Qt6-adapted layout checks and is not hardware validation.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.

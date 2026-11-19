@@ -23,7 +23,11 @@ from ..entity import entry_video_enabled
 from ..entry_config import entry_config_value
 from ..exceptions import service_validation_error
 from ..qml_patch import async_refresh_qml_patch_status
-from ..runtime_auth import async_classify_runtime_auth_error, async_request_reauth
+from ..runtime_auth import (
+    async_classify_runtime_auth_error,
+    async_request_maintenance_reauth,
+    async_request_reauth,
+)
 
 MEDIA_PLAYER_DOMAIN = "media_player"
 MEDIA_PLAYER_PLAY_MEDIA_SERVICE = "play_media"
@@ -41,9 +45,10 @@ async def raise_agent_command_failed(awaitable: Awaitable[Any], *, entry: Any) -
             raise service_validation_error("agent_command_failed") from err
         failure = await async_classify_runtime_auth_error(runtime.api, err)
         ensure_current_runtime(entry, runtime)
-        if isinstance(failure, C300XAgentApiAuthError):
+        if isinstance(failure, C300XAgentApiAuthError) and failure.maintenance:
+            async_request_maintenance_reauth(async_get_hass(), entry)
+        elif isinstance(failure, C300XAgentApiAuthError):
             hass = async_get_hass()
-            # An in-flight bearer-only renewal must not clear maintenance reauth.
             resources = runtime.resources
             unregister = resources.unregister_event_registration
             resources.unregister_event_registration = None

@@ -69,7 +69,16 @@ def test_service_rejection_requests_reauth_only_for_confirmed_credentials(monkey
     command.assert_awaited_once()
     assert api.async_validate_maintenance_auth.await_count == (0 if rejection == "bearer" else 1)
     state = entry.runtime_data.connection_state
-    if rejection in {"bearer", "maintenance"}:
+    if rejection == "maintenance":
+        # Only maintenance is locked: the access key still works, the entry stays online.
+        assert isinstance(error.value.__cause__, C300XAgentApiAuthError)
+        entry.async_start_reauth.assert_called_once_with(hass, data={"maintenance_key_rejected": True})
+        send.assert_not_called()
+        unregister.assert_not_called()
+        assert entry.runtime_data.resources.unregister_event_registration is unregister
+        cancel_grace.assert_not_called()
+        assert state.available and not state.authentication_failed
+    elif rejection == "bearer":
         assert isinstance(error.value.__cause__, C300XAgentApiAuthError)
         entry.async_start_reauth.assert_called_once_with(hass)
         send.assert_called_once_with(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
@@ -79,7 +88,7 @@ def test_service_rejection_requests_reauth_only_for_confirmed_credentials(monkey
         cancel_grace.assert_called_once()
         assert state.expire_unavailable is None
         assert state.authentication_failed and not state.available
-        assert state.last_reconnect_reason == ("agent_auth" if rejection == "bearer" else "maintenance_auth")
+        assert state.last_reconnect_reason == "agent_auth"
         assert state.next_reconnect_delay_seconds is None
     else:
         assert isinstance(error.value.__cause__, C300XAgentApiResponseError)
@@ -163,7 +172,7 @@ def test_service_auth_recovery_cannot_cross_runtime_boundary(monkeypatch, stage,
     asyncio.run(run())
 
 
-def test_confirmed_maintenance_rejection_stops_inflight_bearer_renewal(monkeypatch):
+def test_confirmed_maintenance_rejection_leaves_event_registration_running(monkeypatch):
     async def run():
         hass, entry, api, _, _ = setup(monkeypatch)
         entry.data.update(event_webhook_id="events", event_webhook_token="secret")
@@ -188,12 +197,11 @@ def test_confirmed_maintenance_rejection_stops_inflight_bearer_renewal(monkeypat
             await asyncio.wait_for(entered.wait(), 1)
             with pytest.raises(ServiceValidationError):
                 await services._C300XServiceHandlers(hass).async_reload_gui(SimpleNamespace(data={}))
-            with pytest.raises(asyncio.CancelledError):
-                await asyncio.wait_for(renewal, 1)
-            assert entry.runtime_data.connection_state.authentication_failed
-            assert not entry.runtime_data.connection_state.available
-            assert entry.runtime_data.resources.unregister_event_registration is None
-            entry.async_start_reauth.assert_called_once_with(hass)
+            assert not renewal.done()
+            assert not entry.runtime_data.connection_state.authentication_failed
+            assert entry.runtime_data.connection_state.available
+            assert entry.runtime_data.resources.unregister_event_registration == worker.unregister
+            entry.async_start_reauth.assert_called_once_with(hass, data={"maintenance_key_rejected": True})
             api.async_reload_gui.assert_awaited_once()
             api.async_validate_maintenance_auth.assert_awaited_once()
             api.async_register_event_subscription.assert_not_called()

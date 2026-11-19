@@ -30,6 +30,7 @@ from .const import (
     DEFAULT_AGENT_PORT,
 )
 from .discovery import discovery_matches_entry
+from .runtime_auth import REAUTH_MAINTENANCE
 
 _KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
 
@@ -171,6 +172,7 @@ class AuthFlowSteps:
     ) -> ConfigFlowResult:
         """Never use supplied entry data as a new endpoint or identity."""
         self._get_reauth_entry()
+        self._reauth_maintenance = entry_data.get(REAUTH_MAINTENANCE) is True
         return cast(ConfigFlowResult, await self.async_step_reauth_confirm())
 
     async def async_step_reauth_confirm(
@@ -181,9 +183,13 @@ class AuthFlowSteps:
         if user_input is not None:
             connection = current_connection_options(entry)
             keys = {key: _key_or_saved(user_input, connection, key) for key in _KEYS}
-            _, errors = await async_validate_entry_connection(
-                self.hass, entry, {**connection, **keys},
-            )
+            if getattr(self, "_reauth_maintenance", False) and not keys[CONF_MAINTENANCE_TOKEN]:
+                # Without a key nothing would be checked and the rejection would return.
+                errors = {CONF_MAINTENANCE_TOKEN: "required"}
+            else:
+                _, errors = await async_validate_entry_connection(
+                    self.hass, entry, {**connection, **keys},
+                )
             if errors.get("base") == "wrong_device":
                 return cast(ConfigFlowResult, self.async_abort(reason="reauth_wrong_device"))
             if not errors and current_connection_options(entry) != connection:

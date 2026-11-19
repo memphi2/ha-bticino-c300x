@@ -18,6 +18,7 @@
 - Validate agent and supplied maintenance credentials before saving normal
   setup, reconfiguration or connection options. Distinguish rejected keys from
   an unreachable agent, with translated form errors and entry-bound reauthentication.
+  A rejected maintenance key locks only maintenance actions; the entry stays online.
   Existing entries can still start offline; one-time SSH installation remains
   available. Event registration logs each outage and recovery once.
 - Unified media window in the doorstation card for live video, saved HA

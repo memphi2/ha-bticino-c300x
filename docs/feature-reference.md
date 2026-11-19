@@ -35,7 +35,11 @@ has a help text.
 Normal credential entry is checked before saving: rejected agent keys and
 rejected supplied maintenance keys have separate errors from an unreachable
 agent. Correct the keys through Home Assistant's reauthentication flow when
-prompted; the existing entry and unrelated settings are retained. Blank key
+prompted; the existing entry and unrelated settings are retained. A rejected
+maintenance key locks only maintenance actions such as restart, update and
+repair: calls, video, door and events continue, and the prompt then requires a
+maintenance key. A rejected agent key takes the entry offline until it is
+corrected. Blank key
 fields for an existing connection retain the saved key. An existing entry can
 still start while its device is offline and reconnect later. This does not
 bypass credential validation for a new entry or a changed connection, and the

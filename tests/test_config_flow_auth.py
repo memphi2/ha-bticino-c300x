@@ -229,3 +229,21 @@ def test_auth_forms_and_errors_are_translated(language):
     for section in ("config", "options"):
         for key in ("invalid_auth", "invalid_maintenance_auth", "cannot_connect"):
             assert translation[section]["error"][key]
+
+
+def test_reauth_for_a_rejected_maintenance_key_requires_that_key(monkeypatch):
+    existing = entry()
+    existing.data[CONF_MAINTENANCE_TOKEN] = ""
+    flow = BticinoC300XConfigFlow()
+    flow._get_reauth_entry = lambda: existing
+    flow.hass = SimpleNamespace()
+    flow.context = {"source": "reauth", "entry_id": "entry"}
+    flow.async_update_and_abort = Mock(side_effect=AssertionError("must not save"))
+    validate = AsyncMock(return_value=({}, {}))
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", validate)
+    shown = asyncio.run(flow.async_step_reauth({**existing.data, "maintenance_key_rejected": True}))
+    assert shown["step_id"] == "reauth_confirm"
+    result = asyncio.run(flow.async_step_reauth_confirm({CONF_AGENT_TOKEN: ""}))
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {CONF_MAINTENANCE_TOKEN: "required"}
+    validate.assert_not_called()

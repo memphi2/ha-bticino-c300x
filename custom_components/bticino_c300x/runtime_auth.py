@@ -29,6 +29,20 @@ async def async_classify_runtime_auth_error(
     return C300XAgentApiResponseError("maintenance operation is not permitted")
 
 
+REAUTH_MAINTENANCE = "maintenance_key_rejected"
+
+
+@callback
+def async_request_maintenance_reauth(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
+    """Ask for a new maintenance key and leave the entry online.
+
+    Calls, video, door and events use the access key, which still works. Only
+    the maintenance actions fail until the key is replaced.
+    """
+
+    entry.async_start_reauth(hass, data={REAUTH_MAINTENANCE: True})
+
+
 @callback
 def async_request_reauth(
     hass: HomeAssistant,

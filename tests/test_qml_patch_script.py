@@ -313,7 +313,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "db6a9046b38c6997c1c75091ffdb05a5d1d8de8b72b86a47b853c299266ec3fe",
+    "HomeAssistant.qml": "55ed9d6652e5263958a9c874a3badd517e008a4b9942d0783fb6ca5be0edc08a",
     "C300XEnergy.qml": "94596b90c4dd7d49e0214bfecbe846f4e711cd53989dd310d9ba739459179d81",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
     "C300XAgenda.qml": "9bc5d2ff2d69250033323a4bc4696df85268ad761ed5b8446b56bf0325143711",
@@ -328,7 +328,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "02fb96fe0befd3c9347a267619cefe615e91239a05071e529c574a4accb594e4",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "17c510ed56828affcd8eefc7a34068f2f34fe843b125f7c1167585252e5c3133",
-    "js/c300x_ha.js": "b91e15aa1efdcd1fc06cc23d3c084f99a7b7b1ae658db1121e792ba72237c083",
+    "js/c300x_ha.js": "c7d9b32012d4612889cf7b69df53611de7c287bd31aeca0d4731df80eb1405c8",
     "js/c300x_i18n.js": "4e66685179ad1ba40cc93591426635f7dec03cc5fcccdcce166b94e4944eb883",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }

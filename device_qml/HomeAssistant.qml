@@ -69,8 +69,12 @@ Page {
     property variant tapOrigin: [0, 0, 0]
     property bool tapFlicked: false
     property bool tapStolen: false
+    property variant pendingSettling: []
+    property variant pendingSince: 0
     function controlFree(item) {
-        return pendingEntity.length === 0 || (!controlInFlight && (!item || pendingEntity !== item.entity_id))
+        if (pendingEntity.length === 0) return true
+        if (controlInFlight) return false
+        return !item || (pendingEntity !== item.entity_id && pendingSettling.indexOf(item.entity_id) < 0)
     }
     function tapPress(area) {
         tapArea = area
@@ -101,6 +105,18 @@ Page {
         flick.contentY = tapOrigin[index]
         try { if (leaveHomeLoader.item) leaveHomeLoader.item.tapForget() } catch (error) {}
         try { area.clicked(null) } catch (error) {}
+    }
+    function pendingExpiryTick() {
+        if (!pendingEntity) return
+        var left = 10000 - (Date.now() - pendingSince)
+        if (left <= 0) {
+            expirePendingControl()
+            return
+        }
+        try {
+            pendingExpiry.interval = left
+            pendingExpiry.restart()
+        } catch (error) {}
     }
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
     // its bindings. Doing that inside a flick drops frames on the device, and the
@@ -145,6 +161,7 @@ Page {
         dashboardRefreshAgain = false
         dashboardOnline = false
         pendingEntity = ""
+        pendingSettling = []
         controlInFlight = false
         interactionActive = false
         Api.stopDashboardRuntime()
@@ -386,10 +403,11 @@ Page {
     }
 
     Timer {
+        id: pendingExpiry
         interval: 10000
         repeat: false
         running: pageActive && pendingEntity.length > 0
-        onTriggered: expirePendingControl()
+        onTriggered: pendingExpiryTick()
     }
 
     function itemName(item) {

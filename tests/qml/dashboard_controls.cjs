@@ -979,4 +979,25 @@ p.tapPress(a); p.tapCancel(); p.tapForget();
 p.tapEnd(p.scroll, 0);
 assert.equal(a.clicks, 1, "a press another list delivered is not delivered again");
 
-console.log("Tap delivery passed");
+// A control stays locked until its own state is confirmed.
+Object.assign(p, {pendingSettling: [], pendingSince: 0});
+queue.length = 0; p.pendingEntity = ""; p.controlInFlight = false;
+Api.dashboardControl({entity_id: "light.a", domain: "light"}, {command: ""}, null, p.status, p);
+queue.shift().success({ok: true});
+queue.length = 0;
+Api.dashboardControl({entity_id: "light.b", domain: "light"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 1);
+queue.shift().success({ok: true});
+queue.length = 0;
+Api.dashboardControl({entity_id: "light.a", domain: "light"}, {command: ""}, null, p.status, p);
+assert.equal(queue.length, 0, "an answered but unconfirmed control stays locked when another is pressed");
+assert.equal(p.controlFree({entity_id: "light.a"}), false);
+assert.equal(p.controlFree({entity_id: "light.c"}), true);
+p.dashboardRefreshAgain = false; p.controlInFlight = false;
+Api.finishDashboardRefresh(p.status, p);
+assert.deepEqual(Array.from(p.pendingSettling), []);
+assert.equal(p.controlFree({entity_id: "light.a"}), true);
+p.pendingEntity = "light.b"; p.pendingSince = Date.now() - 5000; p.commandGeneration = 7;
+p.pendingExpiryTick();
+assert.equal(p.commandGeneration, 7, "a command is not expired before its own ten seconds");
+console.log("Tap delivery and per-control lock passed");

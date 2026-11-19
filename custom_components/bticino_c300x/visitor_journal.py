@@ -13,7 +13,7 @@ from typing import Any
 from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 
-from .capture_history import CaptureHistory
+from .capture_history import CLOCK_TOLERANCE, CaptureHistory
 from .config_snapshots import snapshot_options
 from .const import DOMAIN, EVENT_AGENT_EVENT_RECEIVED
 from .event_payload import agent_event_key
@@ -196,7 +196,7 @@ class VisitorJournal:
         captures_changed = self.captures.prune(snapshot_options(self.entry).retention_days)
         cutoff = time.time() - snapshot_options(self.entry).retention_days * 86400
         kept = sorted(
-            (item for item in self.records.values() if cutoff < item["at"] <= time.time()),
+            (item for item in self.records.values() if cutoff < item["at"] <= time.time() + CLOCK_TOLERANCE),
             key=lambda item: (item["at"], item["id"]),
         )[-MAX_VISITS:]
         records = {item["id"]: item for item in kept}
@@ -255,7 +255,7 @@ def _validated_record(raw: Any) -> dict[str, Any] | None:
     at = raw.get("at")
     if type(at) is not int and type(at) is not float:
         return None
-    if not 0 < at <= time.time():
+    if not 0 < at <= time.time() + CLOCK_TOLERANCE:
         return None
     source = raw.get("source")
     if visit_id({"source_event_id": source}) != raw["id"]:

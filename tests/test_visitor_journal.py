@@ -138,7 +138,7 @@ def test_malformed_answer_evidence_is_ignored(tmp_path, monkeypatch, payload):
 
 @pytest.mark.parametrize("at", [
     None, True, False, "123", [], {}, 0, -1,
-    float("nan"), float("inf"), float("-inf"), 1800000001,
+    float("nan"), float("inf"), float("-inf"), 1800000000 + 86401,
 ])
 def test_invalid_restored_timestamp_is_rejected(monkeypatch, at):
     monkeypatch.setattr(journal_module.time, "time", lambda: 1800000000)
@@ -155,7 +155,7 @@ def test_numeric_subclass_timestamp_is_still_rejected(number_type):
     assert journal_module._validated_record(raw) is None
 
 
-@pytest.mark.parametrize("at", [1, 1.25, 1800000000, 1800000000.0])
+@pytest.mark.parametrize("at", [1, 1.25, 1800000000, 1800000000.0, 1800000000 + 3600])
 def test_valid_restored_timestamp_is_not_coerced(monkeypatch, at):
     monkeypatch.setattr(journal_module.time, "time", lambda: 1800000000)
     source = event().data["source_event_id"]
@@ -334,3 +334,33 @@ def test_removal_deletes_metadata_but_not_existing_artifacts(tmp_path):
         await hass.async_block_till_done()
 
     asyncio.run(run())
+
+
+def test_clock_set_back_keeps_visits_and_captures(tmp_path, monkeypatch):
+    """A host that starts with its clock behind must not erase recent history."""
+
+    async def run():
+        from custom_components.bticino_c300x import capture_history
+
+        manager, journal = fixture(tmp_path, monkeypatch)
+        now = 1800000000
+        monkeypatch.setattr(journal_module.time, "time", lambda: now)
+        monkeypatch.setattr(capture_history.time, "time", lambda: now)
+        journal.event(event())
+        clip = {"name": "doorbell_20261116_120000_" + "c" * 32 + ".mp4", "size": 1, "mtime_ns": 1, "ctime_ns": 1}
+        monkeypatch.setattr(capture_history, "valid_clip", lambda value: value)
+        journal.captures.add(clip, now)
+        saved = journal._payload()
+        now -= 3600
+        journal.prune()
+        assert len(journal.items()) == 1
+        assert len(journal.captures.records) == 1
+        journal.records = {}
+        journal.captures.records = {}
+        journal.store.async_load.return_value = saved
+        await journal.load()
+        assert len(journal.records) == 1
+        assert len(journal.captures.records) == 1
+
+    asyncio.run(run())
+

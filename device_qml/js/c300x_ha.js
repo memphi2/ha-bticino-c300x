@@ -1087,6 +1087,8 @@ function loadDashboardPage(statusItem, pageItem) {
     pageItem.agendaVisible = !!pageData.agenda
     assignDashboardValue(pageItem, "leaveHome", pageData.leave_home || {})
     pageItem.leaveHomeVisible = !!pageData.leave_home
+    assignDashboardValue(pageItem, "situations", pageData.situations || {})
+    pageItem.situationsVisible = !!pageData.situations
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {

@@ -15,7 +15,7 @@ STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml js/c300x_ringer.js EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
 # The display files this integration adds; every list of them derives from here.
-GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XChecks.qml C300XSituations.qml C300XOptionalPages.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
@@ -120,6 +120,9 @@ full_patch_present() {
         && [ -f "$GUI_DIR/js/c300x_alerts.js" ] \
         && [ -f "$GUI_DIR/C300XAgenda.qml" ] \
         && [ -f "$GUI_DIR/C300XLeaveHome.qml" ] \
+        && [ -f "$GUI_DIR/C300XChecks.qml" ] \
+        && [ -f "$GUI_DIR/C300XSituations.qml" ] \
+        && [ -f "$GUI_DIR/C300XOptionalPages.qml" ] \
         && [ -f "$GUI_DIR/C300XDetailControl.qml" ] \
         && [ -f "$GUI_DIR/C300XEnergyReadout.qml" ] \
         && [ -f "$GUI_DIR/C300XEnergySums.qml" ] \

@@ -167,6 +167,9 @@ scp_cmd \
     "$QML_STAGE_DIR/C300XAlerts.qml" \
     "$QML_STAGE_DIR/C300XAgenda.qml" \
     "$QML_STAGE_DIR/C300XLeaveHome.qml" \
+    "$QML_STAGE_DIR/C300XChecks.qml" \
+    "$QML_STAGE_DIR/C300XSituations.qml" \
+    "$QML_STAGE_DIR/C300XOptionalPages.qml" \
     "$QML_STAGE_DIR/C300XDetailControl.qml" \
     "$QML_STAGE_DIR/C300XEnergyReadout.qml" \
     "$QML_STAGE_DIR/C300XEnergySums.qml" \

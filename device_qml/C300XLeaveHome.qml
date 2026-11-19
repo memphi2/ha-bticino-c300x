@@ -53,43 +53,10 @@ Item {
             id: content
             width: parent.width
             spacing: 8
-            Repeater {
-                model: root.checks
-                Item {
-                    width: content.width
-                    height: 44
-                    UbuntuLightText {
-                        anchors.left: parent.left
-                        anchors.right: checkState.left
-                        anchors.rightMargin: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: modelData.name
-                        textFormat: Text.PlainText
-                        font.pixelSize: 20
-                        color: "white"
-                        elide: Text.ElideRight
-                    }
-                    UbuntuLightText {
-                        id: checkState
-                        width: parent.width * 0.36
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: modelData.state_label
-                        font.pixelSize: 19
-                        color: modelData.color
-                        horizontalAlignment: Text.AlignRight
-                        elide: Text.ElideRight
-                    }
-                }
-            }
-            UbuntuLightText {
+            C300XChecks {
                 width: content.width
-                height: visible ? 52 : 0
-                visible: root.checks.length === 0
-                text: root.leaveHome && root.leaveHome.empty_text ? root.leaveHome.empty_text : ""
-                color: "#c7d0d9"
-                font.pixelSize: 19
-                wrapMode: Text.WordWrap
+                checks: root.checks
+                emptyText: root.leaveHome && root.leaveHome.empty_text ? root.leaveHome.empty_text : ""
             }
             Item {
                 width: content.width

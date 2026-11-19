@@ -327,6 +327,20 @@ def test_leave_home_timeout_still_detects_broken_handler(tmp_path):
     assert checks["timeout clears confirmation"]["actual"] == "scene.departure"
 
 
+def test_optional_host_loads_and_unloads_each_page_without_actions(tmp_path):
+    result = subprocess.run([qt_python(), str(SCRIPT), "--components", "C300XOptionalPages",
+                             "--scenarios", "transitions", "--check", "--output", str(tmp_path)],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads((tmp_path / "report.json").read_text())
+    assert report["passed"] and len(report["cases"]) == 3
+    for case in report["cases"]:
+        assert not case["events"] and not case["network_attempts"]
+        assert {shot["state"] for shot in case["snapshots"]} >= {
+            "agendaVisible", "leaveHomeVisible", "energyVisible", "situationsVisible", "all-hidden",
+        }
+
+
 @pytest.mark.parametrize("fault", ["none", "wrong_palette", "click_through", "broken_scroll",
                                     "ignore_blocked", "qml_error", "network_fallback"])
 def test_alerts_mock_transport_pixels_and_interactions(tmp_path, fault):

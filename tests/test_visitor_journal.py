@@ -459,18 +459,19 @@ def test_a_change_is_trimmed_to_the_size_limit_before_it_is_saved(tmp_path, monk
     asyncio.run(run())
 
 
-def test_a_clip_is_not_linked_to_an_old_visit_while_a_newer_ring_is_active(tmp_path, monkeypatch):
+def test_a_clip_stays_with_its_visit_when_the_visitor_rings_again_during_it(tmp_path, monkeypatch):
     async def run():
         manager, journal = fixture(tmp_path, monkeypatch)
         journal.event(event())
         first = journal.active
-        journal.event(event("call_ended", 2))
-        journal.event(event(sequence=3))
-        assert journal.active not in (None, first)
+        journal.event(event(sequence=2))
+        second = journal.active
+        assert second not in (None, first)
         path = tmp_path / "media" / "c300x" / ("doorbell_20261116_120000_" + "9" * 32 + ".mp4")
         path.parent.mkdir(parents=True)
         path.write_bytes(b"clip")
         await journal.attach_clip(first, {"output_path": str(path), "entry_id": "one", "capture_mode": "ring"})
-        assert journal.records[first]["clip"] is None
+        assert journal.records[first]["clip"] is not None
+        assert journal.records[second]["clip"] is None
 
     asyncio.run(run())

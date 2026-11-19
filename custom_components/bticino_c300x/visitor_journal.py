@@ -189,13 +189,12 @@ class VisitorJournal:
             and manager.journal is self
         )):
             self.captures.add(clip, metadata.get("captured_at"))
-            # The key was taken from the ring when the capture started; the
-            # call may have closed while the recording was still being written,
-            # but a newer ring makes the recording overlap another visit.
+            # A ring clip belongs to the visit its capture was started for,
+            # even if that call has closed or a newer ring came in meanwhile.
+            # Only while that visit is the active call may a newer clip replace it.
             if (metadata.get("capture_mode") == "ring" and key is not None
                     and key in self.records
-                    and (key == self.active
-                         or (self.active is None and self.records[key]["clip"] is None))):
+                    and (key == self.active or self.records[key]["clip"] is None)):
                 self.records[key]["clip"] = clip
             self.prune()
             self.changed()

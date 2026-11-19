@@ -326,7 +326,7 @@ PATCH_OUTPUT_SHA256 = {
     "C300XRingerControl.qml": "7e30781b7a43dcff6ab090d6dcc87c479b2284f073a98c314827ce23774310d9",
     "js/c300x_alerts.js": "a06a136e24ba269ee49110d7586c5fb97deda137371e2f8a52a93696ec3ff3d1",
     "js/c300x_energy.js": "02fb96fe0befd3c9347a267619cefe615e91239a05071e529c574a4accb594e4",
-    "js/c300x_energy_consumers.js": "e569ba7514a7086e7c7b7ff67cd70cb68fdda5a54de4a46ae5464c596abebb32",
+    "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "17c510ed56828affcd8eefc7a34068f2f34fe843b125f7c1167585252e5c3133",
     "js/c300x_ha.js": "17a3499d6be78996ab312739f45eb3f089e97bf23d73d0e244cc63f9094a0865",
     "js/c300x_i18n.js": "4e66685179ad1ba40cc93591426635f7dec03cc5fcccdcce166b94e4944eb883",

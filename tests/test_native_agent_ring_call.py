@@ -405,11 +405,10 @@ def test_native_agent_ring_receiver_follows_smartphone_forwarding_state() -> Non
     assert "c300x_video_set_ring_receiver_enabled(" in video
     assert "static void sync_ring_receiver_for_forwarding" in http
     assert "runtime->smartphone_forwarding_mode_code == 0" not in forwarding_body
-    assert "runtime->smartphone_forwarding_mode_code == 1" in forwarding_body
+    assert "runtime->forwarding_state.last_valid == 1" in forwarding_body
     assert "c300x_video_set_ring_receiver_enabled(" in http
-    assert "remember_smartphone_forwarding_mode(runtime, code)" in http
+    assert "remember_smartphone_forwarding_mode(runtime, code, reply)" in http
     assert "refresh_smartphone_forwarding_mode(config, runtime)" in http
-    assert "int changed = note_smartphone_forwarding_changed(runtime, code);" in http
     assert "sync_ring_receiver_for_forwarding(runtime);" in http
     assert (
         "send_ring_registration(bridge, fd, domain, from_aor, cseq, 0)"

@@ -46,7 +46,9 @@ Most users only need:
   saved HA snapshots and capture videos with the arrows on the picture; videos
   have play/pause, a timeline and volume/mute, with their timestamp at the
   lower right. Click the picture for a large window with the same controls
-  and full screen. Live video and incoming rings take
+  and full screen. On iPhone and iPad the volume slider is not shown,
+  because the system leaves media volume to the hardware keys; mute works.
+  Live video and incoming rings take
   priority. Browsing never starts, answers or stops a device call.
 - History does not record videos or include the device's answering-machine
   recordings. Use the bundled **C300X Ring capture** blueprint to configure

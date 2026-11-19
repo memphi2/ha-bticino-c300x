@@ -390,3 +390,15 @@ test("new media modules keep HA controls on a picture that fills the card, witho
     assert.ok(source.split("\n").length < 400, module);
   }
 });
+
+test("the volume slider is hidden where the platform fixes the media volume", async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = { createElement: () => ({ get volume() { return 1; }, set volume(_value) {} }) };
+  t.after(() => { globalThis.document = previous; });
+  const s = harness(t, [], { enabled: false, live: true, hasAudio: true }), c = s.controls;
+  await tick();
+  assert.equal(c.nodes.mute.hidden, false);
+  assert.equal(c.nodes.volume.hidden, true);
+  s.click("mute");
+  assert.equal(s.volumes[0].detail.muted, true);
+});

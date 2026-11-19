@@ -1,12 +1,24 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=cc4e34bd2489f079";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=cc4e34bd2489f079";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=cc4e34bd2489f079";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=5ce7a638990d9f10";
+import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=5ce7a638990d9f10";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=5ce7a638990d9f10";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
   const seconds = Math.floor(Number.isFinite(value) && value > 0 ? value : 0);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
+
+// iOS leaves the volume of media elements to the hardware keys: a value
+// written to it is ignored. Only mute works there, so the slider is not shown.
+function volumeFixed() {
+  try {
+    const probe = document.createElement("video");
+    probe.volume = 0.5;
+    return probe.volume !== 0.5;
+  } catch (_error) {
+    return false;
+  }
+}
 
 export class C300XMediaControls extends HTMLElement {
   constructor() {
@@ -32,6 +44,7 @@ export class C300XMediaControls extends HTMLElement {
         "elapsed", "info", "previous", "next", "play", "mute", "volume", "fullscreen", "expand", "close"]
         .map((name) => [name, this.shadowRoot.querySelector(`.${name}`)]));
       this.video = this.shadowRoot.querySelector("video");
+      this.volumeFixed = volumeFixed();
       this.img = this.shadowRoot.querySelector("img");
       const on = (name, event, callback) => this.nodes[name].addEventListener(event, callback);
       on("previous", "click", () => void this.history.step(1));
@@ -212,7 +225,8 @@ export class C300XMediaControls extends HTMLElement {
     const playing = isVideo && !video.paused && !video.ended;
     this.buttonLabel("play", playing ? "pause" : "play");
     n.play.querySelector("ha-icon").setAttribute("icon", playing ? "mdi:pause" : "mdi:play");
-    n.mute.hidden = n.volume.hidden = !audio;
+    n.mute.hidden = !audio;
+    n.volume.hidden = !audio || this.volumeFixed;
     this.buttonLabel("mute", this.audioMuted ? "unmute" : "mute");
     n.mute.setAttribute("aria-pressed", String(!!this.audioMuted));
     n.mute.querySelector("ha-icon").setAttribute("icon", this.audioMuted || !this.audioVolume ? "mdi:volume-off" : "mdi:volume-high");

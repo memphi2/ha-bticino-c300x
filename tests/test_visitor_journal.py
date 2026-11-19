@@ -44,7 +44,7 @@ def test_invalidation_notifies_without_storage_and_changes_still_persist(tmp_pat
     )
     journal.hass.bus.async_fire.reset_mock()
     journal.event(event())
-    journal.store.async_delay_save.assert_called_once_with(journal._payload, 1)
+    journal.store.async_delay_save.assert_called_once_with(journal._saved_payload, 1)
     journal.hass.bus.async_fire.assert_called_once_with(
         journal_module.EVENT_JOURNAL_CHANGED, {"entry_id": "one"},
     )
@@ -428,7 +428,7 @@ def test_reading_an_unchanged_journal_does_not_serialize_it_again(tmp_path, monk
     assert journal.items() == []
 
 
-@pytest.mark.parametrize("change", ["ring", "clip"])
+@pytest.mark.parametrize("change", ["ring", "clip", "snapshot", "outcome"])
 def test_a_change_is_trimmed_to_the_size_limit_before_it_is_saved(tmp_path, monkeypatch, change):
     async def run():
         manager, journal = fixture(tmp_path, monkeypatch)
@@ -440,6 +440,12 @@ def test_a_change_is_trimmed_to_the_size_limit_before_it_is_saved(tmp_path, monk
         journal.items()
         if change == "ring":
             journal.event(event(sequence=6))
+        elif change == "snapshot":
+            journal.records[journal.active]["snapshot"] = {"name": "x" * 200}
+            journal.changed()
+        elif change == "outcome":
+            journal.records[journal.active]["outcome"] = "answered-" + "y" * 40
+            journal.changed()
         else:
             key = journal.active
             path = tmp_path / "media" / "c300x" / ("doorbell_20261116_120000_" + "f" * 32 + ".mp4")
@@ -447,7 +453,8 @@ def test_a_change_is_trimmed_to_the_size_limit_before_it_is_saved(tmp_path, monk
             path.write_bytes(b"clip")
             await journal.attach_clip(key, {"output_path": str(path), "entry_id": "one", "capture_mode": "ring"})
         # What the delayed save writes, without a read in between.
-        assert len(json.dumps(journal._payload())) <= limit
+        save = journal.store.async_delay_save.call_args[0][0]
+        assert len(json.dumps(save())) <= limit
 
     asyncio.run(run())
 

@@ -126,7 +126,6 @@ class VisitorJournal:
                 "id": key, "at": time.time(), "source": source, "outcome": "unknown",
                 "snapshot": None, "clip": None,
             }
-            self._unsized = True
             self.prune()
             self.changed()
         elif kind in {"doorbell_media_closed", "agent_restarted", "home_call_started", "call_ended"}:
@@ -198,7 +197,6 @@ class VisitorJournal:
                     and (key == self.active
                          or (self.active is None and self.records[key]["clip"] is None))):
                 self.records[key]["clip"] = clip
-            self._unsized = True
             self.prune()
             self.changed()
 
@@ -229,7 +227,7 @@ class VisitorJournal:
     def changed(self) -> None:
         self._unsized = True
         if not self.closed:
-            self.store.async_delay_save(self._payload, 1)
+            self.store.async_delay_save(self._saved_payload, 1)
             self.invalidate()
 
     def invalidate(self) -> None:
@@ -237,6 +235,11 @@ class VisitorJournal:
         if not self.closed:
             # Only invalidation crosses the event bus, never visitor/media data.
             self.hass.bus.async_fire(EVENT_JOURNAL_CHANGED, {"entry_id": self.entry.entry_id})
+
+    def _saved_payload(self) -> dict[str, Any]:
+        """Apply retention and the size limit to every change before it is written."""
+        self.prune()
+        return self._payload()
 
     def _payload(self) -> dict[str, Any]:
         result = {"visits": list(self.records.values())}
@@ -256,7 +259,7 @@ class VisitorJournal:
         if self.removed:
             return
         try:
-            await self.store.async_save(self._payload())
+            await self.store.async_save(self._saved_payload())
         except OSError:
             _LOGGER.warning("Could not persist C300X visitor journal", exc_info=True)
 

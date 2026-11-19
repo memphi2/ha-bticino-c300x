@@ -459,29 +459,22 @@ _DEVICE_OWNED_CONFIG_SECTIONS = (
 
 
 def _read_remote_config_sync(client: _DeviceSshClient, remote_path: str) -> Any:
-    # lstat distinguishes an absent config from an unreadable or dangling one.
-    script = (
-        "import errno, json, os, sys\n"
-        "path = sys.argv[1]\n"
-        "try:\n"
-        "    os.lstat(path)\n"
-        "except OSError as exc:\n"
-        "    if exc.errno != errno.ENOENT:\n"
-        "        raise\n"
-        "    print(json.dumps({'missing': True}))\n"
-        "else:\n"
-        "    with open(path, 'r') as handle:\n"
-        "        content = handle.read()\n"
-        "    print(json.dumps({'content': content}))\n"
+    # Shell only: the stock device Python has no json module. "F" precedes the
+    # content of an existing path, "M" reports an absent one; a path that
+    # exists but cannot be read, or a folder that cannot be searched, fails.
+    path = _quote(remote_path)
+    folder = _quote(remote_path.rpartition("/")[0] or "/")
+    output = client.run(
+        f"if [ -e {path} ] || [ -L {path} ]; then printf F && cat {path}; "
+        f"elif [ -d {folder} ] && [ ! -x {folder} ]; then exit 1; "
+        "else printf M; fi"
     )
-    output = client.run(f"python - {_quote(remote_path)}", script.encode("utf-8"))
+    if output == "M":
+        return None
     try:
-        result = json.loads(output)
-        if result == {"missing": True} and result["missing"] is True:
-            return None
-        if not isinstance(result, dict) or set(result) != {"content"}:
+        if not output.startswith("F"):
             raise ValueError("Invalid config read response")
-        existing = json.loads(result["content"])
+        existing = json.loads(output[1:])
         if not isinstance(existing, dict):
             raise ValueError("Device config must be an object")
         return existing
@@ -777,20 +770,12 @@ def _remote_content_matches_sync(
 
 
 def _remote_sha256_sync(client: _DeviceSshClient, remote_path: str) -> str | None:
-    script = (
-        "import hashlib, sys\n"
-        "path = sys.argv[1]\n"
-        "h = hashlib.sha256()\n"
-        "with open(path, 'rb') as handle:\n"
-        "    for chunk in iter(lambda: handle.read(65536), b''):\n"
-        "        h.update(chunk)\n"
-        "print(h.hexdigest())\n"
-    )
+    # sha256sum, not Python: the stock device Python has no hashlib module.
     try:
-        output = client.run(f"python - {_quote(remote_path)}", script.encode())
+        output = client.run(f"sha256sum {_quote(remote_path)}")
     except C300XDeviceInstallError:
         return None
-    remote_hash = output.strip().splitlines()[-1] if output.strip() else ""
+    remote_hash = output.split()[0] if output.split() else ""
     if len(remote_hash) != 64 or any(char not in "0123456789abcdef" for char in remote_hash):
         return None
     return remote_hash

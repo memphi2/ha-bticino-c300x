@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import types
@@ -286,10 +287,10 @@ def test_bootstrap_install_uses_python_ssh_client(
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
-            if input_data and b"os.lstat(path)" in input_data:
+            if command.startswith("if [ -e "):
                 assert len(self.commands) == 1
                 assert not self.uploads
-                return json.dumps({"missing": True})
+                return "M"
             if command == f"readlink {device_installer.REMOTE_INIT_LINK}":
                 return f"{device_installer.REMOTE_INIT_SCRIPT}\n"
             if "qml_patch.sh " in command:
@@ -449,8 +450,8 @@ def test_bootstrap_install_fails_when_startup_link_is_missing(
 
     class FakeSshClient:
         def run(self, command: str, input_data: bytes | None = None) -> str:
-            if input_data and b"os.lstat(path)" in input_data:
-                return json.dumps({"missing": True})
+            if command.startswith("if [ -e "):
+                return "M"
             if command == f"readlink {device_installer.REMOTE_INIT_LINK}":
                 return ""
             return ""
@@ -515,7 +516,7 @@ def test_write_remote_file_skips_identical_content() -> None:
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
-            if command.startswith("python - "):
+            if command.startswith("sha256sum "):
                 return expected_hash + "\n"
             if command.startswith("stat -c %a "):
                 return "600\n"
@@ -556,7 +557,7 @@ def test_write_remote_file_repairs_mode_drift_for_identical_content() -> None:
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
-            if command.startswith("python - "):
+            if command.startswith("sha256sum "):
                 return expected_hash + "\n"
             if command.startswith("stat -c %a "):
                 return "644\n"
@@ -598,7 +599,7 @@ def test_write_remote_file_replaces_changed_content_atomically() -> None:
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
-            if command.startswith("python - "):
+            if command.startswith("sha256sum "):
                 return "not-a-sha\n"
             if ".new" in command and "mv -f" in command:
                 return ""
@@ -637,7 +638,7 @@ def test_remote_helpers_treat_invalid_or_missing_remote_state_as_mismatch() -> N
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append(command)
-            if command.startswith("python - "):
+            if command.startswith("sha256sum "):
                 raise C300XDeviceInstallError("device_install_failed")
             if command.startswith("stat -c %a "):
                 raise C300XDeviceInstallError("device_install_failed")
@@ -709,7 +710,7 @@ def test_put_file_repairs_mode_drift_for_identical_payload(tmp_path: Path) -> No
 
     def fake_run(command: str, input_data: bytes | None = None) -> str:
         commands.append((command, input_data))
-        if command.startswith("python - "):
+        if command.startswith("sha256sum "):
             return expected_hash + "\n"
         if command.startswith("stat -c %a "):
             return "600\n"
@@ -744,7 +745,7 @@ def test_asyncssh_put_file_replaces_changed_payload(tmp_path: Path) -> None:
 
     def fake_run(command: str, input_data: bytes | None = None) -> str:
         commands.append((command, input_data))
-        if command.startswith("python - "):
+        if command.startswith("sha256sum "):
             return "not-a-valid-sha\n"
         if ".new" in command and "mv -f" in command:
             return ""
@@ -829,7 +830,7 @@ def test_startup_script_recreates_missing_rc_link_without_rewriting_init(
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
-            if command.startswith("python - "):
+            if command.startswith("sha256sum "):
                 for path, digest in hashes.items():
                     if path in command:
                         return digest + "\n"
@@ -895,7 +896,7 @@ def test_startup_script_update_preserves_init_move_failure_status(
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
-            if command.startswith("python - "):
+            if command.startswith("sha256sum "):
                 for path, digest in hashes.items():
                     if path in command:
                         return digest + "\n"
@@ -967,7 +968,7 @@ def test_startup_script_keeps_matching_rc_link_unchanged(tmp_path: Path) -> None
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
-            if command.startswith("python - "):
+            if command.startswith("sha256sum "):
                 for path, digest in hashes.items():
                     if path in command:
                         return digest + "\n"
@@ -1240,8 +1241,8 @@ def test_install_reads_remote_config_and_writes_merged_result(
             self.writes: list[bytes] = []
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
-            if input_data and b"os.lstat(path)" in input_data:
-                return json.dumps({"content": old})
+            if command.startswith("if [ -e "):
+                return "F" + old
             if input_data and b"api-token" in input_data:
                 self.writes.append(input_data)
             if "qml_patch.sh " in command:
@@ -1287,9 +1288,7 @@ def test_install_reads_remote_config_and_writes_merged_result(
 
 
 @pytest.mark.parametrize("response", [
-    None, "", "not-json", "[]", '{"missing": false}', '{"missing": 1}',
-    '{"content": "broken"}', '{"content": "null"}', '{"content": "[]"}',
-    '{"content": null}',
+    None, "", "not-json", "[]", "{}", "MM", "Fbroken", "Fnull", "F[]", "F",
 ])
 def test_install_config_read_failure_never_writes_or_restarts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, response: str | None
@@ -1301,7 +1300,7 @@ def test_install_config_read_failure_never_writes_or_restarts(
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append(command)
-            assert input_data and b"os.lstat(path)" in input_data
+            assert "config.json" in command and input_data is None
             if response is None:
                 raise C300XDeviceInstallError("device_install_failed")
             return response
@@ -1327,44 +1326,75 @@ def test_install_config_read_failure_never_writes_or_restarts(
     assert client.closed
 
 
+class _LocalShellClient:
+    """Run the device commands in a local shell, as the device shell would."""
+
+    def __init__(self) -> None:
+        self.commands: list[str] = []
+
+    def run(self, command: str, input_data: bytes | None = None) -> str:
+        self.commands.append(command)
+        result = subprocess.run(
+            ["sh", "-c", command], input=input_data or b"",
+            capture_output=True, check=False,
+        )
+        if result.returncode:
+            raise C300XDeviceInstallError("device_install_failed")
+        return result.stdout.decode("utf-8")
+
+
 @pytest.mark.parametrize("state", [
-    "missing", "valid", "malformed", "directory", "dangling", "denied", "read_error",
+    "missing", "missing_dir", "valid", "empty", "malformed", "directory",
+    "dangling", "denied", "read_error",
 ])
-def test_config_read_script_local_files(tmp_path: Path, state: str) -> None:
-    path = tmp_path / "config.json"
+def test_config_read_command_local_files(tmp_path: Path, state: str) -> None:
+    if state in ("denied", "read_error") and os.geteuid() == 0:
+        pytest.skip("root ignores file permissions")
+    folder = tmp_path / "agent"
+    path = folder / "config.json"
+    if state != "missing_dir":
+        folder.mkdir()
     if state in ("valid", "read_error"):
         path.write_text('{"mqtt": {"host": "broker.lan"}}', encoding="utf-8")
+    elif state == "empty":
+        path.write_text("", encoding="utf-8")
     elif state == "malformed":
-        path.write_text("broken", encoding="utf-8")
+        path.write_text("Mbroken", encoding="utf-8")
     elif state == "directory":
         path.mkdir()
     elif state == "dangling":
         path.symlink_to(tmp_path / "absent-target")
+    if state == "read_error":
+        path.chmod(0)
+    elif state == "denied":
+        folder.chmod(0)
 
-    class LocalReadClient:
-        def run(self, command: str, input_data: bytes | None = None) -> str:
-            assert input_data is not None
-            if state in ("denied", "read_error"):
-                target = "os.lstat" if state == "denied" else "builtins.open"
-                prefix = (
-                    "import os, builtins\n"
-                    "def denied(*args, **kwargs):\n"
-                    "    raise OSError(13, 'Permission denied')\n"
-                    f"{target} = denied\n"
-                )
-                input_data = prefix.encode() + input_data
-            result = subprocess.run(
-                [sys.executable, "-", str(path)], input=input_data,
-                capture_output=True, check=False,
-            )
-            if result.returncode:
-                raise C300XDeviceInstallError("device_install_failed")
-            return result.stdout.decode("utf-8")
+    client = _LocalShellClient()
+    try:
+        if state in ("missing", "missing_dir"):
+            assert device_installer._read_remote_config_sync(client, str(path)) is None
+        elif state == "valid":
+            assert device_installer._read_remote_config_sync(client, str(path)) == {
+                "mqtt": {"host": "broker.lan"}
+            }
+        else:
+            with pytest.raises(C300XDeviceInstallError):
+                device_installer._read_remote_config_sync(client, str(path))
+    finally:
+        folder.chmod(0o755) if folder.exists() else None
 
-    client = LocalReadClient()
-    if state in ("malformed", "directory", "dangling", "denied", "read_error"):
-        with pytest.raises(C300XDeviceInstallError):
-            device_installer._read_remote_config_sync(client, str(path))
-    else:
-        result = device_installer._read_remote_config_sync(client, str(path))
-        assert result == (None if state == "missing" else {"mqtt": {"host": "broker.lan"}})
+
+def test_device_side_steps_use_no_python(tmp_path: Path) -> None:
+    """The stock device Python has neither json nor hashlib."""
+
+    path = tmp_path / "config.json"
+    path.write_text('{"video": {}}', encoding="utf-8")
+    client = _LocalShellClient()
+
+    assert device_installer._read_remote_config_sync(client, str(path)) == {"video": {}}
+    assert device_installer._remote_sha256_sync(client, str(path)) == hashlib.sha256(
+        b'{"video": {}}'
+    ).hexdigest()
+    assert device_installer._remote_sha256_sync(client, str(tmp_path / "absent")) is None
+    assert client.commands
+    assert not any("python" in command for command in client.commands)

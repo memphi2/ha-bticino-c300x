@@ -242,7 +242,7 @@ test("an audio track arriving after video makes listening controls available", a
   card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
   card.hass = fakeHass();
   const tracks = [];
-  card._webrtc = { running: true, remoteStream: { getAudioTracks: () => tracks }, close() {} };
+  card._webrtc = { running: true, remoteStream: { getAudioTracks: () => tracks, getVideoTracks: () => tracks.filter((track) => track.kind === "video") }, close() {} };
   const controls = card.shadowRoot.querySelector("c300x-media-controls");
   try {
     card._updateState();
@@ -250,6 +250,10 @@ test("an audio track arriving after video makes listening controls available", a
     tracks.push({ kind: "audio" });
     card._scheduleUpdate();
     assert.equal(controls.configuration.hasAudio, true);
+    assert.equal(controls.configuration.live, false);
+    tracks.push({ kind: "video" });
+    card._scheduleUpdate();
+    assert.equal(controls.configuration.live, true);
   } finally { card.disconnectedCallback(); }
 });
 

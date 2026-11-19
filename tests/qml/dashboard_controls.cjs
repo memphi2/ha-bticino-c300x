@@ -953,67 +953,12 @@ assert.equal(p.pendingEntity, "light.other");
 Api.dashboardControl({entity_id: "switch.third", domain: "switch"}, {command: ""}, null, p.status, p);
 assert.equal(queue.length, 1, "every control waits while a command is in flight");
 
-// Tap tolerance: one state for every list; only a press a list took over is delivered, once.
-// Qt 4.8 order when a list takes a press over: contentY change, movementStarted, then canceled.
-function fakeArea() { const a = {clicks: 0, visible: true, enabled: true, parent: {enabled: true}, clicked() { a.clicks += 1; }}; return a; }
-Object.assign(p, {tapArea: null, tapAt: 0, tapList: -1, tapOrigin: 0, tapFlicked: false, tapStolen: false, tapShifted: false, tapEdge: false});
-const outer = {contentY: 20, atYBeginning: false, atYEnd: false}, inner = {contentY: 20, atYBeginning: false, atYEnd: false};
-function takeOver(list, index) { p.tapScrolled(index, list); p.tapMoving(index, list); p.tapCancel(); }
-function steal(area, list, index, moved) {
-    p.tapPress(area); takeOver(list, index);
-    list.contentY += moved; p.tapScrolled(index, list); p.tapEnd(index, list);
+// A press a list takes over is a scroll, never a delayed tap: Qt 4.8 does not
+// report the finger, so a delivered tap could not tell a wobble from a swipe.
+for (const file of ["HomeAssistant", "C300XLeaveHome", "C300XDetailControl", "C300XPageNavigation", "C300XEnergy"]) {
+    const text = fs.readFileSync(path.join(__dirname, `../../device_qml/${file}.qml`), "utf8");
+    assert.doesNotMatch(text, /clicked\(null\)|\btap(Press|Cancel|End)\b/, `${file} delivers no taps on its own`);
 }
-let a = fakeArea();
-p.tapPress(a); p.tapMoving(0, outer); outer.contentY = 26; p.tapScrolled(0, outer); p.tapEnd(0, outer);
-assert.equal(a.clicks, 0, "a press the list did not take over was already a normal tap");
-outer.contentY = 20;
-steal(a, outer, 0, 10);
-assert.equal(a.clicks, 1, "a press taken over by a small scroll is delivered");
-assert.equal(outer.contentY, 20, "the list returns to where the press started");
-p.tapEnd(0, outer);
-assert.equal(a.clicks, 1, "the delivered press is used up");
-p.tapPress(a); takeOver(outer, 0);
-outer.contentY = 100; p.tapScrolled(0, outer); outer.contentY = 20; p.tapEnd(0, outer);
-assert.equal(a.clicks, 1, "a drag out and back is a scroll, not a tap");
-p.tapPress(a); takeOver(outer, 0); outer.contentY = 60; p.tapScrolled(0, outer); p.tapEnd(0, outer);
-outer.contentY = 20;
-p.tapMoving(3, inner); inner.contentY = 32; p.tapScrolled(3, inner); p.tapEnd(3, inner);
-assert.equal(a.clicks, 1, "a rejected press is used up for every list, also Leave home's");
-inner.contentY = 20;
-p.tapPress(a); takeOver(inner, 3); p.tapMoving(0, outer);
-inner.contentY = 25; p.tapScrolled(3, inner); p.tapEnd(3, inner); p.tapEnd(0, outer);
-assert.equal(a.clicks, 1, "a press that moved two lists is a scroll");
-inner.contentY = 20;
-p.tapPress(a); p.tapCancel(); p.tapMoving(0, outer); outer.contentY = 25; p.tapScrolled(0, outer); p.tapEnd(0, outer);
-assert.equal(a.clicks, 1, "a cancel without a moving list (control hidden while pressed) arms nothing");
-outer.contentY = 20;
-p.tapPress(a); p.tapMoving(0, outer); outer.contentY = 5; p.tapScrolled(0, outer); p.tapEnd(0, outer);
-assert.equal(a.clicks, 1, "a later gesture from a blank spot does not click an earlier control");
-outer.contentY = 20;
-p.tapPress(a); takeOver(inner, 3); p.tapEnd(3, inner);
-assert.equal(a.clicks, 1, "a list that took the press over without moving (content fits) is a swipe, not a tap");
-inner.atYEnd = true;
-p.tapPress(a); takeOver(inner, 3); inner.contentY += 8; p.tapScrolled(3, inner); p.tapEnd(3, inner);
-assert.equal(a.clicks, 1, "a list that hit its end may hide a longer finger movement");
-inner.atYEnd = false; inner.contentY = 20;
-outer.contentY = 20;
-a.visible = false; steal(a, outer, 0, 5);
-assert.equal(a.clicks, 1, "a control hidden while pressed gets no tap");
-a.visible = true; a.parent.enabled = false; outer.contentY = 20; steal(a, outer, 0, 5);
-assert.equal(a.clicks, 1, "a control in a disabled container gets no tap");
-a.parent.enabled = true; outer.contentY = 20;
-p.tapPress(a); p.tapAt = Date.now() - 3000; takeOver(outer, 0); outer.contentY = 25; p.tapScrolled(0, outer); p.tapEnd(0, outer);
-assert.equal(a.clicks, 1, "a press older than two seconds is not delivered");
-outer.contentY = 20;
-p.tapPress(null); takeOver(outer, 0); p.tapEnd(0, outer);
-assert.equal(p.tapStolen, false, "a destroyed control leaves nothing armed");
-const leaveHomeQml = fs.readFileSync(path.join(__dirname, "../../device_qml/C300XLeaveHome.qml"), "utf8");
-assert.doesNotMatch(leaveHomeQml, /tapArea|tapStolen|tapEnd/, "Leave home keeps no tap state of its own");
-for (const signal of ["listFlicking", "listMoving", "listScrolled", "listEnded"])
-    assert.match(leaveHomeQml, new RegExp("root\\." + signal + "\\("), `Leave home forwards ${signal}`);
-assert.match(qml, /onListMoving: tapMoving\(3, flick\)/);
-assert.match(qml, /onListEnded: tapEnd\(3, flick\)/);
-assert.match(qml, /property Item tapArea/, "a destroyed control clears the held press");
 
 // A control stays locked until its own state is confirmed.
 Object.assign(p, {pendingSettling: []});
@@ -1037,4 +982,4 @@ assert.match(qml, /onPendingEntityChanged: if \(pageActive && pendingEntity.leng
     "every new command gets its own ten seconds, started outside the timer's own handler");
 assert.match(qml, /id: pendingExpiry[^}]*onTriggered: expirePendingControl\(\)/);
 assert.doesNotMatch(qml, /onTriggered:[^\n]*restart|pendingExpiryTick/, "Qt 4.8 drops a restart made inside onTriggered");
-console.log("Tap delivery and per-control lock passed");
+console.log("No delayed taps and per-control lock passed");

@@ -13,12 +13,6 @@ Item {
     property string pendingActionId: ""
     signal actionRequested(variant item)
     signal alarmRequested()
-    signal pressing(variant area)
-    signal canceling(variant area)
-    signal listFlicking()
-    signal listMoving(variant flick)
-    signal listScrolled(variant flick)
-    signal listEnded(variant flick)
     clip: true
     onLeaveHomeChanged: clearConfirmation()
     onBusyChanged: clearConfirmation()
@@ -50,10 +44,6 @@ Item {
 
     Flickable {
         id: list
-        onFlickStarted: root.listFlicking()
-        onMovementStarted: root.listMoving(list)
-        onContentYChanged: root.listScrolled(list)
-        onMovementEnded: root.listEnded(list)
         anchors.fill: parent
         contentWidth: width
         contentHeight: content.height
@@ -123,8 +113,6 @@ Item {
                 BeepingMouseArea {
                     id: alarmMouse
                     anchors.fill: parent
-                    onPressed: root.pressing(alarmMouse)
-                    onCanceled: root.canceling(alarmMouse)
                     enabled: !root.busy && root.online && root.alarm && root.alarm.available
                     onClicked: { root.clearConfirmation(); root.alarmRequested() }
                 }
@@ -156,8 +144,6 @@ Item {
                     }
                     BeepingMouseArea {
                         id: actionMouse
-                        onPressed: root.pressing(actionMouse)
-                        onCanceled: root.canceling(actionMouse)
                         width: confirming ? parent.width * 0.68 - 8 : parent.width
                         height: parent.height
                         enabled: !root.busy && root.online
@@ -179,7 +165,7 @@ Item {
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
                         }
-                        BeepingMouseArea { id: cancelMouse; anchors.fill: parent; onPressed: root.pressing(cancelMouse); onCanceled: root.canceling(cancelMouse); onClicked: root.clearConfirmation() }
+                        BeepingMouseArea { id: cancelMouse; anchors.fill: parent; onClicked: root.clearConfirmation() }
                     }
                 }
             }

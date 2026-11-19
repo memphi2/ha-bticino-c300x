@@ -46,6 +46,7 @@ def _rootfs(root: Path, checker: ModuleType, version: str = "1.7.19") -> Path:
     info.write_text(f"<a><ver_webserver> {version} </ver_webserver></a>", encoding="utf-8")
     (root / "usr/bin").mkdir(parents=True, exist_ok=True)
     (root / "bin").mkdir(exist_ok=True)
+    (root / "bin/busybox").write_bytes(b"busybox")
     for tool in checker.TOOLS:
         (root / "usr/bin" / tool).symlink_to("/bin/busybox")
     return root
@@ -115,6 +116,31 @@ def test_links_never_leave_the_root_file_system(tmp_path: Path) -> None:
 
     assert checker.resolve(root, "lib/libc.so.6") is None
     assert checker.resolve(root, "lib/loop") is None
+
+    # A linked folder stays inside the root as well.
+    (tmp_path / "hostlib").mkdir()
+    (tmp_path / "hostlib" / "libm.so.6").write_bytes(b"host file")
+    (root / "usr").mkdir()
+    (root / "usr/lib").symlink_to(str(tmp_path / "hostlib"))
+    assert checker.resolve(root, "usr/lib/libm.so.6") is None
+    (root / "real").mkdir()
+    (root / "real/libm.so.6").write_bytes(b"device file")
+    (root / "alias").symlink_to("/real")
+    assert checker.resolve(root, "alias/libm.so.6") == root / "real/libm.so.6"
+
+
+def test_a_tool_whose_link_target_is_absent_counts_as_missing(tmp_path: Path) -> None:
+    checker = _load()
+    baseline = _rootfs(tmp_path / "a", checker)
+    candidate = _rootfs(tmp_path / "b", checker)
+    (candidate / "bin/busybox").unlink()
+    (candidate / "usr/bin/setsid").unlink()
+    (candidate / "usr/bin/setsid").write_bytes(b"tool")
+
+    failures, _notes = checker.compare(baseline, candidate, {ROUTING_SHA})
+
+    assert len(failures) == len(checker.TOOLS) - 1
+    assert all("device tool" in failure for failure in failures)
 
 
 def test_routing_hashes_come_from_the_patch_builder() -> None:

@@ -54,24 +54,36 @@ _MAX_LINKS = 16
 
 
 def resolve(root: Path, relative: str) -> Path | None:
-    """Follow symbolic links inside the root file system, never outside it."""
+    """Follow symbolic links inside the root file system, never outside it.
 
-    current = PurePosixPath("/") / relative
-    for _ in range(_MAX_LINKS):
-        path = root / str(current).lstrip("/")
+    Every path component is resolved against the root, so neither an absolute
+    link nor a linked folder of an extracted image reads a host file.
+    """
+
+    pending = [part for part in PurePosixPath(relative).parts if part != "/"]
+    done: list[str] = []
+    links = 0
+    while pending:
+        part = pending.pop(0)
+        if part == ".":
+            continue
+        if part == "..":
+            if done:
+                done.pop()
+            continue
+        path = root.joinpath(*done, part)
         if not path.is_symlink():
-            return path if path.exists() else None
+            done.append(part)
+            continue
+        links += 1
+        if links > _MAX_LINKS:
+            return None
         target = PurePosixPath(path.readlink().as_posix())
-        current = target if target.is_absolute() else current.parent / target
-        parts: list[str] = []
-        for part in current.parts[1:]:
-            if part == "..":
-                if parts:
-                    parts.pop()
-            elif part != ".":
-                parts.append(part)
-        current = PurePosixPath("/", *parts)
-    return None
+        if target.is_absolute():
+            done = []
+        pending = [item for item in target.parts if item != "/"] + pending
+    path = root.joinpath(*done)
+    return path if path.exists() else None
 
 
 def sha256(path: Path) -> str:
@@ -88,9 +100,9 @@ def file_hash(root: Path, relative: str) -> str | None:
 
 
 def tree_hashes(root: Path, relative: str) -> dict[str, str]:
-    base = root / relative
+    base = resolve(root, relative)
     hashes: dict[str, str] = {}
-    if not base.is_dir():
+    if base is None or not base.is_dir():
         return hashes
     for path in sorted(base.rglob("*")):
         name = path.relative_to(base).as_posix()
@@ -102,8 +114,8 @@ def tree_hashes(root: Path, relative: str) -> dict[str, str]:
 
 
 def firmware_version(root: Path) -> str | None:
-    path = root / FIRMWARE_INFO
-    if not path.is_file():
+    path = resolve(root, FIRMWARE_INFO)
+    if path is None or not path.is_file():
         return None
     match = re.search(
         r"<ver_webserver>\s*([0-9A-Za-z._-]+)\s*</ver_webserver>",
@@ -130,8 +142,11 @@ def known_routing_hashes() -> set[str]:
 
 
 def has_tool(root: Path, tool: str) -> bool:
-    return any((root / folder / tool).exists() or (root / folder / tool).is_symlink()
-               for folder in TOOL_DIRS)
+    for folder in TOOL_DIRS:
+        path = resolve(root, f"{folder}/{tool}")
+        if path is not None and path.is_file():
+            return True
+    return False
 
 
 def compare(

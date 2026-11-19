@@ -364,3 +364,25 @@ def test_clock_set_back_keeps_visits_and_captures(tmp_path, monkeypatch):
 
     asyncio.run(run())
 
+
+def test_clip_links_to_its_ring_after_the_call_has_closed(tmp_path, monkeypatch):
+    async def run():
+        manager, journal = fixture(tmp_path, monkeypatch)
+        journal.event(event())
+        key = journal.active
+        path = tmp_path / "media" / "c300x" / ("doorbell_20261116_120000_" + "d" * 32 + ".mp4")
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"ring clip")
+        metadata = {"output_path": str(path), "entry_id": "one", "capture_mode": "ring"}
+        journal.event(event("call_ended", 2))
+        assert journal.active is None
+        await journal.attach_clip(key, metadata)
+        clip = journal.items()[0]["clip"]
+        assert read_clip(manager.hass, clip) == b"ring clip"
+        other = path.with_name("doorbell_20261116_120100_" + "e" * 32 + ".mp4")
+        other.write_bytes(b"later clip")
+        await journal.attach_clip(key, {**metadata, "output_path": str(other)})
+        assert journal.items()[0]["clip"] == clip
+
+    asyncio.run(run())
+

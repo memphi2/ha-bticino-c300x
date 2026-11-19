@@ -307,7 +307,8 @@ def test_completed_captures_survive_visit_end_and_storage_reload(tmp_path, monke
         key = journal.active
         journal.event(event("doorbell_media_closed", 2))
         path = await clip(manager, key=key, mode=mode)
-        assert journal.items()[0]["clip"] is None
+        # A ring clip still belongs to its visit; an on-demand capture has none.
+        assert (journal.items()[0]["clip"] is None) == (mode == "on_demand")
         before = await listed(view, request)
         assert len(before) == 1
         payload = journal._payload()

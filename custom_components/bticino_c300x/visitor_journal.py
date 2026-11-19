@@ -187,7 +187,11 @@ class VisitorJournal:
             and manager.journal is self
         )):
             self.captures.add(clip, metadata.get("captured_at"))
-            if metadata.get("capture_mode") == "ring" and key == self.active and key in self.records:
+            # The key was taken from the ring when the capture started; the
+            # call may have closed while the recording was still being written.
+            if (metadata.get("capture_mode") == "ring" and key is not None
+                    and key in self.records
+                    and (key == self.active or self.records[key]["clip"] is None)):
                 self.records[key]["clip"] = clip
             self.prune()
             self.changed()

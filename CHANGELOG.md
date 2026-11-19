@@ -2,6 +2,8 @@
 
 ## v2.5.1 - 2026-11-19
 
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20test%20device-FF5E5B?style=for-the-badge)](https://ko-fi.com/oliver7557)
+
 - A second test device is wanted: contribute on
   [Ko-fi](https://ko-fi.com/oliver7557) or with hardware, see the README.
   Every contribution is voluntary and very welcome; support and new features

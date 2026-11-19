@@ -170,6 +170,70 @@ PATCHES_2_0_2: tuple[Patch, ...] = tuple(
     )
 )
 
+# Firmware 3.0.6 (Qt5-era PIE rebuild). Patch sites re-derived from the
+# recompiled binary; the 1.7.x rec_json_f restructure collapses to a literal
+# route_ext->route_int redirect because the symlink call exists inline here.
+STOCK_SHA256_3_0_6 = "7f7b28e1579c93d1c752ecab220801f639a4c5fc7eb845d79fe76563e7c9f1cb"
+
+PATCHES_3_0_6: tuple[Patch, ...] = (
+    Patch(
+        name="p0_mode_recjson",
+        offset=0x27014,
+        range_len=12,
+        expected_range_sha256="a9db5d94fdd0cb9b4dae85941ac99762a33abcc5237db4edf051259c973b146e",
+        patched_range_sha256="bfac450eff18576df39e787372d02b01c4ea3b4099d7cb1507ab4a21700d67cb",
+        writes=(Write(1, bytes.fromhex("0050")), Write(11, bytes.fromhex("8a")),),
+    ),
+    Patch(
+        name="p1_mode_sigusr2",
+        offset=0xA1DC,
+        range_len=16,
+        expected_range_sha256="cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b",
+        patched_range_sha256="9bf52da965bdf744685e93b31353826af7bc74bc1fc3248d91f3b89f493444fe",
+        writes=(Write(1, bytes.fromhex("0050")), Write(4, bytes.fromhex("00")), Write(7, bytes.fromhex("93")), Write(11, bytes.fromhex("9a01")), Write(15, bytes.fromhex("e3")),),
+    ),
+    Patch(
+        name="p2_nop_blx",
+        offset=0x34D04,
+        range_len=4,
+        expected_range_sha256="85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547",
+        patched_range_sha256="71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d",
+        writes=(Write(0, bytes.fromhex("0000a0")),),
+    ),
+    Patch(
+        name="p3_nop_str",
+        offset=0x34D1C,
+        range_len=4,
+        expected_range_sha256="4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391",
+        patched_range_sha256="71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d",
+        writes=(Write(0, bytes.fromhex("0000a0e1")),),
+    ),
+    Patch(
+        name="p4_nop_block",
+        offset=0x34D24,
+        range_len=16,
+        expected_range_sha256="cea97ef00435c2c2429911a495511a3f914c7b055dd04c4176c141c71a6d7b27",
+        patched_range_sha256="801b48661d2b117e9d4c1065f5b27b8e68938ac8efaf47e5a1db1211d495f592",
+        writes=(Write(0, bytes.fromhex("0000")), Write(4, bytes.fromhex("0000")), Write(8, bytes.fromhex("00")), Write(12, bytes.fromhex("0000a0e1")),),
+    ),
+    Patch(
+        name="p5_redir_update",
+        offset=0x350DC,
+        range_len=4,
+        expected_range_sha256="60b7b33fa991351fdc7658edb4d51d7f1193979428b4a5516d302911a4352b9b",
+        patched_range_sha256="2ddad22425195d27460390320d8ed0b8bdd67a6bcbc94b36a5b16af16fa3f678",
+        writes=(Write(0, bytes.fromhex("7c830000")),),
+    ),
+    Patch(
+        name="p6_redir_recjson",
+        offset=0x272D8,
+        range_len=4,
+        expected_range_sha256="7bd214987c21b0d60e03be16fe943d682bdb18e9c85c006b1b8a363d31398245",
+        patched_range_sha256="b4fe8af24b6dbb176ec9f93a250610fe56bad6c2807b5c0f2c10dab1722fbc89",
+        writes=(Write(0, bytes.fromhex("f05e0100")),),
+    ),
+)
+
 class PatchError(Exception):
     """Raised when the routing target cannot be patched safely."""
 
@@ -198,10 +262,12 @@ def patch_routing(source: Path, target: Path) -> str:
         patches = PATCHES
     elif digest == STOCK_SHA256_2_0_2:
         patches = PATCHES_2_0_2
+    elif digest == STOCK_SHA256_3_0_6:
+        patches = PATCHES_3_0_6
     else:
         raise PatchError(
             f"Unsupported bt_answering_machine SHA-256: {digest}; "
-            f"expected {STOCK_SHA256} or {STOCK_SHA256_2_0_2}"
+            f"expected {STOCK_SHA256}, {STOCK_SHA256_2_0_2} or {STOCK_SHA256_3_0_6}"
         )
 
     for patch in patches:

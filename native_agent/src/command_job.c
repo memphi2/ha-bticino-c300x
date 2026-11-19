@@ -252,7 +252,7 @@ int c300x_command_capture(
             child_done = 1;
             break;
         }
-        if (waited_ms >= timeout_ms) {
+        if (timeout_ms != C300X_COMMAND_NO_DEADLINE && waited_ms >= timeout_ms) {
             (void)kill(pid, SIGKILL);
             (void)waitpid(pid, &status, 0);
             close(pipe_fd[0]);
@@ -262,7 +262,9 @@ int c300x_command_capture(
             return 0;
         }
         (void)poll(NULL, 0, interval_ms);
-        waited_ms += interval_ms;
+        if (timeout_ms != C300X_COMMAND_NO_DEADLINE) {
+            waited_ms += interval_ms;
+        }
     }
     for (;;) {
         char discard[256];

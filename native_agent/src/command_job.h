@@ -24,6 +24,10 @@ int c300x_command_job_prepare(const struct c300x_command_job *job, struct pollfd
 void c300x_command_job_tick(struct c300x_command_job *job);
 void c300x_command_job_close(struct c300x_command_job *job);
 
+/* For scripts that write: they undo a failed write and remount read-only in
+ * shell traps, which SIGKILL would skip. */
+#define C300X_COMMAND_NO_DEADLINE (-1)
+
 /* Legacy synchronous media-user setup/status callers. */
 int c300x_command_capture(const char *program, const char *argument, char *out,
     size_t out_len, int timeout_ms, int *exit_code);

@@ -2962,7 +2962,7 @@ static void handle_device_user_ensure(
                 "media-user-label-apply",
                 body,
                 sizeof(body),
-                10000,
+                C300X_COMMAND_NO_DEADLINE,
                 NULL
             )
         ) {
@@ -3009,7 +3009,7 @@ static void handle_device_user_restore(
             "media-user-label-restore",
             body,
             sizeof(body),
-            10000,
+            C300X_COMMAND_NO_DEADLINE,
             NULL
         )
     ) {

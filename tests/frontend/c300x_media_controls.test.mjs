@@ -422,6 +422,21 @@ test("an arrow that cannot be used lets clicks through to the picture", async (t
   assert.equal(c.nodes.previous.disabled, true, "the oldest item has nothing older");
 });
 
+test("a quick second tap on an arrow does not open the large view", async (t) => {
+  const s = harness(t, [item()], { expandAvailable: true }), c = s.controls;
+  const sent = [];
+  c.addEventListener("media-expand", () => sent.push("expand"));
+  await tick();
+  s.click("previous");
+  s.click("expand");  // the arrow is disabled while the list loads; the tap falls through
+  await tick();
+  s.click("expand");
+  assert.deepEqual(sent, [], "the tap right after navigating is not a picture click");
+  c.navigatedAt = Date.now() - 1000;
+  s.click("expand");
+  assert.deepEqual(sent, ["expand"]);
+});
+
 test("the controls keep the open saved item when the card is moved", async (t) => {
   const s = harness(t, [item()]), c = s.controls;
   await tick();

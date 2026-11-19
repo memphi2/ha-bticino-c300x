@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=e5d52ed24d3fdfd4";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=e5d52ed24d3fdfd4";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=e5d52ed24d3fdfd4";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=7a7cb8a1a4f9883a";
+import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=7a7cb8a1a4f9883a";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=7a7cb8a1a4f9883a";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -47,8 +47,11 @@ export class C300XMediaControls extends HTMLElement {
       this.volumeFixed = volumeFixed();
       this.img = this.shadowRoot.querySelector("img");
       const on = (name, event, callback) => this.nodes[name].addEventListener(event, callback);
-      on("previous", "click", () => void this.history.step(1));
-      on("next", "click", () => void this.history.step(-1));
+      // A disabled arrow lets clicks through to the picture; a quick second
+      // tap on an arrow that just became disabled must not open the window.
+      const step = (offset) => { this.navigatedAt = Date.now(); void this.history.step(offset); };
+      on("previous", "click", () => step(1));
+      on("next", "click", () => step(-1));
       on("play", "click", () => void this.togglePlay());
       on("mute", "click", () => this.setVolume(this.audioVolume, !this.audioMuted));
       on("volume", "input", (event) => this.setVolume(Number(event.target.value), false));
@@ -60,7 +63,10 @@ export class C300XMediaControls extends HTMLElement {
         }
       });
       const send = (name) => this.dispatchEvent(new Event(name, { bubbles: true, composed: true }));
-      on("expand", "click", () => { if (this.config.expandAvailable && !this.config.expanded) send("media-expand"); });
+      on("expand", "click", () => {
+        if (this.history.listPromise || Date.now() - (this.navigatedAt || 0) < 700) return;
+        if (this.config.expandAvailable && !this.config.expanded) send("media-expand");
+      });
       on("close", "click", () => send("media-collapse"));
       on("fullscreen", "click", () => {
         if (this.config.fullscreenAvailable) this.dispatchEvent(new Event("media-fullscreen", { bubbles: true, composed: true }));

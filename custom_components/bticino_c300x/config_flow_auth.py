@@ -119,24 +119,27 @@ class AuthFlowSteps:
             self, entry, data_updates, clear_keys, force_reload=True,
         )
 
-    def _note_setup_rejection(self: Any, errors: dict[str, str]) -> None:
-        """Remember which key the device rejected in the latest check."""
-        self._setup_rejected_key = _REJECTED_KEY.get(errors.get("base", ""))
+    def _note_setup_rejection(self: Any, errors: dict[str, str], candidate: dict[str, Any]) -> None:
+        """Remember the key value the device rejected, per field."""
+        key = _REJECTED_KEY.get(errors.get("base", ""))
+        if key is not None:
+            self._setup_rejected = {**getattr(self, "_setup_rejected", {}), key: candidate.get(key)}
 
     def _setup_retry_keys(self: Any) -> dict[str, Any] | None:
         """Keys an empty retry field keeps.
 
         After an SSH installation the generated keys are kept: they were never
         shown. After the final check, an empty field keeps the key entered
-        before, except the one the device rejected in the latest check, so
-        that one can be removed.
+        last, unless the device rejected that very key, so a rejected key can
+        be removed and a key typed on an earlier retry is not lost.
         """
         if self._setup_bootstrapped:
             return cast(dict[str, Any], self._setup_connection)
         if self._setup_pending_features is None:
             return None
-        rejected = getattr(self, "_setup_rejected_key", None)
-        return {key: value for key, value in self._setup_connection.items() if key != rejected}
+        rejected = getattr(self, "_setup_rejected", {})
+        return {key: value for key, value in self._setup_connection.items()
+                if key not in rejected or rejected[key] != value}
 
     def _show_agent_auth(self: Any, errors: dict[str, str]) -> ConfigFlowResult:
         return cast(ConfigFlowResult, self.async_show_form(
@@ -159,7 +162,10 @@ class AuthFlowSteps:
             if not errors:
                 candidate = {**self._setup_connection, **auth_data}
                 setup, errors = await async_validate_connection(self.hass, candidate)
-                self._note_setup_rejection(errors)
+                self._note_setup_rejection(errors, candidate)
+                if errors and self._setup_pending_features is not None and not self._setup_bootstrapped:
+                    # Keys typed on this retry stay for the next one.
+                    self._setup_connection = candidate
                 if not errors:
                     errors = self._setup_identity_error(setup)
                 if not errors:

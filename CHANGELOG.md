@@ -40,6 +40,9 @@
 - Keep a running stream or call in the doorstation card when a dashboard with
   columns rebuilds its layout, for example after the browser window is resized
   or enters full screen.
+- Expire the display's control feedback reliably. After the first expiry a
+  later "sending" or "not confirmed" text could stay on a tile until the next
+  dashboard change.
 
 ## v2.5.1 - 2026-11-19
 

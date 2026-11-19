@@ -472,7 +472,9 @@ def _read_remote_config_sync(client: _DeviceSshClient, remote_path: str) -> Any:
     if output == "M":
         return None
     try:
-        if not output.startswith("F"):
+        # The reply is decoded leniently. A config that is not UTF-8 would come
+        # back with replacement characters and be saved that way.
+        if not output.startswith("F") or "\ufffd" in output:
             raise ValueError("Invalid config read response")
         existing = json.loads(output[1:])
         if not isinstance(existing, dict):

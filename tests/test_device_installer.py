@@ -1384,6 +1384,21 @@ def test_config_read_command_local_files(tmp_path: Path, state: str) -> None:
         folder.chmod(0o755) if folder.exists() else None
 
 
+def test_config_that_is_not_utf8_is_refused_and_not_rewritten(tmp_path: Path) -> None:
+    """The reply is decoded leniently; a damaged value must not be saved."""
+
+    path = tmp_path / "config.json"
+    path.write_bytes(b'{"mqtt": {"password": "caf\xe9"}}')
+
+    class LenientClient(_LocalShellClient):
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            result = subprocess.run(["sh", "-c", command], capture_output=True, check=True)
+            return result.stdout.decode("utf-8", "replace")
+
+    with pytest.raises(C300XDeviceInstallError):
+        device_installer._read_remote_config_sync(LenientClient(), str(path))
+
+
 def test_device_side_steps_use_no_python(tmp_path: Path) -> None:
     """The stock device Python has neither json nor hashlib."""
 

@@ -13,7 +13,6 @@ from custom_components.bticino_c300x.qml_patch import (
     async_apply_qml_core_patch_and_confirm,
     async_apply_qml_patch_and_confirm,
     async_refresh_qml_patch_status,
-    async_restore_qml_core_patch_and_confirm,
     async_restore_qml_patch_and_confirm,
     async_restore_qml_patches_after_update,
 )
@@ -34,7 +33,6 @@ class _FakeApi:
     apply_status: dict[str, Any] = field(default_factory=dict)
     restore_status: dict[str, Any] = field(default_factory=dict)
     core_apply_status: dict[str, Any] = field(default_factory=dict)
-    core_restore_status: dict[str, Any] = field(default_factory=dict)
     fail_action: str | None = None
     dynamic_homepage: bool | None = None
     calls: list[str] = field(default_factory=list)
@@ -65,12 +63,6 @@ class _FakeApi:
         if self.fail_action == "core_apply":
             raise RuntimeError("core apply failed")
         return self.core_apply_status
-
-    async def async_restore_qml_core_patch(self) -> dict[str, Any]:
-        self.calls.append("restore_qml_core")
-        if self.fail_action == "core_restore":
-            raise RuntimeError("core restore failed")
-        return self.core_restore_status
 
     async def async_reload_gui(self) -> dict[str, Any]:
         self.calls.append("reload_gui")
@@ -197,27 +189,6 @@ def test_core_patch_restores_previous_status_on_apply_error() -> None:
     assert entry.runtime_data.qml_patch_status == previous
 
 
-def test_core_patch_keeps_action_status_when_confirmation_mismatches() -> None:
-    api = _FakeApi(core_restore_status={"core_patched": True, "core_state": "busy"})
-    entry = _entry(api, {"available": True, "patched": False, "core_patched": True})
-
-    status = asyncio.run(async_restore_qml_core_patch_and_confirm(entry))
-
-    assert status == {"core_patched": True, "core_state": "busy"}
-    assert entry.runtime_data.qml_patch_status == status
-
-
-def test_core_patch_restores_previous_status_on_error() -> None:
-    api = _FakeApi(fail_action="core_restore")
-    previous = {"available": True, "patched": True, "core_patched": True}
-    entry = _entry(api, previous)
-
-    with pytest.raises(RuntimeError, match="core restore failed"):
-        asyncio.run(async_restore_qml_core_patch_and_confirm(entry))
-
-    assert entry.runtime_data.qml_patch_status == previous
-
-
 def test_restore_qml_patch_restores_previous_status_on_error() -> None:
     api = _FakeApi(fail_action="restore")
     previous = {"available": True, "patched": True, "state": "patched"}
@@ -229,7 +200,7 @@ def test_restore_qml_patch_restores_previous_status_on_error() -> None:
     assert entry.runtime_data.qml_patch_status == previous
 
 
-def test_concurrent_apply_and_restore_do_not_run_the_device_action_together() -> None:
+def test_concurrent_patch_actions_do_not_run_the_device_action_together() -> None:
     """A switch toggle racing a repair-flow action must not hit the device concurrently."""
 
     class _SlowApi(_FakeApi):
@@ -253,26 +224,26 @@ def test_concurrent_apply_and_restore_do_not_run_the_device_action_together() ->
             finally:
                 self.active -= 1
 
-        async def async_restore_qml_core_patch(self) -> dict[str, Any]:
+        async def async_apply_qml_core_patch(self) -> dict[str, Any]:
             self.active += 1
             self.max_active = max(self.max_active, self.active)
             try:
                 await asyncio.sleep(0.02)
-                return await super().async_restore_qml_core_patch()
+                return await super().async_apply_qml_core_patch()
             finally:
                 self.active -= 1
 
     api = _SlowApi(
         status={"available": True, "patched": True, "state": "patched"},
         apply_status={"patched": True},
-        core_restore_status={"core_patched": False},
+        core_apply_status={"core_patched": True},
     )
-    entry = _entry(api, {"available": True, "patched": False, "core_patched": True})
+    entry = _entry(api, {"available": True, "patched": False, "core_patched": False})
 
     async def _run() -> None:
         await asyncio.gather(
             async_apply_qml_patch_and_confirm(entry),
-            async_restore_qml_core_patch_and_confirm(entry),
+            async_apply_qml_core_patch_and_confirm(entry),
         )
 
     asyncio.run(_run())

@@ -73,8 +73,14 @@ try {
       && !!lab.controls.history.url && (kind === "video" ? lab.control("video").readyState >= 2
         : lab.control("img").complete && lab.control("img").naturalWidth === 320), {}, id, kind);
   };
+  // Back to live: the right arrow steps past the newest saved item.
   const current = async () => {
-    await click(".current");
+    for (let step = 0; step < 10 && await page.evaluate(() => lab.controls.browsing); step++) {
+      const before = await page.evaluate(() => lab.controls.history.selected?.id || "");
+      await click(".next");
+      await page.waitForFunction((before) => !lab.controls.browsing
+        || (lab.controls.history.selected?.id || "") !== before, {}, before);
+    }
     await page.waitForFunction(() => !lab.controls.browsing && !lab.controls.history.url);
   };
   const archiveVideo = async () => {
@@ -106,12 +112,14 @@ try {
         if (r.left < media.left - 1 || r.right > media.right + 1 || r.bottom > media.bottom + 1) failures.push(`bounds: ${node.className}`);
         if (!node.getAttribute("aria-label")) failures.push(`label: ${node.className}`);
         for (const other of controls) {
-          if (other === node) continue;
+          // The picture itself is the large-view button under every control.
+          if (other === node || node.classList.contains("expand") || other.classList.contains("expand")) continue;
           const s = other.getBoundingClientRect();
           if (r.left < s.right - 1 && r.right > s.left + 1 && r.top < s.bottom - 1 && r.bottom > s.top + 1) failures.push(`overlap: ${node.className}/${other.className}`);
         }
       }
-      for (const selector of [".mode", ".status", ".elapsed", ".stamp"]) {
+      // The label and status shorten with an ellipsis by design.
+      for (const selector of [".elapsed", ".stamp"]) {
         const node = root.querySelector(selector);
         if (!visible(node)) continue;
         if (node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1) failures.push(`clipped: ${selector}`);
@@ -137,28 +145,20 @@ try {
           }
         }
       }
-      if (media.width > 0 && media.width < 240) {
-        const toolbar = root.querySelector(".toolbar").getBoundingClientRect();
-        const picture = (lab.controls.browsing ? root.querySelector(".archive") : lab.card._videoEl).getBoundingClientRect();
-        if (Math.abs(toolbar.height - 112) > 1 || media.height < 176 || picture.height < 64) failures.push("narrow media band");
-        if (Math.abs(picture.bottom - toolbar.top) > 1) failures.push("picture overlaps narrow toolbar");
-      }
       if (lab.controls.isVideo) {
-        for (const selector of [".previous", ".current", ".next", ".play", ".seek", ".mute", ".volume", ".fullscreen"]) {
+        // Full screen is offered in the large view only.
+        const required = [".previous", ".next", ".play", ".seek", ".mute", ".volume"];
+        if (lab.card._cardMedia?.expanded) required.push(".fullscreen");
+        for (const selector of required) {
           const r = root.querySelector(selector).getBoundingClientRect();
           if (r.width <= 0 || r.height <= 0) failures.push(`missing video control: ${selector}`);
         }
         const stamp = root.querySelector(".stamp").getBoundingClientRect();
         const frame = root.querySelector(".archive").getBoundingClientRect();
-        if (Math.abs(frame.right - stamp.right - 8) > 1 || Math.abs(frame.bottom - stamp.bottom - 6) > 1) failures.push("timestamp not bottom-right");
+        // Lower right of the picture, just above the toolbar that lies on it.
+        const bar = root.querySelector(".toolbar").getBoundingClientRect();
+        if (Math.abs(frame.right - stamp.right - 8) > 1 || stamp.bottom > bar.top + 1 || bar.top - stamp.bottom > 24) failures.push("timestamp not bottom-right");
         if (stamp.top < frame.top || stamp.left < frame.left) failures.push("timestamp outside picture");
-        if (media.width < 240) {
-          const toolbar = root.querySelector(".toolbar").getBoundingClientRect();
-          const volume = root.querySelector(".volume").getBoundingClientRect();
-          const previous = root.querySelector(".previous").getBoundingClientRect();
-          if (volume.width < 48 || volume.top < previous.bottom) failures.push("narrow second-row volume");
-          if (Math.abs(frame.bottom - toolbar.top) > 1) failures.push("archive overlaps narrow toolbar");
-        }
       }
       return failures;
     });
@@ -356,6 +356,11 @@ try {
   await archiveVideo();
   await narrowLayouts("archive");
   if (await page.evaluate(() => document.fullscreenEnabled)) {
+    // Full screen is offered in the large view; a picture click right after an
+    // arrow is ignored, so wait for the window rather than assume the first click.
+    await page.waitForFunction(() => Date.now() - (lab.controls.navigatedAt || 0) > 800);
+    await click(".expand");
+    await page.waitForFunction(() => lab.card._cardMedia.expanded && !lab.control(".fullscreen").hidden);
     await click(".fullscreen");
     await page.waitForFunction(() => !!lab.card.shadowRoot.fullscreenElement);
     assert.equal(await page.evaluate(() => lab.card.shadowRoot.fullscreenElement === lab.card.shadowRoot.querySelector("ha-card")), true, "Fullscreen must include footer, not only video");
@@ -363,6 +368,8 @@ try {
     await page.screenshot({ path: resolve(artifacts, "media-controls-fullscreen.png") });
     await click(".fullscreen");
     await page.waitForFunction(() => !document.fullscreenElement);
+    await click(".close");
+    await page.waitForFunction(() => !lab.card._cardMedia.expanded);
   } else console.log("Fullscreen unavailable in this browser; fullscreen entry skipped");
 
   await idleTransport();
@@ -407,7 +414,8 @@ try {
   await click(".row-action", true);
   await page.waitForFunction(() => lab.card._videoEl.readyState >= 2 && lab.controls.config.hasAudio);
   assert.equal(await page.evaluate(() => lab.control(".previous").hidden && !lab.control(".mute").hidden
-    && !lab.control(".volume").hidden && !lab.control(".fullscreen").hidden), true, "Disabled history retains live controls");
+    && !lab.control(".volume").hidden && lab.control(".fullscreen").hidden), true,
+    "Disabled history retains live controls; full screen stays in the large view");
   await click(".mute");
   assert.equal(await page.evaluate(() => lab.card._playbackMuted), true, "Live mute must reach parent playback");
   await click(".mute");

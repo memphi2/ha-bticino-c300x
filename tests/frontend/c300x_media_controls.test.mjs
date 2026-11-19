@@ -373,7 +373,9 @@ test("new media modules keep HA controls on a picture that fills the card, witho
   const template = readFileSync(new URL("c300x-media-controls-template.js", root), "utf8");
   assert.match(template, /\.archive \{ position: absolute; inset: 0;/);
   assert.match(template, /\.stage \{ position: absolute; inset: 0;/);
-  assert.equal(template.includes("toolbar-height"), false);
+  // The picture is never shrunk by the toolbar; only the arrows centre above it.
+  assert.doesNotMatch(template, /\.(archive|stage) \{[^}]*toolbar-height/);
+  assert.match(template, /\.nav \{ top: calc\(\(100% - var\(--c300x-toolbar-height, 0px\)\) \/ 2 - 20px\); \}/);
   assert.match(template, /object-fit: contain/);
   assert.match(template, /type="range"/);
   assert.match(template, /<ha-icon/);

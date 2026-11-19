@@ -10,7 +10,7 @@ export const MEDIA_CONTROLS_TEMPLATE = `
       background: var(--c300x-media-background, #111); overflow: hidden; }
     .archive img, .archive video { display: block; width: 100%; height: 100%; object-fit: contain; }
     .stage { position: absolute; inset: 0; pointer-events: none; }
-    .stamp { position: absolute; right: 8px; bottom: 80px; max-width: calc(100% - 16px); margin: 0;
+    .stamp { position: absolute; right: 8px; bottom: calc(100% + 4px); max-width: calc(100% - 16px); margin: 0;
       padding: 2px 4px; font-size: 12px; overflow-wrap: anywhere; color: #fff; background: rgb(0 0 0 / .65); }
     .info { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 112px); display: flex;
       align-items: center; gap: 6px; padding: 2px 8px; border-radius: 10px; background: rgb(0 0 0 / .55); }
@@ -38,19 +38,18 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .expand:hover { background: none; }
     .nav, .close, .fullscreen { background: rgb(0 0 0 / .5); transition: opacity 140ms ease; }
     .nav:hover, .close:hover, .fullscreen:hover { background: rgb(0 0 0 / .75); }
-    .nav { top: calc(50% - 20px); }
+    .nav { top: calc((100% - var(--c300x-toolbar-height, 0px)) / 2 - 20px); }
     .nav:disabled { opacity: 0; pointer-events: none; }
     .previous { left: 8px; }
     .next, .close { right: 8px; }
     .close, .fullscreen { top: 8px; }
     .fullscreen { right: 56px; }
     @container (max-width: 280px) { .volume { width: 40px; flex-basis: 40px; } button { width: 32px; height: 32px; flex-basis: 32px; }
-      .nav { top: calc(50% - 16px); } .fullscreen { right: 48px; } }
+      .nav { top: calc((100% - var(--c300x-toolbar-height, 0px)) / 2 - 16px); } .fullscreen { right: 48px; } }
   </style>
   <div class="archive" hidden>
     <img hidden alt="">
     <video hidden playsinline preload="metadata"></video>
-    <time class="stamp" hidden></time>
   </div>
   <div class="stage">
     <button class="expand" type="button"></button>
@@ -58,6 +57,7 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     <div class="info"><span class="mode"></span><span class="status" role="status" aria-live="polite"></span></div>
   </div>
   <div class="toolbar" role="group">
+    <time class="stamp" hidden></time>
     <div class="timeline" hidden><input class="seek" type="range" min="0" max="0" step="0.1" value="0"><span class="elapsed">0:00 / 0:00</span></div>
     <div class="buttons">
       ${button("play", "play")}

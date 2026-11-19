@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=7a7cb8a1a4f9883a";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=7a7cb8a1a4f9883a";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=7a7cb8a1a4f9883a";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=42fb1c2a81e69f09";
+import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=42fb1c2a81e69f09";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=42fb1c2a81e69f09";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -46,6 +46,12 @@ export class C300XMediaControls extends HTMLElement {
       this.video = this.shadowRoot.querySelector("video");
       this.volumeFixed = volumeFixed();
       this.img = this.shadowRoot.querySelector("img");
+      // The arrows are centred on the picture above the toolbar, whose height
+      // depends on the controls shown and the card width.
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(() => this.style.setProperty("--c300x-toolbar-height", `${this.nodes.toolbar.offsetHeight}px`))
+          .observe(this.nodes.toolbar);
+      }
       const on = (name, event, callback) => this.nodes[name].addEventListener(event, callback);
       // A disabled arrow lets clicks through to the picture; a quick second
       // tap on an arrow that just became disabled must not open the window.

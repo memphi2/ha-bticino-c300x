@@ -2951,7 +2951,12 @@ static void handle_device_user_ensure(
         send_json(client_fd, 500, "Internal Server Error", body);
         return;
     }
-    {
+    if (access("/home/bticino/bin/gui/skins/default", F_OK) == 0) {
+        /* Qt4 firmware (1.7.x/2.0.x) keeps on-disk QML here; apply the label
+         * patch. Qt5 firmware (3.0.x+) compiles the GUI/QML into the binary, so
+         * there is nothing on disk to patch: skip the label step rather than
+         * fail the whole setup. The media user and routing are already done; the
+         * on-device media-user label just will not be shown. */
         char *qml_body;
         int qml_ok = 0;
 
@@ -5322,7 +5327,13 @@ static int smartphone_forwarding_allows_ring_receiver(const struct agent_runtime
 {
     return runtime != NULL
         && runtime->forwarding_state.known
-        && runtime->forwarding_state.last_valid == 1;
+        /* mode 1 = Home Assistant forwarding. mode 3 = unprovisioned (never
+         * paired with the Door Entry app): no smartphone client is competing
+         * for the rings, and the device cannot be switched to mode 1 until it
+         * is provisioned, so allow the agent to register/receive here too -
+         * this is what lets on-demand video work on an un-paired unit. */
+        && (runtime->forwarding_state.last_valid == 1
+            || runtime->forwarding_state.last_valid == 3);
 }
 
 static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime)

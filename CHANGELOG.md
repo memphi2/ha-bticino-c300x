@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+- Preliminary support for C300X firmware 3.0.6 (Qt5-era, kernel 5.15 / Poky 4.0):
+  - `PATCHES_3_0_6` routing table for the recompiled PIE `bt_answering_machine`
+    (stock `7f7b28e1…` -> patched `c3344938…`), re-derived by disassembly; the
+    1.7.x `rec_json_f` restructure collapses to a literal route_ext->route_int
+    redirect. Added to the agent and `scripts/device_routing_builder.py`.
+  - Installer skips the QML core hook when the device has no on-disk QML
+    (`/home/bticino/bin/gui/skins/default` absent) — 3.0.x compiles QML into the
+    GUI binary, so the hook can't apply; this lets the agent install complete.
+  - Agent skips the `media-user-label` QML step on the same Qt5 condition, so
+    `ensure-homeassistant` completes (media user + routing) instead of aborting.
+  - Agent enables the SIP ring receiver / registration for the `unprovisioned`
+    forwarding state (mode 3), not only Home Assistant (mode 1): an un-paired
+    unit can never reach mode 1, and with no smartphone competing for rings the
+    agent can register, so on-demand video and ring events work pre-pairing too.
+  - On-demand video, ring events, door unlock and the camera stream are confirmed
+    working end-to-end on a provisioned, rooted 3.0.6 unit, including a clean
+    fresh install (agent registers, the on-demand INVITE returns `200`, and RTP
+    video flows into the agent and plays in Home Assistant).
+  - Camera defaults to the low-res stream on Qt5 (`video.av.highResolution`
+    defaults to false in both the installer and the agent when unset). High-res
+    (type `#0`) cannot reach the agent on 3.0.6: `bt_av_media` only fans out the
+    low-res and audio branches (`multiudp_low_res` / `multiudp_audio`); the
+    high-res branch has no `multiudpsink`, so "Add UDP client"
+    (`*7*300#…#PORT#BRANCH`) to it is a no-op. The device's own display is
+    affected identically, so 400×288 is the ceiling short of patching
+    `bt_av_media`; better visual quality needs a better door station.
+  - CAUTION on 3.0.6: start `openserver` / `bt_answering_machine` only via the
+    normal bt_daemon stack (a reboot). Hand-starting either as a standalone
+    process duplicates the `c300x` Flexisip registration and the on-demand INVITE
+    then forks to `486 Busy` / `603 Decline`.
+  - NOTE: intermittent green/white corruption on the low-res stream tracks SCS
+    bus signal quality (long/chained wiring), not the agent relay — an
+    installation factor, not an integration bug.
+
 ## v2.6.0 - 2026-11-19
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

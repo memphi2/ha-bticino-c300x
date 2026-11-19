@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import shlex
 import stat
 from dataclasses import dataclass
@@ -853,9 +854,34 @@ def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: s
     )
 
 
+_LOGGER = logging.getLogger(__name__)
+
+# Qt4 firmware (1.7.x/2.0.x) keeps the GUI as on-disk .qml files under this dir,
+# which the QML hook patches in place. Firmware 3.0.x+ ships a Qt5 GUI with the
+# QML compiled into the BtClass binary (a Qt resource, qrc:/skins/default/...),
+# so there is nothing on disk to patch.
+_QML_SKINS_DIR = "/home/bticino/bin/gui/skins/default"
+
+
+def _device_has_ondisk_qml(client: _DeviceSshClient) -> bool:
+    """Return True when the device exposes a patchable on-disk QML tree."""
+
+    output = client.run(f"test -d {_quote(_QML_SKINS_DIR)} && echo yes || echo no")
+    return output.strip().splitlines()[-1:] == ["yes"]
+
+
 def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
     """Require the patcher's reported outcome, not just a successful shell exit."""
 
+    if not _device_has_ondisk_qml(client):
+        # Qt5 firmware (3.0.x+) has no on-disk QML to patch. Skip rather than
+        # abort the whole install: the on-device display pages and ringer-sync
+        # are unavailable, but camera, door, stair light, ring and calls work
+        # through the agent API and do not depend on the QML hook.
+        _LOGGER.warning(
+            "C300X: device has no on-disk QML (Qt5 GUI); skipping %s patch", action
+        )
+        return
     output = client.run(
         f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
         f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"

@@ -22,9 +22,11 @@
   available. Event registration logs each outage and recovery once.
 - Unified media window in the doorstation card for live video, saved HA
   snapshots and saved HA capture videos. Media history is on by default
-  (`show_media_history: true`) and can be hidden independently. Previous/next
-  browses media chronologically inline; saved videos offer play/pause, timeline,
-  volume/mute and fullscreen, with a lower-right recording timestamp.
+  (`show_media_history: true`) and can be hidden independently. Arrows on the
+  picture browse media chronologically; saved videos offer play/pause, timeline
+  and volume/mute, with a lower-right recording timestamp. A click on the
+  picture opens the card as a large window with the same controls, including
+  two-way audio, door and light; full screen is available there.
   Live video and incoming rings take priority; browsing never starts, answers
   or stops a device call. Existing Home Call, door/light, name and status
   options remain available.

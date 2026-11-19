@@ -90,6 +90,7 @@ function installFakeDom() {
           ".readiness-text",
           "c300x-media-controls",
           "ha-card",
+          "dialog",
         ].map((selector) => [selector, new FakeElement(selector)]),
       );
     }
@@ -272,6 +273,51 @@ test("a pending fullscreen request is exited after card reconfiguration", async 
     await pending;
     assert.equal(exits, 1);
     assert.equal(card.shadowRoot.fullscreenElement, null);
+  } finally { card.disconnectedCallback(); }
+});
+
+test("the picture opens the card as a window and offers full screen only there", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?window");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  const root = card.shadowRoot, frame = root.querySelector("dialog"), target = root.querySelector("ha-card");
+  const controls = root.querySelector("c300x-media-controls"), video = root.querySelector("video");
+  let exits = 0;
+  target.requestFullscreen = async () => {};
+  target.ownerDocument = { exitFullscreen: async () => { exits++; root.fullscreenElement = null; } };
+  frame.open = false;
+  frame.showModal = () => { frame.open = true; };
+  frame.close = () => { frame.open = false; };
+  const send = (element, type, event = {}) => element.listeners.get(type)?.({ type, ...event });
+  try {
+    card._updateState();
+    assert.match(root.innerHTML, /<dialog class="window" role="none">\s*<ha-card>/);
+    assert.equal(controls.configuration.expandAvailable, true);
+    assert.equal(controls.configuration.expanded, false);
+    assert.equal(controls.configuration.fullscreenAvailable, false);
+    send(controls, "media-expand");
+    assert.equal(frame.open, true);
+    assert.equal(frame.attributes.has("role"), false);
+    assert.equal(controls.configuration.expanded, true);
+    assert.equal(controls.configuration.fullscreenAvailable, true);
+    assert.equal(root.querySelector("video"), video);
+    send(frame, "click", { target });
+    assert.equal(frame.open, true);
+    root.fullscreenElement = target;
+    send(frame, "click", { target: frame });
+    assert.equal(frame.open, false);
+    assert.equal(exits, 1);
+    assert.equal(frame.attributes.get("role"), "none");
+    assert.equal(controls.configuration.expanded, false);
+    assert.equal(controls.configuration.fullscreenAvailable, false);
+    send(controls, "media-expand");
+    send(controls, "media-collapse");
+    assert.equal(frame.open, false);
+    send(controls, "media-expand");
+    card.disconnectedCallback();
+    assert.equal(frame.open, false);
   } finally { card.disconnectedCallback(); }
 });
 

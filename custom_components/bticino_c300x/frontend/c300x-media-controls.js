@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=1402c4dbdb9334ff";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=1402c4dbdb9334ff";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=1402c4dbdb9334ff";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=bdf4945fe4b83f87";
+import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=bdf4945fe4b83f87";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=bdf4945fe4b83f87";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -12,7 +12,8 @@ export class C300XMediaControls extends HTMLElement {
   constructor() {
     super();
     this.config = { enabled: true, busy: false, live: false, hasAudio: false,
-      volume: 1, muted: false, fullscreenAvailable: false, fullscreen: false };
+      volume: 1, muted: false, fullscreenAvailable: false, fullscreen: false,
+      expandAvailable: false, expanded: false, still: false };
     this.history = new C300XMediaHistory(() => this.changed());
     this.archiveVolume = 1;
     this.archiveMuted = false;
@@ -28,14 +29,13 @@ export class C300XMediaControls extends HTMLElement {
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" }).innerHTML = MEDIA_CONTROLS_TEMPLATE;
       this.nodes = Object.fromEntries(["archive", "stamp", "toolbar", "mode", "status", "timeline", "seek",
-        "elapsed", "previous", "current", "next", "play", "mute", "volume", "fullscreen"]
+        "elapsed", "info", "previous", "next", "play", "mute", "volume", "fullscreen", "expand", "close"]
         .map((name) => [name, this.shadowRoot.querySelector(`.${name}`)]));
       this.video = this.shadowRoot.querySelector("video");
       this.img = this.shadowRoot.querySelector("img");
       const on = (name, event, callback) => this.nodes[name].addEventListener(event, callback);
       on("previous", "click", () => void this.history.step(1));
       on("next", "click", () => void this.history.step(-1));
-      on("current", "click", () => this.clearMedia());
       on("play", "click", () => void this.togglePlay());
       on("mute", "click", () => this.setVolume(this.audioVolume, !this.audioMuted));
       on("volume", "input", (event) => this.setVolume(Number(event.target.value), false));
@@ -46,6 +46,9 @@ export class C300XMediaControls extends HTMLElement {
           this.renderTransport();
         }
       });
+      const send = (name) => this.dispatchEvent(new Event(name, { bubbles: true, composed: true }));
+      on("expand", "click", () => { if (this.config.expandAvailable && !this.config.expanded) send("media-expand"); });
+      on("close", "click", () => send("media-collapse"));
       on("fullscreen", "click", () => {
         if (this.config.fullscreenAvailable) this.dispatchEvent(new Event("media-fullscreen", { bubbles: true, composed: true }));
       });
@@ -62,9 +65,11 @@ export class C300XMediaControls extends HTMLElement {
   }
 
   configure({ hass, entryId, enabled = true, busy = false, live = false, hasAudio = false,
-    volume = 1, muted = false, label = "", fullscreenAvailable = false, fullscreen = false } = {}) {
+    volume = 1, muted = false, label = "", fullscreenAvailable = false, fullscreen = false,
+    expandAvailable = false, expanded = false, still = false } = {}) {
     const next = { hass, entryId, enabled, busy, live, hasAudio, volume: boundedVolume(volume),
-      muted: !!muted, label: typeof label === "string" ? label : "", fullscreenAvailable, fullscreen };
+      muted: !!muted, label: typeof label === "string" ? label : "", fullscreenAvailable, fullscreen,
+      expandAvailable: !!expandAvailable, expanded: !!expanded, still: !!still };
     this.config = next;
     // Always refresh transport/auth, but batch its synchronous invalidations.
     const wasActive = this.history.active;
@@ -73,7 +78,7 @@ export class C300XMediaControls extends HTMLElement {
     finally { this.configuring = false; }
     if (!this.nodes) return;
     const signature = JSON.stringify([enabled, busy, live, hasAudio, next.volume,
-      next.muted, next.label, fullscreenAvailable, fullscreen, this.history.active,
+      next.muted, next.label, fullscreenAvailable, fullscreen, next.expandAvailable, next.expanded, next.still, this.history.active,
       hass?.language || hass?.locale?.language || "en"]);
     const changed = this.historyChanged || wasActive !== this.history.active
       || signature !== this.configureSignature;
@@ -162,24 +167,28 @@ export class C300XMediaControls extends HTMLElement {
     n.archive.hidden = !this.browsing;
     n.archive.setAttribute("aria-busy", String(!!h.mediaAbort));
     const available = c.enabled && h.active && !c.busy;
-    for (const name of ["previous", "next", "current"]) n[name].hidden = !available;
+    for (const name of ["previous", "next"]) n[name].hidden = !available;
     const index = h.items.findIndex((item) => item.id === h.selected?.id);
     n.previous.disabled = !!h.listPromise || (!h.dirty && index === h.items.length - 1);
     n.next.disabled = !this.browsing || !!h.listPromise;
-    n.current.disabled = !this.browsing && !h.listPromise;
-    n.current.querySelector("ha-icon").setAttribute("icon", c.live ? "mdi:video-outline" : "mdi:image-outline");
+    n.expand.hidden = !c.expandAvailable || c.expanded;
+    n.close.hidden = !c.expanded;
+    this.buttonLabel("expand", "expand");
+    this.buttonLabel("close", "close");
     n.fullscreen.hidden = !c.fullscreenAvailable;
     n.fullscreen.disabled = !c.fullscreenAvailable;
     n.fullscreen.setAttribute("aria-pressed", String(!!c.fullscreen));
     n.fullscreen.querySelector("ha-icon").setAttribute("icon", c.fullscreen ? "mdi:fullscreen-exit" : "mdi:fullscreen");
     n.toolbar.setAttribute("aria-label", this.label("controls"));
-    for (const name of ["previous", "next", "current"]) this.buttonLabel(name, name);
+    for (const name of ["previous", "next"]) this.buttonLabel(name, name);
     this.buttonLabel("fullscreen", c.fullscreen ? "exit_fullscreen" : "fullscreen");
-    n.mode.textContent = this.browsing ? this.label(h.selected.kind) : c.label || this.label(c.live ? "live" : "preview");
+    n.mode.textContent = this.browsing ? this.label(h.selected.kind)
+      : c.label || (c.live ? this.label("live") : c.still ? this.label("image") : "");
     n.mode.title = n.mode.textContent;
     n.status.textContent = h.error ? this.label(h.error) : h.mediaAbort || h.listPromise ? this.label("loading") : "";
     n.status.title = n.status.textContent;
     n.status.hidden = !n.status.textContent;
+    n.info.hidden = !n.mode.textContent && !n.status.textContent;
     n.stamp.hidden = !this.isVideo;
     if (h.selected) {
       const date = mediaDate(c.hass, h.selected.at), label = `${this.label(h.selected.kind)}: ${date}`;
@@ -216,6 +225,7 @@ export class C300XMediaControls extends HTMLElement {
     n.seek.setAttribute("aria-label", this.label("seek"));
     n.seek.setAttribute("aria-valuetext", `${time(video.currentTime)} / ${time(duration)}`);
     n.elapsed.textContent = `${time(video.currentTime)} / ${time(duration)}`;
+    n.toolbar.hidden = n.play.hidden && n.mute.hidden;
   }
 }
 

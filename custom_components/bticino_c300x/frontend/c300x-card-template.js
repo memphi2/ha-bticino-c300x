@@ -5,6 +5,31 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           height: 100%;
           container-type: inline-size;
         }
+        dialog.window {
+          display: block;
+          position: static;
+          width: auto;
+          height: 100%;
+          max-width: none;
+          max-height: none;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: none;
+          color: inherit;
+          overflow: visible;
+        }
+        dialog.window[open] {
+          position: fixed;
+          inset: 0;
+          margin: auto;
+          width: min(96vw, 1280px, calc((94vh - 64px) * 688 / 480));
+          height: fit-content;
+          max-height: 94vh;
+          container-type: inline-size;
+        }
+        dialog.window[open] ha-card { height: auto; }
+        dialog.window::backdrop { background: rgb(0 0 0 / .72); }
         ha-card {
           overflow: hidden;
           height: 100%;
@@ -12,7 +37,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           flex-direction: column;
         }
         .media {
-          --c300x-media-toolbar-height: 76px;
           position: relative;
           width: 100%;
           flex: 1 1 auto;
@@ -24,9 +48,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           position: absolute;
           inset: 0;
           z-index: 1;
-        }
-        .media > video:not(.transition-video), .media > .snapshot-preview {
-          height: calc(100% - var(--c300x-media-toolbar-height));
         }
         ha-card:fullscreen {
           width: 100%;
@@ -344,10 +365,6 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           }
         }
         @container (max-width: 239px) {
-          .media {
-            --c300x-media-toolbar-height: 112px;
-            min-height: 176px;
-          }
           .body {
             grid-template-columns: minmax(0, 1fr) auto;
             grid-template-areas: "text text" "controls devices";
@@ -360,6 +377,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           }
         }
       </style>
+      <dialog class="window" role="none">
       <ha-card>
         <audio class="remote-audio" autoplay playsinline></audio>
         <div class="media">
@@ -401,4 +419,5 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           </div>
         </div>
       </ha-card>
+      </dialog>
     `;

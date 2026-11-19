@@ -43,9 +43,10 @@ Most users only need:
 - Use the **C300X Doorbell Call Card** in **Doorstation + Home Call** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.
 - **Browse saved images and videos** is on by default (`show_media_history: true`). Browse
-  saved HA snapshots and capture videos with previous/next in the same media
-  window; videos have play/pause, a timeline, volume/mute and fullscreen, with
-  their timestamp at the lower right. Live video and incoming rings take
+  saved HA snapshots and capture videos with the arrows on the picture; videos
+  have play/pause, a timeline and volume/mute, with their timestamp at the
+  lower right. Click the picture for a large window with the same controls
+  and full screen. Live video and incoming rings take
   priority. Browsing never starts, answers or stops a device call.
 - History does not record videos or include the device's answering-machine
   recordings. Use the bundled **C300X Ring capture** blueprint to configure

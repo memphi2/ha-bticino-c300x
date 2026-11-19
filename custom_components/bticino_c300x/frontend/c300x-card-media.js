@@ -1,5 +1,5 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=1402c4dbdb9334ff";
-import "./c300x-media-controls.js?v=1402c4dbdb9334ff";
+import { c300xMediaState } from "./c300x-state-model.js?v=bdf4945fe4b83f87";
+import "./c300x-media-controls.js?v=bdf4945fe4b83f87";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -10,6 +10,11 @@ export class C300XCardMedia {
     this.fullscreenPending = false;
     this.controls = card.shadowRoot.querySelector("c300x-media-controls");
     this.target = card.shadowRoot.querySelector("ha-card");
+    this.frame = card.shadowRoot.querySelector("dialog");
+    this.controls?.addEventListener("media-expand", () => this.setExpanded(true));
+    this.controls?.addEventListener("media-collapse", () => this.setExpanded(false));
+    this.frame?.addEventListener("click", (event) => { if (event.target === this.frame) this.setExpanded(false); });
+    this.frame?.addEventListener("close", () => this.collapsed());
     this.controls?.addEventListener("archive-changed", () => card._scheduleUpdate());
     this.controls?.addEventListener("media-volume", (event) => {
       if (card._disposed) return;
@@ -27,6 +32,32 @@ export class C300XCardMedia {
   }
 
   get browsing() { return this.controls?.browsing === true; }
+  get expanded() { return this.frame?.open === true; }
+
+  // The card itself becomes the window: its media elements never move, so a
+  // running stream or call is not interrupted by opening or closing it.
+  setExpanded(expanded) {
+    const frame = this.frame;
+    if (this.card._disposed || typeof frame?.showModal !== "function" || expanded === this.expanded) return;
+    if (!expanded) { frame.close(); this.collapsed(); return; }
+    this.card.style?.setProperty?.("min-height", `${this.card.offsetHeight || 0}px`);
+    frame.removeAttribute("role");
+    try { frame.showModal(); } catch (_error) { this.collapsed(); return; }
+    this.configure();
+  }
+
+  collapsed() {
+    this.exitFullscreen();
+    this.card.style?.removeProperty?.("min-height");
+    this.frame?.setAttribute("role", "none");
+    this.configure();
+  }
+
+  exitFullscreen() {
+    if (this.card.shadowRoot?.fullscreenElement === this.target) {
+      this.target.ownerDocument.exitFullscreen?.().catch?.(() => {});
+    }
+  }
 
   configure() {
     const card = this.card;
@@ -45,7 +76,9 @@ export class C300XCardMedia {
       busy: !!busy, live,
       hasAudio: !!card._webrtc?.remoteStream?.getAudioTracks?.().length,
       volume: card._playbackVolume ?? 1, muted: card._playbackMuted === true,
-      fullscreenAvailable: typeof this.target?.requestFullscreen === "function",
+      still: this.card._snapshotEl?.hidden === false,
+      expandAvailable: typeof this.frame?.showModal === "function", expanded: this.expanded,
+      fullscreenAvailable: this.expanded && typeof this.target?.requestFullscreen === "function",
       fullscreen: this.target?.ownerDocument?.fullscreenElement === this.target
         || card.shadowRoot.fullscreenElement === this.target,
     });
@@ -56,9 +89,10 @@ export class C300XCardMedia {
   deactivate() {
     this.fullscreenGeneration++;
     this.controls?.deactivate?.();
-    if (this.card.shadowRoot?.fullscreenElement === this.target) {
-      this.target.ownerDocument.exitFullscreen?.().catch?.(() => {});
-    }
+    if (this.expanded) this.frame.close();
+    this.exitFullscreen();
+    this.card.style?.removeProperty?.("min-height");
+    this.frame?.setAttribute("role", "none");
   }
 
   async toggleFullscreen() {

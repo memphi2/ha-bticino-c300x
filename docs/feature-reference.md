@@ -100,9 +100,10 @@ that card; the Home Assistant entities and services remain available.
 **Browse saved images and videos** is on by default (`show_media_history: true`). The
 doorstation card combines saved HA snapshots and saved HA capture videos in
 one chronological sequence, newest first, in the same window as live video.
-Use previous/next inline; there is no separate visitor list or modal. Saved
-videos offer play/pause, a seek timeline, volume/mute and fullscreen where
-supported, with their recording timestamp at the lower right. Snapshots keep
+Use the arrows on the picture; there is no separate visitor list. A click on
+the picture opens the card as a large window with the same controls; full
+screen is available there. Saved videos offer play/pause, a seek timeline and
+volume/mute, with their recording timestamp at the lower right. Snapshots keep
 their configured date/time stamp without a second card overlay.
 
 Live video and incoming rings take precedence. Archive navigation and playback

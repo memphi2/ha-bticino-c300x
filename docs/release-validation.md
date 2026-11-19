@@ -200,7 +200,7 @@ PySide6 is a development-only tool, not an integration dependency.
 | On-demand capture with an announcement | `announcement_path` is rejected before media starts; Ring Call announcements retain their existing behavior. |
 | Home Call start/stop | Display rings, state updates, hangup cleans up. |
 | On-demand after Home Call | First stream attempt works after Home Call cleanup. |
-| Saved media browsing | Older/newer navigates entry-owned snapshots and recordings in the same window without device requests. Play, seek, volume, mute and fullscreen work; leaving the recording stops playback. |
+| Saved media browsing | Older/newer navigates entry-owned snapshots and recordings in the same window without device requests. A click on the picture opens the large window and closing it keeps a running stream. Play, seek, volume, mute and, in the large window, full screen work; leaving the recording stops playback. |
 | Ring arrives during archive playback | Archive playback stops and the existing Ring Call controls take priority; Home Call and door/light actions retain their configured behavior. |
 | Narrow media card | Controls, name and status remain visible at the supported HA grid minimum, including an active microphone and Home Call-only mode. |
 

@@ -2,13 +2,18 @@
 
 The doorstation card shows live video, saved HA snapshots and saved HA capture
 videos in one media window. **Browse saved images and videos** is on by default
-(`show_media_history: true`). Use previous/next to browse the available media
+(`show_media_history: true`). Use the arrows on the picture to browse the available media
 chronologically, starting with the newest item. The arrow tooltips are **Older
-media** and **Newer media**; **Current view** leaves history without starting
-a live stream. There is no separate visitor list or modal to open.
+media** and **Newer media**; **Newer media** on the newest item leaves history
+without starting a live stream. A label on the picture names what is shown:
+**Snapshot**, **Recording** or **Live**. There is no separate visitor list to open.
 
-Saved videos have play/pause, a seek timeline, volume/mute and fullscreen
-controls where the browser supports them. Their recording timestamp appears
+Click the picture to open the card as a large window with the same controls,
+including calls, door and light. Close it with the close button, Escape or a
+click beside the window; a running stream or call continues. Full screen is
+available inside this window.
+
+Saved videos have play/pause, a seek timeline and volume/mute controls. Their recording timestamp appears
 at the lower right. Snapshots already contain their date and time when
 **Visitor Snapshot > Write date and time into the image** is enabled; the card
 does not add a second stamp. Video playback starts with Play, not automatically,

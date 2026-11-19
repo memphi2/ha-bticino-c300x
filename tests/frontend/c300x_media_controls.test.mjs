@@ -72,7 +72,6 @@ test("default config leaves parent preview intact and subscribes lazily after at
   assert.equal(s.controls.nodes.previous.hidden, false);
   assert.equal(s.controls.nodes.previous.disabled, false);
   assert.equal(s.controls.nodes.next.disabled, true);
-  assert.equal(s.controls.nodes.current.disabled, true);
 });
 
 for (const options of [{}, { busy: true }, { enabled: false }]) {
@@ -200,7 +199,7 @@ test("navigation swaps inline media without false browsing toggles or starting p
   assert.equal(c.video.plays, 0);
   assert.equal(c.nodes.previous.disabled, true);
   assert.deepEqual(s.events, [{ browsing: true, bubbles: true, composed: true }]);
-  s.click("current");
+  c.clearMedia();
   assert.equal(c.browsing, false);
   assert.equal(c.video.src, null);
   assert.equal(c.video.paused, true);
@@ -304,6 +303,50 @@ test("history disable leaves live volume and fullscreen functional without subsc
   assert.equal(s.fullscreens, 1);
 });
 
+test("the picture requests the window, navigation lies on the picture and close ends it", async (t) => {
+  const s = harness(t, [item("a"), item("b", "image", 20)], { expandAvailable: true }), c = s.controls;
+  const sent = [];
+  for (const name of ["media-expand", "media-collapse"]) c.addEventListener(name, (event) => sent.push([name, event.composed]));
+  await tick();
+  assert.equal(c.nodes.expand.hidden, false);
+  assert.equal(c.nodes.close.hidden, true);
+  assert.equal(c.nodes.expand.getAttribute("aria-label"), "Open large view");
+  s.click("expand");
+  assert.deepEqual(sent, [["media-expand", true]]);
+  s.configure({ expanded: true });
+  assert.equal(c.nodes.expand.hidden, true);
+  assert.equal(c.nodes.close.hidden, false);
+  assert.equal(c.nodes.close.getAttribute("aria-label"), "Close");
+  s.click("expand");
+  assert.equal(sent.length, 1);
+  s.click("close");
+  assert.deepEqual(sent[1], ["media-collapse", true]);
+  s.configure({ expandAvailable: false });
+  assert.equal(c.nodes.expand.hidden, true);
+  s.click("expand");
+  assert.equal(sent.length, 2);
+  const template = readFileSync(new URL("../../custom_components/bticino_c300x/frontend/c300x-media-controls-template.js", import.meta.url), "utf8");
+  const stage = template.slice(template.indexOf('<div class="stage">'), template.indexOf('<div class="toolbar"'));
+  assert.match(stage, /class="expand"/);
+  assert.match(stage, /button\("previous nav"/);
+  assert.match(stage, /button\("next nav"/);
+  assert.match(stage, /button\("close"/);
+  assert.match(stage, /button\("fullscreen"/);
+  assert.match(stage, /class="mode"/);
+  assert.equal(template.includes('"current"'), false);
+  assert.equal(c.nodes.toolbar.hidden, true);
+  assert.equal(c.nodes.info.hidden, true);
+  s.configure({ expandAvailable: true, expanded: true, fullscreenAvailable: true });
+  assert.equal(c.nodes.fullscreen.hidden, false);
+  assert.equal(c.nodes.toolbar.hidden, true);
+  s.configure({ expandAvailable: true, still: true });
+  assert.equal(c.nodes.info.hidden, false);
+  assert.equal(c.nodes.mode.textContent, "Snapshot");
+  s.configure({ expandAvailable: true, live: true });
+  assert.equal(c.nodes.mode.textContent, "Live");
+  assert.doesNotMatch(template.slice(template.indexOf('<div class="toolbar"')), /"previous|"next/);
+});
+
 test("mode labels are text-only; volume normalization and language updates are safe", async (t) => {
   const s = harness(t, [], { enabled: false, label: '<img src="x">', volume: NaN, hasAudio: true }), c = s.controls;
   assert.equal(c.nodes.mode.textContent, '<img src="x">');
@@ -328,15 +371,16 @@ test("four standalone translations cover controls and follow HA language fallbac
   assert.doesNotThrow(() => mediaDate({ language: "not_a_locale" }, 10));
 });
 
-test("new media modules keep HA controls and a stable picture/toolbar split without device APIs", () => {
+test("new media modules keep HA controls on a picture that fills the card, without device APIs", () => {
   const root = new URL("../../custom_components/bticino_c300x/frontend/", import.meta.url);
   const template = readFileSync(new URL("c300x-media-controls-template.js", root), "utf8");
-  assert.match(template, /inset: 0 0 var\(--c300x-media-toolbar-height, 76px\)/);
+  assert.match(template, /\.archive \{ position: absolute; inset: 0;/);
+  assert.match(template, /\.stage \{ position: absolute; inset: 0;/);
+  assert.equal(template.includes("toolbar-height"), false);
   assert.match(template, /object-fit: contain/);
   assert.match(template, /type="range"/);
   assert.match(template, /<ha-icon/);
   assert.match(template, /:focus-visible/);
-  assert.match(template, /--card-background-color/);
   for (const module of ["controls", "controls-template", "history", "translations"]) {
     const source = readFileSync(new URL(`c300x-media-${module}.js`, root), "utf8");
     for (const forbidden of ["callService", "callWS", "getUserMedia", "RTCPeerConnection", "setInterval", "autoplay", "srcObject", "paper-", "mwc-"]) {

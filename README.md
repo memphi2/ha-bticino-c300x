@@ -2,11 +2,11 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/quality-scale.md)
-[![Release](https://img.shields.io/badge/release-v2.5.0-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.5.1-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Version: **2.5.0**.
+Version: **2.5.1**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.
@@ -53,15 +53,16 @@ forwarding controls, messages and optional display pages.
 ## Requirements
 
 - Home Assistant `2026.10.0` or newer.
-- BTicino Classe 300X / C300X firmware `1.7.x`.
+- BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
 
 If your device is still stock, root or SSH-enable it first with a separate
 workflow. This repository does not provide firmware images, firmware extraction
 output, APKs, exploits, rooting instructions or vendor files. If another
-workflow asks for a firmware target, use `1.7.19`. Everything is used at your
-own risk and without warranty.
+workflow asks for a firmware target, use `1.7.19`; a device on `2.0.2` needs a
+workflow made for that firmware. Everything is used at your own risk and
+without warranty.
 
 ## Installation
 
@@ -186,6 +187,19 @@ feature or firmware version.
 - License: Apache-2.0
 - Support scope: community project, not an official BTicino/Legrand or Home
   Assistant Core integration
+
+## Hardware Donations
+
+Every release is tested on one C300X with firmware `1.7.19`. Other firmware
+versions, such as `2.0.2`, can only be checked against their firmware files,
+not on a device. A second test unit would change that.
+
+Hardware donations are welcome: a used BTicino Classe 300X / C300X (`344642`
+or `344643`), also one with a defect or stuck in a boot loop, or a matching
+door station. If you have one to spare, please start a
+[discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general);
+do not post an address there. A donation is voluntary and gives no claim to
+support or to a feature.
 
 ## AI Assistance
 

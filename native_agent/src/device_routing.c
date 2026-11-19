@@ -268,18 +268,47 @@ static const struct routing_variant *variant_for_stock_sha(const char *sha256)
     return NULL;
 }
 
-/* A backup is only worth restoring when it is the stock file: a truncated copy,
- * one of another firmware, or a patched one must never replace the target. */
-static int backup_is_stock(const char *backup_path, const char *target_path)
+/* The firmware build a target file belongs to: by its stock hash, else by its
+ * patched ranges, else by its stock ranges. NULL for a file of neither build. */
+static const struct routing_variant *target_variant(const char *target_path)
 {
     char sha256[65];
     unsigned char *data = NULL;
     size_t len = 0;
-    int stock;
+    const struct routing_variant *variant = NULL;
 
-    if (c300x_sha256_file_hex(backup_path, sha256, sizeof(sha256))
-        && variant_for_stock_sha(sha256) != NULL) {
-        return 1;
+    if (c300x_sha256_file_hex(target_path, sha256, sizeof(sha256))) {
+        variant = variant_for_stock_sha(sha256);
+    }
+    if (variant == NULL && c300x_patch_read_file(target_path, &data, &len)) {
+        variant = variant_matching(data, len, 1);
+        if (variant == NULL) {
+            variant = variant_matching(data, len, 0);
+        }
+        free(data);
+    }
+    return variant;
+}
+
+/* A backup is only worth restoring when it is the stock file: a truncated copy,
+ * one of another firmware, or a patched one must never replace the target.
+ * The backup folder outlives a firmware update, so the stock file of the other
+ * supported firmware can lie there; it is refused whenever the target shows
+ * which build the device runs. Only a target of neither build leaves that
+ * open, and then any supported stock file is the better content. */
+static int backup_is_stock(const char *backup_path, const char *target_path)
+{
+    const struct routing_variant *expected = target_variant(target_path);
+    const struct routing_variant *found;
+    char sha256[65];
+    unsigned char *data = NULL;
+    size_t len = 0;
+
+    if (c300x_sha256_file_hex(backup_path, sha256, sizeof(sha256))) {
+        found = variant_for_stock_sha(sha256);
+        if (found != NULL) {
+            return expected == NULL || found == expected;
+        }
     }
     if (!c300x_patch_read_file(backup_path, &data, &len)) {
         return 0;
@@ -291,9 +320,11 @@ static int backup_is_stock(const char *backup_path, const char *target_path)
         free(data);
         return 0;
     }
-    stock = variant_matching(data, len, 0) != NULL;
+    found = expected != NULL
+        ? (variant_ranges_match(expected, data, len, 0) ? expected : NULL)
+        : variant_matching(data, len, 0);
     free(data);
-    return stock;
+    return found != NULL;
 }
 
 int c300x_device_routing_read_status(

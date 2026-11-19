@@ -163,6 +163,7 @@ def test_python_and_agent_2_0_2_patch_tables_match() -> None:
     table = table[: table.index("};")]
 
     assert patcher.STOCK_SHA256_2_0_2 in source
+    assert table.count('{"patch_range_') == len(patcher.PATCHES_2_0_2) == len(patcher.PATCHES)
     for index, patch in enumerate(patcher.PATCHES_2_0_2):
         row = (
             f'{{"{patch.name}", 0x{patch.offset:x}, {patch.range_len}, '

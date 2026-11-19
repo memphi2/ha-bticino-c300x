@@ -8,6 +8,7 @@ import stat
 import time
 from typing import Any
 
+from .capture_history import CLOCK_TOLERANCE
 from .snapshot_identity import _read, _signature
 from .snapshot_store import MAX_SNAPSHOT_BYTES, SnapshotStore
 from .visitor_journal_media import _path, describe_clip, read_clip
@@ -57,7 +58,7 @@ def inventory(hass: Any, entry_id: str, enabled: bool, days: int,
             except OSError:
                 continue
     for record in videos[:MAX_HISTORY_ITEMS]:
-        if not now - days * 86400 < record["at"] <= now:
+        if not now - days * 86400 < record["at"] <= now + CLOCK_TOLERANCE:
             continue
         try:
             # _path applies the existing private capture-root policy. No scan.
@@ -72,7 +73,7 @@ def inventory(hass: Any, entry_id: str, enabled: bool, days: int,
         except (OSError, ValueError):
             continue
     return sorted(
-        (item for item in result if now - days * 86400 < item["at"] <= now),
+        (item for item in result if now - days * 86400 < item["at"] <= now + CLOCK_TOLERANCE),
         key=lambda item: (item["at"], item["id"]), reverse=True,
     )[:MAX_HISTORY_ITEMS]
 

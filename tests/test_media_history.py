@@ -428,3 +428,18 @@ def test_video_read_rechecks_descriptor_and_path_after_read(tmp_path, monkeypatc
             await view.get(request, "one", item["id"])
 
     asyncio.run(run())
+
+
+def test_recordings_stay_listed_while_the_clock_is_behind(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import media_history, media_history_http
+
+    async def run():
+        manager, _, request, view = fixture(tmp_path, monkeypatch)
+        await clip(manager)
+        assert len(await listed(view, request)) == 1
+        behind = time.time() - 3600
+        for module in (media_history, media_history_http):
+            monkeypatch.setattr(module.time, "time", lambda: behind)
+        assert len(await listed(view, request)) == 1
+
+    asyncio.run(run())

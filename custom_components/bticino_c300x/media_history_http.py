@@ -9,6 +9,7 @@ from typing import Any
 from aiohttp import web
 from homeassistant.auth.permissions.const import POLICY_READ
 
+from .capture_history import CLOCK_TOLERANCE
 from .config_snapshots import snapshot_options
 from .const import DOMAIN
 from .media import _media_response, _media_window
@@ -48,7 +49,7 @@ class C300XMediaHistoryView(C300XSnapshotView):
             current_videos = {record["clip"]["name"]: record for record in video_records(journal)}
             kept = []
             for item in items:
-                if (not now - days * 86400 < item["at"] <= now
+                if (not now - days * 86400 < item["at"] <= now + CLOCK_TOLERANCE
                         or (item["kind"] == "image" and not manager.enabled)
                         or (item["kind"] == "video" and item["record"] !=
                             current_videos.get(item["identity"]["name"]))):

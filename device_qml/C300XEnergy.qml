@@ -268,6 +268,11 @@ Item {
             height: barsHeight
             property real slotWidth: width / 24
             property int tickLabelStep: Math.max(1, Math.ceil((root.listOf(hoursAxis.ticks).length - 1) * 16 / height))
+            property int tickLabelBase: {
+                var ticks = root.listOf(hoursAxis.ticks)
+                for (var i = 0; i < ticks.length; i++) if (ticks[i].value === 0) return i
+                return 0
+            }
 
             Rectangle {
                 anchors.fill: parent
@@ -291,7 +296,7 @@ Item {
                     }
 
                     UbuntuLightText {
-                        visible: index % bars.tickLabelStep === 0
+                        visible: (index - bars.tickLabelBase) % bars.tickLabelStep === 0
                         x: -root.axisWidth
                         y: -7
                         width: root.axisWidth - 8

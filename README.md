@@ -23,6 +23,10 @@ forwarding controls, messages and optional display pages.
 [Installation](#installation) | [Quickstart](docs/quickstart.md) |
 [User guide](docs/user-guide.md) | [Troubleshooting](docs/media-troubleshooting.md)
 
+<p align="center">
+  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
+</p>
+
 ## What You Get
 
 - **See and answer the door.** Local live video and talkback through the bundled
@@ -84,10 +88,6 @@ Classe 300X / C300X (`344642` or `344643`): please start a
 [discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
 Every contribution is voluntary and very welcome. Support and new features
 stay open to everyone either way.
-
-<p align="center">
-  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
-</p>
 
 ## Installation
 

@@ -75,7 +75,7 @@ and do not post an address there. A donation is voluntary and gives no claim to
 support or to a feature.
 
 <p align="center">
-  [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20test%20device-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/oliver7557)
+  <a href="https://ko-fi.com/oliver7557"><img src="https://img.shields.io/badge/Ko--fi-Support%20the%20test%20device-FF5E5B?style=for-the-badge" alt="Support the test device on Ko-fi" height="40"></a>
 </p>
 
 ## Installation

@@ -737,6 +737,35 @@ test("doorbell card updates from direct camera state events without page reload"
   assert.equal(subscriptions[0].active, false);
 });
 
+test("a removed card that is configured again starts nothing until it is attached", async () => {
+  const registry = installFakeDom();
+  const subscriptions = [];
+  const connection = {
+    subscribeEvents(callback, eventType) {
+      subscriptions.push({ eventType, active: true });
+      return () => { subscriptions.at(-1).active = false; };
+    },
+  };
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?detached-config");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass({ connection });
+  await Promise.resolve();
+  card.isConnected = false;
+  card.disconnectedCallback();
+  await Promise.resolve();
+  assert.equal(card._disposed, true);
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass({ connection });
+  await Promise.resolve();
+  assert.equal(subscriptions.filter((item) => item.active).length, 0, "no subscription while detached");
+  assert.equal(card._locationChangeHandler ?? null, null, "no location listener while detached");
+  card.isConnected = true;
+  card.connectedCallback();
+  await Promise.resolve();
+  assert.equal(subscriptions.filter((item) => item.active).length, 1, "attaching starts it again");
+});
+
 test("reconfiguration disposes media, timers and subscriptions before replacing resources", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?reconfigure-cleanup");

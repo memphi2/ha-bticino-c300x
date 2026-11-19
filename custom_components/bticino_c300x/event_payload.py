@@ -8,17 +8,11 @@ from typing import Any
 
 from .capabilities import event_label
 from .const import DASHBOARD_ENTITY_DOOR_UNLOCK
-from .event_types import agent_event_key as _agent_event_key
+from .event_types import agent_event_key as agent_event_key
 
 ACTION_EVENT_KEYS = {
     DASHBOARD_ENTITY_DOOR_UNLOCK: "door_unlock_started",
 }
-
-
-def agent_event_key(data: Mapping[str, Any]) -> str | None:
-    """Return the stable machine key from a agent event payload."""
-
-    return _agent_event_key(data)
 
 
 def agent_event_name(

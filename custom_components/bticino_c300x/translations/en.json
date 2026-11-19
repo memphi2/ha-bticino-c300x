@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
+        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe five built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -396,7 +396,7 @@
             "data_description": {
               "enabled": "Next five events in seven days. Read on Home Assistant only.",
               "calendars": "Select up to eight calendars.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 10."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 10."
             }
           },
           "leave_home_page": {
@@ -416,7 +416,7 @@
               "lights": "Select up to 24 lights.",
               "actions": "Select up to eight existing allowlisted actions.",
               "show_alarm": "Use the alarm already configured for this display.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 11."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 11."
             }
           },
           "energy_page": {
@@ -433,19 +433,39 @@
             },
             "data_description": {
               "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 2.",
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 2.",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_consumers": "Top ten configured electrical devices by current power in W; unavailable readings are omitted, with no history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position}: Situations",
+            "description": "Read-only selected household issues. No actions or automatic navigation.",
+            "data": {
+              "enabled": "Show Situations",
+              "position": "Position",
+              "contacts": "Windows and doors",
+              "garages": "Garage doors",
+              "lights": "Lights",
+              "tasks": "Task lists"
+            },
+            "data_description": {
+              "enabled": "Select up to 24 entities in total across all four fields. Unknown and unavailable states stay visible. Disabled by default.",
+              "position": "1 = first page; positions 1 to 12. Default: 12.",
+              "contacts": "Up to 24 contacts; open contacts are shown.",
+              "garages": "Up to 24 garage covers; open or moving doors are shown.",
+              "lights": "Up to 24 lights; lights that are on are shown.",
+              "tasks": "Up to 24 to-do lists; pending-item counts only. No task changes."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
+        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe five built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -565,7 +585,7 @@
             "data_description": {
               "enabled": "Next five events in seven days. Read on Home Assistant only.",
               "calendars": "Select up to eight calendars.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 10."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 10."
             }
           },
           "leave_home_page": {
@@ -585,7 +605,7 @@
               "lights": "Select up to 24 lights.",
               "actions": "Select up to eight existing allowlisted actions.",
               "show_alarm": "Use the alarm already configured for this display.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 11."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 11."
             }
           },
           "energy_page": {
@@ -602,12 +622,32 @@
             },
             "data_description": {
               "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 2.",
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 2.",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_consumers": "Top ten configured electrical devices by current power in W; unavailable readings are omitted, with no history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position}: Situations",
+            "description": "Read-only selected household issues. No actions or automatic navigation.",
+            "data": {
+              "enabled": "Show Situations",
+              "position": "Position",
+              "contacts": "Windows and doors",
+              "garages": "Garage doors",
+              "lights": "Lights",
+              "tasks": "Task lists"
+            },
+            "data_description": {
+              "enabled": "Select up to 24 entities in total across all four fields. Unknown and unavailable states stay visible. Disabled by default.",
+              "position": "1 = first page; positions 1 to 12. Default: 12.",
+              "contacts": "Up to 24 contacts; open contacts are shown.",
+              "garages": "Up to 24 garage covers; open or moving doors are shown.",
+              "lights": "Up to 24 lights; lights that are on are shown.",
+              "tasks": "Up to 24 to-do lists; pending-item counts only. No task changes."
             }
           }
         }
@@ -820,7 +860,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
+        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe five built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -940,7 +980,7 @@
             "data_description": {
               "enabled": "Next five events in seven days. Read on Home Assistant only.",
               "calendars": "Select up to eight calendars.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 10."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 10."
             }
           },
           "leave_home_page": {
@@ -960,7 +1000,7 @@
               "lights": "Select up to 24 lights.",
               "actions": "Select up to eight existing allowlisted actions.",
               "show_alarm": "Use the alarm already configured for this display.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 11."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 11."
             }
           },
           "energy_page": {
@@ -977,12 +1017,32 @@
             },
             "data_description": {
               "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 2.",
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 2.",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_consumers": "Top ten configured electrical devices by current power in W; unavailable readings are omitted, with no history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position}: Situations",
+            "description": "Read-only selected household issues. No actions or automatic navigation.",
+            "data": {
+              "enabled": "Show Situations",
+              "position": "Position",
+              "contacts": "Windows and doors",
+              "garages": "Garage doors",
+              "lights": "Lights",
+              "tasks": "Task lists"
+            },
+            "data_description": {
+              "enabled": "Select up to 24 entities in total across all four fields. Unknown and unavailable states stay visible. Disabled by default.",
+              "position": "1 = first page; positions 1 to 12. Default: 12.",
+              "contacts": "Up to 24 contacts; open contacts are shown.",
+              "garages": "Up to 24 garage covers; open or moving doors are shown.",
+              "lights": "Up to 24 lights; lights that are on are shown.",
+              "tasks": "Up to 24 to-do lists; pending-item counts only. No task changes."
             }
           }
         }

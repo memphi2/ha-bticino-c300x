@@ -81,6 +81,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/dashboard.py",
     "custom_components/bticino_c300x/dashboard_agenda.py",
     "custom_components/bticino_c300x/dashboard_leave_home.py",
+    "custom_components/bticino_c300x/dashboard_situations.py",
     "custom_components/bticino_c300x/dashboard_optional_config.py",
     "custom_components/bticino_c300x/dashboard_page_order.py",
     "custom_components/bticino_c300x/dashboard_response.py",

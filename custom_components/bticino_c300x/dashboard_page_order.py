@@ -1,4 +1,4 @@
-"""Shared logical display slots for regular, Energy, Agenda and Leave home pages."""
+"""Shared logical display slots for regular and independently enabled pages."""
 
 from __future__ import annotations
 
@@ -10,12 +10,13 @@ from .const import (
     CONF_AGENDA_PAGE,
     CONF_ENERGY_PAGE,
     CONF_LEAVE_HOME_PAGE,
+    CONF_SITUATIONS_PAGE,
     DASHBOARD_NAVIGATION_PAGER,
     DASHBOARD_NAVIGATION_TABS,
 )
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT
 
-SPECIAL_PAGE_ORDER = (CONF_ENERGY_PAGE, CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE)
+SPECIAL_PAGE_ORDER = (CONF_ENERGY_PAGE, CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE, CONF_SITUATIONS_PAGE)
 PAGE_POSITION_MAX = DASHBOARD_PAGE_MAX_COUNT + len(SPECIAL_PAGE_ORDER)
 DASHBOARD_NAVIGATIONS = (DASHBOARD_NAVIGATION_PAGER, DASHBOARD_NAVIGATION_TABS)
 
@@ -54,7 +55,7 @@ def page_layout_slots(
     """Replay saved absolute special slots against relative regular-page order.
 
     Keep configured but invisible regular pages in this input; the caller
-    removes empty slots after ordering. Ties are Energy, Agenda, Leave home,
+    removes empty slots after ordering. Ties are Energy, Agenda, Leave home, Situations,
     then regular pages. Insertion never reverses two tied special pages.
     """
     slots = [("regular", name) for name in regular_names]

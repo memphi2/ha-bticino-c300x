@@ -1264,19 +1264,23 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
         ("energy_page", "expandable"),
         ("agenda_page", "expandable"),
         ("leave_home_page", "expandable"),
+        ("situations_page", "expandable"),
         *((f"page_{slot}", "expandable") for slot in range(2, 9)),
     ]
     # Used pages are open, and so is the first free one to add a page; the
     # optional built-in pages are closed while switched off.
-    assert [field["expanded"] for field in fields] == [True, False, False, False, True, True] + [False] * 5
+    assert [field["expanded"] for field in fields] == [True, False, False, False, False, True, True] + [False] * 5
     assert [item["name"] for item in fields[1]["schema"]] == [
         "enabled", "position", "view_now", "view_today", "view_power", "view_consumers", "view_balance",
     ]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "enabled", "weather_entity_id", "position", "entities",
     ]
-    assert [item["name"] for item in fields[4]["schema"]] == ["name", "position", "entities"]
-    assert fields[4]["schema"][0]["description"] == {"suggested_value": "Room"}
+    assert [item["name"] for item in fields[4]["schema"]] == [
+        "enabled", "position", "contacts", "garages", "lights", "tasks",
+    ]
+    assert [item["name"] for item in fields[5]["schema"]] == ["name", "position", "entities"]
+    assert fields[5]["schema"][0]["description"] == {"suggested_value": "Room"}
 
 
 
@@ -1318,6 +1322,7 @@ def test_section_titles_carry_the_page_names():
         "energy_page_position": " 2",
         "agenda_page_position": " 10",
         "leave_home_page_position": " 11",
+        "situations_page_position": " 12",
         "page_2_name": ": Room",
         **{f"page_{slot}_name": "" for slot in range(3, 9)},
     }

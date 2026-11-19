@@ -3,7 +3,7 @@
 The display has up to ``DASHBOARD_PAGE_MAX_COUNT`` regular pages. The form has one
 section per page: the status page carries the badges and the weather card,
 set here as its Weather field; every other page has a name,
-which the display shows as its heading. Each section has a position from 1 to 11,
+which the display shows as its heading. Each section has a position from 1 to 12,
 which orders the pages, and the entities shown on that page, in the order they
 are picked.
 
@@ -11,10 +11,10 @@ The entities are stored as before: the dashboard entity list in page order
 and the page name of each entity in its display overrides. The page list
 stores each page's name and its position, numbered from 1 in display order.
 
-Energy, Agenda and Leave home are independently enabled extra pages. They
+Energy, Agenda, Leave home and Situations are independently enabled extra pages. They
 store absolute display positions; regular pages stay numbered among themselves.
 The shared layout helper converts between these positions for the form and
-the display. Equal requested positions put Energy, Agenda and Leave home
+the display. Equal requested positions put Energy, Agenda, Leave home and Situations
 before regular pages, in that order. Disabled pages retain their settings.
 Section titles and order follow display positions, not internal form slot keys;
 unused regular sections remain available at the end.

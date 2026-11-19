@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
+        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie fünf vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -396,7 +396,7 @@
             "data_description": {
               "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
               "calendars": "Bis zu acht Kalender auswählen.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 10."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 10."
             }
           },
           "leave_home_page": {
@@ -416,7 +416,7 @@
               "lights": "Bis zu 24 Lichter auswählen.",
               "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
               "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 11."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 11."
             }
           },
           "energy_page": {
@@ -433,19 +433,39 @@
             },
             "data_description": {
               "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 2.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 2.",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_consumers": "Die zehn konfigurierten elektrischen Verbraucher mit der höchsten aktuellen Leistung in W; nicht verfügbare Werte entfallen, ohne Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
+            }
+          },
+          "situations_page": {
+            "name": "Seite{situations_page_position}: Situationen",
+            "description": "Ausgewählte Hinweise, nur lesend. Keine Aktionen oder automatische Navigation.",
+            "data": {
+              "enabled": "Situationen anzeigen",
+              "position": "Position",
+              "contacts": "Fenster und Türen",
+              "garages": "Garagentore",
+              "lights": "Lichter",
+              "tasks": "Aufgabenlisten"
+            },
+            "data_description": {
+              "enabled": "Insgesamt bis zu 24 Entitäten in allen vier Feldern auswählen. Unbekannte und nicht verfügbare Zustände bleiben sichtbar. Standardmäßig deaktiviert.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Standard: 12.",
+              "contacts": "Bis zu 24 Kontakte; offene Kontakte werden angezeigt.",
+              "garages": "Bis zu 24 Garagentore; offene oder fahrende Tore werden angezeigt.",
+              "lights": "Bis zu 24 Lichter; eingeschaltete Lichter werden angezeigt.",
+              "tasks": "Bis zu 24 Aufgabenlisten; nur die Anzahl offener Aufgaben. Keine Änderungen."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
+        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie fünf vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -565,7 +585,7 @@
             "data_description": {
               "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
               "calendars": "Bis zu acht Kalender auswählen.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 10."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 10."
             }
           },
           "leave_home_page": {
@@ -585,7 +605,7 @@
               "lights": "Bis zu 24 Lichter auswählen.",
               "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
               "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 11."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 11."
             }
           },
           "energy_page": {
@@ -602,12 +622,32 @@
             },
             "data_description": {
               "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 2.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 2.",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_consumers": "Die zehn konfigurierten elektrischen Verbraucher mit der höchsten aktuellen Leistung in W; nicht verfügbare Werte entfallen, ohne Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
+            }
+          },
+          "situations_page": {
+            "name": "Seite{situations_page_position}: Situationen",
+            "description": "Ausgewählte Hinweise, nur lesend. Keine Aktionen oder automatische Navigation.",
+            "data": {
+              "enabled": "Situationen anzeigen",
+              "position": "Position",
+              "contacts": "Fenster und Türen",
+              "garages": "Garagentore",
+              "lights": "Lichter",
+              "tasks": "Aufgabenlisten"
+            },
+            "data_description": {
+              "enabled": "Insgesamt bis zu 24 Entitäten in allen vier Feldern auswählen. Unbekannte und nicht verfügbare Zustände bleiben sichtbar. Standardmäßig deaktiviert.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Standard: 12.",
+              "contacts": "Bis zu 24 Kontakte; offene Kontakte werden angezeigt.",
+              "garages": "Bis zu 24 Garagentore; offene oder fahrende Tore werden angezeigt.",
+              "lights": "Bis zu 24 Lichter; eingeschaltete Lichter werden angezeigt.",
+              "tasks": "Bis zu 24 Aufgabenlisten; nur die Anzahl offener Aufgaben. Keine Änderungen."
             }
           }
         }
@@ -820,7 +860,7 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
+        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie fünf vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -940,7 +980,7 @@
             "data_description": {
               "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
               "calendars": "Bis zu acht Kalender auswählen.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 10."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 10."
             }
           },
           "leave_home_page": {
@@ -960,7 +1000,7 @@
               "lights": "Bis zu 24 Lichter auswählen.",
               "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
               "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 11."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 11."
             }
           },
           "energy_page": {
@@ -977,12 +1017,32 @@
             },
             "data_description": {
               "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 2.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 2.",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_consumers": "Die zehn konfigurierten elektrischen Verbraucher mit der höchsten aktuellen Leistung in W; nicht verfügbare Werte entfallen, ohne Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
+            }
+          },
+          "situations_page": {
+            "name": "Seite{situations_page_position}: Situationen",
+            "description": "Ausgewählte Hinweise, nur lesend. Keine Aktionen oder automatische Navigation.",
+            "data": {
+              "enabled": "Situationen anzeigen",
+              "position": "Position",
+              "contacts": "Fenster und Türen",
+              "garages": "Garagentore",
+              "lights": "Lichter",
+              "tasks": "Aufgabenlisten"
+            },
+            "data_description": {
+              "enabled": "Insgesamt bis zu 24 Entitäten in allen vier Feldern auswählen. Unbekannte und nicht verfügbare Zustände bleiben sichtbar. Standardmäßig deaktiviert.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Standard: 12.",
+              "contacts": "Bis zu 24 Kontakte; offene Kontakte werden angezeigt.",
+              "garages": "Bis zu 24 Garagentore; offene oder fahrende Tore werden angezeigt.",
+              "lights": "Bis zu 24 Lichter; eingeschaltete Lichter werden angezeigt.",
+              "tasks": "Bis zu 24 Aufgabenlisten; nur die Anzahl offener Aufgaben. Keine Änderungen."
             }
           }
         }

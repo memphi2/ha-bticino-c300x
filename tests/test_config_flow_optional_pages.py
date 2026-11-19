@@ -125,7 +125,7 @@ def test_all_three_flows_translate_optional_sections(name):
     path = Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x" / name
     catalog = json.loads(path.read_text())
     for flow, step in [("config", "user_dashboard_pages"), ("config", "reconfigure_dashboard_pages"), ("options", "dashboard_pages")]:
-        for key, fields in [("agenda_page", {"enabled", "position", "calendars"}), ("leave_home_page", {"enabled", "position", "contacts", "lights", "actions", "show_alarm"})]:
+        for key, fields in [("agenda_page", {"enabled", "position", "calendars"}), ("leave_home_page", {"enabled", "position", "contacts", "lights", "actions", "show_alarm"}), ("situations_page", {"enabled", "position", "contacts", "garages", "lights", "tasks"})]:
             section = catalog[flow]["step"][step]["sections"][key]
             assert set(section["data"]) == set(section["data_description"]) == fields
             assert section["name"] and section["description"]

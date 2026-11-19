@@ -1,4 +1,4 @@
-"""All eleven logical slots share stable configuration and display ordering."""
+"""All logical slots share stable configuration and display ordering."""
 
 import asyncio
 from itertools import permutations, product
@@ -28,7 +28,7 @@ from custom_components.bticino_c300x.dashboard_page_order import (
 
 def special_settings(positions=(2, 10, 11), enabled=(True, True, True)):
     return {key: {"position": position, "enabled": active, **({"views": ["now"]} if key == "energy_page" else {})}
-            for key, position, active in zip(SPECIAL_PAGE_ORDER, positions, enabled, strict=True)}
+            for key, position, active in zip(SPECIAL_PAGE_ORDER[:len(positions)], positions, enabled, strict=True)}
 
 
 def form_input(regular_positions=(1, 3, 5), positions=(2, 4, 6), enabled=(True, True, True)):
@@ -45,12 +45,12 @@ def slots_for_saved(saved):
     })
 
 
-def test_all_eleven_position_combinations_replay_normalized_form_order():
+def test_all_position_combinations_replay_normalized_form_order():
     regular = [f"Room {index}" for index in range(1, 9)]
-    for positions in product(range(1, 12), repeat=3):
-        special = special_settings(positions)
+    for positions in product(range(1, PAGE_POSITION_MAX + 1), repeat=len(SPECIAL_PAGE_ORDER)):
+        special = special_settings(positions, (True,) * len(SPECIAL_PAGE_ORDER))
         saved = submitted_special_positions(list(range(1, 9)), special, set(SPECIAL_PAGE_ORDER))
-        expected = [(index, 3, ("regular", name)) for index, name in enumerate(regular, 1)]
+        expected = [(index, len(SPECIAL_PAGE_ORDER), ("regular", name)) for index, name in enumerate(regular, 1)]
         expected += [(position, index, ("special", key)) for index, (key, position) in enumerate(zip(SPECIAL_PAGE_ORDER, positions, strict=True))]
         assert page_layout_slots(regular, saved) == [value for _, _, value in sorted(expected)]
 
@@ -69,29 +69,29 @@ def test_form_save_reopen_preserves_mixed_order_and_disabled_positions(positions
         for key in SPECIAL_PAGE_ORDER:
             assert reopened[key] == saved[key]
         saved = reopened
-    for key, active, position in zip(SPECIAL_PAGE_ORDER, enabled, positions, strict=True):
+    for key, active, position in zip(SPECIAL_PAGE_ORDER[:len(positions)], enabled, positions, strict=True):
         if not active:
             assert saved[key]["position"] == position
 
 
-def test_all_sections_offer_one_to_eleven_and_optional_defaults_append():
+def test_all_sections_offer_all_positions_and_optional_defaults_append():
     schema = dashboard_pages_schema({})
-    assert PAGE_POSITION_MAX == 11
+    assert PAGE_POSITION_MAX == 12
     for marker, section in schema.schema.items():
         selector = next(value for field, value in section.schema.schema.items() if str(field) == "position")
-        assert selector.config["min"] == 1 and selector.config["max"] == 11 and selector.config["step"] == 1
-        if str(marker) in ("agenda_page", "leave_home_page", "energy_page"):
+        assert selector.config["min"] == 1 and selector.config["max"] == 12 and selector.config["step"] == 1
+        if str(marker) in SPECIAL_PAGE_ORDER:
             position = next(field for field in section.schema.schema if str(field) == "position")
-            assert position.description["suggested_value"] == {"agenda_page": 10, "leave_home_page": 11, "energy_page": 2}[str(marker)]
+            assert position.description["suggested_value"] == {"agenda_page": 10, "leave_home_page": 11, "energy_page": 2, "situations_page": 12}[str(marker)]
 
 
 def test_equal_positions_are_energy_agenda_leave_then_regular_section_order():
-    saved, errors = dashboard_pages_input({}, form_input((1, 1, 1), (1, 1, 1)))
+    saved, errors = dashboard_pages_input({}, form_input((1, 1, 1), (1, 1, 1, 1), (True,) * 4))
     assert not errors
     assert slots_for_saved(saved) == [("special", key) for key in SPECIAL_PAGE_ORDER] + [
         ("regular", name) for name in ("C300X", "Room 2", "Room 3")
     ]
-    assert [saved[key]["position"] for key in SPECIAL_PAGE_ORDER] == [1, 2, 3]
+    assert [saved[key]["position"] for key in SPECIAL_PAGE_ORDER] == [1, 2, 3, 4]
 
 
 def test_disabled_optional_page_preserves_position_and_selections_after_roundtrip():
@@ -116,7 +116,7 @@ def test_omitted_optional_sections_keep_saved_positions():
         assert result[key] == saved[key]
 
 
-@pytest.mark.parametrize("value,expected", [(None, 10), ("bad", 10), (float("nan"), 10), (float("inf"), 10), (-8, 1), (2.5, 3), (99, 11)])
+@pytest.mark.parametrize("value,expected", [(None, 10), ("bad", 10), (float("nan"), 10), (float("inf"), 10), (-8, 1), (2.5, 3), (99, 12)])
 def test_position_normalization_matches_regular_form(value, expected):
     assert page_position(value, 10) == expected
     assert optional_page_values({"agenda_page": {"position": value}})["agenda_page"]["position"] == expected

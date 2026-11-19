@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura quattro pagine predefinite (Stato, Energia, Agenda ed Esci di casa) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.\n\nLe quattro sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
+        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe cinque sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -396,7 +396,7 @@
             "data_description": {
               "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
               "calendars": "Seleziona fino a otto calendari.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 10."
             }
           },
           "leave_home_page": {
@@ -416,7 +416,7 @@
               "lights": "Seleziona fino a 24 luci.",
               "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
               "show_alarm": "Usa l'allarme già configurato per questo display.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 11."
             }
           },
           "energy_page": {
@@ -433,19 +433,39 @@
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
+            }
+          },
+          "situations_page": {
+            "name": "Pagina{situations_page_position}: Situazioni",
+            "description": "Problemi selezionati in sola lettura. Nessuna azione o navigazione automatica.",
+            "data": {
+              "enabled": "Mostra Situazioni",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "garages": "Porte del garage",
+              "lights": "Luci",
+              "tasks": "Elenchi di attività"
+            },
+            "data_description": {
+              "enabled": "Seleziona al massimo 24 entità in totale nei quattro campi. Gli stati sconosciuti e non disponibili restano visibili. Disattivato per impostazione predefinita.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Predefinita: 12.",
+              "contacts": "Fino a 24 contatti; sono mostrati i contatti aperti.",
+              "garages": "Fino a 24 porte del garage; sono mostrate le porte aperte o in movimento.",
+              "lights": "Fino a 24 luci; sono mostrate le luci accese.",
+              "tasks": "Fino a 24 elenchi; numero di attività da completare. Nessuna modifica."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura quattro pagine predefinite (Stato, Energia, Agenda ed Esci di casa) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.\n\nLe quattro sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
+        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe cinque sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -565,7 +585,7 @@
             "data_description": {
               "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
               "calendars": "Seleziona fino a otto calendari.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 10."
             }
           },
           "leave_home_page": {
@@ -585,7 +605,7 @@
               "lights": "Seleziona fino a 24 luci.",
               "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
               "show_alarm": "Usa l'allarme già configurato per questo display.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 11."
             }
           },
           "energy_page": {
@@ -602,12 +622,32 @@
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
+            }
+          },
+          "situations_page": {
+            "name": "Pagina{situations_page_position}: Situazioni",
+            "description": "Problemi selezionati in sola lettura. Nessuna azione o navigazione automatica.",
+            "data": {
+              "enabled": "Mostra Situazioni",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "garages": "Porte del garage",
+              "lights": "Luci",
+              "tasks": "Elenchi di attività"
+            },
+            "data_description": {
+              "enabled": "Seleziona al massimo 24 entità in totale nei quattro campi. Gli stati sconosciuti e non disponibili restano visibili. Disattivato per impostazione predefinita.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Predefinita: 12.",
+              "contacts": "Fino a 24 contatti; sono mostrati i contatti aperti.",
+              "garages": "Fino a 24 porte del garage; sono mostrate le porte aperte o in movimento.",
+              "lights": "Fino a 24 luci; sono mostrate le luci accese.",
+              "tasks": "Fino a 24 elenchi; numero di attività da completare. Nessuna modifica."
             }
           }
         }
@@ -820,7 +860,7 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura quattro pagine predefinite (Stato, Energia, Agenda ed Esci di casa) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.\n\nLe quattro sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
+        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe cinque sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -940,7 +980,7 @@
             "data_description": {
               "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
               "calendars": "Seleziona fino a otto calendari.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 10."
             }
           },
           "leave_home_page": {
@@ -960,7 +1000,7 @@
               "lights": "Seleziona fino a 24 luci.",
               "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
               "show_alarm": "Usa l'allarme già configurato per questo display.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 11."
             }
           },
           "energy_page": {
@@ -977,12 +1017,32 @@
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
+            }
+          },
+          "situations_page": {
+            "name": "Pagina{situations_page_position}: Situazioni",
+            "description": "Problemi selezionati in sola lettura. Nessuna azione o navigazione automatica.",
+            "data": {
+              "enabled": "Mostra Situazioni",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "garages": "Porte del garage",
+              "lights": "Luci",
+              "tasks": "Elenchi di attività"
+            },
+            "data_description": {
+              "enabled": "Seleziona al massimo 24 entità in totale nei quattro campi. Gli stati sconosciuti e non disponibili restano visibili. Disattivato per impostazione predefinita.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Predefinita: 12.",
+              "contacts": "Fino a 24 contatti; sono mostrati i contatti aperti.",
+              "garages": "Fino a 24 porte del garage; sono mostrate le porte aperte o in movimento.",
+              "lights": "Fino a 24 luci; sono mostrate le luci accese.",
+              "tasks": "Fino a 24 elenchi; numero di attività da completare. Nessuna modifica."
             }
           }
         }

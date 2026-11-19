@@ -33,13 +33,15 @@ def test_saved_headings_and_section_order_match_resolved_slots(positions, enable
         key = regular[name] if kind == "regular" else name
         active.append(key)
         assert placeholders[f"{key}_position"] == f" {position}"
-    assert keys[:4] == ["page_1", *SPECIAL_PAGE_ORDER]
-    assert [key for key in keys[4:] if key in active] == [
+    assert keys[:5] == ["page_1", *SPECIAL_PAGE_ORDER]
+    assert [key for key in keys[5:] if key in active] == [
         key for key in active if key.startswith("page_") and key != "page_1"
     ]
     assert keys[-5:] == [f"page_{i}" for i in range(4, 9)]
     assert all(placeholders[f"page_{i}_position"] == "" for i in range(4, 9))
-    for key, is_enabled in zip(SPECIAL_PAGE_ORDER, enabled, strict=True):
+    # Situations is not in this input and stays switched off at its default.
+    assert placeholders["situations_page_position"] == " 12"
+    for key, is_enabled in zip(SPECIAL_PAGE_ORDER[:3], enabled, strict=True):
         if not is_enabled:
             assert placeholders[f"{key}_position"] == f" {saved[key]['position']}"
     reopened, errors = dashboard_pages_input(saved, post_pages_like_home_assistant(schema))
@@ -62,7 +64,7 @@ def test_retry_orders_requested_positions_and_keeps_section_identity_and_fields(
     assert errors and unchanged == saved
     schema = dashboard_pages_schema(saved, posted)
     assert [str(key) for key in schema.schema] == [
-        "page_1", "energy_page", "agenda_page", "leave_home_page", "page_3", "page_7", "page_2",
+        "page_1", "energy_page", "agenda_page", "leave_home_page", "situations_page", "page_3", "page_7", "page_2",
         "page_4", "page_5", "page_6", "page_8",
     ]
     placeholders = dashboard_pages_placeholders(saved, posted)
@@ -81,6 +83,7 @@ def test_default_form_promotes_disabled_built_in_pages_above_seven_custom_pages(
     assert placeholders["energy_page_position"] == " 2"
     assert placeholders["agenda_page_position"] == " 10"
     assert placeholders["leave_home_page_position"] == " 11"
+    assert placeholders["situations_page_position"] == " 12"
     for key in SPECIAL_PAGE_ORDER:
         assert post_pages_like_home_assistant(schema)[key]["enabled"] is False
 
@@ -148,11 +151,11 @@ def test_every_page_title_renders_its_position_in_all_flows_and_languages(name):
 
 
 @pytest.mark.parametrize("name,built_in,custom", [
-    ("strings.json", "four built-in pages", "seven custom pages"),
-    ("translations/en.json", "four built-in pages", "seven custom pages"),
-    ("translations/de.json", "vier vordefinierte Seiten", "sieben eigene Seiten"),
-    ("translations/fr.json", "quatre pages", "sept pages"),
-    ("translations/it.json", "quattro pagine", "sette pagine"),
+    ("strings.json", "five built-in pages", "seven custom pages"),
+    ("translations/en.json", "five built-in pages", "seven custom pages"),
+    ("translations/de.json", "fünf vordefinierte Seiten", "sieben eigene Seiten"),
+    ("translations/fr.json", "cinq pages", "sept pages"),
+    ("translations/it.json", "cinque pagine", "sette pagine"),
 ])
 def test_page_descriptions_distinguish_built_in_and_custom_pages(name, built_in, custom):
     catalog = json.loads((Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x" / name).read_text())
@@ -163,5 +166,5 @@ def test_page_descriptions_distinguish_built_in_and_custom_pages(name, built_in,
     assert len(set(descriptions)) == 1
     assert built_in in descriptions[0] and custom in descriptions[0]
     keys = [str(marker) for marker in dashboard_pages_schema({}).schema]
-    assert len(keys[:4]) == 4
-    assert len(keys[4:]) == 7
+    assert keys[:5] == ["page_1", *SPECIAL_PAGE_ORDER]
+    assert len(keys[5:]) == 7

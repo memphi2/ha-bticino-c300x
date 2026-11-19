@@ -12,11 +12,13 @@ from .const import (
     CONF_ACTIONS_JSON,
     CONF_AGENDA_PAGE,
     CONF_LEAVE_HOME_PAGE,
+    CONF_SITUATIONS_PAGE,
 )
 from .dashboard_optional_config import (
     MAX_ACTIONS,
     MAX_CALENDARS,
     MAX_CHECKS,
+    SITUATION_DOMAINS,
     optional_page_values,
 )
 from .dashboard_page_order import PAGE_POSITION_MAX
@@ -49,10 +51,14 @@ def optional_page_sections(saved: dict[str, Any], posted: dict[str, Any] | None)
         domains = {"calendars": "calendar"} if key == CONF_AGENDA_PAGE else {
             "contacts": "binary_sensor", "lights": "light",
         }
+        if key == CONF_SITUATIONS_PAGE:
+            domains = SITUATION_DOMAINS
         for field, domain in domains.items():
             config = selector.EntitySelectorConfig(domain=domain, multiple=True, reorder=True)
             if field == "contacts":
                 config["device_class"] = ["door", "window", "opening", "garage_door"]
+            if field == "garages":
+                config["device_class"] = ["garage"]
             inner[optional_suggested(field, shown.get(field))] = selector.EntitySelector(config)
         if key == CONF_LEAVE_HOME_PAGE:
             # Retain a removed action visibly so it can be cleared; the backend
@@ -86,6 +92,7 @@ def optional_pages_errors(posted: dict[str, Any]) -> dict[str, str]:
     for key, limits in (
         (CONF_AGENDA_PAGE, {"calendars": MAX_CALENDARS}),
         (CONF_LEAVE_HOME_PAGE, {"contacts": MAX_CHECKS, "lights": MAX_CHECKS, "actions": MAX_ACTIONS}),
+        (CONF_SITUATIONS_PAGE, dict.fromkeys(SITUATION_DOMAINS, MAX_CHECKS)),
     ):
         section_input = posted.get(key)
         if not isinstance(section_input, dict):

@@ -2149,3 +2149,21 @@ test("a card that is attached again at once keeps its call, a removed card ends 
   assert.equal(card._disposed, true);
   assert.ok(closed >= 1);
 });
+
+test("a card moved in one DOM call keeps its call", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?move-one-call");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  let closed = 0;
+  card._webrtc = { running: true, remoteStream: { getAudioTracks: () => [], getVideoTracks: () => [] }, close() { closed += 1; } };
+  // appendChild of a connected element: the callbacks run after the move,
+  // so the element is already connected again when it hears of the removal.
+  card.isConnected = true;
+  card.disconnectedCallback();
+  card.connectedCallback();
+  await Promise.resolve();
+  assert.equal(closed, 0);
+  assert.equal(card._disposed, false);
+});

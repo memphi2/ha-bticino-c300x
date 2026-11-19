@@ -459,7 +459,7 @@ def test_async_wait_talkback_ready_times_out(monkeypatch: pytest.MonkeyPatch) ->
         )
 
 
-def test_async_play_and_keepalive_map_worker_errors(
+def test_keepalive_maps_worker_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class TalkbackError(Exception):
@@ -483,14 +483,6 @@ def test_async_play_and_keepalive_map_worker_errors(
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", broken_keepalive)
     monkeypatch.setattr(ring_talkback.asyncio, "to_thread", _to_thread_inline)
 
-    with pytest.raises(TalkbackError, match="announcement playback failed"):
-        asyncio.run(
-            ring_talkback.async_play_announcement_when_ready(
-                object(),
-                "192.0.2.10",
-                Path("announcement.wav"),
-            )
-        )
     with pytest.raises(TalkbackError, match="talkback keepalive failed"):
         asyncio.run(
             ring_talkback.async_keep_talkback_alive_when_ready(
@@ -502,7 +494,7 @@ def test_async_play_and_keepalive_map_worker_errors(
         )
 
 
-def test_async_play_and_keepalive_propagate_homeassistant_errors(
+def test_keepalive_propagates_homeassistant_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def ok_wait(_entry: Any) -> None:
@@ -516,22 +508,12 @@ def test_async_play_and_keepalive_propagate_homeassistant_errors(
         codec_pcmu: bool = False,
         keep_alive: bool = True,
     ) -> None:
-        raise ring_talkback.HomeAssistantError(
-            "expected keepalive failure" if keep_alive else "expected play failure"
-        )
+        raise ring_talkback.HomeAssistantError("expected keepalive failure")
 
     monkeypatch.setattr(ring_talkback, "_async_wait_talkback_ready", ok_wait)
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", broken_keepalive)
     monkeypatch.setattr(ring_talkback.asyncio, "to_thread", _to_thread_inline)
 
-    with pytest.raises(ring_talkback.HomeAssistantError, match="expected play failure"):
-        asyncio.run(
-            ring_talkback.async_play_announcement_when_ready(
-                object(),
-                "192.0.2.10",
-                Path("announcement.wav"),
-            )
-        )
     with pytest.raises(
         ring_talkback.HomeAssistantError,
         match="expected keepalive failure",
@@ -544,28 +526,6 @@ def test_async_play_and_keepalive_propagate_homeassistant_errors(
                 threading.Event(),
             )
         )
-
-
-def test_single_shot_playback_does_not_use_cancellation_signal(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    seen = []
-
-    def _keepalive(
-        host: str,
-        source: Path | None,
-        stop_event: threading.Event,
-        *,
-        codec_pcmu: bool = False,
-        keep_alive: bool = True,
-    ) -> None:
-        seen.append((host, source, stop_event.is_set(), keep_alive))
-
-    monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", _keepalive)
-
-    asyncio.run(ring_talkback._async_play_announcement("192.0.2.10", Path("announcement.wav")))
-
-    assert seen == [("192.0.2.10", Path("announcement.wav"), False, False)]
 
 
 async def _async_noop(*_args: Any) -> None:

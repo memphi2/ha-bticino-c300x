@@ -980,7 +980,7 @@ p.tapEnd(p.scroll, 0);
 assert.equal(a.clicks, 1, "a press another list delivered is not delivered again");
 
 // A control stays locked until its own state is confirmed.
-Object.assign(p, {pendingSettling: [], pendingSince: 0});
+Object.assign(p, {pendingSettling: []});
 queue.length = 0; p.pendingEntity = ""; p.controlInFlight = false;
 Api.dashboardControl({entity_id: "light.a", domain: "light"}, {command: ""}, null, p.status, p);
 queue.shift().success({ok: true});
@@ -997,7 +997,8 @@ p.dashboardRefreshAgain = false; p.controlInFlight = false;
 Api.finishDashboardRefresh(p.status, p);
 assert.deepEqual(Array.from(p.pendingSettling), []);
 assert.equal(p.controlFree({entity_id: "light.a"}), true);
-p.pendingEntity = "light.b"; p.pendingSince = Date.now() - 5000; p.commandGeneration = 7;
-p.pendingExpiryTick();
-assert.equal(p.commandGeneration, 7, "a command is not expired before its own ten seconds");
+assert.match(qml, /onPendingEntityChanged: if \(pageActive && pendingEntity.length > 0\) pendingExpiry.restart\(\)/,
+    "every new command gets its own ten seconds, started outside the timer's own handler");
+assert.match(qml, /id: pendingExpiry[^}]*onTriggered: expirePendingControl\(\)/);
+assert.doesNotMatch(qml, /onTriggered:[^\n]*restart|pendingExpiryTick/, "Qt 4.8 drops a restart made inside onTriggered");
 console.log("Tap delivery and per-control lock passed");

@@ -490,7 +490,6 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
     // An answered command stays locked until the refresh confirms its state.
     if (pageItem.pendingEntity) pageItem.pendingSettling = settling.concat([pageItem.pendingEntity])
     pageItem.pendingEntity = item.entity_id
-    pageItem.pendingSince = Date.now()
     pageItem.controlInFlight = true
     setDashboardFeedback(pageItem, item.entity_id, "sending", expected)
     var path = "/homeassistant?domain=" + encodeURIComponent(item.domain || "c300x") + "&service=toggle&entities="

@@ -63,6 +63,7 @@ Page {
     property int commandGeneration: 0
     property variant controlFeedback: []
     onControlFeedbackChanged: scheduleFeedbackExpiry()
+    onPendingEntityChanged: if (pageActive && pendingEntity.length > 0) pendingExpiry.restart()
     property bool interactionActive: false
     property variant tapArea
     property variant tapAt: 0
@@ -70,7 +71,7 @@ Page {
     property bool tapFlicked: false
     property bool tapStolen: false
     property variant pendingSettling: []
-    property variant pendingSince: 0
+    property bool feedbackDue: false
     function controlFree(item) {
         if (pendingEntity.length === 0) return true
         if (controlInFlight) return false
@@ -105,18 +106,6 @@ Page {
         flick.contentY = tapOrigin[index]
         try { if (leaveHomeLoader.item) leaveHomeLoader.item.tapForget() } catch (error) {}
         try { area.clicked(null) } catch (error) {}
-    }
-    function pendingExpiryTick() {
-        if (!pendingEntity) return
-        var left = 10000 - (Date.now() - pendingSince)
-        if (left <= 0) {
-            expirePendingControl()
-            return
-        }
-        try {
-            pendingExpiry.interval = left
-            pendingExpiry.restart()
-        } catch (error) {}
     }
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
     // its bindings. Doing that inside a flick drops frames on the device, and the
@@ -323,7 +312,8 @@ Page {
     Timer {
         id: feedbackExpiry
         repeat: false
-        onTriggered: refreshFeedbackExpiry()
+        onTriggered: feedbackDue = true
+        onRunningChanged: if (!running && feedbackDue) { feedbackDue = false; refreshFeedbackExpiry() }
     }
 
     function replayDeferredRefresh() {
@@ -407,7 +397,7 @@ Page {
         interval: 10000
         repeat: false
         running: pageActive && pendingEntity.length > 0
-        onTriggered: pendingExpiryTick()
+        onTriggered: expirePendingControl()
     }
 
     function itemName(item) {

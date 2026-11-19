@@ -7171,6 +7171,16 @@ static void handle_ringer_get(
         char volume_raw[C300X_MAX_FRAME_LEN];
         c300x_json_string_field(body, "volume_raw", volume_raw, sizeof(volume_raw));
         remember_ringer_volume(runtime, volume, volume_raw[0] ? volume_raw : NULL);
+        /* Report the setting, not the call's mute, so a reading client keeps it. */
+        static const char call_muted[] = "{\"ok\":true,\"muted\":true,";
+        if (strncmp(body, call_muted, sizeof(call_muted) - 1) == 0) {
+            char reported[sizeof(body)];
+            const char *setting = !runtime->ringer_muted_state.known ? "null"
+                : runtime->ringer_muted_state.last_valid ? "true" : "false";
+            int length = snprintf(reported, sizeof(reported), "{\"ok\":true,\"muted\":%s,%s",
+                                  setting, body + sizeof(call_muted) - 1);
+            if (length > 0 && (size_t)length < sizeof(reported)) memcpy(body, reported, (size_t)length + 1);
+        }
     } else {
         remember_ringer_status(runtime, body, muted, volume);
     }

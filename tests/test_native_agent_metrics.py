@@ -630,6 +630,9 @@ def test_native_agent_ringer_events_are_change_based() -> None:
         "remember_ringer_status(runtime, body, muted, volume)"
     )
     assert "remember_ringer_volume(runtime, volume," in read_body
+    # The reply reports the remembered setting instead of the call's mute.
+    assert '"{\\"ok\\":true,\\"muted\\":%s,%s"' in read_body
+    assert "runtime->ringer_muted_state.last_valid" in read_body
     assert "ringer_volume_from_reply(msg, &code)" in event_body
     assert "remember_ringer_volume(runtime, code, msg)" in event_body
     assert "c300x_setting_observe(&runtime->ringer_muted_state" in note_body

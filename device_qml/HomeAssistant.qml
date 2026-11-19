@@ -1204,6 +1204,11 @@ Page {
                     target: leaveHomeLoader.item
                     onActionRequested: Api.dashboardAction(item, status, page)
                     onAlarmRequested: tabView.activateTab(alarmPage)
+                    onPressing: tapPress(area)
+                }
+                Connections {
+                    target: energyLoader.item
+                    onPressing: tapPress(area)
                 }
 
                 Flow {
@@ -1219,6 +1224,7 @@ Page {
                         C300XPageNavigation {
                             links: Api.dashboardPageLinks(page)
                             onSelected: Api.dashboardSelectPage(pageIndex, status, page)
+                            onPressing: tapPress(area)
                         }
                     }
 

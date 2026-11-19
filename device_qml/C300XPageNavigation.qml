@@ -5,6 +5,7 @@ Grid {
     id: navigation
     property variant links: []
     signal selected(int pageIndex)
+    signal pressing(variant area)
     columns: 2
     spacing: 10
 
@@ -34,6 +35,7 @@ Grid {
             BeepingMouseArea {
                 id: button
                 anchors.fill: parent
+                onPressed: navigation.pressing(button)
                 onClicked: navigation.selected(navigation.links[index].index)
             }
         }

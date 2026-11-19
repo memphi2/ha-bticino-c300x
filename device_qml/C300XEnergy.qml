@@ -5,6 +5,7 @@ import "js/c300x_energy.js" as EnergyChart
 
 Item {
     id: root
+    signal pressing(variant area)
     property variant energy: ({})
     property string view: ""
     property variant views: listOf(energy ? energy.views : undefined)
@@ -726,6 +727,7 @@ Item {
                 BeepingMouseArea {
                     id: tabMouse
                     anchors.fill: parent
+                    onPressed: root.pressing(tabMouse)
                     onClicked: root.view = modelData.id
                 }
             }

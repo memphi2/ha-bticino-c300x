@@ -188,6 +188,18 @@ feature or firmware version.
 - Support scope: community project, not an official BTicino/Legrand or Home
   Assistant Core integration
 
+## Hardware Donations
+
+Every release is tested on one C300X with firmware `1.7.19`. Other firmware
+versions, such as `2.0.2`, can only be checked against their firmware files,
+not on a device. A second test unit would change that.
+
+Hardware donations are welcome: a used BTicino Classe 300X / C300X (`344642`
+or `344643`), also one with a defect or stuck in a boot loop, or a matching
+door station. If you have one to spare, please open an
+[issue](https://github.com/memphi2/ha-bticino-c300x/issues/new/choose). A
+donation is voluntary and gives no claim to support or to a feature.
+
 ## AI Assistance
 
 - This project was developed with AI assistance, including Codex and Claude.

@@ -20,6 +20,5 @@ struct request {
 
 int parse_request(char *buffer, struct request *request);
 int c300x_http_request_status(char *buffer, size_t used, size_t capacity, int *size_error);
-int receive_http_request(int client_fd, char *buffer, size_t buffer_len, int *too_large);
 
 #endif

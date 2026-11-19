@@ -58,6 +58,7 @@ static FILE *metrics_fopen(const char *path, const char *mode)
 #undef clock_gettime
 #undef fopen
 #include "../src/http.c"
+#include "http_request_reader.h"
 
 static void baseline(struct c300x_config *config, struct agent_runtime *runtime, time_t now, double percent)
 {
@@ -74,7 +75,7 @@ static void baseline(struct c300x_config *config, struct agent_runtime *runtime,
     runtime->metrics.last.has_cpu_usage = 1;
     runtime->metrics.last.cpu_usage_percent = percent;
     runtime->metrics.next_sample_ms = test_now_ms + 30000;
-    c300x_system_metrics_monitor_delivered(&runtime->metrics, now);
+    c300x_system_metrics_monitor_delivered_sample(&runtime->metrics, &runtime->metrics.last, now);
 }
 
 static void check_http_snapshot(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
@@ -319,7 +320,7 @@ static void check_hourly_budget(struct c300x_config *config, struct agent_runtim
                 if (scenario == 2) {
                     runtime->metrics.delivery_pending = 1;
                 } else {
-                    c300x_system_metrics_monitor_delivered(&runtime->metrics, now + second);
+                    c300x_system_metrics_monitor_delivered_sample(&runtime->metrics, &runtime->metrics.last, now + second);
                 }
             }
             assert(c300x_system_metrics_monitor_timeout_ms(&runtime->metrics) > 0);

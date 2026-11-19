@@ -129,15 +129,6 @@ def strip_device_file(source: Path, target: Path) -> Path:
     return target
 
 
-def strip_device_tree(target_dir: Path, source_dir: Path = DEVICE_SOURCE_DIR) -> list[Path]:
-    """Write every display file, stripped, below ``target_dir``."""
-
-    return [
-        strip_device_file(source_dir / relative, target_dir / relative)
-        for relative in DEVICE_SOURCE_FILES
-    ]
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, help="Write the stripped display files here.")

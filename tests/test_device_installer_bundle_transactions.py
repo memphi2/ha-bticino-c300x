@@ -61,6 +61,9 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             return self.write(path, source.read_bytes())
 
         def run(self, command: str) -> str:
+            if "libQt5Core" in command:
+                # A device with the Qt 4 display, which the Display patch edits.
+                return "no\n"
             if command.startswith("if [ -L ") and obsolete_path in command:
                 self.stage("cleanup-source")
                 self.files.pop(obsolete_path, None)

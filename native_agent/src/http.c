@@ -2951,12 +2951,10 @@ static void handle_device_user_ensure(
         send_json(client_fd, 500, "Internal Server Error", body);
         return;
     }
-    if (access("/home/bticino/bin/gui/skins/default", F_OK) == 0) {
-        /* Qt4 firmware (1.7.x/2.0.x) keeps on-disk QML here; apply the label
-         * patch. Qt5 firmware (3.0.x+) compiles the GUI/QML into the binary, so
-         * there is nothing on disk to patch: skip the label step rather than
-         * fail the whole setup. The media user and routing are already done; the
-         * on-device media-user label just will not be shown. */
+    if (!c300x_device_display_is_qt5()) {
+        /* The label is written into the display's QML files. A Qt 5 display
+         * has none on disk: the media user and routing are set up, only the
+         * label on the device is not shown. */
         char *qml_body;
         int qml_ok = 0;
 

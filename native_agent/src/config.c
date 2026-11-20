@@ -771,6 +771,19 @@ int c300x_config_listen_valid(const struct c300x_config *config, char *error, si
     return 1;
 }
 
+/* Firmware 3.0.x has a Qt 5 display with its QML built into the program; the
+ * earlier ones have Qt 4 and QML files the Display patch edits. The Qt 5
+ * library is the mark, not a missing QML folder: a folder can be missing on
+ * an older device for other reasons. */
+#ifndef C300X_QT5_DISPLAY_MARKER
+#define C300X_QT5_DISPLAY_MARKER "/usr/lib/libQt5Core.so.5"
+#endif
+
+int c300x_device_display_is_qt5(void)
+{
+    return access(C300X_QT5_DISPLAY_MARKER, F_OK) == 0;
+}
+
 int c300x_load_config(
     const char *config_path,
     struct c300x_config *config,
@@ -1468,13 +1481,11 @@ int c300x_load_config(
             free(document);
             return 0;
         }
-    } else if (access("/home/bticino/bin/gui/skins/default", F_OK) != 0) {
-        /* Qt5 firmware (3.0.x+): bt_av_media only fans out the low-res video
-         * branch (multiudp_low_res); the high-res branch (#0) has no
-         * multiudpsink, so its stream never reaches the agent and clients get
-         * no decodable picture. When the config does not pin highResolution,
-         * default to the low-res stream on Qt5 devices (the on-disk QML skins
-         * dir is absent there), matching the installer default. */
+    } else if (c300x_device_display_is_qt5()) {
+        /* Firmware 3.0.x: bt_av_media only fans out the low-res video branch
+         * (multiudp_low_res); the high-res branch (#0) has no multiudpsink, so
+         * its stream never reaches the agent. Without a setting in the config
+         * the low-res stream is the default there, as in the installer. */
         config->video_av_high_resolution = 0;
     }
     if (nested_member3(document, document_end, "video", "rtsp", "port", &value)) {

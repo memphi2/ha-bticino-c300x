@@ -860,17 +860,18 @@ def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: s
 
 _LOGGER = logging.getLogger(__name__)
 
-# Qt4 firmware (1.7.x/2.0.x) keeps the GUI as on-disk .qml files under this dir,
-# which the QML hook patches in place. Firmware 3.0.x+ ships a Qt5 GUI with the
-# QML compiled into the BtClass binary (a Qt resource, qrc:/skins/default/...),
-# so there is nothing on disk to patch.
-_QML_SKINS_DIR = "/home/bticino/bin/gui/skins/default"
+# Firmware 3.0.x has a Qt 5 display with its QML built into the BtClass program
+# (qrc:/skins/default/...), so there are no files for the Display patch. The
+# earlier ones have Qt 4 and QML files on disk. The Qt 5 library is the mark,
+# not a missing QML folder: on an older device a missing folder is a fault the
+# Display patch has to report.
+_QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
 
 
-def _device_has_ondisk_qml(client: _DeviceSshClient) -> bool:
-    """Return True when the device exposes a patchable on-disk QML tree."""
+def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
+    """Return whether the device has the Qt 5 display, which cannot be patched."""
 
-    output = client.run(f"test -d {_quote(_QML_SKINS_DIR)} && echo yes || echo no")
+    output = client.run(f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo yes || echo no")
     return output.strip().splitlines()[-1:] == ["yes"]
 
 
@@ -887,7 +888,7 @@ def _apply_qt5_low_res_video_default(
     so this only sets the default for a fresh install.
     """
 
-    if _device_has_ondisk_qml(client):
+    if not _device_display_is_qt5(client):
         return config_bytes
     try:
         config = json.loads(config_bytes)
@@ -916,7 +917,7 @@ def _apply_qt5_low_res_video_default(
 def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
     """Require the patcher's reported outcome, not just a successful shell exit."""
 
-    if not _device_has_ondisk_qml(client):
+    if _device_display_is_qt5(client):
         # Qt5 firmware (3.0.x+) has no on-disk QML to patch. Skip rather than
         # abort the whole install: the on-device display pages and ringer-sync
         # are unavailable, but camera, door, stair light, ring and calls work

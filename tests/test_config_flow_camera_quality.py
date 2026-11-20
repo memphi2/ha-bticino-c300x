@@ -34,7 +34,7 @@ class _QualityApi:
             raise C300XAgentApiError("offline")
         return {"ok": True, "supported": self.supported, **self.values,
                 "running_bitrate_kbps": 800, "running_fps": 15, "running_size": "688x480",
-                "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 25,
+                "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 24,
                 "sizes": ["688x480", "720x576"]}
 
 
@@ -70,9 +70,9 @@ def test_the_form_starts_from_the_values_on_the_device() -> None:
 
 def test_both_changed_values_are_saved_in_one_write() -> None:
     api = _QualityApi()
-    result = _open(_entry(api), {"size": "720x576", "bitrate_kbps": 3000.0, "fps": 25.0})
+    result = _open(_entry(api), {"size": "720x576", "bitrate_kbps": 3000.0, "fps": 24.0})
     # One write: the device restarts once for all values.
-    assert api.writes == [{"bitrate_kbps": 3000, "fps": 25, "size": "720x576"}]
+    assert api.writes == [{"bitrate_kbps": 3000, "fps": 24, "size": "720x576"}]
     assert (result["type"], result["step_id"]) == ("menu", "init")
 
 
@@ -127,3 +127,17 @@ def test_a_device_back_since_the_explanation_shows_the_values_instead() -> None:
     assert (form["step_id"], form["errors"]) == ("camera_quality", {})
     assert form["data_schema"]({}) == {"size": "688x480", "bitrate_kbps": 800, "fps": 15}
     assert api.writes == []
+
+
+def test_a_value_in_the_file_outside_the_limits_can_stay_while_another_changes() -> None:
+    # The agent keeps a saved value outside its limits; the form must let it through.
+    api = _QualityApi()
+    api.values = {"bitrate_kbps": 180, "fps": 30, "size": "688x480"}
+    schema = _open(_entry(api))["data_schema"]
+    assert schema({"size": "720x576"}) == {"size": "720x576", "bitrate_kbps": 180, "fps": 30}
+    for wrong in ({"fps": 31}, {"fps": 4}, {"bitrate_kbps": 3050}, {"bitrate_kbps": 170}):
+        try:
+            schema(wrong)
+        except Exception:  # noqa: BLE001 - any refusal of the selector
+            continue
+        raise AssertionError(f"{wrong} was taken")

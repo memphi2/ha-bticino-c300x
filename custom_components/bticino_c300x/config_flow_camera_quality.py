@@ -46,6 +46,13 @@ def _limit(status: Mapping[str, Any], key: str, fallback: int) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else fallback
 
 
+def _range(status: Mapping[str, Any], key: str, fallback: tuple[int, int]) -> tuple[int, int]:
+    """The limits, widened to a value the file already has: the agent keeps it."""
+    low, high = _limit(status, f"{key}_min", fallback[0]), _limit(status, f"{key}_max", fallback[1])
+    saved = _limit(status, key if key == "fps" else f"{key}_kbps", low)
+    return min(low, saved), max(high, saved)
+
+
 def _sizes(status: Mapping[str, Any]) -> list[str]:
     offered = [size for size in status.get("sizes") or [] if isinstance(size, str) and size]
     # A size the file already has but that is not offered can stay as it is.
@@ -59,10 +66,8 @@ def _schema(status: Mapping[str, Any], values: Mapping[str, Any]) -> vol.Schema:
     return vol.Schema({
         vol.Required(SIZE, default=values[SIZE]): SelectSelector(SelectSelectorConfig(
             options=_sizes(status), mode=SelectSelectorMode.DROPDOWN)),
-        vol.Required(BITRATE, default=values[BITRATE]): _number(
-            _limit(status, "bitrate_min", 300), _limit(status, "bitrate_max", 3000), 50, "kbit/s"),
-        vol.Required(FPS, default=values[FPS]): _number(
-            _limit(status, "fps_min", 5), _limit(status, "fps_max", 25), 1, "fps"),
+        vol.Required(BITRATE, default=values[BITRATE]): _number(*_range(status, "bitrate", (300, 3000)), 10, "kbit/s"),
+        vol.Required(FPS, default=values[FPS]): _number(*_range(status, "fps", (5, 24)), 1, "fps"),
     })
 
 

@@ -150,6 +150,10 @@ def scaled_jpeg(content: bytes, width: int, height: int) -> bytes:
             image.draft("RGB", (width, height))
             # Shrink first, inside a square that still covers the tile after a
             # rotation: turning and converting then copy a small picture.
+            # Palette and 1-bit pictures are converted first: shrinking them
+            # as they are drops pixels instead of averaging them.
+            if image.mode in ("P", "1"):
+                image = image.convert("RGB")
             side = max(width, height)
             image.thumbnail((side, side))
             picture = ImageOps.exif_transpose(image).convert("RGB")
@@ -249,7 +253,12 @@ class C300XTileImageView(HomeAssistantView):
                 if cached is not None and time.monotonic() - cached[0] < _CACHE_SECONDS:
                     body = cached[1]
                 else:
-                    body = await self._async_picture(hass, entity_id, width, height)
+                    # A failed read is kept as well, so the requests waiting
+                    # behind it do not each try the camera again.
+                    try:
+                        body = await self._async_picture(hass, entity_id, width, height)
+                    except web.HTTPServiceUnavailable:
+                        body = None
                     now = time.monotonic()
                     for old in [k for k, value in cache.items() if now - value[0] >= _CACHE_SECONDS]:
                         del cache[old]
@@ -257,8 +266,12 @@ class C300XTileImageView(HomeAssistantView):
                         cache.clear()
                     cache[key] = (now, body)
         finally:
+            # The picture or the failure is in the cache by now, so a request
+            # that still waits on this lock finds it without reading again.
             if not lock.locked() and locks.get(key) is lock:
                 del locks[key]
+        if body is None:
+            raise web.HTTPServiceUnavailable()
         return web.Response(body=body, content_type="image/jpeg", headers={
             "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
         })

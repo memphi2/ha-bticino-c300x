@@ -365,3 +365,42 @@ def test_the_view_is_registered_and_the_address_base_is_recorded():
     assert "hass.http.register_view(cast(Any, C300XTileImageView()))" in (root / "media.py").read_text()
     assert "runtime_data.display_image_base_url = image_tile_base_url(webhook_url)" in (
         root / "runtime_manager.py").read_text()
+
+
+def test_a_palette_picture_is_scaled_smoothly():
+    """Pillow shrinks palette and 1-bit pictures by dropping pixels unless they are converted first."""
+
+    stripes = Image.new("P", (2048, 400))
+    stripes.putpalette([0, 0, 0, 255, 255, 255] + [0] * 756)
+    stripes.putdata([(x % 2) for _y in range(400) for x in range(2048)])
+    buffer = io.BytesIO()
+    stripes.save(buffer, "PNG")
+    with Image.open(io.BytesIO(scaled_jpeg(buffer.getvalue(), 728, 200))) as image:
+        levels = list(image.convert("L").getdata())
+    mean = sum(levels) / len(levels)
+    spread = (sum((level - mean) ** 2 for level in levels) / len(levels)) ** 0.5
+    assert spread < 30, "fine stripes average to grey instead of turning into coarse bands"
+
+
+def test_a_failed_read_is_not_repeated_by_the_requests_waiting_behind_it(monkeypatch):
+    hass, entry = _environment([_camera()])
+    source = next(item["source"] for item in _items(hass, entry) if item.get("kind") == "image")
+    reads = []
+
+    async def fail(*_args):
+        reads.append(1)
+        await asyncio.sleep(0.01)
+        raise dashboard_images.TileImageUnavailable("camera off")
+
+    monkeypatch.setattr(dashboard_images, "_async_source_image", fail)
+    view = C300XTileImageView()
+
+    async def together():
+        requests = [_request(hass, source) for _ in range(3)]
+        return await asyncio.gather(
+            *(view.get(request, *ids) for request, ids in requests), return_exceptions=True)
+
+    results = asyncio.run(together())
+    assert all(isinstance(result, web.HTTPServiceUnavailable) for result in results)
+    assert len(reads) == 1
+    assert hass.data[dashboard_images._CACHE_KEY]["locks"] == {}

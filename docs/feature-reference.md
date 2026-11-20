@@ -389,7 +389,7 @@ the entity leaves the display pages or the display feature is switched off.
 The picture keeps its proportions, so a wide tile shows a 16:9 camera with
 empty space left and right; the half width fits it closely. A camera or image
 entity that is unavailable has no tile until it is back. If a picture cannot
-be read once, the tile stays empty until the next picture.
+be read once, the tile shows only the name until the next picture.
 
 Picture tiles need a plain `http://` address of Home Assistant for the device:
 the display cannot open `https://` addresses. With an HTTPS callback address

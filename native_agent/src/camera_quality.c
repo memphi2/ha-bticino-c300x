@@ -10,6 +10,8 @@
 
 /* What the device started with; zero while not known. */
 static struct c300x_camera_values running;
+/* A change saved while that was not known; only a restart makes it count. */
+static int written_unknown;
 
 static const char *env_or(const char *name, const char *fallback)
 {
@@ -93,8 +95,8 @@ int c300x_camera_quality_read(struct c300x_camera_quality *quality)
     }
     quality->supported = 1;
     c300x_camera_quality_size_name(quality->low, &quality->saved, quality->size, sizeof(quality->size));
-    quality->restart_required = running.bitrate_kbps > 0
-        && memcmp(&running, &quality->saved, sizeof(running)) != 0;
+    quality->restart_required = written_unknown
+        || (running.bitrate_kbps > 0 && memcmp(&running, &quality->saved, sizeof(running)) != 0);
     return 1;
 }
 
@@ -152,8 +154,8 @@ static int write_values(struct c300x_camera_quality *quality, const struct c300x
     }
     quality->changed = ok;
     quality->remount_ro_failed = ro_failed;
-    /* Not knowing what the device runs, only a restart makes the change count. */
-    quality->restart_required |= ok && running.bitrate_kbps <= 0;
+    written_unknown |= ok && running.bitrate_kbps <= 0;
+    quality->restart_required |= written_unknown;
     return ok;
 }
 

@@ -103,6 +103,9 @@ class CameraQualityOptionsStep:
             ))
         saved = {BITRATE: status.get(BITRATE), FPS: status.get(FPS), SIZE: status.get(SIZE)}
         errors: dict[str, str] = {}
+        if user_input is not None and not all(key in user_input for key in (SIZE, BITRATE, FPS)):
+            # The explanation without fields was sent after the device came back.
+            user_input = None
         if user_input is not None:
             wanted = {**{key: int(user_input[key]) for key in (BITRATE, FPS)}, SIZE: str(user_input[SIZE])}
             changes = {key: value for key, value in wanted.items() if value != saved[key]}

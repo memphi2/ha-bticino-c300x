@@ -118,3 +118,12 @@ def test_firmware_3_offers_its_low_stream_and_keeps_a_size_not_offered() -> None
     assert sizes == ["400x288", "352x288"]
     assert "camera_quality" in _options_menu_of(_entry(api))
 
+
+
+def test_a_device_back_since_the_explanation_shows_the_values_instead() -> None:
+    # The explanation had no fields; the device came back before it was sent.
+    api = _QualityApi()
+    form = _open(_entry(api), {})
+    assert (form["step_id"], form["errors"]) == ("camera_quality", {})
+    assert form["data_schema"]({}) == {"size": "688x480", "bitrate_kbps": 800, "fps": 15}
+    assert api.writes == []

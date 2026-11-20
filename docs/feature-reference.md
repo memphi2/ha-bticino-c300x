@@ -424,8 +424,9 @@ widget.
 The pages dialog has five built-in pages (Status, Energy, Agenda, Leave home and
 Situations) and up to seven custom pages, one section each. The sections follow
 the display order. Titles show the page's number and name, for example
-**Page 2: Living room**. A built-in page that is switched off has no number and
-follows the shown pages; free custom sections, titled **Page +**, come last. Alarmo is not one of
+**Page 2: Living room**. A page the display does not show (switched off, or
+without entities) has no number and follows the shown pages; free custom
+sections, titled **Page +**, come last. Alarmo is not one of
 the pages: its Alarm page opens from the home page button and has an area of
 its own in the settings menu.
 
@@ -450,9 +451,10 @@ any capitalization) and each entity can be used once. Page names are limited to
 60 characters; a longer one is cut, and a position is rounded to a whole
 number. Pages that only configured actions use follow the configured pages.
 The sections are listed in the order of the display and their headings show
-the page number. A built-in page that is switched off has no number and follows
-the shown pages. Free sections come last and are titled "Page +"; fill one in to
-add a page. Sections of used pages are open, and so is the first free one.
+the page number, counted over the pages the display shows. A page it does not
+show (switched off, or without entities) has no number and follows the shown
+pages. Free sections come last and are titled "Page +"; fill one in to add a
+page. Sections of used pages are open, and so is the first free one.
 The optional pages can be placed among regular pages, not just after them.
 Their default positions are Energy 2, Agenda 10, Leave home 11 and Situations 12. Disabling an
 optional page preserves its position and selections for later use.
@@ -485,7 +487,7 @@ It shows up to five ongoing or upcoming events within the next seven days,
 including all-day events. Calendar titles and event summaries stay in HA and
 the display's memory, with no new files on the C300X.
 
-The default position is 10, configurable from 1 to 11. HA fetches events in the
+The default position is 10, configurable from 1 to 12. HA fetches events in the
 background and caches bounded results for five minutes, invalidating them on
 calendar changes. A translated loading message appears during the first read;
 a slow calendar does not hold up the dashboard or its controls. A calendar read

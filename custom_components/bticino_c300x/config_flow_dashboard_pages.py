@@ -43,7 +43,11 @@ from .config_flow_optional_pages import (
 from .config_flow_optional_pages import (
     page_position_selector as _page_position_selector,
 )
-from .config_flow_page_order import ordered_page_sections, page_form_positions
+from .config_flow_page_order import (
+    ordered_page_sections,
+    page_form_numbers,
+    page_form_positions,
+)
 from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
@@ -255,7 +259,9 @@ def dashboard_pages_schema(
     )
     fields.update(optional_page_sections(dashboard_input, posted))
     return vol.Schema(ordered_page_sections(
-        fields, page_form_positions(layout, dashboard_input, posted),
+        fields,
+        page_form_positions(layout, dashboard_input, posted),
+        page_form_numbers(layout, dashboard_input, posted),
     ))
 
 
@@ -266,16 +272,16 @@ def dashboard_pages_placeholders(
     """Return the page names and positions the section titles show.
 
     A named page's section is titled with its name, as ": name" after the
-    page number. A built-in page that is switched off has no number. A
-    free section, where a page can be added, is titled with a plus sign. A
-    form shown again with errors shows the names that were sent.
+    page number. A page the display does not show has no number. A free
+    section, where a page can be added, is titled with a plus sign. A form
+    shown again with errors shows the names that were sent.
     """
 
     layout = dashboard_page_layout(dashboard_input)
     positions = page_form_positions(layout, dashboard_input, user_input)
     placeholders = {
-        f"{key}_position": f" {position}" if position is not None else ""
-        for key, position in positions.items()
+        f"{key}_position": f" {number}" if number is not None else ""
+        for key, number in page_form_numbers(layout, dashboard_input, user_input).items()
     }
     for slot in range(2, DASHBOARD_PAGE_MAX_COUNT + 1):
         if user_input is not None:

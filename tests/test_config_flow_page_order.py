@@ -46,7 +46,7 @@ def test_saved_headings_and_section_order_match_resolved_slots(positions, enable
     assert reopened == saved == original
 
 
-def test_retry_orders_requested_positions_and_keeps_section_identity_and_fields():
+def test_retry_orders_by_requested_positions_and_keeps_section_identity_and_fields():
     saved, _ = dashboard_pages_input({}, form_input())
     posted = post_pages_like_home_assistant(dashboard_pages_schema(saved), {
         "page_1": {"position": 8, "enabled": False},
@@ -66,10 +66,14 @@ def test_retry_orders_requested_positions_and_keeps_section_identity_and_fields(
     ]
     placeholders = dashboard_pages_placeholders(saved, posted)
     assert placeholders["page_2_name"] == ": Renamed"
-    assert posted["situations_page"]["enabled"] is False and placeholders["situations_page_position"] == ""
-    for key, values in posted.items():
-        if key != "situations_page":
-            assert placeholders[f"{key}_position"] == (f" {int(values['position'])}" if "position" in values else "")
+    # The titles count the pages that will be shown, in the requested order.
+    assert {key: placeholders[f"{key}_position"] for key in posted} == {
+        "agenda_page": " 1", "page_3": " 2", "leave_home_page": " 3", "page_7": " 4",
+        "energy_page": " 5", "page_2": " 6",
+        # Switched off in this post, or off already: no number.
+        "page_1": "", "situations_page": "",
+        "page_4": "", "page_5": "", "page_6": "", "page_8": "",
+    }
     assert post_pages_like_home_assistant(schema) == posted
 
 
@@ -87,17 +91,20 @@ def test_default_form_lists_the_off_built_in_pages_above_the_seven_free_sections
         assert posted[key]["position"] == position
 
 
-def test_hidden_logical_pages_keep_their_number_and_inactive_energy_its_position():
+def test_pages_that_are_not_shown_have_no_number_and_keep_their_positions():
     saved, _ = dashboard_pages_input({}, form_input())
     saved["dashboard_status_page_enabled"] = False
     saved["dashboard_entities"] = []
     saved["energy_page"].update(position=11, views=[])
     placeholders = dashboard_pages_placeholders(saved)
-    assert placeholders["page_1_position"] == " 1"
-    assert placeholders["page_2_position"] == " 2"
-    # Switched on without a view, the energy page is not shown: no number in the title.
+    # The status page is off, the other pages have no entities and Energy
+    # has no view: nothing is shown, so no title has a number.
+    assert placeholders["page_1_position"] == ""
+    assert placeholders["page_2_position"] == ""
     assert placeholders["energy_page_position"] == ""
     posted = post_pages_like_home_assistant(dashboard_pages_schema(saved))
+    # The position fields still hold the stored order.
+    assert [posted[f"page_{slot}"]["position"] for slot in (1, 2, 3)] == [1, 2, 3]
     assert posted["page_1"]["enabled"] is False
     assert posted["energy_page"]["enabled"] is True
     assert posted["energy_page"]["position"] == 11

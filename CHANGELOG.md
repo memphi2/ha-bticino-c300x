@@ -14,8 +14,9 @@
 - The energy page loads again on the display. 2.6.0 shipped a display file
   the device could not read, so the page stayed empty.
 - The display-pages form reads like the display: the shown pages come first,
-  in display order and numbered from 1. A built-in page that is switched off
-  has no number and follows them, and free sections come last as **Page +**.
+  in display order and numbered from 1. A page the display does not show
+  (switched off, or without entities) has no number and follows them, and free
+  sections come last as **Page +**.
   2.6.0 listed the built-in pages first and numbered a switched-off page with
   its stored position (Page 1, 2, 10, 11, 3, ...). Saved settings and the
   display order are unchanged.

@@ -163,3 +163,28 @@ def test_other_languages_follow_the_same_order(language, new_page):
     assert numbers == ["1", "2", "3", "4", "5", "6"]
     assert not any(char.isdigit() for title in titles[6:] for char in title)
     assert len(titles) == 12
+
+
+def test_numbers_count_only_the_pages_the_display_shows():
+    """A status page that is off and a named page without entities take no number."""
+
+    saved = _saved(
+        page_1={"position": 1, "enabled": False, "entities": ["sensor.status"]},
+        page_3={"name": "Leer", "position": 4},
+    )
+    assert _titles(saved) == [
+        "Seite 1: Energie",
+        "Seite 2: Allgemein",
+        "Seite 3: Licht",
+        "Seite 4: Media",
+        "Seite: Statusseite",
+        "Seite: Termine",
+        "Seite: Haus verlassen",
+        "Seite: Situationen",
+        "Seite: Leer",
+        "Seite +", "Seite +", "Seite +",
+    ]
+    # The position fields keep the stored order, so saving unchanged changes nothing.
+    again, errors = dashboard_pages_input(saved, post_pages_like_home_assistant(dashboard_pages_schema(saved)))
+    assert not errors and again == saved
+

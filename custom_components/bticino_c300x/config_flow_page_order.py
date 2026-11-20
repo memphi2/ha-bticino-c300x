@@ -1,20 +1,23 @@
 """Titles and order of the sections in the display-pages form.
 
 The form reads like the display: the pages that are shown come first, in
-display order and numbered from 1. Built-in pages that are switched off
-follow without a number, and the free sections for new pages are last.
-Nothing here changes what is stored.
+display order and numbered from 1. Pages that are not shown follow without a
+number: built-in pages that are switched off and named pages without
+entities. The free sections for new pages are last. Nothing here changes what
+is stored.
 """
 
 from collections.abc import Mapping
 from typing import Any
 
 from .config_flow_optional_pages import optional_pages_input
-from .const import CONF_ENERGY_PAGE
+from .const import CONF_DASHBOARD_STATUS_PAGE_ENABLED, CONF_ENERGY_PAGE
 from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT, normalize_dashboard_page_name
 from .dashboard_optional_config import optional_page_values
 from .dashboard_page_order import SPECIAL_PAGE_ORDER, page_layout_slots, page_position
+
+_NOT_SHOWN_ORDER = ("page_1", *SPECIAL_PAGE_ORDER)
 
 
 def _posted_page_on(key: str, values: Mapping[str, Any], saved: Mapping[str, Any]) -> bool:
@@ -30,11 +33,12 @@ def page_form_positions(
     saved: dict[str, Any],
     posted: dict[str, Any] | None = None,
 ) -> dict[str, int | None]:
-    """Return the number each section title shows, or None for no number.
+    """Return each section's place in the stored page order, or None for no place.
 
-    A page has a number when it takes a place in the page order: every used
-    regular page and every built-in page that is switched on. A form shown
-    again after an error shows the positions that were sent instead.
+    This is what the position fields show and what saving them keeps: every
+    used regular page has a place, shown on the display or not, and so has
+    every optional page that is switched on. A form shown again after an
+    error has the positions that were sent instead.
     """
     special = {
         CONF_ENERGY_PAGE: normalize_energy_page(saved.get(CONF_ENERGY_PAGE)),
@@ -66,20 +70,65 @@ def page_form_positions(
     return positions
 
 
-def ordered_page_sections(fields: dict[Any, Any], positions: dict[str, int | None]) -> dict[Any, Any]:
-    """Sort the sections: numbered pages, built-in pages that are off, the free sections.
+def _tie_rank(key: str) -> int:
+    if key in SPECIAL_PAGE_ORDER:
+        return SPECIAL_PAGE_ORDER.index(key)
+    return len(SPECIAL_PAGE_ORDER) + int(key.removeprefix("page_"))
 
-    Two pages sent with the same position are listed the way they will be
-    saved: Energy, Agenda, Leave home, Situations, then the regular pages.
+
+def page_form_numbers(
+    layout: list[dict[str, Any]],
+    saved: dict[str, Any],
+    posted: dict[str, Any] | None = None,
+) -> dict[str, int | None]:
+    """Return the page number each section title shows, or None for no number.
+
+    The numbers count the pages the display shows, from 1 in display order.
+    A status page that is switched off and a page without entities have a
+    place in the stored order but no number. Two pages sent with the same
+    position are numbered the way they will be saved: Energy, Agenda, Leave
+    home, Situations, then the regular pages.
     """
+    positions = page_form_positions(layout, saved, posted)
 
-    def order(marker: Any) -> tuple[int, int, int]:
+    def shown(key: str) -> bool:
+        if key in SPECIAL_PAGE_ORDER:
+            return True
+        slot = int(key.removeprefix("page_"))
+        values = posted.get(key) if posted is not None else None
+        values = values if isinstance(values, dict) else {}
+        if slot == 1:
+            enabled = saved.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True)
+            return values.get("enabled", enabled) is True
+        if posted is not None:
+            return bool(values.get("entities"))
+        return slot <= len(layout) and bool(layout[slot - 1]["entities"])
+
+    numbers: dict[str, int | None] = dict.fromkeys(positions)
+    listed = sorted(
+        (position, _tie_rank(key), key)
+        for key, position in positions.items()
+        if position is not None and shown(key)
+    )
+    numbers.update({key: number for number, (_, _, key) in enumerate(listed, 1)})
+    return numbers
+
+
+def ordered_page_sections(
+    fields: dict[Any, Any],
+    positions: dict[str, int | None],
+    numbers: dict[str, int | None],
+) -> dict[Any, Any]:
+    """Sort the sections: numbered pages, pages that are not shown, the free sections."""
+
+    def order(marker: Any) -> tuple[int, int]:
         key = str(marker)
-        special = key in SPECIAL_PAGE_ORDER
-        rank = SPECIAL_PAGE_ORDER.index(key) if special else len(SPECIAL_PAGE_ORDER) + int(key.removeprefix("page_"))
-        position = positions[key]
-        if position is not None:
-            return 0, position, rank
-        return (1 if special else 2), 0, rank
+        number = numbers[key]
+        if number is not None:
+            return 0, number
+        if key in _NOT_SHOWN_ORDER:
+            return 1, _NOT_SHOWN_ORDER.index(key)
+        slot = int(key.removeprefix("page_"))
+        return (1 if positions[key] is not None else 2), len(_NOT_SHOWN_ORDER) + slot
 
     return {key: fields[key] for key in sorted(fields, key=order)}

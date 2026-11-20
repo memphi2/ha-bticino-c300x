@@ -188,3 +188,39 @@ def test_numbers_count_only_the_pages_the_display_shows():
     again, errors = dashboard_pages_input(saved, post_pages_like_home_assistant(dashboard_pages_schema(saved)))
     assert not errors and again == saved
 
+
+
+def test_a_page_added_without_a_position_goes_to_the_end():
+    saved = _saved(agenda_page={"enabled": True, "position": 4, "calendars": ["calendar.home"]})
+    posted = post_pages_like_home_assistant(dashboard_pages_schema(saved), {
+        "page_6": {"name": "Garten", "entities": ["light.garden"]},
+    })
+    assert "position" not in posted["page_6"]
+    added, errors = dashboard_pages_input(saved, posted)
+    assert not errors
+    assert _titles(added)[:8] == [
+        "Seite 1: Statusseite",
+        "Seite 2: Energie",
+        "Seite 3: Allgemein",
+        "Seite 4: Termine",
+        "Seite 5: Rollladen",
+        "Seite 6: Licht",
+        "Seite 7: Media",
+        "Seite 8: Garten",
+    ]
+
+
+def test_a_form_shown_again_numbers_the_pages_once_each():
+    saved = _saved(agenda_page={"enabled": True, "position": 4, "calendars": ["calendar.home"]})
+    posted = post_pages_like_home_assistant(dashboard_pages_schema(saved), {
+        "page_6": {"entities": ["light.garden"]},
+        "page_2": {"position": 6},
+    })
+    _unchanged, errors = dashboard_pages_input(saved, posted)
+    assert errors == {"page_6": "dashboard_page_name_missing"}
+    titles = _titles(saved, posted)
+    numbered = [title for title in titles if title.split(":")[0].split()[-1].isdigit()]
+    assert [int(title.split(":")[0].split()[-1]) for title in numbered] == list(range(1, 9))
+    assert numbered == titles[:8]
+    # The page without a name was sent without a position and comes last.
+    assert titles[7] == "Seite 8"

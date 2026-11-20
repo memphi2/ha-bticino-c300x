@@ -454,7 +454,7 @@ The sections are listed in the order of the display and their headings show
 the page number, counted over the pages the display shows. A page it does not
 show (switched off, or without entities) has no number and follows the shown
 pages. Free sections come last and are titled "Page +"; fill one in to add a
-page. Sections of used pages are open, and so is the first free one.
+page. Without a position the new page follows the existing ones. Sections of used pages are open, and so is the first free one.
 The optional pages can be placed among regular pages, not just after them.
 Their default positions are Energy 2, Agenda 10, Leave home 11 and Situations 12. Disabling an
 optional page preserves its position and selections for later use.

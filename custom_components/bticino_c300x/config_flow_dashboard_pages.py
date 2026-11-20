@@ -302,7 +302,8 @@ def dashboard_pages_input(
 
     Home Assistant leaves a field the user emptied out of a section, so a
     missing name or entity list is empty and a missing position is the
-    section's own number. A page is used when it has a name or entities; the
+    section's own number; in a free section it is the end, so a new page
+    follows the existing ones. A page is used when it has a name or entities; the
     status page is always used, and a page with entities needs a name, except
     the page without a title that the saved entities already form. Pages
     with the same position keep the order of their sections. The weather of
@@ -317,9 +318,10 @@ def dashboard_pages_input(
     # Entities saved without a page sit on a page without a title. That page
     # may stay as it is, so saving the form unchanged does not give it a
     # heading on the display; a name is needed once anything else goes onto it.
+    layout = dashboard_page_layout(dashboard_input)
     untitled_entities = {
         entity_id
-        for page in dashboard_page_layout(dashboard_input)
+        for page in layout
         if not page["name"]
         for entity_id in page["entities"]
     }
@@ -351,7 +353,8 @@ def dashboard_pages_input(
             continue
         seen_names.add(name.casefold())
         seen_entities.update(entities)
-        pages.append((_page_position(values.get(PAGE_POSITION_FIELD), slot), slot, name, entities))
+        default = slot if slot <= len(layout) else POSITION_MAX
+        pages.append((_page_position(values.get(PAGE_POSITION_FIELD), default), slot, name, entities))
     weather = str(dashboard_input.get(CONF_WEATHER_ENTITY_ID) or "")
     status = user_input.get(page_section_key(1))
     status_enabled = dashboard_input.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True) is True

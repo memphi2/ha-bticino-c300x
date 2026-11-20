@@ -15,7 +15,12 @@ from .const import CONF_DASHBOARD_STATUS_PAGE_ENABLED, CONF_ENERGY_PAGE
 from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT, normalize_dashboard_page_name
 from .dashboard_optional_config import optional_page_values
-from .dashboard_page_order import SPECIAL_PAGE_ORDER, page_layout_slots, page_position
+from .dashboard_page_order import (
+    PAGE_POSITION_MAX,
+    SPECIAL_PAGE_ORDER,
+    page_layout_slots,
+    page_position,
+)
 
 _NOT_SHOWN_ORDER = ("page_1", *SPECIAL_PAGE_ORDER)
 
@@ -59,7 +64,8 @@ def page_form_positions(
             values = posted.get(key)
             values = values if isinstance(values, dict) else {}
             used = slot == 1 or normalize_dashboard_page_name(values.get("name", "")) or values.get("entities")
-            positions[key] = page_position(values.get("position"), slot) if used else None
+            default = slot if slot <= len(layout) else PAGE_POSITION_MAX
+            positions[key] = page_position(values.get("position"), default) if used else None
         defaults = {CONF_ENERGY_PAGE: normalize_energy_page(None), **optional_pages_input(saved, posted)}
         for key in SPECIAL_PAGE_ORDER:
             if isinstance(values := posted.get(key), dict):

@@ -318,3 +318,103 @@ def test_a_display_area_returns_to_the_display_submenu() -> None:
     _step(flow, "init")
     result = _step(flow, "dashboard_alarm", {"alarm_entity_id": ""})
     assert (result["type"], result["step_id"]) == ("menu", "init")
+
+
+def _five_pages(order: list[str] | None = None, **options: Any) -> SimpleNamespace:
+    names = order or [DASHBOARD_STATUS_PAGE, "Doors", "Garden", "Cellar", "Attic"]
+    custom = ["Doors", "Garden", "Cellar", "Attic"]
+    return _entry(**{
+        CONF_DASHBOARD_ENTITIES: [f"light.{name.lower()}" for name in custom],
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+            f"light.{name.lower()}": {"page": name} for name in custom
+        },
+        CONF_DASHBOARD_PAGES: [
+            {"name": name, "order": number} for number, name in enumerate(names, start=1)
+        ],
+        **options,
+    })
+
+
+def _shown(entry: SimpleNamespace) -> list[str]:
+    """Return the pages in display order, a built-in page by its key."""
+
+    pages = sorted(entry.options[CONF_DASHBOARD_PAGES], key=lambda page: page["order"])
+    shown = [page["name"] for page in pages]
+    energy = entry.options.get(CONF_ENERGY_PAGE) or {}
+    if energy.get("enabled"):
+        shown.insert(energy["position"] - 1, CONF_ENERGY_PAGE)
+    return shown
+
+
+def _energy(position: int, *, enabled: bool) -> dict[str, Any]:
+    return {
+        "enabled": enabled, "position": position, "view_balance": True, "view_consumers": True,
+        "view_now": True, "view_power": True, "view_today": True,
+    }
+
+
+def test_a_built_in_page_switched_on_lands_at_the_position_it_asks_for() -> None:
+    for position in (1, 3, 4, 6):
+        entry = _five_pages()
+        _save_page(entry, CONF_ENERGY_PAGE, _energy(position, enabled=True))
+        expected = [DASHBOARD_STATUS_PAGE, "Doors", "Garden", "Cellar", "Attic"]
+        expected.insert(min(position, 6) - 1, CONF_ENERGY_PAGE)
+        assert _shown(entry) == expected, position
+
+
+def test_a_page_switched_off_moves_nothing_with_its_position() -> None:
+    order = ["Doors", "Garden", DASHBOARD_STATUS_PAGE, "Cellar", "Attic"]
+    entry = _five_pages(order)
+    _save_page(entry, CONF_ENERGY_PAGE, _energy(3, enabled=False))
+    assert _shown(entry) == order
+    assert entry.options[CONF_ENERGY_PAGE]["position"] == 3
+
+
+def test_a_move_keeps_the_position_of_the_pages_switched_off() -> None:
+    entry = _five_pages(**{CONF_ENERGY_PAGE: {"enabled": False, "position": 2}})
+    _save_page(entry, "page_3", {"name": "Garden", "position": 1, "entities": ["light.garden"]})
+    assert _shown(entry) == ["Garden", DASHBOARD_STATUS_PAGE, "Doors", "Cellar", "Attic"]
+    assert entry.options[CONF_ENERGY_PAGE]["position"] == 2
+
+
+def test_a_page_moves_past_a_built_in_page_stored_beyond_the_pages() -> None:
+    entry = _five_pages(**{CONF_ENERGY_PAGE: {"enabled": True, "position": 10}})
+    _save_page(entry, "page_5", {"name": "Attic", "position": 6, "entities": ["light.attic"]})
+    assert _shown(entry) == [
+        DASHBOARD_STATUS_PAGE, "Doors", "Garden", "Cellar", CONF_ENERGY_PAGE, "Attic",
+    ]
+
+
+def test_an_emptied_position_keeps_the_page_where_it_is() -> None:
+    order = ["Doors", DASHBOARD_STATUS_PAGE, "Garden", "Cellar", "Attic"]
+    entry = _five_pages(order, **{CONF_ENERGY_PAGE: {"enabled": True, "position": 1}})
+    before = _shown(entry)
+    _save_page(entry, "page_2", {"name": "Doors", "entities": ["light.doors"]})
+    assert _shown(entry) == before
+    _save_page(entry, "page_1", {"enabled": True, "weather_entity_id": ""})
+    assert _shown(entry) == before
+
+
+def test_every_page_form_sent_as_it_opens_saves_what_the_whole_form_would() -> None:
+    from custom_components.bticino_c300x.config_flow_display_menu import (
+        page_list,
+        unchanged_pages_post,
+    )
+
+    def options() -> dict[str, Any]:
+        return {CONF_ENERGY_PAGE: {"enabled": True, "position": 3}}
+
+    whole = _five_pages(["Doors", DASHBOARD_STATUS_PAGE, "Garden", "Cellar", "Attic"], **options())
+    flow = _options_flow(whole)
+    _step(flow, "dashboard_page_list")
+    keys = [key for key in page_list(flow._dashboard_options) if key != "page_new"]
+    _step(flow, "dashboard_pages", unchanged_pages_post(flow._dashboard_options))
+    assert len(keys) == 9
+    for key in keys:
+        entry = _five_pages(["Doors", DASHBOARD_STATUS_PAGE, "Garden", "Cellar", "Attic"], **options())
+        single = _options_flow(entry)
+        _step(single, "dashboard_page_list")
+        _step(single, key)
+        post = unchanged_pages_post(single._dashboard_options)[key]
+        assert _step(single, "dashboard_pages", {key: post})["step_id"] == "dashboard_page_list"
+        assert entry.options == whole.options, key

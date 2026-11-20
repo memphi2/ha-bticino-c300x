@@ -822,7 +822,7 @@
       },
       "init": {
         "title": "C300X settings",
-        "description": "Choose what to change. Each area saves on its own when you submit it and brings you back here; the other areas keep their settings. To leave an area without a change, submit it as it is.",
+        "description": "Choose what to change. Each area saves on its own when you submit it and brings you back to the menu it was opened from; the other areas keep their settings. To leave an area without a change, submit it as it is.",
         "menu_options": {
           "connection": "Connection to the C300X",
           "features": "Video and audio",

@@ -822,7 +822,7 @@
       },
       "init": {
         "title": "Réglages C300X",
-        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène ici ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène au menu d'où elle a été ouverte ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
         "menu_options": {
           "connection": "Connexion au C300X",
           "features": "Vidéo et audio",

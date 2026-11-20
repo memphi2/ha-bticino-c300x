@@ -8,7 +8,7 @@ A page form is the pages form of the setup reduced to one section. What it
 posts is completed with the other sections as they are saved, so one page is
 validated and stored as if the whole form had been sent. The other sections
 are not on the form, so what the page asks of them is done for it: a new
-position makes the pages in between move by one, and an entity the page takes
+position numbers the pages anew around it, and an entity the page takes
 leaves the page that had it.
 """
 
@@ -24,7 +24,9 @@ from .config_flow_dashboard import (
     dashboard_input_defaults,
 )
 from .config_flow_dashboard_pages import (
+    PAGE_ENABLED_FIELD,
     PAGE_ENTITIES_FIELD,
+    PAGE_NAME_FIELD,
     PAGE_POSITION_FIELD,
     dashboard_page_layout,
     dashboard_pages_input,
@@ -35,6 +37,7 @@ from .config_flow_dashboard_pages import (
 from .config_flow_features import current_feature_options
 from .const import CONF_DEVICE_UI_ENABLED
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT
+from .dashboard_page_order import SPECIAL_PAGE_ORDER
 from .schema_compat import vol
 
 PAGE_LIST_STEP = "dashboard_page_list"
@@ -98,35 +101,61 @@ def unchanged_pages_post(dashboard_input: dict[str, Any]) -> dict[str, Any]:
 def single_page_post(
     dashboard_input: dict[str, Any], key: str, user_input: dict[str, Any]
 ) -> dict[str, Any]:
-    """Complete the post of one page form with the other pages as saved."""
+    """Complete the post of one page form with the other pages as saved.
+
+    The pages that hold a place are the Status page, the pages of your own in
+    use and the built-in pages switched on. When the opened page takes a new
+    place among them, they are numbered anew in their order with the opened
+    page at the place it asks for. A page switched off keeps its position.
+    """
 
     values = user_input.get(key)
-    values = values if isinstance(values, dict) else {}
+    values = dict(values) if isinstance(values, dict) else {}
     post = unchanged_pages_post(dashboard_input)
-    before = _position(post.get(key, {}).get(PAGE_POSITION_FIELD))
-    after = _position(values.get(PAGE_POSITION_FIELD))
     taken = values.get(PAGE_ENTITIES_FIELD)
     taken = set(taken) if isinstance(taken, list) else set()
     for other_key, other in post.items():
-        if other_key == key:
-            continue
-        place = _position(other.get(PAGE_POSITION_FIELD))
-        if place is not None and after is not None and after != before:
-            # The page takes its new place; the pages in between make room.
-            if (before is None or after < before) and after <= place and (before is None or place < before):
-                other[PAGE_POSITION_FIELD] = place + 1
-            elif before is not None and before < place <= after:
-                other[PAGE_POSITION_FIELD] = place - 1
         entities = other.get(PAGE_ENTITIES_FIELD)
-        if isinstance(entities, list) and taken.intersection(entities):
+        if other_key != key and isinstance(entities, list) and taken.intersection(entities):
             other[PAGE_ENTITIES_FIELD] = [entity for entity in entities if entity not in taken]
-    return {**post, key: values}
+    saved = post.get(key, {})
+    before = _position(saved.get(PAGE_POSITION_FIELD))
+    after = _position(values.get(PAGE_POSITION_FIELD))
+    had_place = _holds_place(key, saved)
+    if after is None and had_place and before is not None and PAGE_POSITION_FIELD in saved:
+        # An emptied position keeps the page where it is.
+        values[PAGE_POSITION_FIELD] = after = before
+    post[key] = values
+    if _holds_place(key, {**saved, **values}) and (not had_place or after != before):
+        others = sorted(
+            (name for name in post if name != key and _holds_place(name, post[name])),
+            key=lambda name: (
+                _position(post[name].get(PAGE_POSITION_FIELD)) or DASHBOARD_PAGE_MAX_COUNT + 99,
+                name not in SPECIAL_PAGE_ORDER,
+                SPECIAL_PAGE_ORDER.index(name) if name in SPECIAL_PAGE_ORDER
+                else int(name.removeprefix("page_")),
+            ),
+        )
+        place = len(others) if after is None else min(max(after - 1, 0), len(others))
+        for number, name in enumerate([*others[:place], key, *others[place:]], start=1):
+            post[name][PAGE_POSITION_FIELD] = number
+    return post
+
+
+def _holds_place(key: str, values: dict[str, Any]) -> bool:
+    if key in SPECIAL_PAGE_ORDER:
+        return values.get(PAGE_ENABLED_FIELD) is True
+    return key == page_section_key(1) or bool(
+        str(values.get(PAGE_NAME_FIELD) or "").strip() or values.get(PAGE_ENTITIES_FIELD)
+    )
 
 
 def _position(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
         return None
-    return int(value)
+    if value in (float("inf"), float("-inf")):
+        return None
+    return round(value)
 
 
 def single_page_schema(

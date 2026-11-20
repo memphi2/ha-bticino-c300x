@@ -693,7 +693,7 @@
       "invalid_dashboard_entity_display_overrides": "Un'impostazione del display non è valida. Controlla i nomi personalizzati e i nomi delle pagine (al massimo 60 caratteri).",
       "dashboard_page_name_reserved": "C300X è il nome interno della pagina di stato; scegli un altro nome di pagina.",
       "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
-      "dashboard_entity_on_several_pages": "Un'entità e scelta su più pagine; lasciala su una sola pagina.",
+      "dashboard_entity_on_several_pages": "Un'entità è scelta su più pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
       "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480.",
@@ -822,7 +822,7 @@
       },
       "init": {
         "title": "Impostazioni C300X",
-        "description": "Scegli cosa vuoi modificare. Ogni sezione si salva da sola all'invio e ti riporta qui; le altre sezioni mantengono le loro impostazioni. Per uscire da una sezione senza modifiche, inviala così com'è.",
+        "description": "Scegli cosa vuoi modificare. Ogni sezione si salva da sola all'invio e ti riporta al menu da cui è stata aperta; le altre sezioni mantengono le loro impostazioni. Per uscire da una sezione senza modifiche, inviala così com'è.",
         "menu_options": {
           "connection": "Connessione al C300X",
           "features": "Video e audio",
@@ -1101,7 +1101,7 @@
       "invalid_dashboard_entity_display_overrides": "Un'impostazione del display non è valida. Controlla i nomi personalizzati e i nomi delle pagine (al massimo 60 caratteri).",
       "dashboard_page_name_reserved": "C300X è il nome interno della pagina di stato; scegli un altro nome di pagina.",
       "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
-      "dashboard_entity_on_several_pages": "Un'entità e scelta su più pagine; lasciala su una sola pagina.",
+      "dashboard_entity_on_several_pages": "Un'entità è scelta su più pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
       "required": "Questo campo è obbligatorio.",

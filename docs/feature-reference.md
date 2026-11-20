@@ -475,8 +475,8 @@ pages. Pick a page to open a form with its fields only; saving returns to the
 list. Entries show the page's number and name, for example
 **Page 2: Living room**. A page the display does not show (switched off, or
 without entities) has no number and follows the shown pages; **Add a page**
-follows while a custom page is free. In a page's form a new position moves
-the pages in between by one, and an entity that another page shows moves to
+follows while a custom page is free. In a page's form a new position puts
+the page there and numbers the others around it, and an entity that another page shows moves to
 the opened page with its tile settings. The setup and the reconfigure dialog show the same pages in one
 form, one section each, with free sections titled **Page +**. Alarmo is not
 one of the pages: its Alarm page opens from the home page button and has an
@@ -485,7 +485,7 @@ area of its own in the Display menu.
 | Field | Meaning |
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
-| **Position** | Order of all pages, 1 to 12. Left empty, an existing page returns to its section's number and a new page goes to the end. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
+| **Position** | Order of all pages, 1 to 12. In the settings a page takes the place it asks for and the other pages are numbered around it; left empty, a page stays where it is and a new page goes to the end. In the setup form, left empty, an existing page returns to its section's number. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
 The status-page section carries the weather card at its top,

@@ -1127,7 +1127,8 @@
       "invalid_maintenance_auth": "Il C300X ha rifiutato la chiave di manutenzione. Inserisci la chiave di manutenzione attuale.",
       "cannot_connect": "Impossibile verificare il C300X. Controlla indirizzo e connessione, poi riprova.",
       "camera_quality_failed": "Il C300X non ha salvato i valori. Controlla la connessione e riprova.",
-      "camera_quality_unsupported": "Questo C300X non offre l'impostazione della qualità della telecamera."
+      "camera_quality_unsupported": "Questo C300X non offre l'impostazione della qualità della telecamera.",
+      "camera_quality_out_of_range": "Fuori da ciò che il dispositivo accetta per questo flusso; solo il valore salvato sul dispositivo può restare così."
     }
   },
   "entity": {

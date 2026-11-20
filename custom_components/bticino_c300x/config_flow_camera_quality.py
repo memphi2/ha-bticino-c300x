@@ -46,6 +46,15 @@ def _limit(status: Mapping[str, Any], key: str, fallback: int) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else fallback
 
 
+_FALLBACK = {"bitrate": (300, 3000), "fps": (5, 24)}
+
+
+def _within(status: Mapping[str, Any], key: str, value: int) -> bool:
+    """A new value inside the agent's limits; only the saved one may be outside."""
+    low, high = (_limit(status, f"{key}_{end}", _FALLBACK[key][i]) for i, end in enumerate(("min", "max")))
+    return low <= value <= high
+
+
 def _range(status: Mapping[str, Any], key: str, fallback: tuple[int, int]) -> tuple[int, int]:
     """The limits, widened to a value the file already has: the agent keeps it."""
     low, high = _limit(status, f"{key}_min", fallback[0]), _limit(status, f"{key}_max", fallback[1])
@@ -66,8 +75,8 @@ def _schema(status: Mapping[str, Any], values: Mapping[str, Any]) -> vol.Schema:
     return vol.Schema({
         vol.Required(SIZE, default=values[SIZE]): SelectSelector(SelectSelectorConfig(
             options=_sizes(status), mode=SelectSelectorMode.DROPDOWN)),
-        vol.Required(BITRATE, default=values[BITRATE]): _number(*_range(status, "bitrate", (300, 3000)), 10, "kbit/s"),
-        vol.Required(FPS, default=values[FPS]): _number(*_range(status, "fps", (5, 24)), 1, "fps"),
+        vol.Required(BITRATE, default=values[BITRATE]): _number(*_range(status, "bitrate", _FALLBACK["bitrate"]), 10, "kbit/s"),
+        vol.Required(FPS, default=values[FPS]): _number(*_range(status, "fps", _FALLBACK["fps"]), 1, "fps"),
     })
 
 
@@ -114,14 +123,17 @@ class CameraQualityOptionsStep:
         if user_input is not None:
             wanted = {**{key: int(user_input[key]) for key in (BITRATE, FPS)}, SIZE: str(user_input[SIZE])}
             changes = {key: value for key, value in wanted.items() if value != saved[key]}
-            if not changes:
+            errors = {key: "camera_quality_out_of_range" for key, name in ((BITRATE, "bitrate"), (FPS, "fps"))
+                      if key in changes and not _within(status, name, changes[key])}
+            if not errors and not changes:
                 return cast(ConfigFlowResult, await self.async_step_init())
-            try:
-                await api.async_camera_quality(**changes)
-            except C300XAgentApiError:
-                errors["base"] = "camera_quality_failed"
-            else:
-                return cast(ConfigFlowResult, await self.async_step_init())
+            if not errors:
+                try:
+                    await api.async_camera_quality(**changes)
+                except C300XAgentApiError:
+                    errors["base"] = "camera_quality_failed"
+                else:
+                    return cast(ConfigFlowResult, await self.async_step_init())
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="camera_quality",
             data_schema=_schema(status, saved if user_input is None else user_input),

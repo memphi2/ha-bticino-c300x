@@ -148,3 +148,13 @@ def test_values_sent_while_the_device_is_away_are_not_dropped_silently() -> None
     form = _open(_entry(api), {"size": "720x576", "bitrate_kbps": 3000.0, "fps": 24.0})
     assert (form["step_id"], form["errors"]) == ("camera_quality", {"base": "cannot_connect"})
     assert api.writes == []
+
+
+def test_a_new_value_outside_the_limits_is_named_before_anything_is_sent() -> None:
+    api = _QualityApi()
+    api.values = {"bitrate_kbps": 180, "fps": 30, "size": "688x480"}
+    form = _open(_entry(api), {"size": "688x480", "bitrate_kbps": 200.0, "fps": 27.0})
+    assert form["errors"] == {"bitrate_kbps": "camera_quality_out_of_range", "fps": "camera_quality_out_of_range"}
+    assert api.writes == []
+    _open(_entry(api), {"size": "688x480", "bitrate_kbps": 180.0, "fps": 24.0})
+    assert api.writes == [{"fps": 24}]

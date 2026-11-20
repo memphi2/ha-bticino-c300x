@@ -15,6 +15,13 @@ Display:
 - The favourites bar is the default page navigation. An entry that never
   chose keeps the bar after the update; to keep the previous and next arrows,
   choose **Arrows** under **Page navigation** in the display settings.
+- Taps on the display pages are reliable. The display library counted a
+  finger that moved four pixels as a swipe, so buttons inside a page often
+  needed several taps. The Display patch now raises that threshold to 16
+  pixels on firmware 1.7.x and 2.0.2 (with a backup; the Display restore
+  brings the original back), and a page that fits on the screen no longer
+  scrolls. Needs the agent update; its Repair applies it to a display that
+  is already patched.
 - The energy tabs, the Leave home buttons, tiles that open details, the
   detail tabs and the on/off switch show that they are pressed.
 

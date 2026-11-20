@@ -179,7 +179,15 @@ device HomePage for unread memo/video-message badges, transforms the
 device MemoPage for external-delete refresh, adds the HA feedback and touch-tone controls to Settings > General, installs
 the project-owned Alarmo, Home Assistant and energy pages, and installs the
 local QML JavaScript bridge.
-Original display files are backed up under
+On Qt 4 devices (firmware 1.7.x and 2.0.2) the Display patch also raises the
+swipe threshold of the display library from 4 to 16 pixels, so a tap with a
+slightly moving finger stays a tap instead of becoming a swipe. The helper
+calls the agent binary for it (`--display-touch apply` or `restore`): the
+library is recognised by its SHA-256, changed once in one place, written
+through a temporary file and restored by the Display restore. A library of
+another build is left alone, and a display that does not start with the
+changed library gets the original back at once.
+Original display files and the original display library are backed up under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`; generated agent
 files are not backed up on the device.
 

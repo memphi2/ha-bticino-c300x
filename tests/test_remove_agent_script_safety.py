@@ -25,7 +25,11 @@ def local_device(tmp_path):
     temporary.mkdir()
     _write_original_gui(gui)
     binary = agent / "c300x-agent-native"
-    binary.write_text('#!/bin/sh\nprintf "media-restore\\n" >> "$CALL_LOG"\nexit 0\n')
+    binary.write_text(
+        '#!/bin/sh\nif [ "$1" = "--display-touch" ]; then\n'
+        '    printf \'{"ok":true,"changed":false}\\n\'\n    exit 0\nfi\n'
+        'printf "media-restore\\n" >> "$CALL_LOG"\nexit 0\n'
+    )
     binary.chmod(0o700)
     for command in ("mount", "start-stop-daemon", "pidof", "killall", "ssh-init", "reboot"):
         path = commands / command

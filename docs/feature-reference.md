@@ -378,7 +378,7 @@ width can be set to half, so two pictures stand side by side, and the height to
 size before the display loads it, so a full camera frame never reaches the
 device. The picture is a still, not a stream: an image entity is reloaded when
 it has a new picture, a camera about every five minutes. The entity's name is
-written along the bottom edge of the picture. A tap does nothing.
+written in the bottom left corner of the picture. A tap does nothing.
 
 The display loads the picture straight from Home Assistant, at the address the
 device already uses for it. That address is signed with the entry's secret and

@@ -3082,3 +3082,30 @@ def test_device_user_repair_asks_to_add_an_unregistered_device_in_the_app(
 
     assert result["errors"] == {"base": "device_not_registered"}
     assert deleted == []
+
+
+@pytest.mark.parametrize(("offered", "restored"), [(True, [True]), (False, [])])
+def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, offered, restored):
+    """A Qt 5 display (firmware 3.0.x) has no Display patch to restore."""
+
+    import custom_components.bticino_c300x.repairs as repairs
+
+    api = FakePatchApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    state = _ExternalPatchState(qml_patch_required=True, firewall_patched=True,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    calls = []
+
+    async def restore(_entry, *, apply_full_patch):
+        calls.append(apply_full_patch)
+
+    monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
+    capabilities = {"maintenance": {"supported": True, "qml_core_patch": offered}}
+    asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(qml_patch_changed=True, firewall_patch_changed=True),
+        capabilities,
+    ))
+
+    assert calls == restored
+    # The firewall is restored on every display.
+    assert "apply_firewall" in api.calls

@@ -2813,6 +2813,7 @@ static void device_user_status_body(
     (void)c300x_device_routing_read_status(&routing_status);
     if (
         config != NULL
+        && !c300x_device_display_is_qt5()
         && access(config->maintenance_qml_patch_script, X_OK) == 0
         && c300x_command_capture(
             config->maintenance_qml_patch_script,

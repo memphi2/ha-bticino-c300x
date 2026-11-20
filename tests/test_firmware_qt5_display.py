@@ -34,7 +34,7 @@ def config_probe(tmp_path_factory):
         check=True, capture_output=True, text=True,
     )
 
-    def run(*, qt5: bool, high_resolution: bool | None) -> dict:
+    def run(*, qt5: bool, high_resolution: bool | None, display_patch: bool = False) -> dict:
         marker.unlink(missing_ok=True)
         if qt5:
             marker.write_bytes(b"")
@@ -42,6 +42,9 @@ def config_probe(tmp_path_factory):
         config["video"]["av"].pop("highResolution", None)
         if high_resolution is not None:
             config["video"]["av"]["highResolution"] = high_resolution
+        if display_patch:
+            config["maintenance"]["adminToken"] = "admin"
+            config["maintenance"]["qmlPatch"] = {"enabled": True, "script": "/data/qml_patch.sh"}
         path = folder / "config.json"
         path.write_text(json.dumps(config), encoding="utf-8")
         result = subprocess.run([str(binary), str(path)], check=True, capture_output=True, text=True)
@@ -51,16 +54,25 @@ def config_probe(tmp_path_factory):
 
 
 def test_the_agent_defaults_to_the_low_resolution_stream_on_a_qt5_display(config_probe):
-    assert config_probe(qt5=False, high_resolution=None) == {"high_resolution": 1, "qt5": 0}
+    assert config_probe(qt5=False, high_resolution=None)["high_resolution"] == 1
     # 3.0.x sends only the low-resolution stream on to other receivers.
-    assert config_probe(qt5=True, high_resolution=None) == {"high_resolution": 0, "qt5": 1}
+    assert config_probe(qt5=True, high_resolution=None)["high_resolution"] == 0
     # A resolution set in the config is kept.
     assert config_probe(qt5=True, high_resolution=True)["high_resolution"] == 1
+
+
+def test_the_agent_offers_no_display_patch_on_a_qt5_display(config_probe):
+    # The installer enables the Display patch; a Qt 5 display has nothing to patch,
+    # so the agent neither offers it nor its repairs.
+    assert config_probe(qt5=False, high_resolution=None, display_patch=True)["display_patch"] == 1
+    assert config_probe(qt5=True, high_resolution=None, display_patch=True)["display_patch"] == 0
 
 
 def test_the_agent_skips_the_display_label_only_on_a_qt5_display():
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     assert "if (!c300x_device_display_is_qt5()) {" in http
+    # Nor does it ask the Display patch for the label status there.
+    assert "&& !c300x_device_display_is_qt5()\n        && access(config->maintenance_qml_patch_script, X_OK) == 0" in http
     assert "skins/default" not in http
     assert "skins/default" not in (NATIVE / "src/config.c").read_text(encoding="utf-8")
 

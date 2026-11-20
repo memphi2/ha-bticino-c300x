@@ -172,7 +172,13 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
             self._status.get("homeassistant_user_present") is True
             and self._status.get("routes_consistent") is True
             and self._status.get("device_routing_applied") is True
-            and self._status.get("media_user_label_applied") is True
+            and (
+                self._status.get("media_user_label_applied") is True
+                # The label is written into the Display patch files. An agent
+                # that offers no Display patch (Qt 5 display, firmware 3.0.x)
+                # has none, and the media user is complete without it.
+                or not entry_maintenance_action_is_advertised(self._entry, "qml_core_patch")
+            )
         )
 
     @property

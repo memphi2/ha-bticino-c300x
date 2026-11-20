@@ -296,8 +296,10 @@ Page {
     function expirePendingControl() {
         if (!pendingEntity) return
         commandGeneration += 1
+        var more = morePagesOpen
         aboutToHide()
         aboutToShow()
+        morePagesOpen = more
     }
 
     function pressAction(item, control) {

@@ -433,7 +433,7 @@ its own in the settings menu.
 | Field | Meaning |
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
-| **Position** | Order of all pages, 1 to 12. Left empty, the regular section's number is used. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
+| **Position** | Order of all pages, 1 to 12. Left empty, an existing page returns to its section's number and a new page goes to the end. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
 The status-page section carries the weather card at its top,
@@ -455,6 +455,9 @@ the page number, counted over the pages the display shows. A page it does not
 show (switched off, or without entities) has no number and follows the shown
 pages. Free sections come last and are titled "Page +"; fill one in to add a
 page. Without a position the new page follows the existing ones. Sections of used pages are open, and so is the first free one.
+The headings count what this form sets up. Two things it does not know can
+shift the numbers on the display: a page that only configured actions use, and
+an Energy page that is switched on while Home Assistant has no energy data.
 The optional pages can be placed among regular pages, not just after them.
 Their default positions are Energy 2, Agenda 10, Leave home 11 and Situations 12. Disabling an
 optional page preserves its position and selections for later use.

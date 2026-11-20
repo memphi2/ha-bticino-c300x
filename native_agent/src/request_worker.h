@@ -30,7 +30,7 @@ struct c300x_request_worker {
     int armed_fd;
     int deferred;
     int waited; /* the armed request got the worker after waiting for it */
-    int reaped; /* offer the requests again: a result is there or the owner is done */
+    int reaped; /* offer the requests again once: one of them can go on or is to be ended */
     size_t stack_bytes;
     struct c300x_request_queue *queue;
     void (*execute)(void *job);

@@ -13,7 +13,6 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
-
 from test_native_openwebnet_offload import PRESS, RELEASE, UNLOCK, Bus
 
 from native_agent.test.smoke import (
@@ -297,3 +296,18 @@ def test_a_door_command_that_lost_its_place_is_not_sent_later(lab: Lab) -> None:
     assert finish(extra)["ok"] is True
     lab.health_ms()
     assert lab.bus.frames == [PRESS, RELEASE]
+
+
+def test_a_request_waiting_for_the_media_worker_leaves_the_agent_idle(lab: Lab) -> None:
+    stop = lab.held_stop()
+    waiting = lab.post(HOME_STOP)
+    lab.health_ms()
+    stat = Path(f"/proc/{lab.process.pid}/stat").read_text().rsplit(")", 1)[1].split()
+    before = int(stat[11]) + int(stat[12])
+    time.sleep(1)
+    stat = Path(f"/proc/{lab.process.pid}/stat").read_text().rsplit(")", 1)[1].split()
+    assert int(stat[11]) + int(stat[12]) - before < 20
+
+    lab.release()
+    assert finish(stop) == {"ok": True}
+    assert finish(waiting) == {"ok": True}

@@ -330,6 +330,21 @@ def cpu_seconds(pid: int) -> float:
     return (int(fields[11]) + int(fields[12])) / 100
 
 
+def test_a_request_waiting_for_the_bus_leaves_the_agent_idle(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    waiting = lab.start("/api/v1/answering-machine")
+    lab.health_ms()
+    before = cpu_seconds(lab.process.pid)
+    time.sleep(1)
+    assert cpu_seconds(lab.process.pid) - before < 0.2
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    assert finish(waiting)["ok"] is True
+
+
 def test_more_departed_callers_than_places_leave_the_agent_idle_and_its_slots_free(lab: Lab) -> None:
     lab.bus.hold(PRESS)
     unlock = lab.start(UNLOCK, post=True)
@@ -400,3 +415,26 @@ def test_an_admitted_maintenance_write_waits_for_the_request_on_the_bus(lab: Lab
     # Answered after the door command, whatever it says to an empty change.
     assert write.getresponse().status in (200, 400)
     assert lab.bus.frames == [PRESS, RELEASE]
+
+
+STAIR = "/api/v1/stair-light/actions/activate"
+
+
+@pytest.mark.parametrize(
+    "lab", [{"maintenance": {"enabled": True, "adminToken": "maintenance-token"}}], indirect=True)
+def test_a_configuration_write_admitted_by_the_admin_token_alone_waits_too(lab: Lab) -> None:
+    lab.bus.hold("*8*21*10##")
+    stair = lab.start(STAIR, post=True)
+    assert lab.bus.seen.wait(5)
+    write = lab.start("/api/v1/maintenance/auth", body={"stairLightDefaultAddress": "11"},
+                      headers={"X-Bticino-C300X-Maintenance-Token": "maintenance-token",
+                               "Authorization": "Bearer wrong"})
+    lab.health_ms()
+    assert select.select([write.sock], [], [], 0.3)[0] == []
+
+    lab.bus.gate.set()
+    assert finish(stair)["address"] == "10"
+    assert write.getresponse().status == 200
+    lab.health_ms()
+    # The request on the bus sent one command, for the address it started with.
+    assert [frame for frame in lab.bus.frames if frame.startswith("*8*21*")] == ["*8*21*10##"]

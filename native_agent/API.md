@@ -130,8 +130,9 @@ repeated. A request that had to wait and whose caller has closed the
 connection meanwhile, also only its sending side, is not run and answered
 `client_gone`; of the media actions this applies to the three that start
 something, a stop still runs unless a new request needed its place. A
-maintenance POST that passed authentication waits while a request has a
-command on the OpenWebNet bus.
+maintenance POST that replaces the agent configuration waits, once it is
+admitted, until the request that has a command on the OpenWebNet bus is
+answered.
 
 Request bodies are parsed from JSON. Unknown fields should be ignored unless the
 handler explicitly validates the whole object.

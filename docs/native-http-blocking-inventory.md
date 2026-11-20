@@ -105,11 +105,12 @@ thread can be started the call runs on the loop as before.
 The waiting places are shared with the media operations (`request_queue.c`):
 three in all, beside the two requests the workers run. (Other requests kept
 open - a status read deferred behind a maintenance job, an admitted
-maintenance write held behind the bus request, an unfinished upload - count
+configuration write held behind the bus request, an unfinished upload - count
 against the six API client slots as well.) When all places are taken, a
 waiting request whose caller has left loses its place to the new request. It
-is marked, never run, and answered `client_gone` the next time the loop
-offers it, which frees its client slot. A request that
+is marked and never run. The next time the loop offers it, it is answered
+`client_gone` (or by a check of its handler that comes before the worker
+call), which frees its client slot. A request that
 finds no place is answered `openwebnet_busy` (502), and one that waited is
 answered `client_gone` (502) without being run when its caller has left; a
 caller that only closed its sending side counts as gone. Both are answered by
@@ -125,9 +126,10 @@ is set after a failed call; `send_json` writes nothing in that state. A
 handler runs again from its start, so a state it checks before its first
 call must not be checked again once the request has a command out
 (`c300x_openwebnet_async_owns`); the ringer handlers do this for the display
-slot. A maintenance POST that passed authentication, and so may replace the
-configuration, is held back while another request owns the bus worker; one
-that is not admitted is answered at once. The call also runs on the loop when
+slot. The four maintenance POSTs that replace the configuration (auth, MQTT,
+legacy MQTT, MQTT migration) hold themselves back, each after its own
+admission check, while another request owns the bus worker; a request that
+is not admitted is answered at once. The call also runs on the loop when
 eight results of one request are stored already.
 
 `openwebnet.c` uses blocking IPv4 `connect`/`send`/`recv`, configured socket

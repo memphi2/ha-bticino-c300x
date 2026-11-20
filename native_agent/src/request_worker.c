@@ -117,13 +117,14 @@ enum c300x_request_worker_turn c300x_request_worker_turn(struct c300x_request_wo
         worker->waited = c300x_request_queue_remove(worker->queue, worker, worker->armed_fd);
         return C300X_REQUEST_WORKER_MINE;
     }
-    /* A waiting request whose caller left gives its place to this one. */
-    if (!c300x_request_queue_add(worker->queue, worker, worker->armed_fd)
-        && !(c300x_request_queue_drop_departed(worker->queue)
-             && c300x_request_queue_add(worker->queue, worker, worker->armed_fd))) {
-        return C300X_REQUEST_WORKER_FULL;
+    if (!c300x_request_queue_add(worker->queue, worker, worker->armed_fd)) {
+        /* A waiting request whose caller left gives its place to this one. */
+        if (!c300x_request_queue_drop_departed(worker->queue)
+            || !c300x_request_queue_add(worker->queue, worker, worker->armed_fd)) {
+            return C300X_REQUEST_WORKER_FULL;
+        }
+        worker->reaped = 1; /* the one that lost its place is offered, to be ended */
     }
-    worker->reaped = 1; /* one that lost its place is offered, to be ended */
     worker->deferred = 1;
     return C300X_REQUEST_WORKER_WAIT;
 }

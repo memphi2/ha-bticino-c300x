@@ -225,6 +225,7 @@ struct agent_runtime {
     struct c300x_openwebnet_async openwebnet;
     struct c300x_video_control video_control;
     struct c300x_request_queue request_queue;
+    int config_write_waits;
     struct c300x_system_metrics_monitor metrics;
     struct c300x_setting_state forwarding_state;
     struct c300x_setting_state ringer_muted_state;
@@ -243,6 +244,15 @@ struct firewall_workspace {
     char desired[C300X_FIREWALL_BUFFER_SIZE];
 };
 static void send_json(int client_fd, int status, const char *reason, const char *body);
+/* A handler that is about to replace the configuration asks this once it has
+ * admitted its request, before it does anything. Nonzero: it returns without
+ * an answer and runs again. The request that has a command on the bus runs
+ * again too and must find the configuration it started with. */
+static int config_write_waits(struct agent_runtime *runtime, int client_fd)
+{
+    runtime->config_write_waits = c300x_request_worker_owned_by_other(&runtime->openwebnet.worker, client_fd);
+    return runtime->config_write_waits;
+}
 static void send_openwebnet_refusal(int client_fd, const char *error)
 {
     char body[96];
@@ -3131,6 +3141,7 @@ static void handle_auth_config_post(
         send_maintenance_unauthorized(client_fd);
         return;
     }
+    if (config_write_waits(runtime, client_fd)) return;
     baseline = calloc(1, sizeof(*baseline));
     updated = calloc(1, sizeof(*updated));
     if (baseline == NULL || updated == NULL) {
@@ -3952,6 +3963,7 @@ static void handle_legacy_mqtt_post(
         send_maintenance_unauthorized(client_fd);
         return;
     }
+    if (config_write_waits(runtime, client_fd)) return;
     if (!c300x_json_bool_field(request->body, "enabled", &enabled)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"enabled_required\"}\n");
         return;
@@ -4040,6 +4052,7 @@ static void handle_mqtt_migrate_legacy_post(
         send_maintenance_unauthorized(client_fd);
         return;
     }
+    if (config_write_waits(runtime, client_fd)) return;
     if (!confirm_matches(request, "migrate_legacy_mqtt")) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
         return;
@@ -4181,6 +4194,7 @@ static void handle_mqtt_post(
         send_maintenance_unauthorized(client_fd);
         return;
     }
+    if (config_write_waits(runtime, client_fd)) return;
     updated = calloc(1, sizeof(*updated));
     if (updated == NULL) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
@@ -9675,15 +9689,7 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
             free(request);
             return 0;
         }
-        /* An admitted maintenance write may replace the configuration. It waits until the
-         * request that has a command on the bus is answered: that request runs
-         * again and must find the configuration it started with. */
-        if (strcmp(request->method, "POST") == 0 && strncmp(request->path, "/api/v1/maintenance/", 20) == 0
-            && c300x_request_worker_owned_by_other(&runtime->openwebnet.worker, client_fd)
-            && api_request_authorized(config, request) && maintenance_authorized(config, request)) {
-            free(request);
-            return 0;
-        }
+        runtime->config_write_waits = 0;
         c300x_openwebnet_async_begin(&runtime->openwebnet, client_fd);
         c300x_video_control_begin(&runtime->video_control, client_fd);
         handle_api_request(client_fd, config, runtime, request);
@@ -9692,7 +9698,8 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
              * other one holds for it until it is answered. */
             const char *refusal = c300x_openwebnet_async_refusal(&runtime->openwebnet);
             int deferred = refusal == NULL && (c300x_openwebnet_async_deferred(&runtime->openwebnet)
-                                               || c300x_video_control_deferred(&runtime->video_control));
+                                               || c300x_video_control_deferred(&runtime->video_control)
+                                               || runtime->config_write_waits);
 
             c300x_openwebnet_async_end(&runtime->openwebnet, deferred);
             c300x_video_control_end(&runtime->video_control, deferred);

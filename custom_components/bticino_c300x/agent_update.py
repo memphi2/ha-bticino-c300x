@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
@@ -285,11 +286,13 @@ async def async_retry_update_maintenance_busy(
     if _BUSY_WAIT_ACTIVE.get():
         # A caller further out waits already; one wait, not one inside another.
         return await action()
-    _BUSY_WAIT_ACTIVE.set(True)
+    token = _BUSY_WAIT_ACTIVE.set(True)
     try:
         return await _async_wait_out_busy(action, wait_seconds)
     finally:
-        _BUSY_WAIT_ACTIVE.set(False)
+        # Closed from another context: that one keeps its own flag.
+        with contextlib.suppress(ValueError):
+            _BUSY_WAIT_ACTIVE.reset(token)
 
 
 async def _async_wait_out_busy(

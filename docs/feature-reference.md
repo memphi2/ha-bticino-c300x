@@ -179,6 +179,8 @@ It is on by default and never starts additional recording or live video.
 
 ## Alarmo Display
 
+<p align="center"><img src="images/readme/display-alarmo-en.webp" alt="Alarmo modes, PIN keypad and a configured stair-light shortcut" width="480"></p>
+
 The optional native Alarmo page stays a subpage in the original blue C300X
 design. The configured return-after-standby setting still applies. It shows
 reported alarm state, readiness, blocking contacts and entry/exit countdowns.
@@ -203,6 +205,8 @@ only after a failed event connection while the page is active.
 
 ## Display Home Page Buttons
 
+<p align="center"><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="480"></p>
+
 With the Display patch, the Alarm button appears when an alarm panel is configured;
 the Home Assistant button appears when a display page has configured content.
 Their positions stay reserved, so a change in availability does not rearrange
@@ -210,6 +214,17 @@ the other home-page buttons. A temporary connection failure keeps the last
 confirmed visibility instead of hiding both buttons.
 
 ## Display Device Controls
+
+<table>
+  <tr>
+    <td align="center"><strong>Sensor and switch tiles</strong><br><img src="images/readme/display-general-en.webp" alt="Page with a switch, temperature, CPU load, window and alarm tiles and the favourites bar" width="360"></td>
+    <td align="center"><strong>Light overview</strong><br><img src="images/readme/display-lights-en.webp" alt="Eight light tiles with state, brightness and on-off controls" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Brightness and color</strong><br><img src="images/readme/display-light-detail-en.webp" alt="Light detail page with brightness slider and color presets" width="360"></td>
+    <td align="center"><strong>Media player</strong><br><img src="images/readme/display-media-player-en.webp" alt="Media player with current program, pause, volume, mute and shuffle" width="360"></td>
+  </tr>
+</table>
 
 Select entities under **Display pages**. Supported controls include lights,
 covers, climate, fans, media players, locks, vacuums, valves, humidifiers and
@@ -371,6 +386,8 @@ detail views.
 
 ### Picture tiles
 
+<p align="center"><img src="images/readme/display-camera-en.webp" alt="Camera page with two picture tiles side by side" width="480"></p>
+
 A camera or image entity becomes a picture tile on the page you place it on.
 By default the tile spans the page and follows its picture: the picture is as
 wide as the tile, and the tile is as high as the picture's proportions make it.
@@ -494,6 +511,13 @@ optional page preserves its position and selections for later use.
 
 #### Page navigation
 
+<table>
+  <tr>
+    <td align="center"><strong>Favourites bar</strong><br><img src="images/readme/display-start-en.webp" alt="Start page with the favourites bar along the bottom edge" width="360"></td>
+    <td align="center"><strong>More: the other pages</strong><br><img src="images/readme/display-more-en.webp" alt="The list of further pages that More opens" width="360"></td>
+  </tr>
+</table>
+
 **Page navigation** in the display settings chooses how the display changes
 pages. It is one setting for all pages.
 
@@ -514,6 +538,8 @@ tiles keep the height they have above the arrows. Changing the page uses the
 dashboard that is already loaded and requests no data.
 
 ### Agenda
+
+<p align="center"><img src="images/readme/display-appointments-en.webp" alt="Agenda page with two upcoming events" width="480"></p>
 
 Enable **Agenda** in **Display pages** and select up to eight HA calendars.
 It shows up to five ongoing or upcoming events within the next seven days,
@@ -574,6 +600,14 @@ anyway and watches only the selected entities. It is off by default; its
 position defaults to 12 and can be set from 1 to 12.
 
 ### Energy Page
+
+<table>
+  <tr>
+    <td align="center"><strong>Now</strong><br><img src="images/readme/display-energy-flow-en.webp" alt="Energy page: current flow between grid, solar, battery and home" width="260"></td>
+    <td align="center"><strong>Power</strong><br><img src="images/readme/display-energy-power-en.webp" alt="Energy page: power over the day" width="260"></td>
+    <td align="center"><strong>Consumers</strong><br><img src="images/readme/display-energy-consumers-en.webp" alt="Energy page: consumers ranked by power" width="260"></td>
+  </tr>
+</table>
 
 The **Energy** section switches on an optional page that
 shows Home Assistant's own Energy setup (**Settings → Dashboards → Energy**).
@@ -786,6 +820,15 @@ relying on an automation; a successful action is not proof of audible or visible
 delivery.
 
 ## Entity Reference
+
+<table>
+  <tr>
+    <td align="center" valign="top"><strong>Controls</strong><br><img src="images/readme/controls.png" alt="BTicino C300X Home Assistant controls" width="170"></td>
+    <td align="center" valign="top"><strong>Sensors / Events</strong><br><img src="images/readme/sensors.png" alt="BTicino C300X Home Assistant sensors" width="170"><br><img src="images/readme/events.png" alt="BTicino C300X Home Assistant device and doorbell events" width="170"></td>
+    <td align="center" valign="top"><strong>Configuration</strong><br><img src="images/readme/configuration.png" alt="BTicino C300X Home Assistant configuration entities" width="170"></td>
+    <td align="center" valign="top"><strong>Diagnostics</strong><br><img src="images/readme/diagnostic.png" alt="BTicino C300X Home Assistant diagnostic entities" width="170"></td>
+  </tr>
+</table>
 
 Entities are capability-gated. If the installed agent does not advertise a
 feature, the matching entity is not created.

@@ -141,47 +141,22 @@ depend on enabled options and installed agent capabilities.
   <img src="docs/images/readme/ha-door-camera-inline-dark.png" alt="BTicino C300X inline door camera dashboard card in Home Assistant dark mode" width="720">
 </p>
 
-### Home Assistant Entities
-
-<table>
-  <tr>
-    <td align="center" valign="top"><strong>Controls</strong><br><img src="docs/images/readme/controls.png" alt="BTicino C300X Home Assistant controls" width="170"></td>
-    <td align="center" valign="top"><strong>Sensors / Events</strong><br><img src="docs/images/readme/sensors.png" alt="BTicino C300X Home Assistant sensors" width="170"><br><img src="docs/images/readme/events.png" alt="BTicino C300X Home Assistant device and doorbell events" width="170"></td>
-    <td align="center" valign="top"><strong>Configuration</strong><br><img src="docs/images/readme/configuration.png" alt="BTicino C300X Home Assistant configuration entities" width="170"></td>
-    <td align="center" valign="top"><strong>Diagnostics</strong><br><img src="docs/images/readme/diagnostic.png" alt="BTicino C300X Home Assistant diagnostic entities" width="170"></td>
-  </tr>
-</table>
-
 ### C300X Display Pages
 
 Control Home Assistant entities from the C300X's native blue interface.
 Pages, tile sizes and names are configurable; controls follow each entity's
 capabilities. [Set up pages and tiles](docs/quickstart.md#9-optional-native-display).
-
-The display examples below come from device photographs and a direct Energy
-screen capture. They are color-adjusted and AI-localized into English; photographs
-are also perspective-corrected. They illustrate configured pages, not live data.
-They are examples of the display design, not validation evidence for every
-feature or firmware version.
+The [feature reference](docs/feature-reference.md#display-device-controls) shows
+every page.
 
 <table>
   <tr>
-    <td align="center"><strong>Home screen</strong><br><img src="docs/images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="360"></td>
-    <td align="center"><strong>Alarmo and optional quick action</strong><br><img src="docs/images/readme/display-alarmo-en.webp" alt="Alarmo modes, PIN keypad and a configured stair-light shortcut" width="360"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Status and sensor tiles</strong><br><img src="docs/images/readme/display-status-en.webp" alt="Status page showing device temperature, CPU use, windows, intrusion, water leak and battery state" width="360"></td>
-    <td align="center"><strong>Light overview</strong><br><img src="docs/images/readme/display-lights-en.webp" alt="Eight configured light tiles with individual state, brightness and on-off controls" width="360"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Brightness and color controls</strong><br><img src="docs/images/readme/display-light-detail-en.webp" alt="Bathroom light detail page with brightness slider and eight color presets" width="360"></td>
-    <td align="center"><strong>Media player controls</strong><br><img src="docs/images/readme/display-media-player-en.webp" alt="Living-room media player with current program, pause, volume, mute and shuffle controls" width="360"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Weather</strong><br><img src="docs/images/readme/display-ha-weather-en.webp" alt="Native C300X weather page with temperature and Home Assistant status" width="360"></td>
-    <td align="center"><strong>Energy</strong><br><img src="docs/images/readme/display-energy-en.webp" alt="Energy page captured on a C300X, showing solar, grid, battery and home" width="360"></td>
+    <td align="center"><strong>Pages with the favourites bar</strong><br><img src="docs/images/readme/display-start-en.webp" alt="Home Assistant start page on the C300X with weather, status and the favourites bar" width="360"></td>
+    <td align="center"><strong>Picture tiles</strong><br><img src="docs/images/readme/display-camera-en.webp" alt="Camera page on the C300X with two picture tiles" width="360"></td>
   </tr>
 </table>
+
+Captured on a C300X and translated into English; the camera pictures are example pictures, not real cameras.
 
 ## Documentation
 

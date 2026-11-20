@@ -77,9 +77,10 @@ part of the new active GUI.
 
 The English display examples are edited from maintainer-provided photographs,
 with AI-assisted perspective correction, color matching and localization.
-`display-energy-en.webp` instead comes from a read-only screen capture on the
-maintainer's C300X on 2026-11-15, before its 2.4.1 update. Its layout and values
-were retained, with English labels and colors matched to the other examples.
+Eight examples are read-only framebuffer captures from the maintainer's C300X
+on 2026-11-20, with the texts replaced by the display's English texts.
+Appointments and consumer names are example text; the two camera pictures are
+AI-generated views supplied by the maintainer.
 These are illustrative documentation assets, not extracted firmware files or
 pixel-exact runtime captures.
 

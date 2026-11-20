@@ -699,7 +699,7 @@ Item {
 
                 Image {
                     anchors.fill: parent
-                    source: tabMouse.pressed || root.shown === modelData.id ? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"
+                    source: tabMouse.pressed ? "images/settings/list_btn_p.svg" : root.shown === modelData.id ? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"
                     fillMode: Image.Stretch
                 }
 

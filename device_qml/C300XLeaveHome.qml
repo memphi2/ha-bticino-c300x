@@ -66,7 +66,7 @@ Item {
                 opacity: root.online && root.alarm && root.alarm.available ? 1 : 0.5
                 Image {
                     anchors.fill: parent
-                    source: "images/settings/act_btn.svg"
+                    source: alarmMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
                     fillMode: Image.Stretch
                 }
                 UbuntuLightText {
@@ -95,7 +95,7 @@ Item {
                     Image {
                         width: confirming ? parent.width * 0.68 - 8 : parent.width
                         height: parent.height
-                        source: "images/settings/act_btn.svg"
+                        source: actionMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
                         fillMode: Image.Stretch
                     }
                     UbuntuLightText {
@@ -122,7 +122,7 @@ Item {
                         width: parent.width * 0.32
                         height: parent.height
                         visible: confirming
-                        Image { anchors.fill: parent; source: "images/settings/act_btn.svg"; fillMode: Image.Stretch }
+                        Image { anchors.fill: parent; source: cancelMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
                         UbuntuLightText {
                             anchors.fill: parent
                             anchors.margins: 8

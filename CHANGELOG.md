@@ -15,6 +15,8 @@ Display:
 - The favourites bar is the default page navigation. An entry that never
   chose keeps the bar after the update; to keep the previous and next arrows,
   choose **Arrows** under **Page navigation** in the display settings.
+- The energy tabs, the Leave home buttons, tiles that open details, the
+  detail tabs and the on/off switch show that they are pressed.
 
 ## v2.7.0 - 2026-11-20
 

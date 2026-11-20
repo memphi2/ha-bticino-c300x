@@ -5327,13 +5327,7 @@ static int smartphone_forwarding_allows_ring_receiver(const struct agent_runtime
 {
     return runtime != NULL
         && runtime->forwarding_state.known
-        /* mode 1 = Home Assistant forwarding. mode 3 = unprovisioned (never
-         * paired with the Door Entry app): no smartphone client is competing
-         * for the rings, and the device cannot be switched to mode 1 until it
-         * is provisioned, so allow the agent to register/receive here too -
-         * this is what lets on-demand video work on an un-paired unit. */
-        && (runtime->forwarding_state.last_valid == 1
-            || runtime->forwarding_state.last_valid == 3);
+        && runtime->forwarding_state.last_valid == 1;
 }
 
 static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime)

@@ -15,7 +15,7 @@ def media_binaries(request, tmp_path_factory):
     directory = tmp_path_factory.mktemp("media-lifecycle")
     flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if request.param else []
     sources = [
-        "config", "json_parse", "json_util", "string_util", "time_util", "video_rtsp", "sha256", "audio_codec",
+        "config", "json_parse", "json_util", "string_util", "time_util", "video_rtsp", "sha256", "audio_codec", "device_file",
         "media_audio", "media_sip", "media_sip_io", "media_sip_dialog", "media_base64", "media_session_guard",
         "media_rtsp_auth", "media_rtsp_io", "media_rtsp_reader", "talkback_g711",
     ]

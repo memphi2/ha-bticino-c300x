@@ -1127,7 +1127,7 @@ static bool sip_local_endpoint_from_config(
     const char **transport
 ) {
     const char *configured_ip = "127.0.0.1";
-    uint16_t configured_port = DEFAULT_SIP_PORT;
+    uint16_t configured_port = C300X_MEDIA_SIP_DEFAULT_PORT;
 
     if (config != NULL && config->video_sip_local_ip[0] != '\0') {
         configured_ip = config->video_sip_local_ip;
@@ -1622,7 +1622,7 @@ static bool send_ring_response(
             sizeof(response),
             &used,
             "Contact: <sip:%s;gr=urn:uuid:%s>;+sip.instance=\"<urn:uuid:%s>\"\r\n"
-            "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+            "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
             "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, PRACK, UPDATE\r\n"
             "Supported: replaces, outbound, gruu\r\n",
             from_aor,
@@ -1634,7 +1634,7 @@ static bool send_ring_response(
             response,
             sizeof(response),
             &used,
-            "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+            "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
             "Supported: replaces, outbound, gruu\r\n"
         );
     }
@@ -1688,11 +1688,11 @@ static bool send_ring_registration(
         "Supported: replaces, outbound, gruu\r\n"
         "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
         "Contact: <sip:%s;transport=tcp>;expires=%d;+sip.instance=\"<urn:uuid:%s>\"\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Expires: %d\r\n"
         "Content-Length: 0\r\n\r\n",
         domain,
-        DEFAULT_SIP_PORT,
+        C300X_MEDIA_SIP_DEFAULT_PORT,
         unique_id,
         from_aor,
         from_aor,
@@ -2218,7 +2218,7 @@ static void ring_media_loop(
 
         if (stop) {
             if (send_bye) {
-                send_ring_bye(sip_fd, invite, to_tag, remote_contact_uri);
+                c300x_media_sip_send_ring_bye(sip_fd, invite, to_tag, remote_contact_uri);
             }
             break;
         }
@@ -2271,10 +2271,10 @@ static void ring_media_loop(
                 if (n > 0 && strncmp(message, "\r\n\r\n", 4) != 0) {
                     last_inbound_activity = c300x_monotonic_ms();
                     if (strncmp(message, "BYE ", 4) == 0 || strncmp(message, "CANCEL ", 7) == 0) {
-                        send_sip_ok_response(sip_fd, message);
+                        c300x_media_sip_send_ok(sip_fd, message);
                         remote_ended = true;
                     } else if (strncmp(message, "OPTIONS ", 8) == 0 || strncmp(message, "NOTIFY ", 7) == 0) {
-                        send_sip_ok_response(sip_fd, message);
+                        c300x_media_sip_send_ok(sip_fd, message);
                     }
                 }
             }
@@ -2598,7 +2598,7 @@ static void *ring_receiver_thread(void *arg) {
                 if (strncmp(message, "INVITE ", 7) == 0 && strstr(message, "sip:alluser@") != NULL) {
                     handle_ring_invite(bridge, fd, message, from_user, from_aor);
                 } else if (strncmp(message, "OPTIONS ", 8) == 0 || strncmp(message, "NOTIFY ", 7) == 0) {
-                    send_sip_ok_response(fd, message);
+                    c300x_media_sip_send_ok(fd, message);
                 }
             }
 
@@ -2706,14 +2706,14 @@ static void *sip_monitor_thread(void *arg) {
         char cseq_method[16];
         c300x_media_sip_cseq_method_value(message, cseq_method, sizeof(cseq_method));
         if (c300x_media_sip_status_code(message) == 200 && strcmp(cseq_method, "INVITE") == 0) {
-            send_sip_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, invite_cseq);
+            c300x_media_sip_send_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, invite_cseq);
             continue;
         }
 
         char method[16] = {0};
         (void)sscanf(message, "%15s", method);
         if (strcmp(method, "BYE") == 0) {
-            send_sip_ok_response(fd, message);
+            c300x_media_sip_send_ok(fd, message);
             pthread_mutex_lock(&bridge->mutex);
             bridge->relay_stop = true;
             shutdown_all_rtsp_clients_locked(bridge);
@@ -3668,7 +3668,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         "Supported: replaces, outbound, gruu\r\n"
         "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
         "Contact: <sip:%s;transport=%s>;expires=300;+sip.instance=\"<urn:uuid:%s>\"\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Expires: 300\r\n"
         "Content-Length: 0\r\n\r\n",
         domain,
@@ -3801,7 +3801,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         "From: <sip:%s>;tag=%s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: 21 INVITE\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Supported: replaces, outbound, gruu\r\n"
         "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, PRACK, UPDATE\r\n"
         "Contact: <sip:%s;transport=%s>\r\n"
@@ -3893,7 +3893,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         snprintf(contact_uri, sizeof(contact_uri), "sip:%s", to_aor);
     }
 
-    send_sip_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, 21);
+    c300x_media_sip_send_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, 21);
 
     pthread_mutex_lock(&bridge->mutex);
     if (bridge->media_generation != generation) {
@@ -3902,7 +3902,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         secure_zero(video_key_raw, sizeof(video_key_raw));
         secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
         secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
-        send_sip_bye(fd, from_aor, to_aor, local_ip, local_port, transport,
+        c300x_media_sip_send_bye(fd, from_aor, to_aor, local_ip, local_port, transport,
                      to_header, from_tag, call_id, contact_uri);
         close(fd);
         close(ondemand_audio_rtp_fd);
@@ -4183,7 +4183,7 @@ static bool send_home_call_register(
         "Supported: replaces, outbound, gruu\r\n"
         "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
         "Contact: <sip:%s;transport=tcp>;expires=300;+sip.instance=\"<urn:uuid:%s>\"\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Expires: 300\r\n"
         "Content-Length: 0\r\n\r\n",
         domain,
@@ -4238,7 +4238,7 @@ static bool send_home_call_invite(
         "Call-ID: %s\r\n"
         "CSeq: 21 INVITE\r\n"
         "Contact: <sip:%s;gr=urn:uuid:%s>;+sip.instance=\"<urn:uuid:%s>\"\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, PRACK, UPDATE\r\n"
         "Supported: replaces, outbound, gruu\r\n"
         "Content-Type: application/sdp\r\n"
@@ -4288,11 +4288,11 @@ static void drain_home_call_stop_responses(
             continue;
         }
         if (strncmp(message, "OPTIONS ", 8) == 0 || strncmp(message, "NOTIFY ", 7) == 0) {
-            send_sip_ok_response(fd, message);
+            c300x_media_sip_send_ok(fd, message);
             continue;
         }
         if (strncmp(message, "BYE ", 4) == 0 || strncmp(message, "CANCEL ", 7) == 0) {
-            send_sip_ok_response(fd, message);
+            c300x_media_sip_send_ok(fd, message);
             continue;
         }
 
@@ -4446,7 +4446,7 @@ static void *home_call_thread_func(void *arg) {
         pthread_mutex_unlock(&bridge->mutex);
         if (stop) {
             if (send_bye && invite_sent) {
-                send_home_call_cancel(fd, to_aor, from_aor, from_tag, call_id, invite_branch, local_ip, local_port, transport);
+                c300x_media_sip_send_cancel(fd, to_aor, from_aor, from_tag, call_id, invite_branch, local_ip, local_port, transport);
                 drain_home_call_stop_responses(fd, "CANCEL", true);
             }
             goto cleanup;
@@ -4461,11 +4461,11 @@ static void *home_call_thread_func(void *arg) {
             continue;
         }
         if (strncmp(message, "OPTIONS ", 8) == 0 || strncmp(message, "NOTIFY ", 7) == 0) {
-            send_sip_ok_response(fd, message);
+            c300x_media_sip_send_ok(fd, message);
             continue;
         }
         if (strncmp(message, "BYE ", 4) == 0 || strncmp(message, "CANCEL ", 7) == 0) {
-            send_sip_ok_response(fd, message);
+            c300x_media_sip_send_ok(fd, message);
             goto cleanup;
         }
         int status = c300x_media_sip_status_code(message);
@@ -4493,7 +4493,7 @@ static void *home_call_thread_func(void *arg) {
             c300x_video_bridge_set_error(bridge->video, "home_call_answer_srtp_failed");
             goto cleanup;
         }
-        send_sip_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, 21);
+        c300x_media_sip_send_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, 21);
         pthread_mutex_lock(&bridge->mutex);
         bridge->home_call_answered = true;
         bridge->home_call_target_audio_port = target_audio_port;
@@ -4514,7 +4514,7 @@ static void *home_call_thread_func(void *arg) {
 
     if (!answered) {
         if (invite_sent) {
-            send_home_call_cancel(fd, to_aor, from_aor, from_tag, call_id, invite_branch, local_ip, local_port, transport);
+            c300x_media_sip_send_cancel(fd, to_aor, from_aor, from_tag, call_id, invite_branch, local_ip, local_port, transport);
         }
         c300x_video_bridge_set_error(bridge->video, "home_call_answer_timeout");
         goto cleanup;
@@ -4530,7 +4530,7 @@ static void *home_call_thread_func(void *arg) {
         pthread_mutex_unlock(&bridge->mutex);
         if ((call_deadline > 0 && c300x_monotonic_ms() >= call_deadline) || stop) {
             if (send_bye || call_deadline > 0) {
-                send_sip_bye(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
+                c300x_media_sip_send_bye(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
                 drain_home_call_stop_responses(fd, "BYE", false);
             }
             break;
@@ -4554,11 +4554,11 @@ static void *home_call_thread_func(void *arg) {
                 }
                 if (n > 0 && strncmp(message, "\r\n\r\n", 4) != 0) {
                     if (strncmp(message, "BYE ", 4) == 0 || strncmp(message, "CANCEL ", 7) == 0) {
-                        send_sip_ok_response(fd, message);
+                        c300x_media_sip_send_ok(fd, message);
                         break;
                     }
                     if (strncmp(message, "OPTIONS ", 8) == 0 || strncmp(message, "NOTIFY ", 7) == 0) {
-                        send_sip_ok_response(fd, message);
+                        c300x_media_sip_send_ok(fd, message);
                     }
                 }
             }
@@ -4979,7 +4979,7 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     char to_aor[256];
     char local_ip[64];
     char transport[4];
-    uint16_t local_port = DEFAULT_SIP_PORT;
+    uint16_t local_port = C300X_MEDIA_SIP_DEFAULT_PORT;
     char call_id[128];
     char from_tag[64];
     char to_header[512];
@@ -5079,7 +5079,7 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     }
 
     if (sip_fd >= 0) {
-        send_sip_bye(sip_fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
+        c300x_media_sip_send_bye(sip_fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
         shutdown(sip_fd, SHUT_RDWR);
     }
     if (sip_monitor_started && !pthread_equal(sip_thread, pthread_self())) {

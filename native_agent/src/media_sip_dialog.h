@@ -3,13 +3,13 @@
 
 #include <stdint.h>
 
-#define DEFAULT_SIP_PORT 5060
-#define MEDIA_SIP_USER_AGENT "VctLinphoneService/1.17.3"
+#define C300X_MEDIA_SIP_DEFAULT_PORT 5060
+#define C300X_MEDIA_SIP_USER_AGENT "VctLinphoneService/1.17.3"
 
 /* Internal, stateless dialog messages. Strings and fd are borrowed for the
  * call only. The bridge decides when to send and owns dialog/session state,
  * locking, response reads and socket shutdown. No retained state or workers. */
-void send_sip_ack(
+void c300x_media_sip_send_ack(
     int fd,
     const char *from_aor,
     const char *to_aor,
@@ -23,16 +23,16 @@ void send_sip_ack(
     int cseq
 );
 
-void send_sip_ok_response(int fd, const char *message);
+void c300x_media_sip_send_ok(int fd, const char *message);
 
-void send_ring_bye(
+void c300x_media_sip_send_ring_bye(
     int fd,
     const char *invite,
     const char *to_tag,
     const char *remote_contact_uri
 );
 
-void send_sip_bye(
+void c300x_media_sip_send_bye(
     int fd,
     const char *from_aor,
     const char *to_aor,
@@ -45,7 +45,7 @@ void send_sip_bye(
     const char *contact_uri
 );
 
-void send_home_call_cancel(
+void c300x_media_sip_send_cancel(
     int fd,
     const char *to_aor,
     const char *from_aor,

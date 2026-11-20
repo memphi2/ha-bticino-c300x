@@ -358,7 +358,7 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert '"m=audio %d RTP/SAVP %s\\r\\n"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
     assert '"a=nortpproxy:yes\\r\\n"' in setup_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in setup_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"' in setup_body
     assert '"Contact: <sip:%s;transport=%s>' in setup_body
     assert "MEDIA_AUDIO_RTP_PORT 26986" in media_bridge
     assert "MEDIA_AUDIO_RTCP_PORT 26987" in media_bridge

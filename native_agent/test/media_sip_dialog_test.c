@@ -35,7 +35,7 @@ static void empty(int fd)
 
 static void requests(int *fds)
 {
-    send_sip_ack(fds[0], "local@example.test", "door@example.test", "127.0.0.1", 5060,
+    c300x_media_sip_send_ack(fds[0], "local@example.test", "door@example.test", "127.0.0.1", 5060,
         "TCP", "<sip:door@example.test>;tag=remote", "local-tag", "call-id",
         "sip:contact@example.test:5070", 21);
     expect(fds[1], "ACK sip:contact@example.test:5070 SIP/2.0\r\n"
@@ -43,17 +43,17 @@ static void requests(int *fds)
         "Max-Forwards: 70\r\nTo: <sip:door@example.test>;tag=remote\r\n"
         "From: <sip:local@example.test>;tag=local-tag\r\nCall-ID: call-id\r\nCSeq: 21 ACK\r\n"
         "User-Agent: VctLinphoneService/1.17.3\r\nContent-Length: 0\r\n\r\n");
-    send_sip_ack(fds[0], "a", "b", "127.0.0.1", 5061, "UDP", "to", "tag", "id", NULL, 7);
+    c300x_media_sip_send_ack(fds[0], "a", "b", "127.0.0.1", 5061, "UDP", "to", "tag", "id", NULL, 7);
     expect(fds[1], "ACK sip:b SIP/2.0\r\n"
         "Via: SIP/2.0/UDP 127.0.0.1:5061;branch=z9hG4bKack1700000000;rport\r\n"
         "Max-Forwards: 70\r\nTo: to\r\nFrom: <sip:a>;tag=tag\r\nCall-ID: id\r\nCSeq: 7 ACK\r\n"
         "User-Agent: VctLinphoneService/1.17.3\r\nContent-Length: 0\r\n\r\n");
-    send_sip_bye(fds[0], "a", "b", "127.0.0.1", 5060, "TCP", "to", "tag", "id", "");
+    c300x_media_sip_send_bye(fds[0], "a", "b", "127.0.0.1", 5060, "TCP", "to", "tag", "id", "");
     expect(fds[1], "BYE sip:b SIP/2.0\r\n"
         "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKbye1700000000;rport\r\n"
         "Max-Forwards: 70\r\nTo: to\r\nFrom: <sip:a>;tag=tag\r\nCall-ID: id\r\nCSeq: 22 BYE\r\n"
         "User-Agent: VctLinphoneService/1.17.3\r\nContent-Length: 0\r\n\r\n");
-    send_home_call_cancel(fds[0], "b", "a", "tag", "id", "original-branch", "127.0.0.1", 5060, "TCP");
+    c300x_media_sip_send_cancel(fds[0], "b", "a", "tag", "id", "original-branch", "127.0.0.1", 5060, "TCP");
     expect(fds[1], "CANCEL sip:b SIP/2.0\r\n"
         "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=original-branch;rport\r\n"
         "Max-Forwards: 70\r\nTo: <sip:b>\r\nFrom: <sip:a>;tag=tag\r\n"
@@ -67,17 +67,17 @@ static const char invite[] = "INVITE sip:local@example.test SIP/2.0\r\n"
 
 static void replies(int *fds)
 {
-    send_sip_ok_response(fds[0], invite);
+    c300x_media_sip_send_ok(fds[0], invite);
     expect(fds[1], "SIP/2.0 200 OK\r\nVia: first\r\nvIa: second\r\n"
         "To: <sip:local@example.test>\r\nFrom: <sip:door@example.test>;tag=remote\r\n"
         "Call-ID: call-id\r\nCSeq: 20 INVITE\r\nContent-Length: 0\r\n\r\n");
-    send_ring_bye(fds[0], invite, "local-tag", "sip:remote-contact");
+    c300x_media_sip_send_ring_bye(fds[0], invite, "local-tag", "sip:remote-contact");
     expect(fds[1], "BYE sip:remote-contact SIP/2.0\r\n"
         "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKringbye1700000000;rport\r\n"
         "Max-Forwards: 70\r\nFrom: <sip:local@example.test>;tag=local-tag\r\n"
         "To: <sip:door@example.test>;tag=remote\r\nCall-ID: call-id\r\nCSeq: 111 BYE\r\n"
         "User-Agent: VctLinphoneService/1.17.3\r\nContent-Length: 0\r\n\r\n");
-    send_ring_bye(fds[0], invite, "local-tag", NULL);
+    c300x_media_sip_send_ring_bye(fds[0], invite, "local-tag", NULL);
     expect(fds[1], "BYE sip:c300x@127.0.0.1:5060 SIP/2.0\r\n"
         "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKringbye1700000000;rport\r\n"
         "Max-Forwards: 70\r\nFrom: <sip:local@example.test>;tag=local-tag\r\n"
@@ -87,15 +87,15 @@ static void replies(int *fds)
 
 static void rejected(int *fds)
 {
-    send_sip_ok_response(fds[0], "OPTIONS x SIP/2.0\r\nTo: x\r\n\r\n");
-    send_ring_bye(fds[0], "INVITE x SIP/2.0\r\n\r\n", "tag", NULL);
-    send_sip_ack(fds[0], "", "b", "ip", 5060, "TCP", "to", "tag", "id", NULL, 1);
-    send_sip_bye(fds[0], "a", "b", "ip", 5060, "TCP", "", "tag", "id", NULL);
-    send_home_call_cancel(fds[0], "b", "a", "tag", "id", "", "ip", 5060, "TCP");
+    c300x_media_sip_send_ok(fds[0], "OPTIONS x SIP/2.0\r\nTo: x\r\n\r\n");
+    c300x_media_sip_send_ring_bye(fds[0], "INVITE x SIP/2.0\r\n\r\n", "tag", NULL);
+    c300x_media_sip_send_ack(fds[0], "", "b", "ip", 5060, "TCP", "to", "tag", "id", NULL, 1);
+    c300x_media_sip_send_bye(fds[0], "a", "b", "ip", 5060, "TCP", "", "tag", "id", NULL);
+    c300x_media_sip_send_cancel(fds[0], "b", "a", "tag", "id", "", "ip", 5060, "TCP");
     char long_uri[2048];
     memset(long_uri, 'x', sizeof(long_uri) - 1);
     long_uri[sizeof(long_uri) - 1] = '\0';
-    send_sip_ack(fds[0], "a", "b", "ip", 5060, "TCP", "to", "tag", "id", long_uri, 1);
+    c300x_media_sip_send_ack(fds[0], "a", "b", "ip", 5060, "TCP", "to", "tag", "id", long_uri, 1);
     empty(fds[1]);
 }
 

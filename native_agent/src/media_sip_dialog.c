@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-void send_sip_ack(
+void c300x_media_sip_send_ack(
     int fd,
     const char *from_aor,
     const char *to_aor,
@@ -51,7 +51,7 @@ void send_sip_ack(
         "From: <sip:%s>;tag=%s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: %d ACK\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Content-Length: 0\r\n\r\n",
         request_uri,
         transport,
@@ -68,7 +68,7 @@ void send_sip_ack(
     (void)c300x_media_sip_send_all(fd, request, strlen(request));
 }
 
-void send_sip_ok_response(int fd, const char *message) {
+void c300x_media_sip_send_ok(int fd, const char *message) {
     char to[512];
     char from[512];
     char call_id[128];
@@ -108,7 +108,7 @@ void send_sip_ok_response(int fd, const char *message) {
     }
 }
 
-void send_ring_bye(
+void c300x_media_sip_send_ring_bye(
     int fd,
     const char *invite,
     const char *to_tag,
@@ -140,10 +140,10 @@ void send_ring_bye(
         "To: %s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: 111 BYE\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Content-Length: 0\r\n\r\n",
         request_uri,
-        DEFAULT_SIP_PORT,
+        C300X_MEDIA_SIP_DEFAULT_PORT,
         (long)time(NULL),
         tagged_to,
         from,
@@ -152,7 +152,7 @@ void send_ring_bye(
     (void)c300x_media_sip_send_all(fd, request, strlen(request));
 }
 
-void send_sip_bye(
+void c300x_media_sip_send_bye(
     int fd,
     const char *from_aor,
     const char *to_aor,
@@ -194,7 +194,7 @@ void send_sip_bye(
         "From: <sip:%s>;tag=%s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: 22 BYE\r\n"
-        "User-Agent: " MEDIA_SIP_USER_AGENT "\r\n"
+        "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Content-Length: 0\r\n\r\n",
         request_uri,
         transport,
@@ -209,7 +209,7 @@ void send_sip_bye(
     (void)c300x_media_sip_send_all(fd, request, strlen(request));
 }
 
-void send_home_call_cancel(
+void c300x_media_sip_send_cancel(
     int fd,
     const char *to_aor,
     const char *from_aor,

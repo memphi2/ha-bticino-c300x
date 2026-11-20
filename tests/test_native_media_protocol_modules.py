@@ -34,7 +34,7 @@ def test_media_protocol_contract(tmp_path, sanitize, module):
     ("rtsp_reader", {"c300x_media_rtsp_read"}, {
         "c300x_media_sip_content_length", "c300x_rtsp_wait_readable", "memcpy", "memmove", "recv", "strstr",
     }),
-    ("sip_dialog", {"send_sip_ack", "send_sip_ok_response", "send_ring_bye", "send_sip_bye", "send_home_call_cancel"}, {
+    ("sip_dialog", {"c300x_media_sip_send_ack", "c300x_media_sip_send_ok", "c300x_media_sip_send_ring_bye", "c300x_media_sip_send_bye", "c300x_media_sip_send_cancel"}, {
         "c300x_media_sip_send_all", "c300x_media_sip_header_value", "c300x_media_sip_append_headers",
         "c300x_media_sip_make_tagged_to", "c300x_appendf", "snprintf", "strlen", "time",
     }),

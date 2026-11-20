@@ -287,8 +287,8 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert '#include "time_util.h"' in media_bridge
     assert "static bool base64_encode(" not in media_bridge
     assert "static long long monotonic_ms" not in media_bridge
-    assert stop_body.index("send_sip_bye(") < stop_body.index("if (relay_started)")
-    assert stop_body.index("send_sip_bye(") < stop_body.index(
+    assert stop_body.index("c300x_media_sip_send_bye(") < stop_body.index("if (relay_started)")
+    assert stop_body.index("c300x_media_sip_send_bye(") < stop_body.index(
         "c300x_device_media_stop(g_bridge.config);"
     )
     assert "request_ring_answer_if_active" not in start_body
@@ -645,7 +645,7 @@ def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
         media_bridge.index("static void drain_home_call_stop_responses")
     ]
     dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
-    cancel_body = dialog[dialog.index("void send_home_call_cancel") :]
+    cancel_body = dialog[dialog.index("void c300x_media_sip_send_cancel") :]
     home_call_thread = media_bridge[
         media_bridge.index("static void *home_call_thread_func") :
         media_bridge.index("static void *rtp_relay_thread")
@@ -666,25 +666,25 @@ def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
     assert '"To: <sip:%s>\\r\\n"' in cancel_body
     assert '"From: <sip:%s>;tag=%s\\r\\n"' in cancel_body
     assert '"CSeq: 21 CANCEL\\r\\n"' in cancel_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT' not in cancel_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT' not in cancel_body
     assert "drain_home_call_stop_responses(fd, \"CANCEL\", true)" in ringing_loop
-    assert "send_home_call_cancel(" in ringing_loop
-    assert "send_sip_bye(" not in ringing_loop
-    assert "send_sip_bye(" in answered_loop
+    assert "c300x_media_sip_send_cancel(" in ringing_loop
+    assert "c300x_media_sip_send_bye(" not in ringing_loop
+    assert "c300x_media_sip_send_bye(" in answered_loop
     assert "drain_home_call_stop_responses(fd, \"BYE\", false)" in answered_loop
-    assert "send_home_call_cancel(" not in answered_loop
+    assert "c300x_media_sip_send_cancel(" not in answered_loop
 
 
 def test_native_agent_home_call_ack_and_bye_match_app_headers() -> None:
     media_bridge = _read_media_bridge()
     dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
     ack_body = dialog[
-        dialog.index("void send_sip_ack") :
-        dialog.index("void send_sip_ok_response")
+        dialog.index("void c300x_media_sip_send_ack") :
+        dialog.index("void c300x_media_sip_send_ok")
     ]
     bye_body = dialog[
-        dialog.index("void send_sip_bye") :
-        dialog.index("void send_home_call_cancel")
+        dialog.index("void c300x_media_sip_send_bye") :
+        dialog.index("void c300x_media_sip_send_cancel")
     ]
     stop_drain_body = media_bridge[
         media_bridge.index("static void drain_home_call_stop_responses") :
@@ -692,16 +692,16 @@ def test_native_agent_home_call_ack_and_bye_match_app_headers() -> None:
     ]
 
     assert '"CSeq: %d ACK\\r\\n"' in ack_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in ack_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"' in ack_body
     assert ack_body.index('"CSeq: %d ACK\\r\\n"') < ack_body.index(
-        '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"'
+        '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"'
     )
 
     assert '"BYE %s SIP/2.0\\r\\n"' in bye_body
     assert '"CSeq: 22 BYE\\r\\n"' in bye_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in bye_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"' in bye_body
     assert bye_body.index('"CSeq: 22 BYE\\r\\n"') < bye_body.index(
-        '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"'
+        '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"'
     )
 
     assert 'strcmp(cseq_method, stop_method) == 0' in stop_drain_body
@@ -737,7 +737,7 @@ def test_native_agent_home_call_emits_authoritative_state_events() -> None:
         in media_bridge
     )
     assert "strncmp(message, \"BYE \", 4) == 0" in home_call_thread
-    assert "send_sip_ok_response(fd, message)" in home_call_thread
+    assert "c300x_media_sip_send_ok(fd, message)" in home_call_thread
     assert "typedef void (*c300x_video_event_callback)" in video_header
     assert "int event_read_fd;" in video
     assert "struct c300x_video_event pending_events" in video

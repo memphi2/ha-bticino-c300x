@@ -1461,14 +1461,15 @@ def test_a_busy_agent_is_given_up_on_after_the_wait(monkeypatch) -> None:
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(_maintenance_api(session).async_device_user_status())
     # A read waits as long as a job may take, with a pause before every new try.
-    assert sum(pauses) == 12.0 and len(session.requests) == len(pauses) == 12
+    assert sum(pauses) == 12.0 and len(pauses) == 12 and len(session.requests) == 13
 
     pauses.clear()
     session = _QueuedSession([_BUSY] * 40)
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(_maintenance_api(session).async_set_ssh_enabled(True))
-    # An action holds its platform meanwhile and gives up sooner.
-    assert sum(pauses) == 3.0 and len(session.requests) == 3
+    # An action holds its platform meanwhile and gives up sooner; the last try
+    # comes when the three seconds are over.
+    assert sum(pauses) == 3.0 and len(session.requests) == 4
 
 
 def test_a_caller_that_waits_itself_is_not_made_to_wait_twice(monkeypatch) -> None:
@@ -1480,7 +1481,7 @@ def test_a_caller_that_waits_itself_is_not_made_to_wait_twice(monkeypatch) -> No
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(agent_update.async_retry_update_maintenance_busy(
             lambda: api.async_set_ssh_enabled(True)))
-    assert sum(pauses) == 12.0 and len(session.requests) == 12
+    assert sum(pauses) == 12.0 and len(session.requests) == 13
 
 
 def test_other_refusals_are_not_repeated() -> None:

@@ -285,11 +285,11 @@ async def async_retry_update_maintenance_busy(
     if _BUSY_WAIT_ACTIVE.get():
         # A caller further out waits already; one wait, not one inside another.
         return await action()
-    token = _BUSY_WAIT_ACTIVE.set(True)
+    _BUSY_WAIT_ACTIVE.set(True)
     try:
         return await _async_wait_out_busy(action, wait_seconds)
     finally:
-        _BUSY_WAIT_ACTIVE.reset(token)
+        _BUSY_WAIT_ACTIVE.set(False)
 
 
 async def _async_wait_out_busy(
@@ -311,9 +311,8 @@ async def _async_wait_out_busy(
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise
+            # The last try comes at the end of the wait, not a pause before it.
             await asyncio.sleep(min(1.0, remaining))
-            if monotonic() >= deadline:
-                raise
 
 
 async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) -> None:

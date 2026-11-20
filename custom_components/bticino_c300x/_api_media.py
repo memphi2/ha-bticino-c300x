@@ -21,6 +21,10 @@ from .api_errors import (
     C300XAgentApiConnectionError,
 )
 
+# A write that restarts the device is answered after the agent started SSH,
+# which it gives up to 60 s.
+_RESTART_WRITE_TIMEOUT = 75.0
+
 
 class _ApiMediaMixin(_C300XApiCore):
     """Doorbell video, ring/home calls and audio-codec endpoints."""
@@ -192,6 +196,7 @@ class _ApiMediaMixin(_C300XApiCore):
                     if changes else None
                 ),
                 extra_headers=self._maintenance_headers(),
+                request_timeout=max(self._timeout, _RESTART_WRITE_TIMEOUT) if changes else None,
             ),
         )
 
@@ -217,6 +222,7 @@ class _ApiMediaMixin(_C300XApiCore):
                 "/api/v1/maintenance/audio-codec/actions/apply",
                 json_data={"confirm": "apply_audio_codec_patch", "reboot": reboot},
                 extra_headers=self._maintenance_headers(),
+                request_timeout=max(self._timeout, _RESTART_WRITE_TIMEOUT),
             ),
         )
 
@@ -230,5 +236,6 @@ class _ApiMediaMixin(_C300XApiCore):
                 "/api/v1/maintenance/audio-codec/actions/restore",
                 json_data={"confirm": "restore_audio_codec_patch", "reboot": reboot},
                 extra_headers=self._maintenance_headers(),
+                request_timeout=max(self._timeout, _RESTART_WRITE_TIMEOUT),
             ),
         )

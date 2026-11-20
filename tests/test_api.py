@@ -3914,3 +3914,14 @@ def test_a_device_without_sip_domain_is_reported_as_not_registered(body, unregis
     with pytest.raises(C300XAgentApiConnectionError) as raised:
         api._raise_for_agent_status(500, body, "/api/v1/maintenance/device-user/actions/ensure-homeassistant")
     assert isinstance(raised.value, C300XDeviceNotRegisteredError) is unregistered
+
+
+def test_writes_that_restart_the_device_wait_for_the_ssh_start_before_it() -> None:
+    # The agent starts SSH first and gives that up to 60 s; the write succeeded meanwhile.
+    api, session = _audio_codec_api('{"ok": true, "supported": true}')
+    asyncio.run(api.async_camera_quality())
+    asyncio.run(api.async_camera_quality(fps=20))
+    asyncio.run(api.async_apply_audio_codec())
+    asyncio.run(api.async_restore_audio_codec())
+    timeouts = [request["kwargs"]["timeout"] for request in session.requests]
+    assert timeouts[0] < 60 and timeouts[1:] == [75.0, 75.0, 75.0]

@@ -764,6 +764,18 @@
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
         }
       },
+      "camera_quality": {
+        "title": "Kameraqualität",
+        "description": "Bitrate und Bildrate des hochauflösenden Kamerastreams, den Home Assistant empfängt. Die C300X liest sie nur beim Start: Das Speichern einer Änderung startet das Gerät einmal neu, das dauert etwa eine Minute. Der niedrig aufgelöste Stream der Door-Entry-App bleibt unverändert.\n\nDas Gerät läuft gerade mit: {running}",
+        "data": {
+          "bitrate_kbps": "Bitrate",
+          "fps": "Bildrate"
+        },
+        "data_description": {
+          "bitrate_kbps": "Standard 800 kbit/s. Mehr ergibt ein schärferes Bild und braucht mehr Netzwerk.",
+          "fps": "Standard 15 Bilder pro Sekunde; höchstens 25, die Rate der Kamera."
+        }
+      },
       "device_activations": {
         "title": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
         "description": "Zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
@@ -827,6 +839,7 @@
           "connection": "Verbindung zum C300X",
           "features": "Video und Audio",
           "visitor_snapshot": "Besucher-Snapshot",
+          "camera_quality": "Kameraqualität",
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
           "display": "Display",
           "done": "Fertig"
@@ -835,6 +848,7 @@
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
+          "camera_quality": "Bitrate und Bildrate des Kamerastreams; eine Änderung startet das Gerät neu.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "display": "Display-Patch, Seiten, Kacheln und Alarmo.",
           "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
@@ -1109,7 +1123,9 @@
       "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
       "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
       "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
-      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut."
+      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
+      "camera_quality_failed": "Die C300X hat die Werte nicht gespeichert. Prüfe die Verbindung und versuche es erneut.",
+      "camera_quality_unsupported": "Diese C300X bietet die Einstellung der Kameraqualität nicht an."
     }
   },
   "entity": {
@@ -1224,12 +1240,6 @@
       }
     },
     "number": {
-      "camera_bitrate": {
-        "name": "Kamera-Bitrate"
-      },
-      "camera_frame_rate": {
-        "name": "Kamera-Bildrate"
-      },
       "ringer_volume": {
         "name": "Klingel-Lautstärke"
       }

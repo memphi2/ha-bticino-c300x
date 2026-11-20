@@ -12,7 +12,6 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import C300XAgentApiError
-from .capabilities import entry_maintenance_action_is_advertised
 from .const import EVENT_AGENT_EVENT_RECEIVED, SIGNAL_SETTING_STATE
 from .entity import C300XEntity
 from .entity import (
@@ -20,7 +19,6 @@ from .entity import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
-from .number_camera_quality import camera_quality_numbers
 from .value_parsing import ringer_volume as _coerce_active_ringer_volume
 
 if TYPE_CHECKING:
@@ -42,8 +40,6 @@ async def async_setup_entry(
     entities: list[NumberEntity] = []
     if _supports_ringer_volume(entry):
         entities.append(C300XRingerVolumeNumber(entry))
-    if entry_maintenance_action_is_advertised(entry, "camera_quality"):
-        entities.extend(camera_quality_numbers(entry))
     if entities:
         await _async_refresh_initial_states(entities)
         async_add_entities(entities)

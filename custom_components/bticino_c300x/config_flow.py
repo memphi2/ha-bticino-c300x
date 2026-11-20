@@ -48,6 +48,7 @@ from .config_flow_activations import (
 )
 from .config_flow_alarm import alarm_step as _alarm_step
 from .config_flow_alarm import alarm_values as _alarm_values
+from .config_flow_camera_quality import CameraQualityOptionsStep
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -1393,7 +1394,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
 
 class BticinoC300XOptionsFlow(
-    SnapshotOptionsStep, DisplayMenuSteps, OptionsMenuSteps, config_entries.OptionsFlow,
+    SnapshotOptionsStep, CameraQualityOptionsStep, DisplayMenuSteps, OptionsMenuSteps,
+    config_entries.OptionsFlow,
 ):
     """Handle C300X options.
 

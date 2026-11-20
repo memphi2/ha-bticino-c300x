@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .config_audio import audio_gain_db_or_default
+from .config_flow_camera_quality import camera_quality_offered
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -469,7 +470,9 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     saved = current_feature_options(config_entry)
     menu = ["connection", "features"]
     if saved[CONF_VIDEO_ENABLED]:
-        # Visitor images exist only with video.
+        # Visitor images and the stream quality exist only with video.
         menu.append("visitor_snapshot")
+        if camera_quality_offered(config_entry):
+            menu.append("camera_quality")
     menu += ["device_activations", "display"]
     return menu

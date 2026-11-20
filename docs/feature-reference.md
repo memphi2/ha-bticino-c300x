@@ -50,6 +50,7 @@ one-time SSH installation remains a separate explicit step.
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
 | Video and audio | Door station video and audio, video and audio access on the C300X, live audio level, volume of ring recordings, connection paths for the live picture, talking through the HA camera view. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
 | Visitor Snapshot | Image width and height (688x480), delay (3 s), retention (14 days), date and time in the image (on). Offered only with video on. | No. |
+| Camera quality | Bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–25 fps, 15 from the factory) of the high-resolution camera stream. The form shows the values saved on the device and the ones it runs with. Offered only in the settings, with video on, and not on firmware 3.0.x. | Yes: saving a change writes both values in one step and restarts the device once, like the audio codec switch. The values stay on the device, not in Home Assistant. |
 | Activations: locks, lights, stair light | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
 | Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | No. Stored in Home Assistant; the display asks for it. |
 | Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. | Yes, only when the Display patch is applied/restored. |
@@ -857,7 +858,6 @@ feature, the matching entity is not created.
 | `switch` | Save images | Automatic visitor images on or off (on by default). |
 | `switch` | Touch tone | The display's touch-sound setting. |
 | `select` | Camera resolution | High (688×480) or low (400×288) camera stream, from the next stream on; high by default. Not offered on firmware 3.0.x, which is fixed to low. |
-| `number` | Camera bit rate, Camera frame rate | Bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–25 fps, 15 from the factory) of the high-resolution camera stream. Like the audio codec select, a new value is saved on the device, which restarts to use it; the number shows the running value, and `pending_value` / `restart_required` show a saved one the device does not run yet. Not offered on firmware 3.0.x. |
 | `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |

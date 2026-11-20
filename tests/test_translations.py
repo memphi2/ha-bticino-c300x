@@ -368,7 +368,10 @@ def test_options_menu_names_and_explains_every_area() -> None:
     """Each entry of the settings menu and of its Display submenu has a label and a line."""
 
     menus = {
-        "init": {"features", "visitor_snapshot", "device_activations", "connection", "display", "done"},
+        "init": {
+            "features", "visitor_snapshot", "camera_quality", "device_activations", "connection",
+            "display", "done",
+        },
         "display": {
             "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm", "init",
         },

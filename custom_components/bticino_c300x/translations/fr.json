@@ -764,6 +764,18 @@
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
         }
       },
+      "camera_quality": {
+        "title": "Qualité de la caméra",
+        "description": "Débit et fréquence d'images du flux caméra haute résolution que reçoit Home Assistant. Le C300X ne les lit qu'au démarrage : enregistrer une modification redémarre l'appareil une fois, ce qui prend environ une minute. Le flux basse résolution de l'application Door Entry n'est pas modifié.\n\nL'appareil fonctionne actuellement avec : {running}",
+        "data": {
+          "bitrate_kbps": "Débit",
+          "fps": "Fréquence d'images"
+        },
+        "data_description": {
+          "bitrate_kbps": "800 kbit/s par défaut. Plus donne une image plus nette et utilise plus de réseau.",
+          "fps": "15 images par seconde par défaut ; au plus 25, la fréquence de la caméra."
+        }
+      },
       "device_activations": {
         "title": "Activations : serrures, lumières, éclairage d'escalier",
         "description": "Activations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
@@ -827,6 +839,7 @@
           "connection": "Connexion au C300X",
           "features": "Vidéo et audio",
           "visitor_snapshot": "Instantané visiteur",
+          "camera_quality": "Qualité de la caméra",
           "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
           "display": "Écran",
           "done": "Terminé"
@@ -835,6 +848,7 @@
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
+          "camera_quality": "Débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
           "display": "Patch display, pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."
@@ -1109,7 +1123,9 @@
       "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
       "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
-      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez."
+      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
+      "camera_quality_failed": "Le C300X n'a pas enregistré les valeurs. Vérifiez la connexion et réessayez.",
+      "camera_quality_unsupported": "Ce C300X ne propose pas le réglage de la qualité de la caméra."
     }
   },
   "entity": {
@@ -1224,12 +1240,6 @@
       }
     },
     "number": {
-      "camera_bitrate": {
-        "name": "Débit vidéo de la caméra"
-      },
-      "camera_frame_rate": {
-        "name": "Fréquence d'images de la caméra"
-      },
       "ringer_volume": {
         "name": "Volume sonnerie"
       }

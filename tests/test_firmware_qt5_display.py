@@ -96,11 +96,11 @@ def test_the_agent_offers_no_display_patch_on_a_qt5_display(config_probe):
 
 
 def test_the_agent_skips_the_display_label_only_on_a_qt5_display():
+    # tests/test_native_device_user_routes.py runs both routes on a Qt 5 display.
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
-    assert "if (!c300x_device_display_is_qt5()) {" in http
-    # Nor does it ask the Display patch for the label status there.
-    assert "&& !c300x_device_display_is_qt5()\n        && access(config->maintenance_qml_patch_script, X_OK) == 0" in http
-    assert "skins/default" not in http
+    routes = (NATIVE / "src/http_device_user.c").read_text(encoding="utf-8")
+    assert routes.count("c300x_device_display_is_qt5()") == 2
+    assert "skins/default" not in http + routes
     assert "skins/default" not in (NATIVE / "src/config.c").read_text(encoding="utf-8")
 
 

@@ -63,6 +63,11 @@ int c300x_device_user_read_status(struct c300x_device_user_status *status)
     return 1;
 }
 
+int c300x_device_display_is_qt5(void)
+{
+    return strcmp(test_case, "qt5") == 0;
+}
+
 int c300x_device_routing_read_status(struct c300x_device_routing_status *status)
 {
     memset(status, 0, sizeof(*status));
@@ -159,6 +164,7 @@ int main(int argc, char **argv)
         return 0;
     }
     int asynchronous = c300x_http_maintenance_busy(&owner);
+    assert(strcmp(test_case, "qt5") != 0 || !asynchronous);
     if (asynchronous) {
         assert(responses == 0 && owner.client_fd == 1234);
         assert(owner.job.capture_size == 4096);
@@ -203,6 +209,7 @@ int main(int argc, char **argv)
         assert(strstr(response_body, "\"status_available\":true") != NULL);
         assert(strstr(response_body, "\"account_label\":\"A \\\"quoted\\\" label\"") != NULL);
     } else if (strcmp(test_case, "success") == 0 || strcmp(test_case, "overflow") == 0
+        || (strcmp(test_case, "qt5") == 0 && strcmp(operation, "ensure") == 0)
         || (strcmp(test_case, "missing") == 0 && strcmp(operation, "restore") == 0)) {
         assert(response_status == 200 && writes == 1 && reads == 1);
         assert(strcmp(write_reason, strcmp(operation, "restore") == 0

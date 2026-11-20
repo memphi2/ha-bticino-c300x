@@ -387,6 +387,8 @@ test("the time of a video is written like the time in an image and has no plate"
   assert.equal(mediaStamp({ config: { time_zone: "Europe/Berlin" } }, Date.UTC(2026, 10, 20, 18, 0, 15) / 1000), "2026-11-20 19:00:15");
   assert.equal(mediaStamp({ config: { time_zone: "UTC" } }, Date.UTC(2026, 0, 2, 0, 4, 5) / 1000), "2026-01-02 00:04:05");
   assert.match(mediaStamp({ config: { time_zone: "No/Zone" } }, 10), /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
+  // A time that is no date gives no text and does not stop the card.
+  for (const at of [NaN, undefined, 1e16]) assert.equal(mediaStamp({}, at), "");
   const template = readFileSync(new URL("../../custom_components/bticino_c300x/frontend/c300x-media-controls-template.js", import.meta.url), "utf8");
   const stage = template.slice(template.indexOf('<div class="stage">'), template.indexOf('<div class="toolbar"'));
   assert.match(stage, /<time class="stamp" hidden>/);

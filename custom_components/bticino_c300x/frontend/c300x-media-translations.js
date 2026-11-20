@@ -46,6 +46,7 @@ export function mediaStamp(hass, at) {
   const date = new Date(at * 1000), options = { hourCycle: "h23", year: "numeric", month: "2-digit",
     day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" };
   let parts;
+  if (!Number.isFinite(date.getTime())) return "";
   try { parts = new Intl.DateTimeFormat("en-CA", { ...options, timeZone: hass?.config?.time_zone }).formatToParts(date); }
   catch { parts = new Intl.DateTimeFormat("en-CA", options).formatToParts(date); }
   const part = Object.fromEntries(parts.map(({ type, value }) => [type, value]));

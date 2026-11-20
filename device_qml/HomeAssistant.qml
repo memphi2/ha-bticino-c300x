@@ -1137,7 +1137,7 @@ Page {
 
                 C300XOptionalPages {
                     width: parent.width
-                    height: visible ? Math.max(0, scroll.height - 20) : 0
+                    height: energyVisible || agendaVisible || leaveHomeVisible || situationsVisible ? Math.max(0, scroll.height - 20) : 0
                     visible: energyVisible || agendaVisible || leaveHomeVisible || situationsVisible
                     energyVisible: page.energyVisible
                     agendaVisible: page.agendaVisible

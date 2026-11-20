@@ -38,3 +38,11 @@ assert.match(host, /when: situationsLoader.status === Loader.Ready/);
 assert.match(host, /onActionRequested: root.actionRequested\(item\)/);
 assert.match(host, /onAlarmRequested: root.alarmRequested\(\)/);
 assert.doesNotMatch(host, /QtQuick 2|property var |Component\.onCompleted|wake|activateTab/);
+
+// The host keeps its height while a notification list or the More list covers
+// the page. Tied to its effective visibility it collapsed to 0 and back, and
+// the energy chart was laid out twice for every open and close.
+const pageSource = fs.readFileSync(path.join(root, "HomeAssistant.qml"), "utf8");
+assert.ok(pageSource.includes(
+    "height: energyVisible || agendaVisible || leaveHomeVisible || situationsVisible ? Math.max(0, scroll.height - 20) : 0"));
+assert.ok(!/C300XOptionalPages \{[^}]*height: visible \?/.test(pageSource));

@@ -525,6 +525,7 @@ def _dashboard_item_for_state(
         # does not count as a change of the display.
         return {
             "name": name,
+            "caption": name,
             "_image_entity": entity_id,
             "_image_revision": image_tile_revision(entity_id, state),
             "_kind": "image",

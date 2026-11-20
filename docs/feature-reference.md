@@ -377,7 +377,8 @@ width can be set to half, so two pictures stand side by side, and the height to
 120 px (half) or 290 px (full). Home Assistant scales the picture down to that
 size before the display loads it, so a full camera frame never reaches the
 device. The picture is a still, not a stream: an image entity is reloaded when
-it has a new picture, a camera about every five minutes. A tap does nothing.
+it has a new picture, a camera about every five minutes. The entity's name is
+written along the bottom edge of the picture. A tap does nothing.
 
 The display loads the picture straight from Home Assistant, at the address the
 device already uses for it. That address is signed with the entry's secret and
@@ -387,7 +388,12 @@ load that scaled picture. The address does not expire; it stops working when
 the entity leaves the display pages or the display feature is switched off.
 The picture keeps its proportions, so a wide tile shows a 16:9 camera with
 empty space left and right; the half width fits it closely. A camera or image
-entity that is unavailable has no tile until it is back. Picture tiles are not offered for the Alarm page.
+entity that is unavailable has no tile until it is back. If a picture cannot
+be read once, the tile stays empty until the next picture.
+
+Picture tiles need a plain `http://` address of Home Assistant for the device:
+the display cannot open `https://` addresses. With an HTTPS callback address
+the tiles are left out. Picture tiles are not offered for the Alarm page.
 
 ## Display Settings
 

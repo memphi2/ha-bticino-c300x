@@ -13,8 +13,9 @@
   by default, with its own position among the pages (1 to 12).
 - Camera and image entities can be placed on the display pages as picture
   tiles, full or half width. Home Assistant scales the picture down to the tile
-  before the display loads it. A still, not a stream: reloaded when the image entity changes, for
-  a camera about every five minutes.
+  before the display loads it. A still, not a stream: reloaded when the image
+  entity changes, for a camera about every five minutes. Needs a plain
+  `http://` address of Home Assistant for the device.
 - The energy page loads again on the display. 2.6.0 shipped a display file
   the device could not read, so the page stayed empty.
 - The display-pages form reads like the display: the shown pages come first,

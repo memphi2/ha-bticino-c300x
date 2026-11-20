@@ -65,10 +65,15 @@ class TileImageUnavailable(Exception):
 
 
 def image_tile_base_url(callback_url: str) -> str:
-    """Return scheme and host of the address the device reaches Home Assistant at."""
+    """Return scheme and host of the address the display can load pictures from.
+
+    Only plain HTTP: the Qt of the device is built without SSL, so its display
+    cannot open an https address. (The agent can, but pictures do not pass
+    through it.) With an https callback there are no picture tiles.
+    """
 
     parts = urlsplit(str(callback_url or ""))
-    if parts.scheme not in ("http", "https") or not parts.netloc:
+    if parts.scheme != "http" or not parts.netloc:
         return ""
     return f"{parts.scheme}://{parts.netloc}"
 
@@ -101,11 +106,11 @@ def image_tile_revision(entity_id: str, state: Any) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:10]
 
 
-def _signature(entry: Any, entity_id: str, width: int, height: int) -> str:
+def _signature(entry: Any, entity_id: str, width: int, height: int, revision: str) -> str:
     secret = str(entry.data.get(CONF_SHARED_SECRET) or "")
     if not secret:
         return ""
-    message = f"tile-image\n{entry.entry_id}\n{entity_id}\n{width}\n{height}".encode()
+    message = f"tile-image\n{entry.entry_id}\n{entity_id}\n{width}\n{height}\n{revision}".encode()
     return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()[:32]
 
 
@@ -119,13 +124,14 @@ def image_tile_source(entry: Any, entity_id: str, state: Any, layout: dict[str, 
     base = str(getattr(getattr(entry, "runtime_data", None), "display_image_base_url", "") or "")
     width = image_tile_width(layout)
     height = image_tile_height(layout)
-    signature = _signature(entry, entity_id, width, height)
+    revision = image_tile_revision(entity_id, state)
+    signature = _signature(entry, entity_id, width, height, revision)
     if not base or not signature:
         return None
     return {
         "source": (
             f"{base}/api/{DOMAIN}/tile_image/{quote(entry.entry_id, safe='')}/{entity_id}"
-            f"?w={width}&h={height}&rev={image_tile_revision(entity_id, state)}&sig={signature}"
+            f"?w={width}&h={height}&rev={revision}&sig={signature}"
         ),
         "width": width,
         "height": height,
@@ -135,18 +141,22 @@ def image_tile_source(entry: Any, entity_id: str, state: Any, layout: dict[str, 
 def scaled_jpeg(content: bytes, width: int, height: int) -> bytes:
     """Scale a picture down to fit the tile and return it as JPEG. Never scales up."""
 
-    from PIL import Image, ImageOps, UnidentifiedImageError
+    from PIL import Image, ImageOps
 
     try:
         with Image.open(io.BytesIO(content), formats=_SOURCE_FORMATS) as image:
             if image.width * image.height > _SOURCE_LIMIT_PIXELS:
                 raise ValueError("picture has too many pixels")
             image.draft("RGB", (width, height))
+            # Shrink first, inside a square that still covers the tile after a
+            # rotation: turning and converting then copy a small picture.
+            side = max(width, height)
+            image.thumbnail((side, side))
             picture = ImageOps.exif_transpose(image).convert("RGB")
         picture.thumbnail((width, height))
         buffer = io.BytesIO()
         picture.save(buffer, "JPEG", quality=_JPEG_QUALITY)
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as err:
+    except Exception as err:  # noqa: BLE001 - decoders raise many types on damaged files
         raise ValueError("not a usable picture") from err
     return buffer.getvalue()
 
@@ -186,6 +196,17 @@ class C300XTileImageView(HomeAssistantView):
     name = f"api:{DOMAIN}:tile_image"
     requires_auth = False
 
+    @staticmethod
+    async def _async_picture(hass: Any, entity_id: str, width: int, height: int) -> bytes:
+        async with _SLOTS:
+            try:
+                content = await _async_source_image(hass, entity_id, width, height)
+                if len(content) > _SOURCE_LIMIT_BYTES:
+                    raise ValueError("picture too large")
+                return bytes(await hass.async_add_executor_job(scaled_jpeg, content, width, height))
+            except (TileImageUnavailable, ValueError) as err:
+                raise web.HTTPServiceUnavailable() from err
+
     async def get(self, request: web.Request, entry_id: str, entity_id: str) -> web.Response:
         from homeassistant.config_entries import ConfigEntryState
 
@@ -212,30 +233,32 @@ class C300XTileImageView(HomeAssistantView):
             or entity_id not in configured_dashboard_entities(entry)
         ):
             raise web.HTTPNotFound()
-        expected = _signature(entry, entity_id, width, height)
+        revision = str(request.query.get("rev", ""))
+        expected = _signature(entry, entity_id, width, height, revision) if revision.isascii() else ""
         if not expected or not hmac.compare_digest(expected.encode(), supplied.encode()):
             raise web.HTTPNotFound()
-        cache = hass.data.setdefault(_CACHE_KEY, {})
-        key = (entry_id, entity_id, width, height, str(request.query.get("rev", ""))[:16])
-        async with _SLOTS:
-            cached = cache.get(key)
-            if cached is not None and time.monotonic() - cached[0] < _CACHE_SECONDS:
-                body = cached[1]
-            else:
-                cache.pop(key, None)
-                try:
-                    content = await _async_source_image(hass, entity_id, width, height)
-                    if len(content) > _SOURCE_LIMIT_BYTES:
-                        raise ValueError("picture too large")
-                    body = await hass.async_add_executor_job(scaled_jpeg, content, width, height)
-                except (TileImageUnavailable, ValueError) as err:
-                    raise web.HTTPServiceUnavailable() from err
-                now = time.monotonic()
-                for old in [k for k, value in cache.items() if now - value[0] >= _CACHE_SECONDS]:
-                    del cache[old]
-                if len(cache) >= _CACHE_ENTRIES:
-                    cache.clear()
-                cache[key] = (now, body)
+        store = hass.data.setdefault(_CACHE_KEY, {"pictures": {}, "locks": {}})
+        cache, locks = store["pictures"], store["locks"]
+        key = (entry_id, entity_id, width, height, revision)
+        # One lock per address: requests that arrive together wait for the
+        # first one and take its picture instead of reading the camera again.
+        lock = locks.setdefault(key, asyncio.Lock())
+        try:
+            async with lock:
+                cached = cache.get(key)
+                if cached is not None and time.monotonic() - cached[0] < _CACHE_SECONDS:
+                    body = cached[1]
+                else:
+                    body = await self._async_picture(hass, entity_id, width, height)
+                    now = time.monotonic()
+                    for old in [k for k, value in cache.items() if now - value[0] >= _CACHE_SECONDS]:
+                        del cache[old]
+                    if len(cache) >= _CACHE_ENTRIES:
+                        cache.clear()
+                    cache[key] = (now, body)
+        finally:
+            if not lock.locked() and locks.get(key) is lock:
+                del locks[key]
         return web.Response(body=body, content_type="image/jpeg", headers={
             "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
         })

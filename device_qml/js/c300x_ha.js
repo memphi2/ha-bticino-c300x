@@ -1453,6 +1453,7 @@ function dashboardImages(source) {
         images.push({
             "kind": "image",
             "source": imageSource(source[i].source),
+            "caption": String(source[i].caption || ""),
             "width": positiveNumber(source[i].width, 220),
             "height": positiveNumber(source[i].height, 120)
         })

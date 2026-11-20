@@ -73,6 +73,12 @@ def test_a_camera_is_a_picture_tile_that_loads_a_scaled_image_from_home_assistan
     assert set(query) == {"w", "h", "rev", "sig"}
     assert (item["width"], item["height"], query["w"], query["h"]) == (728, 200, ["728"], ["200"])
     assert item["name"] == "Front door"
+    # The display writes the caption into the picture. Pictures of configured
+    # actions have none and stay as they were.
+    assert item["caption"] == "Front door"
+    root = Path(__file__).resolve().parents[1] / "device_qml"
+    assert '"caption": String(source[i].caption || "")' in (root / "js" / "c300x_ha.js").read_text(encoding="utf-8")
+    assert 'text: imageTile.tileItem.caption || ""' in (root / "HomeAssistant.qml").read_text(encoding="utf-8")
     # Nothing but the address tells the display that a new picture exists.
     assert "access_token" not in item["source"] and "tok-1" not in item["source"]
 
@@ -118,6 +124,8 @@ def test_without_a_known_address_the_tile_is_left_out():
     assert image_tile_base_url("http://192.0.2.10:8123/api/webhook/abc") == BASE
     assert image_tile_base_url("") == ""
     assert image_tile_base_url("ftp://host/x") == ""
+    # The display's Qt has no SSL: an https address would only give a blank tile.
+    assert image_tile_base_url("https://ha.example/api/webhook/abc") == ""
 
 
 def _jpeg(width, height, mode="RGB"):
@@ -138,6 +146,28 @@ def test_pictures_are_scaled_to_fit_the_tile_and_kept_small():
         assert image.size == (100, 50), "a small picture is not blown up"
     with pytest.raises(ValueError):
         scaled_jpeg(b"not a picture", 728, 200)
+
+
+def test_a_damaged_picture_is_refused_whatever_the_decoder_raises(monkeypatch):
+    import struct
+
+    from PIL import ImageOps
+
+    def broken(_image):
+        raise struct.error("unpack requires a buffer of 2 bytes")
+
+    monkeypatch.setattr(ImageOps, "exif_transpose", broken)
+    with pytest.raises(ValueError):
+        scaled_jpeg(_jpeg(64, 64), 728, 200)
+
+
+def test_a_picture_taken_sideways_is_turned_upright():
+    buffer = io.BytesIO()
+    exif = Image.Exif()
+    exif[0x0112] = 6
+    Image.new("RGB", (1600, 900), "navy").save(buffer, "JPEG", exif=exif)
+    with Image.open(io.BytesIO(scaled_jpeg(buffer.getvalue(), 728, 200))) as image:
+        assert image.height == 200 and image.width < image.height
 
 
 def _request(hass, source, **changes):
@@ -190,9 +220,26 @@ def test_the_view_serves_only_signed_addresses_of_configured_picture_entities(mo
     request, ids = _request(hass, source)
     asyncio.run(view.get(request, *ids))
     assert len(fetched) == 1
-    request, ids = _request(hass, source, rev="newer")
+    hass.states = SimpleNamespace(get={"camera.door": _camera("tok-2")}.get)
+    newer = next(item["source"] for item in _items(hass, entry) if item.get("kind") == "image")
+    assert newer != source
+    request, ids = _request(hass, newer)
     asyncio.run(view.get(request, *ids))
     assert len(fetched) == 2
+    # The revision is signed too: an address cannot be varied to force reads.
+    request, ids = _request(hass, source, rev="made-up")
+    with pytest.raises(web.HTTPNotFound):
+        asyncio.run(view.get(request, *ids))
+
+    async def together():
+        hass.data.clear()
+        first, ids = _request(hass, source)
+        second, _ = _request(hass, source)
+        await asyncio.gather(view.get(first, *ids), view.get(second, *ids))
+
+    asyncio.run(together())
+    assert len(fetched) == 3, "two requests at once read the camera once"
+    fetched.pop()
 
     # Switching the display feature off or unloading the entry ends the access.
     hass.data.clear()

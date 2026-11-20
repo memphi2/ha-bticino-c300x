@@ -1386,12 +1386,41 @@ Page {
                     Component {
                         id: mixedImageTileComponent
 
-                        Image {
+                        Item {
+                            id: imageTile
                             property variant tileItem: parent ? parent.tileItem : ({})
-                            cache: false
                             anchors.fill: parent
-                            source: tileItem.source || ""
-                            fillMode: Image.PreserveAspectFit
+                            Image {
+                                cache: false
+                                anchors.fill: parent
+                                source: imageTile.tileItem.source || ""
+                                fillMode: Image.PreserveAspectFit
+                            }
+                            Rectangle {
+                                visible: imageCaption.text !== ""
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 26
+                                color: "#000000"
+                                opacity: 0.55
+                            }
+                            UbuntuLightText {
+                                id: imageCaption
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                height: 26
+                                text: imageTile.tileItem.caption || ""
+                                textFormat: Text.PlainText
+                                color: "#ffffff"
+                                font.pixelSize: 16
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
                         }
                     }
 

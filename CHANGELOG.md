@@ -25,6 +25,15 @@ Display:
 - The energy tabs, the Leave home buttons, tiles that open details, the
   detail tabs and the on/off switch show that they are pressed.
 
+Settings:
+
+- The settings menu has one **Display** entry. It opens a menu with the
+  Display patch, the pages, the tiles and Alarmo.
+- **Display pages** is a list of the pages. A page opens a short form with
+  its own fields instead of one form with all pages.
+- The setup texts say access key and maintenance key throughout, as the
+  fields do.
+
 Fixed:
 
 - The camera card no longer stays on a call the device has lost. After an

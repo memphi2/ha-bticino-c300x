@@ -462,20 +462,23 @@ it, keeps the original tone control and restores the page on removal. Unknown
 page layouts or a missing backup of an already patched page abort the operation
 instead of replacing the original with a guessed version.
 
-Switch the Display patch on under **Configure > Display and Display patch**;
-the settings menu then offers **Display pages** and **Display tiles**. Choose the weather and the entities with the normal
-HA selectors; Alarmo is set under **Alarm (Alarmo)**;
+Everything about the display is under **Configure > Display**. Switch the
+Display patch on under **Display and Display patch**; the Display menu then
+offers **Display pages** and **Display tiles**. Choose the weather and the entities with the normal
+HA selectors; Alarmo is set under **Alarm (Alarmo)** in the same menu;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
-The pages dialog has five built-in pages (Status, Energy, Agenda, Leave home and
-Situations) and up to seven custom pages, one section each. The sections follow
-the display order. Titles show the page's number and name, for example
+**Display pages** is a list of the pages in display order: five built-in pages
+(Status, Energy, Agenda, Leave home and Situations) and up to seven custom
+pages. Pick a page to open a form with its fields only; saving returns to the
+list. Entries show the page's number and name, for example
 **Page 2: Living room**. A page the display does not show (switched off, or
-without entities) has no number and follows the shown pages; free custom
-sections, titled **Page +**, come last. Alarmo is not one of
-the pages: its Alarm page opens from the home page button and has an area of
-its own in the settings menu.
+without entities) has no number and follows the shown pages; **Add a page**
+comes last. The setup and the reconfigure dialog show the same pages in one
+form, one section each, with free sections titled **Page +**. Alarmo is not
+one of the pages: its Alarm page opens from the home page button and has an
+area of its own in the Display menu.
 
 | Field | Meaning |
 | --- | --- |

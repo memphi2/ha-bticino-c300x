@@ -199,8 +199,10 @@ class _OptionsAreas:
         result = {"type": "finished", "data": dict(self._entry.options)}
         if next_step_id is None:
             return result
-        menu = (await self._flow().async_step_init())["menu_options"]
-        if next_step_id not in menu:
+        # The whole pages form stands for the page list, which opens it page by page.
+        listed = {"dashboard_pages": "dashboard_page_list"}.get(next_step_id, next_step_id)
+        menu = (await self._flow().async_step_display())["menu_options"]
+        if listed not in menu:
             return result
         return await getattr(self._flow(), f"async_step_{next_step_id}")(None)
 

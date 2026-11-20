@@ -17,7 +17,9 @@ Path: `custom_components/bticino_c300x/`
 Responsibilities:
 
 - Config flow and options flow. The options flow is a settings menu: each area
-  saves when it is submitted and returns to the menu; Done closes it.
+  saves when it is submitted and returns to its menu; Done closes it. The
+  display areas are in a Display submenu, and the display pages are a list
+  that opens one page per form.
 - Capability-gated entities/services.
 - Authenticated API calls to the device agent.
 - Event webhook registration and event-state handling.

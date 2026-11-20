@@ -2475,10 +2475,15 @@ def _save_options_area(entry, result) -> None:
 
 
 def _options_menu_of(entry) -> list[str]:
+    """Return the areas of the settings menu, the Display submenu unfolded."""
+
     menu = asyncio.run(BticinoC300XOptionsFlow(entry).async_step_init())
     assert (menu["type"], menu["step_id"]) == ("menu", "init")
-    assert menu["menu_options"][-1] == "done"
-    return list(menu["menu_options"][:-1])
+    assert menu["menu_options"][-2:] == ["display", "done"]
+    display = asyncio.run(BticinoC300XOptionsFlow(entry).async_step_display())
+    assert (display["type"], display["step_id"]) == ("menu", "display")
+    assert display["menu_options"][-1] == "init"
+    return [*menu["menu_options"][:-2], *display["menu_options"][:-1]]
 
 
 def test_options_flow_returns_to_the_menu_after_saving_and_done_closes_it() -> None:
@@ -2587,7 +2592,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     )
     # Without the Display patch there are no pages or tiles to set up.
     assert _options_menu_of(entry) == [
-        "connection", "features", "device_activations", "dashboard_alarm", "dashboard",
+        "connection", "features", "device_activations", "dashboard", "dashboard_alarm",
     ]
 
     _flow, result = _options_area(entry, "connection", {
@@ -2640,7 +2645,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     # The patch is on: pages can be set up, and there are no tiles yet.
     assert _options_menu_of(entry) == [
         "connection", "features", "visitor_snapshot", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages",
+        "dashboard", "dashboard_page_list", "dashboard_alarm",
     ]
 
     # Video is on now, so the visitor image has an area of its own. It starts
@@ -2689,7 +2694,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _save_options_area(entry, result)
     assert _options_menu_of(entry) == [
         "connection", "features", "visitor_snapshot", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm",
     ]
     # The areas saved since then left the visitor image settings alone.
     assert {key: entry.options[key] for key in snapshot_settings} == snapshot_settings
@@ -3096,18 +3101,25 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
     menu = _options_menu_of(entry)
     assert menu == [
         "connection", "features", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm",
     ]
     for step_id in menu:
-        _flow, form = _options_area(entry, step_id)
+        flow, form = _options_area(entry, step_id)
         assert form["step_id"] == step_id
         assert not form.get("errors")
+        if step_id != "dashboard_page_list":
+            continue
+        # The page list is a menu; each of its entries opens the pages form.
+        for page in form["menu_options"][:-1]:
+            page_form = asyncio.run(getattr(flow, f"async_step_{page}")())
+            assert page_form["step_id"] == "dashboard_pages"
+            assert not page_form.get("errors")
 
     # Tiles need something to show: without an entity the menu leaves them out.
     entry.data[CONF_DASHBOARD_ENTITIES] = []
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages",
+        "dashboard", "dashboard_page_list", "dashboard_alarm",
     ]
 
 

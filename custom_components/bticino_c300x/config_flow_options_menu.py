@@ -18,7 +18,7 @@ from .entry_config import entry_config_value
 
 
 class OptionsMenuSteps:
-    """Store what an area saved, show the menu again, and close it on Done."""
+    """Store what an area saved, show its menu again, and close it on Done."""
 
     _unchanged_options: dict[str, Any] | None = None
     _connection_validated = False
@@ -90,7 +90,9 @@ class OptionsMenuSteps:
         flow._activation_edit_id = None
         flow._dashboard_options = {}
         flow._tile_form = None
-        return cast(ConfigFlowResult, await flow.async_step_init())
+        # An area opened from a submenu returns to that submenu.
+        back = getattr(flow, f"async_step_{getattr(flow, '_return_step', 'init')}")
+        return cast(ConfigFlowResult, await back())
 
     async def async_step_done(
         self: Any,

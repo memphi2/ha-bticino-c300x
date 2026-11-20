@@ -1430,6 +1430,7 @@ def test_requests_refused_for_a_running_maintenance_job_are_repeated(monkeypatch
         "ensure_user": lambda api: api.async_ensure_homeassistant_user(account_label="Home"),
         "ssh": lambda api: api.async_set_ssh_enabled(True),
         "camera_resolution": lambda api: api.async_camera_resolution(high_resolution=False),
+        "camera_quality": lambda api: api.async_camera_quality(fps=25),
         "qml_status": lambda api: api.async_qml_patch_status(),
     }
     for name, call in calls.items():
@@ -1772,6 +1773,22 @@ def test_restore_audio_codec_can_defer_reboot() -> None:
         "confirm": "restore_audio_codec_patch",
         "reboot": False,
     }
+
+
+def test_camera_quality_reads_without_a_body_and_saves_only_the_given_values() -> None:
+    api, session = _audio_codec_api('{"ok": true, "supported": true, "bitrate_kbps": 800, "fps": 25}')
+
+    assert asyncio.run(api.async_camera_quality())["fps"] == 25
+    asyncio.run(api.async_camera_quality(fps=25))
+    asyncio.run(api.async_camera_quality(bitrate_kbps=3000, fps=20))
+    url = "http://agent.local:8080/api/v1/maintenance/camera-quality"
+    assert [request["args"] for request in session.requests] == [("GET", url), ("POST", url), ("POST", url)]
+    assert session.requests[0]["kwargs"].get("json") is None
+    assert session.requests[1]["kwargs"]["json"] == {"confirm": "apply_camera_quality", "fps": 25}
+    assert session.requests[2]["kwargs"]["json"] == {
+        "confirm": "apply_camera_quality", "bitrate_kbps": 3000, "fps": 20}
+    for request in session.requests:
+        assert request["kwargs"]["headers"]["X-Bticino-C300X-Maintenance-Token"] == "maintenance-token"
 
 
 def test_ipv6_firewall_methods_use_separate_maintenance_endpoint() -> None:

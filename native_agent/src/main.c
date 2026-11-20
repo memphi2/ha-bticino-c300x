@@ -1,5 +1,6 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
+#include "camera_quality.h"
 #include "display_touch.h"
 #include "https_client.h"
 
@@ -186,6 +187,11 @@ int main(int argc, char **argv)
     if (restore_media_patches) {
         if (!c300x_audio_codec_remove_patches(error, sizeof(error))) {
             fprintf(stderr, "Failed to restore media patches: %s\n", error);
+            return 1;
+        }
+        const char *quality_error = "";
+        if (!c300x_camera_quality_remove_patches(&quality_error)) {
+            fprintf(stderr, "Failed to restore the camera quality: %s\n", quality_error);
             return 1;
         }
         return 0;

@@ -84,7 +84,7 @@ def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     capabilities = (NATIVE / "src/capabilities.c").read_text(encoding="utf-8")
     assert ".camera_resolution_fixed = c300x_device_display_is_qt5()," in http
-    assert '\\"camera_resolution\\":%s}' in capabilities
+    assert '\\"camera_resolution\\":%s,\\"camera_quality\\":%s}' in capabilities
     assert "config->video_enabled && !context->camera_resolution_fixed" in capabilities
 
 

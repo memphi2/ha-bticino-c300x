@@ -1224,6 +1224,12 @@
       }
     },
     "number": {
+      "camera_bitrate": {
+        "name": "Débit vidéo de la caméra"
+      },
+      "camera_frame_rate": {
+        "name": "Fréquence d'images de la caméra"
+      },
       "ringer_volume": {
         "name": "Volume sonnerie"
       }

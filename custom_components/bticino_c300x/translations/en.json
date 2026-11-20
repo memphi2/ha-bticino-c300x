@@ -1224,6 +1224,12 @@
       }
     },
     "number": {
+      "camera_bitrate": {
+        "name": "Camera bit rate"
+      },
+      "camera_frame_rate": {
+        "name": "Camera frame rate"
+      },
       "ringer_volume": {
         "name": "Ringer volume"
       }

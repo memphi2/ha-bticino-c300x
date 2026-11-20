@@ -1224,6 +1224,12 @@
       }
     },
     "number": {
+      "camera_bitrate": {
+        "name": "Kamera-Bitrate"
+      },
+      "camera_frame_rate": {
+        "name": "Kamera-Bildrate"
+      },
       "ringer_volume": {
         "name": "Klingel-Lautstärke"
       }

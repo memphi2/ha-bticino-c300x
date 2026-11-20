@@ -167,6 +167,29 @@ class _ApiMediaMixin(_C300XApiCore):
             ),
         )
 
+    async def async_camera_quality(
+        self, *, bitrate_kbps: int | None = None, fps: int | None = None
+    ) -> dict[str, Any]:
+        """Read bit rate and frame rate of the camera stream, or save new ones.
+
+        The device uses saved values after its next restart.
+        """
+
+        changes = {
+            key: value
+            for key, value in (("bitrate_kbps", bitrate_kbps), ("fps", fps))
+            if value is not None
+        }
+        return cast(
+            "dict[str, Any]",
+            await self._request_json(
+                "POST" if changes else "GET",
+                "/api/v1/maintenance/camera-quality",
+                json_data={"confirm": "apply_camera_quality", **changes} if changes else None,
+                extra_headers=self._maintenance_headers(),
+            ),
+        )
+
     async def async_audio_codec_status(self) -> dict[str, Any]:
         """Return the device audio-codec state (speex|pcmu|partial)."""
 

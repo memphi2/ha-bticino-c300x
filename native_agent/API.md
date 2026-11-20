@@ -252,6 +252,8 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore` | maintenance | Restores full display QML patch. |
 | `GET` | `/api/v1/maintenance/camera-resolution` | maintenance | Reads the camera resolution. |
 | `POST` | `/api/v1/maintenance/camera-resolution` | maintenance | Saves the camera resolution for the next stream. |
+| `GET` | `/api/v1/maintenance/camera-quality` | maintenance | Reads bit rate and frame rate of the high-resolution camera stream. |
+| `POST` | `/api/v1/maintenance/camera-quality` | maintenance | Saves them for the next device restart. |
 | `GET` | `/api/v1/maintenance/audio-codec` | maintenance | Reads the device audio codec (speex/PCMU) state. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/apply` | maintenance | Switches the device to PCMU and reboots after confirmation. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Restores the stock speex codec and reboots after confirmation. |
@@ -1396,6 +1398,39 @@ same body; it applies from the next stream that starts. Capabilities advertise
 it as `maintenance.camera_resolution`. On firmware 3.0.x the agent fixes the low
 resolution, does not advertise the setting, and answers a request for high
 resolution with `409` and `error: "high_resolution_unsupported"`.
+
+### Camera Quality
+
+`GET /api/v1/maintenance/camera-quality` returns the bit rate and frame rate
+the device uses for its high-resolution camera stream:
+
+```json
+{"ok": true, "supported": true, "bitrate_kbps": 800, "fps": 15,
+ "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 25,
+ "restart_required": false, "changed": false, "remount_ro_failed": false}
+```
+
+`POST` with `{"confirm": "apply_camera_quality", "bitrate_kbps": 3000, "fps": 25}`
+saves new values and returns the same body; either value may be left out and
+then stays as it is. A value outside the limits, or a request with neither
+value, is answered `400` with `error: "camera_quality_out_of_range"`.
+
+The device keeps both values as `BitrateRtpH` and `FpsRtpH` in the
+`[Answering Machine]` section of `/home/bticino/cfg/bt_answering_machine` and
+reads that file only when it starts. The agent replaces those two numbers and
+nothing else, keeps one backup of the original file under
+`/home/bticino/cfg/extra/c300x-device-file-backups/original`, and makes the
+root filesystem writable only for the write. `restart_required` is `true`
+while the file is newer than the running system; restart the device
+(`POST /api/v1/maintenance/reboot`) to use the saved values. The low
+resolution stream, which the Door Entry app also receives, is not changed.
+Removing the agent puts the two original values back.
+
+Capabilities advertise the setting as `maintenance.camera_quality`. On firmware
+3.0.x, which has no high-resolution stream, it is not advertised and a `POST`
+is answered `409` with `error: "camera_quality_unsupported"`; the same answer
+is given when the file does not hold both values, and `GET` then reports
+`"supported": false`.
 
 ### Audio Codec
 

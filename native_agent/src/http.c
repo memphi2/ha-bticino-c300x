@@ -9,6 +9,7 @@
 #include "http_service_commands.h"
 #include "http_setup_page.h"
 #include "http_audio_codec.h"
+#include "http_camera_quality.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -9044,6 +9045,8 @@ static void handle_api_request(
         || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_audio_codec_route(&runtime->maintenance, client_fd, config,
             runtime->audio_codec_running_state, request, run_detached_command)
+        || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config,
+            c300x_device_display_is_qt5(), request)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
             run_detached_command)) {
         return;

@@ -128,8 +128,12 @@ call must not be checked again once the request has a command out
 (`c300x_openwebnet_async_owns`); the ringer handlers do this for the display
 slot. The four maintenance POSTs that replace the configuration (auth, MQTT,
 legacy MQTT, MQTT migration) hold themselves back, each after its own
-admission check, while another request owns the bus worker; a request that
-is not admitted is answered at once. The call also runs on the loop when
+admission check, while another request owns the bus worker or the media
+worker; a request that is not admitted is answered at once. The media worker
+reads the live configuration on its thread, and a request that runs again
+checks its token again. A held write whose caller has left is not applied.
+Held writes take none of the three waiting places and go by client slot, not
+by arrival; with the admin token they can fill the client slots. The call also runs on the loop when
 eight results of one request are stored already.
 
 `openwebnet.c` uses blocking IPv4 `connect`/`send`/`recv`, configured socket

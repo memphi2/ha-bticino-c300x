@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import select
 import signal
 import socket
 import subprocess
@@ -98,7 +99,7 @@ def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture
-def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
+def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Lab]:
     with managed_tcp_server(Bus()) as bus:
         api, ui = free_tcp_ports(2)
         config = {
@@ -114,6 +115,7 @@ def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
             "video": {"enabled": True}, "displayBridge": {"enabled": False},
             "mqtt": {"enabled": False}, "mdns": {"enabled": False},
         }
+        config.update(getattr(request, "param", {}))
         config_path = tmp_path / "config.json"
         config_path.write_text(json.dumps(config))
         with (tmp_path / "agent.log").open("w") as log:
@@ -313,3 +315,43 @@ def test_a_request_waiting_for_the_media_worker_leaves_the_agent_idle(lab: Lab) 
     lab.release()
     assert finish(stop) == {"ok": True}
     assert finish(waiting) == {"ok": True}
+
+
+ADMIN = {"maintenance": {"enabled": True, "adminToken": "maintenance-token"}}
+
+
+def write_token(lab: Lab, token: str) -> HTTPConnection:
+    conn = HTTPConnection("127.0.0.1", lab.api_port, timeout=10)
+    lab.connections.append(conn)
+    conn.request("POST", "/api/v1/maintenance/auth", body=json.dumps({"apiToken": token}),
+                 headers={"Authorization": "Bearer " + TOKEN,
+                          "X-Bticino-C300X-Maintenance-Token": "maintenance-token"})
+    return conn
+
+
+@pytest.mark.parametrize("lab", [ADMIN], indirect=True)
+def test_a_configuration_write_waits_for_the_media_operation_and_its_answer(lab: Lab) -> None:
+    stop = lab.held_stop()
+    write = write_token(lab, "another-token-0123456789")
+    lab.health_ms()
+    assert select.select([write.sock], [], [], 0.3)[0] == []
+
+    lab.release()
+    # The stop is answered for what it did, with the token it came with.
+    assert finish(stop) == {"ok": True}
+    assert write.getresponse().status == 200
+    assert lab.post(STOP).getresponse().status == 401
+
+
+@pytest.mark.parametrize("lab", [ADMIN], indirect=True)
+def test_a_held_configuration_write_is_not_applied_when_its_caller_left(lab: Lab) -> None:
+    stop = lab.held_stop()
+    write = write_token(lab, "another-token-0123456789")
+    lab.health_ms()
+    write.close()
+    lab.health_ms()
+
+    lab.release()
+    assert finish(stop) == {"ok": True}
+    lab.health_ms()
+    assert finish(lab.post(STOP)) == {"ok": True}

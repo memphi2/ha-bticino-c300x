@@ -3,7 +3,8 @@
 
 /* The API has six client slots. Each of the two workers holds one for the
  * request it runs, and the requests waiting for either worker share these
- * places, so that waiting requests cannot take all the slots. */
+ * places, so that requests waiting for a worker cannot take all the slots.
+ * (An admitted configuration write held meanwhile takes a slot of its own.) */
 #define C300X_REQUEST_QUEUE_PLACES 3
 #define C300X_REQUEST_QUEUE_DEPARTED 8 /* no more than there are client slots */
 

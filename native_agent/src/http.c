@@ -244,21 +244,28 @@ struct firewall_workspace {
     char desired[C300X_FIREWALL_BUFFER_SIZE];
 };
 static void send_json(int client_fd, int status, const char *reason, const char *body);
-/* A handler that is about to replace the configuration asks this once it has
- * admitted its request, before it does anything. Nonzero: it returns without
- * an answer and runs again. The request that has a command on the bus runs
- * again too and must find the configuration it started with. */
-static int config_write_waits(struct agent_runtime *runtime, int client_fd)
-{
-    runtime->config_write_waits = c300x_request_worker_owned_by_other(&runtime->openwebnet.worker, client_fd);
-    return runtime->config_write_waits;
-}
 static void send_openwebnet_refusal(int client_fd, const char *error)
 {
     char body[96];
 
     snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", error);
     send_json(client_fd, 502, "Bad Gateway", body);
+}
+/* A handler that is about to replace the configuration asks this once it has
+ * admitted its request, before it does anything. Nonzero: it returns at once.
+ * While a request has work on one of the two workers the write is not
+ * answered and runs again later: that request runs again too, and the worker
+ * may read the configuration meanwhile, so both must find the one the request
+ * started with. A write nobody waits for any more is not applied. */
+static int config_write_waits(struct agent_runtime *runtime, int client_fd)
+{
+    if (c300x_openwebnet_caller_left(client_fd)) {
+        send_openwebnet_refusal(client_fd, "client_gone");
+        return 1;
+    }
+    runtime->config_write_waits = c300x_request_worker_owned_by_other(&runtime->openwebnet.worker, client_fd)
+        || c300x_request_worker_owned_by_other(&runtime->video_control.worker, client_fd);
+    return runtime->config_write_waits;
 }
 static void send_response_too_large(int client_fd) { send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n"); }
 static void send_maintenance_unauthorized(int client_fd) { send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n"); }

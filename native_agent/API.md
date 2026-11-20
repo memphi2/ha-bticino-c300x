@@ -130,9 +130,12 @@ repeated. A request that had to wait and whose caller has closed the
 connection meanwhile, also only its sending side, is not run and answered
 `client_gone`; of the media actions this applies to the three that start
 something, a stop still runs unless a new request needed its place. A
-maintenance POST that replaces the agent configuration waits, once it is
-admitted, until the request that has a command on the OpenWebNet bus is
-answered.
+maintenance POST that replaces the agent configuration (auth, MQTT, legacy
+MQTT, MQTT migration) is no such waiting request and takes none of the three
+places. Once it is admitted it is held while any request has a bus command or
+a media operation running, which can be several in a row, and is applied
+afterwards; when its caller has closed the connection by then it is not
+applied and answered `client_gone`.
 
 Request bodies are parsed from JSON. Unknown fields should be ignored unless the
 handler explicitly validates the whole object.

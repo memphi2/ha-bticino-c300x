@@ -333,6 +333,13 @@ def test_firmware_3_sets_the_low_stream_its_only_stream(lab: Lab) -> None:
     assert lab.settings.read_text() == SETTINGS
 
 
+@pytest.mark.parametrize("qt5", [True])
+def test_firmware_3_without_the_values_still_names_its_low_stream(lab: Lab) -> None:
+    lab.settings.write_text("[Answering Machine]\nWidth=800\n")
+    body = lab.call()
+    assert (body["supported"], body["stream"], body["bitrate_max"]) == (False, "low", 2000)
+
+
 def test_the_full_camera_picture_is_chosen_by_width_and_height(lab: Lab) -> None:
     body = lab.call({**CONFIRM, "size": "720x576"})
     assert (body["size"], body["running_size"], body["restart_required"]) == ("720x576", "688x480", True)

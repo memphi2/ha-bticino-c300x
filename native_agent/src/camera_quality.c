@@ -98,6 +98,17 @@ int c300x_camera_quality_read(struct c300x_camera_quality *quality)
     return 1;
 }
 
+int c300x_camera_quality_status(struct c300x_camera_quality *quality, int video_enabled)
+{
+    if (c300x_camera_quality_read(quality) && video_enabled) {
+        return 1;
+    }
+    int low = quality->low; /* the stream stays named */
+    memset(quality, 0, sizeof(*quality));
+    quality->low = low;
+    return 0;
+}
+
 /* Writes the values, keeping everything else of the file. */
 static int write_values(struct c300x_camera_quality *quality, const struct c300x_camera_values *values,
     const char **error)

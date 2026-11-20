@@ -41,6 +41,9 @@ struct c300x_camera_quality {
 /* Called once when the agent starts. */
 void c300x_camera_quality_note_running(void);
 int c300x_camera_quality_read(struct c300x_camera_quality *quality);
+/* As _read, but with video off or no values only names the stream; returns
+ * whether the setting is supported. */
+int c300x_camera_quality_status(struct c300x_camera_quality *quality, int video_enabled);
 /* Writes the values when they are in range; size NULL keeps the size.
  * error names the failed step. */
 int c300x_camera_quality_apply(struct c300x_camera_quality *quality, int bitrate_kbps, int fps,

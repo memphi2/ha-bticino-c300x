@@ -37,10 +37,9 @@ int c300x_http_camera_quality_route(struct c300x_http_maintenance *owner, int fd
     if (quality == NULL) {
         return refuse(fd, 500, "Internal Server Error", "out_of_memory");
     }
-    if (!config->video_enabled || !c300x_camera_quality_read(quality)) {
-        if (post) free(quality);
-        if (post) return refuse(fd, 409, "Conflict", "unsupported");
-        memset(quality, 0, sizeof(*quality));
+    if (!c300x_camera_quality_status(quality, config->video_enabled) && post) {
+        free(quality);
+        return refuse(fd, 409, "Conflict", "unsupported");
     }
     if (!post) {
         c300x_camera_quality_reply(fd, 0, quality);

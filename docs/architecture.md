@@ -111,8 +111,9 @@ also removes the old synchronous capture's unsafe ten-second kill timeout.
 A hung label script blocks HTTP and graceful shutdown indefinitely. The change
 does not certify existing QML-write job cancellation as transaction-safe.
 SSH status GETs instead wait in existing bounded input slots, without gaining a
-new busy status. Service commands preserve their legacy absence of a deadline
-and discarded output; no new worker, queue or idle polling is introduced.
+new busy status. Service commands have a deadline (60 seconds for SSH start
+and stop, 15 for SSH status) and discard output; no new worker, queue or idle
+polling is introduced.
 
 QML/GUI output retains its 4096-byte buffer and overflow failure. Device-user
 captures retain their legacy bounded-prefix behavior: 4096 bytes for status,

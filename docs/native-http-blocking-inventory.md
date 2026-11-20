@@ -23,7 +23,8 @@ nonblocking output as noted below.
 
 See [preserved contracts](native-http-maintenance.md) for exact statuses,
 deadlines, capture limits, slot admission, disconnect and shutdown behavior.
-Service commands retain no deadline because the previous waits had none.
+Service commands have a deadline: 60 seconds for SSH start and stop, 15 for
+SSH status, after which the process group is killed and maintenance is free.
 The loopback tests demonstrate responsive `/api/v1/health` and UI dispatch
 while the selected fake commands are held open, with device IO stubbed and
 MQTT/video disabled. They do not establish responsiveness during other waits.

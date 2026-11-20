@@ -1096,8 +1096,10 @@ writes retain 30 seconds for a failed start, rollback and restart of the previou
 GUI. Their failed execution, timeout and overflowing 4096-byte output retain
 the existing `502` responses. Device-user status alone also has a 10-second
 deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
-with unavailable/unknown label status. SSH/service jobs have no execution
-deadline and discard output, preserving their previous wait semantics.
+with unavailable/unknown label status. SSH start and stop have a 60-second
+deadline and SSH status a 15-second one; at the deadline the process group is
+killed with `SIGKILL`; an action then fails like a failed command and a
+status reads as not running, so a hanging script no longer holds maintenance. They discard output.
 
 Device-user native routing/user mutations and label apply/restore are
 **synchronous**. Label writes use an 8192-byte bounded-prefix capture, without

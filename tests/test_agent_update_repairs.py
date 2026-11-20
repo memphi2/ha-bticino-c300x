@@ -1985,7 +1985,6 @@ def test_device_user_repair_flow_reports_agent_failures() -> None:
     [
         {"homeassistant_user_present": False},
         {"homeassistant_user_present": True, "routes_consistent": False},
-        {"homeassistant_user_present": True, "media_identity_available": False},
         {"available": False},
     ],
 )
@@ -3052,3 +3051,34 @@ def test_update_mqtt_migration_waits_for_a_busy_agent(monkeypatch) -> None:
         source = handle.read()
     assert source.count("await _async_migrate_mqtt_after_update(entry.runtime_data.api)") == 2
     assert source.count("async_migrate_legacy_mqtt_if_available(") == 1
+
+
+@pytest.mark.parametrize("cause", ["agent_error", "status"])
+def test_device_user_repair_asks_to_add_an_unregistered_device_in_the_app(
+    monkeypatch, cause
+) -> None:
+    """A device never added in the Door Entry app has no SIP domain yet."""
+
+    import custom_components.bticino_c300x.repair_flows_device_user as device_user_flow
+    from custom_components.bticino_c300x.api_errors import C300XDeviceNotRegisteredError
+
+    class UnregisteredDeviceApi(FakePatchApi):
+        async def async_ensure_homeassistant_user(self, *, account_label: str) -> dict[str, Any]:
+            if cause == "agent_error":
+                raise C300XDeviceNotRegisteredError("device_domain_missing")
+            return {"homeassistant_user_present": True, "media_identity_available": False}
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(UnregisteredDeviceApi()))
+    hass = FakeHass(entry)
+    hass.config.location_name = "HA Test"
+    flow = DeviceUserRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        device_user_flow.ir, "async_delete_issue", lambda **kwargs: deleted.append(kwargs["issue_id"])
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["errors"] == {"base": "device_not_registered"}
+    assert deleted == []

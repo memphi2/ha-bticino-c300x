@@ -72,6 +72,20 @@ Doorstation card:
 
 Agent:
 
+- Experimental support for C300X firmware `3.0.6`: Ring Call, camera, door and
+  activations, with the same agent as on `1.7.x` and `2.0.2`. Not on `3.0.6`:
+  the Home Assistant pages on the display, which there is a Qt 5 program
+  without files to patch, and the high-resolution camera stream, which
+  `3.0.6` does not send on. Thanks to Dave
+  ([@davemajor](https://github.com/davemajor)), who contributed the routing
+  table and the first support in
+  [#118](https://github.com/memphi2/ha-bticino-c300x/pull/118) and tested it
+  on a `3.0.6` unit.
+- The media-user Repair says when the C300X was never added in the BTicino
+  Door Entry app. Flexisip on the device gets its SIP user, domain and
+  certificates only from that registration, on every firmware; before, the
+  Repair only asked to check the maintenance access. Dave found this on a
+  freshly recovered `3.0.6` unit.
 - Initial state and availability updates are separated from confirmed setting
   and collection changes. HA entities stay synchronized without false
   touch-tone, forwarding, ringer, memo or message change events on startup or

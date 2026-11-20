@@ -1440,7 +1440,8 @@
           }
         },
         "error": {
-          "device_user_setup_failed": "The device-user setup failed. Check maintenance access and retry."
+          "device_user_setup_failed": "The device-user setup failed. Check maintenance access and retry.",
+          "device_not_registered": "The C300X has not been added in the BTicino Door Entry app yet. Flexisip on the device gets its SIP user, domain and certificates only from that registration. Add the device once in the app, then retry. Forwarding can stay on Smartphone afterwards."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."

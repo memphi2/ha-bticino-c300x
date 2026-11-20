@@ -1440,7 +1440,8 @@
           }
         },
         "error": {
-          "device_user_setup_failed": "La configuration utilisateur appareil a échoué. Vérifiez l'accès maintenance et réessayez."
+          "device_user_setup_failed": "La configuration utilisateur appareil a échoué. Vérifiez l'accès maintenance et réessayez.",
+          "device_not_registered": "Le C300X n'a pas encore été ajouté dans l'application BTicino Door Entry. Flexisip sur l'appareil obtient son utilisateur SIP, son domaine et ses certificats uniquement par cet enregistrement. Ajoutez l'appareil une fois dans l'application, puis réessayez. Le renvoi peut ensuite rester sur Smartphone."
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."

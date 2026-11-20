@@ -67,6 +67,17 @@ def _agent_error_detail(text: str) -> str | None:
     return None
 
 
+def _agent_error_field(text: str, key: str) -> str | None:
+    """Return one string field of an agent's JSON error body, or None."""
+
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    value = data.get(key) if isinstance(data, dict) else None
+    return value if isinstance(value, str) else None
+
+
 def _compact_agent_error_value(value: str, *, max_length: int = 120) -> str:
     """Return one safe line from an agent error string."""
 

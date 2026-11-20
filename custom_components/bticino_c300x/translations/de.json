@@ -1440,7 +1440,8 @@
           }
         },
         "error": {
-          "device_user_setup_failed": "Das Device-User-Setup ist fehlgeschlagen. Prüfe den Maintenance-Zugriff und versuche es erneut."
+          "device_user_setup_failed": "Das Device-User-Setup ist fehlgeschlagen. Prüfe den Maintenance-Zugriff und versuche es erneut.",
+          "device_not_registered": "Die C300X wurde noch nicht in der BTicino-App Door Entry angemeldet. Flexisip auf dem Gerät bekommt SIP-User, Domain und Zertifikate nur über diese Anmeldung. Melde das Gerät einmal in der App an und versuche es dann erneut. Die Weiterleitung kann danach auf Smartphone bleiben."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."

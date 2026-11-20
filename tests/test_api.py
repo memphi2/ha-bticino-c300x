@@ -3789,3 +3789,23 @@ def test_qml_write_requests_outlast_native_rollback_deadline(method, kwargs, pat
     assert session.requests[0]["args"] == (
         "POST", f"http://agent.local:8080/api/v1/maintenance/qml-patch/actions/{path}"
     )
+
+
+@pytest.mark.parametrize(
+    ("body", "unregistered"),
+    [
+        ('{"ok":false,"error":"device_user_update_failed","detail":"device_domain_missing"}', True),
+        ('{"ok":false,"error":"device_user_update_failed","detail":"write_failed"}', False),
+        ("not json", False),
+    ],
+)
+def test_a_device_without_sip_domain_is_reported_as_not_registered(body, unregistered) -> None:
+    from custom_components.bticino_c300x.api_errors import (
+        C300XAgentApiConnectionError,
+        C300XDeviceNotRegisteredError,
+    )
+
+    api = C300XAgentApi(object(), "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    with pytest.raises(C300XAgentApiConnectionError) as raised:
+        api._raise_for_agent_status(500, body, "/api/v1/maintenance/device-user/actions/ensure-homeassistant")
+    assert isinstance(raised.value, C300XDeviceNotRegisteredError) is unregistered

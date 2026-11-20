@@ -50,65 +50,66 @@ void c300x_video_control_settle(struct c300x_video_control *control)
     }
 }
 
-static int run_here(struct c300x_video_control *control, struct c300x_video *video,
-                    enum c300x_video_control_op op, int argument)
+static int run_here(struct c300x_video *video, enum c300x_video_control_op op, int argument)
 {
     struct c300x_video_control_job job = {.video = video, .op = op, .argument = argument};
 
-    c300x_video_control_settle(control);
     execute(&job);
     return job.result;
 }
 
-int c300x_video_control_run(struct c300x_video_control *control, struct c300x_video *video,
-                            enum c300x_video_control_op op, int argument, int *result)
+enum c300x_video_control_state c300x_video_control_run(
+    struct c300x_video_control *control, struct c300x_video *video,
+    enum c300x_video_control_op op, int argument, int *result, const char **error)
 {
     struct c300x_request_worker *worker = &control->worker;
 
     if (worker->armed_fd < 0) {
-        *result = run_here(control, video, op, argument);
-        return 1;
+        /* No wake pipe: on the loop, as before. */
+        *result = run_here(video, op, argument);
+        return C300X_VIDEO_CONTROL_DONE;
     }
     if (worker->deferred) {
-        return 0;
+        return C300X_VIDEO_CONTROL_DEFERRED;
     }
     switch (c300x_request_worker_turn(worker)) {
     case C300X_REQUEST_WORKER_FULL:
-        *result = run_here(control, video, op, argument);
-        return 1;
+        *error = "media_busy";
+        return C300X_VIDEO_CONTROL_REFUSED;
     case C300X_REQUEST_WORKER_WAIT:
-        return 0;
+        return C300X_VIDEO_CONTROL_DEFERRED;
     case C300X_REQUEST_WORKER_MINE:
         break;
     }
     if (control->has_result && control->job.op == op && control->job.argument == argument) {
-        control->has_result = 0;
         *result = control->job.result;
-        return 1;
+        return C300X_VIDEO_CONTROL_DONE;
     }
     if (worker->running) {
         worker->deferred = 1;
-        return 0;
+        return C300X_VIDEO_CONTROL_DEFERRED;
     }
     if (c300x_request_worker_caller_left(worker) && starts_something(op)) {
         /* Nobody waits for it any more: no stream or call starts that late. */
-        *result = 0;
-        return 1;
+        *error = "client_gone";
+        return C300X_VIDEO_CONTROL_REFUSED;
     }
     control->has_result = 0;
     control->job = (struct c300x_video_control_job){.video = video, .op = op, .argument = argument};
     if (!c300x_request_worker_start(worker)) {
+        /* No thread: on the loop, as before. Kept, should the handler run again. */
         execute(&control->job);
+        control->has_result = 1;
         *result = control->job.result;
-        return 1;
+        return C300X_VIDEO_CONTROL_DONE;
     }
-    return 0;
+    return C300X_VIDEO_CONTROL_DEFERRED;
 }
 
-int c300x_video_control_init(struct c300x_video_control *control)
+int c300x_video_control_init(struct c300x_video_control *control, struct c300x_request_queue *queue)
 {
     memset(control, 0, sizeof(*control));
-    return c300x_request_worker_init(&control->worker, execute, &control->job, 1024 * 1024);
+    return c300x_request_worker_init(&control->worker, queue, execute, &control->job, 1024 * 1024);
 }
 
 void c300x_video_control_close(struct c300x_video_control *control)
@@ -134,15 +135,16 @@ void c300x_video_control_begin(struct c300x_video_control *control, int client_f
     c300x_request_worker_begin(&control->worker, client_fd);
 }
 
-int c300x_video_control_end(struct c300x_video_control *control)
+int c300x_video_control_deferred(const struct c300x_video_control *control)
 {
-    int answered;
-    int deferred = c300x_request_worker_end(&control->worker, &answered);
+    return control->worker.deferred;
+}
 
-    if (answered) {
+void c300x_video_control_end(struct c300x_video_control *control, int deferred)
+{
+    if (c300x_request_worker_end(&control->worker, deferred)) {
         control->has_result = 0;
     }
-    return deferred;
 }
 
 void c300x_video_control_abandon(struct c300x_video_control *control, int client_fd)

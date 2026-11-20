@@ -43,7 +43,5 @@ void c300x_openwebnet_execute(struct c300x_openwebnet_call *call);
 /* The same exchange: kind, target, commands and delay. */
 int c300x_openwebnet_call_same(const struct c300x_openwebnet_call *left, const struct c300x_openwebnet_call *right);
 void c300x_openwebnet_call_copy_result(struct c300x_openwebnet_call *call, const struct c300x_openwebnet_call *result);
-/* Fill in a failure without an exchange; returns nonzero for a hook. */
-int c300x_openwebnet_call_fail(struct c300x_openwebnet_call *call, const char *error);
 
 #endif

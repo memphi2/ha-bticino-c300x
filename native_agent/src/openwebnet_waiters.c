@@ -7,39 +7,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-static int waiter_index(const struct c300x_openwebnet_waiters *waiters, int fd)
-{
-    for (int index = 0; index < waiters->count; index++) {
-        if (waiters->fds[index] == fd) {
-            return index;
-        }
-    }
-    return -1;
-}
-
-int c300x_openwebnet_waiters_add(struct c300x_openwebnet_waiters *waiters, int fd)
-{
-    if (waiter_index(waiters, fd) >= 0) {
-        return 1;
-    }
-    if (waiters->count == C300X_OPENWEBNET_MAX_WAITERS) {
-        return 0;
-    }
-    waiters->fds[waiters->count++] = fd;
-    return 1;
-}
-
-int c300x_openwebnet_waiters_forget(struct c300x_openwebnet_waiters *waiters, int fd)
-{
-    int index = waiter_index(waiters, fd);
-
-    if (index < 0) {
-        return 0;
-    }
-    waiters->fds[index] = waiters->fds[--waiters->count];
-    return 1;
-}
-
 int c300x_openwebnet_caller_left(int fd)
 {
     char byte;

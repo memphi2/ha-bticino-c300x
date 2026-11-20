@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import signal
+import socket
 import socketserver
 import subprocess
 import threading
@@ -258,3 +259,43 @@ def test_a_waiting_request_whose_caller_left_is_not_run(lab: Lab) -> None:
     assert finish(lab.start("/api/v1/answering-machine"))["ok"] is True
     # The door of a caller who gave up does not open afterwards.
     assert lab.bus.frames == ["*#8**40##", "*#8**40##"]
+
+
+def test_a_refused_read_does_not_report_the_setting_as_unavailable(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    waiting = [lab.start("/api/v1/answering-machine") for _ in range(3)]
+    lab.health_ms()
+
+    assert finish(lab.start("/api/v1/ringer"), 502) == {"ok": False, "error": "openwebnet_busy"}
+    assert finish(lab.start("/api/v1/smartphone-forwarding"), 502)["error"] == "openwebnet_busy"
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    for conn in waiting:
+        finish(conn)
+    events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+    assert [event["type"] for event in events
+            if "ringer" in event["type"] or "forwarding" in event["type"]] == []
+
+
+def test_waiting_requests_get_the_bus_in_the_order_they_arrived(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    # A connection that only holds the client slot in front of the next request.
+    idle = socket.create_connection(("127.0.0.1", lab.api_port), timeout=5)
+    lab.health_ms()
+    ringer = lab.start("/api/v1/ringer")
+    lab.health_ms()
+    idle.close()
+    lab.health_ms()
+    answering = lab.start("/api/v1/answering-machine")
+    lab.health_ms()
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    finish(ringer)
+    finish(answering)
+    assert lab.bus.frames == [PRESS, RELEASE, "*#8**33##", "*#8**41##", "*#8**40##"]

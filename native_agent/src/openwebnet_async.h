@@ -21,20 +21,26 @@
  * request that waited is not started when its caller has left meanwhile. */
 struct c300x_openwebnet_async {
     struct c300x_request_worker worker;
+    const char *refusal;
     int result_count;
     int used[C300X_OPENWEBNET_ASYNC_RESULTS];
     struct c300x_openwebnet_call results[C300X_OPENWEBNET_ASYNC_RESULTS];
     struct c300x_openwebnet_call job;
 };
 
-int c300x_openwebnet_async_init(struct c300x_openwebnet_async *async);
+int c300x_openwebnet_async_init(struct c300x_openwebnet_async *async, struct c300x_request_queue *queue);
 void c300x_openwebnet_async_close(struct c300x_openwebnet_async *async);
 /* Returns a poll timeout: 0 when a waiting request can be offered again, else -1. */
 int c300x_openwebnet_async_prepare(struct c300x_openwebnet_async *async, struct pollfd *fd);
 void c300x_openwebnet_async_tick(struct c300x_openwebnet_async *async, const struct pollfd *fd);
 void c300x_openwebnet_async_begin(struct c300x_openwebnet_async *async, int client_fd);
-/* Nonzero: the request is deferred; nothing was answered and it runs again. */
-int c300x_openwebnet_async_end(struct c300x_openwebnet_async *async);
+/* Nonzero after the handler: a call left the request unanswered. */
+int c300x_openwebnet_async_deferred(const struct c300x_openwebnet_async *async);
+/* After the handler: an error name when its command was not sent at all and
+ * the request is to be answered with it, else NULL. */
+const char *c300x_openwebnet_async_refusal(const struct c300x_openwebnet_async *async);
+/* deferred: the request runs again, here or for the media worker. */
+void c300x_openwebnet_async_end(struct c300x_openwebnet_async *async, int deferred);
 /* The request of this client is over, however it ended. */
 void c300x_openwebnet_async_abandon(struct c300x_openwebnet_async *async, int client_fd);
 #endif

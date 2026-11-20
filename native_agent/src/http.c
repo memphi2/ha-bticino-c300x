@@ -224,6 +224,7 @@ struct agent_runtime {
     struct c300x_http_maintenance maintenance;
     struct c300x_openwebnet_async openwebnet;
     struct c300x_video_control video_control;
+    struct c300x_request_queue request_queue;
     struct c300x_system_metrics_monitor metrics;
     struct c300x_setting_state forwarding_state;
     struct c300x_setting_state ringer_muted_state;
@@ -242,6 +243,13 @@ struct firewall_workspace {
     char desired[C300X_FIREWALL_BUFFER_SIZE];
 };
 static void send_json(int client_fd, int status, const char *reason, const char *body);
+static void send_openwebnet_refusal(int client_fd, const char *error)
+{
+    char body[96];
+
+    snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", error);
+    send_json(client_fd, 502, "Bad Gateway", body);
+}
 static void send_response_too_large(int client_fd) { send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n"); }
 static void send_maintenance_unauthorized(int client_fd) { send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n"); }
 static void send_loopback_required(int client_fd) { send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n"); }
@@ -9668,9 +9676,22 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
         c300x_openwebnet_async_begin(&runtime->openwebnet, client_fd);
         c300x_video_control_begin(&runtime->video_control, client_fd);
         handle_api_request(client_fd, config, runtime, request);
-        if (c300x_openwebnet_async_end(&runtime->openwebnet) | c300x_video_control_end(&runtime->video_control)) {
-            free(request);
-            return 0;
+        {
+            /* A request waits for one worker at a time and keeps what the
+             * other one holds for it until it is answered. */
+            const char *refusal = c300x_openwebnet_async_refusal(&runtime->openwebnet);
+            int deferred = refusal == NULL && (c300x_openwebnet_async_deferred(&runtime->openwebnet)
+                                               || c300x_video_control_deferred(&runtime->video_control));
+
+            c300x_openwebnet_async_end(&runtime->openwebnet, deferred);
+            c300x_video_control_end(&runtime->video_control, deferred);
+            if (deferred) {
+                free(request);
+                return 0;
+            }
+            if (refusal != NULL) {
+                send_openwebnet_refusal(client_fd, refusal);
+            }
         }
         close_client = runtime->ringer_control.client_fd != client_fd
             && runtime->touch_tone.client_fd != client_fd
@@ -9737,8 +9758,8 @@ int c300x_run(struct c300x_config *config)
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
-    (void)c300x_openwebnet_async_init(&runtime->openwebnet);
-    (void)c300x_video_control_init(&runtime->video_control);
+    (void)c300x_openwebnet_async_init(&runtime->openwebnet, &runtime->request_queue);
+    (void)c300x_video_control_init(&runtime->video_control, &runtime->request_queue);
     runtime->display_client_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);

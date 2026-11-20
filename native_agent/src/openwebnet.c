@@ -337,13 +337,6 @@ void c300x_openwebnet_call_copy_result(struct c300x_openwebnet_call *call, const
     memcpy(call->error, result->error, sizeof(call->error));
 }
 
-int c300x_openwebnet_call_fail(struct c300x_openwebnet_call *call, const char *error)
-{
-    call->ok = 0;
-    snprintf(call->error, sizeof(call->error), "%s", error);
-    return 1;
-}
-
 c300x_openwebnet_hook_fn c300x_openwebnet_hook;
 void (*c300x_openwebnet_before_inline)(void);
 int c300x_openwebnet_call_deferred;

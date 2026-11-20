@@ -7,6 +7,21 @@
 #include "json_util.h"
 #include "video_rtsp.h"
 
+/* Zero: the handler returns; the request runs again or was answered here. */
+static int ran(int client_fd, struct c300x_video_control *control, struct c300x_video *video,
+               enum c300x_video_control_op op, int argument, int *result)
+{
+    const char *error = "";
+    char body[96];
+    enum c300x_video_control_state state = c300x_video_control_run(control, video, op, argument, result, &error);
+
+    if (state == C300X_VIDEO_CONTROL_REFUSED) {
+        snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", error);
+        c300x_http_send_json(client_fd, 503, "Service Unavailable", body);
+    }
+    return state == C300X_VIDEO_CONTROL_DONE;
+}
+
 void c300x_http_doorbell_video_activate(
     int client_fd,
     struct c300x_video_control *control, struct c300x_video *video,
@@ -38,7 +53,7 @@ void c300x_http_doorbell_video_activate(
             return;
         }
     }
-    if (!c300x_video_control_run(control, video, C300X_VIDEO_CONTROL_ACTIVATE, audio, &done)) {
+    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_ACTIVATE, audio, &done)) {
         return;
     }
     if (!done) {
@@ -74,7 +89,7 @@ void c300x_http_doorbell_video_stop(int client_fd, struct c300x_video_control *c
 {
     int done;
 
-    if (video != NULL && !c300x_video_control_run(control, video, C300X_VIDEO_CONTROL_STOP, 0, &done)) {
+    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_STOP, 0, &done)) {
         return;
     }
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
@@ -95,7 +110,7 @@ void c300x_http_doorbell_call_answer(
         c300x_http_send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
         return;
     }
-    if (!c300x_video_control_run(control, video, C300X_VIDEO_CONTROL_ANSWER, 0, &done)) {
+    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_ANSWER, 0, &done)) {
         return;
     }
     if (!done) {
@@ -126,7 +141,7 @@ void c300x_http_doorbell_call_hangup(int client_fd, struct c300x_video_control *
 {
     int done;
 
-    if (video != NULL && !c300x_video_control_run(control, video, C300X_VIDEO_CONTROL_HANGUP, 0, &done)) {
+    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_HANGUP, 0, &done)) {
         return;
     }
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
@@ -153,7 +168,7 @@ void c300x_http_home_call_start(
         c300x_http_send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
         return;
     }
-    if (!c300x_video_control_run(control, video, C300X_VIDEO_CONTROL_HOME_START, duration_seconds, &done)) {
+    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_HOME_START, duration_seconds, &done)) {
         return;
     }
     if (!done) {
@@ -188,7 +203,7 @@ void c300x_http_home_call_stop(int client_fd, struct c300x_video_control *contro
 {
     int done;
 
-    if (video != NULL && !c300x_video_control_run(control, video, C300X_VIDEO_CONTROL_HOME_STOP, 0, &done)) {
+    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_HOME_STOP, 0, &done)) {
         return;
     }
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");

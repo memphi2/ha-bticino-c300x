@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import signal
+import socket
 import subprocess
 import time
 from collections.abc import Iterator
@@ -13,7 +14,15 @@ from pathlib import Path
 
 import pytest
 
-from native_agent.test.smoke import TOKEN, api_get, free_tcp_ports, wait_for_health
+from test_native_openwebnet_offload import PRESS, RELEASE, UNLOCK, Bus
+
+from native_agent.test.smoke import (
+    TOKEN,
+    api_get,
+    free_tcp_ports,
+    managed_tcp_server,
+    wait_for_health,
+)
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
 ACTIVATE = "/api/v1/video/doorbell/actions/activate"
@@ -26,14 +35,15 @@ HOME_STOP = "/api/v1/calls/home/actions/stop"
 @dataclass
 class Lab:
     root: Path
+    bus: Bus
     api_port: int
     process: subprocess.Popen[bytes]
     connections: list[HTTPConnection] = field(default_factory=list)
 
-    def post(self, path: str, body: dict | None = None) -> HTTPConnection:
+    def post(self, path: str, body: dict | None = None, *, method: str = "POST") -> HTTPConnection:
         conn = HTTPConnection("127.0.0.1", self.api_port, timeout=10)
         self.connections.append(conn)
-        conn.request("POST", path, body=json.dumps(body or {}),
+        conn.request(method, path, body=json.dumps(body or {}) if method == "POST" else None,
                      headers={"Authorization": "Bearer " + TOKEN})
         return conn
 
@@ -90,39 +100,44 @@ def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture
 def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
-    api, ui = free_tcp_ports(2)
-    config = {
-        "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
-        "api": {"token": TOKEN},
-        "openwebnet": {"host": "127.0.0.1", "port": 1, "timeoutMs": 200},
-        "maintenance": {"enabled": False},
-        "activations": {"enabled": False, "autoDiscover": False},
-        "events": {"udp": {"enabled": False}},
-        "answeringMachine": {"messages": {"enabled": False}},
-        "memos": {"enabled": False}, "systemMetrics": {"enabled": False},
-        "video": {"enabled": True}, "displayBridge": {"enabled": False},
-        "mqtt": {"enabled": False}, "mdns": {"enabled": False},
-    }
-    config_path = tmp_path / "config.json"
-    config_path.write_text(json.dumps(config))
-    with (tmp_path / "agent.log").open("w") as log:
-        process = subprocess.Popen([str(binary), "--config", str(config_path)],
-                                   stdout=log, stderr=log, cwd=tmp_path)
-        lab = Lab(tmp_path, api, process)
-        try:
-            wait_for_health(api)
-            yield lab
-        finally:
-            lab.release()
-            for conn in lab.connections:
-                conn.close()
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+    with managed_tcp_server(Bus()) as bus:
+        api, ui = free_tcp_ports(2)
+        config = {
+            "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
+            "api": {"token": TOKEN},
+            "openwebnet": {"host": "127.0.0.1", "port": bus.server_address[1], "timeoutMs": 9000},
+            "locks": {"releaseDelayMs": 1, "items": {"default": {"name": "Door", "address": "20"}}},
+            "maintenance": {"enabled": False},
+            "activations": {"enabled": False, "autoDiscover": False},
+            "events": {"udp": {"enabled": False}},
+            "answeringMachine": {"messages": {"enabled": False}},
+            "memos": {"enabled": False}, "systemMetrics": {"enabled": False},
+            "video": {"enabled": True}, "displayBridge": {"enabled": False},
+            "mqtt": {"enabled": False}, "mdns": {"enabled": False},
+        }
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps(config))
+        with (tmp_path / "agent.log").open("w") as log:
+            process = subprocess.Popen([str(binary), "--config", str(config_path)],
+                                       stdout=log, stderr=log, cwd=tmp_path)
+            lab = Lab(tmp_path, bus, api, process)
+            try:
+                wait_for_health(api)
+                bus.gate.set()
+                bus.frames.clear()
+                yield lab
+            finally:
+                bus.gate.set()
+                lab.release()
+                for conn in lab.connections:
+                    conn.close()
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
 
 
 def test_a_held_stop_leaves_the_api_answering(lab: Lab) -> None:
@@ -189,22 +204,62 @@ def test_a_waiting_start_is_dropped_when_its_caller_left_but_a_stop_still_runs(l
     assert lab.log() == ["stop begin", "stop end", "home_stop"]
 
 
-def test_a_request_beyond_the_waiting_places_runs_after_the_running_one(lab: Lab) -> None:
+def test_a_request_that_finds_no_waiting_place_is_refused(lab: Lab) -> None:
     stop = lab.held_stop()
     waiting = [lab.post(HOME_START, {"duration_seconds": seconds}) for seconds in (1, 2, 3)]
     lab.health_ms()
-    extra = lab.post(HOME_STOP)
-    time.sleep(0.2)
+
+    assert finish(lab.post(HOME_STOP), 503) == {"ok": False, "error": "media_busy"}
+    assert lab.health_ms() < 500
     assert lab.log() == ["stop begin"]
 
     lab.release()
     assert finish(stop) == {"ok": True}
-    assert finish(extra) == {"ok": True}
     for conn in waiting:
         assert finish(conn)["ok"] is True
-    log = lab.log()
-    assert log[:3] == ["stop begin", "stop end", "home_stop"]
-    assert sorted(log[3:]) == ["home_start 1", "home_start 2", "home_start 3"]
+    assert lab.log() == ["stop begin", "stop end", "home_start 1", "home_start 2", "home_start 3"]
+
+
+def test_waiting_requests_run_in_the_order_they_arrived(lab: Lab) -> None:
+    stop = lab.held_stop()
+    # A connection that only holds the client slot in front of the next request.
+    idle = socket.create_connection(("127.0.0.1", lab.api_port), timeout=5)
+    lab.health_ms()
+    home = lab.post(HOME_START, {"duration_seconds": 7})
+    lab.health_ms()
+    idle.close()
+    lab.health_ms()
+    home_stop = lab.post(HOME_STOP)
+    lab.health_ms()
+
+    lab.release()
+    assert finish(stop) == {"ok": True}
+    finish(home)
+    finish(home_stop)
+    assert lab.log() == ["stop begin", "stop end", "home_start 7", "home_stop"]
+
+
+def test_bus_and_media_requests_together_leave_an_api_slot_free(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.post(UNLOCK)
+    assert lab.bus.seen.wait(5)
+    stop = lab.held_stop()
+    waiting = [lab.post("/api/v1/answering-machine", method="GET") for _ in range(2)]
+    waiting.append(lab.post(HOME_START, {"duration_seconds": 4}))
+    lab.health_ms()
+
+    assert finish(lab.post(HOME_STOP), 503)["error"] == "media_busy"
+    assert finish(lab.post("/api/v1/answering-machine", method="GET"), 502)["error"] == "openwebnet_busy"
+    assert lab.health_ms() < 500
+
+    lab.release()
+    lab.bus.gate.set()
+    assert finish(stop) == {"ok": True}
+    assert finish(unlock)["ok"] is True
+    for conn in waiting:
+        assert finish(conn)["ok"] is True
+    assert lab.log() == ["stop begin", "stop end", "home_start 4"]
+    assert lab.bus.frames == [PRESS, RELEASE, "*#8**40##", "*#8**40##"]
 
 
 def test_shutdown_lets_a_running_operation_end(lab: Lab) -> None:

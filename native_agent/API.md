@@ -117,9 +117,19 @@ Common status codes:
 | `429 Too Many Requests` | Snapshot requested less than two seconds after the previous one. |
 | `500 Internal Server Error` | Agent-side operation failed. |
 | `501 Not Implemented` | Unknown endpoint. |
-| `502 Bad Gateway` | Home Assistant callback/display bridge is unavailable. |
-| `503 Service Unavailable` | Resource busy or inactive (transfer slots, system metrics, snapshot source, ringer GUI, display command). |
+| `502 Bad Gateway` | Home Assistant callback/display bridge is unavailable, or an OpenWebNet command failed or was not sent (`openwebnet_busy`, `client_gone`). |
+| `503 Service Unavailable` | Resource busy or inactive (transfer slots, system metrics, snapshot source, ringer GUI, display command), or a media action was not run (`media_busy`, `client_gone`). |
 | `504 Gateway Timeout` | The GUI did not acknowledge a ringer command within five seconds. |
+
+Requests that send OpenWebNet commands and the media actions (activate, stop,
+answer, hangup, home call start and stop) run one at a time each, in the order
+they arrived; the others wait for their turn with the connection open. Three
+requests may wait in all. One more is answered `openwebnet_busy` (502) or
+`media_busy` (503): nothing was sent or changed, and the request can be
+repeated. A request that had to wait and whose caller has closed the
+connection meanwhile, also only its sending side, is not run and answered
+`client_gone`; of the media actions this applies to the three that start
+something, a stop still runs.
 
 Request bodies are parsed from JSON. Unknown fields should be ignored unless the
 handler explicitly validates the whole object.

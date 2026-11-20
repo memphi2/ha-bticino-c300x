@@ -27,6 +27,14 @@ static int defer(struct c300x_openwebnet_async *async, struct c300x_openwebnet_c
     return 1;
 }
 
+/* The command is not sent. The handler returns as for a deferred call, with
+ * no effect, and the request is answered with the error. */
+static int refuse(struct c300x_openwebnet_async *async, struct c300x_openwebnet_call *call, const char *error)
+{
+    async->refusal = error;
+    return defer(async, call);
+}
+
 static int hook(struct c300x_openwebnet_call *call)
 {
     struct c300x_openwebnet_async *async = armed;
@@ -41,7 +49,7 @@ static int hook(struct c300x_openwebnet_call *call)
     }
     switch (c300x_request_worker_turn(worker)) {
     case C300X_REQUEST_WORKER_FULL:
-        return c300x_openwebnet_call_fail(call, "openwebnet_busy");
+        return refuse(async, call, "openwebnet_busy");
     case C300X_REQUEST_WORKER_WAIT:
         return defer(async, call);
     case C300X_REQUEST_WORKER_MINE:
@@ -59,7 +67,7 @@ static int hook(struct c300x_openwebnet_call *call)
     }
     if (c300x_request_worker_caller_left(worker)) {
         /* Nobody waits for it any more: a door must not open that late. */
-        return c300x_openwebnet_call_fail(call, "client_gone");
+        return refuse(async, call, "client_gone");
     }
     if (async->result_count == C300X_OPENWEBNET_ASYNC_RESULTS) {
         /* No room to remember another result: run it here, as before. */
@@ -93,10 +101,10 @@ static void wait_for_worker(void)
     }
 }
 
-int c300x_openwebnet_async_init(struct c300x_openwebnet_async *async)
+int c300x_openwebnet_async_init(struct c300x_openwebnet_async *async, struct c300x_request_queue *queue)
 {
     memset(async, 0, sizeof(*async));
-    if (!c300x_request_worker_init(&async->worker, run_job, &async->job, 256 * 1024)) {
+    if (!c300x_request_worker_init(&async->worker, queue, run_job, &async->job, 256 * 1024)) {
         return 0;
     }
     shared = async;
@@ -148,6 +156,7 @@ void c300x_openwebnet_async_begin(struct c300x_openwebnet_async *async, int clie
         return;
     }
     c300x_openwebnet_call_deferred = 0;
+    async->refusal = NULL;
     if (async->worker.owner_fd == client_fd) {
         memset(async->used, 0, sizeof(async->used));
     }
@@ -155,16 +164,23 @@ void c300x_openwebnet_async_begin(struct c300x_openwebnet_async *async, int clie
     c300x_openwebnet_hook = hook;
 }
 
-int c300x_openwebnet_async_end(struct c300x_openwebnet_async *async)
+int c300x_openwebnet_async_deferred(const struct c300x_openwebnet_async *async)
 {
-    int answered;
-    int deferred = c300x_request_worker_end(&async->worker, &answered);
+    return async->worker.deferred;
+}
 
-    if (answered) {
+const char *c300x_openwebnet_async_refusal(const struct c300x_openwebnet_async *async)
+{
+    return async->refusal;
+}
+
+void c300x_openwebnet_async_end(struct c300x_openwebnet_async *async, int deferred)
+{
+    if (c300x_request_worker_end(&async->worker, deferred)) {
         async->result_count = 0;
     }
+    async->refusal = NULL;
     c300x_openwebnet_call_deferred = 0;
     armed = NULL;
     c300x_openwebnet_hook = NULL;
-    return deferred;
 }

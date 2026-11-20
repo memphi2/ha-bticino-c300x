@@ -97,12 +97,19 @@ shared with the media operations below). The request stays in its client slot, t
 handler returns at once and runs again when the worker is done; the OpenWebNet
 client then hands it the stored result of the same call, so every command is
 sent once. A request owns the worker until it is answered; other requests with
-OpenWebNet calls wait in their slots, without a busy response. A caller that
-left does not repeat or cancel its command, and shutdown lets a running
-sequence finish, so a pressed lock is released. If no thread can be started
-the call runs on the loop as before. Three requests may wait; one more is
-answered `openwebnet_busy` (502) so that waiting requests never use up the API
-client slots. A request that waited is not started when its caller has left.
+OpenWebNet calls wait in their slots and get the worker in the order they
+arrived. A caller that left does not repeat or cancel its command, and
+shutdown lets a running sequence finish, so a pressed lock is released. If no
+thread can be started the call runs on the loop as before.
+
+The waiting places are shared with the media operations (`request_queue.c`):
+three in all. With the two requests the workers run, that leaves one of the
+six API client slots free for a request that needs no worker. A request that
+finds no place is answered `openwebnet_busy` (502), and one that waited is
+answered `client_gone` (502) without being run when its caller has left; a
+caller that only closed its sending side counts as gone. Both are answered by
+the loop, not by the handler, which returns as for a deferred call, so a
+refused read is not taken for a failed one.
 Still on the loop: the GUI-confirmed ringer write (`/ui/ringer/next`), the
 forwarding read at startup, and the 3-second `wait_for_path_absent` of the two
 delete handlers. A call on the loop waits for a running worker first, so the
@@ -153,14 +160,17 @@ Status: the API actions in the table no longer hold the HTTP loop.
 (`request_worker.c`), a thread that exists only while an operation runs. The
 request stays in its client slot and its handler (`http_media_actions.c`)
 runs again when the operation is done, with the result of that operation; the
-response and its moment are the ones from before. Operations still run one
-after the other. Three further requests wait their turn in their slots. There
-is no new status code: a request beyond those places, and any request when no
-thread can be started, runs on the loop as before, after the running
-operation. A caller that left does not cancel its operation; a start
-(activate, answer, home call start) that only waited is dropped when its
-caller has left, a stop still runs. Shutdown lets a running operation end
-before the media owner is destroyed.
+response is the one from before; the state it reports is read when the
+handler runs again. Operations of API requests run one at a time, in the
+order the requests arrived; further requests wait in the queue shared with
+the OpenWebNet worker (see above). A request that finds no place is answered
+`media_busy` (503). A caller that left does not cancel its operation; a start
+(activate, answer, home call start) that only waited is answered
+`client_gone` (503) without being run when its caller has left, a stop still
+runs. Only when no thread can be started does an operation run on the loop.
+Shutdown lets a running operation end before the media owner is destroyed.
+Stops from elsewhere (CPU watchdog, a departing RTSP client) do not go
+through the worker and can run beside an operation, as they always could.
 
 | Request | Operation that now runs beside the loop |
 | --- | --- |
@@ -173,6 +183,8 @@ before the media owner is destroyed.
 Still on the loop: the forwarding completion (`sync_ring_receiver_for_forwarding`
 -> `c300x_media_ring_receiver_stop` -> ring-thread join when disabling), which
 has no request of its own to hold; it waits for a running operation first.
+A request that uses both workers keeps what one holds for it while it waits
+for the other; it is released from both when it is answered.
 Status routes take the media mutexes only briefly: the lifecycle waits above
 happen under `media_lifecycle_mutex` or without a lock, never under the bridge
 mutex that status reads. `/ui/media-closed` updates event state rather than

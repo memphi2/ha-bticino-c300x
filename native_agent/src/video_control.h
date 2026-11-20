@@ -21,32 +21,42 @@ struct c300x_video_control_job {
     int result;
 };
 
+enum c300x_video_control_state {
+    C300X_VIDEO_CONTROL_DONE,
+    C300X_VIDEO_CONTROL_DEFERRED, /* the handler returns without an answer */
+    C300X_VIDEO_CONTROL_REFUSED,  /* not run; the handler answers with the error */
+};
+
 /* Keeps the media operations of API requests off the HTTP loop: they wait
  * for SIP answers, for clients to drain and for media threads to end.
  *
- * One operation runs at a time, as before. The first runs on the request
- * worker while its request stays in the client slot; further requests wait
- * their turn. Whatever cannot wait there runs on the loop, as before, after
- * the running operation: a caller that is not an API request, a request
- * beyond the waiting places, and any request when no thread can start. */
+ * The operations of API requests run one at a time, in the order the
+ * requests arrived: the first on the request worker while its request stays
+ * in the client slot, further requests wait in the queue. A request that
+ * finds no place there is refused with media_busy. Only when no thread can
+ * start does an operation run on the loop, as it did before. Stops from
+ * elsewhere (the CPU watchdog, a departing RTSP client) do not come through
+ * here and may run beside an operation, as they always could. */
 struct c300x_video_control {
     struct c300x_request_worker worker;
     struct c300x_video_control_job job;
-    int has_result;
+    int has_result; /* kept until the request is answered: its handler may run more than once more */
 };
 
-int c300x_video_control_init(struct c300x_video_control *control);
+int c300x_video_control_init(struct c300x_video_control *control, struct c300x_request_queue *queue);
 /* Finishes a running operation: the media owner must outlive it. */
 void c300x_video_control_close(struct c300x_video_control *control);
 int c300x_video_control_prepare(struct c300x_video_control *control, struct pollfd *fd);
 void c300x_video_control_tick(struct c300x_video_control *control, const struct pollfd *fd);
 void c300x_video_control_begin(struct c300x_video_control *control, int client_fd);
-/* Nonzero: the request is deferred; nothing was answered and it runs again. */
-int c300x_video_control_end(struct c300x_video_control *control);
+int c300x_video_control_deferred(const struct c300x_video_control *control);
+/* deferred: the request runs again, here or for the OpenWebNet worker. */
+void c300x_video_control_end(struct c300x_video_control *control, int deferred);
 void c300x_video_control_abandon(struct c300x_video_control *control, int client_fd);
-/* Nonzero with *result set, or zero: the handler returns without an answer. */
-int c300x_video_control_run(struct c300x_video_control *control, struct c300x_video *video,
-                            enum c300x_video_control_op op, int argument, int *result);
+/* DONE sets *result, REFUSED sets *error. */
+enum c300x_video_control_state c300x_video_control_run(
+    struct c300x_video_control *control, struct c300x_video *video,
+    enum c300x_video_control_op op, int argument, int *result, const char **error);
 /* Let a running operation end before the loop itself changes the media state. */
 void c300x_video_control_settle(struct c300x_video_control *control);
 

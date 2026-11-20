@@ -1,4 +1,5 @@
 #include "c300x_agent.h"
+#include "openwebnet_call.h"
 #include "string_util.h"
 
 #include <arpa/inet.h>
@@ -33,7 +34,7 @@ static void set_socket_timeout(int fd, int timeout_ms)
     (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 }
 
-static int connect_openwebnet(const struct c300x_config *config, char *error, size_t error_len)
+static int connect_openwebnet(const struct c300x_openwebnet_call *config, char *error, size_t error_len)
 {
     int fd;
     struct sockaddr_in address;
@@ -43,11 +44,11 @@ static int connect_openwebnet(const struct c300x_config *config, char *error, si
         set_error(error, error_len, "openwebnet_socket_failed");
         return -1;
     }
-    set_socket_timeout(fd, config->openwebnet_timeout_ms);
+    set_socket_timeout(fd, config->timeout_ms);
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
-    address.sin_port = htons(config->openwebnet_port);
-    if (inet_pton(AF_INET, config->openwebnet_host, &address.sin_addr) != 1) {
+    address.sin_port = htons(config->port);
+    if (inet_pton(AF_INET, config->host, &address.sin_addr) != 1) {
         set_error(error, error_len, "openwebnet_invalid_host");
         close(fd);
         return -1;
@@ -193,8 +194,8 @@ static int handshake(int fd, char *error, size_t error_len)
     return expect_ack(fd, "openwebnet_handshake", error, error_len);
 }
 
-int c300x_openwebnet_send(
-    const struct c300x_config *config,
+static int send_now(
+    const struct c300x_openwebnet_call *config,
     const char *command,
     char *reply,
     size_t reply_len,
@@ -227,8 +228,8 @@ int c300x_openwebnet_send(
     return 1;
 }
 
-int c300x_openwebnet_sequence(
-    const struct c300x_config *config,
+static int sequence_now(
+    const struct c300x_openwebnet_call *config,
     const char *first_command,
     int delay_ms,
     const char *second_command,
@@ -260,8 +261,8 @@ int c300x_openwebnet_sequence(
     return 1;
 }
 
-int c300x_openwebnet_write_readback(
-    const struct c300x_config *config,
+static int write_readback_now(
+    const struct c300x_openwebnet_call *config,
     const char *write_command,
     int delay_ms,
     const char *readback_command,
@@ -316,5 +317,93 @@ int c300x_openwebnet_write_readback(
     }
     drain_openwebnet_frames(fd);
     close(fd);
+    return 1;
+}
+
+c300x_openwebnet_hook_fn c300x_openwebnet_hook;
+int c300x_openwebnet_call_deferred;
+
+int c300x_openwebnet_deferred(void)
+{
+    return c300x_openwebnet_call_deferred;
+}
+
+void c300x_openwebnet_execute(struct c300x_openwebnet_call *call)
+{
+    call->reply[0] = '\0';
+    call->readback[0] = '\0';
+    call->error[0] = '\0';
+    if (call->kind == C300X_OPENWEBNET_SEQUENCE) {
+        call->ok = sequence_now(call, call->first, call->delay_ms, call->second,
+            call->error, sizeof(call->error));
+    } else if (call->kind == C300X_OPENWEBNET_WRITE_READBACK) {
+        call->ok = write_readback_now(call, call->first, call->delay_ms, call->second,
+            call->reply, sizeof(call->reply), call->readback, sizeof(call->readback),
+            call->error, sizeof(call->error));
+    } else {
+        call->ok = send_now(call, call->first, call->reply, sizeof(call->reply),
+            call->error, sizeof(call->error));
+    }
+}
+
+/* Run the call now, or hand it to the hook that keeps the caller's loop free.
+ * Zero with an empty error and c300x_openwebnet_deferred() set means the
+ * caller has to return at once and will be called again with the result. */
+static int run_call(const struct c300x_config *config, struct c300x_openwebnet_call *call,
+    int kind, const char *first, int delay_ms, const char *second, char *error, size_t error_len)
+{
+    memset(call, 0, sizeof(*call));
+    call->kind = kind;
+    call->delay_ms = delay_ms;
+    call->port = config->openwebnet_port;
+    call->timeout_ms = config->openwebnet_timeout_ms;
+    c300x_copy_string(call->host, sizeof(call->host), config->openwebnet_host);
+    if (strlen(first) >= sizeof(call->first) || (second != NULL && strlen(second) >= sizeof(call->second))) {
+        set_error(error, error_len, "openwebnet_command_too_long");
+        return 0;
+    }
+    c300x_copy_string(call->first, sizeof(call->first), first);
+    c300x_copy_string(call->second, sizeof(call->second), second != NULL ? second : "");
+    if (c300x_openwebnet_hook == NULL || !c300x_openwebnet_hook(call)) {
+        c300x_openwebnet_execute(call);
+    }
+    set_error(error, error_len, call->error);
+    return call->ok;
+}
+
+int c300x_openwebnet_send(const struct c300x_config *config, const char *command,
+    char *reply, size_t reply_len, char *error, size_t error_len)
+{
+    struct c300x_openwebnet_call call;
+    if (!run_call(config, &call, C300X_OPENWEBNET_SEND, command, 0, NULL, error, error_len)) {
+        return 0;
+    }
+    snprintf(reply, reply_len, "%s", call.reply);
+    return 1;
+}
+
+int c300x_openwebnet_sequence(const struct c300x_config *config, const char *first_command,
+    int delay_ms, const char *second_command, char *error, size_t error_len)
+{
+    struct c300x_openwebnet_call call;
+    return run_call(config, &call, C300X_OPENWEBNET_SEQUENCE, first_command, delay_ms,
+        second_command, error, error_len);
+}
+
+int c300x_openwebnet_write_readback(const struct c300x_config *config, const char *write_command,
+    int delay_ms, const char *readback_command, char *write_reply, size_t write_reply_len,
+    char *readback_reply, size_t readback_reply_len, char *error, size_t error_len)
+{
+    struct c300x_openwebnet_call call;
+    if (!run_call(config, &call, C300X_OPENWEBNET_WRITE_READBACK, write_command, delay_ms,
+            readback_command, error, error_len)) {
+        /* The write reply is reported even when the readback failed, as before. */
+        if (call.reply[0] != '\0') {
+            snprintf(write_reply, write_reply_len, "%s", call.reply);
+        }
+        return 0;
+    }
+    snprintf(write_reply, write_reply_len, "%s", call.reply);
+    snprintf(readback_reply, readback_reply_len, "%s", call.readback);
     return 1;
 }

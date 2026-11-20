@@ -40,6 +40,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "command_transaction.c": (4_500, 120),
         "http_service_commands.c": (10_000, 285),
         "http_audio_codec.c": (4_500, 110),
+        "openwebnet_async.c": (6_500, 215),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name

@@ -1,4 +1,5 @@
 #include "ringer_protocol.h"
+#include "openwebnet_call.h"
 #include "json_util.h"
 
 #include <stdio.h>
@@ -90,7 +91,11 @@ int c300x_ringer_read_json(
         snprintf(muted_status_part, sizeof(muted_status_part), ",\"status\":\"unknown\"");
     }
 
-    if (c300x_openwebnet_send(config, "*#8**41##", volume_reply, sizeof(volume_reply), error, error_len)) {
+    int volume_read = c300x_openwebnet_send(config, "*#8**41##", volume_reply, sizeof(volume_reply), error, error_len);
+    if (c300x_openwebnet_deferred()) {
+        return 0;
+    }
+    if (volume_read) {
         c300x_json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
         snprintf(volume_raw_part, sizeof(volume_raw_part), ",\"volume_raw\":%s", volume_reply_json);
         if (c300x_ringer_volume_from_reply(volume_reply, &volume)) {

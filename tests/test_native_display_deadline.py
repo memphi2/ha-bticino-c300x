@@ -16,7 +16,7 @@ def test_display_deadline_releases_pending_command(tmp_path: Path, sanitize: boo
         flags += ["-idirafter", include]
     sources = [
         "callback_queue", "display_callback", "http_callback", "http_util",
-        "http_response", "https_client", "system_metrics", "time_util",
+        "http_response", "https_client", "openwebnet", "system_metrics", "time_util",
     ]
     binary = tmp_path / "display-deadline"
     build = subprocess.run(

@@ -90,6 +90,22 @@ does not change or certify cancellation of existing QML apply/restore jobs.
 
 ## OpenWebNet Network Waits
 
+Status: the API requests in the table below no longer hold the HTTP loop.
+`openwebnet_async.c` runs one exchange at a time on a worker thread that
+exists only while an exchange runs. The request stays in its client slot, the
+handler returns at once and runs again when the worker is done; the OpenWebNet
+client then hands it the stored result of the same call, so every command is
+sent once. A request owns the worker until it is answered; other requests with
+OpenWebNet calls wait in their slots, without a busy response. A caller that
+left does not repeat or cancel its command, and shutdown lets a running
+sequence finish, so a pressed lock is released. If no thread can be started
+the call runs on the loop as before. Still on the loop: the GUI-confirmed
+ringer write (`/ui/ringer/next`), the forwarding refresh after an event, and
+the 3-second `wait_for_path_absent` of the two delete handlers.
+
+A handler must return without any effect when `c300x_openwebnet_deferred()`
+is set after a failed call; `send_json` writes nothing in that state.
+
 `openwebnet.c` uses blocking IPv4 `connect`/`send`/`recv`, configured socket
 send/receive timeouts, and `select` for draining. Host parsing is numeric
 `inet_pton`, not DNS. Frame reads consume bytes individually, so the configured
@@ -108,9 +124,10 @@ readback settle delays use `nanosleep`.
 | GET/POST `/api/v1/answering-machine` | `handle_answering_get`/`post` -> OpenWebNet send/readback. |
 | POST `/api/v1/answering-machine/messages/actions/delete` and `/api/v1/memos/actions/delete` | Delete handler -> `send_answering_delete_command` -> OpenWebNet send; `wait_for_path_absent(..., 3000)` then polls the path with 100ms sleeps when it was present. |
 
-### Safe Protocol Design
+### Earlier Design Note
 
-Use a bounded transaction state machine integrated with the existing poll loop:
+Not built; the worker above was chosen because it keeps the protocol code
+unchanged. Kept for the remaining loop callers. Use a bounded transaction state machine integrated with the existing poll loop:
 nonblocking connect/send/frame receive, active-only settle/hold timers, copied
 config/command inputs, bounded result frames, main-loop completion. Preserve
 per-operation timeout resets and existing error strings, not a newly invented

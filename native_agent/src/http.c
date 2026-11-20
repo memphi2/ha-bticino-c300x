@@ -16,6 +16,7 @@
 #include "http_request.h"
 #include "http_response.h"
 #include "http_clients.h"
+#include "openwebnet_async.h"
 #include "http_file_transfers.h"
 #include "http_callback.h"
 #include "https_client.h"
@@ -219,6 +220,7 @@ struct agent_runtime {
     struct c300x_http_file_transfers file_transfers;
     struct c300x_ringer_control ringer_control;
     struct c300x_http_maintenance maintenance;
+    struct c300x_openwebnet_async openwebnet;
     struct c300x_system_metrics_monitor metrics;
     struct c300x_setting_state forwarding_state;
     struct c300x_setting_state ringer_muted_state;
@@ -5295,6 +5297,10 @@ static int make_listener(const char *host, uint16_t port)
 
 static void send_json(int client_fd, int status, const char *reason, const char *body)
 {
+    if (c300x_openwebnet_deferred()) {
+        /* The request runs again with the result; it is answered then. */
+        return;
+    }
     c300x_http_send_json(client_fd, status, reason, body);
 }
 
@@ -6545,6 +6551,7 @@ static void handle_smartphone_get(
     char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
 
     if (!c300x_openwebnet_send(config, "*#8**37##", reply, sizeof(reply), error, sizeof(error))) {
+        if (c300x_openwebnet_deferred()) return;
         remember_smartphone_forwarding_mode(runtime, -1, NULL);
         send_device_error(client_fd, error);
         return;
@@ -6614,6 +6621,7 @@ static void handle_smartphone_post(
         readback_reply, sizeof(readback_reply),
         error, sizeof(error)
     )) {
+        if (c300x_openwebnet_deferred()) return;
         remember_smartphone_forwarding_mode(runtime, -1, NULL);
         send_device_error(client_fd, error);
         return;
@@ -6705,6 +6713,7 @@ static void handle_ringer_get(
         return;
     }
     if (!c300x_ringer_read_json(config, body, sizeof(body), &muted, &volume, error, sizeof(error))) {
+        if (c300x_openwebnet_deferred()) return;
         remember_ringer_muted(runtime, -1, NULL, NULL);
         remember_ringer_volume(runtime, -1, NULL);
         send_device_error(client_fd, error);
@@ -6804,6 +6813,7 @@ static int handle_ringer_post(
             return 0;
         }
         if (!c300x_openwebnet_send(config, "*#8**33##", muted_reply, sizeof(muted_reply), error, sizeof(error))) {
+            if (c300x_openwebnet_deferred()) return 1;
             remember_ringer_muted(runtime, -1, NULL, NULL);
             send_device_error(client_fd, error);
             return 1;
@@ -6836,6 +6846,7 @@ static int handle_ringer_post(
             error,
             sizeof(error)
         )) {
+            if (c300x_openwebnet_deferred()) return 1;
             remember_ringer_volume(runtime, -1, NULL);
             send_device_error(client_fd, error);
             return 1;
@@ -9904,7 +9915,12 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
             free(request);
             return 0;
         }
+        c300x_openwebnet_async_begin(&runtime->openwebnet, client_fd);
         handle_api_request(client_fd, config, runtime, request);
+        if (c300x_openwebnet_async_end(&runtime->openwebnet)) {
+            free(request);
+            return 0;
+        }
         close_client = runtime->ringer_control.client_fd != client_fd
             && runtime->touch_tone.client_fd != client_fd
             && runtime->maintenance.client_fd != client_fd
@@ -9934,7 +9950,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -9968,6 +9984,7 @@ int c300x_run(struct c300x_config *config)
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
+    (void)c300x_openwebnet_async_init(&runtime->openwebnet);
     runtime->display_client_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);
@@ -10047,6 +10064,7 @@ int c300x_run(struct c300x_config *config)
         int udp_poll_index = -1;
         int mdns_poll_index = -1;
         int mqtt_poll_index = -1;
+        int openwebnet_poll_index = 0;
         int voicemail_poll_index = -1;
         int text_memos_poll_index = -1;
         int voice_memos_poll_index = -1;
@@ -10085,6 +10103,9 @@ int c300x_run(struct c300x_config *config)
         poll_count += C300X_HTTP_MAX_FILE_TRANSFERS;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_http_maintenance_prepare(&runtime->maintenance, &poll_fds[poll_count++]));
+        openwebnet_poll_index = (int)poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c300x_openwebnet_async_prepare(&runtime->openwebnet, &poll_fds[poll_count++]));
         callback_poll_index = (int)poll_count;
         poll_fds[poll_count++] = (struct pollfd){.fd = c300x_callback_queue_fd(runtime->callbacks), .events = POLLIN};
         display_poll_index = (int)poll_count;
@@ -10219,6 +10240,7 @@ int c300x_run(struct c300x_config *config)
         /* Drain old descriptors before accept can reuse one of their numbers. */
         c300x_http_outputs_handle(&poll_fds[output_poll_index]);
         c300x_http_maintenance_tick(&runtime->maintenance);
+        c300x_openwebnet_async_tick(&runtime->openwebnet, &poll_fds[openwebnet_poll_index]);
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
         c300x_ringer_control_expire(&runtime->ringer_control);
         c300x_touch_tone_tick(&runtime->touch_tone, &poll_fds[touch_tone_poll_index]);
@@ -10360,6 +10382,7 @@ cleanup:
         c300x_touch_tone_close(&runtime->touch_tone);
         c300x_display_alerts_close(&runtime->display_alerts);
         c300x_http_maintenance_close(&runtime->maintenance);
+        c300x_openwebnet_async_close(&runtime->openwebnet);
         c300x_recent_events_clear(&runtime->recent_events);
         c300x_http_outputs_close();
     }

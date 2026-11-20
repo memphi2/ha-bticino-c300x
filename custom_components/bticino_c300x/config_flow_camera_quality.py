@@ -129,11 +129,14 @@ class CameraQualityOptionsStep:
                 return cast(ConfigFlowResult, await self.async_step_init())
             if not errors:
                 try:
-                    await api.async_camera_quality(**changes)
+                    result = await api.async_camera_quality(**changes)
                 except C300XAgentApiError:
                     errors["base"] = "camera_quality_failed"
                 else:
-                    return cast(ConfigFlowResult, await self.async_step_init())
+                    # Restarts turned off in the agent: saved, but waiting.
+                    if result.get("restart_required") is not True or result.get("rebooting") is not False:
+                        return cast(ConfigFlowResult, await self.async_step_init())
+                    errors["base"] = "camera_quality_restart_pending"
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="camera_quality",
             data_schema=_schema(status, saved if user_input is None else user_input),

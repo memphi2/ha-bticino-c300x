@@ -158,3 +158,20 @@ def test_a_new_value_outside_the_limits_is_named_before_anything_is_sent() -> No
     assert api.writes == []
     _open(_entry(api), {"size": "688x480", "bitrate_kbps": 180.0, "fps": 24.0})
     assert api.writes == [{"fps": 24}]
+
+
+def test_a_save_without_a_restart_says_the_values_wait_for_the_next_one() -> None:
+    # Reboot maintenance off in the agent: saved, but nothing restarts.
+    api = _QualityApi()
+    real = api.async_camera_quality
+
+    async def no_reboot(**changes: Any) -> dict[str, Any]:
+        body = await real(**changes)
+        return {**body, "restart_required": True, "rebooting": False} if changes else body
+
+    api.async_camera_quality = no_reboot  # type: ignore[method-assign]
+    form = _open(_entry(api), {"size": "688x480", "bitrate_kbps": 1500.0, "fps": 15.0})
+    assert form["errors"] == {"base": "camera_quality_restart_pending"}
+    assert form["data_schema"]({})["bitrate_kbps"] == 1500
+    result = _open(_entry(api), {"size": "688x480", "bitrate_kbps": 1500.0, "fps": 15.0})
+    assert (result["type"], result["step_id"]) == ("menu", "init")

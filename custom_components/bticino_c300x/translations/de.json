@@ -1128,7 +1128,8 @@
       "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
       "camera_quality_failed": "Die C300X hat die Werte nicht gespeichert. Prüfe die Verbindung und versuche es erneut.",
       "camera_quality_unsupported": "Diese C300X bietet die Einstellung der Kameraqualität nicht an.",
-      "camera_quality_out_of_range": "Außerhalb dessen, was das Gerät für diesen Stream annimmt; nur der auf dem Gerät gespeicherte Wert darf so bleiben."
+      "camera_quality_out_of_range": "Außerhalb dessen, was das Gerät für diesen Stream annimmt; nur der auf dem Gerät gespeicherte Wert darf so bleiben.",
+      "camera_quality_restart_pending": "Gespeichert. Neustarts sind in den Agent-Einstellungen ausgeschaltet, daher nutzt das Gerät die neuen Werte erst nach seinem nächsten Neustart."
     }
   },
   "entity": {

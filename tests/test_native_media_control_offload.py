@@ -284,6 +284,8 @@ def test_a_door_command_that_lost_its_place_is_not_sent_later(lab: Lab) -> None:
     lab.health_ms()
     # The places are taken; this one gets the place of the caller that left.
     extra = lab.post(HOME_START, {"duration_seconds": 3})
+    # Until the one that lost its place is ended, all six client slots are taken.
+    time.sleep(0.3)
     lab.health_ms()
 
     lab.bus.gate.set()

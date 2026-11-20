@@ -1468,6 +1468,14 @@ int c300x_load_config(
             free(document);
             return 0;
         }
+    } else if (access("/home/bticino/bin/gui/skins/default", F_OK) != 0) {
+        /* Qt5 firmware (3.0.x+): bt_av_media only fans out the low-res video
+         * branch (multiudp_low_res); the high-res branch (#0) has no
+         * multiudpsink, so its stream never reaches the agent and clients get
+         * no decodable picture. When the config does not pin highResolution,
+         * default to the low-res stream on Qt5 devices (the on-disk QML skins
+         * dir is absent there), matching the installer default. */
+        config->video_av_high_resolution = 0;
     }
     if (nested_member3(document, document_end, "video", "rtsp", "port", &value)) {
         if (!uint16_value(value, document_end, &config->video_rtsp_port)) {

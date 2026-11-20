@@ -2,80 +2,83 @@
 
 ## v2.7.0 - Unreleased
 
-- Optional favourites bar on the display. **Page navigation** in the display
-  settings chooses between the previous/next arrows (default) and a bar along
-  the bottom edge with one button per page, the current page marked. Up to
-  four pages each get a button; with more pages the fourth is **More** and
-  lists the rest. The tiles keep their height.
-- Optional **Situations** display page: lists, from the contacts, garage
-  doors, lights and task lists you select, those that are open, on or have
-  pending items. Read-only; unknown and unavailable entities stay visible. Off
-  by default, with its own position among the pages (1 to 12).
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+2.6.0 was withdrawn; this section lists everything since 2.5.1.
+
+Display:
+
+- Optional favourites bar. **Page navigation** in the display settings chooses
+  between the previous/next arrows (default) and a bar along the bottom edge
+  with one button per page, the current page marked. Up to four pages each get
+  a button; with more pages the fourth is **More** and lists the rest. The
+  tiles keep their height.
+- Optional **Situations** page: lists, from the contacts, garage doors, lights
+  and task lists you select, those that are open, on or have pending items.
+  Read-only; unknown and unavailable entities stay visible. Off by default,
+  with its own position among the pages (1 to 12).
 - Camera and image entities can be placed on the display pages as picture
-  tiles, full or half width. Home Assistant scales the picture down to the tile
-  before the display loads it. A still, not a stream: reloaded when the image
-  entity changes, for a camera about every five minutes. Needs a plain
-  `http://` address of Home Assistant for the device.
-- The energy page loads again on the display. 2.6.0 shipped a display file
-  the device could not read, so the page stayed empty.
+  tiles, full or half width, with the entity's name on the picture. Home
+  Assistant scales the picture down to the tile before the display loads it. A
+  still, not a stream: reloaded when the image entity changes, for a camera
+  about every five minutes. Needs a plain `http://` address of Home Assistant
+  for the device.
+- Energy's Today chart shows grid export below zero, with separate positive
+  stacks, a signed axis and negative values in the hourly readout.
+- Consumers values are rounded to whole watts; ranking and bar lengths keep
+  the measurement precision.
+- Control feedback expires reliably. After the first expiry a later "sending"
+  or "not confirmed" text could stay on a tile until the next dashboard
+  change.
+
+Configuration:
+
 - The display-pages form reads like the display: the shown pages come first,
   in display order and numbered from 1. A page the display does not show
   (switched off, or without entities) has no number and follows them, and free
-  sections come last as **Page +**.
-  2.6.0 listed the built-in pages first and numbered a switched-off page with
-  its stored position (Page 1, 2, 10, 11, 3, ...). Saved settings and the
-  display order are unchanged.
-- Setting up or removing the Home Assistant media user no longer stops the
-  display label script after ten seconds. A slow write used to be killed
-  without its cleanup, which could leave the device's root filesystem writable.
-- Requires the 2.7.0 agent bundle; run the agent-update Repair once. It
-  installs the agent and the three new display files.
+  sections come last as **Page +**. A page added without a position goes to
+  the end. Saved settings and the display order are unchanged.
+- Agent and supplied maintenance credentials are validated before normal
+  setup, reconfiguration or connection options are saved. Rejected keys are
+  told apart from an unreachable agent, with translated form errors and
+  entry-bound reauthentication. A rejected maintenance key locks only
+  maintenance actions; the entry stays online. Existing entries can still
+  start offline; one-time SSH installation remains available. Event
+  registration logs each outage and recovery once.
 
-## v2.6.0 - 2026-11-19
+Doorstation card:
 
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
-
-- Separate initial state and availability updates from confirmed setting and
-  collection changes in the agent. Keep HA entities synchronized without false
-  touch-tone, forwarding, ringer, memo or message change events on startup or
-  unchanged recovery. Startup does not set these device settings; real changes
-  and repeated physical actions remain observable. Requires the matching
-  2.6.0 agent bundle.
-- Show grid export below zero in Energy's Today chart, with separate positive
-  stacks, a signed axis and negative values in the hourly readout.
-- Round Consumers values to whole watts while retaining measurement precision
-  for ranking and bar lengths.
-- Keep the four built-in display-page sections (Status, Energy, Agenda and
-  Leave home) together at the top of the configuration form, before the seven
-  custom pages. Headings retain their configured display positions.
-- Validate agent and supplied maintenance credentials before saving normal
-  setup, reconfiguration or connection options. Distinguish rejected keys from
-  an unreachable agent, with translated form errors and entry-bound reauthentication.
-  A rejected maintenance key locks only maintenance actions; the entry stays online.
-  Existing entries can still start offline; one-time SSH installation remains
-  available. Event registration logs each outage and recovery once.
-- Unified media window in the doorstation card for live video, saved HA
-  snapshots and saved HA capture videos. Media history is on by default
-  (`show_media_history: true`) and can be hidden independently. Arrows on the
-  picture browse media chronologically; saved videos offer play/pause, timeline
-  and volume/mute, with a lower-right recording timestamp. A click on the
-  picture opens the card as a large window with the same controls, including
-  two-way audio, door and light; full screen is available there.
-  Live video and incoming rings take priority; browsing never starts, answers
-  or stops a device call. Existing Home Call, door/light, name and status
-  options remain available.
+- Unified media window for live video, saved HA snapshots and saved HA capture
+  videos. Media history is on by default (`show_media_history: true`) and can
+  be hidden independently. Arrows on the picture browse media chronologically;
+  saved videos offer play/pause, timeline and volume/mute, with a lower-right
+  recording timestamp. A click on the picture opens the card as a large window
+  with the same controls, including two-way audio, door and light; full screen
+  is available there. Live video and incoming rings take priority; browsing
+  never starts, answers or stops a device call. Existing Home Call, door/light,
+  name and status options remain available.
 - Media history uses existing HA storage and device-specific indexing for new
   completed default-path ring and on-demand captures, without importing
   arbitrary historic MP4s or device answering-machine recordings. Automatic
   images still require **Save images**; clips require a separate capture
   automation. Hiding history or expiring its links does not delete MP4 files.
   See [Media history](docs/visitor-journal.md) for setup and retention.
-- Keep a running stream or call in the doorstation card when a dashboard with
-  columns rebuilds its layout, for example after the browser window is resized
-  or enters full screen.
-- Expire the display's control feedback reliably. After the first expiry a
-  later "sending" or "not confirmed" text could stay on a tile until the next
-  dashboard change.
+- A running stream or call stays in the card when a dashboard with columns
+  rebuilds its layout, for example after the browser window is resized or
+  enters full screen.
+
+Agent:
+
+- Initial state and availability updates are separated from confirmed setting
+  and collection changes. HA entities stay synchronized without false
+  touch-tone, forwarding, ringer, memo or message change events on startup or
+  unchanged recovery. Startup does not set these device settings; real changes
+  and repeated physical actions remain observable.
+- Setting up or removing the Home Assistant media user no longer stops the
+  display label script after ten seconds. A slow write used to be killed
+  without its cleanup, which could leave the device's root filesystem writable.
+- Requires the 2.7.0 agent bundle; run the agent-update Repair once. It
+  installs the agent and the three new display files.
 
 ## v2.5.1 - 2026-11-19
 

@@ -416,7 +416,7 @@ changed**, with the stable event type `display_touch_tone_changed` for automatio
 The initial reading, loss of the GUI connection and recovery with the same
 value only refresh the switch. Starting HA does not set the touch tone.
 
-With the matching 2.6.0 agent bundle, the same distinction applies to ringer
+With the matching 2.7.0 agent bundle, the same distinction applies to ringer
 mute, ringer volume and forwarding: initial values and availability updates
 synchronize their entities without firing change events. Message and memo
 collections retain their last valid content identity across an access failure;

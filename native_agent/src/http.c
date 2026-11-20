@@ -9675,11 +9675,12 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
             free(request);
             return 0;
         }
-        /* A maintenance write may replace the configuration. It waits until the
+        /* An admitted maintenance write may replace the configuration. It waits until the
          * request that has a command on the bus is answered: that request runs
          * again and must find the configuration it started with. */
         if (strcmp(request->method, "POST") == 0 && strncmp(request->path, "/api/v1/maintenance/", 20) == 0
-            && c300x_request_worker_owned_by_other(&runtime->openwebnet.worker, client_fd)) {
+            && c300x_request_worker_owned_by_other(&runtime->openwebnet.worker, client_fd)
+            && api_request_authorized(config, request) && maintenance_authorized(config, request)) {
             free(request);
             return 0;
         }

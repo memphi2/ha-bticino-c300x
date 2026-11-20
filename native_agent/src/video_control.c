@@ -76,6 +76,9 @@ enum c300x_video_control_state c300x_video_control_run(
     case C300X_REQUEST_WORKER_FULL:
         *error = "media_busy";
         return C300X_VIDEO_CONTROL_REFUSED;
+    case C300X_REQUEST_WORKER_LEFT:
+        *error = "client_gone";
+        return C300X_VIDEO_CONTROL_REFUSED;
     case C300X_REQUEST_WORKER_WAIT:
         return C300X_VIDEO_CONTROL_DEFERRED;
     case C300X_REQUEST_WORKER_MINE:

@@ -3,8 +3,9 @@
 
 /* The API has six client slots. Each of the two workers holds one for the
  * request it runs, and the requests waiting for either worker share these
- * places, so worker requests alone never hold more than five of the six. */
+ * places, so that waiting requests cannot take all the slots. */
 #define C300X_REQUEST_QUEUE_PLACES 3
+#define C300X_REQUEST_QUEUE_DEPARTED 8 /* no more than there are client slots */
 
 /* Requests waiting for a worker, in the order they arrived. */
 struct c300x_request_queue {
@@ -13,6 +14,10 @@ struct c300x_request_queue {
         int fd;
         const void *worker;
     } places[C300X_REQUEST_QUEUE_PLACES];
+    /* Requests that lost their place because their caller had left. They are
+     * still in their client slots and are ended when the loop offers them. */
+    int departed_count;
+    int departed[C300X_REQUEST_QUEUE_DEPARTED];
 };
 
 /* The longest waiting request of that worker, or -1. */

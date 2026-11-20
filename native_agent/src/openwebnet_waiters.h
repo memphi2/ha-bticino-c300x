@@ -6,8 +6,13 @@
 #include "pthread_compat.h"
 #include "request_queue.h"
 
-/* Take the place of one waiting request whose caller has left; zero when all wait still. */
+/* Free the place of one waiting request whose caller has left and mark that
+ * request as departed; zero when all callers are still there. */
 int c300x_request_queue_drop_departed(struct c300x_request_queue *queue);
+/* Nonzero when the request lost its place that way. */
+int c300x_request_queue_departed(const struct c300x_request_queue *queue, int fd);
+/* The request is over. */
+void c300x_request_queue_forget_departed(struct c300x_request_queue *queue, int fd);
 /* Nonzero when the peer of a request that sent everything has closed. */
 int c300x_openwebnet_caller_left(int fd);
 /* Start a joinable worker that no signal interrupts, with a stack of that size. */

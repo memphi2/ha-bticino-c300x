@@ -50,6 +50,8 @@ static int hook(struct c300x_openwebnet_call *call)
     switch (c300x_request_worker_turn(worker)) {
     case C300X_REQUEST_WORKER_FULL:
         return refuse(async, call, "openwebnet_busy");
+    case C300X_REQUEST_WORKER_LEFT:
+        return refuse(async, call, "client_gone");
     case C300X_REQUEST_WORKER_WAIT:
         return defer(async, call);
     case C300X_REQUEST_WORKER_MINE:

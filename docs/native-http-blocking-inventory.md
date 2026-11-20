@@ -103,11 +103,13 @@ shutdown lets a running sequence finish, so a pressed lock is released. If no
 thread can be started the call runs on the loop as before.
 
 The waiting places are shared with the media operations (`request_queue.c`):
-three in all. The requests of the two workers so never hold more than five of
-the six API client slots. (Other requests kept open - a status read deferred
-behind a maintenance job, an unfinished upload - still count against the six.)
-A waiting request whose caller has left gives its place to a new one when all
-places are taken. A request that
+three in all, beside the two requests the workers run. (Other requests kept
+open - a status read deferred behind a maintenance job, an admitted
+maintenance write held behind the bus request, an unfinished upload - count
+against the six API client slots as well.) When all places are taken, a
+waiting request whose caller has left loses its place to the new request. It
+is marked, never run, and answered `client_gone` the next time the loop
+offers it, which frees its client slot. A request that
 finds no place is answered `openwebnet_busy` (502), and one that waited is
 answered `client_gone` (502) without being run when its caller has left; a
 caller that only closed its sending side counts as gone. Both are answered by
@@ -123,8 +125,9 @@ is set after a failed call; `send_json` writes nothing in that state. A
 handler runs again from its start, so a state it checks before its first
 call must not be checked again once the request has a command out
 (`c300x_openwebnet_async_owns`); the ringer handlers do this for the display
-slot. A maintenance POST, which may replace the configuration, is held back
-while another request owns the bus worker. The call also runs on the loop when
+slot. A maintenance POST that passed authentication, and so may replace the
+configuration, is held back while another request owns the bus worker; one
+that is not admitted is answered at once. The call also runs on the loop when
 eight results of one request are stored already.
 
 `openwebnet.c` uses blocking IPv4 `connect`/`send`/`recv`, configured socket
@@ -176,7 +179,7 @@ the OpenWebNet worker (see above). A request that finds no place is answered
 `media_busy` (503). A caller that left does not cancel its operation; a start
 (activate, answer, home call start) that only waited is answered
 `client_gone` (503) without being run when its caller has left, a stop still
-runs, unless its place was given to a new request. Only when no thread or
+runs, unless it lost its place to a new request (then `client_gone`). Only when no thread or
 wake pipe can be created does an operation run on the loop.
 Shutdown lets a running operation end before the media owner is destroyed.
 Stops from elsewhere (CPU watchdog, a departing RTSP client) do not go

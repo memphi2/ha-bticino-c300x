@@ -51,18 +51,6 @@ int c300x_request_worker_prepare(struct c300x_request_worker *worker, struct pol
     return -1;
 }
 
-int c300x_request_worker_finished(const struct c300x_request_worker *worker, const struct pollfd *fd)
-{
-    return worker->running && fd->fd == worker->wake[0] && (fd->revents & POLLIN) != 0;
-}
-
-void c300x_request_worker_wait(const struct c300x_request_worker *worker)
-{
-    if (worker->running) {
-        c300x_openwebnet_wait_readable(worker->wake[0]);
-    }
-}
-
 int c300x_request_worker_reap(struct c300x_request_worker *worker)
 {
     char done;
@@ -93,6 +81,7 @@ void c300x_request_worker_begin(struct c300x_request_worker *worker, int client_
 int c300x_request_worker_abandon(struct c300x_request_worker *worker, int client_fd)
 {
     (void)c300x_request_queue_remove(worker->queue, worker, client_fd);
+    c300x_request_queue_forget_departed(worker->queue, client_fd);
     if (worker->owner_fd != client_fd) {
         return 0;
     }
@@ -121,6 +110,9 @@ enum c300x_request_worker_turn c300x_request_worker_turn(struct c300x_request_wo
     if (worker->owner_fd == worker->armed_fd) {
         return C300X_REQUEST_WORKER_MINE;
     }
+    if (c300x_request_queue_departed(worker->queue, worker->armed_fd)) {
+        return C300X_REQUEST_WORKER_LEFT;
+    }
     if (worker->owner_fd == C300X_REQUEST_WORKER_FREE && (first < 0 || first == worker->armed_fd)) {
         worker->waited = c300x_request_queue_remove(worker->queue, worker, worker->armed_fd);
         return C300X_REQUEST_WORKER_MINE;
@@ -131,6 +123,7 @@ enum c300x_request_worker_turn c300x_request_worker_turn(struct c300x_request_wo
              && c300x_request_queue_add(worker->queue, worker, worker->armed_fd))) {
         return C300X_REQUEST_WORKER_FULL;
     }
+    worker->reaped = 1; /* one that lost its place is offered, to be ended */
     worker->deferred = 1;
     return C300X_REQUEST_WORKER_WAIT;
 }

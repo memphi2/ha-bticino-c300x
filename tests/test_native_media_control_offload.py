@@ -271,3 +271,29 @@ def test_shutdown_lets_a_running_operation_end(lab: Lab) -> None:
     lab.release()
     assert lab.process.wait(timeout=5) == 0
     assert lab.log()[:2] == ["stop begin", "stop end"]
+
+
+def test_a_door_command_that_lost_its_place_is_not_sent_later(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    first = lab.post(UNLOCK)
+    assert lab.bus.seen.wait(5)
+    late = lab.post(UNLOCK)
+    lab.health_ms()
+    late.close()
+    stop = lab.held_stop()
+    waiting = [lab.post(HOME_STOP), lab.post(HOME_STOP)]
+    lab.health_ms()
+    # The places are taken; this one gets the place of the caller that left.
+    extra = lab.post(HOME_START, {"duration_seconds": 3})
+    lab.health_ms()
+
+    lab.bus.gate.set()
+    assert finish(first)["ok"] is True
+    lab.health_ms()
+    lab.release()
+    assert finish(stop) == {"ok": True}
+    for conn in waiting:
+        assert finish(conn) == {"ok": True}
+    assert finish(extra)["ok"] is True
+    lab.health_ms()
+    assert lab.bus.frames == [PRESS, RELEASE]

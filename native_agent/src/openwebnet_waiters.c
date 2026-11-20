@@ -17,12 +17,35 @@ int c300x_openwebnet_caller_left(int fd)
 
 int c300x_request_queue_drop_departed(struct c300x_request_queue *queue)
 {
-    for (int place = 0; place < queue->count; place++) {
-        if (c300x_openwebnet_caller_left(queue->places[place].fd)) {
-            return c300x_request_queue_remove(queue, queue->places[place].worker, queue->places[place].fd);
+    for (int place = 0; place < queue->count && queue->departed_count < C300X_REQUEST_QUEUE_DEPARTED; place++) {
+        int fd = queue->places[place].fd;
+
+        if (c300x_openwebnet_caller_left(fd)) {
+            queue->departed[queue->departed_count++] = fd;
+            return c300x_request_queue_remove(queue, queue->places[place].worker, fd);
         }
     }
     return 0;
+}
+
+int c300x_request_queue_departed(const struct c300x_request_queue *queue, int fd)
+{
+    for (int index = 0; index < queue->departed_count; index++) {
+        if (queue->departed[index] == fd) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void c300x_request_queue_forget_departed(struct c300x_request_queue *queue, int fd)
+{
+    for (int index = 0; index < queue->departed_count; index++) {
+        if (queue->departed[index] == fd) {
+            queue->departed[index] = queue->departed[--queue->departed_count];
+            return;
+        }
+    }
 }
 
 int c300x_openwebnet_worker_start(pthread_t *thread, void *(*run)(void *), void *context, size_t stack_bytes)

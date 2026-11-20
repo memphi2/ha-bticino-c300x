@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import select
 import signal
 import socket
 import socketserver
@@ -80,12 +81,13 @@ class Lab:
     process: subprocess.Popen[bytes]
     connections: list[HTTPConnection] = field(default_factory=list)
 
-    def start(self, path: str, *, post: bool = False, body: dict | None = None) -> HTTPConnection:
+    def start(self, path: str, *, post: bool = False, body: dict | None = None,
+              headers: dict | None = None) -> HTTPConnection:
         conn = HTTPConnection("127.0.0.1", self.api_port, timeout=10)
         self.connections.append(conn)
         post = post or body is not None
         conn.request("POST" if post else "GET", path, body=json.dumps(body or {}) if post else None,
-                     headers={"Authorization": "Bearer " + TOKEN})
+                     headers={"Authorization": "Bearer " + TOKEN, **(headers or {})})
         return conn
 
     def health_ms(self) -> float:
@@ -110,7 +112,7 @@ def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture
-def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
+def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Lab]:
     with managed_tcp_server(Bus()) as bus:
         api, ui = free_tcp_ports(2)
         config = {
@@ -126,6 +128,7 @@ def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
             "video": {"enabled": False}, "displayBridge": {"enabled": False},
             "mqtt": {"enabled": False}, "mdns": {"enabled": False},
         }
+        config.update(getattr(request, "param", {}))
         config_path = tmp_path / "config.json"
         config_path.write_text(json.dumps(config))
         with (tmp_path / "agent.log").open("w") as log:
@@ -317,6 +320,37 @@ def test_waiting_requests_whose_callers_left_give_their_places_to_new_ones(lab: 
     lab.bus.gate.set()
     assert finish(unlock)["ok"] is True
     assert finish(ringer)["volume"] == 3
+    lab.health_ms()
+    # None of the requests nobody waits for was sent.
+    assert "*#8**40##" not in lab.bus.frames
+
+
+def cpu_seconds(pid: int) -> float:
+    fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    return (int(fields[11]) + int(fields[12])) / 100
+
+
+def test_more_departed_callers_than_places_leave_the_agent_idle_and_its_slots_free(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    for _ in range(4):
+        conn = lab.start("/api/v1/answering-machine")
+        lab.health_ms()
+        conn.close()
+        lab.health_ms()
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    lab.health_ms()
+    before = cpu_seconds(lab.process.pid)
+    time.sleep(1)
+    assert cpu_seconds(lab.process.pid) - before < 0.2
+    assert "*#8**40##" not in lab.bus.frames
+    # All six client slots of the API are free again.
+    waiting = [lab.start("/api/v1/answering-machine") for _ in range(4)]
+    for conn in waiting:
+        assert finish(conn)["ok"] is True
 
 
 def test_a_request_with_its_command_out_is_answered_for_that_command(lab: Lab) -> None:
@@ -336,18 +370,33 @@ def test_a_request_with_its_command_out_is_answered_for_that_command(lab: Lab) -
     assert lab.bus.frames.count(write) == 1
 
 
-def test_a_maintenance_write_waits_for_the_request_on_the_bus(lab: Lab) -> None:
+def test_a_maintenance_write_that_is_not_admitted_is_answered_at_once(lab: Lab) -> None:
     lab.bus.hold(PRESS)
     unlock = lab.start(UNLOCK, post=True)
     assert lab.bus.seen.wait(5)
-    write = lab.start("/api/v1/maintenance/auth", body={})
-    lab.health_ms()
-    write.sock.settimeout(0.3)
-    with pytest.raises(TimeoutError):
-        write.getresponse()
+    refused = [lab.start("/api/v1/maintenance/auth", body={}) for _ in range(5)]
+    for conn in refused:
+        assert conn.getresponse().status in (403, 404)
+    assert lab.health_ms() < 500
 
     lab.bus.gate.set()
     assert finish(unlock)["ok"] is True
-    write2 = lab.start("/api/v1/maintenance/auth", body={})
-    assert write2.getresponse().status in (403, 404)
-    assert lab.health_ms() < 500
+
+
+@pytest.mark.parametrize(
+    "lab", [{"maintenance": {"enabled": True, "adminToken": "maintenance-token"}}], indirect=True)
+def test_an_admitted_maintenance_write_waits_for_the_request_on_the_bus(lab: Lab) -> None:
+    admin = {"X-Bticino-C300X-Maintenance-Token": "maintenance-token"}
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    write = lab.start("/api/v1/maintenance/auth", body={}, headers=admin)
+    lab.health_ms()
+    assert select.select([write.sock], [], [], 0.3)[0] == []
+    assert lab.bus.frames == [PRESS]
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    # Answered after the door command, whatever it says to an empty change.
+    assert write.getresponse().status in (200, 400)
+    assert lab.bus.frames == [PRESS, RELEASE]

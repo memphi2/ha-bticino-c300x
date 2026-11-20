@@ -129,7 +129,9 @@ requests may wait in all. One more is answered `openwebnet_busy` (502) or
 repeated. A request that had to wait and whose caller has closed the
 connection meanwhile, also only its sending side, is not run and answered
 `client_gone`; of the media actions this applies to the three that start
-something, a stop still runs.
+something, a stop still runs unless a new request needed its place. A
+maintenance POST that passed authentication waits while a request has a
+command on the OpenWebNet bus.
 
 Request bodies are parsed from JSON. Unknown fields should be ignored unless the
 handler explicitly validates the whole object.

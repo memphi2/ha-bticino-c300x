@@ -25,7 +25,7 @@
 #endif
 
 enum service_action { SSH_STATUS, SSH_START, SSH_STOP, SSH_SET, REBOOT, REMOVE };
-enum service_phase { SERVICE_COMMAND, STATUS_COMMAND, START_SSH, REBOOT_COMMAND };
+enum service_phase { SERVICE_COMMAND, STATUS_COMMAND, START_SSH };
 struct service_request {
     const struct c300x_config *config;
     c300x_schedule_command_fn schedule;
@@ -61,9 +61,7 @@ static void ssh_status(int fd, int running)
 static int start_command(struct c300x_http_maintenance *owner, const char *program, const char *action)
 {
     char *argv[] = {(char *)program, (char *)action, NULL};
-    /* The reboot command is not cut short: the device goes down with it. */
-    return c300x_command_job_start_wait(&owner->job, program, argv,
-        action == NULL ? 0 : C300X_SSH_COMMAND_TIMEOUT_MS);
+    return c300x_command_job_start_wait(&owner->job, program, argv, C300X_SSH_COMMAND_TIMEOUT_MS);
 }
 
 static int start_status(struct c300x_http_maintenance *owner, struct service_request *state)
@@ -91,23 +89,14 @@ static void reply_action(int fd, struct service_request *state, int ok)
     }
 }
 
-static int schedule_action(struct c300x_http_maintenance *owner, int fd,
-    struct service_request *state)
+static void schedule_action(int fd, struct service_request *state)
 {
     const struct c300x_config *config = state->config;
-    if (state->action == REBOOT && config->maintenance_reboot_delay_ms <= 0) {
-        state->phase = REBOOT_COMMAND;
-        if (start_command(owner, C300X_REBOOT_PROGRAM, NULL)) {
-            return 1;
-        }
-        reply_action(fd, state, 0);
-        return 0;
-    }
+    /* The configuration only takes a positive delay, so a reboot is always scheduled. */
     int ok = state->action == REMOVE
         ? state->schedule(config->maintenance_agent_remove_script, "remove", 500)
         : state->schedule(C300X_REBOOT_PROGRAM, NULL, config->maintenance_reboot_delay_ms);
     reply_action(fd, state, ok);
-    return 0;
 }
 
 static int begin_shutdown(struct c300x_http_maintenance *owner, int fd,
@@ -118,7 +107,8 @@ static int begin_shutdown(struct c300x_http_maintenance *owner, int fd,
         && start_command(owner, C300X_SSH_INIT_SCRIPT, "start")) {
         return 1;
     }
-    return schedule_action(owner, fd, state);
+    schedule_action(fd, state);
+    return 0;
 }
 
 static int finish_service(struct c300x_http_maintenance *owner)
@@ -127,12 +117,11 @@ static int finish_service(struct c300x_http_maintenance *owner)
     int fd = owner->client_fd;
     if (state->phase == START_SSH) {
         /* The old reboot/remove paths deliberately ignore SSH start failure. */
-        return !schedule_action(owner, fd, state);
+        schedule_action(fd, state);
+        return 1;
     }
     if (state->phase == STATUS_COMMAND) {
         ssh_status(fd, !owner->job.failed);
-    } else if (state->phase == REBOOT_COMMAND) {
-        reply_action(fd, state, !owner->job.failed);
     } else if (owner->job.failed) {
         command_failed(fd);
     } else if (state->action == SSH_SET) {

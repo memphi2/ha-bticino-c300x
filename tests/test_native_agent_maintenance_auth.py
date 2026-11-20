@@ -21,7 +21,7 @@ def test_every_agent_initiated_reboot_starts_ssh_first() -> None:
     begin = service.split("static int begin_shutdown", 1)[1].split("static int finish_service", 1)[0]
     assert "maintenance_ssh_start_enabled" in begin
     assert begin.index('start_command(owner, C300X_SSH_INIT_SCRIPT, "start")') < begin.index(
-        "schedule_action(owner, fd, state)"
+        "schedule_action(fd, state)"
     )
     assert service.count("begin_shutdown(owner, fd, state)") == 2
 

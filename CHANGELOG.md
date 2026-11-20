@@ -25,6 +25,14 @@ Display:
 - The energy tabs, the Leave home buttons, tiles that open details, the
   detail tabs and the on/off switch show that they are pressed.
 
+Doorstation card:
+
+- Saved images and videos look alike while browsing. The time of a video
+  is written where an image carries its own, in the lower right corner and
+  in the same form; the label in the corner and the time have no plate
+  any more. The video controls are one row in a bar above the time, and the
+  arrows stay at one height.
+
 Settings:
 
 - The settings menu has one **Display** entry. It opens a menu with the

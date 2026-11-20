@@ -1067,7 +1067,7 @@ Page {
         anchors.topMargin: 18
         anchors.leftMargin: 36
         anchors.rightMargin: 36
-        anchors.bottomMargin: tabBar.visible ? 65 : 18
+        anchors.bottomMargin: tabNavigation && pageCount > 1 ? 65 : 18
         spacing: 9
 
         Item {
@@ -1126,7 +1126,7 @@ Page {
         Flickable {
             id: scroll
             width: parent.width
-            height: parent.height - (notificationBanner.visible ? notificationBanner.height + 9 : 0) - (badgeGrid.visible ? badgeGrid.height + 9 : 0) - (pagerRow.visible ? pagerRow.height + 9 : 0)
+            height: parent.height - (notificationBanner.height > 0 ? notificationBanner.height + 9 : 0) - (badgeGrid.height > 0 ? badgeGrid.height + 9 : 0) - (pagerRow.height > 0 ? pagerRow.height + 9 : 0)
             contentWidth: width
             contentHeight: contentColumn.height
             clip: true

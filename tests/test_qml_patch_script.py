@@ -316,7 +316,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "40c477a110846897e79de5e4957dc2ae38462fc54988cd300c690c0056b435da",
+    "HomeAssistant.qml": "d528c9035cbb60a1593547e7ec27cbfadb55c3a613df1662c0a511dbed942340",
     "C300XEnergy.qml": "4c4484d123f8dc391f60ba32942b35e1134d4bf29c9c796fb50ee2504751357f",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
     "C300XAgenda.qml": "9bc5d2ff2d69250033323a4bc4696df85268ad761ed5b8446b56bf0325143711",
@@ -1026,17 +1026,20 @@ def test_home_assistant_status_sits_in_the_header() -> None:
     )
     assert scroll_height == (
         "height: parent.height"
-        " - (notificationBanner.visible ? notificationBanner.height + 9 : 0)"
-        " - (badgeGrid.visible ? badgeGrid.height + 9 : 0)"
-        " - (pagerRow.visible ? pagerRow.height + 9 : 0)"
+        " - (notificationBanner.height > 0 ? notificationBanner.height + 9 : 0)"
+        " - (badgeGrid.height > 0 ? badgeGrid.height + 9 : 0)"
+        " - (pagerRow.height > 0 ? pagerRow.height + 9 : 0)"
     )
+    # None of this reads a "visible": an item inside a hidden page reads as not
+    # visible, so the page area changed its height whenever the notification
+    # list or the More list covered it.
     # The firmware page is 480 px high under a 78 px header bar. With the 18 px
     # margins, the 38 px pager row and the 9 px column spacing the tiles keep
     # 319 px; four rows of half-height tiles, 64 px high and 10 px apart, fit.
     # The favourites bar, 56 px high at the bottom edge, takes the place of the
     # pager row and its margin: 56 + 9 is the same 65 px as 18 + 38 + 9.
     assert "anchors.topMargin: 18" in home_assistant_qml
-    assert "anchors.bottomMargin: tabBar.visible ? 65 : 18" in home_assistant_qml
+    assert "anchors.bottomMargin: tabNavigation && pageCount > 1 ? 65 : 18" in home_assistant_qml
     assert "height: pageCount > 1 && !tabNavigation ? 38 : 0" in home_assistant_qml
     assert "spacing: 9" in home_assistant_qml
     assert "(tall ? 94 : 64)" in home_assistant_qml

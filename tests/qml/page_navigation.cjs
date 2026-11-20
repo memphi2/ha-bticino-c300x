@@ -143,7 +143,7 @@ for (const line of [
     "visible: pageCount > 1 && !tabNavigation",
     "height: pageCount > 1 && !tabNavigation ? 38 : 0",
     "visible: !detailOpen && !notificationsOpen && !morePagesOpen",
-    "anchors.bottomMargin: tabBar.visible ? 65 : 18",
+    "anchors.bottomMargin: tabNavigation && pageCount > 1 ? 65 : 18",
     "else if (morePagesOpen) morePagesOpen = false",
 ]) assert.ok(qml.includes(line), line);
 assert.equal(qml.split("onSelected: Api.dashboardSelectTab(pageIndex, status, page)").length, 3);

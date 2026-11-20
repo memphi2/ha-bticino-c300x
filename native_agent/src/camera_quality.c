@@ -41,7 +41,7 @@ static int read_values(const char *path, int *bitrate, int *fps)
  * without the device finds them in a note that names the boot. */
 void c300x_camera_quality_note_running(void)
 {
-    char boot[64] = "", noted[64] = "";
+    char boot[64] = "", noted[64] = "", temp[C300X_MAX_PATH_LEN];
     const char *note = env_or("C300X_CAMERA_RUNNING_NOTE", "/tmp/c300x-camera-running");
     FILE *fp = fopen(env_or("C300X_BOOT_ID_FILE", "/proc/sys/kernel/random/boot_id"), "r");
     int bitrate = 0, fps = 0;
@@ -66,9 +66,14 @@ void c300x_camera_quality_note_running(void)
     }
     running_bitrate = bitrate;
     running_fps = fps;
-    if (boot[0] != '\0' && (fp = fopen(note, "w")) != NULL) {
-        fprintf(fp, "%s %d %d\n", boot, bitrate, fps);
-        fclose(fp);
+    /* A note cut short must not pass for the values the device runs. */
+    if (boot[0] != '\0' && snprintf(temp, sizeof(temp), "%s.tmp", note) < (int)sizeof(temp)
+        && (fp = fopen(temp, "w")) != NULL) {
+        int ok = fprintf(fp, "%s %d %d\n", boot, bitrate, fps) > 0;
+        ok = fclose(fp) == 0 && ok;
+        if (!ok || rename(temp, note) != 0) {
+            unlink(temp);
+        }
     }
 }
 

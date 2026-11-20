@@ -1746,7 +1746,7 @@ Page {
                             property string sizeW: tileItem.tile_width || ""
                             property string sizeH: tileItem.tile_height || ""
                             property bool tall: sizeH === "full" || (sizeH === "" && isSensor)
-                            width: isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
+                            width: isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || (isImage && sizeW !== "half") || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
                             height: isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10 : isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
 
                             Loader {

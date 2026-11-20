@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
@@ -68,8 +69,8 @@ def test_a_camera_is_a_picture_tile_that_loads_a_scaled_image_from_home_assistan
     query = parse_qs(url.query)
     assert f"{url.scheme}://{url.netloc}" == BASE
     assert url.path == "/api/bticino_c300x/tile_image/entry/camera.door"
-    assert set(query) == {"h", "rev", "sig"}
-    assert (item["width"], item["height"], query["h"]) == (728, 200, ["200"])
+    assert set(query) == {"w", "h", "rev", "sig"}
+    assert (item["width"], item["height"], query["w"], query["h"]) == (728, 200, ["728"], ["200"])
     assert item["name"] == "Front door"
     # Nothing but the address tells the display that a new picture exists.
     assert "access_token" not in item["source"] and "tok-1" not in item["source"]
@@ -93,6 +94,21 @@ def test_the_tile_height_setting_sets_the_picture_height(height, pixels):
     hass, entry = _environment([_camera()], overrides=overrides)
     item = next(item for item in _items(hass, entry) if item.get("kind") == "image")
     assert item["height"] == pixels and f"h={pixels}" in item["source"]
+
+
+def test_two_pictures_fit_side_by_side_with_the_half_width_setting():
+    states = [_camera(), State("camera.garden", "idle", {"access_token": "g"})]
+    overrides = {"camera.door": {"width": "half"}, "camera.garden": {"width": "half", "height": "half"}}
+    hass, entry = _environment(states, overrides=overrides)
+    door, garden = [item for item in _items(hass, entry) if item.get("kind") == "image"]
+    assert (door["width"], door["height"], door["tile_width"]) == (359, 200, "half")
+    assert (garden["width"], garden["height"]) == (359, 120)
+    assert "w=359" in door["source"]
+    # The display lays a picture tile out at half width only when told to;
+    # pictures of configured actions keep the full width.
+    qml = (Path(__file__).resolve().parents[1] / "device_qml" / "HomeAssistant.qml").read_text(encoding="utf-8")
+    assert '(isWeather || (isImage && sizeW !== "half") || isChoice || isSlider ? itemColumn.width' in qml
+    assert "property int tileWidth: (width - spacing) / 2" in qml and (728 - 10) // 2 == 359
 
 
 def test_without_a_known_address_the_tile_is_left_out():
@@ -155,6 +171,9 @@ def test_the_view_serves_only_signed_addresses_of_configured_picture_entities(mo
         ({"sig": "0" * 32}, (entry_id, entity_id)),
         ({"sig": None}, (entry_id, entity_id)),
         ({"h": "4000"}, (entry_id, entity_id)),
+        ({"w": "359"}, (entry_id, entity_id)),
+        ({"w": "5000"}, (entry_id, entity_id)),
+        ({"w": None}, (entry_id, entity_id)),
         ({}, (entry_id, "camera.other")),
         ({}, ("another", entity_id)),
         ({}, (entry_id, "light.kitchen")),

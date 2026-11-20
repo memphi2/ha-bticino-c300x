@@ -34,11 +34,14 @@ else:
     from homeassistant.components.http import HomeAssistantView
 
 IMAGE_TILE_DOMAINS = ("camera", "image")
-# The tile spans the page: 800 px less the 36 px margins.
+# A full tile spans the page: 800 px less the 36 px margins. Two half tiles
+# share it with the 10 px gap of the tile grid between them.
 IMAGE_TILE_WIDTH = 728
+IMAGE_TILE_HALF_WIDTH = 359
 IMAGE_TILE_HEIGHT = 200
 IMAGE_TILE_HEIGHTS = {"half": 120, "full": 290}
 _ALLOWED_HEIGHTS = frozenset((IMAGE_TILE_HEIGHT, *IMAGE_TILE_HEIGHTS.values()))
+_ALLOWED_WIDTHS = frozenset((IMAGE_TILE_WIDTH, IMAGE_TILE_HALF_WIDTH))
 _SOURCE_LIMIT_BYTES = 16 * 1024 * 1024
 _FETCH_TIMEOUT = 10
 _JPEG_QUALITY = 80
@@ -58,6 +61,10 @@ def image_tile_base_url(callback_url: str) -> str:
     if parts.scheme not in ("http", "https") or not parts.netloc:
         return ""
     return f"{parts.scheme}://{parts.netloc}"
+
+
+def image_tile_width(layout: dict[str, Any]) -> int:
+    return IMAGE_TILE_HALF_WIDTH if layout.get("width") == "half" else IMAGE_TILE_WIDTH
 
 
 def image_tile_height(layout: dict[str, Any]) -> int:
@@ -82,11 +89,11 @@ def image_tile_revision(entity_id: str, state: Any) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:10]
 
 
-def _signature(entry: Any, entity_id: str, height: int) -> str:
+def _signature(entry: Any, entity_id: str, width: int, height: int) -> str:
     secret = str(entry.data.get(CONF_SHARED_SECRET) or "")
     if not secret:
         return ""
-    message = f"tile-image\n{entry.entry_id}\n{entity_id}\n{height}".encode()
+    message = f"tile-image\n{entry.entry_id}\n{entity_id}\n{width}\n{height}".encode()
     return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()[:32]
 
 
@@ -94,16 +101,17 @@ def image_tile_source(entry: Any, entity_id: str, state: Any, layout: dict[str, 
     """Return address and size of the picture tile, or None when it cannot be served."""
 
     base = str(getattr(getattr(entry, "runtime_data", None), "display_image_base_url", "") or "")
+    width = image_tile_width(layout)
     height = image_tile_height(layout)
-    signature = _signature(entry, entity_id, height)
+    signature = _signature(entry, entity_id, width, height)
     if not base or not signature:
         return None
     return {
         "source": (
             f"{base}/api/{DOMAIN}/tile_image/{quote(entry.entry_id, safe='')}/{entity_id}"
-            f"?h={height}&rev={image_tile_revision(entity_id, state)}&sig={signature}"
+            f"?w={width}&h={height}&rev={image_tile_revision(entity_id, state)}&sig={signature}"
         ),
-        "width": IMAGE_TILE_WIDTH,
+        "width": width,
         "height": height,
     }
 
@@ -162,6 +170,7 @@ class C300XTileImageView(HomeAssistantView):
         hass = request.app["hass"]
         entry = hass.config_entries.async_get_entry(entry_id)
         try:
+            width = int(request.query.get("w", ""))
             height = int(request.query.get("h", ""))
         except ValueError:
             raise web.HTTPNotFound() from None
@@ -170,20 +179,21 @@ class C300XTileImageView(HomeAssistantView):
         if (
             entry is None
             or getattr(entry, "domain", DOMAIN) != DOMAIN
+            or width not in _ALLOWED_WIDTHS
             or height not in _ALLOWED_HEIGHTS
             or entity_id.split(".", 1)[0] not in IMAGE_TILE_DOMAINS
             or entity_id not in configured_dashboard_entities(entry)
         ):
             raise web.HTTPNotFound()
-        expected = _signature(entry, entity_id, height)
+        expected = _signature(entry, entity_id, width, height)
         if not expected or not hmac.compare_digest(expected, supplied):
             raise web.HTTPNotFound()
         async with _SLOTS:
             try:
-                content = await _async_source_image(hass, entity_id, IMAGE_TILE_WIDTH, height)
+                content = await _async_source_image(hass, entity_id, width, height)
                 if len(content) > _SOURCE_LIMIT_BYTES:
                     raise ValueError("picture too large")
-                body = await hass.async_add_executor_job(scaled_jpeg, content, IMAGE_TILE_WIDTH, height)
+                body = await hass.async_add_executor_job(scaled_jpeg, content, width, height)
             except (TileImageUnavailable, ValueError) as err:
                 raise web.HTTPServiceUnavailable() from err
         return web.Response(body=body, content_type="image/jpeg", headers={

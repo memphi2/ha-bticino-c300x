@@ -222,7 +222,8 @@ open its supported controls, or tap a sensor tile for its read-only details.
 ### Picture tiles
 
 A camera or image entity becomes a picture tile on the page you place it on.
-The tile spans the page and is 200 px high; the tile height setting makes it
+By default the tile spans the page and is 200 px high. Under **Tiles** the
+width can be set to half, so two pictures stand side by side, and the height to
 120 px (half) or 290 px (full). Home Assistant scales the picture down to that
 size before the display loads it, so a full camera frame never reaches the
 device. The picture is a still, not a stream: an image entity is reloaded when

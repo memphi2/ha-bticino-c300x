@@ -122,18 +122,20 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action"
+          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page."
+          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
       "user_dashboard_entity_display": {
         "title": "Display tiles",
-        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "reconfigure": {
         "title": "Reconfigure BTicino C300X",
@@ -233,18 +235,20 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action"
+          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page."
+          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Display tiles",
-        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "user_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
@@ -272,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
+        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe sections are listed in the order of the display, and their headings show the page number. A page the display does not show (switched off, or without entities) has no number and follows the shown pages. A section titled \"Page +\" is free: fill it in to add a page.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -392,7 +396,7 @@
             "data_description": {
               "enabled": "Next five events in seven days. Read on Home Assistant only.",
               "calendars": "Select up to eight calendars.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 10."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 10."
             }
           },
           "leave_home_page": {
@@ -412,7 +416,7 @@
               "lights": "Select up to 24 lights.",
               "actions": "Select up to eight existing allowlisted actions.",
               "show_alarm": "Use the alarm already configured for this display.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 11."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 11."
             }
           },
           "energy_page": {
@@ -429,19 +433,39 @@
             },
             "data_description": {
               "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 2.",
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 2.",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_consumers": "Top ten configured electrical devices by current power in W; unavailable readings are omitted, with no history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position}: Situations",
+            "description": "Read-only selected household issues. No actions or automatic navigation.",
+            "data": {
+              "enabled": "Show Situations",
+              "position": "Position",
+              "contacts": "Windows and doors",
+              "garages": "Garage doors",
+              "lights": "Lights",
+              "tasks": "Task lists"
+            },
+            "data_description": {
+              "enabled": "Select up to 24 entities in total across all four fields. Unknown and unavailable states stay visible. Disabled by default.",
+              "position": "1 = first page; positions 1 to 12. Default: 12.",
+              "contacts": "Up to 24 contacts; open contacts are shown.",
+              "garages": "Up to 24 garage covers; open or moving doors are shown.",
+              "lights": "Up to 24 lights; lights that are on are shown.",
+              "tasks": "Up to 24 to-do lists; pending-item counts only. No task changes."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
+        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe sections are listed in the order of the display, and their headings show the page number. A page the display does not show (switched off, or without entities) has no number and follows the shown pages. A section titled \"Page +\" is free: fill it in to add a page.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -561,7 +585,7 @@
             "data_description": {
               "enabled": "Next five events in seven days. Read on Home Assistant only.",
               "calendars": "Select up to eight calendars.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 10."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 10."
             }
           },
           "leave_home_page": {
@@ -581,7 +605,7 @@
               "lights": "Select up to 24 lights.",
               "actions": "Select up to eight existing allowlisted actions.",
               "show_alarm": "Use the alarm already configured for this display.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 11."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 11."
             }
           },
           "energy_page": {
@@ -598,12 +622,32 @@
             },
             "data_description": {
               "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 2.",
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 2.",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_consumers": "Top ten configured electrical devices by current power in W; unavailable readings are omitted, with no history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position}: Situations",
+            "description": "Read-only selected household issues. No actions or automatic navigation.",
+            "data": {
+              "enabled": "Show Situations",
+              "position": "Position",
+              "contacts": "Windows and doors",
+              "garages": "Garage doors",
+              "lights": "Lights",
+              "tasks": "Task lists"
+            },
+            "data_description": {
+              "enabled": "Select up to 24 entities in total across all four fields. Unknown and unavailable states stay visible. Disabled by default.",
+              "position": "1 = first page; positions 1 to 12. Default: 12.",
+              "contacts": "Up to 24 contacts; open contacts are shown.",
+              "garages": "Up to 24 garage covers; open or moving doors are shown.",
+              "lights": "Up to 24 lights; lights that are on are shown.",
+              "tasks": "Up to 24 to-do lists; pending-item counts only. No task changes."
             }
           }
         }
@@ -761,18 +805,20 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action"
+          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page."
+          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
       "dashboard_entity_display": {
         "title": "Display tiles",
-        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "init": {
         "title": "C300X settings",
@@ -794,7 +840,7 @@
           "visitor_snapshot": "Size of the saved visitor image, capture delay, retention and the date written into the image.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
           "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
-          "dashboard": "Home Assistant pages on the display on or off, home page buttons, behaviour after an action and allowed actions.",
+          "dashboard": "Home Assistant pages on the display on or off, page navigation, behaviour after an action and allowed actions.",
           "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
           "dashboard_entity_display": "Size, name and secondary line of each tile.",
           "done": "Close the settings. Everything submitted is already saved."
@@ -814,7 +860,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure four built-in pages (Status, Energy, Agenda and Leave home) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda and Leave home are independently enabled extra pages. Every page can be placed from 1 to 11. Equal positions put Energy, Agenda and Leave home before regular pages, in that order.\n\nThe four built-in sections always appear first, even when disabled. Their headings show the display position, not the section order in this form.",
+        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe sections are listed in the order of the display, and their headings show the page number. A page the display does not show (switched off, or without entities) has no number and follows the shown pages. A section titled \"Page +\" is free: fill it in to add a page.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -934,7 +980,7 @@
             "data_description": {
               "enabled": "Next five events in seven days. Read on Home Assistant only.",
               "calendars": "Select up to eight calendars.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 10."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 10."
             }
           },
           "leave_home_page": {
@@ -954,7 +1000,7 @@
               "lights": "Select up to 24 lights.",
               "actions": "Select up to eight existing allowlisted actions.",
               "show_alarm": "Use the alarm already configured for this display.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 11."
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 11."
             }
           },
           "energy_page": {
@@ -971,12 +1017,32 @@
             },
             "data_description": {
               "enabled": "Disabled views cause no queries or caching of their own; data shared with active views remains. All views off hides the page and clears its caches without losing settings.",
-              "position": "1 = first page; positions 1 to 11. Ties: Energy, Agenda, Leave home, then regular pages. Default position: 2.",
+              "position": "1 = first page; positions 1 to 12. Ties: Energy, Agenda, Leave home, Situations, then regular pages. Default position: 2.",
               "view_now": "Live flow between grid, solar, battery and home",
               "view_today": "Today's hourly energy and totals",
               "view_power": "Today's mean power in 15-minute intervals from existing Home Assistant statistics, not real-time values",
               "view_consumers": "Top ten configured electrical devices by current power in W; unavailable readings are omitted, with no history queries",
               "view_balance": "Self-sufficiency, solar used at home and costs"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position}: Situations",
+            "description": "Read-only selected household issues. No actions or automatic navigation.",
+            "data": {
+              "enabled": "Show Situations",
+              "position": "Position",
+              "contacts": "Windows and doors",
+              "garages": "Garage doors",
+              "lights": "Lights",
+              "tasks": "Task lists"
+            },
+            "data_description": {
+              "enabled": "Select up to 24 entities in total across all four fields. Unknown and unavailable states stay visible. Disabled by default.",
+              "position": "1 = first page; positions 1 to 12. Default: 12.",
+              "contacts": "Up to 24 contacts; open contacts are shown.",
+              "garages": "Up to 24 garage covers; open or moving doors are shown.",
+              "lights": "Up to 24 lights; lights that are on are shown.",
+              "tasks": "Up to 24 to-do lists; pending-item counts only. No task changes."
             }
           }
         }
@@ -1374,7 +1440,8 @@
           }
         },
         "error": {
-          "device_user_setup_failed": "The device-user setup failed. Check maintenance access and retry."
+          "device_user_setup_failed": "The device-user setup failed. Check maintenance access and retry.",
+          "device_not_registered": "The C300X has not been added in the BTicino Door Entry app yet. Flexisip on the device gets its SIP user, domain and certificates only from that registration. Add the device once in the app, then retry. Forwarding can stay on Smartphone afterwards."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."
@@ -1531,6 +1598,20 @@
         "drop_link_local": "Without link-local addresses (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 and local IPv6 (ULA) - recommended",
         "ipv4_only": "IPv4 only"
+      }
+    },
+    "dashboard_navigation": {
+      "options": {
+        "pager": "Arrows (previous / next)",
+        "tabs": "Favourites bar"
+      }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "applied",
+        "original": "not applied (original files)",
+        "unknown": "unknown",
+        "unavailable": "not available"
       }
     }
   },

@@ -8,7 +8,7 @@ from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
-from .api_errors import C300XAgentApiError
+from .api_errors import C300XAgentApiError, C300XDeviceNotRegisteredError
 from .const import DOMAIN
 from .device_user import (
     device_user_repair_reason,
@@ -50,12 +50,22 @@ class DeviceUserRepairFlow(RepairsFlow):
             status = await entry.runtime_data.api.async_ensure_homeassistant_user(
                 account_label=homeassistant_account_label(self.hass)
             )
+        except C300XDeviceNotRegisteredError:
+            return self.async_show_form(
+                step_id="confirm",
+                errors={"base": "device_not_registered"},
+            )
         except C300XAgentApiError:
             return self.async_show_form(
                 step_id="confirm",
                 errors={"base": "device_user_setup_failed"},
             )
         entry.runtime_data.device_user_status = status
+        if status.get("media_identity_available") is False:
+            return self.async_show_form(
+                step_id="confirm",
+                errors={"base": "device_not_registered"},
+            )
         if (
             not device_user_status_available(status)
             or device_user_repair_reason(status) is not None

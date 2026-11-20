@@ -369,6 +369,36 @@ and physical Ring Call interruption are not yet confirmed on hardware. No
 additional polling, refresh timers or device-file writes are introduced by these
 detail views.
 
+### Picture tiles
+
+A camera or image entity becomes a picture tile on the page you place it on.
+By default the tile spans the page and follows its picture: the picture is as
+wide as the tile, and the tile is as high as the picture's proportions make it.
+Under **Tiles** the width can be set to half, so two pictures stand side by
+side. A tile is at most 320 px high, which is what a page shows at once; a
+picture that would be higher is shown whole and narrower than the tile. With
+the height set to half (138 px) or full (286 px) the tile has that height and
+the picture is cut around its centre to fill it. Home Assistant brings the
+picture to the tile's size before the display loads it, so a full camera frame
+never reaches the device. A picture smaller than the tile is enlarged up to
+twice its size. The picture is a still, not a stream: an image entity is reloaded when
+it has a new picture, a camera about every five minutes. The entity's name is
+written in the bottom left corner of the picture. A tap does nothing.
+
+The display loads the picture straight from Home Assistant, at the address the
+device already uses for it. That address is signed with the entry's secret and
+serves only camera and image entities that are on the display pages; it needs
+no login, so anyone who can reach Home Assistant and has seen the address can
+load that scaled picture. The address does not expire; it stops working when
+the entity leaves the display pages or the display feature is switched off.
+A camera or image
+entity that is unavailable has no tile until it is back. If a picture cannot
+be read once, the tile shows only the name until the next picture.
+
+Picture tiles need a plain `http://` address of Home Assistant for the device:
+the display cannot open `https://` addresses. With an HTTPS callback address
+the tiles are left out. Picture tiles are not offered for the Alarm page.
+
 ## Display Settings
 
 On the C300X itself, open **Settings → General**. The original **Tone buttons**
@@ -390,7 +420,7 @@ changed**, with the stable event type `display_touch_tone_changed` for automatio
 The initial reading, loss of the GUI connection and recovery with the same
 value only refresh the switch. Starting HA does not set the touch tone.
 
-With the matching 2.6.0 agent bundle, the same distinction applies to ringer
+With the matching 2.7.0 agent bundle, the same distinction applies to ringer
 mute, ringer volume and forwarding: initial values and availability updates
 synchronize their entities without firing change events. Message and memo
 collections retain their last valid content identity across an access failure;
@@ -421,18 +451,19 @@ HA selectors; Alarmo is set under **Alarm (Alarmo)**;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
-The pages dialog has four built-in pages (Status, Energy, Agenda and Leave home)
-and up to seven custom pages, one section each. The four built-in sections
-always appear first, even when disabled; custom sections follow in display order.
-Titles show the page's display position and name, for example **Page 2: Living room**,
-not its place in the form. Unused custom sections remain at the end. Alarmo is not one of
+The pages dialog has five built-in pages (Status, Energy, Agenda, Leave home and
+Situations) and up to seven custom pages, one section each. The sections follow
+the display order. Titles show the page's number and name, for example
+**Page 2: Living room**. A page the display does not show (switched off, or
+without entities) has no number and follows the shown pages; free custom
+sections, titled **Page +**, come last. Alarmo is not one of
 the pages: its Alarm page opens from the home page button and has an area of
 its own in the settings menu.
 
 | Field | Meaning |
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
-| **Position** | Order of all pages, 1 to 11. Left empty, the regular section's number is used. Equal positions put Energy, Agenda, then Leave home before regular pages; regular pages keep their section order. |
+| **Position** | Order of all pages, 1 to 12. Left empty, an existing page returns to its section's number and a new page goes to the end. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
 The status-page section carries the weather card at its top,
@@ -449,10 +480,38 @@ entities stays unused; a page with entities needs a name. Each page name (in
 any capitalization) and each entity can be used once. Page names are limited to
 60 characters; a longer one is cut, and a position is rounded to a whole
 number. Pages that only configured actions use follow the configured pages.
-Sections of used pages are open, and so is the first free one.
+The sections are listed in the order of the display and their headings show
+the page number, counted over the pages the display shows. A page it does not
+show (switched off, or without entities) has no number and follows the shown
+pages. Free sections come last and are titled "Page +"; fill one in to add a
+page. Without a position the new page follows the existing ones. Sections of used pages are open, and so is the first free one.
+The headings count what this form sets up. Two things it does not know can
+shift the numbers on the display: a page that only configured actions use, and
+an Energy page that is switched on while Home Assistant has no energy data.
 The optional pages can be placed among regular pages, not just after them.
-Their default positions are Energy 2, Agenda 10 and Leave home 11. Disabling an
+Their default positions are Energy 2, Agenda 10, Leave home 11 and Situations 12. Disabling an
 optional page preserves its position and selections for later use.
+
+#### Page navigation
+
+**Page navigation** in the display settings chooses how the display changes
+pages. It is one setting for all pages.
+
+| Choice | On the display |
+| --- | --- |
+| **Arrows (previous / next)** | The row with `<`, the page number and `>` under the tiles. This is the default. |
+| **Favourites bar** | A bar along the bottom edge with one button per page. The current page is marked in yellow. |
+
+The bar has four places and follows the page positions. With up to four pages
+every page has its button. With more pages the first three have one and the
+fourth is **More**: it opens the list of the other pages, and **More** stays
+marked while one of those is shown. The device's back button closes the open
+list first. The status page is labelled **Home**; every other page shows its
+name, on up to two lines.
+
+With the bar the status page has no direct page buttons of its own, and the
+tiles keep the height they have above the arrows. Changing the page uses the
+dashboard that is already loaded and requests no data.
 
 ### Agenda
 
@@ -461,7 +520,7 @@ It shows up to five ongoing or upcoming events within the next seven days,
 including all-day events. Calendar titles and event summaries stay in HA and
 the display's memory, with no new files on the C300X.
 
-The default position is 10, configurable from 1 to 11. HA fetches events in the
+The default position is 10, configurable from 1 to 12. HA fetches events in the
 background and caches bounded results for five minutes, invalidating them on
 calendar changes. A translated loading message appears during the first read;
 a slow calendar does not hold up the dashboard or its controls. A calendar read
@@ -482,7 +541,7 @@ contacts, 24 lights and eight actions). It does not
 automatically inspect every entity in HA. Unavailable contacts remain unknown,
 not safely closed. Opening or refreshing this page never executes an action.
 
-Its position defaults to 11 and can be set from 1 to 11. Selected actions require
+Its position defaults to 11 and can be set from 1 to 12. Selected actions require
 a second tap on **Confirm** within eight seconds and can be cancelled. Leaving
 the page, changed page data, a busy command or a lost connection clears pending
 confirmation; offline controls cannot execute commands. The first tap never
@@ -490,6 +549,29 @@ executes an action. Only the existing configured action allowlist is used. The
 optional Alarmo section opens the existing Alarm page with its usual readiness
 checks and PIN rules; it does not arm the alarm automatically. Disarmed panels
 show readiness where supported; armed or arming panels show their actual state.
+
+### Situations
+
+Enable **Situations** in **Display pages** and pick the entities to watch. The
+page lists only those that need attention, one row each with the state on the
+right:
+
+| Field | Shown when |
+| --- | --- |
+| **Windows and doors** | A contact with device class door, window, opening or garage door is open. |
+| **Garage doors** | A cover with device class garage is open, opening or closing. |
+| **Lights** | The light is on. |
+| **Task lists** | The to-do list has pending items; the row shows their number. |
+
+Up to 24 entities in total across the four fields. An unknown or unavailable
+entity stays on the page, in yellow, and is never counted as closed or off. An
+entity of another kind is shown as unsupported. With nothing to show the page
+says so in one line.
+
+The page is read-only: it runs no action, does not wake the display and does
+not change the page by itself. It uses the dashboard updates that are sent
+anyway and watches only the selected entities. It is off by default; its
+position defaults to 12 and can be set from 1 to 12.
 
 ### Energy Page
 
@@ -501,7 +583,7 @@ from there.
 | Field | Meaning |
 | --- | --- |
 | **Show the energy page** | Off by default. |
-| **Position** | 1 to 11, 2 by default. At the same position Energy comes before Agenda, Leave home and regular pages. |
+| **Position** | 1 to 12, 2 by default. At the same position Energy comes before Agenda, Leave home, Situations and regular pages. |
 | **Show Now / Today / Power / Consumers / Balance** | Each subpage has its own switch. With more than one enabled, buttons at the bottom switch between them. Switching all five off hides the Energy page and stops its updates without deleting its settings. |
 
 | View | Shows |
@@ -577,7 +659,7 @@ entity id added. With more than two tiles the sections start collapsed.
 | Field | Meaning |
 | --- | --- |
 | **Width**, **Height** | Half or full; Automatic keeps the usual size of the entity type. |
-| **Name** | The Home Assistant name, the entity id, or a typed text of your own. Left empty, the Home Assistant name is shown. |
+| **Name** | A text of your own. Left empty, the Home Assistant name is shown. A tile saved earlier to show its entity ID shows the ID here; overwrite or empty it. |
 | **Secondary line** | State, entity id, last changed, last updated, or nothing. |
 
 Missing or unavailable entities retain their configuration and show unavailable

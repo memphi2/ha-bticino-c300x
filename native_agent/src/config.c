@@ -771,6 +771,19 @@ int c300x_config_listen_valid(const struct c300x_config *config, char *error, si
     return 1;
 }
 
+/* Firmware 3.0.x has a Qt 5 display with its QML built into the program; the
+ * earlier ones have Qt 4 and QML files the Display patch edits. The Qt 5
+ * library is the mark, not a missing QML folder: a folder can be missing on
+ * an older device for other reasons. */
+#ifndef C300X_QT5_DISPLAY_MARKER
+#define C300X_QT5_DISPLAY_MARKER "/usr/lib/libQt5Core.so.5"
+#endif
+
+int c300x_device_display_is_qt5(void)
+{
+    return access(C300X_QT5_DISPLAY_MARKER, F_OK) == 0;
+}
+
 int c300x_load_config(
     const char *config_path,
     struct c300x_config *config,
@@ -1468,6 +1481,12 @@ int c300x_load_config(
             free(document);
             return 0;
         }
+    } else if (c300x_device_display_is_qt5()) {
+        /* Firmware 3.0.x: bt_av_media only fans out the low-res video branch
+         * (multiudp_low_res); the high-res branch (#0) has no multiudpsink, so
+         * its stream never reaches the agent. Without a setting in the config
+         * the low-res stream is the default there, as in the installer. */
+        config->video_av_high_resolution = 0;
     }
     if (nested_member3(document, document_end, "video", "rtsp", "port", &value)) {
         if (!uint16_value(value, document_end, &config->video_rtsp_port)) {
@@ -1643,6 +1662,11 @@ int c300x_load_config(
     ) {
         set_error(error, error_len, "maintenance.adminToken must be set when maintenance actions are enabled");
         return 0;
+    }
+    if (c300x_device_display_is_qt5()) {
+        /* A Qt 5 display has no QML files: there is no Display patch to offer,
+         * so its maintenance actions are not advertised either. */
+        config->maintenance_qml_patch_enabled = 0;
     }
     if (config->maintenance_qml_patch_enabled && config->maintenance_qml_patch_script[0] == '\0') {
         set_error(error, error_len, "maintenance.qmlPatch.script must be set when enabled");

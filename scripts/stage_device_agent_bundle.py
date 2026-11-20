@@ -28,13 +28,13 @@ COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
 AGENT_BINARY = ROOT / "native_agent" / "build" / "armhf" / "c300x-agent-native"
 AGENT_VERSION_FILE = ROOT / "native_agent" / "VERSION"
 AGENT_API_VERSION = "1"
-AGENT_UPDATE_FILE_SET_VERSION = 5
+AGENT_UPDATE_FILE_SET_VERSION = 6
 ARMHF_STRIP = "arm-linux-gnueabihf-strip"
 FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v2-api-rtsp-talkback"
 IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v2-api-rtsp-talkback"
 CONFIG_SCHEMA_MATERIAL = "c300x-native-agent-config-schema-v1"
 # File-set 4 validates this path before it can install the new updater. It is
-# inert bootstrap input only; file-set 5 never installs it and removes its old
+# inert bootstrap input only; file-set 5 and later never install it and remove its old
 # installed counterpart transactionally on the second update pass.
 LEGACY_BOOTSTRAP_QML = "device_agent/qml/C300XEnergyDistribution.qml"
 LEGACY_BOOTSTRAP_CONTENT = b"import QtQuick 1.1\nItem {}\n"

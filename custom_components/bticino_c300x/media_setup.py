@@ -41,7 +41,9 @@ SELF_TEST_REASON_TEXT = {
     "video_runtime_unavailable": "the device-agent video runtime is unavailable",
     "rtsp_server_not_running": "the device-agent RTSP server is not running",
     "rtsp_config_missing": "the RTSP port or stream path is missing",
-    "media_identity_missing": "no usable C300X media identity is configured",
+    "media_identity_missing": (
+        "the C300X has no SIP identity yet; add it once in the BTicino Door Entry app"
+    ),
     "homeassistant_user_missing": (
         "the dedicated Home Assistant media user has not been created yet"
     ),

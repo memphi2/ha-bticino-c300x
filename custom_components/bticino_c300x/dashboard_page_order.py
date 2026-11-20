@@ -1,4 +1,4 @@
-"""Shared logical display slots for regular, Energy, Agenda and Leave home pages."""
+"""Shared logical display slots for regular and independently enabled pages."""
 
 from __future__ import annotations
 
@@ -6,11 +6,30 @@ import math
 from collections.abc import Mapping, Sequence, Set
 from typing import Any
 
-from .const import CONF_AGENDA_PAGE, CONF_ENERGY_PAGE, CONF_LEAVE_HOME_PAGE
+from .const import (
+    CONF_AGENDA_PAGE,
+    CONF_ENERGY_PAGE,
+    CONF_LEAVE_HOME_PAGE,
+    CONF_SITUATIONS_PAGE,
+    DASHBOARD_NAVIGATION_PAGER,
+    DASHBOARD_NAVIGATION_TABS,
+)
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT
 
-SPECIAL_PAGE_ORDER = (CONF_ENERGY_PAGE, CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE)
+SPECIAL_PAGE_ORDER = (CONF_ENERGY_PAGE, CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE, CONF_SITUATIONS_PAGE)
 PAGE_POSITION_MAX = DASHBOARD_PAGE_MAX_COUNT + len(SPECIAL_PAGE_ORDER)
+DASHBOARD_NAVIGATIONS = (DASHBOARD_NAVIGATION_PAGER, DASHBOARD_NAVIGATION_TABS)
+
+
+def dashboard_navigation(value: Any) -> str:
+    """Return how the display changes pages.
+
+    The favourites bar shows the first pages as buttons along the bottom
+    edge. Anything else, such as an entry saved before the bar existed, is
+    the previous and next arrows.
+    """
+
+    return DASHBOARD_NAVIGATION_TABS if value == DASHBOARD_NAVIGATION_TABS else DASHBOARD_NAVIGATION_PAGER
 
 
 def page_position(value: Any, default: int) -> int:
@@ -36,7 +55,7 @@ def page_layout_slots(
     """Replay saved absolute special slots against relative regular-page order.
 
     Keep configured but invisible regular pages in this input; the caller
-    removes empty slots after ordering. Ties are Energy, Agenda, Leave home,
+    removes empty slots after ordering. Ties are Energy, Agenda, Leave home, Situations,
     then regular pages. Insertion never reverses two tied special pages.
     """
     slots = [("regular", name) for name in regular_names]

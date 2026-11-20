@@ -30,7 +30,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("C300XPageNavigation", "C300XAgenda", "C300XLeaveHome", "C300XDetailControl", "C300XAlerts", "C300XEnergy")
+COMPONENTS = ("C300XPageNavigation", "C300XAgenda", "C300XLeaveHome", "C300XDetailControl", "C300XAlerts", "C300XEnergy", "C300XSituations", "C300XOptionalPages")
 VIEWPORTS = {"native": (800, 480, 748, 300), "short": (800, 480, 748, 230),
              "narrow": (480, 480, 428, 300)}
 LONG = "Very long household label - garage, upstairs and garden equipment " * 3
@@ -41,6 +41,16 @@ ALERT_CONNECTIONS = """    Connections {
 ALERT_CONNECTIONS_QT6 = """    Connections {
         target: global.screenState
         function onStateChangedInt() { root.screenChanged() }
+    }"""
+OPTIONAL_CONNECTIONS = """    Connections {
+        target: leaveHomeLoader.item
+        onActionRequested: root.actionRequested(item)
+        onAlarmRequested: root.alarmRequested()
+    }"""
+OPTIONAL_CONNECTIONS_QT6 = """    Connections {
+        target: leaveHomeLoader.item
+        function onActionRequested(item) { root.actionRequested(item) }
+        function onAlarmRequested() { root.alarmRequested() }
     }"""
 ALERT_MOUSE = """    MouseArea {
         anchors.fill: parent
@@ -59,9 +69,11 @@ def adapt_qml(source: str) -> str:
     if count != 1:
         raise ValueError("Expected exactly one QtQuick 1.1 import")
     if re.search(r"\bConnections\s*\{", source):
-        if source.count(ALERT_CONNECTIONS) != 1 or len(re.findall(r"\bConnections\s*\{", source)) != 1:
-            raise ValueError("Unreviewed Connections handler: expected the exact Alerts screen-state block")
-        source = source.replace(ALERT_CONNECTIONS, ALERT_CONNECTIONS_QT6, 1)
+        reviewed = [(ALERT_CONNECTIONS, ALERT_CONNECTIONS_QT6), (OPTIONAL_CONNECTIONS, OPTIONAL_CONNECTIONS_QT6)]
+        matches = [(old, new) for old, new in reviewed if source.count(old) == 1]
+        if len(matches) != 1 or len(re.findall(r"\bConnections\s*\{", source)) != 1:
+            raise ValueError("Unreviewed Connections handler: expected an exact reviewed block")
+        source = source.replace(*matches[0], 1)
     if "mouse.accepted" in source:
         if source.count(ALERT_MOUSE) != 1:
             raise ValueError("Unreviewed mouse handler: expected the exact Alerts pass-through block")
@@ -89,6 +101,12 @@ def fixtures() -> list[dict]:
         add(COMPONENTS[0], name, links=[{"index": index, "title": label + " " + title}
                                       for index, title in zip((7, 2, 11, 5),
                                                              ("Agenda", "Energy", "Departure", "Lights"), strict=True)])
+        # The favourites bar: the same component as one row of four buttons,
+        # the third one marked as the current page.
+        add(COMPONENTS[0], name + "-bar", bar=True, columns=4, current=11,
+            links=[{"index": index, "title": label + " " + title}
+                   for index, title in zip((7, 2, 11, -1),
+                                          ("Home", "Energy", "Climate", "More"), strict=True)])
         add(COMPONENTS[1], name, agenda={"events": [
             {"summary": label + f" appointment {i}", "when": "Tomorrow 10:30 - 12:00",
              "calendar": label} for i in range(8)]})
@@ -147,6 +165,24 @@ def fixtures() -> list[dict]:
                       (("now", "Jetzt"), ("today", "Heute"), ("power", "Leistung"), ("consumers", "Verbraucher"), ("balance", "Bilanz"))],
             "consumers": {"items": list(reversed(items)), "unit": "W", "empty_text": "No available consumers",
                           "status": "Some consumers are unavailable" if scenario == "consumers-unknown" else ""}})
+    for scenario, checks, empty in (
+        ("normal", [{"name": "Kitchen window", "state_label": "Open", "color": "#ff6b6b"},
+                    {"name": "Garage door", "state_label": "Unknown", "color": "#ffd166"}], ""),
+        ("long", [{"name": LONG, "state_label": LONG, "color": "#ffd166"} for _ in range(24)], ""),
+        ("clear", [], "No active issues in selected entities"),
+        ("empty", [], "No entities selected"),
+    ):
+        payload = {"checks": checks, "empty_text": empty}
+        add("C300XSituations", scenario, situations=payload)
+        add("C300XOptionalPages", "situations-" + scenario, situations=payload, situationsVisible=True)
+    add("C300XOptionalPages", "agenda", agendaVisible=True, agenda={"events": [], "empty_text": "No upcoming appointments"})
+    add("C300XOptionalPages", "leave", leaveHomeVisible=True, leaveHome={"checks": [], "empty_text": "No checks configured"})
+    add("C300XOptionalPages", "transitions", situationsVisible=True,
+        situations={"checks": [{"name": "Window", "state_label": "Unknown", "color": "#ffd166"}]},
+        agenda={"events": [], "empty_text": "No appointments"},
+        leaveHome={"checks": [], "empty_text": "No checks configured", "actions": []},
+        energy={"views": [{"id": "consumers", "label": "Consumers"}],
+                "consumers": {"items": [], "empty_text": "No consumers"}})
     return cases
 
 
@@ -308,9 +344,12 @@ Rectangle {{
                        'onAdjusted: function(direction) { frame.record("adjusted", direction) }\n'
                        'onRefreshRequested: frame.record("refreshRequested", null)',
         "C300XEnergy": "",
+        "C300XSituations": "",
+        "C300XOptionalPages": 'onActionRequested: function(item) { frame.record("actionRequested", item.entity_id) }\n'
+                              'onAlarmRequested: frame.record("alarmRequested", null)',
     }
     target = f'{component} {{ id: target; objectName: "target"; width: {content_width}\n{props}\n{handlers[component]}\n'
-    if component in COMPONENTS[1:3] or component == "C300XEnergy":
+    if component in COMPONENTS[1:3] or component in ("C300XEnergy", "C300XSituations", "C300XOptionalPages"):
         target += f"height: {content_height}\n"
     target += "}"
     # Detail rows belong in a scrolling parent, as in HomeAssistant.qml.
@@ -426,7 +465,7 @@ def render(args):
     pending = list(sources.values())
     while pending:
         body = pending.pop().decode()
-        dependencies = {name + ".qml" for name in re.findall(r"\b(C300XEnergy[A-Z]\w*)\b", body)}
+        dependencies = {name + ".qml" for name in re.findall(r"\b(C300X[A-Z]\w*)\b", body)}
         dependencies.update(re.findall(r'import "(js/c300x_energy\w*\.js)"', body))
         for name in sorted(dependencies - sources.keys()):
             candidate = args.qml_dir / name
@@ -674,6 +713,18 @@ def render(args):
                             before = len(event_log())
                             click(alarm)
                             check("alarm emits once", event_log()[before:], [{"signal": "alarmRequested", "value": None}])
+                        elif fixture["component"] == "C300XOptionalPages" and fixture["name"] == "transitions":
+                            flags = ("energyVisible", "agendaVisible", "leaveHomeVisible", "situationsVisible")
+                            for target in ("agendaVisible", "leaveHomeVisible", "energyVisible", "situationsVisible"):
+                                for flag in flags:
+                                    component.setProperty(flag, flag == target)
+                                settle()
+                                snapshot(target)
+                                check(target + " never executes on opening", event_log(), [])
+                            for flag in flags:
+                                component.setProperty(flag, False)
+                            settle()
+                            snapshot("all-hidden", expect_blank=True)
                         elif fixture["component"] == "C300XEnergy":
                             consumers = named(component, "energyConsumers")
                             rows = [item for item in walk(consumers) if item.objectName() == "consumerRow"]

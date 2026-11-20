@@ -294,7 +294,12 @@ function dashboard(statusItem, pageItem) {
         pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         pageItem.decimalComma = data.decimalComma === true
         assignDashboardValue(pageItem, "dashboardPages", pages)
+        var titles = []
+        for (var t = 0; t < pages.length; t++) titles.push({title: pages[t] ? pages[t].title || pages[t].name || "" : ""})
+        assignDashboardValue(pageItem, "pageTitles", titles)
         pageItem.pageCount = pages.length
+        pageItem.tabNavigation = data.navigation === "tabs"
+        if (!pageItem.tabNavigation || pages.length <= TAB_SLOTS) pageItem.morePagesOpen = false
         if (pageItem.currentPageIndex >= pages.length) {
             pageItem.currentPageIndex = 0
         }
@@ -558,6 +563,47 @@ function dashboardPageLinks(pageItem) {
         }
     }
     return links
+}
+
+var TAB_SLOTS = 4
+
+function dashboardTabTitle(pageData, index, startTitle) {
+    if (!pageData || !(pageData.title || pageData.name)) return String(index + 1)
+    return dashboardPageTitle(pageData) || startTitle
+}
+
+function dashboardPageTabs(pages, startTitle, moreTitle) {
+    pages = listOrEmpty(pages)
+    var direct = pages.length > TAB_SLOTS ? TAB_SLOTS - 1 : pages.length
+    var tabs = []
+    for (var i = 0; i < direct; i++) {
+        tabs.push({index: i, title: dashboardTabTitle(pages[i], i, startTitle)})
+    }
+    if (direct < pages.length) tabs.push({index: -1, title: moreTitle})
+    return tabs
+}
+
+function dashboardMoreLinks(pages, startTitle) {
+    pages = listOrEmpty(pages)
+    var links = []
+    if (pages.length <= TAB_SLOTS) return links
+    for (var i = TAB_SLOTS - 1; i < pages.length; i++) {
+        links.push({index: i, title: dashboardTabTitle(pages[i], i, startTitle)})
+    }
+    return links
+}
+
+function dashboardTabCurrent(pageCount, index, moreOpen) {
+    return pageCount > TAB_SLOTS && (moreOpen || index >= TAB_SLOTS - 1) ? -1 : index
+}
+
+function dashboardSelectTab(index, statusItem, pageItem) {
+    if (index === -1) {
+        pageItem.morePagesOpen = !pageItem.morePagesOpen
+        return
+    }
+    pageItem.morePagesOpen = false
+    dashboardSelectPage(index, statusItem, pageItem)
 }
 
 function dashboardPreviousPage(statusItem, pageItem) {
@@ -1045,6 +1091,8 @@ function loadDashboardPage(statusItem, pageItem) {
     pageItem.agendaVisible = !!pageData.agenda
     assignDashboardValue(pageItem, "leaveHome", pageData.leave_home || {})
     pageItem.leaveHomeVisible = !!pageData.leave_home
+    assignDashboardValue(pageItem, "situations", pageData.situations || {})
+    pageItem.situationsVisible = !!pageData.situations
     pageItem.pageTitle = dashboardPageTitle(pageData)
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {
@@ -1405,6 +1453,7 @@ function dashboardImages(source) {
         images.push({
             "kind": "image",
             "source": imageSource(source[i].source),
+            "caption": String(source[i].caption || ""),
             "width": positiveNumber(source[i].width, 220),
             "height": positiveNumber(source[i].height, 120)
         })

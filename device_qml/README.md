@@ -15,14 +15,24 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   images, switches and buttons without a refresh timer. See
   [Display Device Controls](../docs/feature-reference.md#display-device-controls).
 - `C300XPageNavigation.qml`: direct navigation to other visible dashboard pages,
-  using the existing snapshot without new requests.
+  using the existing snapshot without new requests. The same component draws
+  the page buttons of the status page, the optional favourites bar along the
+  bottom edge (`bar: true`, one row, current page marked) and the bar's More
+  list. See [Page navigation](../docs/feature-reference.md#page-navigation).
 - `C300XAgenda.qml` and `C300XLeaveHome.qml`: optional calendar and departure
   pages. HA prepares at most five events in seven days from selected calendars
   in a bounded background cache. Leave home uses explicit contacts, lights and
   allowlisted actions; actions require a second Confirm tap within eight seconds.
   No device polling is added. All regular and optional pages support positions
-  1 to 11 (Energy 2, Agenda 10, Leave home 11 by default); disabling preserves
-  selections and positions.
+  1 to 12 (Energy 2, Agenda 10, Leave home 11, Situations 12 by default);
+  disabling preserves selections and positions.
+- `C300XSituations.qml`: optional read-only page listing the selected contacts,
+  garage doors, lights and task lists that need attention. See
+  [Situations](../docs/feature-reference.md#situations).
+- `C300XChecks.qml`: the row list (name, coloured state) shared by Leave home
+  and Situations.
+- `C300XOptionalPages.qml`: loads Energy, Agenda, Leave home or Situations,
+  whichever the current page is, and unloads the others.
 - `C300XDetailControl.qml`: shared touch controls for entity detail pages.
 - `C300XEnergy.qml`: the optional energy page (views Now, Today, Power, Consumers, Balance).
   `HomeAssistant.qml` loads it only while an energy page is shown and unloads

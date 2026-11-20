@@ -42,7 +42,6 @@ from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.qml_patch import (  # noqa: E402
     async_apply_qml_core_patch_and_confirm,
     async_apply_qml_patch_and_confirm,
-    async_restore_qml_core_patch_and_confirm,
     async_restore_qml_patch_and_confirm,
 )
 
@@ -188,16 +187,6 @@ class _FakeMemoApi:
             "state": "original",
             "core_patched": True,
             "core_state": "patched",
-        }
-
-    async def async_restore_qml_core_patch(self) -> dict[str, Any]:
-        self.qml_patch_actions.append("core_restore")
-        return {
-            "available": True,
-            "patched": False,
-            "state": "original",
-            "core_patched": False,
-            "core_state": "original",
         }
 
     async def async_restore_qml_patch(self) -> dict[str, Any]:
@@ -903,38 +892,6 @@ def test_qml_core_patch_apply_reports_transient_core_status() -> None:
         assert [state["core_state"] for state in states] == [
             "core_patching",
             "patched",
-        ]
-        assert states[0]["patched"] is False
-        assert states[0]["state"] == "original"
-        assert states[0]["core_patched"] is None
-
-    asyncio.run(_run())
-
-
-def test_qml_core_patch_restore_reports_transient_core_status() -> None:
-    async def _run() -> None:
-        entry = _FakeEntry(
-            runtime_data=_FakeRuntimeData(
-                api=_FakeMemoApi(),
-                qml_patch_status={
-                    "available": True,
-                    "patched": False,
-                    "state": "original",
-                    "core_patched": True,
-                    "core_state": "patched",
-                },
-            )
-        )
-        states: list[dict[str, Any]] = []
-
-        await async_restore_qml_core_patch_and_confirm(
-            entry,  # type: ignore[arg-type]
-            lambda: states.append(dict(entry.runtime_data.qml_patch_status)),
-        )
-
-        assert [state["core_state"] for state in states] == [
-            "core_restoring",
-            "original",
         ]
         assert states[0]["patched"] is False
         assert states[0]["state"] == "original"

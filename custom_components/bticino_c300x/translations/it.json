@@ -122,18 +122,20 @@
           "device_ui_enabled": "Pagine Home Assistant sul display",
           "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
-          "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
+          "dashboard_prevent_return": "Restare sulla pagina dopo un'azione",
+          "dashboard_navigation": "Navigazione tra le pagine"
         },
         "data_description": {
           "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
-          "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
+          "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale.",
+          "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
         }
       },
       "user_dashboard_entity_display": {
         "title": "Riquadri del display",
-        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: scrivi un nome tuo. Se il campo resta vuoto, il riquadro mostra il nome di Home Assistant.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "reconfigure": {
         "title": "Riconfigura BTicino C300X",
@@ -233,18 +235,20 @@
           "device_ui_enabled": "Pagine Home Assistant sul display",
           "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
-          "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
+          "dashboard_prevent_return": "Restare sulla pagina dopo un'azione",
+          "dashboard_navigation": "Navigazione tra le pagine"
         },
         "data_description": {
           "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
-          "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
+          "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale.",
+          "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
         }
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Riquadri del display",
-        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: scrivi un nome tuo. Se il campo resta vuoto, il riquadro mostra il nome di Home Assistant.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "user_dashboard_alarm": {
         "title": "Allarme (Alarmo)",
@@ -272,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura quattro pagine predefinite (Stato, Energia, Agenda ed Esci di casa) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.\n\nLe quattro sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
+        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe sezioni seguono l'ordine del display e i titoli indicano il numero di pagina. Una pagina che il display non mostra (disattivata o senza entità) non ha numero e si trova sotto le pagine mostrate. Una sezione «Pagina +» è libera: compilala per aggiungere una pagina.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -392,7 +396,7 @@
             "data_description": {
               "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
               "calendars": "Seleziona fino a otto calendari.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 10."
             }
           },
           "leave_home_page": {
@@ -412,7 +416,7 @@
               "lights": "Seleziona fino a 24 luci.",
               "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
               "show_alarm": "Usa l'allarme già configurato per questo display.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 11."
             }
           },
           "energy_page": {
@@ -429,19 +433,39 @@
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
+            }
+          },
+          "situations_page": {
+            "name": "Pagina{situations_page_position}: Situazioni",
+            "description": "Problemi selezionati in sola lettura. Nessuna azione o navigazione automatica.",
+            "data": {
+              "enabled": "Mostra Situazioni",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "garages": "Porte del garage",
+              "lights": "Luci",
+              "tasks": "Elenchi di attività"
+            },
+            "data_description": {
+              "enabled": "Seleziona al massimo 24 entità in totale nei quattro campi. Gli stati sconosciuti e non disponibili restano visibili. Disattivato per impostazione predefinita.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Predefinita: 12.",
+              "contacts": "Fino a 24 contatti; sono mostrati i contatti aperti.",
+              "garages": "Fino a 24 porte del garage; sono mostrate le porte aperte o in movimento.",
+              "lights": "Fino a 24 luci; sono mostrate le luci accese.",
+              "tasks": "Fino a 24 elenchi; numero di attività da completare. Nessuna modifica."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura quattro pagine predefinite (Stato, Energia, Agenda ed Esci di casa) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.\n\nLe quattro sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
+        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe sezioni seguono l'ordine del display e i titoli indicano il numero di pagina. Una pagina che il display non mostra (disattivata o senza entità) non ha numero e si trova sotto le pagine mostrate. Una sezione «Pagina +» è libera: compilala per aggiungere una pagina.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -561,7 +585,7 @@
             "data_description": {
               "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
               "calendars": "Seleziona fino a otto calendari.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 10."
             }
           },
           "leave_home_page": {
@@ -581,7 +605,7 @@
               "lights": "Seleziona fino a 24 luci.",
               "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
               "show_alarm": "Usa l'allarme già configurato per questo display.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 11."
             }
           },
           "energy_page": {
@@ -598,12 +622,32 @@
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
+            }
+          },
+          "situations_page": {
+            "name": "Pagina{situations_page_position}: Situazioni",
+            "description": "Problemi selezionati in sola lettura. Nessuna azione o navigazione automatica.",
+            "data": {
+              "enabled": "Mostra Situazioni",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "garages": "Porte del garage",
+              "lights": "Luci",
+              "tasks": "Elenchi di attività"
+            },
+            "data_description": {
+              "enabled": "Seleziona al massimo 24 entità in totale nei quattro campi. Gli stati sconosciuti e non disponibili restano visibili. Disattivato per impostazione predefinita.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Predefinita: 12.",
+              "contacts": "Fino a 24 contatti; sono mostrati i contatti aperti.",
+              "garages": "Fino a 24 porte del garage; sono mostrate le porte aperte o in movimento.",
+              "lights": "Fino a 24 luci; sono mostrate le luci accese.",
+              "tasks": "Fino a 24 elenchi; numero di attività da completare. Nessuna modifica."
             }
           }
         }
@@ -761,18 +805,20 @@
           "device_ui_enabled": "Pagine Home Assistant sul display",
           "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
-          "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
+          "dashboard_prevent_return": "Restare sulla pagina dopo un'azione",
+          "dashboard_navigation": "Navigazione tra le pagine"
         },
         "data_description": {
           "device_ui_enabled": "Attivo: installa le pagine Home Assistant sul display del C300X (patch display). Disattivo: ripristina il display originale ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "dashboard_dynamic_homepage": "Attivo: i pulsanti Allarme e Home Assistant compaiono nella pagina iniziale del C300X solo quando hanno qualcosa da aprire, accanto ai pulsanti originali. Disattivo: entrambi sono sempre mostrati come coppia fissa. Una modifica riapplica il patch display e riavvia il display una volta.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
-          "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale."
+          "dashboard_prevent_return": "Attivo: dopo un'azione il display resta sulla pagina Home Assistant invece di tornare alla pagina iniziale.",
+          "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
         }
       },
       "dashboard_entity_display": {
         "title": "Riquadri del display",
-        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: scrivi un nome tuo. Se il campo resta vuoto, il riquadro mostra il nome di Home Assistant.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "init": {
         "title": "Impostazioni C300X",
@@ -794,7 +840,7 @@
           "visitor_snapshot": "Dimensione dell'immagine del visitatore salvata, ritardo di acquisizione, conservazione e data scritta nell'immagine.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
           "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",
-          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, pulsanti della pagina iniziale, comportamento dopo un'azione e azioni consentite.",
+          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, navigazione tra le pagine, comportamento dopo un'azione e azioni consentite.",
           "dashboard_pages": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
           "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro.",
           "done": "Chiudi le impostazioni. Tutto ciò che è stato inviato è già salvato."
@@ -814,7 +860,7 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura quattro pagine predefinite (Stato, Energia, Agenda ed Esci di casa) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda ed Esci di casa sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 11. A parità di posizione, Energia, Agenda ed Esci di casa precedono le pagine normali, in questo ordine.\n\nLe quattro sezioni predefinite appaiono sempre per prime, anche se le pagine sono disattivate. I titoli indicano la posizione sul display, non l'ordine delle sezioni nel modulo.",
+        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe sezioni seguono l'ordine del display e i titoli indicano il numero di pagina. Una pagina che il display non mostra (disattivata o senza entità) non ha numero e si trova sotto le pagine mostrate. Una sezione «Pagina +» è libera: compilala per aggiungere una pagina.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -934,7 +980,7 @@
             "data_description": {
               "enabled": "I prossimi cinque eventi nei sette giorni. Lettura solo in Home Assistant.",
               "calendars": "Seleziona fino a otto calendari.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 10."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 10."
             }
           },
           "leave_home_page": {
@@ -954,7 +1000,7 @@
               "lights": "Seleziona fino a 24 luci.",
               "actions": "Seleziona fino a otto azioni esistenti autorizzate.",
               "show_alarm": "Usa l'allarme già configurato per questo display.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 11."
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 11."
             }
           },
           "energy_page": {
@@ -971,12 +1017,32 @@
             },
             "data_description": {
               "enabled": "Le viste disattivate non eseguono query né memorizzano dati propri nella cache; i dati condivisi con le viste attive restano disponibili. Disattivare tutte le viste nasconde la pagina e svuota la sua cache senza perdere le impostazioni.",
-              "position": "1 = prima pagina; posizioni da 1 a 11. Parità: Energia, Agenda, Esci di casa, poi le pagine normali. Posizione predefinita: 2.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Parità: Energia, Agenda, Esci di casa, Situazioni, poi le pagine normali. Posizione predefinita: 2.",
               "view_now": "Flusso attuale tra rete, solare, batteria e casa",
               "view_today": "Energia oraria e totali di oggi",
               "view_power": "Potenza media di oggi a intervalli di 15 minuti dalle statistiche Home Assistant esistenti, non valori in tempo reale",
               "view_consumers": "I dieci dispositivi elettrici configurati con la maggiore potenza attuale in W; valori non disponibili omessi, senza storico",
               "view_balance": "Autosufficienza, autoconsumo solare e costi"
+            }
+          },
+          "situations_page": {
+            "name": "Pagina{situations_page_position}: Situazioni",
+            "description": "Problemi selezionati in sola lettura. Nessuna azione o navigazione automatica.",
+            "data": {
+              "enabled": "Mostra Situazioni",
+              "position": "Posizione",
+              "contacts": "Finestre e porte",
+              "garages": "Porte del garage",
+              "lights": "Luci",
+              "tasks": "Elenchi di attività"
+            },
+            "data_description": {
+              "enabled": "Seleziona al massimo 24 entità in totale nei quattro campi. Gli stati sconosciuti e non disponibili restano visibili. Disattivato per impostazione predefinita.",
+              "position": "1 = prima pagina; posizioni da 1 a 12. Predefinita: 12.",
+              "contacts": "Fino a 24 contatti; sono mostrati i contatti aperti.",
+              "garages": "Fino a 24 porte del garage; sono mostrate le porte aperte o in movimento.",
+              "lights": "Fino a 24 luci; sono mostrate le luci accese.",
+              "tasks": "Fino a 24 elenchi; numero di attività da completare. Nessuna modifica."
             }
           }
         }
@@ -1374,7 +1440,8 @@
           }
         },
         "error": {
-          "device_user_setup_failed": "Configurazione utente dispositivo non riuscita. Controlla l'accesso manutenzione e riprova."
+          "device_user_setup_failed": "Configurazione utente dispositivo non riuscita. Controlla l'accesso manutenzione e riprova.",
+          "device_not_registered": "Il C300X non è ancora stato aggiunto nell'app BTicino Door Entry. Flexisip sul dispositivo riceve utente SIP, dominio e certificati solo da questa registrazione. Aggiungi il dispositivo una volta nell'app, poi riprova. In seguito l'inoltro può restare su Smartphone."
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non e caricata."
@@ -1531,6 +1598,20 @@
         "drop_link_local": "Senza indirizzi link-local (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 e IPv6 locale (ULA) - consigliato",
         "ipv4_only": "Solo IPv4"
+      }
+    },
+    "dashboard_navigation": {
+      "options": {
+        "pager": "Frecce (precedente / successiva)",
+        "tabs": "Barra dei preferiti"
+      }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "applicato",
+        "original": "non applicato (file originali)",
+        "unknown": "sconosciuto",
+        "unavailable": "non disponibile"
       }
     }
   },

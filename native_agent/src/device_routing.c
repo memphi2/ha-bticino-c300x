@@ -40,6 +40,15 @@
 #define C300X_DEVICE_PATCH_STOCK_SHA256_2_0_2 "18a555afcfb3c1d163cdb649cdd7a61e9526e08aec8275f88dd78df4bc5f2ec7"
 #endif
 
+/* Firmware 3.0.6 ships a Qt5-era rebuild of bt_answering_machine as a PIE.
+ * The routing logic is the same but recompiled: the patch sites were re-located
+ * by disassembly (string xrefs + the bics/symlink structure). The rec_json_f
+ * symlink that 1.7.x had to synthesise already exists inline here, so the 60-byte
+ * restructure collapses to a route_ext->route_int literal redirect. */
+#ifndef C300X_DEVICE_PATCH_STOCK_SHA256_3_0_6
+#define C300X_DEVICE_PATCH_STOCK_SHA256_3_0_6 "7f7b28e1579c93d1c752ecab220801f639a4c5fc7eb845d79fe76563e7c9f1cb"
+#endif
+
 #define ARRAY_LEN(values) (sizeof(values) / sizeof((values)[0]))
 
 static int device_patch_file_name(char *buffer, size_t buffer_len)
@@ -189,6 +198,41 @@ static const struct c300x_patch_range PATCHES_2_0_2[] = {
     {"patch_range_8", 0x285b4, 4, "a883b9c4475398a5852aaf4ef0b4cbd8bd0557c4206c4d8bafd69832c8d56a47", "a828ca69c6e94a3592c35b9989123858720ac9b114514e040d53a604f87e1d6d", PATCH_8_WRITES, ARRAY_LEN(PATCH_8_WRITES)},
 };
 
+/* Firmware 3.0.6 (PIE). Patch sites re-derived from the recompiled binary;
+ * p6 redirects the rec_json_f symlink instead of the 1.7.x code insertion. */
+static const unsigned char PATCH_306_0_WRITE_0[] = {0x00,0x50};
+static const unsigned char PATCH_306_0_WRITE_1[] = {0x8a};
+static const struct c300x_patch_write PATCH_306_0_WRITES[] = {{1, PATCH_306_0_WRITE_0, sizeof(PATCH_306_0_WRITE_0)}, {11, PATCH_306_0_WRITE_1, sizeof(PATCH_306_0_WRITE_1)}};
+static const unsigned char PATCH_306_1_WRITE_0[] = {0x00,0x50};
+static const unsigned char PATCH_306_1_WRITE_1[] = {0x00};
+static const unsigned char PATCH_306_1_WRITE_2[] = {0x93};
+static const unsigned char PATCH_306_1_WRITE_3[] = {0x9a,0x01};
+static const unsigned char PATCH_306_1_WRITE_4[] = {0xe3};
+static const struct c300x_patch_write PATCH_306_1_WRITES[] = {{1, PATCH_306_1_WRITE_0, sizeof(PATCH_306_1_WRITE_0)}, {4, PATCH_306_1_WRITE_1, sizeof(PATCH_306_1_WRITE_1)}, {7, PATCH_306_1_WRITE_2, sizeof(PATCH_306_1_WRITE_2)}, {11, PATCH_306_1_WRITE_3, sizeof(PATCH_306_1_WRITE_3)}, {15, PATCH_306_1_WRITE_4, sizeof(PATCH_306_1_WRITE_4)}};
+static const unsigned char PATCH_306_2_WRITE_0[] = {0x00,0x00,0xa0};
+static const struct c300x_patch_write PATCH_306_2_WRITES[] = {{0, PATCH_306_2_WRITE_0, sizeof(PATCH_306_2_WRITE_0)}};
+static const unsigned char PATCH_306_3_WRITE_0[] = {0x00,0x00,0xa0,0xe1};
+static const struct c300x_patch_write PATCH_306_3_WRITES[] = {{0, PATCH_306_3_WRITE_0, sizeof(PATCH_306_3_WRITE_0)}};
+static const unsigned char PATCH_306_4_WRITE_0[] = {0x00,0x00};
+static const unsigned char PATCH_306_4_WRITE_1[] = {0x00,0x00};
+static const unsigned char PATCH_306_4_WRITE_2[] = {0x00};
+static const unsigned char PATCH_306_4_WRITE_3[] = {0x00,0x00,0xa0,0xe1};
+static const struct c300x_patch_write PATCH_306_4_WRITES[] = {{0, PATCH_306_4_WRITE_0, sizeof(PATCH_306_4_WRITE_0)}, {4, PATCH_306_4_WRITE_1, sizeof(PATCH_306_4_WRITE_1)}, {8, PATCH_306_4_WRITE_2, sizeof(PATCH_306_4_WRITE_2)}, {12, PATCH_306_4_WRITE_3, sizeof(PATCH_306_4_WRITE_3)}};
+static const unsigned char PATCH_306_5_WRITE_0[] = {0x7c,0x83,0x00,0x00};
+static const struct c300x_patch_write PATCH_306_5_WRITES[] = {{0, PATCH_306_5_WRITE_0, sizeof(PATCH_306_5_WRITE_0)}};
+static const unsigned char PATCH_306_6_WRITE_0[] = {0xf0,0x5e,0x01,0x00};
+static const struct c300x_patch_write PATCH_306_6_WRITES[] = {{0, PATCH_306_6_WRITE_0, sizeof(PATCH_306_6_WRITE_0)}};
+
+static const struct c300x_patch_range PATCHES_3_0_6[] = {
+    {"p0_mode_recjson", 0x27014, 12, "a9db5d94fdd0cb9b4dae85941ac99762a33abcc5237db4edf051259c973b146e", "bfac450eff18576df39e787372d02b01c4ea3b4099d7cb1507ab4a21700d67cb", PATCH_306_0_WRITES, ARRAY_LEN(PATCH_306_0_WRITES)},
+    {"p1_mode_sigusr2", 0xa1dc, 16, "cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b", "9bf52da965bdf744685e93b31353826af7bc74bc1fc3248d91f3b89f493444fe", PATCH_306_1_WRITES, ARRAY_LEN(PATCH_306_1_WRITES)},
+    {"p2_nop_blx", 0x34d04, 4, "85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_306_2_WRITES, ARRAY_LEN(PATCH_306_2_WRITES)},
+    {"p3_nop_str", 0x34d1c, 4, "4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_306_3_WRITES, ARRAY_LEN(PATCH_306_3_WRITES)},
+    {"p4_nop_block", 0x34d24, 16, "cea97ef00435c2c2429911a495511a3f914c7b055dd04c4176c141c71a6d7b27", "801b48661d2b117e9d4c1065f5b27b8e68938ac8efaf47e5a1db1211d495f592", PATCH_306_4_WRITES, ARRAY_LEN(PATCH_306_4_WRITES)},
+    {"p5_redir_update", 0x350dc, 4, "60b7b33fa991351fdc7658edb4d51d7f1193979428b4a5516d302911a4352b9b", "2ddad22425195d27460390320d8ed0b8bdd67a6bcbc94b36a5b16af16fa3f678", PATCH_306_5_WRITES, ARRAY_LEN(PATCH_306_5_WRITES)},
+    {"p6_redir_recjson", 0x272d8, 4, "7bd214987c21b0d60e03be16fe943d682bdb18e9c85c006b1b8a363d31398245", "b4fe8af24b6dbb176ec9f93a250610fe56bad6c2807b5c0f2c10dab1722fbc89", PATCH_306_6_WRITES, ARRAY_LEN(PATCH_306_6_WRITES)},
+};
+
 struct routing_variant {
     const char *stock_sha256;
     const struct c300x_patch_range *patches;
@@ -198,6 +242,7 @@ struct routing_variant {
 static const struct routing_variant VARIANTS[] = {
     {C300X_DEVICE_PATCH_STOCK_SHA256, PATCHES, ARRAY_LEN(PATCHES)},
     {C300X_DEVICE_PATCH_STOCK_SHA256_2_0_2, PATCHES_2_0_2, ARRAY_LEN(PATCHES_2_0_2)},
+    {C300X_DEVICE_PATCH_STOCK_SHA256_3_0_6, PATCHES_3_0_6, ARRAY_LEN(PATCHES_3_0_6)},
 };
 
 static void set_error(char *error, size_t error_len, const char *message)

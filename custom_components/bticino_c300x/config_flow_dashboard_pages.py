@@ -3,7 +3,7 @@
 The display has up to ``DASHBOARD_PAGE_MAX_COUNT`` regular pages. The form has one
 section per page: the status page carries the badges and the weather card,
 set here as its Weather field; every other page has a name,
-which the display shows as its heading. Each section has a position from 1 to 11,
+which the display shows as its heading. Each section has a position from 1 to 12,
 which orders the pages, and the entities shown on that page, in the order they
 are picked.
 
@@ -11,10 +11,10 @@ The entities are stored as before: the dashboard entity list in page order
 and the page name of each entity in its display overrides. The page list
 stores each page's name and its position, numbered from 1 in display order.
 
-Energy, Agenda and Leave home are independently enabled extra pages. They
+Energy, Agenda, Leave home and Situations are independently enabled extra pages. They
 store absolute display positions; regular pages stay numbered among themselves.
 The shared layout helper converts between these positions for the form and
-the display. Equal requested positions put Energy, Agenda and Leave home
+the display. Equal requested positions put Energy, Agenda, Leave home and Situations
 before regular pages, in that order. Disabled pages retain their settings.
 Section titles and order follow display positions, not internal form slot keys;
 unused regular sections remain available at the end.
@@ -43,7 +43,11 @@ from .config_flow_optional_pages import (
 from .config_flow_optional_pages import (
     page_position_selector as _page_position_selector,
 )
-from .config_flow_page_order import ordered_page_sections, page_form_positions
+from .config_flow_page_order import (
+    ordered_page_sections,
+    page_form_numbers,
+    page_form_positions,
+)
 from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
@@ -188,13 +192,8 @@ def dashboard_pages_schema(
         return values.get(field) if isinstance(values, dict) else None
 
     fields: dict[Any, Any] = {}
-    free_section_shown = False
     for slot in range(1, DASHBOARD_PAGE_MAX_COUNT + 1):
         page = layout[slot - 1] if slot <= len(layout) else None
-        collapsed = False
-        if page is None:
-            collapsed = free_section_shown
-            free_section_shown = True
         page_fields: dict[Any, Any] = {}
         if slot == 1:
             page_fields[vol.Required(
@@ -227,7 +226,7 @@ def dashboard_pages_schema(
         )] = _page_entity_selector()
         fields[vol.Required(page_section_key(slot))] = section(
             vol.Schema(page_fields),
-            {"collapsed": collapsed},
+            {"collapsed": slot > len(layout) + 1},
         )
     def energy_shown(field: str, saved: Any) -> Any:
         if posted is None:
@@ -260,7 +259,9 @@ def dashboard_pages_schema(
     )
     fields.update(optional_page_sections(dashboard_input, posted))
     return vol.Schema(ordered_page_sections(
-        fields, page_form_positions(layout, dashboard_input, posted),
+        fields,
+        page_form_positions(layout, dashboard_input, posted),
+        page_form_numbers(layout, dashboard_input, posted),
     ))
 
 
@@ -271,14 +272,16 @@ def dashboard_pages_placeholders(
     """Return the page names and positions the section titles show.
 
     A named page's section is titled with its name, as ": name" after the
-    page number; unused sections have no display number. A form
+    page number. A page the display does not show has no number. A free
+    section, where a page can be added, is titled with a plus sign. A form
     shown again with errors shows the names that were sent.
     """
 
     layout = dashboard_page_layout(dashboard_input)
+    positions = page_form_positions(layout, dashboard_input, user_input)
     placeholders = {
-        f"{key}_position": f" {position}" if position is not None else ""
-        for key, position in page_form_positions(layout, dashboard_input, user_input).items()
+        f"{key}_position": f" {number}" if number is not None else ""
+        for key, number in page_form_numbers(layout, dashboard_input, user_input).items()
     }
     for slot in range(2, DASHBOARD_PAGE_MAX_COUNT + 1):
         if user_input is not None:
@@ -286,7 +289,8 @@ def dashboard_pages_placeholders(
             name = normalize_dashboard_page_name(values.get(PAGE_NAME_FIELD, ""))
         else:
             name = layout[slot - 1]["name"] if slot <= len(layout) else ""
-        placeholders[page_name_placeholder(slot)] = f": {name}" if name else ""
+        free = slot > len(layout) and positions[page_section_key(slot)] is None
+        placeholders[page_name_placeholder(slot)] = f": {name}" if name else " +" if free else ""
     return placeholders
 
 
@@ -298,7 +302,8 @@ def dashboard_pages_input(
 
     Home Assistant leaves a field the user emptied out of a section, so a
     missing name or entity list is empty and a missing position is the
-    section's own number. A page is used when it has a name or entities; the
+    section's own number; in a free section it is the end, so a new page
+    follows the existing ones. A page is used when it has a name or entities; the
     status page is always used, and a page with entities needs a name, except
     the page without a title that the saved entities already form. Pages
     with the same position keep the order of their sections. The weather of
@@ -313,9 +318,10 @@ def dashboard_pages_input(
     # Entities saved without a page sit on a page without a title. That page
     # may stay as it is, so saving the form unchanged does not give it a
     # heading on the display; a name is needed once anything else goes onto it.
+    layout = dashboard_page_layout(dashboard_input)
     untitled_entities = {
         entity_id
-        for page in dashboard_page_layout(dashboard_input)
+        for page in layout
         if not page["name"]
         for entity_id in page["entities"]
     }
@@ -347,7 +353,8 @@ def dashboard_pages_input(
             continue
         seen_names.add(name.casefold())
         seen_entities.update(entities)
-        pages.append((_page_position(values.get(PAGE_POSITION_FIELD), slot), slot, name, entities))
+        default = slot if slot <= len(layout) else POSITION_MAX
+        pages.append((_page_position(values.get(PAGE_POSITION_FIELD), default), slot, name, entities))
     weather = str(dashboard_input.get(CONF_WEATHER_ENTITY_ID) or "")
     status = user_input.get(page_section_key(1))
     status_enabled = dashboard_input.get(CONF_DASHBOARD_STATUS_PAGE_ENABLED, True) is True

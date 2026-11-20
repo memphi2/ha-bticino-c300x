@@ -151,6 +151,7 @@ struct c300x_config {
 };
 
 void c300x_default_config(struct c300x_config *config);
+int c300x_device_display_is_qt5(void);
 int c300x_load_config(
     const char *config_path,
     struct c300x_config *config,

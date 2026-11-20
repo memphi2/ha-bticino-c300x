@@ -106,6 +106,9 @@ from .config_flow_features import (
 from .config_flow_forms import (
     actions_json as _actions_json,
 )
+from .config_flow_forms import (
+    async_display_patch_status_text as _async_display_patch_status_text,
+)
 from .config_flow_identity import (
     async_existing_manual_discovery as _async_existing_manual_discovery,
 )
@@ -163,6 +166,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_NAVIGATION,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -241,6 +245,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+        CONF_DASHBOARD_NAVIGATION,
         CONF_DASHBOARD_PAGES,
         CONF_ENERGY_PAGE,
         CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -732,11 +737,11 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             if self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]:
                 errors = _actions_json_errors(self._setup_dashboard_input)
                 if errors:
-                    return self._async_show_user_dashboard_form(user_input, errors)
+                    return await self._async_show_user_dashboard_form(user_input, errors)
                 return self._async_show_user_dashboard_pages_form(None, errors)
             return await self._async_create_setup_entry_from_dashboard(errors)
 
-        return self._async_show_user_dashboard_form(user_input, errors)
+        return await self._async_show_user_dashboard_form(user_input, errors)
 
     async def async_step_user_dashboard_pages(
         self,
@@ -811,13 +816,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
         )
         if errors:
-            return self._async_show_user_dashboard_form(
+            return await self._async_show_user_dashboard_form(
                 self._setup_dashboard_input,
                 errors,
             )
         return await self._async_create_setup_entry(feature_data)
 
-    def _async_show_user_dashboard_form(
+    async def _async_show_user_dashboard_form(
         self,
         user_input: dict[str, Any] | None,
         errors: dict[str, str],
@@ -846,10 +851,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         self._setup_device_ui_default,
                     )
                 ),
+                default_dashboard_navigation=(user_input or {}).get(CONF_DASHBOARD_NAVIGATION),
             ),
             errors=errors,
             description_placeholders={
-                "qml_patch_status": _QML_PATCH_STATUS_UNKNOWN,
+                "qml_patch_status": await _async_display_patch_status_text(
+                    _QML_PATCH_STATUS_UNKNOWN, self.hass
+                ),
             },
         )
 
@@ -918,6 +926,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 ],
                 CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
                 CONF_DASHBOARD_PAGES: feature_data[CONF_DASHBOARD_PAGES],
+                CONF_DASHBOARD_NAVIGATION: feature_data[CONF_DASHBOARD_NAVIGATION],
                 CONF_ENERGY_PAGE: feature_data[CONF_ENERGY_PAGE],
                 **optional_page_values(feature_data),
                 CONF_DASHBOARD_STATUS_PAGE_ENABLED: feature_data[CONF_DASHBOARD_STATUS_PAGE_ENABLED],
@@ -1304,6 +1313,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         CONF_DEVICE_UI_ENABLED,
                         feature_defaults[CONF_DEVICE_UI_ENABLED],
                     )
+                ),
+                default_dashboard_navigation=(user_input or {}).get(
+                    CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
                 ),
             ),
             errors=errors,
@@ -1738,6 +1750,9 @@ class BticinoC300XOptionsFlow(
                         feature_defaults[CONF_DEVICE_UI_ENABLED],
                     )
                 ),
+                default_dashboard_navigation=(user_input or {}).get(
+                    CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
+                ),
             ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
@@ -1889,8 +1904,8 @@ async def _async_qml_patch_description_placeholders(
     """Return placeholders for the device Display patch status."""
 
     return {
-        "qml_patch_status": _qml_patch_status_label(
-            await _async_qml_patch_status(config_entry)
+        "qml_patch_status": await _async_display_patch_status_text(
+            _qml_patch_status_label(await _async_qml_patch_status(config_entry))
         )
     }
 

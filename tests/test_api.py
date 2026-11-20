@@ -1786,26 +1786,6 @@ def test_apply_qml_core_patch_sends_maintenance_confirmation() -> None:
     assert request["kwargs"]["json"] == {"confirm": "apply_qml_core_patch"}
 
 
-def test_restore_qml_core_patch_sends_maintenance_confirmation() -> None:
-    session = _FakeSession(
-        '{"ok": true, "state": "original", "core_state": "original", "core_patched": false}'
-    )
-    api = C300XAgentApi(
-        session,  # type: ignore[arg-type]
-        "http://agent.local:8080",
-        "agent-token",
-        maintenance_token="maintenance-token",
-    )
-
-    assert asyncio.run(api.async_restore_qml_core_patch())["core_patched"] is False
-    request = session.requests[0]
-    assert request["args"] == (
-        "POST",
-        "http://agent.local:8080/api/v1/maintenance/qml-patch/actions/restore-core",
-    )
-    assert request["kwargs"]["json"] == {"confirm": "restore_qml_core_patch"}
-
-
 def test_restore_qml_patch_sends_maintenance_confirmation() -> None:
     session = _FakeSession('{"ok": true, "state": "original"}')
     api = C300XAgentApi(
@@ -3789,7 +3769,6 @@ def test_script_backed_maintenance_requests_outlast_the_agent_script(
 @pytest.mark.parametrize("method,kwargs,path", [
     ("async_apply_qml_patch", {"dynamic_homepage": True}, "apply"),
     ("async_apply_qml_core_patch", {}, "apply-core"),
-    ("async_restore_qml_core_patch", {}, "restore-core"),
     ("async_restore_qml_patch", {}, "restore"),
 ])
 @pytest.mark.parametrize(("configured", "expected"), [(5.0, 35.0), (30.0, 35.0), (60.0, 60.0)])
@@ -3810,3 +3789,23 @@ def test_qml_write_requests_outlast_native_rollback_deadline(method, kwargs, pat
     assert session.requests[0]["args"] == (
         "POST", f"http://agent.local:8080/api/v1/maintenance/qml-patch/actions/{path}"
     )
+
+
+@pytest.mark.parametrize(
+    ("body", "unregistered"),
+    [
+        ('{"ok":false,"error":"device_user_update_failed","detail":"device_domain_missing"}', True),
+        ('{"ok":false,"error":"device_user_update_failed","detail":"write_failed"}', False),
+        ("not json", False),
+    ],
+)
+def test_a_device_without_sip_domain_is_reported_as_not_registered(body, unregistered) -> None:
+    from custom_components.bticino_c300x.api_errors import (
+        C300XAgentApiConnectionError,
+        C300XDeviceNotRegisteredError,
+    )
+
+    api = C300XAgentApi(object(), "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    with pytest.raises(C300XAgentApiConnectionError) as raised:
+        api._raise_for_agent_status(500, body, "/api/v1/maintenance/device-user/actions/ensure-homeassistant")
+    assert isinstance(raised.value, C300XDeviceNotRegisteredError) is unregistered

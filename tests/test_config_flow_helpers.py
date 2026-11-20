@@ -499,7 +499,7 @@ def test_dashboard_entity_ids_accept_supported_entities() -> None:
     ]
 
 
-@pytest.mark.parametrize("value", ["camera.tv", "sensor.", "bad"])
+@pytest.mark.parametrize("value", ["update.tv", "sensor.", "bad"])
 def test_dashboard_entity_ids_reject_unsupported_entities(value: str) -> None:
     with pytest.raises(vol.Invalid):
         _dashboard_entity_ids(value)
@@ -531,7 +531,7 @@ def test_dashboard_entity_display_overrides_accepts_valid_mapping() -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        {"camera.tv": {"name": "entity_id"}},
+        {"update.tv": {"name": "entity_id"}},
         {"sensor.temperature": {"name": "bad"}},
         {"sensor.temperature": {"name": "custom"}},
         {"sensor.temperature": {"secondary": "bad"}},
@@ -803,7 +803,7 @@ def test_feature_input_collects_activation_and_dashboard_errors() -> None:
             CONF_ALARM_ENTITY_ID: "light.entry",
             CONF_ALARM_PAGE_ENTITY_ID: "camera.tv",
             CONF_WEATHER_ENTITY_ID: "sensor.outdoor",
-            CONF_DASHBOARD_ENTITIES: ["camera.tv"],
+            CONF_DASHBOARD_ENTITIES: ["update.tv"],
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
                 "sensor.temperature": {"name": "bad"}
             },
@@ -1911,6 +1911,7 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
     assert _schema_key_names(dashboard_schema) == [
         CONF_DEVICE_UI_ENABLED,
         CONF_DASHBOARD_PREVENT_RETURN,
+        "dashboard_navigation",
         CONF_ACTIONS_JSON,
     ]
     # Alarmo and the weather are set with the pages.
@@ -2379,8 +2380,8 @@ def test_qml_patch_status_placeholder_refreshes_agent_once() -> None:
     placeholders = asyncio.run(_async_qml_patch_description_placeholders(entry))
     cached_placeholders = asyncio.run(_async_qml_patch_description_placeholders(entry))
 
-    assert placeholders == {"qml_patch_status": "original"}
-    assert cached_placeholders == {"qml_patch_status": "original"}
+    assert placeholders == {"qml_patch_status": "not applied (original files)"}
+    assert cached_placeholders == {"qml_patch_status": "not applied (original files)"}
     assert api.calls == 1
     assert entry.runtime_data.qml_patch_status["state"] == "original"
     assert entry.runtime_data.qml_patch_status_updated_at is not None
@@ -2390,7 +2391,8 @@ def test_user_dashboard_form_passes_qml_patch_status_placeholder() -> None:
     flow = BticinoC300XConfigFlow()
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
 
-    result = flow._async_show_user_dashboard_form(None, {})  # noqa: SLF001
+    flow.hass = None  # type: ignore[assignment]
+    result = asyncio.run(flow._async_show_user_dashboard_form(None, {}))  # noqa: SLF001
 
     assert result["step_id"] == "user_dashboard"
     assert result["description_placeholders"] == {"qml_patch_status": "unknown"}
@@ -2911,7 +2913,6 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
         flow.async_step_reconfigure_dashboard_entity_display(
             entity_display_form["data_schema"]({
                 "Status page \u203a Forwarding": {
-                    "Name": "friendly_name",
                     "Secondary line": "last_changed",
                 },
                 "Alarm page \u203a Stair Light": {},

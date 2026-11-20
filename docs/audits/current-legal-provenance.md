@@ -1,8 +1,9 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-19. Integration and native agent `2.6.0`, the successor
-of `2.5.1`, with credential recovery and an HA-only media history. This report
-covers the release source tree.
+Source review: 2026-11-20. Integration and native agent `2.7.0`, the successor
+of `2.5.1`, with credential recovery, an HA-only media history and new display
+pages and picture tiles. Version `2.6.0` was withdrawn. This report covers the
+release source tree.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.

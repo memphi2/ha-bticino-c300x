@@ -2,11 +2,11 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/quality-scale.md)
-[![Release](https://img.shields.io/badge/release-v2.6.0-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.7.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Version: **2.6.0**.
+Version: **2.7.0**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.
@@ -44,11 +44,13 @@ forwarding controls, messages and optional display pages.
   blueprint. History does not include the device's answering-machine recordings.
 - **Use the C300X as a home-control display.** Keep the native blue interface
   with configurable controls for lights, covers, climate, media and locks,
-  plus weather and Alarmo. Four built-in pages (Status, Energy, Agenda and
-  Leave home) and up to seven custom pages have configurable positions. Energy
+  plus weather and Alarmo. Five built-in pages (Status, Energy, Agenda,
+  Leave home and Situations) and up to seven custom pages have configurable positions. Energy
   includes live power, history and up to ten consumers configured in HA's
   Energy dashboard, ranked by current W. Agenda shows upcoming calendar events; Leave home checks
-  selected contacts and lights, with explicitly confirmed actions.
+  selected contacts and lights, with explicitly confirmed actions. Situations
+  lists what is open, on or pending among the entities you pick. Change pages
+  with arrows or a favourites bar.
   See [Display setup](docs/quickstart.md#9-optional-native-display).
 - **Connect notifications and automations.** The standard
   [Notify service](docs/feature-reference.md#standard-notify-service) offers
@@ -67,15 +69,17 @@ off by default and requires HA 2026.11+ Labs and the integration option.
 ## Requirements
 
 - Home Assistant `2026.10.0` or newer.
-- BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`.
+- BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`. Firmware `3.0.6` is
+  supported experimentally: without the Home Assistant pages on the display and
+  with the low-resolution camera stream.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
 
 If your device is still stock, root or SSH-enable it first with a separate
 workflow. This repository does not provide firmware images, firmware extraction
 output, APKs, exploits, rooting instructions or vendor files. If another
-workflow asks for a firmware target, use `1.7.19`; a device on `2.0.2` needs a
-workflow made for that firmware. Everything is used at your own risk and
+workflow asks for a firmware target, use `1.7.19`; a device on `2.0.2` or
+`3.0.6` needs a workflow made for that firmware. Everything is used at your own risk and
 without warranty.
 
 ## Support the Test Device

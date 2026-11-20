@@ -15,6 +15,7 @@ from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_NAVIGATION,
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
@@ -29,6 +30,8 @@ from .dashboard_entities import (
     normalize_dashboard_entity_ids,
     normalize_dashboard_pages,
 )
+from .dashboard_images import IMAGE_TILE_DOMAINS
+from .dashboard_page_order import dashboard_navigation
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 
@@ -82,7 +85,9 @@ def configured_alarm_page_entity_id(entry: BticinoC300XConfigEntry) -> str | Non
 
     value = entry_config_value(entry, CONF_ALARM_PAGE_ENTITY_ID)
     entities = _dashboard_entity_ids([value] if isinstance(value, str) else value)
-    return entities[0] if entities else None
+    if not entities or entities[0].split(".", 1)[0] in IMAGE_TILE_DOMAINS:
+        return None
+    return entities[0]
 
 
 def configured_weather_entity_id(entry: BticinoC300XConfigEntry) -> str | None:
@@ -127,6 +132,12 @@ def configured_dashboard_pages(entry: BticinoC300XConfigEntry) -> tuple[Dashboar
     """
 
     return normalize_dashboard_pages(entry_config_value(entry, CONF_DASHBOARD_PAGES, []))
+
+
+def configured_dashboard_navigation(entry: BticinoC300XConfigEntry) -> str:
+    """Return how the display changes pages: arrows or the favourites bar."""
+
+    return dashboard_navigation(entry_config_value(entry, CONF_DASHBOARD_NAVIGATION, None))
 
 
 def configured_dashboard_entity_display_overrides(

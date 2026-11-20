@@ -392,12 +392,6 @@ _WEATHER_STATE_LABELS_BY_LANGUAGE = {
     "fr": _WEATHER_STATE_LABELS_FR,
     "it": _WEATHER_STATE_LABELS_IT,
 }
-_WEATHER_TITLE_BY_LANGUAGE = {
-    "de": "Wetter",
-    "en": "Weather",
-    "fr": "Meteo",
-    "it": "Meteo",
-}
 
 
 # The texts of the energy page.

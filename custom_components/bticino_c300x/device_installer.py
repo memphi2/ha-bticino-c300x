@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import shlex
 import stat
 from dataclasses import dataclass
@@ -62,6 +63,9 @@ DISPLAY_FILES = (
     "js/c300x_alerts.js",
     "C300XAgenda.qml",
     "C300XLeaveHome.qml",
+    "C300XChecks.qml",
+    "C300XSituations.qml",
+    "C300XOptionalPages.qml",
     "C300XDetailControl.qml",
     "C300XEnergyReadout.qml",
     "C300XEnergySums.qml",
@@ -188,6 +192,7 @@ def _install_device_agent_sync(
         merged_config = _merge_existing_device_config(
             config_bytes, _read_remote_config_sync(client, config_path)
         )
+        merged_config = _apply_qt5_low_res_video_default(client, merged_config)
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
         manifest: _PayloadFile | None = None
@@ -853,9 +858,74 @@ def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: s
     )
 
 
+_LOGGER = logging.getLogger(__name__)
+
+# Firmware 3.0.x has a Qt 5 display with its QML built into the BtClass program
+# (qrc:/skins/default/...), so there are no files for the Display patch. The
+# earlier ones have Qt 4 and QML files on disk. The Qt 5 library is the mark,
+# not a missing QML folder: on an older device a missing folder is a fault the
+# Display patch has to report.
+_QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
+
+
+def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
+    """Return whether the device has the Qt 5 display, which cannot be patched."""
+
+    output = client.run(f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo yes || echo no")
+    return output.strip().splitlines()[-1:] == ["yes"]
+
+
+def _apply_qt5_low_res_video_default(
+    client: _DeviceSshClient, config_bytes: bytes
+) -> bytes:
+    """Default the camera to the low-res stream on Qt5 firmware (3.0.x+).
+
+    bt_av_media only fans out the low-res video branch (``multiudp_low_res``);
+    the high-res branch has no ``multiudpsink``, so its stream never reaches the
+    agent and clients get an undecodable picture. Qt4 firmware (1.7.x/2.0.x)
+    keeps the high-res default. An explicit ``highResolution`` already in the
+    device config (e.g. a user override the merge preserved) is left untouched,
+    so this only sets the default for a fresh install.
+    """
+
+    if not _device_display_is_qt5(client):
+        return config_bytes
+    try:
+        config = json.loads(config_bytes)
+    except (ValueError, TypeError):
+        return config_bytes
+    if not isinstance(config, dict):
+        return config_bytes
+    video = config.get("video")
+    if not isinstance(video, dict):
+        video = {}
+        config["video"] = video
+    av = video.get("av")
+    if not isinstance(av, dict):
+        av = {}
+        video["av"] = av
+    if "highResolution" in av:
+        return config_bytes
+    av["highResolution"] = False
+    _LOGGER.info(
+        "C300X: Qt5 firmware detected; defaulting camera to low-res "
+        "(video.av.highResolution=false)"
+    )
+    return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
 def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
     """Require the patcher's reported outcome, not just a successful shell exit."""
 
+    if _device_display_is_qt5(client):
+        # Qt5 firmware (3.0.x+) has no on-disk QML to patch. Skip rather than
+        # abort the whole install: the on-device display pages and ringer-sync
+        # are unavailable, but camera, door, stair light, ring and calls work
+        # through the agent API and do not depend on the QML hook.
+        _LOGGER.warning(
+            "C300X: device has no on-disk QML (Qt5 GUI); skipping %s patch", action
+        )
+        return
     output = client.run(
         f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
         f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"

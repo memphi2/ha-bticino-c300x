@@ -9,10 +9,9 @@ from homeassistant.helpers import selector
 
 from .const import (
     ALARM_DOMAIN,
-    DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
-    DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
+    DOMAIN,
     WEATHER_DOMAIN,
 )
 from .dashboard_entities import (
@@ -93,19 +92,6 @@ def dashboard_entity_name_display_selector() -> Any:
     return _translated_choice("tile_name", DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS)
 
 
-def dashboard_tile_name_selector() -> Any:
-    """Return the name of a tile: one of the choices or a typed text."""
-
-    return _translated_choice(
-        "tile_name",
-        (
-            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-            DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
-        ),
-        custom_value=True,
-    )
-
-
 def dashboard_entity_custom_name_selector() -> Any:
     """Return the text selector for one custom dashboard entity title."""
 
@@ -136,3 +122,38 @@ def actions_json_field() -> Any:
     """Return the HA multiline text selector for action JSON."""
 
     return selector.TextSelector(selector.TextSelectorConfig(multiline=True))
+
+
+DISPLAY_PATCH_STATUS_TRANSLATION_KEY = "display_patch_status"
+# English texts, used when Home Assistant has no translation to offer.
+DISPLAY_PATCH_STATUS_TEXTS: dict[str, str] = {
+    "patched": "applied",
+    "original": "not applied (original files)",
+    "unknown": "unknown",
+    "unavailable": "not available",
+}
+
+
+async def async_display_patch_status_text(status: str, hass: Any = None) -> str:
+    """Return the Display patch status in the language of Home Assistant.
+
+    A state of the agent that is none of the four known ones is shown as it is.
+    """
+
+    if status not in DISPLAY_PATCH_STATUS_TEXTS:
+        return status
+    text = DISPLAY_PATCH_STATUS_TEXTS[status]
+    try:
+        if hass is None:
+            from homeassistant.core import async_get_hass
+
+            hass = async_get_hass()
+        from homeassistant.helpers.translation import async_get_translations
+
+        translations = await async_get_translations(
+            hass, hass.config.language, "selector", {DOMAIN}
+        )
+    except Exception:  # noqa: BLE001 - the form works with the English text
+        return text
+    key = f"component.{DOMAIN}.selector.{DISPLAY_PATCH_STATUS_TRANSLATION_KEY}.options.{status}"
+    return str(translations.get(key) or "").strip() or text

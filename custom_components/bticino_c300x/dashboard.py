@@ -19,6 +19,7 @@ from .const import (
     CONF_AGENDA_PAGE,
     CONF_ENERGY_PAGE,
     CONF_LEAVE_HOME_PAGE,
+    CONF_SITUATIONS_PAGE,
     DASHBOARD_ACTION_DOMAIN,
     DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
     DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
@@ -28,6 +29,7 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED,
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+    DASHBOARD_NAVIGATION_TABS,
 )
 from .dashboard_agenda import async_agenda_dashboard_page
 from .dashboard_config import (
@@ -47,6 +49,7 @@ from .dashboard_config import (
     configured_alarm_page_entity_id,
     configured_dashboard_entities,
     configured_dashboard_entity_display_overrides,
+    configured_dashboard_navigation,
     configured_dashboard_pages,
     configured_dashboard_prevent_return,
     configured_energy_page,
@@ -62,6 +65,7 @@ from .dashboard_entities import (
     dashboard_entity_secondary_info_override,
 )
 from .dashboard_glyphs import dashboard_glyph
+from .dashboard_images import IMAGE_TILE_DOMAINS, image_tile_revision, image_tile_source
 from .dashboard_labels import (
     _BINARY_SENSOR_DEVICE_CLASS_COLORS,
     _BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE,
@@ -79,6 +83,7 @@ from .dashboard_leave_home import leave_home_dashboard_page
 from .dashboard_optional_config import (
     configured_agenda_page,
     configured_leave_home_page,
+    configured_situations_page,
 )
 from .dashboard_page_order import page_layout_slots
 from .dashboard_response import (
@@ -87,6 +92,7 @@ from .dashboard_response import (
     display_json_size,
 )
 from .dashboard_select_texts import apply_select_texts
+from .dashboard_situations import situations_dashboard_page
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
 from .entry_types import BticinoC300XConfigEntry
@@ -167,6 +173,7 @@ async def async_status(
             or bool(energy_settings["enabled"] and energy_settings["views"])
             or configured_agenda_page(entry)["enabled"]
             or configured_leave_home_page(entry)["enabled"]
+            or configured_situations_page(entry)["enabled"]
             or bool(notification_payload(entry))
         ),
         "preventReturnToHomepage": configured_dashboard_prevent_return(entry),
@@ -240,6 +247,12 @@ async def async_dashboard_payload(
         if dashboard_item is None:
             continue
         layout = entity_display_overrides.get(entity_id, {})
+        if dashboard_item.pop("_image_entity", None):
+            dashboard_item.pop("_image_revision", None)
+            picture = image_tile_source(entry, entity_id, hass.states.get(entity_id), layout)
+            if picture is None:
+                continue
+            dashboard_item.update(picture)
         if "page" in layout:
             dashboard_item["_page"] = layout["page"]
         if "order" in layout:
@@ -277,6 +290,7 @@ async def async_dashboard_payload(
         CONF_ENERGY_PAGE: await async_energy_dashboard_page(hass, entry, language),
         CONF_AGENDA_PAGE: await async_agenda_dashboard_page(hass, entry, language),
         CONF_LEAVE_HOME_PAGE: leave_home_dashboard_page(hass, entry, language),
+        CONF_SITUATIONS_PAGE: situations_dashboard_page(hass, entry, language),
     }
     regular_names = [page["name"] for page in configured]
     regular_names.extend(name for name in pages if name not in regular_names)
@@ -285,6 +299,7 @@ async def async_dashboard_payload(
         CONF_ENERGY_PAGE: configured_energy_page(entry),
         CONF_AGENDA_PAGE: configured_agenda_page(entry),
         CONF_LEAVE_HOME_PAGE: configured_leave_home_page(entry),
+        CONF_SITUATIONS_PAGE: configured_situations_page(entry),
     }):
         rendered_page = pages.get(name) if kind == "regular" else special_pages.get(name)
         if rendered_page is not None:
@@ -293,7 +308,9 @@ async def async_dashboard_payload(
         page for page in ordered
         if (status_enabled and page is main_page) or _dashboard_page_has_content(page)
     ]
-    if status_enabled and len(shown) > 1:
+    tabs = configured_dashboard_navigation(entry) == DASHBOARD_NAVIGATION_TABS
+    if status_enabled and len(shown) > 1 and not tabs:
+        # The favourites bar reaches every page; the page list would repeat it.
         main_page["items"].append({"_kind": "navigation", "_order": 1})
     if not shown and notifications:
         # The messages need a page to appear on, even an otherwise empty one.
@@ -306,6 +323,7 @@ async def async_dashboard_payload(
         # The numbers in the texts follow Home Assistant's language; the
         # display writes its own numbers the same way.
         "decimalComma": language != "en",
+        **({"navigation": DASHBOARD_NAVIGATION_TABS} if tabs else {}),
         "notifications": notifications,
         "data": {"pages": [_finalize_dashboard_page(page) for page in shown]},
     })
@@ -501,6 +519,19 @@ def _dashboard_item_for_state(
         display=name_display,
         custom_name=custom_name,
     )
+    if domain in IMAGE_TILE_DOMAINS:
+        # The address and size are added where the entry is known. The
+        # revision is here so that a state event which brings no new picture
+        # does not count as a change of the display.
+        return {
+            "name": name,
+            "caption": name,
+            "_image_entity": entity_id,
+            "_image_revision": image_tile_revision(entity_id, state),
+            "_kind": "image",
+            "_page": _DASHBOARD_ACTION_PAGE,
+            "_order": order,
+        }
     item: dict[str, Any] = {
         "domain": DASHBOARD_ACTION_DOMAIN,
         "entity_id": entity_id,
@@ -1028,7 +1059,7 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
         finalized["items"] = items
     if isinstance(page.get("weather"), dict):
         finalized["weather"] = page["weather"]
-    for key in ("energy", "agenda", "leave_home"):
+    for key in ("energy", "agenda", "leave_home", "situations"):
         if isinstance(page.get(key), dict):
             finalized[key] = page[key]
     return finalized
@@ -1075,4 +1106,4 @@ def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
     other pages need weather, tiles or energy content.
     """
 
-    return any(bool(page.get(key)) for key in ("items", "weather", "energy", "agenda", "leave_home"))
+    return any(bool(page.get(key)) for key in ("items", "weather", "energy", "agenda", "leave_home", "situations"))

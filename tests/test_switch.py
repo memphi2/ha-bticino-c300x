@@ -1594,3 +1594,26 @@ def test_mqtt_push_updates_matching_native_and_legacy_switches() -> None:
 
     assert native.is_on is True
     assert legacy.is_on is True
+
+
+@pytest.mark.parametrize(("display_patch_offered", "is_on"), [(True, False), (False, True)])
+def test_media_user_setup_needs_the_display_label_only_where_there_is_a_display_patch(
+    display_patch_offered: bool, is_on: bool
+) -> None:
+    """A Qt 5 display (firmware 3.0.x) has no Display patch and shows no label."""
+
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"maintenance": {"supported": True, "qml_core_patch": display_patch_offered}},
+        )
+    )
+    entity = C300XHomeAssistantMediaUserSetupSwitch(entry)  # type: ignore[arg-type]
+    entity._status = {
+        "homeassistant_user_present": True,
+        "routes_consistent": True,
+        "device_routing_applied": True,
+        "media_user_label_available": False,
+        "media_user_label_applied": False,
+    }
+
+    assert entity.is_on is is_on

@@ -1985,7 +1985,6 @@ def test_device_user_repair_flow_reports_agent_failures() -> None:
     [
         {"homeassistant_user_present": False},
         {"homeassistant_user_present": True, "routes_consistent": False},
-        {"homeassistant_user_present": True, "media_identity_available": False},
         {"available": False},
     ],
 )
@@ -3052,3 +3051,72 @@ def test_update_mqtt_migration_waits_for_a_busy_agent(monkeypatch) -> None:
         source = handle.read()
     assert source.count("await _async_migrate_mqtt_after_update(entry.runtime_data.api)") == 2
     assert source.count("async_migrate_legacy_mqtt_if_available(") == 1
+
+
+@pytest.mark.parametrize("cause", ["agent_error", "status"])
+def test_device_user_repair_asks_to_add_an_unregistered_device_in_the_app(
+    monkeypatch, cause
+) -> None:
+    """A device never added in the Door Entry app has no SIP domain yet."""
+
+    import custom_components.bticino_c300x.repair_flows_device_user as device_user_flow
+    from custom_components.bticino_c300x.api_errors import C300XDeviceNotRegisteredError
+
+    class UnregisteredDeviceApi(FakePatchApi):
+        async def async_ensure_homeassistant_user(self, *, account_label: str) -> dict[str, Any]:
+            if cause == "agent_error":
+                raise C300XDeviceNotRegisteredError("device_domain_missing")
+            return {"homeassistant_user_present": True, "media_identity_available": False}
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(UnregisteredDeviceApi()))
+    hass = FakeHass(entry)
+    hass.config.location_name = "HA Test"
+    flow = DeviceUserRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        device_user_flow.ir, "async_delete_issue", lambda **kwargs: deleted.append(kwargs["issue_id"])
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["errors"] == {"base": "device_not_registered"}
+    assert deleted == []
+
+
+@pytest.mark.parametrize(
+    ("maintenance", "restored"),
+    [
+        ({"supported": True, "qml_core_patch": True}, [True]),
+        ({"supported": True, "qml_core_patch": False}, []),
+        # No answer about the Display patch: it is restored as before.
+        (None, [True]),
+    ],
+)
+def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, maintenance, restored):
+    """A Qt 5 display (firmware 3.0.x) has no Display patch to restore."""
+
+    import custom_components.bticino_c300x.repairs as repairs
+
+    api = FakePatchApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    state = _ExternalPatchState(qml_patch_required=True, firewall_patched=True,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    calls = []
+
+    async def restore(_entry, *, apply_full_patch):
+        calls.append(apply_full_patch)
+
+    monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
+    # The setup payload as async_validate_setup returns it.
+    setup_data = asyncio.run(FakeUpdateVerifyApi().async_validate_setup())
+    if maintenance is not None:
+        setup_data["capabilities"]["maintenance"] = maintenance
+    asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(qml_patch_changed=True, firewall_patch_changed=True),
+        setup_data,
+    ))
+
+    assert calls == restored
+    # The firewall is restored on every display.
+    assert "apply_firewall" in api.calls

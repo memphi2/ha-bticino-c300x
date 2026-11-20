@@ -122,18 +122,20 @@
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
+          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
+          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
       "user_dashboard_entity_display": {
         "title": "Display-Kacheln",
-        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "reconfigure": {
         "title": "BTicino C300X neu konfigurieren",
@@ -233,18 +235,20 @@
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
+          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
+          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Display-Kacheln",
-        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "user_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
@@ -272,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
+        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie Abschnitte stehen in der Reihenfolge des Displays, ihre Überschriften zeigen die Seitennummer. Eine Seite, die das Display nicht zeigt (ausgeschaltet oder ohne Entitäten), hat keine Nummer und steht unter den angezeigten Seiten. Ein Abschnitt „Seite +“ ist frei: ausfüllen, um eine Seite anzulegen.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -392,7 +396,7 @@
             "data_description": {
               "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
               "calendars": "Bis zu acht Kalender auswählen.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 10."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 10."
             }
           },
           "leave_home_page": {
@@ -412,7 +416,7 @@
               "lights": "Bis zu 24 Lichter auswählen.",
               "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
               "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 11."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 11."
             }
           },
           "energy_page": {
@@ -429,19 +433,39 @@
             },
             "data_description": {
               "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 2.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 2.",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_consumers": "Die zehn konfigurierten elektrischen Verbraucher mit der höchsten aktuellen Leistung in W; nicht verfügbare Werte entfallen, ohne Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
+            }
+          },
+          "situations_page": {
+            "name": "Seite{situations_page_position}: Situationen",
+            "description": "Ausgewählte Hinweise, nur lesend. Keine Aktionen oder automatische Navigation.",
+            "data": {
+              "enabled": "Situationen anzeigen",
+              "position": "Position",
+              "contacts": "Fenster und Türen",
+              "garages": "Garagentore",
+              "lights": "Lichter",
+              "tasks": "Aufgabenlisten"
+            },
+            "data_description": {
+              "enabled": "Insgesamt bis zu 24 Entitäten in allen vier Feldern auswählen. Unbekannte und nicht verfügbare Zustände bleiben sichtbar. Standardmäßig deaktiviert.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Standard: 12.",
+              "contacts": "Bis zu 24 Kontakte; offene Kontakte werden angezeigt.",
+              "garages": "Bis zu 24 Garagentore; offene oder fahrende Tore werden angezeigt.",
+              "lights": "Bis zu 24 Lichter; eingeschaltete Lichter werden angezeigt.",
+              "tasks": "Bis zu 24 Aufgabenlisten; nur die Anzahl offener Aufgaben. Keine Änderungen."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
+        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie Abschnitte stehen in der Reihenfolge des Displays, ihre Überschriften zeigen die Seitennummer. Eine Seite, die das Display nicht zeigt (ausgeschaltet oder ohne Entitäten), hat keine Nummer und steht unter den angezeigten Seiten. Ein Abschnitt „Seite +“ ist frei: ausfüllen, um eine Seite anzulegen.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -561,7 +585,7 @@
             "data_description": {
               "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
               "calendars": "Bis zu acht Kalender auswählen.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 10."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 10."
             }
           },
           "leave_home_page": {
@@ -581,7 +605,7 @@
               "lights": "Bis zu 24 Lichter auswählen.",
               "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
               "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 11."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 11."
             }
           },
           "energy_page": {
@@ -598,12 +622,32 @@
             },
             "data_description": {
               "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 2.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 2.",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_consumers": "Die zehn konfigurierten elektrischen Verbraucher mit der höchsten aktuellen Leistung in W; nicht verfügbare Werte entfallen, ohne Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
+            }
+          },
+          "situations_page": {
+            "name": "Seite{situations_page_position}: Situationen",
+            "description": "Ausgewählte Hinweise, nur lesend. Keine Aktionen oder automatische Navigation.",
+            "data": {
+              "enabled": "Situationen anzeigen",
+              "position": "Position",
+              "contacts": "Fenster und Türen",
+              "garages": "Garagentore",
+              "lights": "Lichter",
+              "tasks": "Aufgabenlisten"
+            },
+            "data_description": {
+              "enabled": "Insgesamt bis zu 24 Entitäten in allen vier Feldern auswählen. Unbekannte und nicht verfügbare Zustände bleiben sichtbar. Standardmäßig deaktiviert.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Standard: 12.",
+              "contacts": "Bis zu 24 Kontakte; offene Kontakte werden angezeigt.",
+              "garages": "Bis zu 24 Garagentore; offene oder fahrende Tore werden angezeigt.",
+              "lights": "Bis zu 24 Lichter; eingeschaltete Lichter werden angezeigt.",
+              "tasks": "Bis zu 24 Aufgabenlisten; nur die Anzahl offener Aufgaben. Keine Änderungen."
             }
           }
         }
@@ -761,18 +805,20 @@
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
+          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren."
+          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
       "dashboard_entity_display": {
         "title": "Display-Kacheln",
-        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "init": {
         "title": "C300X-Einstellungen",
@@ -794,7 +840,7 @@
           "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
-          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Verhalten nach einer Aktion und erlaubte Aktionen.",
           "dashboard_pages": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
           "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
@@ -814,7 +860,7 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere vier vordefinierte Seiten (Status, Energie, Termine und Haus verlassen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine und Haus verlassen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 11 stehen. Bei gleicher Position kommen Energie, Termine und Haus verlassen vor normalen Seiten, in dieser Reihenfolge.\n\nDie vier vordefinierten Abschnitte stehen immer oben, auch wenn die Seiten ausgeschaltet sind. Ihre Überschriften zeigen die Position auf dem Display, nicht die Reihenfolge in diesem Formular.",
+        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie Abschnitte stehen in der Reihenfolge des Displays, ihre Überschriften zeigen die Seitennummer. Eine Seite, die das Display nicht zeigt (ausgeschaltet oder ohne Entitäten), hat keine Nummer und steht unter den angezeigten Seiten. Ein Abschnitt „Seite +“ ist frei: ausfüllen, um eine Seite anzulegen.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -934,7 +980,7 @@
             "data_description": {
               "enabled": "Die nächsten fünf Termine in sieben Tagen. Abfrage nur in Home Assistant.",
               "calendars": "Bis zu acht Kalender auswählen.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 10."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 10."
             }
           },
           "leave_home_page": {
@@ -954,7 +1000,7 @@
               "lights": "Bis zu 24 Lichter auswählen.",
               "actions": "Bis zu acht vorhandene freigegebene Aktionen auswählen.",
               "show_alarm": "Den bereits für dieses Display konfigurierten Alarm verwenden.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 11."
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 11."
             }
           },
           "energy_page": {
@@ -971,12 +1017,32 @@
             },
             "data_description": {
               "enabled": "Deaktivierte Ansichten verursachen keine eigenen Abfragen oder Zwischenspeicherung; gemeinsam mit aktiven Ansichten genutzte Daten bleiben erhalten. Sind alle Ansichten aus, wird die Seite ausgeblendet und ihr Zwischenspeicher geleert; die Einstellungen bleiben erhalten.",
-              "position": "1 = erste Seite; Positionen 1 bis 11. Bei gleicher Position: Energie, Termine, Haus verlassen, dann normale Seiten. Standardposition: 2.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Bei gleicher Position: Energie, Termine, Haus verlassen, Situationen, dann normale Seiten. Standardposition: 2.",
               "view_now": "Aktueller Energiefluss zwischen Netz, Solar, Batterie und Haus",
               "view_today": "Stündliche Energie und Summen des heutigen Tages",
               "view_power": "Heutige mittlere Leistung in 15-Minuten-Intervallen aus vorhandenen Home-Assistant-Statistiken, keine Echtzeitwerte",
               "view_consumers": "Die zehn konfigurierten elektrischen Verbraucher mit der höchsten aktuellen Leistung in W; nicht verfügbare Werte entfallen, ohne Verlaufsabfragen",
               "view_balance": "Autarkiegrad, Solar-Eigenverbrauch und Kosten"
+            }
+          },
+          "situations_page": {
+            "name": "Seite{situations_page_position}: Situationen",
+            "description": "Ausgewählte Hinweise, nur lesend. Keine Aktionen oder automatische Navigation.",
+            "data": {
+              "enabled": "Situationen anzeigen",
+              "position": "Position",
+              "contacts": "Fenster und Türen",
+              "garages": "Garagentore",
+              "lights": "Lichter",
+              "tasks": "Aufgabenlisten"
+            },
+            "data_description": {
+              "enabled": "Insgesamt bis zu 24 Entitäten in allen vier Feldern auswählen. Unbekannte und nicht verfügbare Zustände bleiben sichtbar. Standardmäßig deaktiviert.",
+              "position": "1 = erste Seite; Positionen 1 bis 12. Standard: 12.",
+              "contacts": "Bis zu 24 Kontakte; offene Kontakte werden angezeigt.",
+              "garages": "Bis zu 24 Garagentore; offene oder fahrende Tore werden angezeigt.",
+              "lights": "Bis zu 24 Lichter; eingeschaltete Lichter werden angezeigt.",
+              "tasks": "Bis zu 24 Aufgabenlisten; nur die Anzahl offener Aufgaben. Keine Änderungen."
             }
           }
         }
@@ -1374,7 +1440,8 @@
           }
         },
         "error": {
-          "device_user_setup_failed": "Das Device-User-Setup ist fehlgeschlagen. Prüfe den Maintenance-Zugriff und versuche es erneut."
+          "device_user_setup_failed": "Das Device-User-Setup ist fehlgeschlagen. Prüfe den Maintenance-Zugriff und versuche es erneut.",
+          "device_not_registered": "Die C300X wurde noch nicht in der BTicino-App Door Entry angemeldet. Flexisip auf dem Gerät bekommt SIP-User, Domain und Zertifikate nur über diese Anmeldung. Melde das Gerät einmal in der App an und versuche es dann erneut. Die Weiterleitung kann danach auf Smartphone bleiben."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
@@ -1531,6 +1598,20 @@
         "drop_link_local": "Ohne Link-Local-Adressen (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 und lokales IPv6 (ULA) - empfohlen",
         "ipv4_only": "Nur IPv4"
+      }
+    },
+    "dashboard_navigation": {
+      "options": {
+        "pager": "Pfeile (vor / zurück)",
+        "tabs": "Favoritenleiste"
+      }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "angewendet",
+        "original": "nicht angewendet (Originaldateien)",
+        "unknown": "unbekannt",
+        "unavailable": "nicht abrufbar"
       }
     }
   },

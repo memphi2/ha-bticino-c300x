@@ -11,6 +11,14 @@ class C300XAgentApiConnectionError(C300XAgentApiError):
     """Raised when the device agent cannot be reached."""
 
 
+class C300XDeviceNotRegisteredError(C300XAgentApiConnectionError):
+    """The C300X has no SIP domain: it was never added in the Door Entry app.
+
+    Flexisip on the device gets its user, domain and certificates only from
+    that registration, so the Home Assistant media user cannot be created yet.
+    """
+
+
 class C300XAgentApiAuthError(C300XAgentApiError):
     """A credential was rejected, independently of transport availability."""
 

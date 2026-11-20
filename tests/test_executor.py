@@ -61,7 +61,6 @@ from custom_components.bticino_c300x.dashboard_config import (
 )
 from custom_components.bticino_c300x.dashboard_weather import (
     _cached_weather_forecast,
-    _weather_forecast,
     _weather_forecast_cache,
     _weather_forecast_temperature,
     _weather_forecast_time_label,
@@ -957,7 +956,7 @@ def test_configured_dashboard_entities_normalizes_supported_entities() -> None:
                 " Switch.Entry ",
                 "sensor.temperature",
                 "switch.entry",
-                "camera.tv",
+                "update.tv",
                 "bad",
             ]
         },
@@ -2329,13 +2328,11 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
     assert main_page["badges"][1]["state"].count("\n") == 1
     assert main_page["weather"] == {
         "available": True,
-        "title": "Wetter",
         "condition": "Sonnig",
         "condition_key": "sunny",
         "temperature": "22 C",
         "humidity": "55%",
         "wind": "12 km/h",
-        "forecast": "14:00 Regen 20 C | 18:00 Bewoelkt 18 C",
         "forecast_1": {
             "time": "14:00",
             "condition": "Regen",
@@ -2348,11 +2345,9 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
             "condition_key": "cloudy",
             "temperature": "18 C",
         },
-        "sun": "03:20   19:28",
         "sunrise": "03:20",
         "sunset": "19:28",
         "updated": "10:30",
-        "badge": "Sonnig\n22 C",
         "color": "#f1c40f",
     }
     assert "buttons" not in main_page
@@ -2412,14 +2407,12 @@ def test_async_dashboard_payload_uses_weather_forecast_service() -> None:
     result = run(async_dashboard_payload(hass, entry))
 
     main_page = {page["title"]: page for page in result["data"]["pages"]}["C300X"]
-    assert main_page["weather"]["forecast"] == "15:00 Regen 18 C"
     assert main_page["weather"]["forecast_1"] == {
         "time": "15:00-16:00",
         "condition": "Regen",
         "condition_key": "rainy",
         "temperature": "18 C",
     }
-    assert main_page["weather"]["sun"] == "03:20   19:28"
     assert main_page["weather"]["sunrise"] == "03:20"
     assert main_page["weather"]["sunset"] == "19:28"
     assert hass.services.calls[0] == (
@@ -2483,8 +2476,9 @@ def test_async_dashboard_payload_caches_weather_forecast_service() -> None:
     first = run(async_dashboard_payload(hass, entry))
     second = run(async_dashboard_payload(hass, entry))
 
-    assert first["data"]["pages"][0]["weather"]["forecast"] == "15:00 Regen 18 C"
-    assert second["data"]["pages"][0]["weather"]["forecast"] == "15:00 Regen 18 C"
+    for answer in (first, second):
+        forecast = answer["data"]["pages"][0]["weather"]["forecast_1"]
+        assert (forecast["condition"], forecast["temperature"]) == ("Regen", "18 C")
     assert hass.services.calls == [
         (
             "weather",
@@ -2515,7 +2509,6 @@ def test_async_dashboard_payload_weather_offline_entity() -> None:
         "condition_key": "",
         "temperature": "",
     }
-    assert weather["badge"] == "Wetter\nOffline"
     assert weather["color"] == "#f1c40f"
 
 
@@ -2662,7 +2655,7 @@ def test_async_dashboard_payload_weather_uses_nested_attribute_forecast() -> Non
         "condition_key": "sunny",
         "temperature": "23 C",
     }
-    assert weather["sun"] == ""
+    assert (weather["sunrise"], weather["sunset"]) == ("", "")
     assert weather["color"] == "#5dade2"
 
 
@@ -2694,9 +2687,7 @@ def test_async_dashboard_payload_weather_handles_forecast_service_errors() -> No
 
     weather = result["data"]["pages"][0]["weather"]
     assert weather["available"] is False
-    assert weather["title"] == "Weather"
     assert weather["condition"] == "Unknown"
-    assert weather["forecast"] == ""
     assert weather["forecast_1"]["time"] == ""
     assert weather["updated"] == ""
 
@@ -2826,7 +2817,8 @@ def test_async_dashboard_payload_weather_replaces_invalid_cache_container() -> N
 
     result = run(async_dashboard_payload(hass, entry))
 
-    assert result["data"]["pages"][0]["weather"]["forecast"] == "15:00 Regen 18 C"
+    forecast = result["data"]["pages"][0]["weather"]["forecast_1"]
+    assert (forecast["condition"], forecast["temperature"]) == ("Regen", "18 C")
     assert isinstance(hass.data["bticino_c300x_dashboard_weather_forecast"], dict)
     assert len(hass.services.calls) == 1
 
@@ -2846,25 +2838,9 @@ def test_dashboard_weather_cache_helpers_handle_unusable_cache() -> None:
     )
 
 
-def test_dashboard_weather_private_helpers_cover_truncation() -> None:
-    long_forecast = [
-        {
-            "time": "very-long-unparseable-weather-time-label",
-            "condition": "unknown_condition_with_a_long_name",
-            "temperature": 123,
-            "temperature_unit": "C",
-        },
-        {
-            "time": "second-long-unparseable-weather-time-label",
-            "condition": "another_unknown_condition_with_a_long_name",
-            "temperature": 456,
-            "temperature_unit": "C",
-        },
-    ]
-
+def test_dashboard_weather_private_helpers_cover_empty_values() -> None:
     assert _weather_forecast_time_label(None, "hourly") == ""
     assert _weather_forecast_temperature({}, "C", "en") == ""
-    assert _weather_forecast({}, "en", forecast_items=long_forecast).endswith("...")
 
 
 def test_async_dashboard_payload_builds_dynamic_pages_from_actions() -> None:

@@ -181,10 +181,11 @@ Lovelace card or an embedded HA dashboard.
 1. Update the bundled agent, then enable and apply **Display patch** under
    **Configure > Display and Display patch**. Applying it restarts the device GUI.
 2. Open **Display pages**. Choose an optional weather entity, name your pages,
-   set their order and select the entities for each. Four built-in pages
-   (Status, Energy, Agenda and Leave home) and up to seven custom pages are
-   available. Set all
-   positions from 1 to 11; defaults are Energy 2, Agenda 10 and Leave home 11.
+   set their order and select the entities for each. Five built-in pages
+   (Status, Energy, Agenda, Leave home and Situations) and up to seven custom
+   pages are available. Set all
+   positions from 1 to 12; defaults are Energy 2, Agenda 10, Leave home 11 and
+   Situations 12.
    Equal positions put those optional pages in that order before regular pages.
    Disabling an optional page keeps its selections and position.
    Drag entities to reorder their tiles.
@@ -194,10 +195,10 @@ Lovelace card or an embedded HA dashboard.
    the top ten configured devices by current W without history queries.
    Distribution has been removed: enable Consumers explicitly after upgrading;
    the old selection is removed without enabling another view.
-   The four built-in sections always appear first in the form, even when
-   disabled. Their titles show their configured display positions, not their
-   order in this form. Custom sections follow in display order, with unused
-   sections at the end. Optional **Agenda** and **Leave home** sections select calendars and departure
+   The sections are listed in the order of the display and their titles show
+   the page number. A page the display does not show (switched off, or without
+   entities) has no number and follows the shown pages; free sections, titled
+   **Page +**, come last. Optional **Agenda** and **Leave home** sections select calendars and departure
    checks explicitly; they are disabled until you enable them. Agenda shows up
    to five events in seven days, using a background HA cache. Leave home actions
    require a second **Confirm** tap and never run when the page opens. The status page

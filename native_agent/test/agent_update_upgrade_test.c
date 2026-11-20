@@ -22,21 +22,37 @@ static int simulated_remount(const char *command)
 #include "../src/agent_update.c"
 #undef system
 
+static int fail_activation(const struct c300x_config *config, struct agent_update_change_summary *summary)
+{
+    (void)config;
+    (void)summary;
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
-    assert(argc == 4);
+    assert(argc == 4 || (argc == 5 && !strcmp(argv[4], "fail-activation")));
     struct c300x_config config = {0};
     struct agent_update_change_summary summary;
-    char manifest[8192];
+    char manifest[8192], installed_manifest[8192] = "{}", installed_path[C300X_MAX_PATH_LEN];
     int truncated = 0;
     assert(c300x_join_path(config.config_path, sizeof(config.config_path), argv[1], "config.json"));
     assert(c300x_join_path(init_script, sizeof(init_script), argv[1], "init-script"));
     assert(c300x_join_path(init_link, sizeof(init_link), argv[1], "init-link"));
     assert(read_bounded_text_file(argv[2], manifest, sizeof(manifest), &truncated) && !truncated);
+    assert(c300x_join_path(installed_path, sizeof(installed_path), argv[1], "bundle.json"));
+    if (access(installed_path, F_OK) == 0) {
+        assert(read_bounded_text_file(installed_path, installed_manifest, sizeof(installed_manifest), &truncated) && !truncated);
+    }
     int expected = atoi(argv[3]);
-    assert(apply_agent_update_files(&config, manifest, "{}", &summary, NULL) == expected);
+    assert(apply_agent_update_files(&config, manifest, installed_manifest, &summary,
+        argc == 5 ? fail_activation : NULL) == expected);
     if (!expected) {
         assert(summary.changed_files == 0);
     }
+    printf("{\"ok\":%s,\"changed_files\":%d,\"runtime_changed\":%s,\"qml_patch_changed\":%s,\"script_changed\":%s,\"manifest_changed\":%s}\n",
+        expected ? "true" : "false", summary.changed_files,
+        summary.runtime_changed ? "true" : "false", summary.qml_patch_changed ? "true" : "false",
+        summary.script_changed ? "true" : "false", summary.manifest_changed ? "true" : "false");
     return 0;
 }

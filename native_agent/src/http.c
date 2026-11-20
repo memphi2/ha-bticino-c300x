@@ -2813,6 +2813,7 @@ static void device_user_status_body(
     (void)c300x_device_routing_read_status(&routing_status);
     if (
         config != NULL
+        && !c300x_device_display_is_qt5()
         && access(config->maintenance_qml_patch_script, X_OK) == 0
         && c300x_command_capture(
             config->maintenance_qml_patch_script,
@@ -2951,7 +2952,10 @@ static void handle_device_user_ensure(
         send_json(client_fd, 500, "Internal Server Error", body);
         return;
     }
-    {
+    if (!c300x_device_display_is_qt5()) {
+        /* The label is written into the display's QML files. A Qt 5 display
+         * has none on disk: the media user and routing are set up, only the
+         * label on the device is not shown. */
         char *qml_body;
         int qml_ok = 0;
 
@@ -2962,7 +2966,7 @@ static void handle_device_user_ensure(
                 "media-user-label-apply",
                 body,
                 sizeof(body),
-                10000,
+                C300X_COMMAND_NO_DEADLINE,
                 NULL
             )
         ) {
@@ -3009,7 +3013,7 @@ static void handle_device_user_restore(
             "media-user-label-restore",
             body,
             sizeof(body),
-            10000,
+            C300X_COMMAND_NO_DEADLINE,
             NULL
         )
     ) {

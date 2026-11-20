@@ -2,9 +2,10 @@
 
 ## Supported Release Line
 
-- `2.6.x`: current stable (2.6.0)
-- `2.5.x`: previous stable; upgrade to 2.6.x for maintenance fixes
-- `2.4.x`: no longer maintained; upgrade to 2.6.x
+- `2.7.x`: current stable (2.7.0)
+- `2.5.x`: previous stable; upgrade to 2.7.x for maintenance fixes
+- `2.4.x`: no longer maintained; upgrade to 2.7.x
+- `2.6.0`: withdrawn because the energy page did not load on the display
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 
 ## Compatibility Baseline
@@ -13,7 +14,7 @@
 - Home Assistant validation baseline: `2026.10.x` and `2026.11.x`
 - CI tests the fixed minimum and resolves the latest stable Home Assistant on every run.
 - Python: `3.14`
-- C300X firmware: `1.7.x or 2.0.2`
+- C300X firmware: `1.7.x, 2.0.2 or 3.0.6 (experimental)`
 
 ## Maintenance Scope
 

@@ -276,6 +276,12 @@ firmware glibc baseline and needs a C300X firmware sysroot through
 `C300X_DEVICE_SYSROOT`. Public CI runners do not ship that proprietary sysroot,
 so they still compile the ARMHF target and run `armhf-stack-check`, while local
 release builds must run the ABI check against the real device sysroot.
+One binary serves every supported firmware: it is built against the oldest
+(`1.7.19`), and the check also runs against each newer root file system named in
+`C300X_ABI_SYSROOTS` (by default the extracted `3.0.6` one, when it is there).
+For each it requires the libraries the agent links against, every versioned C
+library symbol it imports, and every function it loads at run time from
+`libcurl`, `libsrtp` and `libspeex`.
 `armhf-stack-check` rejects oversized or dynamic stack usage records for the
 ARMHF build.
 
@@ -295,8 +301,24 @@ files, because everything they depend on is unchanged there:
 for a locally extracted root file system and fails on any difference. Run it
 before a firmware version is added to the supported list; a version that fails
 needs its own build or display files and is not supported by adding a routing
-table alone. Firmware `3.0.6` fails this check (other C library, no GUI files
-in the file system, other routing target) and is not supported.
+table alone.
+
+Firmware `3.0.6` fails this check and is supported experimentally:
+
+- Its C library is glibc 2.35, and `libcurl` and `libsrtp` are other builds.
+  The same binary runs there: `armhf-abi-check` checks it against the `3.0.6`
+  root file system as well (see above).
+- Its display is Qt 5 with the QML built into the vendor program, so there are
+  no files for the Display patch. The agent and the installer recognise it by
+  `/usr/lib/libQt5Core.so.5`, skip the Display patch and the media-user label,
+  and the Home Assistant pages are not shown on the device.
+- Its `bt_av_media` sends only the low-resolution video stream on to other
+  receivers. Without a setting of its own the camera uses that stream there
+  (`video.av.highResolution: false`).
+- `bt_answering_machine` is another build with its own routing table.
+- As on the other versions, Ring Call and video need a device registered once
+  through the Door Entry app: that creates the SIP user, domain and keystore
+  of Flexisip.
 
 The routing target is the one file that differs between the supported
 versions. `device_routing.c` holds one patch table per known stock build and

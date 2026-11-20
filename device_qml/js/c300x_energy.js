@@ -73,6 +73,12 @@ function decimalSeparator(axis) {
     return ".";
 }
 
+function zeroTick(ticks) {
+    var all = list(ticks);
+    for (var i = 0; i < all.length; i++) if (all[i] && all[i].value === 0) return i;
+    return 0;
+}
+
 function barSegment(series, hour, index, axis, height) {
     var empty = {y: 0, height: 0};
     if (!axis || !finite(axis.min) || !finite(axis.max) || axis.max <= axis.min ||

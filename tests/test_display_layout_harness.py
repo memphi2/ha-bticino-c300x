@@ -59,7 +59,7 @@ def test_geometry_uses_visible_ink_for_overlap_and_viewport_bounds():
 def test_fixtures_cover_actual_contracts_and_three_viewports():
     fixtures = HARNESS.fixtures()
     assert {fixture["component"] for fixture in fixtures} == set(HARNESS.COMPONENTS)
-    assert len([fixture for fixture in fixtures if fixture["component"] in HARNESS.COMPONENTS[:4]]) * 3 == 57
+    assert len([fixture for fixture in fixtures if fixture["component"] in HARNESS.COMPONENTS[:4]]) * 3 == 63
     assert HARNESS.VIEWPORTS["native"] == (800, 480, 748, 300)
     assert len(HARNESS.VIEWPORTS) == 3
     assert HARNESS.VIEWPORTS["narrow"][2] < 748
@@ -325,6 +325,20 @@ def test_leave_home_timeout_still_detects_broken_handler(tmp_path):
     assert checks["timeout never executes"]["passed"]
     assert not checks["timeout clears confirmation"]["passed"]
     assert checks["timeout clears confirmation"]["actual"] == "scene.departure"
+
+
+def test_optional_host_loads_and_unloads_each_page_without_actions(tmp_path):
+    result = subprocess.run([qt_python(), str(SCRIPT), "--components", "C300XOptionalPages",
+                             "--scenarios", "transitions", "--check", "--output", str(tmp_path)],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads((tmp_path / "report.json").read_text())
+    assert report["passed"] and len(report["cases"]) == 3
+    for case in report["cases"]:
+        assert not case["events"] and not case["network_attempts"]
+        assert {shot["state"] for shot in case["snapshots"]} >= {
+            "agendaVisible", "leaveHomeVisible", "energyVisible", "situationsVisible", "all-hidden",
+        }
 
 
 @pytest.mark.parametrize("fault", ["none", "wrong_palette", "click_through", "broken_scroll",

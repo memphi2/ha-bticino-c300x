@@ -209,7 +209,10 @@ assert.equal(p.feedbackKey(p.selectedItem), "action_error", "refresh cannot hide
 
 p.adjustControl(p.selectedItem, p.selectedItem.controls[0], 1);
 const timedOut = queue.shift();
+p.morePagesOpen = true;
 p.expirePendingControl();
+assert.equal(p.morePagesOpen, true, "a command that times out does not close the More list under the finger");
+p.morePagesOpen = false;
 assert.equal(p.feedbackKey(p.selectedItem), "state_unconfirmed");
 assert.equal(p.controlInFlight, false);
 assert.equal(queue.length, 1, "timeout only reads state; it never resends a command");

@@ -122,18 +122,20 @@
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action"
+          "dashboard_prevent_return": "Rester sur la page après une action",
+          "dashboard_navigation": "Navigation entre les pages"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
       "user_dashboard_entity_display": {
         "title": "Tuiles de l'écran",
-        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : saisissez votre propre nom. Si le champ reste vide, la tuile affiche le nom de Home Assistant.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "reconfigure": {
         "title": "Reconfigurer BTicino C300X",
@@ -233,18 +235,20 @@
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action"
+          "dashboard_prevent_return": "Rester sur la page après une action",
+          "dashboard_navigation": "Navigation entre les pages"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Tuiles de l'écran",
-        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : saisissez votre propre nom. Si le champ reste vide, la tuile affiche le nom de Home Assistant.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "user_dashboard_alarm": {
         "title": "Alarme (Alarmo)",
@@ -272,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez quatre pages prédéfinies (Statut, Énergie, Agenda et Quitter la maison) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.\n\nLes quatre sections prédéfinies apparaissent toujours en premier, même si les pages sont désactivées. Leurs titres indiquent la position sur l'écran, pas l'ordre des sections dans ce formulaire.",
+        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -392,7 +396,7 @@
             "data_description": {
               "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
               "calendars": "Sélectionnez jusqu'à huit calendriers.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 10."
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 10."
             }
           },
           "leave_home_page": {
@@ -412,7 +416,7 @@
               "lights": "Sélectionnez jusqu'à 24 lumières.",
               "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
               "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 11."
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 11."
             }
           },
           "energy_page": {
@@ -429,19 +433,39 @@
             },
             "data_description": {
               "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 2.",
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 2.",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
               "view_consumers": "Les dix appareils électriques configurés consommant le plus de puissance actuelle en W ; mesures indisponibles omises, sans historique",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position} : Situations",
+            "description": "Problèmes sélectionnés en lecture seule. Aucune action ni navigation automatique.",
+            "data": {
+              "enabled": "Afficher Situations",
+              "position": "Position",
+              "contacts": "Fenêtres et portes",
+              "garages": "Portes de garage",
+              "lights": "Lumières",
+              "tasks": "Listes de tâches"
+            },
+            "data_description": {
+              "enabled": "Sélectionnez au total 24 entités au maximum dans les quatre champs. Les états inconnus et indisponibles restent visibles. Désactivé par défaut.",
+              "position": "1 = première page ; positions de 1 à 12. Défaut : 12.",
+              "contacts": "Jusqu'à 24 contacts ; les contacts ouverts sont affichés.",
+              "garages": "Jusqu'à 24 portes de garage ; les portes ouvertes ou en mouvement sont affichées.",
+              "lights": "Jusqu'à 24 lumières ; les lumières allumées sont affichées.",
+              "tasks": "Jusqu'à 24 listes ; nombre de tâches en attente. Aucune modification."
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez quatre pages prédéfinies (Statut, Énergie, Agenda et Quitter la maison) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.\n\nLes quatre sections prédéfinies apparaissent toujours en premier, même si les pages sont désactivées. Leurs titres indiquent la position sur l'écran, pas l'ordre des sections dans ce formulaire.",
+        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -561,7 +585,7 @@
             "data_description": {
               "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
               "calendars": "Sélectionnez jusqu'à huit calendriers.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 10."
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 10."
             }
           },
           "leave_home_page": {
@@ -581,7 +605,7 @@
               "lights": "Sélectionnez jusqu'à 24 lumières.",
               "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
               "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 11."
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 11."
             }
           },
           "energy_page": {
@@ -598,12 +622,32 @@
             },
             "data_description": {
               "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 2.",
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 2.",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
               "view_consumers": "Les dix appareils électriques configurés consommant le plus de puissance actuelle en W ; mesures indisponibles omises, sans historique",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position} : Situations",
+            "description": "Problèmes sélectionnés en lecture seule. Aucune action ni navigation automatique.",
+            "data": {
+              "enabled": "Afficher Situations",
+              "position": "Position",
+              "contacts": "Fenêtres et portes",
+              "garages": "Portes de garage",
+              "lights": "Lumières",
+              "tasks": "Listes de tâches"
+            },
+            "data_description": {
+              "enabled": "Sélectionnez au total 24 entités au maximum dans les quatre champs. Les états inconnus et indisponibles restent visibles. Désactivé par défaut.",
+              "position": "1 = première page ; positions de 1 à 12. Défaut : 12.",
+              "contacts": "Jusqu'à 24 contacts ; les contacts ouverts sont affichés.",
+              "garages": "Jusqu'à 24 portes de garage ; les portes ouvertes ou en mouvement sont affichées.",
+              "lights": "Jusqu'à 24 lumières ; les lumières allumées sont affichées.",
+              "tasks": "Jusqu'à 24 listes ; nombre de tâches en attente. Aucune modification."
             }
           }
         }
@@ -761,18 +805,20 @@
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action"
+          "dashboard_prevent_return": "Rester sur la page après une action",
+          "dashboard_navigation": "Navigation entre les pages"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
+          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
       "dashboard_entity_display": {
         "title": "Tuiles de l'écran",
-        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : le nom de Home Assistant ou l'ID de l'entité - ou saisissez simplement votre propre texte.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
+        "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : saisissez votre propre nom. Si le champ reste vide, la tuile affiche le nom de Home Assistant.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "init": {
         "title": "Réglages C300X",
@@ -794,7 +840,7 @@
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
           "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
-          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
           "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."
@@ -814,7 +860,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez quatre pages prédéfinies (Statut, Énergie, Agenda et Quitter la maison) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda et Quitter la maison sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 11. À position égale, Énergie, Agenda et Quitter la maison précèdent les pages ordinaires, dans cet ordre.\n\nLes quatre sections prédéfinies apparaissent toujours en premier, même si les pages sont désactivées. Leurs titres indiquent la position sur l'écran, pas l'ordre des sections dans ce formulaire.",
+        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -934,7 +980,7 @@
             "data_description": {
               "enabled": "Les cinq prochains événements dans les sept jours. Lecture dans Home Assistant uniquement.",
               "calendars": "Sélectionnez jusqu'à huit calendriers.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 10."
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 10."
             }
           },
           "leave_home_page": {
@@ -954,7 +1000,7 @@
               "lights": "Sélectionnez jusqu'à 24 lumières.",
               "actions": "Sélectionnez jusqu'à huit actions existantes autorisées.",
               "show_alarm": "Utiliser l'alarme déjà configurée pour cet écran.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 11."
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 11."
             }
           },
           "energy_page": {
@@ -971,12 +1017,32 @@
             },
             "data_description": {
               "enabled": "Les vues désactivées ne lancent aucune requête ni mise en cache propre ; les données partagées avec les vues actives sont conservées. Désactiver toutes les vues masque la page et vide son cache sans perdre les réglages.",
-              "position": "1 = première page ; positions de 1 à 11. Égalité : Énergie, Agenda, Quitter la maison, puis les pages ordinaires. Position par défaut: 2.",
+              "position": "1 = première page ; positions de 1 à 12. Égalité : Énergie, Agenda, Quitter la maison, Situations, puis les pages ordinaires. Position par défaut: 2.",
               "view_now": "Flux actuel entre réseau, solaire, batterie et maison",
               "view_today": "Énergie horaire et totaux du jour",
               "view_power": "Puissance moyenne du jour par intervalles de 15 minutes, issue des statistiques Home Assistant existantes, pas de valeurs en temps réel",
               "view_consumers": "Les dix appareils électriques configurés consommant le plus de puissance actuelle en W ; mesures indisponibles omises, sans historique",
               "view_balance": "Autonomie, autoconsommation solaire et coûts"
+            }
+          },
+          "situations_page": {
+            "name": "Page{situations_page_position} : Situations",
+            "description": "Problèmes sélectionnés en lecture seule. Aucune action ni navigation automatique.",
+            "data": {
+              "enabled": "Afficher Situations",
+              "position": "Position",
+              "contacts": "Fenêtres et portes",
+              "garages": "Portes de garage",
+              "lights": "Lumières",
+              "tasks": "Listes de tâches"
+            },
+            "data_description": {
+              "enabled": "Sélectionnez au total 24 entités au maximum dans les quatre champs. Les états inconnus et indisponibles restent visibles. Désactivé par défaut.",
+              "position": "1 = première page ; positions de 1 à 12. Défaut : 12.",
+              "contacts": "Jusqu'à 24 contacts ; les contacts ouverts sont affichés.",
+              "garages": "Jusqu'à 24 portes de garage ; les portes ouvertes ou en mouvement sont affichées.",
+              "lights": "Jusqu'à 24 lumières ; les lumières allumées sont affichées.",
+              "tasks": "Jusqu'à 24 listes ; nombre de tâches en attente. Aucune modification."
             }
           }
         }
@@ -1374,7 +1440,8 @@
           }
         },
         "error": {
-          "device_user_setup_failed": "La configuration utilisateur appareil a échoué. Vérifiez l'accès maintenance et réessayez."
+          "device_user_setup_failed": "La configuration utilisateur appareil a échoué. Vérifiez l'accès maintenance et réessayez.",
+          "device_not_registered": "Le C300X n'a pas encore été ajouté dans l'application BTicino Door Entry. Flexisip sur l'appareil obtient son utilisateur SIP, son domaine et ses certificats uniquement par cet enregistrement. Ajoutez l'appareil une fois dans l'application, puis réessayez. Le renvoi peut ensuite rester sur Smartphone."
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
@@ -1531,6 +1598,20 @@
         "drop_link_local": "Sans adresses link-local (fe80::, 169.254.x.x)",
         "prefer_ipv4_ula": "IPv4 et IPv6 local (ULA) - recommandé",
         "ipv4_only": "IPv4 uniquement"
+      }
+    },
+    "dashboard_navigation": {
+      "options": {
+        "pager": "Flèches (précédent / suivant)",
+        "tabs": "Barre de favoris"
+      }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "appliqué",
+        "original": "non appliqué (fichiers d'origine)",
+        "unknown": "inconnu",
+        "unavailable": "indisponible"
       }
     }
   },

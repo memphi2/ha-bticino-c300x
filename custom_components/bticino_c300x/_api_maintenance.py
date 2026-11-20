@@ -612,18 +612,6 @@ class _ApiMaintenanceMixin(_C300XApiCore):
         )
         return normalize_qml_patch_status(data)
 
-    async def async_restore_qml_core_patch(self) -> dict[str, Any]:
-        """Restore the core media QML hook through the maintenance API."""
-
-        data = await self._request_json(
-            "POST",
-            "/api/v1/maintenance/qml-patch/actions/restore-core",
-            json_data={"confirm": "restore_qml_core_patch"},
-            extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
-        )
-        return normalize_qml_patch_status(data)
-
     async def async_restore_qml_patch(self) -> dict[str, Any]:
         """Restore original device UI files through the maintenance API."""
 

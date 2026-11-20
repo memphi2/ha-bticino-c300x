@@ -83,3 +83,92 @@ def test_abi_gate_rejects_missing_tool(tmp_path):
     )
     assert result.returncode != 0
     assert "ARMHF ABI check passed" not in result.stdout
+
+
+def _abi_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("check_agent_abi", ROOT / "scripts/check_agent_abi.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _fake_firmware(tmp_path, *, drop=(), lacks_runtime=None):
+    """Build a root file system and a readelf that reports its symbols."""
+
+    abi = _abi_module()
+    root = tmp_path / "rootfs"
+    (root / "lib").mkdir(parents=True)
+    (root / "usr/lib").mkdir(parents=True)
+    tables = {}
+    for name in abi.SYSTEM_LIBRARIES:
+        (root / "lib" / name).write_bytes(b"")
+        tables[str(root / "lib" / name)] = []
+    tables[str(root / "lib/libc.so.6")] = [
+        name for name in ("pthread_create@GLIBC_2.4", "memcpy@GLIBC_2.4") if name not in drop
+    ]
+    for library, functions in abi.RUNTIME_SYMBOLS.items():
+        (root / "usr/lib" / library).write_bytes(b"")
+        tables[str(root / "usr/lib" / library)] = [
+            name for name in functions if name != lacks_runtime
+        ]
+    tables["agent"] = ["UND pthread_create@GLIBC_2.4", "UND memcpy@GLIBC_2.4", "UND free"]
+    tool = tmp_path / "readelf"
+    tool.write_text(
+        f"#!{sys.executable}\n"
+        "import sys\n"
+        f"tables = {tables!r}\n"
+        "args = sys.argv[1:]\n"
+        "if args[0] == '-d':\n"
+        "    print(' 0x1 (NEEDED) Shared library: [libpthread.so.0]')\n"
+        "    print(' 0x1 (NEEDED) Shared library: [libc.so.6]')\n"
+        "    raise SystemExit(0)\n"
+        "for index, entry in enumerate(tables[args[-1]]):\n"
+        "    where, _, name = entry.rpartition(' ')\n"
+        "    print(f'   {index}: 00000000 0 FUNC GLOBAL DEFAULT {where or 11} {name}')\n"
+    )
+    tool.chmod(0o700)
+    return abi, root, str(tool)
+
+
+def test_the_agent_is_checked_against_every_firmware_it_runs_on(tmp_path):
+    abi, root, tool = _fake_firmware(tmp_path)
+    abi.check_sysroot("agent", tool, root)
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"drop": ("memcpy@GLIBC_2.4",)}, "lacks memcpy@GLIBC_2.4"),
+        ({"lacks_runtime": "srtp_protect"}, "libsrtp.so.1 lacks srtp_protect"),
+    ],
+)
+def test_a_firmware_without_a_symbol_the_agent_uses_fails_the_check(tmp_path, change, message):
+    abi, root, tool = _fake_firmware(tmp_path, **change)
+    with pytest.raises(ValueError, match=message):
+        abi.check_sysroot("agent", tool, root)
+
+
+def test_a_firmware_without_a_library_the_agent_needs_fails_the_check(tmp_path):
+    abi, root, tool = _fake_firmware(tmp_path)
+    (root / "usr/lib/libspeex.so.1").unlink()
+    with pytest.raises(ValueError, match="lacks libspeex.so.1"):
+        abi.check_sysroot("agent", tool, root)
+
+
+def test_the_checked_runtime_functions_are_the_ones_the_agent_loads():
+    import re
+
+    sources = "".join(path.read_text(encoding="utf-8") for path in (ROOT / "native_agent/src").glob("*.c"))
+    loaded = set(re.findall(r'"((?:srtp|speex)_[a-z_]+)"', sources))
+    # The curl names come from a macro; its own definition is no function.
+    loaded |= {f"curl_{name}" for name in re.findall(r"\bLOAD\(([a-z_]+)\)", sources) if name != "name"}
+    checked = {name for functions in _abi_module().RUNTIME_SYMBOLS.values() for name in functions}
+    assert checked == loaded
+
+
+def test_the_abi_check_covers_the_newer_firmware_when_it_is_there():
+    makefile = (ROOT / "native_agent/Makefile").read_text(encoding="utf-8")
+    assert "C300X_ABI_SYSROOTS ?= $(wildcard ../../c300x-fwpatch/work/rootfs-3.0.6)" in makefile
+    assert "$(foreach root,$(C300X_DEVICE_SYSROOT) $(C300X_ABI_SYSROOTS),--sysroot $(root))" in makefile

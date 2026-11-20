@@ -44,6 +44,9 @@ DEVICE_SOURCE_FILES = (
     "js/c300x_alerts.js",
     "C300XAgenda.qml",
     "C300XLeaveHome.qml",
+    "C300XChecks.qml",
+    "C300XSituations.qml",
+    "C300XOptionalPages.qml",
     "C300XDetailControl.qml",
     "C300XEnergyReadout.qml",
     "C300XEnergySums.qml",
@@ -124,15 +127,6 @@ def strip_device_file(source: Path, target: Path) -> Path:
         strip_device_source(text, name=str(source)), encoding="utf-8", newline="\n"
     )
     return target
-
-
-def strip_device_tree(target_dir: Path, source_dir: Path = DEVICE_SOURCE_DIR) -> list[Path]:
-    """Write every display file, stripped, below ``target_dir``."""
-
-    return [
-        strip_device_file(source_dir / relative, target_dir / relative)
-        for relative in DEVICE_SOURCE_FILES
-    ]
 
 
 def main() -> int:

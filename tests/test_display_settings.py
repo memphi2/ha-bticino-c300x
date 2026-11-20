@@ -1,6 +1,8 @@
 """Native display layout forms preserve older selections and infer controls."""
 
 import asyncio
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -87,7 +89,10 @@ def post_tiles_like_home_assistant(schema, changes=None):
 
     data = {}
     for key, tile_section in schema.schema.items():
-        values = {str(field): field.default() for field in tile_section.schema.schema}
+        values = {}
+        for field in tile_section.schema.schema:
+            suggested = (field.description or {}).get("suggested_value")
+            values[str(field)] = suggested if suggested is not None else field.default()
         values.update(changes or {})
         data[str(key)] = {
             name: value for name, value in values.items() if value not in (None, "")
@@ -330,12 +335,13 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     assert form["step_id"].endswith("dashboard_pages")
     # The section of a named page carries its name in its title.
     assert form["description_placeholders"]["page_2_name"] == ": Study"
-    assert form["description_placeholders"]["page_3_name"] == ""
+    # A free section is titled with a plus sign.
+    assert form["description_placeholders"]["page_3_name"] == " +"
     form = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
     assert list(form["data_schema"].schema) == ["Study \u203a Room"]
     # The name shows the typed text; emptied, it is left out of the post.
     assert post_tiles_like_home_assistant(form["data_schema"])["Study \u203a Room"]["Name"] == "Desk"
-    posted = post_tiles_like_home_assistant(form["data_schema"], {"Name": "friendly_name"})
+    posted = post_tiles_like_home_assistant(form["data_schema"], {"Name": ""})
     result = asyncio.run(display_step(posted))
 
     assert result["type"] == "finished", result.get("errors")
@@ -399,7 +405,7 @@ def test_the_pages_form_places_and_orders_the_pages(monkeypatch, flow_kind):
             {"page_1": {"entities": ["light.one"]}, "page_2": {"name": "Room", "entities": ["light.one"]}},
             {"page_2": "dashboard_entity_on_several_pages"},
         ),
-        ({"page_2": {"entities": ["camera.door"]}}, {"page_2": "invalid_dashboard_entities"}),
+        ({"page_2": {"entities": ["update.door"]}}, {"page_2": "invalid_dashboard_entities"}),
         # A page with tiles is shown with its name as the heading.
         ({"page_2": {"entities": ["light.one"]}}, {"page_2": "dashboard_page_name_missing"}),
         (
@@ -722,10 +728,11 @@ def test_a_weather_entity_needs_no_entity_display_dialog(monkeypatch, flow_kind)
         # A name without a text leaves the Home Assistant name.
         ({"Name": ""}, {}),
         ({"Name": "   "}, {}),
-        ({"Name": "custom"}, {}),
-        # A typed text is a name of its own.
+        # A typed text is a name of its own, whatever it reads.
         ({"Name": " Desk "}, {"name": "custom", "custom_name": "Desk"}),
-        ({"Name": "entity_id"}, {"name": "entity_id"}),
+        ({"Name": "entity_id"}, {"name": "custom", "custom_name": "entity_id"}),
+        # The entity's own ID is what a tile saved to show its ID reads.
+        ({"Name": "light.room"}, {"name": "entity_id"}),
         ({"Width": "full", "Height": "half"}, {"width": "full", "height": "half"}),
         ({"Secondary line": "none"}, {"secondary": "none"}),
     ],
@@ -1065,7 +1072,7 @@ def test_weather_entity_keys_are_dropped_from_the_display_settings():
     assert cleaned == {"light.room": {"page": "Room"}}
     # Only a dashboard entity may have display settings.
     with pytest.raises(ValueError):
-        normalize_dashboard_entity_display_overrides({"camera.door": {"page": "x"}}, strict=True)
+        normalize_dashboard_entity_display_overrides({"update.door": {"page": "x"}}, strict=True)
 
 
 @pytest.mark.parametrize(
@@ -1261,22 +1268,27 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
 
     assert [(field["name"], field["type"]) for field in fields] == [
         ("page_1", "expandable"),
+        ("page_2", "expandable"),
         ("energy_page", "expandable"),
         ("agenda_page", "expandable"),
         ("leave_home_page", "expandable"),
-        *((f"page_{slot}", "expandable") for slot in range(2, 9)),
+        ("situations_page", "expandable"),
+        *((f"page_{slot}", "expandable") for slot in range(3, 9)),
     ]
     # Used pages are open, and so is the first free one to add a page; the
     # optional built-in pages are closed while switched off.
-    assert [field["expanded"] for field in fields] == [True, False, False, False, True, True] + [False] * 5
-    assert [item["name"] for item in fields[1]["schema"]] == [
+    assert [field["expanded"] for field in fields] == [True, True, False, False, False, False, True] + [False] * 5
+    assert [item["name"] for item in fields[2]["schema"]] == [
         "enabled", "position", "view_now", "view_today", "view_power", "view_consumers", "view_balance",
     ]
     assert [item["name"] for item in fields[0]["schema"]] == [
         "enabled", "weather_entity_id", "position", "entities",
     ]
-    assert [item["name"] for item in fields[4]["schema"]] == ["name", "position", "entities"]
-    assert fields[4]["schema"][0]["description"] == {"suggested_value": "Room"}
+    assert [item["name"] for item in fields[5]["schema"]] == [
+        "enabled", "position", "contacts", "garages", "lights", "tasks",
+    ]
+    assert [item["name"] for item in fields[1]["schema"]] == ["name", "position", "entities"]
+    assert fields[1]["schema"][0]["description"] == {"suggested_value": "Room"}
 
 
 
@@ -1315,11 +1327,13 @@ def test_section_titles_carry_the_page_names():
         "page_1_position": " 1",
         "page_2_position": " 2",
         **{f"page_{slot}_position": "" for slot in range(3, 9)},
-        "energy_page_position": " 2",
-        "agenda_page_position": " 10",
-        "leave_home_page_position": " 11",
+        # The built-in pages are off: no number.
+        "energy_page_position": "",
+        "agenda_page_position": "",
+        "leave_home_page_position": "",
+        "situations_page_position": "",
         "page_2_name": ": Room",
-        **{f"page_{slot}_name": "" for slot in range(3, 9)},
+        **{f"page_{slot}_name": " +" for slot in range(3, 9)},
     }
     # Shown again after an error, the titles follow the names that were sent.
     sent = {"page_2": {"name": " Hall "}, "page_3": {"entities": ["light.a"]}}
@@ -1391,10 +1405,10 @@ def test_the_tiles_form_has_a_section_per_tile_named_after_page_and_entity():
             "Breite": "full", "Height": "auto", "Name": "Desk", "Secondary line": "state",
         },
         "Study › Lamp (light.lamp)": {
-            "Breite": "auto", "Height": "auto", "Name": "entity_id", "Secondary line": "none",
+            "Breite": "auto", "Height": "auto", "Name": "light.lamp", "Secondary line": "none",
         },
         "Statusseite › Temperatur außen": {
-            "Breite": "auto", "Height": "auto", "Name": "friendly_name", "Secondary line": "state",
+            "Breite": "auto", "Height": "auto", "Secondary line": "state",
         },
         # The quick entity is no tile of a page and has no size.
         "Alarm page › Stair Light": {"Name": "Stairs", "Secondary line": "state"},
@@ -1410,10 +1424,14 @@ def test_the_tiles_form_has_a_section_per_tile_named_after_page_and_entity():
 
     # Posted as shown, nothing changes.
     assert stored(shown) == saved
-    # A tile whose section or field was not sent keeps what it showed.
+    # A tile whose section or field was not sent keeps what it showed. The
+    # name is the exception: a posted tile without one has had it removed.
     assert stored({}) == saved
-    assert stored({"Study › Lamp": {"Height": "half"}})["light.desk"] == {
+    assert stored({"Study › Lamp": {"Height": "half", "Name": "Desk"}})["light.desk"] == {
         **saved["light.desk"], "height": "half",
+    }
+    assert stored({"Study › Lamp": {"Height": "half"}})["light.desk"] == {
+        "page": "Study", "width": "full", "height": "half",
     }
     # A change reaches the entity of its section, also behind the shared name.
     changed = stored({**shown, "Study › Lamp (light.lamp)": {
@@ -1555,3 +1573,68 @@ def test_every_flow_leaves_the_energy_page_off_unless_switched_on(monkeypatch, f
 
     assert result["type"] == "finished", result.get("errors")
     assert result["data"]["energy_page"]["enabled"] is False
+
+
+def test_the_tile_name_is_a_text_field_and_emptying_it_brings_the_home_assistant_name_back():
+    saved = {
+        "light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"},
+        "light.hall": {"name": "entity_id", "page": "Study"},
+    }
+    settings = {
+        "dashboard_entities": ["light.room", "light.hall"],
+        "dashboard_pages": [{"name": "Study", "order": 1}],
+        "dashboard_entity_display_overrides": saved,
+    }
+    form = tile_form(settings, saved)
+    schema = form.schema
+    shown = post_tiles_like_home_assistant(schema)
+
+    # The field shows the name that was typed, and the ID where the tile was
+    # saved to show its ID. It offers no list to choose from.
+    assert shown["Study \u203a Room"]["Name"] == "Desk"
+    assert shown["Study \u203a Hall"]["Name"] == "light.hall"
+    for tile_section in schema.schema.values():
+        name = next(f for f in tile_section.schema.schema if str(f) == "Name")
+        assert "options" not in getattr(tile_section.schema.schema[name], "config", {})
+
+    # Home Assistant leaves an emptied field out of the post. Validation must
+    # not put the old name back.
+    emptied = post_tiles_like_home_assistant(schema, {"Name": ""})
+    assert all("Name" not in tile for tile in emptied.values())
+    fields = form.entity_fields(emptied)
+    assert {fields[form.fields[e]["name"]] for e in ("light.room", "light.hall")} == {"friendly_name"}
+    assert {fields[form.fields[e]["custom_name"]] for e in ("light.room", "light.hall")} == {""}
+    # A tile whose section was not posted at all keeps its name.
+    kept = form.entity_fields({})
+    assert kept[form.fields["light.room"]["custom_name"]] == "Desk"
+    assert kept[form.fields["light.hall"]["name"]] == "entity_id"
+
+
+def test_the_display_patch_status_is_shown_in_the_language_of_home_assistant(monkeypatch):
+    from custom_components.bticino_c300x.config_flow_forms import (
+        DISPLAY_PATCH_STATUS_TEXTS,
+        async_display_patch_status_text,
+    )
+
+    prefix = "component.bticino_c300x.selector.display_patch_status.options."
+    wanted = {prefix + "patched": "angewendet"}
+
+    async def translations(_hass, language, category, integrations):
+        assert (language, category, integrations) == ("de", "selector", {"bticino_c300x"})
+        return wanted
+
+    monkeypatch.setattr("homeassistant.helpers.translation.async_get_translations", translations)
+    hass = SimpleNamespace(config=SimpleNamespace(language="de"))
+
+    assert asyncio.run(async_display_patch_status_text("patched", hass)) == "angewendet"
+    # A status without a translation is English, and never the agent's raw word.
+    assert asyncio.run(async_display_patch_status_text("original", hass)) == "not applied (original files)"
+    assert "patched" not in DISPLAY_PATCH_STATUS_TEXTS.values()
+    # Another state of the agent is shown as it is.
+    assert asyncio.run(async_display_patch_status_text("patching", hass)) == "patching"
+
+    # Every language has all four texts.
+    root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
+    for name in ("strings.json", "translations/en.json", "translations/de.json", "translations/fr.json", "translations/it.json"):
+        options = json.loads((root / name).read_text(encoding="utf-8"))["selector"]["display_patch_status"]["options"]
+        assert set(options) == set(DISPLAY_PATCH_STATUS_TEXTS) and all(options.values()), name

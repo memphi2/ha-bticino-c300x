@@ -40,6 +40,11 @@ def _load(name: str) -> ModuleType:
 strip = _load("device_file_strip")
 
 
+def _strip_device_tree(target_dir: Path) -> None:
+    for relative in strip.DEVICE_SOURCE_FILES:
+        strip.strip_device_file(strip.DEVICE_SOURCE_DIR / relative, target_dir / relative)
+
+
 def test_strip_removes_only_comment_lines_blank_lines_and_padding() -> None:
     source = (
         ".pragma library\n"
@@ -165,7 +170,7 @@ def test_stripped_display_code_passes_the_executable_harness(
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not available")
-    strip.strip_device_tree(tmp_path)
+    _strip_device_tree(tmp_path)
 
     result = subprocess.run(
         [node, str(ROOT / "tests" / "qml" / harness)],
@@ -184,7 +189,7 @@ def test_stripped_files_install_through_the_device_patch_script(tmp_path: Path) 
 
     patch_tests = _load_test_module("test_qml_patch_script")
     source_dir = tmp_path / "source"
-    strip.strip_device_tree(source_dir)
+    _strip_device_tree(source_dir)
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()

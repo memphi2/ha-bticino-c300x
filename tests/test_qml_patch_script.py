@@ -264,6 +264,9 @@ SOURCE_INSTALLED_FILES = (
     "js/c300x_alerts.js",
     "C300XAgenda.qml",
     "C300XLeaveHome.qml",
+    "C300XChecks.qml",
+    "C300XSituations.qml",
+    "C300XOptionalPages.qml",
     "C300XDetailControl.qml",
     "C300XEnergyReadout.qml",
     "C300XEnergySums.qml",
@@ -313,23 +316,26 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "a00457ca4502549a2008d067e78fff858cfb0abe2ff3708c6b09b884e1580743",
-    "C300XEnergy.qml": "896e8f92715dd84d54c09082702a36735f00c17e60dbd43dc807ad598c8a16a8",
+    "HomeAssistant.qml": "6e33a498bdb8f5fef9919d23d56077fc0bc834d2510f8774e9968fc15397f505",
+    "C300XEnergy.qml": "4c4484d123f8dc391f60ba32942b35e1134d4bf29c9c796fb50ee2504751357f",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
     "C300XAgenda.qml": "9bc5d2ff2d69250033323a4bc4696df85268ad761ed5b8446b56bf0325143711",
     "C300XAlerts.qml": "d1bd1c10ebbe330ba76bb667a0a9b64f6ef6f76e190ec5033fcc7eb3ecad8837",
     "C300XDetailControl.qml": "86c0987b435e1cfcffee3ece437235c7712cd5bd4db96ff2f408f014a3e1185d",
     "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
     "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
-    "C300XLeaveHome.qml": "5c9a7ac02f3e0e2f6642b48ed76006adfa32a88240d527c75f5c13522d72ddb7",
-    "C300XPageNavigation.qml": "7152e3a1ec13559a27c76fb4f8f0561188b91cd59d1cd7bf2ce4718164b0851c",
+    "C300XLeaveHome.qml": "150060d9da9253e8a7154dc74a28d8b426a84c579b982bc7befa15d9b13a9373",
+    "C300XChecks.qml": "04f543caca11a04449b9cedff97e3e3b244e2ec5aec4ed004fd0a2eee2a6d399",
+    "C300XSituations.qml": "b7b93fff91554c62d3d5d7671dc7ae943f7304bb440a0f340e9e096d164cc299",
+    "C300XOptionalPages.qml": "652645890db10c3797a9f11a165c1ff10faff1bc89164864921b9c3e94444a4d",
+    "C300XPageNavigation.qml": "958aee89fe169d819c3abfd94cfecac0a2fb335845303282100f35b9f52ea638",
     "C300XRingerControl.qml": "7e30781b7a43dcff6ab090d6dcc87c479b2284f073a98c314827ce23774310d9",
     "js/c300x_alerts.js": "a06a136e24ba269ee49110d7586c5fb97deda137371e2f8a52a93696ec3ff3d1",
-    "js/c300x_energy.js": "02fb96fe0befd3c9347a267619cefe615e91239a05071e529c574a4accb594e4",
+    "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "17c510ed56828affcd8eefc7a34068f2f34fe843b125f7c1167585252e5c3133",
-    "js/c300x_ha.js": "849ebdf2c44b82e7879238383f6fc97f2e5224153f29db11e874ba1424c6fab6",
-    "js/c300x_i18n.js": "4e66685179ad1ba40cc93591426635f7dec03cc5fcccdcce166b94e4944eb883",
+    "js/c300x_ha.js": "e7b3a48aa31bf6f858876626fa6563645008f1a49742a2209be47d0e8d9de7ef",
+    "js/c300x_i18n.js": "d1ed4561d23335c026a892b825a1ecade6163fd1f00a475b9fe8b7ba41a41ea3",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }
 
@@ -517,7 +523,7 @@ def test_qml_core_upgrade_corrects_legacy_media_port(tmp_path: Path) -> None:
     assert event_manager.read_text() == ORIGINAL_EVENT_MANAGER
 
 
-@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml"])
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml", "C300XChecks.qml", "C300XOptionalPages.qml", "C300XSituations.qml"])
 def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -531,7 +537,7 @@ def test_qml_patch_installs_and_removes_the_energy_page_file(tmp_path: Path, fil
     assert not (gui_dir / filename).exists()
 
 
-@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml"])
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml", "C300XChecks.qml", "C300XOptionalPages.qml", "C300XSituations.qml"])
 def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -546,7 +552,7 @@ def test_a_display_without_the_energy_page_file_is_not_fully_patched(tmp_path: P
     assert (gui_dir / filename).exists()
 
 
-@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml"])
+@pytest.mark.parametrize("filename", ["C300XEnergy.qml", "C300XEnergyConsumers.qml", "C300XChecks.qml", "C300XOptionalPages.qml", "C300XSituations.qml"])
 def test_a_leftover_energy_page_file_counts_as_a_partial_patch(tmp_path: Path, filename: str) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -561,8 +567,10 @@ def test_the_energy_page_file_is_loaded_only_for_an_energy_page() -> None:
     page = (SOURCE_DIR / "HomeAssistant.qml").read_text()
     script = (SOURCE_DIR / "js/c300x_ha.js").read_text()
     energy = (SOURCE_DIR / "C300XEnergy.qml").read_text()
+    optional = (SOURCE_DIR / "C300XOptionalPages.qml").read_text()
 
-    assert 'source: energyVisible ? "C300XEnergy.qml" : ""' in page
+    assert 'source: root.energyVisible ? "C300XEnergy.qml" : ""' in optional
+    assert "energyVisible: page.energyVisible" in page
     assert "property bool energyVisible: false" in page
     assert "pageItem.energyVisible = energy !== null" in script
     assert "flowVisible" not in page and "flowVisible" not in script
@@ -1018,17 +1026,22 @@ def test_home_assistant_status_sits_in_the_header() -> None:
     )
     assert scroll_height == (
         "height: parent.height"
-        " - (notificationBanner.visible ? notificationBanner.height + 9 : 0)"
-        " - (badgeGrid.visible ? badgeGrid.height + 9 : 0)"
-        " - (pagerRow.visible ? pagerRow.height + 9 : 0)"
+        " - (notificationBanner.height > 0 ? notificationBanner.height + 9 : 0)"
+        " - (badgeGrid.height > 0 ? badgeGrid.height + 9 : 0)"
+        " - (pagerRow.height > 0 ? pagerRow.height + 9 : 0)"
     )
+    # None of this reads a "visible": an item inside a hidden page reads as not
+    # visible, so the page area changed its height whenever the notification
+    # list or the More list covered it.
     # The firmware page is 480 px high under a 78 px header bar. With the 18 px
     # margins, the 38 px pager row and the 9 px column spacing the tiles keep
     # 319 px; four rows of half-height tiles, 64 px high and 10 px apart, fit.
+    # The favourites bar, 56 px high at the bottom edge, takes the place of the
+    # pager row and its margin: 56 + 9 is the same 65 px as 18 + 38 + 9.
     assert "anchors.topMargin: 18" in home_assistant_qml
-    assert "anchors.bottomMargin: 18" in home_assistant_qml
+    assert "anchors.bottomMargin: tabNavigation && pageCount > 1 ? 65 : 18" in home_assistant_qml
+    assert "height: pageCount > 1 && !tabNavigation ? 38 : 0" in home_assistant_qml
     assert "spacing: 9" in home_assistant_qml
-    assert "height: pageCount > 1 ? 38 : 0" in home_assistant_qml
     assert "(tall ? 94 : 64)" in home_assistant_qml
     assert 480 - 78 - 18 - 18 - (38 + 9) >= 4 * 64 + 3 * 10
 

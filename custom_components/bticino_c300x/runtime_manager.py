@@ -56,6 +56,7 @@ from .const import (
     DOMAIN,
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
+from .dashboard_images import image_tile_base_url
 from .data import (
     BticinoC300XRuntimeData,
     C300XConnectionState,
@@ -976,6 +977,7 @@ async def _async_configure_display_bridge(
     )
     shared_secret = entry.data.get(CONF_SHARED_SECRET, "") if enabled else ""
     check_active()
+    runtime_data.display_image_base_url = image_tile_base_url(webhook_url)
     diagnostics = runtime_data.diagnostics.display_bridge_diagnostics
     if enabled:
         diagnostics.mark_callback_attempt(webhook_url, datetime.now(UTC))
@@ -1101,6 +1103,7 @@ def _async_track_display_bridge_updates(
         configured_weather_entity_id,
     )
     from .dashboard_leave_home import leave_home_entity_ids
+    from .dashboard_situations import situations_entity_ids
     from .dashboard_updates import dashboard_state_event_changes_display
 
     status_enabled = configured_status_page_enabled(entry)
@@ -1110,6 +1113,7 @@ def _async_track_display_bridge_updates(
         if status_enabled or overrides.get(entity_id, {}).get("page") != _DASHBOARD_DEFAULT_PAGE
     }
     selected_entity_ids.update(leave_home_entity_ids(entry))
+    selected_entity_ids.update(situations_entity_ids(entry))
     projected_entity_ids = selected_entity_ids.copy()
     alarm_page_entity_id = configured_alarm_page_entity_id(entry)
     if alarm_page_entity_id:

@@ -7,6 +7,8 @@ CURL_INCLUDE_DIR ?= $(shell pkg-config --variable=includedir libcurl 2>/dev/null
 CURL_CPPFLAGS := $(if $(CURL_INCLUDE_DIR),-idirafter $(CURL_INCLUDE_DIR))
 AUTO_C300X_DEVICE_SYSROOT := $(firstword $(wildcard ../../c300x-fwpatch/work/rootfs-1.7.19))
 C300X_DEVICE_SYSROOT ?= $(AUTO_C300X_DEVICE_SYSROOT)
+# Newer firmware the same binary must run on. It is built against the oldest.
+C300X_ABI_SYSROOTS ?= $(wildcard ../../c300x-fwpatch/work/rootfs-3.0.6)
 AGENT_VERSION ?= $(shell tr -d '[:space:]' < VERSION)
 BUILD_DIR := build
 HOST_BUILD_DIR := $(BUILD_DIR)/host
@@ -40,7 +42,7 @@ all: $(TARGET)
 armhf: $(ARMHF_TARGET)
 
 armhf-abi-check: $(ARMHF_TARGET)
-	$(PYTHON) ../scripts/check_agent_abi.py $(ARMHF_TARGET) --readelf $(ARMHF_READELF)
+	$(PYTHON) ../scripts/check_agent_abi.py $(ARMHF_TARGET) --readelf $(ARMHF_READELF) $(foreach root,$(C300X_DEVICE_SYSROOT) $(C300X_ABI_SYSROOTS),--sysroot $(root))
 
 armhf-stack-check:
 	$(MAKE) clean

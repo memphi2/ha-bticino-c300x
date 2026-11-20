@@ -31,19 +31,6 @@ _TALKBACK_SPEEX_PAYLOAD_TYPE = 97
 _TALKBACK_PCMU_PAYLOAD_TYPE = 0
 
 
-async def async_play_announcement_when_ready(
-    entry: Any,
-    host: str,
-    source: Path,
-    *,
-    codec_pcmu: bool = False,
-) -> None:
-    """Wait for ring-call talkback and play one HA-local announcement file."""
-
-    await _async_wait_talkback_ready(entry)
-    await _async_play_announcement(host, source, codec_pcmu=codec_pcmu)
-
-
 async def async_keep_talkback_alive_when_ready(
     entry: Any,
     host: str,
@@ -79,24 +66,6 @@ async def _async_wait_talkback_ready(entry: Any) -> None:
     raise HomeAssistantError(
         "C300X talkback was not ready for announcement playback"
     )
-
-
-async def _async_play_announcement(
-    host: str,
-    source: Path,
-    *,
-    codec_pcmu: bool = False,
-) -> None:
-    """Play one HA-local announcement file into the C300X talkback RTP port."""
-
-    try:
-        await _async_run_talkback_worker(
-            host, source, threading.Event(), codec_pcmu=codec_pcmu, keep_alive=False,
-        )
-    except HomeAssistantError:
-        raise
-    except Exception as err:
-        raise HomeAssistantError("C300X announcement playback failed") from err
 
 
 async def _async_run_talkback_worker(

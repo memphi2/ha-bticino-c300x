@@ -36,11 +36,6 @@ int c300x_system_metrics_monitor_timeout_ms(const struct c300x_system_metrics_mo
     return remaining <= 0 ? 0 : remaining > INT_MAX ? INT_MAX : (int)remaining;
 }
 
-void c300x_system_metrics_monitor_delivered(struct c300x_system_metrics_monitor *monitor, time_t now)
-{
-    c300x_system_metrics_monitor_delivered_sample(monitor, &monitor->last, now);
-}
-
 void c300x_system_metrics_monitor_delivered_sample(struct c300x_system_metrics_monitor *monitor, const struct system_metrics_sample *sample, time_t now)
 {
     if (monitor->delivered_initialized && sample->sample_sequence < monitor->last_delivered.sample_sequence) {

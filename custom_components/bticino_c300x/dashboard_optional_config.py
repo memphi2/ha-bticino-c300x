@@ -1,18 +1,19 @@
-"""Bounded, independently enabled Agenda and Leave home configuration."""
+"""Bounded, independently enabled optional display-page configuration."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from .const import CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE
+from .const import CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE, CONF_SITUATIONS_PAGE
 from .dashboard_page_order import page_position
 from .entry_config import entry_config_value
 from .validation_patterns import HA_ACTION_ID_RE, HA_ENTITY_ID_RE
 
-OPTIONAL_PAGE_KEYS = (CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE)
+OPTIONAL_PAGE_KEYS = (CONF_AGENDA_PAGE, CONF_LEAVE_HOME_PAGE, CONF_SITUATIONS_PAGE)
 MAX_CALENDARS = 8
 MAX_CHECKS = 24
 MAX_ACTIONS = 8
+SITUATION_DOMAINS = {"contacts": "binary_sensor", "garages": "cover", "lights": "light", "tasks": "todo"}
 
 
 def selected_ids(value: Any, domain: str | None, limit: int) -> list[str]:
@@ -52,7 +53,25 @@ def normalize_leave_home_page(value: Any) -> dict[str, Any]:
 
 def optional_page_values(data: dict[str, Any]) -> dict[str, Any]:
     return {CONF_AGENDA_PAGE: normalize_agenda_page(data.get(CONF_AGENDA_PAGE)),
-            CONF_LEAVE_HOME_PAGE: normalize_leave_home_page(data.get(CONF_LEAVE_HOME_PAGE))}
+            CONF_LEAVE_HOME_PAGE: normalize_leave_home_page(data.get(CONF_LEAVE_HOME_PAGE)),
+            CONF_SITUATIONS_PAGE: normalize_situations_page(data.get(CONF_SITUATIONS_PAGE))}
+
+
+def normalize_situations_page(value: Any) -> dict[str, Any]:
+    """Only bounded explicit selections; there are no executable conditions."""
+    data = value if isinstance(value, dict) else {}
+    selections: dict[str, list[str]] = {}
+    remaining = MAX_CHECKS
+    for field, domain in SITUATION_DOMAINS.items():
+        selections[field] = selected_ids(data.get(field), domain, MAX_CHECKS)[:remaining]
+        remaining -= len(selections[field])
+    return {"enabled": data.get("enabled") is True,
+            "position": page_position(data.get("position"), 12),
+            **selections}
+
+
+def configured_situations_page(entry: Any) -> dict[str, Any]:
+    return normalize_situations_page(entry_config_value(entry, CONF_SITUATIONS_PAGE))
 
 
 def configured_agenda_page(entry: Any) -> dict[str, Any]:

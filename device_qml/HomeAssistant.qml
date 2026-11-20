@@ -11,20 +11,24 @@ Page {
     onBackClicked: {
         if (notificationsOpen) notificationsOpen = false
         else if (selectedItem) selectedItem = null
+        else if (morePagesOpen) morePagesOpen = false
         else tabView.activateTab(homePage)
     }
-    headerLabel: headerTitle(notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
+    headerLabel: headerTitle(notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : morePagesOpen ? uiText("more") : pageTitle.length > 0 ? pageTitle : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
     property bool feedbackColorsEnabled: c300xDisplayPreferences.feedbackEnabled
     property variant dashboardPages: []
+    property variant pageTitles: []
     property variant badges: []
     property variant items: []
     property variant energy: ({})
     property variant agenda: ({})
     property variant leaveHome: ({})
+    property variant situations: ({})
     property bool agendaVisible: false
     property bool leaveHomeVisible: false
+    property bool situationsVisible: false
     property int currentPageIndex: 0
     onCurrentPageIndexChanged: scroll.contentY = 0
     property int pageCount: 0
@@ -33,6 +37,8 @@ Page {
     property bool decimalComma: false
     property string pageTitle: ""
     property string pageLabel: ""
+    property bool tabNavigation: false
+    property bool morePagesOpen: false
     property bool weatherVisible: false
     property string weatherCondition: ""
     property string weatherConditionKey: ""
@@ -109,6 +115,7 @@ Page {
     function aboutToHide() {
         if (pendingEntity) Api.setDashboardFeedback(page, pendingEntity, "state_unconfirmed")
         pageActive = false
+        morePagesOpen = false
         armedCommand = ""
         runtimeGeneration += 1
         dashboardLoading = false
@@ -290,8 +297,10 @@ Page {
     function expirePendingControl() {
         if (!pendingEntity) return
         commandGeneration += 1
+        var more = morePagesOpen
         aboutToHide()
         aboutToShow()
+        morePagesOpen = more
     }
 
     function pressAction(item, control) {
@@ -1050,7 +1059,7 @@ Page {
     }
 
     Column {
-        visible: !detailOpen && !notificationsOpen
+        visible: !detailOpen && !notificationsOpen && !morePagesOpen
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -1058,7 +1067,7 @@ Page {
         anchors.topMargin: 18
         anchors.leftMargin: 36
         anchors.rightMargin: 36
-        anchors.bottomMargin: 18
+        anchors.bottomMargin: tabNavigation && pageCount > 1 ? 65 : 18
         spacing: 9
 
         Item {
@@ -1117,7 +1126,7 @@ Page {
         Flickable {
             id: scroll
             width: parent.width
-            height: parent.height - (notificationBanner.visible ? notificationBanner.height + 9 : 0) - (badgeGrid.visible ? badgeGrid.height + 9 : 0) - (pagerRow.visible ? pagerRow.height + 9 : 0)
+            height: parent.height - (notificationBanner.height > 0 ? notificationBanner.height + 9 : 0) - (badgeGrid.height > 0 ? badgeGrid.height + 9 : 0) - (pagerRow.height > 0 ? pagerRow.height + 9 : 0)
             contentWidth: width
             contentHeight: contentColumn.height
             clip: true
@@ -1127,61 +1136,20 @@ Page {
                 width: scroll.width
                 spacing: 10
 
-                Loader {
-                    id: energyLoader
+                C300XOptionalPages {
                     width: parent.width
-                    height: energyVisible ? Math.max(0, scroll.height - 20) : 0
-                    visible: energyVisible
-                    source: energyVisible ? "C300XEnergy.qml" : ""
-                }
-
-                Binding {
-                    target: energyLoader.item
-                    property: "energy"
-                    value: page.energy
-                    when: energyLoader.status === Loader.Ready
-                }
-
-                Loader {
-                    id: agendaLoader
-                    width: parent.width
-                    height: agendaVisible ? Math.max(0, scroll.height - 20) : 0
-                    visible: agendaVisible
-                    source: agendaVisible ? "C300XAgenda.qml" : ""
-                }
-                Binding {
-                    target: agendaLoader.item
-                    property: "agenda"
-                    value: page.agenda
-                    when: agendaLoader.status === Loader.Ready
-                }
-                Loader {
-                    id: leaveHomeLoader
-                    width: parent.width
-                    height: leaveHomeVisible ? Math.max(0, scroll.height - 20) : 0
-                    visible: leaveHomeVisible
-                    source: leaveHomeVisible ? "C300XLeaveHome.qml" : ""
-                }
-                Binding {
-                    target: leaveHomeLoader.item
-                    property: "leaveHome"
-                    value: page.leaveHome
-                    when: leaveHomeLoader.status === Loader.Ready
-                }
-                Binding {
-                    target: leaveHomeLoader.item
-                    property: "busy"
-                    value: !page.dashboardOnline || !page.controlFree(null)
-                    when: leaveHomeLoader.status === Loader.Ready
-                }
-                Binding {
-                    target: leaveHomeLoader.item
-                    property: "online"
-                    value: page.dashboardOnline
-                    when: leaveHomeLoader.status === Loader.Ready
-                }
-                Connections {
-                    target: leaveHomeLoader.item
+                    height: energyVisible || agendaVisible || leaveHomeVisible || situationsVisible ? Math.max(0, scroll.height - 20) : 0
+                    visible: energyVisible || agendaVisible || leaveHomeVisible || situationsVisible
+                    energyVisible: page.energyVisible
+                    agendaVisible: page.agendaVisible
+                    leaveHomeVisible: page.leaveHomeVisible
+                    situationsVisible: page.situationsVisible
+                    energy: page.energy
+                    agenda: page.agenda
+                    leaveHome: page.leaveHome
+                    situations: page.situations
+                    busy: !page.dashboardOnline || !page.controlFree(null)
+                    online: page.dashboardOnline
                     onActionRequested: Api.dashboardAction(item, status, page)
                     onAlarmRequested: tabView.activateTab(alarmPage)
                 }
@@ -1418,12 +1386,57 @@ Page {
                     Component {
                         id: mixedImageTileComponent
 
-                        Image {
+                        Item {
+                            id: imageTile
                             property variant tileItem: parent ? parent.tileItem : ({})
-                            cache: false
+                            property int pictureHeight: 0
                             anchors.fill: parent
-                            source: tileItem.source || ""
-                            fillMode: Image.PreserveAspectFit
+                            Image {
+                                id: imagePicture
+                                cache: false
+                                anchors.fill: parent
+                                source: imageTile.tileItem.source || ""
+                                fillMode: Image.PreserveAspectFit
+                                onStatusChanged: if (status === Image.Ready) imageTile.pictureHeight = sourceSize.height
+                            }
+                            Item {
+                                id: imageFrame
+                                anchors.centerIn: parent
+                                width: imagePicture.status === Image.Ready ? imagePicture.paintedWidth : parent.width
+                                height: imagePicture.status === Image.Ready ? imagePicture.paintedHeight : parent.height
+                            }
+                            UbuntuLightText {
+                                id: imageCaptionSize
+                                visible: false
+                                text: imageCaption.text
+                                textFormat: Text.PlainText
+                                font.pixelSize: 15
+                            }
+                            Rectangle {
+                                id: imageCaptionBack
+                                visible: imageCaption.text !== ""
+                                anchors.left: imageFrame.left
+                                anchors.bottom: imageFrame.bottom
+                                anchors.leftMargin: 6
+                                anchors.bottomMargin: 6
+                                width: Math.min(imageCaptionSize.paintedWidth + 12, imageFrame.width - 12)
+                                height: 22
+                                radius: 4
+                                color: "#000000"
+                                opacity: 0.5
+                            }
+                            UbuntuLightText {
+                                id: imageCaption
+                                anchors.fill: imageCaptionBack
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                text: imageTile.tileItem.caption || ""
+                                textFormat: Text.PlainText
+                                color: "#ffffff"
+                                font.pixelSize: 15
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
                         }
                     }
 
@@ -1778,10 +1791,11 @@ Page {
                             property string sizeW: tileItem.tile_width || ""
                             property string sizeH: tileItem.tile_height || ""
                             property bool tall: sizeH === "full" || (sizeH === "" && isSensor)
-                            width: isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
-                            height: isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10 : isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
+                            width: isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || (isImage && sizeW !== "half") || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
+                            height: isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10 : isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? (mixedTileLoader.item && mixedTileLoader.item.pictureHeight > 0 ? mixedTileLoader.item.pictureHeight : safeNumber(tileItem.height, 120)) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
 
                             Loader {
+                                id: mixedTileLoader
                                 anchors.fill: parent
                                 enabled: mixedTile.isNavigation || mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && controlFree(tileItem))
                                 opacity: enabled ? 1 : 0.45
@@ -1793,7 +1807,7 @@ Page {
                 }
 
                 UbuntuLightText {
-                    text: items.length === 0 && !energyVisible && !agendaVisible && !leaveHomeVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
+                    text: items.length === 0 && !energyVisible && !agendaVisible && !leaveHomeVisible && !situationsVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
                     color: "#f1c40f"
                     font.pixelSize: 18
                     width: parent.width
@@ -1806,8 +1820,8 @@ Page {
         Row {
             id: pagerRow
             width: parent.width
-            height: pageCount > 1 ? 38 : 0
-            visible: pageCount > 1
+            height: pageCount > 1 && !tabNavigation ? 38 : 0
+            visible: pageCount > 1 && !tabNavigation
             spacing: 10
 
             Item {
@@ -1868,6 +1882,33 @@ Page {
                 }
             }
         }
+    }
+
+    C300XPageNavigation {
+        id: tabBar
+        visible: tabNavigation && pageCount > 1 && !detailOpen && !notificationsOpen
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        bar: true
+        links: visible ? Api.dashboardPageTabs(pageTitles, uiText("start_page"), uiText("more")) : []
+        columns: Math.max(1, links.length)
+        current: Api.dashboardTabCurrent(pageCount, currentPageIndex, morePagesOpen)
+        onSelected: Api.dashboardSelectTab(pageIndex, status, page)
+    }
+
+    C300XPageNavigation {
+        visible: morePagesOpen && tabBar.visible
+        anchors.top: header.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: 18
+        anchors.leftMargin: 36
+        anchors.rightMargin: 36
+        columns: 3
+        links: visible ? Api.dashboardMoreLinks(pageTitles, uiText("start_page")) : []
+        current: currentPageIndex
+        onSelected: Api.dashboardSelectTab(pageIndex, status, page)
     }
 
     Item {

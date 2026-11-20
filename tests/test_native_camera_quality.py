@@ -248,6 +248,13 @@ def test_removal_puts_back_an_original_value_outside_the_offered_range(lab: Lab)
     assert lab.settings.read_text() == original
 
 
+def test_a_value_outside_the_range_in_the_file_does_not_block_the_other(lab: Lab) -> None:
+    lab.settings.write_text(SETTINGS.replace("FpsRtpH=15", "FpsRtpH=30"))
+    body = lab.call({**CONFIRM, "bitrate_kbps": 1200})
+    assert (body["bitrate_kbps"], body["fps"]) == (1200, 30)
+    assert lab.call({**CONFIRM, "fps": 26}, status=400)["error"] == "camera_quality_out_of_range"
+
+
 def test_the_route_restarts_the_device_like_the_codec_switch() -> None:
     route = (ROOT / "native_agent/src/http_camera_quality.c").read_text()
     assert ("if (reboot && config->maintenance_reboot_enabled && quality->restart_required) {\n"

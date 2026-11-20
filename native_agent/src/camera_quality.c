@@ -139,9 +139,12 @@ int c300x_camera_quality_apply(struct c300x_camera_quality *quality, int bitrate
     if (!c300x_camera_quality_read(quality)) {
         return 0;
     }
+    /* Only a value that changes is checked: one the file already has may
+     * stay, even outside the offered range. */
     *error = "out_of_range";
-    if (bitrate_kbps < C300X_CAMERA_BITRATE_MIN || bitrate_kbps > C300X_CAMERA_BITRATE_MAX
-        || fps < C300X_CAMERA_FPS_MIN || fps > C300X_CAMERA_FPS_MAX) {
+    if ((bitrate_kbps != quality->bitrate_kbps
+            && (bitrate_kbps < C300X_CAMERA_BITRATE_MIN || bitrate_kbps > C300X_CAMERA_BITRATE_MAX))
+        || (fps != quality->fps && (fps < C300X_CAMERA_FPS_MIN || fps > C300X_CAMERA_FPS_MAX))) {
         return 0;
     }
     if (bitrate_kbps == quality->bitrate_kbps && fps == quality->fps) {

@@ -381,7 +381,8 @@ test("snapshot preview has an accessible timestamp without an overlay and hides 
     card._snapshots.showPreview("blob:archive", capturedAt);
     assert.equal(card._snapshotEl.hidden, false);
     assert.equal(card._snapshotLabelEl, undefined);
-    assert.ok(card._snapshotEl.attributes.get("aria-label").endsWith(new Date(capturedAt * 1000).toLocaleString("en")));
+    // The spoken time is written like the one in the image, in the Home Assistant time zone.
+    assert.match(card._snapshotEl.attributes.get("aria-label"), /: \d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
     assert.match(card._snapshotEl.attributes.get("aria-label"), /Archived image \(not live\)/);
     assert.equal(updates.at(-1).entryId, "entry-1");
     assert.equal(updates.at(-1).attributes, attrs);

@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=47fbb8bc22672ee8";
-import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=47fbb8bc22672ee8";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=47fbb8bc22672ee8";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=b7306c074b08c87e";
+import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=b7306c074b08c87e";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=b7306c074b08c87e";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -98,7 +98,7 @@ export class C300XMediaControls extends HTMLElement {
     finally { this.configuring = false; }
     if (!this.nodes) return;
     const signature = JSON.stringify([enabled, busy, live, hasAudio, next.volume,
-      next.muted, next.label, fullscreenAvailable, fullscreen, next.expandAvailable, next.expanded, next.still, next.scaledVolume, this.history.active,
+      next.muted, next.label, fullscreenAvailable, fullscreen, next.expandAvailable, next.expanded, next.still, next.stillAt, next.scaledVolume, this.history.active,
       hass?.language || hass?.locale?.language || "en"]);
     const changed = this.historyChanged || wasActive !== this.history.active
       || signature !== this.configureSignature;
@@ -189,9 +189,7 @@ export class C300XMediaControls extends HTMLElement {
     const available = c.enabled && h.active && !c.busy;
     n.previous.hidden = !available;
     n.next.hidden = !available;
-    const items = h.browseItems();
-    const index = h.selected ? items.findIndex((item) => item.id === h.selected.id) : -1;
-    n.previous.disabled = !!h.listPromise || (!h.dirty && index === items.length - 1);
+    n.previous.disabled = !!h.listPromise || (!h.dirty && h.neighbour(1) >= h.items.length);
     n.next.disabled = !this.browsing || !!h.listPromise;
     n.expand.hidden = !c.expandAvailable || c.expanded;
     n.close.hidden = !c.expanded;

@@ -51,9 +51,3 @@ export function mediaStamp(hass, at) {
   const part = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
   return `${part.year}-${part.month}-${part.day} ${part.hour}:${part.minute}:${part.second}`;
 }
-
-export function mediaDate(hass, at) {
-  const date = new Date(at * 1000);
-  const language = hass?.language || hass?.locale?.language || "en";
-  try { return date.toLocaleString(language); } catch { return date.toLocaleString("en"); }
-}

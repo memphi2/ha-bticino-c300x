@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { C300X_MEDIA_TRANSLATIONS, mediaDate, mediaLanguage, mediaLocalize, mediaStamp } from "../../custom_components/bticino_c300x/frontend/c300x-media-translations.js";
+import { C300X_MEDIA_TRANSLATIONS, mediaLanguage, mediaLocalize, mediaStamp } from "../../custom_components/bticino_c300x/frontend/c300x-media-translations.js";
 
 class Node extends EventTarget {
   constructor() {
@@ -347,6 +347,19 @@ test("the picture requests the window, navigation lies on the picture and close 
   assert.doesNotMatch(template.slice(template.indexOf('<div class="toolbar"')), /"previous|"next/);
 });
 
+test("the arrow to older files follows the still of the card", async (t) => {
+  const video = item("a", "video", 45), image = item("b", "image", 40);
+  const s = harness(t, [video, image]), c = s.controls;
+  s.configure({ still: true, stillAt: 40 });
+  await c.history.step(1);
+  assert.equal(c.history.selected.id, video.id);
+  // Only the still is left behind the video.
+  assert.equal(c.nodes.previous.disabled, true);
+  // Another image became the still: the saved one can be reached again.
+  s.configure({ stillAt: 50 });
+  assert.equal(c.nodes.previous.disabled, false);
+});
+
 test("mode labels are text-only; volume normalization and language updates are safe", async (t) => {
   const s = harness(t, [], { enabled: false, label: '<img src="x">', volume: NaN, hasAudio: true }), c = s.controls;
   assert.equal(c.nodes.mode.textContent, '<img src="x">');
@@ -368,7 +381,6 @@ test("four standalone translations cover controls and follow HA language fallbac
   assert.equal(mediaLanguage({ locale: { language: "fr-CH" } }), "fr");
   assert.equal(mediaLocalize({ language: "it-IT" }, "play"), "Riproduci");
   assert.equal(mediaLocalize({ language: "zz" }, "play"), "Play");
-  assert.doesNotThrow(() => mediaDate({ language: "not_a_locale" }, 10));
 });
 
 test("the time of a video is written like the time in an image and has no plate", () => {

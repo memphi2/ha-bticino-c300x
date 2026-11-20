@@ -132,6 +132,22 @@ test("the still is left out also when a video is newer than it", async (t) => {
   assert.equal(s.history.selected, null);
 });
 
+test("a selected file that becomes the still keeps its neighbours", async (t) => {
+  const video = item("a", "video", 60), image = item("b", "image", 50), older = item("c", "image", 40);
+  const s = harness(t, [video, image, older]);
+  await s.history.step(1);
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, image.id);
+  s.configure({ stillAt: 50 });
+  assert.equal(s.history.neighbour(1), 2);
+  await s.history.step(-1);
+  assert.equal(s.history.selected.id, video.id);
+  // From the video, the still is stepped over.
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, older.id);
+  assert.equal(s.history.neighbour(1), 3);
+});
+
 test("an image that becomes the still while browsing is left out on the way back", async (t) => {
   const still = item("a", "image", 40), video = item("b", "video", 30);
   const s = harness(t, [still, video]);

@@ -17,6 +17,7 @@
 #include "http_request.h"
 #include "http_response.h"
 #include "http_clients.h"
+#include "http_media_actions.h"
 #include "openwebnet_async.h"
 #include "http_file_transfers.h"
 #include "http_callback.h"
@@ -222,6 +223,7 @@ struct agent_runtime {
     struct c300x_ringer_control ringer_control;
     struct c300x_http_maintenance maintenance;
     struct c300x_openwebnet_async openwebnet;
+    struct c300x_video_control video_control;
     struct c300x_system_metrics_monitor metrics;
     struct c300x_setting_state forwarding_state;
     struct c300x_setting_state ringer_muted_state;
@@ -4837,6 +4839,7 @@ static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime)
     if (runtime == NULL || runtime->video == NULL) {
         return;
     }
+    c300x_video_control_settle(&runtime->video_control);
     c300x_video_set_ring_receiver_enabled(
         runtime->video,
         smartphone_forwarding_allows_ring_receiver(runtime)
@@ -5747,73 +5750,6 @@ static void handle_doorbell_video_get(
     free(body);
 }
 
-static void handle_doorbell_video_activate(
-    int client_fd,
-    struct agent_runtime *runtime,
-    const struct request *request
-)
-{
-    int audio = 1;
-    char body[2048];
-    char last_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-
-    if (runtime == NULL || runtime->video == NULL) {
-        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
-        return;
-    }
-    (void)c300x_json_bool_field(request->body, "audio", &audio);
-    {
-        struct c300x_video_status status;
-
-        c300x_video_status(runtime->video, &status);
-        if (status.ring_call_active || status.ring_media_active) {
-            snprintf(
-                body,
-                sizeof(body),
-                "{\"ok\":true,\"audio\":%s,\"ring_active\":true,\"media_owner\":\"ring\"}\n",
-                audio ? "true" : "false"
-            );
-            send_json(client_fd, 200, "OK", body);
-            return;
-        }
-    }
-    if (!c300x_video_activate(runtime->video, audio)) {
-        struct c300x_video_status status;
-        int http_status;
-        const char *http_text;
-        const char *error;
-        c300x_video_status(runtime->video, &status);
-        error = status.last_error[0] != '\0' ? status.last_error : "unknown";
-        http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503;
-        http_text = http_status == 409 ? "Conflict" : "Service Unavailable";
-        c300x_json_string(
-            error,
-            last_error_json,
-            sizeof(last_error_json)
-        );
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"%s\",\"last_error\":%s,\"external_media_active\":%s}\n",
-            http_status == 409 ? "external_session_active" : "video_activate_failed",
-            last_error_json,
-            status.external_media_active ? "true" : "false"
-        );
-        send_json(client_fd, http_status, http_text, body);
-        return;
-    }
-    snprintf(body, sizeof(body), "{\"ok\":true,\"audio\":%s}\n", audio ? "true" : "false");
-    send_json(client_fd, 200, "OK", body);
-}
-
-static void handle_doorbell_video_stop(int client_fd, struct agent_runtime *runtime)
-{
-    if (runtime != NULL && runtime->video != NULL) {
-        c300x_video_stop(runtime->video);
-    }
-    send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
-}
-
 static void handle_doorbell_call_get(
     int client_fd,
     const struct c300x_config *config,
@@ -5898,52 +5834,6 @@ static void handle_doorbell_call_get(
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_doorbell_call_answer(
-    int client_fd,
-    struct agent_runtime *runtime,
-    const struct request *request
-)
-{
-    struct c300x_video_status video_status;
-    char body[1024];
-
-    (void)request;
-    if (runtime == NULL || runtime->video == NULL) {
-        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
-        return;
-    }
-    if (!c300x_video_doorbell_call_answer(runtime->video)) {
-        c300x_video_status(runtime->video, &video_status);
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"ring_call_not_active\",\"ring_call_active\":%s,\"ring_media_active\":%s,\"answered\":%s}\n",
-            video_status.ring_call_active ? "true" : "false",
-            video_status.ring_media_active ? "true" : "false",
-            video_status.ring_answered ? "true" : "false"
-        );
-        send_json(client_fd, 409, "Conflict", body);
-        return;
-    }
-    c300x_video_status(runtime->video, &video_status);
-    snprintf(
-        body,
-        sizeof(body),
-        "{\"ok\":true,\"audio\":true,\"answer_requested\":%s,\"answered\":%s,\"media_owner\":\"ring\"}\n",
-        video_status.ring_answer_requested ? "true" : "false",
-        video_status.ring_answered ? "true" : "false"
-    );
-    send_json(client_fd, 200, "OK", body);
-}
-
-static void handle_doorbell_call_hangup(int client_fd, struct agent_runtime *runtime)
-{
-    if (runtime != NULL && runtime->video != NULL) {
-        c300x_video_doorbell_call_hangup(runtime->video);
-    }
-    send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
-}
-
 static void handle_doorbell_call_capture(int client_fd)
 {
     send_json(
@@ -6014,62 +5904,6 @@ static void handle_home_call_get(
         last_error_json
     );
     send_json(client_fd, 200, "OK", body);
-}
-
-static void handle_home_call_start(
-    int client_fd,
-    struct agent_runtime *runtime,
-    const struct request *request
-) {
-    int duration_seconds = 0;
-    char body[2048];
-    char last_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-
-    if (request != NULL) {
-        (void)c300x_json_int_field(request->body, "duration_seconds", &duration_seconds);
-    }
-    if (duration_seconds < 0 || duration_seconds > C300X_HOME_CALL_MAX_DURATION_SECONDS) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_duration_seconds\"}\n");
-        return;
-    }
-    if (runtime == NULL || runtime->video == NULL) {
-        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
-        return;
-    }
-    if (!c300x_video_home_call_start(runtime->video, duration_seconds)) {
-        struct c300x_video_status status;
-        int http_status;
-        const char *http_text;
-        const char *error;
-
-        c300x_video_status(runtime->video, &status);
-        error = status.last_error[0] != '\0' ? status.last_error : "unknown";
-        http_status = (
-            strcmp(error, "external_session_active") == 0
-            || strcmp(error, "home_call_active") == 0
-            || strcmp(error, "media_session_active") == 0
-        ) ? 409 : 503;
-        http_text = http_status == 409 ? "Conflict" : "Service Unavailable";
-        c300x_json_string(error, last_error_json, sizeof(last_error_json));
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"home_call_start_failed\",\"last_error\":%s}\n",
-            last_error_json
-        );
-        send_json(client_fd, http_status, http_text, body);
-        return;
-    }
-    snprintf(body, sizeof(body), "{\"ok\":true,\"duration_seconds\":%d}\n", duration_seconds);
-    send_json(client_fd, 200, "OK", body);
-}
-
-static void handle_home_call_stop(int client_fd, struct agent_runtime *runtime)
-{
-    if (runtime != NULL && runtime->video != NULL) {
-        c300x_video_home_call_stop(runtime->video);
-    }
-    send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
 }
 
 static void handle_system_metrics(int client_fd, const struct agent_runtime *runtime)
@@ -9298,7 +9132,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/activate") == 0) {
-        handle_doorbell_video_activate(client_fd, runtime, request);
+        c300x_http_doorbell_video_activate(client_fd, &runtime->video_control, runtime->video, request);
         return;
     }
     if (c300x_try_handle_doorbell_video_audio_settings_route(
@@ -9312,7 +9146,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/stop") == 0) {
-        handle_doorbell_video_stop(client_fd, runtime);
+        c300x_http_doorbell_video_stop(client_fd, &runtime->video_control, runtime->video);
         return;
     }
     if (
@@ -9324,11 +9158,11 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/answer") == 0) {
-        handle_doorbell_call_answer(client_fd, runtime, request);
+        c300x_http_doorbell_call_answer(client_fd, &runtime->video_control, runtime->video, request);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/hangup") == 0) {
-        handle_doorbell_call_hangup(client_fd, runtime);
+        c300x_http_doorbell_call_hangup(client_fd, &runtime->video_control, runtime->video);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/capture") == 0) {
@@ -9344,11 +9178,11 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/home/actions/start") == 0) {
-        handle_home_call_start(client_fd, runtime, request);
+        c300x_http_home_call_start(client_fd, &runtime->video_control, runtime->video, request);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/home/actions/stop") == 0) {
-        handle_home_call_stop(client_fd, runtime);
+        c300x_http_home_call_stop(client_fd, &runtime->video_control, runtime->video);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/ringer") == 0) {
@@ -9812,6 +9646,7 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
     if (request == NULL) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
         c300x_openwebnet_async_abandon(&runtime->openwebnet, client_fd);
+        c300x_video_control_abandon(&runtime->video_control, client_fd);
         close_agent_socket(client_fd);
         return 1;
     }
@@ -9831,8 +9666,9 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
             return 0;
         }
         c300x_openwebnet_async_begin(&runtime->openwebnet, client_fd);
+        c300x_video_control_begin(&runtime->video_control, client_fd);
         handle_api_request(client_fd, config, runtime, request);
-        if (c300x_openwebnet_async_end(&runtime->openwebnet)) {
+        if (c300x_openwebnet_async_end(&runtime->openwebnet) | c300x_video_control_end(&runtime->video_control)) {
             free(request);
             return 0;
         }
@@ -9847,6 +9683,7 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
 
 cleanup:
     c300x_openwebnet_async_abandon(&runtime->openwebnet, client_fd);
+    c300x_video_control_abandon(&runtime->video_control, client_fd);
     free(request);
     if (close_client) {
         close_agent_socket(client_fd);
@@ -9866,7 +9703,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -9901,6 +9738,7 @@ int c300x_run(struct c300x_config *config)
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
     (void)c300x_openwebnet_async_init(&runtime->openwebnet);
+    (void)c300x_video_control_init(&runtime->video_control);
     runtime->display_client_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);
@@ -9981,6 +9819,7 @@ int c300x_run(struct c300x_config *config)
         int mdns_poll_index = -1;
         int mqtt_poll_index = -1;
         int openwebnet_poll_index = 0;
+        int video_control_poll_index = 0;
         int voicemail_poll_index = -1;
         int text_memos_poll_index = -1;
         int voice_memos_poll_index = -1;
@@ -10022,6 +9861,9 @@ int c300x_run(struct c300x_config *config)
         openwebnet_poll_index = (int)poll_count;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_openwebnet_async_prepare(&runtime->openwebnet, &poll_fds[poll_count++]));
+        video_control_poll_index = (int)poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c300x_video_control_prepare(&runtime->video_control, &poll_fds[poll_count++]));
         callback_poll_index = (int)poll_count;
         poll_fds[poll_count++] = (struct pollfd){.fd = c300x_callback_queue_fd(runtime->callbacks), .events = POLLIN};
         display_poll_index = (int)poll_count;
@@ -10157,6 +9999,7 @@ int c300x_run(struct c300x_config *config)
         c300x_http_outputs_handle(&poll_fds[output_poll_index]);
         c300x_http_maintenance_tick(&runtime->maintenance);
         c300x_openwebnet_async_tick(&runtime->openwebnet, &poll_fds[openwebnet_poll_index]);
+        c300x_video_control_tick(&runtime->video_control, &poll_fds[video_control_poll_index]);
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
         c300x_ringer_control_expire(&runtime->ringer_control);
         c300x_touch_tone_tick(&runtime->touch_tone, &poll_fds[touch_tone_poll_index]);
@@ -10299,6 +10142,7 @@ cleanup:
         c300x_display_alerts_close(&runtime->display_alerts);
         c300x_http_maintenance_close(&runtime->maintenance);
         c300x_openwebnet_async_close(&runtime->openwebnet);
+        c300x_video_control_close(&runtime->video_control);
         c300x_recent_events_clear(&runtime->recent_events);
         c300x_http_outputs_close();
     }

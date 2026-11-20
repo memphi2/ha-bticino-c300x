@@ -929,12 +929,13 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "!home_call_active" in http
     assert "&& (bridge_media_active || call_active)" in http
     assert '"\\"window_available\\":%s,"' in http
-    activate_body = http[
-        http.index("static void handle_doorbell_video_activate") :
-        http.index("static void handle_doorbell_video_stop")
+    actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
+    activate_body = actions[
+        actions.index("void c300x_http_doorbell_video_activate") :
+        actions.index("void c300x_http_doorbell_video_stop")
     ]
     assert activate_body.index("status.ring_call_active || status.ring_media_active") < (
-        activate_body.index("c300x_video_activate(runtime->video, audio)")
+        activate_body.index("C300X_VIDEO_CONTROL_ACTIVATE, audio")
     )
     assert '\\"ring_active\\":true' in activate_body
     assert 'snprintf(status->media_owner, sizeof(status->media_owner), "%s", "ring")' in video
@@ -1078,13 +1079,15 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
         video.index("void c300x_video_doorbell_call_hangup") :
         video.index("int c300x_video_home_call_start")
     ]
-    answer_http_body = http[
-        http.index("static void handle_doorbell_call_answer") :
-        http.index("static void handle_doorbell_call_hangup")
+    actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
+    control = (ROOT / "native_agent" / "src" / "video_control.c").read_text(encoding="utf-8")
+    answer_http_body = actions[
+        actions.index("void c300x_http_doorbell_call_answer") :
+        actions.index("void c300x_http_doorbell_call_hangup")
     ]
-    hangup_http_body = http[
-        http.index("static void handle_doorbell_call_hangup") :
-        http.index("static void handle_doorbell_call_capture")
+    hangup_http_body = actions[
+        actions.index("void c300x_http_doorbell_call_hangup") :
+        actions.index("void c300x_http_home_call_start")
     ]
     router_body = http[
         http.index('"/api/v1/video/doorbell/actions/stop"') :
@@ -1105,9 +1108,11 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
     assert "stop_ring_call_if_active" not in hangup_bridge_body
     assert "c300x_media_ring_call_answer(video)" in answer_video_body
     assert "c300x_media_ring_call_hangup(video);" in hangup_video_body
-    assert "c300x_video_doorbell_call_answer(runtime->video)" in answer_http_body
+    assert "C300X_VIDEO_CONTROL_ANSWER" in answer_http_body
+    assert "c300x_video_doorbell_call_answer(job->video)" in control
     assert '\\"ring_call_not_active\\"' in answer_http_body
-    assert "c300x_video_doorbell_call_hangup(runtime->video);" in hangup_http_body
+    assert "C300X_VIDEO_CONTROL_HANGUP" in hangup_http_body
+    assert "c300x_video_doorbell_call_hangup(job->video);" in control
     for path in (
         "/api/v1/calls/doorbell/status",
         "/api/v1/calls/doorbell/actions/answer",

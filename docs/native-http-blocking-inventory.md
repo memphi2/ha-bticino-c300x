@@ -92,7 +92,8 @@ does not change or certify cancellation of existing QML apply/restore jobs.
 
 Status: the API requests in the table below no longer hold the HTTP loop.
 `openwebnet_async.c` runs one exchange at a time on a worker thread that
-exists only while an exchange runs. The request stays in its client slot, the
+exists only while an exchange runs (the slot itself is `request_worker.c`,
+shared with the media operations below). The request stays in its client slot, the
 handler returns at once and runs again when the worker is done; the OpenWebNet
 client then hands it the stored result of the same call, so every command is
 sent once. A request owns the worker until it is answered; other requests with
@@ -147,26 +148,35 @@ not an idle polling timer. Neither design requires a thread per request.
 
 ## Media Lifecycle Waits
 
-| Request | Main-thread path requiring media-owner coordination |
+Status: the API actions in the table no longer hold the HTTP loop.
+`video_control.c` runs one media operation at a time on the request worker
+(`request_worker.c`), a thread that exists only while an operation runs. The
+request stays in its client slot and its handler (`http_media_actions.c`)
+runs again when the operation is done, with the result of that operation; the
+response and its moment are the ones from before. Operations still run one
+after the other. Three further requests wait their turn in their slots. There
+is no new status code: a request beyond those places, and any request when no
+thread can be started, runs on the loop as before, after the running
+operation. A caller that left does not cancel its operation; a start
+(activate, answer, home call start) that only waited is dropped when its
+caller has left, a stop still runs. Shutdown lets a running operation end
+before the media owner is destroyed.
+
+| Request | Operation that now runs beside the loop |
 | --- | --- |
-| POST `/api/v1/video/doorbell/actions/activate` with parked clients | `handle_doorbell_video_activate` -> `c300x_video_activate` -> `c300x_media_session_resume_parked_rtsp` -> `start_media_session`: lifecycle mutex, synchronous SIP setup, talkback startup, `c300x_device_media_takeover` socket waits/settle sleep and failure cleanup. The ordinary keepalive path is not the same as this parked-client path. |
-| POST `/api/v1/video/doorbell/actions/stop` | `handle_doorbell_video_stop` -> `c300x_video_stop` -> `c300x_media_session_stop` -> stop lifecycle: RTSP client drain, SIP close, joins of SIP/relay/talkback/on-demand threads and `c300x_device_media_stop` socket waits. |
-| POST `/api/v1/calls/doorbell/actions/hangup` | `c300x_video_doorbell_call_hangup` -> `c300x_media_ring_call_hangup` -> same session-stop lifecycle. |
-| POST `/api/v1/calls/home/actions/start` or `actions/stop` | `c300x_video_home_call_start`/`stop` -> `c300x_media_home_call_start`/`stop` -> condition waits and `join_home_call_locked`/`pthread_join`. The SIP conversation itself already uses its home-call worker; joining it on main is still a wait. |
-| Forwarding GET/POST completion | `sync_ring_receiver_for_forwarding` -> `c300x_video_set_ring_receiver_enabled` -> `c300x_media_ring_receiver_stop` -> ring-thread join when disabling. |
+| POST `/api/v1/video/doorbell/actions/activate` | `c300x_video_activate` -> with parked clients `c300x_media_session_resume_parked_rtsp` -> `start_media_session`: lifecycle mutex, synchronous SIP setup, talkback startup, `c300x_device_media_takeover` socket waits/settle sleep and failure cleanup. |
+| POST `/api/v1/video/doorbell/actions/stop` | `c300x_video_stop` -> `c300x_media_session_stop` -> stop lifecycle: RTSP client drain, SIP close, joins of SIP/relay/talkback/on-demand threads and `c300x_device_media_stop` socket waits. |
+| POST `/api/v1/calls/doorbell/actions/answer` | `c300x_media_ring_call_answer` -> `request_ring_answer_if_active`: condition wait of up to two seconds. |
+| POST `/api/v1/calls/doorbell/actions/hangup` | `c300x_media_ring_call_hangup` -> same session-stop lifecycle. |
+| POST `/api/v1/calls/home/actions/start` or `actions/stop` | `c300x_media_home_call_start`/`stop` -> condition waits and `join_home_call_locked`/`pthread_join`. |
 
-Status and answer routes also acquire media mutexes; moving long operations
-while holding those mutexes to another thread would not establish responsiveness.
-`/ui/media-closed` updates event state rather than directly calling session stop;
-its publication can nevertheless reach the MQTT send path below.
-
-Safe direction: extend the existing media owner's lifecycle requests and
-generation/cancellation guards, with completion notification to HTTP. The owner
-performs teardown/reaping; the main loop retains a bounded request until the
-same response boundary as today. Do not fork a copy of `g_bridge`, create
-duplicate workers, change session priority, or return early success before
-cleanup solely to make a test pass. This is separate from the maintenance
-command slot and must coordinate with independent media work.
+Still on the loop: the forwarding completion (`sync_ring_receiver_for_forwarding`
+-> `c300x_media_ring_receiver_stop` -> ring-thread join when disabling), which
+has no request of its own to hold; it waits for a running operation first.
+Status routes take the media mutexes only briefly: the lifecycle waits above
+happen under `media_lifecycle_mutex` or without a lock, never under the bridge
+mutex that status reads. `/ui/media-closed` updates event state rather than
+calling session stop; its publication can reach the MQTT send path below.
 
 ## Indirect Network Waits And Existing Background Work
 

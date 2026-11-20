@@ -10,6 +10,7 @@
 #include "http_setup_page.h"
 #include "http_audio_codec.h"
 #include "http_camera_quality.h"
+#include "camera_quality.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -9046,7 +9047,7 @@ static void handle_api_request(
         || c300x_http_audio_codec_route(&runtime->maintenance, client_fd, config,
             runtime->audio_codec_running_state, request, run_detached_command)
         || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config,
-            c300x_device_display_is_qt5(), request)
+            c300x_device_display_is_qt5(), request, run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
             run_detached_command)) {
         return;
@@ -9782,6 +9783,7 @@ int c300x_run(struct c300x_config *config)
     c300x_http_file_transfers_init(&runtime->file_transfers);
     runtime->start_monotonic_ms = c300x_monotonic_ms();
     init_audio_codec_running_state(runtime);
+    c300x_camera_quality_note_running();
     c300x_ui_events_init(&runtime->ui_events);
     c300x_ringer_control_init(&runtime->ringer_control);
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);

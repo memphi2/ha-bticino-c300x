@@ -30,12 +30,6 @@ static const char *linphone_path(void) {
     return (p != NULL && p[0] != '\0') ? p : "/etc/linphone.conf";
 }
 
-static const char *backup_dir(void) {
-    const char *p = getenv("C300X_AUDIO_BACKUP_DIR");
-    return (p != NULL && p[0] != '\0')
-        ? p
-        : "/home/bticino/cfg/extra/c300x-device-file-backups/original";
-}
 
 static void set_err(char *error, size_t error_len, const char *message) {
     if (error != NULL && error_len > 0) {
@@ -43,10 +37,6 @@ static void set_err(char *error, size_t error_len, const char *message) {
     }
 }
 
-static int join_backup(const char *name, char *out, size_t out_len) {
-    int written = snprintf(out, out_len, "%s/%s", backup_dir(), name);
-    return written >= 0 && written < (int)out_len;
-}
 
 static int contains(const char *data, const char *needle) {
     return data != NULL && strstr(data, needle) != NULL;
@@ -270,8 +260,8 @@ int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status) {
     memset(status, 0, sizeof(*status));
     status->supported = access(stack_open_path(), F_OK) == 0
         && access(linphone_path(), F_OK) == 0;
-    if (join_backup("stack_open.xml", sb, sizeof(sb))
-        && join_backup("linphone.conf", lb, sizeof(lb))) {
+    if (c300x_device_file_backup_path("stack_open.xml", sb, sizeof(sb))
+        && c300x_device_file_backup_path("linphone.conf", lb, sizeof(lb))) {
         status->backup_present = access(sb, F_OK) == 0 && access(lb, F_OK) == 0;
     }
     stack_pcmu = stack_open_has("<enable_speex>0</enable_speex>");
@@ -417,8 +407,8 @@ int c300x_audio_codec_apply(
     if (strcmp(status->state, "pcmu") == 0) {
         return 1; /* idempotent */
     }
-    if (!join_backup("stack_open.xml", sb, sizeof(sb))
-        || !join_backup("linphone.conf", lb, sizeof(lb))) {
+    if (!c300x_device_file_backup_path("stack_open.xml", sb, sizeof(sb))
+        || !c300x_device_file_backup_path("linphone.conf", lb, sizeof(lb))) {
         set_err(error, error_len, "backup_path_failed");
         return 0;
     }
@@ -426,7 +416,7 @@ int c300x_audio_codec_apply(
         set_err(error, error_len, "remount_rw_failed");
         return 0;
     }
-    if (!c300x_device_file_mkdir_p(backup_dir())) {
+    if (!c300x_device_file_mkdir_p(c300x_device_file_backup_dir())) {
         (void)c300x_device_file_remount("ro");
         set_err(error, error_len, "backup_dir_failed");
         return 0;
@@ -499,8 +489,8 @@ int c300x_audio_codec_restore(
     if (strcmp(status->state, "speex") == 0) {
         return 1; /* idempotent */
     }
-    if (!join_backup("stack_open.xml", sb, sizeof(sb))
-        || !join_backup("linphone.conf", lb, sizeof(lb))) {
+    if (!c300x_device_file_backup_path("stack_open.xml", sb, sizeof(sb))
+        || !c300x_device_file_backup_path("linphone.conf", lb, sizeof(lb))) {
         set_err(error, error_len, "backup_path_failed");
         return 0;
     }
@@ -542,8 +532,8 @@ int c300x_audio_codec_remove_patches(char *error, size_t error_len)
     char sb[C300X_MAX_PATH_LEN];
     char lb[C300X_MAX_PATH_LEN];
 
-    if (!join_backup("stack_open.xml", sb, sizeof(sb))
-        || !join_backup("linphone.conf", lb, sizeof(lb))) {
+    if (!c300x_device_file_backup_path("stack_open.xml", sb, sizeof(sb))
+        || !c300x_device_file_backup_path("linphone.conf", lb, sizeof(lb))) {
         set_err(error, error_len, "backup_path_failed");
         return 0;
     }

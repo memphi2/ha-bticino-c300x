@@ -857,7 +857,7 @@ feature, the matching entity is not created.
 | `switch` | Save images | Automatic visitor images on or off (on by default). |
 | `switch` | Touch tone | The display's touch-sound setting. |
 | `select` | Camera resolution | High (688×480) or low (400×288) camera stream, from the next stream on; high by default. Not offered on firmware 3.0.x, which is fixed to low. |
-| `number` | Camera bit rate, Camera frame rate | Bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–25 fps, 15 from the factory) of the high-resolution camera stream. A new value is saved on the device and used after the next device restart (**Reboot** button); the attribute `restart_required` shows a pending one. Not offered on firmware 3.0.x. |
+| `number` | Camera bit rate, Camera frame rate | Bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–25 fps, 15 from the factory) of the high-resolution camera stream. Like the audio codec select, a new value is saved on the device, which restarts to use it; the number shows the running value, and `pending_value` / `restart_required` show a saved one the device does not run yet. Not offered on firmware 3.0.x. |
 | `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |

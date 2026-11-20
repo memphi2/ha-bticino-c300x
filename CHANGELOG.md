@@ -9,8 +9,9 @@ Camera:
   the default.
 - New **Camera bit rate** and **Camera frame rate** settings (configuration
   entities) for the high-resolution camera stream: up to 3000 kbit/s and
-  25 frames per second instead of the factory 800 kbit/s and 15. The device
-  uses new values after its next restart. Not offered on firmware 3.0.6.
+  25 frames per second instead of the factory 800 kbit/s and 15. Like the
+  audio codec, a change restarts the device, which then uses the new value.
+  Not offered on firmware 3.0.6.
   Needs the agent update.
 - Firmware 3.0.6 is fixed to the low resolution, the only stream that firmware
   sends on; the setting is not offered there. Needs the agent update.

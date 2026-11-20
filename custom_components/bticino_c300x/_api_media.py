@@ -168,11 +168,12 @@ class _ApiMediaMixin(_C300XApiCore):
         )
 
     async def async_camera_quality(
-        self, *, bitrate_kbps: int | None = None, fps: int | None = None
+        self, *, bitrate_kbps: int | None = None, fps: int | None = None, reboot: bool = True
     ) -> dict[str, Any]:
         """Read bit rate and frame rate of the camera stream, or save new ones.
 
-        The device uses saved values after its next restart.
+        The device uses saved values after a restart, which the agent starts
+        right away unless ``reboot`` is false, as for the audio codec.
         """
 
         changes = {
@@ -185,7 +186,10 @@ class _ApiMediaMixin(_C300XApiCore):
             await self._request_json(
                 "POST" if changes else "GET",
                 "/api/v1/maintenance/camera-quality",
-                json_data={"confirm": "apply_camera_quality", **changes} if changes else None,
+                json_data=(
+                    {"confirm": "apply_camera_quality", **changes, "reboot": reboot}
+                    if changes else None
+                ),
                 extra_headers=self._maintenance_headers(),
             ),
         )

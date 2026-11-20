@@ -21,7 +21,7 @@ from tests.test_select import _FakeEntry, _FakeRuntimeData  # noqa: E402
 class _QualityApi:
     def __init__(self, *, fail: bool = False, supported: bool = True) -> None:
         self.values = {"bitrate_kbps": 800, "fps": 15}
-        self.restart = False
+        self.running = {"running_bitrate_kbps": 800, "running_fps": 15}
         self.fail = fail
         self.supported = supported
         self.calls: list[dict[str, int]] = []
@@ -32,9 +32,15 @@ class _QualityApi:
             raise C300XAgentApiError("offline")
         if changes:
             self.values.update(changes)
-            self.restart = True
-        return {"ok": True, "supported": self.supported, **self.values, "bitrate_min": 300,
-                "bitrate_max": 2500, "fps_min": 5, "fps_max": 25, "restart_required": self.restart}
+        restart = (self.values["bitrate_kbps"], self.values["fps"]) != (
+            self.running["running_bitrate_kbps"], self.running["running_fps"])
+        return {"ok": True, "supported": self.supported, **self.values, **self.running,
+                "bitrate_min": 300, "bitrate_max": 2500, "fps_min": 5, "fps_max": 25,
+                "restart_required": restart}
+
+    def restarted(self) -> None:
+        self.running = {"running_bitrate_kbps": self.values["bitrate_kbps"],
+                        "running_fps": self.values["fps"]}
 
 
 def _entry(maintenance: dict[str, Any], api: _QualityApi) -> _FakeEntry:
@@ -63,20 +69,49 @@ def test_the_numbers_exist_only_where_the_agent_offers_them() -> None:
     # The limits are the agent's, not the built-in ones.
     assert (bitrate.native_min_value, bitrate.native_max_value) == (300, 2500)
     assert (fps.native_min_value, fps.native_max_value) == (5, 25)
-    assert bitrate.extra_state_attributes == {"restart_required": False}
+    assert bitrate.extra_state_attributes == {"restart_required": False, "pending_value": None}
     # Firmware 3.0.x and older agents: no entity.
     assert _added(_entry({"supported": True, "camera_quality": False}, _QualityApi())) == []
     assert _added(_entry({"supported": True}, _QualityApi())) == []
 
 
-def test_a_new_value_is_saved_alone_and_waits_for_a_restart() -> None:
+def test_a_new_value_shows_as_pending_until_the_device_runs_it() -> None:
     api = _QualityApi()
     bitrate, fps = _numbers(api)
     asyncio.run(bitrate.async_set_native_value(3000.0))
-    asyncio.run(fps.async_set_native_value(25.0))
-    assert api.calls == [{"bitrate_kbps": 3000}, {"fps": 25}]
-    assert (bitrate.native_value, fps.native_value) == (3000, 25)
-    assert fps.extra_state_attributes == {"restart_required": True}
+    assert api.calls == [{"bitrate_kbps": 3000}]
+    # The number shows what the device runs; the saved value waits for the restart.
+    assert bitrate.native_value == 800
+    assert bitrate.extra_state_attributes == {"restart_required": True, "pending_value": 3000}
+    api.restarted()
+    asyncio.run(bitrate.async_update())
+    assert bitrate.native_value == 3000
+    assert bitrate.extra_state_attributes == {"restart_required": False, "pending_value": None}
+
+
+def test_an_agent_that_does_not_know_the_running_values_shows_the_saved_ones() -> None:
+    api = _QualityApi()
+    api.running = {"running_bitrate_kbps": 0, "running_fps": 0}
+    bitrate, _fps = _numbers(api)
+    asyncio.run(bitrate.async_update())
+    assert bitrate.native_value == 800 and bitrate.extra_state_attributes["pending_value"] is None
+
+
+def test_a_failed_save_reads_the_values_again() -> None:
+    api = _QualityApi()
+    bitrate, _fps = _numbers(api)
+    real = api.async_camera_quality
+
+    async def refuse(**changes: int) -> dict[str, Any]:
+        if changes:
+            api.calls.append(changes)
+            raise C300XAgentApiError("refused")
+        return await real()
+
+    api.async_camera_quality = refuse  # type: ignore[method-assign]
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(bitrate.async_set_native_value(1000.0))
+    assert bitrate.native_value == 800 and bitrate.available is True
 
 
 def test_a_failed_read_or_save_is_reported() -> None:

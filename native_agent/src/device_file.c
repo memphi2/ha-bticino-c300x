@@ -40,15 +40,6 @@ static int no_remount(void) {
     return p != NULL && strcmp(p, "1") == 0;
 }
 
-int c300x_device_file_mtime(const char *path, long long *mtime) {
-    C300X_DEVICE_FILE_STAT st;
-    if (stat_path(path, &st) != 0 || !S_ISREG(st.st_mode)) {
-        return 0;
-    }
-    *mtime = (long long)st.st_mtime;
-    return 1;
-}
-
 int c300x_device_file_remount(const char *mode) {
     char command[64];
     if (no_remount()) {
@@ -197,4 +188,16 @@ int c300x_device_file_backup_once(const char *source, const char *dest) {
         return 1;
     }
     return c300x_device_file_copy(source, dest);
+}
+
+const char *c300x_device_file_backup_dir(void) {
+    const char *p = getenv("C300X_AUDIO_BACKUP_DIR");
+    return (p != NULL && p[0] != '\0')
+        ? p
+        : "/home/bticino/cfg/extra/c300x-device-file-backups/original";
+}
+
+int c300x_device_file_backup_path(const char *name, char *out, size_t out_len) {
+    int written = snprintf(out, out_len, "%s/%s", c300x_device_file_backup_dir(), name);
+    return written >= 0 && written < (int)out_len;
 }

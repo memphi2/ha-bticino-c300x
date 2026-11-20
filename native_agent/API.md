@@ -253,7 +253,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/maintenance/camera-resolution` | maintenance | Reads the camera resolution. |
 | `POST` | `/api/v1/maintenance/camera-resolution` | maintenance | Saves the camera resolution for the next stream. |
 | `GET` | `/api/v1/maintenance/camera-quality` | maintenance | Reads bit rate and frame rate of the high-resolution camera stream. |
-| `POST` | `/api/v1/maintenance/camera-quality` | maintenance | Saves them for the next device restart. |
+| `POST` | `/api/v1/maintenance/camera-quality` | maintenance | Saves them and restarts the device after confirmation. |
 | `GET` | `/api/v1/maintenance/audio-codec` | maintenance | Reads the device audio codec (speex/PCMU) state. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/apply` | maintenance | Switches the device to PCMU and reboots after confirmation. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Restores the stock speex codec and reboots after confirmation. |
@@ -1406,25 +1406,37 @@ the device uses for its high-resolution camera stream:
 
 ```json
 {"ok": true, "supported": true, "bitrate_kbps": 800, "fps": 15,
+ "running_bitrate_kbps": 800, "running_fps": 15,
  "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 25,
- "restart_required": false, "changed": false, "remount_ro_failed": false}
+ "restart_required": false, "changed": false, "remount_ro_failed": false,
+ "rebooting": false}
 ```
+
+`bitrate_kbps` and `fps` are the saved values, `running_*` the ones the
+device started with (`0` when the agent cannot tell), and `restart_required`
+is `true` while the two differ.
 
 `POST` with `{"confirm": "apply_camera_quality", "bitrate_kbps": 3000, "fps": 25}`
 saves new values and returns the same body; either value may be left out and
-then stays as it is. A value outside the limits, or a request with neither
-value, is answered `400` with `error: "camera_quality_out_of_range"`.
+then stays as it is. Like the audio codec switch, the agent then restarts the
+device when the saved values differ from the running ones, unless the request
+sends `"reboot": false` or reboot maintenance is disabled; `rebooting` says
+whether it does. A value outside the limits is answered `400` with
+`error: "camera_quality_out_of_range"`, a value that is not a whole number
+with `camera_quality_invalid_bitrate` or `camera_quality_invalid_fps`, and a
+request with neither value with `camera_quality_value_required`.
 
 The device keeps both values as `BitrateRtpH` and `FpsRtpH` in the
 `[Answering Machine]` section of `/home/bticino/cfg/bt_answering_machine` and
-reads that file only when it starts. The agent replaces those two numbers and
-nothing else, keeps one backup of the original file under
-`/home/bticino/cfg/extra/c300x-device-file-backups/original`, and makes the
-root filesystem writable only for the write. `restart_required` is `true`
-while the file is newer than the running system; restart the device
-(`POST /api/v1/maintenance/reboot`) to use the saved values. The low
-resolution stream, which the Door Entry app also receives, is not changed.
-Removing the agent puts the two original values back.
+reads that file only when it starts. The agent changes the file only when each
+value is there exactly once, replaces those two numbers and nothing else,
+keeps one backup of the original file under
+`/home/bticino/cfg/extra/c300x-device-file-backups/original`, writes a
+complete new file in one step, makes the root filesystem writable only for
+the write, and reads the result back. The low resolution stream, which the
+Door Entry app also receives, is not changed. Removing the agent puts the two
+original values back; a file that lost them meanwhile (a firmware update) is
+left alone.
 
 Capabilities advertise the setting as `maintenance.camera_quality`. On firmware
 3.0.x, which has no high-resolution stream, it is not advertised and a `POST`

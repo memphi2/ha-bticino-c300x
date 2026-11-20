@@ -144,7 +144,10 @@ def test_gui_and_firewall_writes_are_maintenance_only() -> None:
     assert "apply_firewall" not in setup_body
     assert "apply_ipv6_firewall" not in setup_body
     assert "confirm_matches(request, confirmation)" in http_text
-    assert '"apply_qml_patch"' in http_text
+    # The Display patch routes and their confirmations live with the maintenance jobs.
+    maintenance_text = (ROOT / "native_agent" / "src" / "http_maintenance.c").read_text(encoding="utf-8")
+    assert '"apply_qml_patch"' in maintenance_text
+    assert "confirm_matches(request, confirmation)" in maintenance_text
     assert '"apply_firewall"' in http_text
     assert '"apply_ipv6_firewall"' in http_text
 

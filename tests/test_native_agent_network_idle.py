@@ -152,7 +152,7 @@ def test_agent_listener_sockets_cannot_leak_into_gui_reload_children() -> None:
     assert "close_extra_fds_for_exec()" in detached_body
     assert "close((int)fd)" in cleanup_body
     assert mqtt_connect_body.index("set_fd_cloexec(fd)") < mqtt_connect_body.index(
-        "(void)set_nonblocking(fd)"
+        "set_nonblocking(fd)"
     )
 
 
@@ -198,7 +198,7 @@ def test_native_http_client_sockets_are_explicitly_shutdown_before_close() -> No
         encoding="utf-8"
     )
     helper_body = _function_body(util, "void", "close_agent_socket")
-    client_body = _function_body(text, "static void", "handle_client")
+    client_body = _function_body(text, "static int", "handle_client")
     ui_wait_body = _function_body(ui_events, "static void", "close_waiter")
 
     assert "#define C300X_SOCKET_CLOSED_REVENTS" in header
@@ -220,9 +220,11 @@ def test_mqtt_poll_handles_peer_half_close_events() -> None:
     loop_body = _c300x_run_loop_body(http)
 
     assert '#include "http_util.h"' in text
-    assert "POLLRDHUP" in http
+    # The bridge names the events of its socket; a half-close is always among them.
+    events_body = _function_body(text, "short", "c300x_mqtt_poll_events")
+    assert "short events = POLLRDHUP;" in events_body
     assert "revents & C300X_SOCKET_CLOSED_REVENTS" in body
-    assert "poll_fds[poll_count].events = POLLIN | POLLRDHUP;" in loop_body
+    assert "poll_fds[poll_count].events = c300x_mqtt_poll_events(&runtime->mqtt);" in loop_body
 
 
 def test_native_base64_decoder_bounds_unsigned_accumulator() -> None:

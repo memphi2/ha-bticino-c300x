@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from http.client import HTTPConnection
@@ -30,8 +31,12 @@ CONFIRM = {"confirm": "apply_camera_quality"}
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     build = tmp_path_factory.mktemp("camera-quality-build")
-    subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all"],
-                   check=True, capture_output=True, text=True)
+    # Restarts and the Qt 5 mark stay inside the test directory.
+    flags = ("-std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L "
+             '-DC300X_NATIVE_AGENT_VERSION=\\"test\\" -DC300X_REBOOT_PROGRAM=\\"./reboot-test.sh\\" '
+             '-DC300X_QT5_DISPLAY_MARKER=\\"./qt5-mark\\"')
+    subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", f"CFLAGS={flags}",
+                    "-j2", "all"], check=True, capture_output=True, text=True)
     return build / "host/c300x-agent-native"
 
 
@@ -68,7 +73,13 @@ class Lab:
 
 
 @pytest.fixture
-def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
+def reboot() -> bool:
+    """Whether reboot maintenance is on; a test turns it on by parametrizing."""
+    return False
+
+
+@pytest.fixture
+def lab(binary: Path, tmp_path: Path, reboot: bool) -> Iterator[Lab]:
     port, ui_port, own = free_tcp_ports(3)
     settings = tmp_path / "bt_answering_machine"
     settings.write_text(SETTINGS)
@@ -77,7 +88,8 @@ def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
         "api": {"token": TOKEN},
         "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
-        "maintenance": {"enabled": True, "adminToken": "maintenance-token"},
+        "maintenance": {"enabled": True, "adminToken": "maintenance-token",
+                        "reboot": {"enabled": reboot, "delayMs": 10}},
         "activations": {"enabled": False, "autoDiscover": False},
         "events": {"udp": {"enabled": False}},
         "answeringMachine": {"messages": {"enabled": False}},
@@ -87,6 +99,8 @@ def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
     }
     (tmp_path / "config.json").write_text(json.dumps(config))
     (tmp_path / "boot_id").write_text("boot-1\n")
+    (tmp_path / "reboot-test.sh").write_text("#!/bin/sh\ntouch reboot-done\n")
+    (tmp_path / "reboot-test.sh").chmod(0o700)
     env = {**os.environ, "C300X_CAMERA_QUALITY_FILE": str(settings),
            "C300X_BOOT_ID_FILE": str(tmp_path / "boot_id"),
            "C300X_CAMERA_RUNNING_NOTE": str(tmp_path / "camera-running"),
@@ -248,17 +262,55 @@ def test_removal_puts_back_an_original_value_outside_the_offered_range(lab: Lab)
     assert lab.settings.read_text() == original
 
 
+def wait_for(path: Path) -> bool:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if path.exists():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+@pytest.mark.parametrize("reboot", [True])
+def test_a_change_restarts_the_device_like_the_codec_switch(lab: Lab) -> None:
+    done = lab.settings.parent / "reboot-done"
+    assert lab.call({**CONFIRM, "fps": 20, "reboot": False})["rebooting"] is False
+    assert not done.exists()
+    body = lab.call({**CONFIRM, "fps": 25})
+    assert body["rebooting"] is True and body["restart_required"] is True
+    assert wait_for(done)
+
+
+@pytest.mark.parametrize("reboot", [True])
+def test_values_the_device_already_runs_restart_nothing(lab: Lab) -> None:
+    body = lab.call({**CONFIRM, "bitrate_kbps": 800, "fps": 15})
+    assert body["rebooting"] is False and body["changed"] is False
+    time.sleep(0.3)  # a scheduled restart runs after 10 ms
+    assert not (lab.settings.parent / "reboot-done").exists()
+
+
+def test_disabled_reboot_maintenance_saves_without_a_restart(lab: Lab) -> None:
+    body = lab.call({**CONFIRM, "fps": 25})
+    assert body["rebooting"] is False and body["restart_required"] is True
+    assert "FpsRtpH=25" in lab.settings.read_text()
+
+
+def test_a_qt5_device_is_refused_and_its_file_left_alone(lab: Lab) -> None:
+    (lab.settings.parent / "qt5-mark").touch()
+    assert lab.call()["supported"] is False
+    assert lab.call({**CONFIRM, "fps": 25}, status=409)["error"] == "camera_quality_unsupported"
+    assert lab.settings.read_text() == SETTINGS
+
+
+def test_a_failed_backup_leaves_the_file_unchanged(lab: Lab) -> None:
+    lab.backup.parent.parent.mkdir(parents=True, exist_ok=True)
+    lab.backup.parent.write_text("not a directory")
+    assert lab.call({**CONFIRM, "fps": 25}, status=500)["error"] == "camera_quality_backup_failed"
+    assert lab.settings.read_text() == SETTINGS
+
+
 def test_a_value_outside_the_range_in_the_file_does_not_block_the_other(lab: Lab) -> None:
     lab.settings.write_text(SETTINGS.replace("FpsRtpH=15", "FpsRtpH=30"))
     body = lab.call({**CONFIRM, "bitrate_kbps": 1200})
     assert (body["bitrate_kbps"], body["fps"]) == (1200, 30)
     assert lab.call({**CONFIRM, "fps": 26}, status=400)["error"] == "camera_quality_out_of_range"
-
-
-def test_the_route_restarts_the_device_like_the_codec_switch() -> None:
-    route = (ROOT / "native_agent/src/http_camera_quality.c").read_text()
-    assert ("if (reboot && config->maintenance_reboot_enabled && quality->restart_required) {\n"
-            "        c300x_http_service_reboot(owner, fd, config, schedule, reply_quality, quality, free);") in route
-    http = (ROOT / "native_agent/src/http.c").read_text()
-    assert "c300x_device_display_is_qt5(), request, run_detached_command)" in http
-    assert "    c300x_camera_quality_note_running();\n" in http

@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=8cfee17e2e7b2905";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=8cfee17e2e7b2905";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=8cfee17e2e7b2905";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=44746bffe997cf92";
+import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=44746bffe997cf92";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=44746bffe997cf92";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -91,10 +91,10 @@ export class C300XMediaControls extends HTMLElement {
 
   configure({ hass, entryId, enabled = true, busy = false, live = false, hasAudio = false,
     volume = 1, muted = false, label = "", fullscreenAvailable = false, fullscreen = false,
-    expandAvailable = false, expanded = false, still = false, scaledVolume = false } = {}) {
+    expandAvailable = false, expanded = false, still = false, stillAt = null, scaledVolume = false } = {}) {
     const next = { hass, entryId, enabled, busy, live, hasAudio, volume: boundedVolume(volume),
       muted: !!muted, label: typeof label === "string" ? label : "", fullscreenAvailable, fullscreen,
-      expandAvailable: !!expandAvailable, expanded: !!expanded, still: !!still,
+      expandAvailable: !!expandAvailable, expanded: !!expanded, still: !!still, stillAt,
       scaledVolume: !!scaledVolume };
     this.config = next;
     // Always refresh transport/auth, but batch its synchronous invalidations.
@@ -195,7 +195,8 @@ export class C300XMediaControls extends HTMLElement {
     const available = c.enabled && h.active && !c.busy;
     n.previous.hidden = !available;
     n.next.hidden = !available;
-    const index = h.items.findIndex((item) => item.id === h.selected?.id);
+    const index = h.selected ? h.items.findIndex((item) => item.id === h.selected.id)
+      : h.shownStill() ? 0 : -1;
     n.previous.disabled = !!h.listPromise || (!h.dirty && index === h.items.length - 1);
     n.next.disabled = !this.browsing || !!h.listPromise;
     n.expand.hidden = !c.expandAvailable || c.expanded;

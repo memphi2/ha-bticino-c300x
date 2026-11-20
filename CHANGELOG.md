@@ -38,6 +38,9 @@ Settings:
 
 Fixed:
 
+- The card no longer shows the last image twice. Its saved copy came again
+  as the first step into the saved pictures and videos; browsing now starts
+  behind the image the card already shows.
 - The camera card no longer stays on a call the device has lost. After an
   agent restart during a live view or a call, the card kept offering
   **Hang up** without effect until Home Assistant was restarted.

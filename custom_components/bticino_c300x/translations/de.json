@@ -1604,6 +1604,14 @@
         "pager": "Pfeile (vor / zurück)",
         "tabs": "Favoritenleiste"
       }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "angewendet",
+        "original": "nicht angewendet (Originaldateien)",
+        "unknown": "unbekannt",
+        "unavailable": "nicht abrufbar"
+      }
     }
   },
   "services": {

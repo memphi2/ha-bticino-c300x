@@ -1604,6 +1604,14 @@
         "pager": "Arrows (previous / next)",
         "tabs": "Favourites bar"
       }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "applied",
+        "original": "not applied (original files)",
+        "unknown": "unknown",
+        "unavailable": "not available"
+      }
     }
   },
   "services": {

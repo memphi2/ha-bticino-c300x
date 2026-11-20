@@ -2380,8 +2380,8 @@ def test_qml_patch_status_placeholder_refreshes_agent_once() -> None:
     placeholders = asyncio.run(_async_qml_patch_description_placeholders(entry))
     cached_placeholders = asyncio.run(_async_qml_patch_description_placeholders(entry))
 
-    assert placeholders == {"qml_patch_status": "original"}
-    assert cached_placeholders == {"qml_patch_status": "original"}
+    assert placeholders == {"qml_patch_status": "not applied (original files)"}
+    assert cached_placeholders == {"qml_patch_status": "not applied (original files)"}
     assert api.calls == 1
     assert entry.runtime_data.qml_patch_status["state"] == "original"
     assert entry.runtime_data.qml_patch_status_updated_at is not None
@@ -2391,7 +2391,8 @@ def test_user_dashboard_form_passes_qml_patch_status_placeholder() -> None:
     flow = BticinoC300XConfigFlow()
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
 
-    result = flow._async_show_user_dashboard_form(None, {})  # noqa: SLF001
+    flow.hass = None  # type: ignore[assignment]
+    result = asyncio.run(flow._async_show_user_dashboard_form(None, {}))  # noqa: SLF001
 
     assert result["step_id"] == "user_dashboard"
     assert result["description_placeholders"] == {"qml_patch_status": "unknown"}

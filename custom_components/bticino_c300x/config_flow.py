@@ -106,6 +106,9 @@ from .config_flow_features import (
 from .config_flow_forms import (
     actions_json as _actions_json,
 )
+from .config_flow_forms import (
+    async_display_patch_status_text as _async_display_patch_status_text,
+)
 from .config_flow_identity import (
     async_existing_manual_discovery as _async_existing_manual_discovery,
 )
@@ -734,11 +737,11 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             if self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]:
                 errors = _actions_json_errors(self._setup_dashboard_input)
                 if errors:
-                    return self._async_show_user_dashboard_form(user_input, errors)
+                    return await self._async_show_user_dashboard_form(user_input, errors)
                 return self._async_show_user_dashboard_pages_form(None, errors)
             return await self._async_create_setup_entry_from_dashboard(errors)
 
-        return self._async_show_user_dashboard_form(user_input, errors)
+        return await self._async_show_user_dashboard_form(user_input, errors)
 
     async def async_step_user_dashboard_pages(
         self,
@@ -813,13 +816,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
         )
         if errors:
-            return self._async_show_user_dashboard_form(
+            return await self._async_show_user_dashboard_form(
                 self._setup_dashboard_input,
                 errors,
             )
         return await self._async_create_setup_entry(feature_data)
 
-    def _async_show_user_dashboard_form(
+    async def _async_show_user_dashboard_form(
         self,
         user_input: dict[str, Any] | None,
         errors: dict[str, str],
@@ -852,7 +855,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             ),
             errors=errors,
             description_placeholders={
-                "qml_patch_status": _QML_PATCH_STATUS_UNKNOWN,
+                "qml_patch_status": await _async_display_patch_status_text(
+                    _QML_PATCH_STATUS_UNKNOWN, self.hass
+                ),
             },
         )
 
@@ -1899,8 +1904,8 @@ async def _async_qml_patch_description_placeholders(
     """Return placeholders for the device Display patch status."""
 
     return {
-        "qml_patch_status": _qml_patch_status_label(
-            await _async_qml_patch_status(config_entry)
+        "qml_patch_status": await _async_display_patch_status_text(
+            _qml_patch_status_label(await _async_qml_patch_status(config_entry))
         )
     }
 

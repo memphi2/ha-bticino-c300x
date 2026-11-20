@@ -1604,6 +1604,14 @@
         "pager": "Flèches (précédent / suivant)",
         "tabs": "Barre de favoris"
       }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "appliqué",
+        "original": "non appliqué (fichiers d'origine)",
+        "unknown": "inconnu",
+        "unavailable": "indisponible"
+      }
     }
   },
   "services": {

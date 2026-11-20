@@ -1,6 +1,8 @@
 """Native display layout forms preserve older selections and infer controls."""
 
 import asyncio
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -1606,3 +1608,33 @@ def test_the_tile_name_is_a_text_field_and_emptying_it_brings_the_home_assistant
     kept = form.entity_fields({})
     assert kept[form.fields["light.room"]["custom_name"]] == "Desk"
     assert kept[form.fields["light.hall"]["name"]] == "entity_id"
+
+
+def test_the_display_patch_status_is_shown_in_the_language_of_home_assistant(monkeypatch):
+    from custom_components.bticino_c300x.config_flow_forms import (
+        DISPLAY_PATCH_STATUS_TEXTS,
+        async_display_patch_status_text,
+    )
+
+    prefix = "component.bticino_c300x.selector.display_patch_status.options."
+    wanted = {prefix + "patched": "angewendet"}
+
+    async def translations(_hass, language, category, integrations):
+        assert (language, category, integrations) == ("de", "selector", {"bticino_c300x"})
+        return wanted
+
+    monkeypatch.setattr("homeassistant.helpers.translation.async_get_translations", translations)
+    hass = SimpleNamespace(config=SimpleNamespace(language="de"))
+
+    assert asyncio.run(async_display_patch_status_text("patched", hass)) == "angewendet"
+    # A status without a translation is English, and never the agent's raw word.
+    assert asyncio.run(async_display_patch_status_text("original", hass)) == "not applied (original files)"
+    assert "patched" not in DISPLAY_PATCH_STATUS_TEXTS.values()
+    # Another state of the agent is shown as it is.
+    assert asyncio.run(async_display_patch_status_text("patching", hass)) == "patching"
+
+    # Every language has all four texts.
+    root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
+    for name in ("strings.json", "translations/en.json", "translations/de.json", "translations/fr.json", "translations/it.json"):
+        options = json.loads((root / name).read_text(encoding="utf-8"))["selector"]["display_patch_status"]["options"]
+        assert set(options) == set(DISPLAY_PATCH_STATUS_TEXTS) and all(options.values()), name

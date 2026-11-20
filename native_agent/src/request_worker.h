@@ -60,10 +60,11 @@ void c300x_request_worker_begin(struct c300x_request_worker *worker, int client_
 /* The handler has returned. deferred: the request runs again, on whichever
  * worker it waits for. Nonzero when it owned this worker and is done with it. */
 int c300x_request_worker_end(struct c300x_request_worker *worker, int deferred);
-/* Nonzero while another request has a job of this worker running or done. */
+/* Nonzero while the worker has a job that is not this client's: running or
+ * done for another request, or still running for one that is over. */
 static inline int c300x_request_worker_owned_by_other(const struct c300x_request_worker *worker, int client_fd)
 {
-    return worker->owner_fd >= 0 && worker->owner_fd != client_fd;
+    return worker->owner_fd != C300X_REQUEST_WORKER_FREE && worker->owner_fd != client_fd;
 }
 /* The request of this client is over. Nonzero when it owned the worker. */
 int c300x_request_worker_abandon(struct c300x_request_worker *worker, int client_fd);

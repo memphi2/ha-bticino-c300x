@@ -256,7 +256,8 @@ static void send_openwebnet_refusal(int client_fd, const char *error)
  * While a request has work on one of the two workers the write is not
  * answered and runs again later: that request runs again too, and the worker
  * may read the configuration meanwhile, so both must find the one the request
- * started with. A write nobody waits for any more is not applied. */
+ * started with. A write whose caller has closed the connection, also only its
+ * sending side, is not applied, whether it was held or not. */
 static int config_write_waits(struct agent_runtime *runtime, int client_fd)
 {
     if (c300x_openwebnet_caller_left(client_fd)) {

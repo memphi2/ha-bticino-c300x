@@ -355,3 +355,20 @@ def test_a_held_configuration_write_is_not_applied_when_its_caller_left(lab: Lab
     assert finish(stop) == {"ok": True}
     lab.health_ms()
     assert finish(lab.post(STOP)) == {"ok": True}
+
+
+@pytest.mark.parametrize("lab", [ADMIN], indirect=True)
+def test_a_configuration_write_waits_for_a_media_operation_whose_request_is_over(lab: Lab) -> None:
+    (lab.root / "hold-activate").write_text("")
+    activate = lab.post(ACTIVATE, {"audio": False})
+    lab.wait_for("activate")
+    write = write_token(lab, "another-token-0123456789")
+    lab.health_ms()
+    # A ring ends the activation request early; its operation still runs.
+    (lab.root / "ring").write_text("")
+    lab.health_ms()
+    assert activate.getresponse().status == 200
+    assert select.select([write.sock], [], [], 0.5)[0] == []
+
+    (lab.root / "hold-activate").unlink()
+    assert write.getresponse().status == 200

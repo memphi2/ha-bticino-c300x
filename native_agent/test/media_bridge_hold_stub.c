@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "../src/media_bridge.h"
+#include "../src/video_rtsp.h"
 
 static void note(const char *text)
 {
@@ -80,6 +81,9 @@ void c300x_media_session_note_explicit_activate(struct c300x_video *video)
 {
     (void)video;
     note("activate\n");
+    while (access("hold-activate", F_OK) == 0) {
+        usleep(20000);
+    }
 }
 
 bool c300x_media_session_stop_in_progress(const struct c300x_video *video)
@@ -135,5 +139,5 @@ bool c300x_media_ring_call_active(const struct c300x_video *video)
 void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_video_status *status)
 {
     (void)video;
-    (void)status;
+    status->ring_call_active = access("ring", F_OK) == 0;
 }

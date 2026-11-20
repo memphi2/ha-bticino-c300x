@@ -132,10 +132,12 @@ connection meanwhile, also only its sending side, is not run and answered
 something, a stop still runs unless a new request needed its place. A
 maintenance POST that replaces the agent configuration (auth, MQTT, legacy
 MQTT, MQTT migration) is no such waiting request and takes none of the three
-places. Once it is admitted it is held while any request has a bus command or
-a media operation running, which can be several in a row, and is applied
-afterwards; when its caller has closed the connection by then it is not
-applied and answered `client_gone`.
+places. Once it is admitted it is held while a bus command or a media
+operation of another request is running or not yet answered, which can be
+several in a row, and is applied afterwards. A write whose caller has closed
+the connection, also only its sending side, is never applied and answered
+502 `client_gone`, held or not. A request that waited for a worker while
+such a write changed the API token is answered 401 without having run.
 
 Request bodies are parsed from JSON. Unknown fields should be ignored unless the
 handler explicitly validates the whole object.

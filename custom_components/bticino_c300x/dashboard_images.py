@@ -16,6 +16,7 @@ import asyncio
 import hashlib
 import hmac
 import io
+import math
 import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlsplit
@@ -39,9 +40,15 @@ IMAGE_TILE_DOMAINS = ("camera", "image")
 # share it with the 10 px gap of the tile grid between them.
 IMAGE_TILE_WIDTH = 728
 IMAGE_TILE_HALF_WIDTH = 359
-IMAGE_TILE_HEIGHT = 200
-IMAGE_TILE_HEIGHTS = {"half": 120, "full": 290}
-_ALLOWED_HEIGHTS = frozenset((IMAGE_TILE_HEIGHT, *IMAGE_TILE_HEIGHTS.values()))
+# Without a height of its own the tile follows the picture: as wide as the
+# tile and as high as its proportions make it, up to what a page shows at once.
+IMAGE_TILE_MAX_HEIGHT = 320
+# A set height is two or four rows of ordinary tiles (64 px, 10 px apart). The
+# picture is then cut to fill it.
+IMAGE_TILE_HEIGHTS = {"half": 138, "full": 286}
+# A small picture is enlarged to the tile, but not beyond this factor.
+_MAX_ENLARGEMENT = 2.0
+_ALLOWED_HEIGHTS = frozenset((IMAGE_TILE_MAX_HEIGHT, *IMAGE_TILE_HEIGHTS.values()))
 _ALLOWED_WIDTHS = frozenset((IMAGE_TILE_WIDTH, IMAGE_TILE_HALF_WIDTH))
 _SOURCE_LIMIT_BYTES = 16 * 1024 * 1024
 # Decoding costs memory by pixel count, not by file size: a small file can
@@ -83,7 +90,17 @@ def image_tile_width(layout: dict[str, Any]) -> int:
 
 
 def image_tile_height(layout: dict[str, Any]) -> int:
-    return IMAGE_TILE_HEIGHTS.get(str(layout.get("height", "")), IMAGE_TILE_HEIGHT)
+    """Return the set height, or the highest a tile that follows its picture gets."""
+
+    return IMAGE_TILE_HEIGHTS.get(str(layout.get("height", "")), IMAGE_TILE_MAX_HEIGHT)
+
+
+def image_tile_placeholder_height(width: int, height: int) -> int:
+    """Return the height the display reserves until the picture has arrived."""
+
+    if height != IMAGE_TILE_MAX_HEIGHT:
+        return height
+    return min(IMAGE_TILE_MAX_HEIGHT, round(width * 9 / 16))
 
 
 def image_tile_revision(entity_id: str, state: Any) -> str:
@@ -134,30 +151,44 @@ def image_tile_source(entry: Any, entity_id: str, state: Any, layout: dict[str, 
             f"?w={width}&h={height}&rev={revision}&sig={signature}"
         ),
         "width": width,
-        "height": height,
+        "height": image_tile_placeholder_height(width, height),
     }
 
 
 def scaled_jpeg(content: bytes, width: int, height: int) -> bytes:
-    """Scale a picture down to fit the tile and return it as JPEG. Never scales up."""
+    """Return the picture as a JPEG for a tile of this size.
+
+    At the height of a tile that follows its picture the whole picture is
+    kept: it becomes as wide as the tile unless that would make it too high.
+    At a set height it is cut around its centre to fill the tile.
+    """
 
     from PIL import Image, ImageOps
 
+    crop = height != IMAGE_TILE_MAX_HEIGHT
+    side = max(width, height)
     try:
         with Image.open(io.BytesIO(content), formats=_SOURCE_FORMATS) as image:
             if image.width * image.height > _SOURCE_LIMIT_PIXELS:
                 raise ValueError("picture has too many pixels")
-            image.draft("RGB", (width, height))
-            # Shrink first, inside a square that still covers the tile after a
-            # rotation: turning and converting then copy a small picture.
+            image.draft("RGB", (side, side))
             # Palette and 1-bit pictures are converted first: shrinking them
             # as they are drops pixels instead of averaging them.
             if image.mode in ("P", "1"):
                 image = image.convert("RGB")
-            side = max(width, height)
-            image.thumbnail((side, side))
+            # Shrink first, so that turning and converting copy a small
+            # picture. Its short side stays long enough for either direction.
+            shrink = side / min(image.size)
+            if shrink < 1:
+                image.thumbnail((math.ceil(image.width * shrink), math.ceil(image.height * shrink)))
             picture = ImageOps.exif_transpose(image).convert("RGB")
-        picture.thumbnail((width, height))
+        if crop:
+            picture = ImageOps.fit(picture, (width, height), Image.Resampling.LANCZOS)
+        else:
+            scale = min(width / picture.width, height / picture.height, _MAX_ENLARGEMENT)
+            size = (max(1, round(picture.width * scale)), max(1, round(picture.height * scale)))
+            if size != picture.size:
+                picture = picture.resize(size, Image.Resampling.LANCZOS)
         buffer = io.BytesIO()
         picture.save(buffer, "JPEG", quality=_JPEG_QUALITY)
     except Exception as err:  # noqa: BLE001 - decoders raise many types on damaged files

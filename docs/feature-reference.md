@@ -372,11 +372,16 @@ detail views.
 ### Picture tiles
 
 A camera or image entity becomes a picture tile on the page you place it on.
-By default the tile spans the page and is 200 px high. Under **Tiles** the
-width can be set to half, so two pictures stand side by side, and the height to
-120 px (half) or 290 px (full). Home Assistant scales the picture down to that
-size before the display loads it, so a full camera frame never reaches the
-device. The picture is a still, not a stream: an image entity is reloaded when
+By default the tile spans the page and follows its picture: the picture is as
+wide as the tile, and the tile is as high as the picture's proportions make it.
+Under **Tiles** the width can be set to half, so two pictures stand side by
+side. A tile is at most 320 px high, which is what a page shows at once; a
+picture that would be higher is shown whole and narrower than the tile. With
+the height set to half (138 px) or full (286 px) the tile has that height and
+the picture is cut around its centre to fill it. Home Assistant brings the
+picture to the tile's size before the display loads it, so a full camera frame
+never reaches the device. A picture smaller than the tile is enlarged up to
+twice its size. The picture is a still, not a stream: an image entity is reloaded when
 it has a new picture, a camera about every five minutes. The entity's name is
 written in the bottom left corner of the picture. A tap does nothing.
 
@@ -386,8 +391,7 @@ serves only camera and image entities that are on the display pages; it needs
 no login, so anyone who can reach Home Assistant and has seen the address can
 load that scaled picture. The address does not expire; it stops working when
 the entity leaves the display pages or the display feature is switched off.
-The picture keeps its proportions, so a wide tile shows a 16:9 camera with
-empty space left and right; the half width fits it closely. A camera or image
+A camera or image
 entity that is unavailable has no tile until it is back. If a picture cannot
 be read once, the tile shows only the name until the next picture.
 

@@ -1389,6 +1389,7 @@ Page {
                         Item {
                             id: imageTile
                             property variant tileItem: parent ? parent.tileItem : ({})
+                            property int pictureHeight: 0
                             anchors.fill: parent
                             Image {
                                 id: imagePicture
@@ -1396,6 +1397,7 @@ Page {
                                 anchors.fill: parent
                                 source: imageTile.tileItem.source || ""
                                 fillMode: Image.PreserveAspectFit
+                                onStatusChanged: if (status === Image.Ready) imageTile.pictureHeight = sourceSize.height
                             }
                             Item {
                                 id: imageFrame
@@ -1790,9 +1792,10 @@ Page {
                             property string sizeH: tileItem.tile_height || ""
                             property bool tall: sizeH === "full" || (sizeH === "" && isSensor)
                             width: isNavigation ? itemColumn.width : isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || (isImage && sizeW !== "half") || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
-                            height: isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10 : isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
+                            height: isNavigation ? Math.ceil(Math.max(0, pageCount - 1) / 2) * 62 - 10 : isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? (mixedTileLoader.item && mixedTileLoader.item.pictureHeight > 0 ? mixedTileLoader.item.pictureHeight : safeNumber(tileItem.height, 120)) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
 
                             Loader {
+                                id: mixedTileLoader
                                 anchors.fill: parent
                                 enabled: mixedTile.isNavigation || mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && controlFree(tileItem))
                                 opacity: enabled ? 1 : 0.45

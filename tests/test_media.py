@@ -17,6 +17,7 @@ from custom_components.bticino_c300x.api import (
     C300XAgentApiUnsupportedError,
 )
 from custom_components.bticino_c300x.const import DOMAIN
+from custom_components.bticino_c300x.dashboard_images import C300XTileImageView
 from custom_components.bticino_c300x.media import (
     C300XRingCaptureMediaView,
     C300XVideoMessageMediaView,
@@ -115,6 +116,7 @@ def test_media_view_registration_is_idempotent() -> None:
         C300XVideoMessageMediaView,
         C300XVoiceMemoMediaView,
         C300XRingCaptureMediaView,
+        C300XTileImageView,
     ]
     assert hass.data[DOMAIN]["video_message_view_registered"] is True
 

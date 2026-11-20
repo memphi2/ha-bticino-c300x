@@ -99,8 +99,8 @@ class CameraQualityOptionsStep:
             problem = "camera_quality_unsupported"
         if problem:
             # Nothing to change: the form only says why, and submitting it
-            # goes back to the menu.
-            if user_input is not None:
+            # goes back to the menu. Values sent meanwhile get the reason too.
+            if user_input is not None and not user_input:
                 return cast(ConfigFlowResult, await self.async_step_init())
             return cast(ConfigFlowResult, self.async_show_form(
                 step_id="camera_quality", data_schema=vol.Schema({}), errors={"base": problem},

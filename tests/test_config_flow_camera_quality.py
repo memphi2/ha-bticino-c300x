@@ -141,3 +141,10 @@ def test_a_value_in_the_file_outside_the_limits_can_stay_while_another_changes()
         except Exception:  # noqa: BLE001 - any refusal of the selector
             continue
         raise AssertionError(f"{wrong} was taken")
+
+
+def test_values_sent_while_the_device_is_away_are_not_dropped_silently() -> None:
+    api = _QualityApi(fail_read=True)
+    form = _open(_entry(api), {"size": "720x576", "bitrate_kbps": 3000.0, "fps": 24.0})
+    assert (form["step_id"], form["errors"]) == ("camera_quality", {"base": "cannot_connect"})
+    assert api.writes == []

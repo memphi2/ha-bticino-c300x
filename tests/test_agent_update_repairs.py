@@ -3084,8 +3084,16 @@ def test_device_user_repair_asks_to_add_an_unregistered_device_in_the_app(
     assert deleted == []
 
 
-@pytest.mark.parametrize(("offered", "restored"), [(True, [True]), (False, [])])
-def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, offered, restored):
+@pytest.mark.parametrize(
+    ("maintenance", "restored"),
+    [
+        ({"supported": True, "qml_core_patch": True}, [True]),
+        ({"supported": True, "qml_core_patch": False}, []),
+        # No answer about the Display patch: it is restored as before.
+        (None, [True]),
+    ],
+)
+def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, maintenance, restored):
     """A Qt 5 display (firmware 3.0.x) has no Display patch to restore."""
 
     import custom_components.bticino_c300x.repairs as repairs
@@ -3100,10 +3108,13 @@ def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, offered
         calls.append(apply_full_patch)
 
     monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
-    capabilities = {"maintenance": {"supported": True, "qml_core_patch": offered}}
+    # The setup payload as async_validate_setup returns it.
+    setup_data = asyncio.run(FakeUpdateVerifyApi().async_validate_setup())
+    if maintenance is not None:
+        setup_data["capabilities"]["maintenance"] = maintenance
     asyncio.run(_async_restore_external_patch_state(
         entry, state, _ExternalPatchChanges(qml_patch_changed=True, firewall_patch_changed=True),
-        capabilities,
+        setup_data,
     ))
 
     assert calls == restored

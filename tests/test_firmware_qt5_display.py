@@ -101,7 +101,7 @@ def test_the_display_patch_is_skipped_on_a_qt5_display_and_runs_on_a_qt4_one():
     installer._apply_qml_patch_sync(qt5, "/data/agent", "apply")
     assert not any("qml_patch.sh" in command for command in qt5.commands)
 
-    # On a Qt 4 device the patch runs and reports, also if its QML folder is gone.
+    # On a Qt 4 device the patch runs.
     qt4 = _Device(qt5=False)
     installer._apply_qml_patch_sync(qt4, "/data/agent", "apply")
     assert any("qml_patch.sh" in command for command in qt4.commands)

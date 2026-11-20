@@ -1025,17 +1025,33 @@ async def _async_capture_external_patch_state(
     )
 
 
+def _agent_offers_no_display_patch(setup_data: Mapping[str, Any] | None) -> bool:
+    """Return whether an agent with maintenance says it has no Display patch.
+
+    Only an explicit answer counts: without a maintenance block the display
+    steps run as before and report their own outcome.
+    """
+
+    capabilities = setup_data.get("capabilities") if isinstance(setup_data, Mapping) else None
+    maintenance = capabilities.get("maintenance") if isinstance(capabilities, Mapping) else None
+    return (
+        isinstance(maintenance, Mapping)
+        and maintenance.get("supported") is True
+        and maintenance.get("qml_core_patch") is False
+    )
+
+
 async def _async_restore_external_patch_state(
     entry: Any,
     patch_state: _ExternalPatchState,
     changed: _ExternalPatchChanges,
-    capabilities: Mapping[str, Any] | None = None,
+    setup_data: Mapping[str, Any] | None = None,
 ) -> None:
     """Re-apply active external patches only when their patch source changed.
 
-    ``capabilities`` are those of the agent just installed. When they do not
-    offer the Display patch, as on the Qt 5 display of firmware 3.0.x, the
-    display steps are skipped.
+    ``setup_data`` is the setup payload of the agent just installed. When it
+    says the agent offers no Display patch, as on the Qt 5 display of firmware
+    3.0.x, the display steps are skipped.
     """
 
     api = entry.runtime_data.api
@@ -1046,9 +1062,7 @@ async def _async_restore_external_patch_state(
         with suppress(C300XAgentApiError):
             await busy_retry(lambda: api.async_set_ipv6_firewall_enabled(True))
         await busy_retry(api.async_apply_ipv6_firewall)
-    if capabilities is not None and not maintenance_action_is_advertised(
-        capabilities, "qml_core_patch"
-    ):
+    if _agent_offers_no_display_patch(setup_data):
         return
     if changed.qml_patch_changed or CONF_AGENT_UPDATE_QML_PENDING in entry.data:
         await async_restore_qml_patches_after_update(

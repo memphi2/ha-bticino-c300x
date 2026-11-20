@@ -59,13 +59,9 @@ def situations_dashboard_page(hass: Any, entry: Any, language: str = "en") -> di
                 continue
             uncertain = status in ("unknown", "unavailable", "unsupported")
             name = state.attributes.get("friendly_name") if state is not None else None
-            checks.append({"entity_id": entity_id, "name": " ".join(str(name or entity_id).split())[:80],
+            checks.append({"name": " ".join(str(name or entity_id).split())[:80],
                            "state_label": labels[status].format(count=count),
-                           "color": "#ffd166" if uncertain else "#ff6b6b",
-                           "status": status})
+                           "color": "#ffd166" if uncertain else "#ff6b6b"})
     return {"title": labels["title"], "situations": {
         "checks": checks, "empty_text": labels["clear" if selected else "empty"],
-        "selected_count": selected,
-        "active_count": sum(check["status"] not in ("unknown", "unavailable", "unsupported") for check in checks),
-        "unknown_count": sum(check["status"] in ("unknown", "unavailable", "unsupported") for check in checks),
     }}

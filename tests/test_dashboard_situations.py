@@ -1,6 +1,8 @@
 """Selected situations are bounded, read-only and never clear unknown state."""
 
 import asyncio
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -85,10 +87,8 @@ def test_projection_reads_only_selected_entities_and_retains_unknown():
     hass, entry, _ = environment({"situations_page": SETTINGS}, states)
     hass.states.get = Mock(side_effect=states.get)
     page = situations_dashboard_page(hass, entry)["situations"]
-    assert [check["status"] for check in page["checks"]] == ["closing", "unknown", "pending"]
-    assert page["checks"][-1]["state_label"] == "Pending: 3"
-    assert page["active_count"] == 2 and page["unknown_count"] == 1
-    assert page["selected_count"] == 4
+    assert [check["state_label"] for check in page["checks"]] == ["Closing", "Unknown", "Pending: 3"]
+    assert [check["color"] for check in page["checks"]] == ["#ff6b6b", "#ffd166", "#ff6b6b"]
     assert [call.args[0] for call in hass.states.get.call_args_list] == list(situations_entity_ids(entry))
     assert "actions" not in page and "alarm" not in page
     hass.services.async_call.assert_not_called()
@@ -184,3 +184,19 @@ def test_subscription_is_selected_and_display_only(monkeypatch, enabled):
     stop()
     assert unsubscribe.call_count == 2
     hass.services.async_call.assert_not_called()
+
+
+def test_page_data_holds_only_what_the_display_reads():
+    """Each row had an entity id and a status, and the page three counts, that no display file reads."""
+
+    root = Path(__file__).resolve().parents[1] / "device_qml"
+    rows = set(re.findall(r"modelData\.(\w+)", (root / "C300XChecks.qml").read_text(encoding="utf-8")))
+    page_fields = set(re.findall(r"root\.situations\.(\w+)", (root / "C300XSituations.qml").read_text(encoding="utf-8")))
+    assert rows == {"name", "state_label", "color"} and page_fields == {"checks", "empty_text"}
+    states = {"cover.garage": State("cover.garage", "open", {"device_class": "garage"}),
+              "light.kitchen": State("light.kitchen", "unavailable")}
+    hass, entry, _ = environment({"situations_page": SETTINGS}, states)
+    page = situations_dashboard_page(hass, entry)["situations"]
+    assert len(page["checks"]) >= 2
+    assert set(page) == page_fields
+    assert all(set(check) == rows for check in page["checks"])

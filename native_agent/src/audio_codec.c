@@ -5,6 +5,7 @@
 #endif
 
 #include "audio_codec.h"
+#include "device_file.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -16,24 +17,6 @@
 #endif
 #include <sys/stat.h>
 #include <unistd.h>
-
-#define C300X_AUDIO_MAX_FILE 262144
-
-/* The target's old glibc (2.26) has no plain `stat` symbol; mirror the
- * device_routing.c portable stat64 syscall shim used across this agent. */
-#ifdef __arm__
-#define C300X_AUDIO_STAT_STRUCT struct stat64
-#else
-#define C300X_AUDIO_STAT_STRUCT struct stat
-#endif
-
-static int audio_stat_path(const char *path, C300X_AUDIO_STAT_STRUCT *status) {
-#ifdef __arm__
-    return (int)syscall(SYS_stat64, path, status);
-#else
-    return stat(path, status);
-#endif
-}
 
 /* Paths default to the real device locations but are env-overridable so the
  * logic can be exercised offline against synthetic fixtures. */
@@ -54,11 +37,6 @@ static const char *backup_dir(void) {
         : "/home/bticino/cfg/extra/c300x-device-file-backups/original";
 }
 
-static int no_remount(void) {
-    const char *p = getenv("C300X_AUDIO_NO_REMOUNT");
-    return p != NULL && strcmp(p, "1") == 0;
-}
-
 static void set_err(char *error, size_t error_len, const char *message) {
     if (error != NULL && error_len > 0) {
         snprintf(error, error_len, "%s", message);
@@ -70,156 +48,6 @@ static int join_backup(const char *name, char *out, size_t out_len) {
     return written >= 0 && written < (int)out_len;
 }
 
-static int remount(const char *mode) {
-    char command[64];
-    if (no_remount()) {
-        return 1;
-    }
-    if (snprintf(command, sizeof(command), "mount -o remount,%s / >/dev/null 2>&1", mode)
-        >= (int)sizeof(command)) {
-        return 0;
-    }
-    return system(command) == 0;
-}
-
-static int read_file(const char *path, char **data, size_t *len, mode_t *mode) {
-    C300X_AUDIO_STAT_STRUCT st;
-    FILE *fp;
-    char *buffer;
-    size_t got;
-
-    if (audio_stat_path(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0
-        || (size_t)st.st_size > C300X_AUDIO_MAX_FILE) {
-        return 0;
-    }
-    fp = fopen(path, "rb");
-    if (fp == NULL) {
-        return 0;
-    }
-    buffer = malloc((size_t)st.st_size + 1);
-    if (buffer == NULL) {
-        fclose(fp);
-        return 0;
-    }
-    got = fread(buffer, 1, (size_t)st.st_size, fp);
-    fclose(fp);
-    if (got != (size_t)st.st_size) {
-        free(buffer);
-        return 0;
-    }
-    buffer[got] = '\0';
-    *data = buffer;
-    *len = got;
-    if (mode != NULL) {
-        *mode = (mode_t)(st.st_mode & 07777);
-    }
-    return 1;
-}
-
-/* Write data to path atomically: write a sibling temp file, fsync it, then
- * rename it over the target. A mid-write failure (short fwrite, fsync error,
- * full partition, power loss) therefore leaves the ORIGINAL file intact instead
- * of a truncated/corrupt live config. When the target already exists we copy its
- * owner+mode onto the temp first (the rename gives a new inode), preserving what
- * the old in-place write kept for free; new targets (backup creation) get the
- * private mode and the caller sets it explicitly afterwards. */
-static int overwrite_file(const char *path, const char *data, size_t len) {
-    C300X_AUDIO_STAT_STRUCT st;
-    int have_meta = audio_stat_path(path, &st) == 0 && S_ISREG(st.st_mode);
-    char tmp[C300X_MAX_PATH_LEN];
-    FILE *fp;
-    int fd;
-    int ok = 1;
-
-    if (snprintf(tmp, sizeof(tmp), "%s.tmp.XXXXXX", path) >= (int)sizeof(tmp)) {
-        return 0;
-    }
-    fd = mkstemp(tmp);
-    if (fd < 0) {
-        return 0;
-    }
-    if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0) {
-        close(fd);
-        unlink(tmp);
-        return 0;
-    }
-    fp = fdopen(fd, "wb");
-    if (fp == NULL) {
-        close(fd);
-        unlink(tmp);
-        return 0;
-    }
-    if (fwrite(data, 1, len, fp) != len) {
-        ok = 0;
-    }
-    if (fflush(fp) != 0) {
-        ok = 0;
-    }
-    if (ok && have_meta) {
-        /* rename creates a new inode, so restore the original owner/mode */
-        if (fchown(fd, st.st_uid, st.st_gid) != 0
-            || fchmod(fd, st.st_mode & 07777) != 0) {
-            ok = 0;
-        }
-    }
-    if (ok && fsync(fd) != 0) {
-        ok = 0;
-    }
-    if (fclose(fp) != 0) {
-        ok = 0;
-    }
-    if (ok && rename(tmp, path) == 0) {
-        return 1;
-    }
-    (void)unlink(tmp);
-    return 0;
-}
-
-/* Copy source to dest preserving source mode; used for one-time backup and for
- * restore. Never overwrites an existing backup. */
-static int copy_new(const char *source, const char *dest) {
-    char *data = NULL;
-    size_t len = 0;
-    mode_t mode = 0600;
-    int ok;
-    if (!read_file(source, &data, &len, &mode)) {
-        return 0;
-    }
-    ok = overwrite_file(dest, data, len);
-    free(data);
-    if (ok) {
-        (void)chmod(dest, mode);
-    }
-    return ok;
-}
-
-static int mkdir_p(const char *path) {
-    char tmp[C300X_MAX_PATH_LEN];
-    size_t len = strlen(path);
-    char *p;
-    if (len == 0 || len >= sizeof(tmp)) {
-        return 0;
-    }
-    memcpy(tmp, path, len + 1);
-    for (p = tmp + 1; *p != '\0'; p++) {
-        if (*p == '/') {
-            *p = '\0';
-            if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
-                return 0;
-            }
-            *p = '/';
-        }
-    }
-    return mkdir(tmp, 0755) == 0 || errno == EEXIST;
-}
-
-static int backup_once(const char *source, const char *dest) {
-    if (access(dest, F_OK) == 0) {
-        return 1;
-    }
-    return copy_new(source, dest);
-}
-
 static int contains(const char *data, const char *needle) {
     return data != NULL && strstr(data, needle) != NULL;
 }
@@ -228,7 +56,7 @@ static int stack_open_has(const char *needle) {
     char *data = NULL;
     size_t len = 0;
     int hit;
-    if (!read_file(stack_open_path(), &data, &len, NULL)) {
+    if (!c300x_device_file_read(stack_open_path(), &data, &len, NULL)) {
         return 0;
     }
     hit = contains(data, needle);
@@ -270,7 +98,7 @@ static void read_linphone_facts(int *is_pcmu, int *is_speex) {
 
     *is_pcmu = 0;
     *is_speex = 0;
-    if (!read_file(linphone_path(), &data, &len, NULL)) {
+    if (!c300x_device_file_read(linphone_path(), &data, &len, NULL)) {
         return;
     }
     while (i < len) {
@@ -543,17 +371,17 @@ static int transform_file(
     char *buffer;
     size_t buffer_len;
 
-    if (!read_file(path, &data, &len, NULL)) {
+    if (!c300x_device_file_read(path, &data, &len, NULL)) {
         set_err(error, error_len, "read_failed");
         return 0;
     }
-    buffer = malloc(C300X_AUDIO_MAX_FILE);
+    buffer = malloc(C300X_DEVICE_FILE_MAX);
     if (buffer == NULL) {
         free(data);
         set_err(error, error_len, "out_of_memory");
         return 0;
     }
-    buffer_len = transform(data, len, buffer, C300X_AUDIO_MAX_FILE);
+    buffer_len = transform(data, len, buffer, C300X_DEVICE_FILE_MAX);
     free(data);
     if (buffer_len == 0) {
         free(buffer);
@@ -594,17 +422,17 @@ int c300x_audio_codec_apply(
         set_err(error, error_len, "backup_path_failed");
         return 0;
     }
-    if (!remount("rw")) {
+    if (!c300x_device_file_remount("rw")) {
         set_err(error, error_len, "remount_rw_failed");
         return 0;
     }
-    if (!mkdir_p(backup_dir())) {
-        (void)remount("ro");
+    if (!c300x_device_file_mkdir_p(backup_dir())) {
+        (void)c300x_device_file_remount("ro");
         set_err(error, error_len, "backup_dir_failed");
         return 0;
     }
-    if (!backup_once(stack_open_path(), sb) || !backup_once(linphone_path(), lb)) {
-        (void)remount("ro");
+    if (!c300x_device_file_backup_once(stack_open_path(), sb) || !c300x_device_file_backup_once(linphone_path(), lb)) {
+        (void)c300x_device_file_remount("ro");
         set_err(error, error_len, "backup_failed");
         return 0;
     }
@@ -615,20 +443,20 @@ int c300x_audio_codec_apply(
         || !transform_file(linphone_path(), patch_linphone, &lin_out, &lin_len, error, error_len)) {
         free(stack_out);
         free(lin_out);
-        (void)remount("ro");
+        (void)c300x_device_file_remount("ro");
         return 0;
     }
-    if (!overwrite_file(stack_open_path(), stack_out, stack_len)
-        || !overwrite_file(linphone_path(), lin_out, lin_len)) {
+    if (!c300x_device_file_write(stack_open_path(), stack_out, stack_len)
+        || !c300x_device_file_write(linphone_path(), lin_out, lin_len)) {
         /* The first write may have already flipped stack_open.xml before the
          * second failed. Roll both files back from the backups so we never
          * leave a mixed speex/PCMU state (garbage audio until a manual restore).
-         * overwrite_file is atomic, so each file is either fully old or new. */
-        (void)copy_new(sb, stack_open_path());
-        (void)copy_new(lb, linphone_path());
+         * the write is atomic, so each file is either fully old or new. */
+        (void)c300x_device_file_copy(sb, stack_open_path());
+        (void)c300x_device_file_copy(lb, linphone_path());
         free(stack_out);
         free(lin_out);
-        (void)remount("ro");
+        (void)c300x_device_file_remount("ro");
         set_err(error, error_len, "write_failed");
         return 0;
     }
@@ -637,7 +465,7 @@ int c300x_audio_codec_apply(
     /* The device files are already written. A busy root cannot undo that, and
      * the boot after this switch mounts read-only again, so report the failed
      * remount instead of failing an operation that succeeded. */
-    ro_failed = !remount("ro");
+    ro_failed = !c300x_device_file_remount("ro");
     if (!c300x_audio_codec_read_status(status)) {
         set_err(error, error_len, "status_failed");
         return 0;
@@ -680,21 +508,21 @@ int c300x_audio_codec_restore(
         set_err(error, error_len, "no_backup");
         return 0;
     }
-    if (!remount("rw")) {
+    if (!c300x_device_file_remount("rw")) {
         set_err(error, error_len, "remount_rw_failed");
         return 0;
     }
-    if (!copy_new(sb, stack_open_path()) || !copy_new(lb, linphone_path())) {
+    if (!c300x_device_file_copy(sb, stack_open_path()) || !c300x_device_file_copy(lb, linphone_path())) {
         /* A partial restore (one file copied, the other not) also leaves a mixed
          * state; re-copy both backups to roll forward to the fully-restored
-         * target (copy_new is idempotent). */
-        (void)copy_new(sb, stack_open_path());
-        (void)copy_new(lb, linphone_path());
-        (void)remount("ro");
+         * target (the copy is idempotent). */
+        (void)c300x_device_file_copy(sb, stack_open_path());
+        (void)c300x_device_file_copy(lb, linphone_path());
+        (void)c300x_device_file_remount("ro");
         set_err(error, error_len, "restore_failed");
         return 0;
     }
-    ro_failed = !remount("ro");
+    ro_failed = !c300x_device_file_remount("ro");
     if (!c300x_audio_codec_read_status(status)) {
         set_err(error, error_len, "status_failed");
         return 0;

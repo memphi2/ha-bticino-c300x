@@ -19,11 +19,13 @@ DASHBOARD_ENTITY_DOMAINS = (
     "automation",
     "binary_sensor",
     "button",
+    "camera",
     "climate",
     "cover",
     "device_tracker",
     "fan",
     "humidifier",
+    "image",
     "input_boolean",
     "input_button",
     "input_number",
@@ -46,7 +48,8 @@ DASHBOARD_ENTITY_DOMAINS = (
 DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)
 # The alarm page has room for one plain action tile, not for a player.
 ALARM_PAGE_ENTITY_DOMAINS = tuple(
-    domain for domain in DASHBOARD_ENTITY_DOMAINS if domain != "media_player"
+    domain for domain in DASHBOARD_ENTITY_DOMAINS
+    if domain not in ("media_player", "camera", "image")
 )
 # What the alarm page offers to pick: only domains that a plain tap can act on
 # (a toggle or a press). A lock, a vacuum or a valve needs a command, a slider or

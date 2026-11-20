@@ -400,7 +400,7 @@ def test_the_pages_form_places_and_orders_the_pages(monkeypatch, flow_kind):
             {"page_1": {"entities": ["light.one"]}, "page_2": {"name": "Room", "entities": ["light.one"]}},
             {"page_2": "dashboard_entity_on_several_pages"},
         ),
-        ({"page_2": {"entities": ["camera.door"]}}, {"page_2": "invalid_dashboard_entities"}),
+        ({"page_2": {"entities": ["update.door"]}}, {"page_2": "invalid_dashboard_entities"}),
         # A page with tiles is shown with its name as the heading.
         ({"page_2": {"entities": ["light.one"]}}, {"page_2": "dashboard_page_name_missing"}),
         (
@@ -1066,7 +1066,7 @@ def test_weather_entity_keys_are_dropped_from_the_display_settings():
     assert cleaned == {"light.room": {"page": "Room"}}
     # Only a dashboard entity may have display settings.
     with pytest.raises(ValueError):
-        normalize_dashboard_entity_display_overrides({"camera.door": {"page": "x"}}, strict=True)
+        normalize_dashboard_entity_display_overrides({"update.door": {"page": "x"}}, strict=True)
 
 
 @pytest.mark.parametrize(

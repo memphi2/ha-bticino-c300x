@@ -333,6 +333,7 @@ class BticinoC300XRuntimeData:
     device_user_status_updated_at: datetime | None = None
     self_test_status: Mapping[str, Any] = field(default_factory=dict)
     self_test_status_updated_at: datetime | None = None
+    display_image_base_url: str = ""
     display_bridge_alarm_notify_pending: bool = False
     display_bridge_notify_dirty: bool = False
     display_bridge_notify_messages: bool = False

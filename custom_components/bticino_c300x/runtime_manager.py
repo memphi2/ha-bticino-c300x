@@ -56,6 +56,7 @@ from .const import (
     DOMAIN,
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
+from .dashboard_images import image_tile_base_url
 from .data import (
     BticinoC300XRuntimeData,
     C300XConnectionState,
@@ -976,6 +977,7 @@ async def _async_configure_display_bridge(
     )
     shared_secret = entry.data.get(CONF_SHARED_SECRET, "") if enabled else ""
     check_active()
+    runtime_data.display_image_base_url = image_tile_base_url(webhook_url)
     diagnostics = runtime_data.diagnostics.display_bridge_diagnostics
     if enabled:
         diagnostics.mark_callback_attempt(webhook_url, datetime.now(UTC))

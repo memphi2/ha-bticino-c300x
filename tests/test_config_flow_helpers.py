@@ -499,7 +499,7 @@ def test_dashboard_entity_ids_accept_supported_entities() -> None:
     ]
 
 
-@pytest.mark.parametrize("value", ["camera.tv", "sensor.", "bad"])
+@pytest.mark.parametrize("value", ["update.tv", "sensor.", "bad"])
 def test_dashboard_entity_ids_reject_unsupported_entities(value: str) -> None:
     with pytest.raises(vol.Invalid):
         _dashboard_entity_ids(value)
@@ -531,7 +531,7 @@ def test_dashboard_entity_display_overrides_accepts_valid_mapping() -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        {"camera.tv": {"name": "entity_id"}},
+        {"update.tv": {"name": "entity_id"}},
         {"sensor.temperature": {"name": "bad"}},
         {"sensor.temperature": {"name": "custom"}},
         {"sensor.temperature": {"secondary": "bad"}},
@@ -803,7 +803,7 @@ def test_feature_input_collects_activation_and_dashboard_errors() -> None:
             CONF_ALARM_ENTITY_ID: "light.entry",
             CONF_ALARM_PAGE_ENTITY_ID: "camera.tv",
             CONF_WEATHER_ENTITY_ID: "sensor.outdoor",
-            CONF_DASHBOARD_ENTITIES: ["camera.tv"],
+            CONF_DASHBOARD_ENTITIES: ["update.tv"],
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
                 "sensor.temperature": {"name": "bad"}
             },

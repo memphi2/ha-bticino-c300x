@@ -65,6 +65,7 @@ from .dashboard_entities import (
     dashboard_entity_secondary_info_override,
 )
 from .dashboard_glyphs import dashboard_glyph
+from .dashboard_images import IMAGE_TILE_DOMAINS, image_tile_revision, image_tile_source
 from .dashboard_labels import (
     _BINARY_SENSOR_DEVICE_CLASS_COLORS,
     _BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE,
@@ -246,6 +247,12 @@ async def async_dashboard_payload(
         if dashboard_item is None:
             continue
         layout = entity_display_overrides.get(entity_id, {})
+        if dashboard_item.pop("_image_entity", None):
+            dashboard_item.pop("_image_revision", None)
+            picture = image_tile_source(entry, entity_id, hass.states.get(entity_id), layout)
+            if picture is None:
+                continue
+            dashboard_item.update(picture)
         if "page" in layout:
             dashboard_item["_page"] = layout["page"]
         if "order" in layout:
@@ -512,6 +519,18 @@ def _dashboard_item_for_state(
         display=name_display,
         custom_name=custom_name,
     )
+    if domain in IMAGE_TILE_DOMAINS:
+        # The address and size are added where the entry is known. The
+        # revision is here so that a state event which brings no new picture
+        # does not count as a change of the display.
+        return {
+            "name": name,
+            "_image_entity": entity_id,
+            "_image_revision": image_tile_revision(entity_id, state),
+            "_kind": "image",
+            "_page": _DASHBOARD_ACTION_PAGE,
+            "_order": order,
+        }
     item: dict[str, Any] = {
         "domain": DASHBOARD_ACTION_DOMAIN,
         "entity_id": entity_id,

@@ -40,6 +40,13 @@ Context-free HA automations remain trusted. The physical display uses its
 separate authenticated bridge and configured action allowlist, not HA user
 impersonation.
 
+Picture tiles are the exception to the bridge: the display loads a scaled
+still of a camera or image entity directly from Home Assistant. The address
+needs no login. It is signed with the entry's shared secret, serves only
+entities placed on the display pages, and is sent to the device over the same
+connection as the other display data. Do not place a camera on the display
+pages whose picture must not be readable on the local network.
+
 ## Stored Media Access
 
 Playback endpoints for answering-machine videos, voice memos and Ring Capture

@@ -218,6 +218,21 @@ numbers, selects and their input helpers. Sensors, binary sensors, people and
 device trackers provide read-only tiles in the same two-column overview.
 A chevron marks every tile that has a submenu: tap anywhere on such a tile to
 open its supported controls, or tap a sensor tile for its read-only details.
+
+### Picture tiles
+
+A camera or image entity becomes a picture tile on the page you place it on.
+The tile spans the page and is 200 px high; the tile height setting makes it
+120 px (half) or 290 px (full). Home Assistant scales the picture down to that
+size before the display loads it, so a full camera frame never reaches the
+device. The picture is a still, not a stream: an image entity is reloaded when
+it has a new picture, a camera about every five minutes. A tap does nothing.
+
+The display loads the picture straight from Home Assistant, at the address the
+device already uses for it. That address is signed with the entry's secret and
+serves only camera and image entities that are on the display pages; it needs
+no login, so anyone on the network who sees the address can load that scaled
+picture. Picture tiles are not offered for the Alarm page.
 Lights, fans and media players keep an on/off switch on the tile itself where
 the entity supports one. Covers and climate entities have none, because neither
 has a single on/off action: a full-height tile carries their buttons, and a

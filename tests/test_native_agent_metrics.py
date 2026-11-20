@@ -725,7 +725,7 @@ def test_native_agent_runtime_diagnostics_are_memory_only_until_requested() -> N
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     diagnostics_body = text.rsplit("static void handle_diagnostics_get", maxsplit=1)[
         1
-    ].split("static void handle_setup_page", maxsplit=1)[0]
+    ].split("static void handle_auth_config_get", maxsplit=1)[0]
     run_body = text.rsplit("int c300x_run", maxsplit=1)[1]
 
     assert "char last_wake_reason[64];" in text

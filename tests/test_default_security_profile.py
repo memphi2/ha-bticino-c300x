@@ -135,10 +135,8 @@ def test_video_default_is_webrtc_on_demand_with_persistent_rtsp_listener() -> No
 
 def test_gui_and_firewall_writes_are_maintenance_only() -> None:
     http_text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    setup_body = http_text.rsplit("static void handle_setup_page", maxsplit=1)[1].split(
-        "static void handle_auth_config_get",
-        maxsplit=1,
-    )[0]
+    setup_body = (ROOT / "native_agent" / "src" / "http_setup_page.c").read_text(encoding="utf-8")
+    assert "void c300x_http_setup_page(int client_fd)" in setup_body
 
     assert "apply_qml_patch" not in setup_body
     assert "apply_firewall" not in setup_body

@@ -79,10 +79,8 @@ def test_auth_config_read_remains_available_in_no_auth_bootstrap() -> None:
 
 def test_setup_page_marks_save_as_bootstrap_completion() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    page_body = text.rsplit("static void handle_setup_page", maxsplit=1)[1].split(
-        "static void handle_auth_config_get",
-        maxsplit=1,
-    )[0]
+    page_body = (ROOT / "native_agent" / "src" / "http_setup_page.c").read_text(encoding="utf-8")
+    assert "c300x_http_setup_page(client_fd);" in text
 
     assert "setupComplete:true" in page_body
     assert "API token for requests" in page_body
@@ -100,7 +98,7 @@ def test_setup_page_is_only_served_during_no_auth_bootstrap() -> None:
     )[1].split('if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/health") == 0)', maxsplit=1)[0]
 
     assert "if (config->api_no_auth)" in route_body
-    assert 'handle_setup_page(client_fd);' in route_body
+    assert 'c300x_http_setup_page(client_fd);' in route_body
     assert "setup_disabled" in route_body
 
 

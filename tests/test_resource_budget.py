@@ -21,8 +21,8 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    # Ratchet down after transport, auth and command-backed maintenance routes.
-    assert path.stat().st_size <= 375_000
+    # Ratchet down after transport, auth, command-backed maintenance routes and the setup page.
+    assert path.stat().st_size <= 365_000
     assert path.read_text(encoding="utf-8").count("\n") <= 10_450
 
 
@@ -41,6 +41,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_service_commands.c": (10_000, 285),
         "http_audio_codec.c": (4_500, 110),
         "openwebnet_async.c": (6_500, 215),
+        "http_setup_page.c": (14_500, 95),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name

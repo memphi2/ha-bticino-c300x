@@ -1178,6 +1178,13 @@
           "speex": "Speex (stock)",
           "pcmu": "PCMU"
         }
+      },
+      "camera_resolution": {
+        "name": "Camera resolution",
+        "state": {
+          "high": "High",
+          "low": "Low"
+        }
       }
     },
     "number": {

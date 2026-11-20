@@ -313,8 +313,9 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   `/usr/lib/libQt5Core.so.5`, skip the Display patch and the media-user label,
   and the Home Assistant pages are not shown on the device.
 - Its `bt_av_media` sends only the low-resolution video stream on to other
-  receivers. Without a setting of its own the camera uses that stream there
-  (`video.av.highResolution: false`).
+  receivers. The camera is fixed to that stream there
+  (`video.av.highResolution: false`), and the Camera resolution entity is not
+  offered.
 - `bt_answering_machine` is another build with its own routing table.
 - As on the other versions, Ring Call and video need a device registered once
   through the Door Entry app: that creates the SIP user, domain and keystore

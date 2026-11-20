@@ -1178,6 +1178,13 @@
           "speex": "Speex (originale)",
           "pcmu": "PCMU"
         }
+      },
+      "camera_resolution": {
+        "name": "Risoluzione della telecamera",
+        "state": {
+          "high": "Alta",
+          "low": "Bassa"
+        }
       }
     },
     "number": {

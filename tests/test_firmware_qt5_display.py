@@ -34,7 +34,10 @@ def config_probe(tmp_path_factory):
         check=True, capture_output=True, text=True,
     )
 
-    def run(*, qt5: bool, high_resolution: bool | None, display_patch: bool = False) -> dict:
+    def run(
+        *, qt5: bool, high_resolution: bool | None, display_patch: bool = False,
+        save: bool | None = None,
+    ) -> dict:
         marker.unlink(missing_ok=True)
         if qt5:
             marker.write_bytes(b"")
@@ -47,18 +50,42 @@ def config_probe(tmp_path_factory):
             config["maintenance"]["qmlPatch"] = {"enabled": True, "script": "/data/qml_patch.sh"}
         path = folder / "config.json"
         path.write_text(json.dumps(config), encoding="utf-8")
-        result = subprocess.run([str(binary), str(path)], check=True, capture_output=True, text=True)
-        return json.loads(result.stdout)
+        command = [str(binary), str(path)] + ([] if save is None else [str(int(save))])
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        answer = json.loads(result.stdout)
+        answer["stored"] = json.loads(path.read_text(encoding="utf-8"))["video"]["av"].get("highResolution")
+        return answer
 
     return run
 
 
-def test_the_agent_defaults_to_the_low_resolution_stream_on_a_qt5_display(config_probe):
+def test_the_agent_fixes_the_low_resolution_stream_on_a_qt5_display(config_probe):
     assert config_probe(qt5=False, high_resolution=None)["high_resolution"] == 1
-    # 3.0.x sends only the low-resolution stream on to other receivers.
+    assert config_probe(qt5=False, high_resolution=False)["high_resolution"] == 0
+    # 3.0.x sends only the low-resolution stream on to other receivers,
+    # so the agent uses it whatever the config says.
     assert config_probe(qt5=True, high_resolution=None)["high_resolution"] == 0
-    # A resolution set in the config is kept.
-    assert config_probe(qt5=True, high_resolution=True)["high_resolution"] == 1
+    assert config_probe(qt5=True, high_resolution=True)["high_resolution"] == 0
+
+
+def test_the_camera_resolution_is_saved_and_refused_high_on_a_qt5_display(config_probe):
+    low = config_probe(qt5=False, high_resolution=True, save=False)
+    assert (low["saved"], low["changed"], low["high_resolution"], low["stored"]) == (1, 1, 0, False)
+    high = config_probe(qt5=False, high_resolution=False, save=True)
+    assert (high["saved"], high["changed"], high["high_resolution"], high["stored"]) == (1, 1, 1, True)
+    same = config_probe(qt5=False, high_resolution=True, save=True)
+    assert (same["saved"], same["changed"]) == (1, 0)
+    refused = config_probe(qt5=True, high_resolution=None, save=True)
+    assert (refused["saved"], refused["high_resolution"], refused["stored"]) == (0, 0, None)
+    assert config_probe(qt5=True, high_resolution=None, save=False)["saved"] == 1
+
+
+def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
+    http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
+    capabilities = (NATIVE / "src/capabilities.c").read_text(encoding="utf-8")
+    assert ".camera_resolution_fixed = c300x_device_display_is_qt5()," in http
+    assert '\\"camera_resolution\\":%s}' in capabilities
+    assert "config->video_enabled && !context->camera_resolution_fixed" in capabilities
 
 
 def test_the_agent_offers_no_display_patch_on_a_qt5_display(config_probe):
@@ -107,10 +134,12 @@ def test_the_display_patch_is_skipped_on_a_qt5_display_and_runs_on_a_qt4_one():
     assert any("qml_patch.sh" in command for command in qt4.commands)
 
 
-def test_the_installer_sets_the_low_resolution_default_only_on_a_qt5_display():
+def test_the_installer_fixes_the_low_resolution_only_on_a_qt5_display():
     unset = json.dumps({"video": {"av": {}}}).encode()
     low = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True), unset))
     assert low["video"]["av"]["highResolution"] is False
     assert installer._apply_qt5_low_res_video_default(_Device(qt5=False), unset) == unset
     pinned = json.dumps({"video": {"av": {"highResolution": True}}}).encode()
-    assert installer._apply_qt5_low_res_video_default(_Device(qt5=True), pinned) == pinned
+    fixed = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True), pinned))
+    assert fixed["video"]["av"]["highResolution"] is False
+    assert installer._apply_qt5_low_res_video_default(_Device(qt5=False), pinned) == pinned

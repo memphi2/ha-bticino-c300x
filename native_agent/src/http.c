@@ -3083,6 +3083,45 @@ static void handle_audio_codec_status(
     send_json(client_fd, 200, "OK", body);
 }
 
+static void handle_camera_resolution(
+    int client_fd,
+    struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    int enabled = 0, changed = 0;
+    char error[C300X_MAX_ERROR_LEN] = "";
+
+    if (!maintenance_authorized(config, request)) {
+        send_maintenance_unauthorized(client_fd);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0) {
+        if (!c300x_json_bool_field(request->body, "high_resolution", &enabled)) {
+            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_high_resolution\"}\n");
+            return;
+        }
+        if (enabled && c300x_device_display_is_qt5()) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"high_resolution_unsupported\"}\n");
+            return;
+        }
+        if (!c300x_save_camera_high_resolution(config, enabled, error, sizeof(error), &changed)) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"config_save_failed\"}\n");
+            return;
+        }
+        if (changed) {
+            record_agent_write(config, runtime, "config", "camera_resolution");
+        }
+    } else if (strcmp(request->method, "GET") != 0) {
+        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"method_not_allowed\"}\n");
+        return;
+    }
+    send_json(client_fd, 200, "OK", config->video_av_high_resolution
+        ? "{\"ok\":true,\"high_resolution\":true}\n"
+        : "{\"ok\":true,\"high_resolution\":false}\n");
+}
+
 static void handle_audio_codec_action(
     int client_fd,
     const struct c300x_config *config,
@@ -5833,6 +5872,7 @@ static void api_capabilities(
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
+        .camera_resolution_fixed = c300x_device_display_is_qt5(),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
@@ -10515,6 +10555,10 @@ static void handle_api_request(
             "restore",
             "restore_firewall"
         );
+        return;
+    }
+    if (strcmp(request->path, "/api/v1/maintenance/camera-resolution") == 0) {
+        handle_camera_resolution(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->path, "/api/v1/maintenance/audio-codec") == 0) {

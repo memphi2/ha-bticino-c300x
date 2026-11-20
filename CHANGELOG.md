@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Camera:
+
+- New **Camera resolution** setting (configuration entity): high or low
+  resolution for the camera stream, applied from the next stream. High stays
+  the default.
+- Firmware 3.0.6 is fixed to the low resolution, the only stream that firmware
+  sends on; the setting is not offered there. Needs the agent update.
+
 ## v2.7.0 - 2026-11-20
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

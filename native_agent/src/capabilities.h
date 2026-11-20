@@ -10,6 +10,7 @@ struct c300x_capabilities_context {
     int maintenance_supported;
     int activations_count;
     int device_codec_pcmu;
+    int camera_resolution_fixed;
     int https_callbacks;
     int https_callbacks_enabled;
     int ringer_min_volume;

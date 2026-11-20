@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "../src/c300x_agent.h"
 
@@ -6,13 +7,17 @@ int main(int argc, char **argv)
 {
     struct c300x_config config;
     char error[256] = "";
+    int saved = -1, changed = 0;
 
-    if (argc != 2 || !c300x_load_config(argv[1], &config, error, sizeof(error))) {
+    if (argc < 2 || argc > 3 || !c300x_load_config(argv[1], &config, error, sizeof(error))) {
         printf("error %s\n", error);
         return 1;
     }
-    printf("{\"high_resolution\":%d,\"qt5\":%d,\"display_patch\":%d}\n",
+    if (argc == 3) {
+        saved = c300x_save_camera_high_resolution(&config, atoi(argv[2]), error, sizeof(error), &changed);
+    }
+    printf("{\"high_resolution\":%d,\"qt5\":%d,\"display_patch\":%d,\"saved\":%d,\"changed\":%d}\n",
         config.video_av_high_resolution, c300x_device_display_is_qt5(),
-        config.maintenance_qml_patch_enabled);
+        config.maintenance_qml_patch_enabled, saved, changed);
     return 0;
 }

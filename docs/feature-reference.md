@@ -808,6 +808,7 @@ feature, the matching entity is not created.
 | `switch` | Answering machine | Device answering-machine enabled state. |
 | `switch` | Save images | Automatic visitor images on or off (on by default). |
 | `switch` | Touch tone | The display's touch-sound setting. |
+| `select` | Camera resolution | High (688×480) or low (400×288) camera stream, from the next stream on; high by default. Not offered on firmware 3.0.x, which is fixed to low. |
 | `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |

@@ -231,6 +231,8 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore-core` | maintenance | Restores core media QML hook. |
 | `POST` | `/api/v1/maintenance/qml-patch/actions/apply` | maintenance | Applies full display QML patch. |
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore` | maintenance | Restores full display QML patch. |
+| `GET` | `/api/v1/maintenance/camera-resolution` | maintenance | Reads the camera resolution. |
+| `POST` | `/api/v1/maintenance/camera-resolution` | maintenance | Saves the camera resolution for the next stream. |
 | `GET` | `/api/v1/maintenance/audio-codec` | maintenance | Reads the device audio codec (speex/PCMU) state. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/apply` | maintenance | Switches the device to PCMU and reboots after confirmation. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Restores the stock speex codec and reboots after confirmation. |
@@ -1335,6 +1337,16 @@ Patch helpers render the desired tree into a temporary staging directory,
 compare target files byte-for-byte, back up original device files under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`, remount the root
 filesystem writable only for final copy/write work, then remount read-only.
+
+### Camera Resolution
+
+`GET /api/v1/maintenance/camera-resolution` returns
+`{"ok": true, "high_resolution": true}`. `POST` with
+`{"high_resolution": false}` saves `video.av.highResolution` and returns the
+same body; it applies from the next stream that starts. Capabilities advertise
+it as `maintenance.camera_resolution`. On firmware 3.0.x the agent fixes the low
+resolution, does not advertise the setting, and answers a request for high
+resolution with `409` and `error: "high_resolution_unsupported"`.
 
 ### Audio Codec
 

@@ -1178,6 +1178,13 @@
           "speex": "Speex (usine)",
           "pcmu": "PCMU"
         }
+      },
+      "camera_resolution": {
+        "name": "Résolution de la caméra",
+        "state": {
+          "high": "Haute",
+          "low": "Basse"
+        }
       }
     },
     "number": {

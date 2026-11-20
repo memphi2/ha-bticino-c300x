@@ -34,6 +34,7 @@ from .entity import (
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .forwarding import coerce_forwarding_mode_state, forwarding_state_from_value
+from .select_camera_resolution import C300XCameraResolutionSelect
 
 if TYPE_CHECKING:
     from homeassistant.core import Event
@@ -61,6 +62,8 @@ async def async_setup_entry(
         entities.append(C300XSmartphoneForwardingModeSelect(entry))
     if entry_maintenance_action_is_advertised(entry, "audio_codec_apply"):
         entities.append(C300XAudioCodecSelect(entry))
+    if entry_maintenance_action_is_advertised(entry, "camera_resolution"):
+        entities.append(C300XCameraResolutionSelect(entry))
     if entities:
         await _async_refresh_initial_states(entities)
         async_add_entities(entities)

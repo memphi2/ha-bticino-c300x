@@ -152,6 +152,21 @@ class _ApiMediaMixin(_C300XApiCore):
         )
         return _ok_response(data)
 
+    async def async_camera_resolution(
+        self, *, high_resolution: bool | None = None
+    ) -> dict[str, Any]:
+        """Read the camera resolution, or set it for the next stream."""
+
+        return cast(
+            "dict[str, Any]",
+            await self._request_json(
+                "GET" if high_resolution is None else "POST",
+                "/api/v1/maintenance/camera-resolution",
+                json_data=None if high_resolution is None else {"high_resolution": high_resolution},
+                extra_headers=self._maintenance_headers(),
+            ),
+        )
+
     async def async_audio_codec_status(self) -> dict[str, Any]:
         """Return the device audio-codec state (speex|pcmu|partial)."""
 

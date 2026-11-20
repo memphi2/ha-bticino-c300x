@@ -165,6 +165,8 @@ int c300x_config_set_activation_items_json(
     char *error,
     size_t error_len
 );
+int c300x_save_camera_high_resolution(struct c300x_config *live, int enabled,
+                                       char *error, size_t error_len, int *changed);
 int c300x_save_display_feedback(struct c300x_config *live, int enabled,
                                 char *error, size_t error_len, int *changed);
 int c300x_save_mqtt_config(const struct c300x_config *live, const struct c300x_config *updated,

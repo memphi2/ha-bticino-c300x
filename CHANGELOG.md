@@ -25,6 +25,12 @@ Display:
 - The energy tabs, the Leave home buttons, tiles that open details, the
   detail tabs and the on/off switch show that they are pressed.
 
+Fixed:
+
+- The camera card no longer stays on a call the device has lost. After an
+  agent restart during a live view or a call, the card kept offering
+  **Hang up** without effect until Home Assistant was restarted.
+
 ## v2.7.0 - 2026-11-20
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

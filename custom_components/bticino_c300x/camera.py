@@ -22,6 +22,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
 from .agent_diagnostics import publish_agent_media_facts
+from .agent_restart import note_status_reconciled, reconcile_due
 from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.background_tasks import CameraBackgroundTasks
 from .camera_media.ha_compat import (
@@ -1434,11 +1435,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         if self._background_tasks.closing:
             return
         handle_agent_cpu_metrics_changed(self, entry_id)
-        if (
-            entry_id == self._entry.entry_id
-            and self._webrtc_sessions.active
-            and not self._reconcile_in_flight
-        ):
+        if reconcile_due(self, entry_id):
             self._reconcile_in_flight = True
             self._background_tasks.create(self.hass, self._async_reconcile_local_sessions(), key="reconcile")
 
@@ -1485,11 +1482,10 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                             notify_client=True,
                             reason="agent_idle_reconcile",
                         )
-            # Home Call is a separate status path: reconcile any held home-call
-            # session against async_home_call_status() so a missed end event does
-            # not leave it churning the heartbeat forever.
-            if self._webrtc_sessions.active_ids("home_call"):
-                await self._async_close_finished_home_call_sessions()
+            # Home Call has its own status path; a missed end event must not
+            # leave a session or the cached call state behind.
+            await self._async_close_finished_home_call_sessions()
+            note_status_reconciled(self, status)
             self._async_write_ha_state_if_ready()
         finally:
             self._reconcile_in_flight = False

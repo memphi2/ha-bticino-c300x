@@ -5,12 +5,14 @@
 #include <string.h>
 
 #define SECTION "[Answering Machine]"
-#define BITRATE_KEY "BitrateRtpH"
-#define FPS_KEY "FpsRtpH"
 
-/* The single line of key in the section: where its digits start and end.
- * NULL when the key is missing, appears more than once in any such section,
- * or has anything but up to five digits as its value. */
+static const char *const KEYS[2][4] = {
+    {"BitrateRtpH", "FpsRtpH", "Width", "Height"},
+    {"BitrateRtpL", "FpsRtpL", "WidthLow", "HeightLow"},
+};
+
+/* Where the digits of the single line of key in the section start and end;
+ * NULL for a missing or repeated key or a value not of 1-5 digits. */
 static const char *find_value(const char *data, const char *key, const char **end)
 {
     const char *line = data, *found = NULL;
@@ -21,16 +23,12 @@ static const char *find_value(const char *data, const char *key, const char **en
         const char *next = strchr(line, '\n');
         size_t len = next != NULL ? (size_t)(next - line) : strlen(line);
 
-        if (len > 0 && line[len - 1] == '\r') {
-            len--;
-        }
+        len -= len > 0 && line[len - 1] == '\r';
         if (line[0] == '[') {
             inside = len == strlen(SECTION) && strncmp(line, SECTION, len) == 0;
         } else if (inside && len > key_len && strncmp(line, key, key_len) == 0 && line[key_len] == '=') {
             const char *digits = line + key_len + 1, *stop = digits;
-            while (stop < line + len && *stop >= '0' && *stop <= '9') {
-                stop++;
-            }
+            while (stop < line + len && *stop >= '0' && *stop <= '9') stop++;
             if (stop != line + len || stop == digits || stop - digits > 5) {
                 return NULL;
             }
@@ -38,28 +36,28 @@ static const char *find_value(const char *data, const char *key, const char **en
             *end = stop;
             count++;
         }
-        if (next == NULL) {
-            break;
-        }
+        if (next == NULL) break;
         line = next + 1;
     }
     return count == 1 ? found : NULL;
 }
 
-int c300x_camera_settings_parse(const char *data, int *bitrate, int *fps)
+int c300x_camera_settings_parse(const char *data, int low, struct c300x_camera_values *values)
 {
-    const char *bitrate_at, *fps_at, *end;
+    int *fields[] = {&values->bitrate_kbps, &values->fps, &values->width, &values->height};
+    const char *end;
 
-    if ((bitrate_at = find_value(data, BITRATE_KEY, &end)) == NULL
-        || (fps_at = find_value(data, FPS_KEY, &end)) == NULL) {
-        return 0;
+    for (int i = 0; i < 4; i++) {
+        const char *digits = find_value(data, KEYS[low != 0][i], &end);
+        if (digits == NULL) {
+            return 0;
+        }
+        *fields[i] = atoi(digits);
     }
-    *bitrate = atoi(bitrate_at);
-    *fps = atoi(fps_at);
     return 1;
 }
 
-/* data with the digits of key replaced by value; NULL when it does not fit. */
+/* data, freed, with the digits of key replaced; NULL when that fails. */
 static char *with_value(char *data, const char *key, int value)
 {
     const char *end = NULL, *digits = find_value(data, key, &end);
@@ -83,8 +81,12 @@ static char *with_value(char *data, const char *key, int value)
     return out;
 }
 
-char *c300x_camera_settings_with(char *data, int bitrate_kbps, int fps)
+char *c300x_camera_settings_with(char *data, int low, const struct c300x_camera_values *values)
 {
-    data = with_value(data, BITRATE_KEY, bitrate_kbps);
-    return data != NULL ? with_value(data, FPS_KEY, fps) : NULL;
+    const int fields[] = {values->bitrate_kbps, values->fps, values->width, values->height};
+
+    for (int i = 0; i < 4 && data != NULL; i++) {
+        data = with_value(data, KEYS[low != 0][i], fields[i]);
+    }
+    return data;
 }

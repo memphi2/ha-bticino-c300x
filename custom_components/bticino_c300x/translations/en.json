@@ -766,14 +766,16 @@
       },
       "camera_quality": {
         "title": "Camera quality",
-        "description": "Bit rate and frame rate of the high-resolution camera stream that Home Assistant receives. The C300X reads them only when it starts: saving a change restarts the device once, which takes about a minute. The low-resolution stream of the Door Entry app is not changed.\n\nThe device currently runs with: {running}",
+        "description": "Size, bit rate and frame rate of the camera stream Home Assistant receives: the high-resolution stream, or on firmware 3.0.x the low-resolution one, the only stream it sends, which the Door Entry app gets as well. The C300X reads them only when it starts: saving a change restarts the device once, which takes about a minute.\n\nThe device currently runs with: {running}",
         "data": {
+          "size": "Picture size",
           "bitrate_kbps": "Bit rate",
           "fps": "Frame rate"
         },
         "data_description": {
-          "bitrate_kbps": "Default 800 kbit/s. More gives a sharper picture and uses more network.",
-          "fps": "Default 15 frames per second; at most 25, the rate of the camera."
+          "size": "High stream: 688x480 (from the factory) is a cut-out of the camera picture, 720x576 the whole picture; the size also applies to the camera picture on the C300X display and to answering-machine recordings. Low stream on firmware 3.0.x: 400x288 from the factory; the other sizes are not tested on such a device yet.",
+          "bitrate_kbps": "From the factory 800 kbit/s, at most 3000. The low stream on firmware 3.0.x: 180 from the factory, 100-2000. More gives a sharper picture and uses more network.",
+          "fps": "From the factory 15 frames per second; the high stream takes at most 24, since at 25 the device sends only about 8. The low stream on firmware 3.0.x: 10 from the factory, at most 25."
         }
       },
       "device_activations": {
@@ -848,7 +850,7 @@
           "connection": "Address, access key and maintenance key of the C300X, address of Home Assistant.",
           "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
           "visitor_snapshot": "Size of the saved visitor image, capture delay, retention and the date written into the image.",
-          "camera_quality": "Bit rate and frame rate of the camera stream; a change restarts the device.",
+          "camera_quality": "Size, bit rate and frame rate of the camera stream; a change restarts the device.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
           "display": "Display patch, pages, tiles and Alarmo.",
           "done": "Close the settings. Everything submitted is already saved."

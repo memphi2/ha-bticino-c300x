@@ -1401,48 +1401,66 @@ resolution with `409` and `error: "high_resolution_unsupported"`.
 
 ### Camera Quality
 
-`GET /api/v1/maintenance/camera-quality` returns the bit rate and frame rate
-the device uses for its high-resolution camera stream:
+`GET /api/v1/maintenance/camera-quality` returns size, bit rate and frame rate
+of the camera stream Home Assistant receives. That is the high-resolution
+stream (`"stream": "high"`), and on firmware 3.0.x (Qt 5 display), which sends
+only the low-resolution stream, that one (`"stream": "low"`):
 
 ```json
-{"ok": true, "supported": true, "bitrate_kbps": 800, "fps": 15,
- "running_bitrate_kbps": 800, "running_fps": 15,
- "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 25,
+{"ok": true, "supported": true, "stream": "high", "bitrate_kbps": 800, "fps": 15,
+ "size": "688x480", "running_bitrate_kbps": 800, "running_fps": 15,
+ "running_size": "688x480", "bitrate_min": 300, "bitrate_max": 3000,
+ "fps_min": 5, "fps_max": 24, "sizes": ["688x480", "720x576"],
  "restart_required": false, "changed": false, "remount_ro_failed": false,
  "rebooting": false}
 ```
 
-`bitrate_kbps` and `fps` are the saved values, `running_*` the ones the
-device started with (`0` when the agent cannot tell), and `restart_required`
-is `true` while the two differ.
+`bitrate_kbps`, `fps` and `size` are the saved values, `running_*` the ones
+the device started with (`0` and `""` when the agent cannot tell), and
+`restart_required` is `true` while the two differ. `sizes` lists the sizes a
+request may choose. The high stream takes 300–3000 kbit/s and 5–24 fps: at
+25 fps the device drops its frame rate control and sends about 8 frames per
+second. The low stream takes 100–2000 kbit/s (the device lowers the bit rate
+at run time and raises it again only up to 2000) and 5–25 fps, in the sizes
+352x288, 400x288 (from the factory), 640x480, 704x576 and 720x576; the sizes
+other than 400x288 are not tested on a 3.0.x device yet.
 
-`POST` with `{"confirm": "apply_camera_quality", "bitrate_kbps": 3000, "fps": 25}`
-saves new values and returns the same body; either value may be left out and
-then stays as it is. Like the audio codec switch, the agent then restarts the
-device when the saved values differ from the running ones, unless the request
-sends `"reboot": false` or reboot maintenance is disabled; `rebooting` says
-whether it does. A value outside the limits is answered `400` with
-`error: "camera_quality_out_of_range"`, a value that is not a whole number
-with `camera_quality_invalid_bitrate` or `camera_quality_invalid_fps`, and a
-request with neither value with `camera_quality_value_required`.
+`POST` with `{"confirm": "apply_camera_quality", "size": "720x576",
+"bitrate_kbps": 3000, "fps": 24}` saves new values and returns the same body;
+each value may be left out and then stays as it is. Like the audio codec
+switch, the agent then restarts the device when the saved values differ from
+the running ones, unless the request sends `"reboot": false` or reboot
+maintenance is disabled; `rebooting` says whether it does. A bit rate or frame
+rate outside the limits is answered `400` with
+`error: "camera_quality_out_of_range"`, a size not in `sizes` with
+`camera_quality_invalid_size`, a value that is not a whole number with
+`camera_quality_invalid_bitrate` or `camera_quality_invalid_fps`, and a
+request with no value with `camera_quality_value_required`. A value the file
+already has may stay even when it is outside the limits.
 
-The device keeps both values as `BitrateRtpH` and `FpsRtpH` in the
-`[Answering Machine]` section of `/home/bticino/cfg/bt_answering_machine` and
-reads that file only when it starts. The agent changes the file only when each
-value is there exactly once, replaces those two numbers and nothing else,
-keeps one backup of the original file under
-`/home/bticino/cfg/extra/c300x-device-file-backups/original`, writes a
-complete new file in one step, makes the root filesystem writable only for
-the write, and reads the result back. The low resolution stream, which the
-Door Entry app also receives, is not changed. Removing the agent puts the two
+The device keeps the values in the `[Answering Machine]` section of
+`/home/bticino/cfg/bt_answering_machine` and reads that file only when it
+starts: `BitrateRtpH`, `FpsRtpH`, `Width` and `Height` for the high stream,
+`BitrateRtpL`, `FpsRtpL`, `WidthLow` and `HeightLow` for the low one. For the
+high stream the device crops the camera picture when `Width` is more than
+1.5 times `Height` (800x480 from the factory gives 688x480) and sends the
+whole 720x576 picture otherwise, so the size `720x576` is written as
+`Width=720`, `Height=480`; the same values also set the camera picture on the
+device display and answering-machine recordings. The low stream is scaled to
+`WidthLow` x `HeightLow`.
+
+The agent changes the file only when each of the four values is there exactly
+once, replaces those numbers and nothing else, keeps one backup of the
+original file under `/home/bticino/cfg/extra/c300x-device-file-backups/original`,
+writes a complete new file in one step, makes the root filesystem writable
+only for the write, and reads the result back. Removing the agent puts the
 original values back; a file that lost them meanwhile (a firmware update) is
 left alone.
 
-Capabilities advertise the setting as `maintenance.camera_quality`. On firmware
-3.0.x, which has no high-resolution stream, it is not advertised and a `POST`
-is answered `409` with `error: "camera_quality_unsupported"`; the same answer
-is given when the file does not hold both values, and `GET` then reports
-`"supported": false`.
+Capabilities advertise the setting as `maintenance.camera_quality` whenever
+video is enabled. A `POST` is answered `409` with
+`error: "camera_quality_unsupported"` when the file does not hold the values,
+and `GET` then reports `"supported": false`.
 
 ### Audio Codec
 

@@ -21,9 +21,10 @@ HEADERS = {"Authorization": "Bearer " + TOKEN,
            "X-Bticino-C300X-Maintenance-Token": "maintenance-token"}
 SETTINGS = (
     "[General Parameters]\nBitrateRtpH=1\n\n"
-    "[Answering Machine]\nBitrate=2500\nWidth=800\nBitrateRtpH=800\nFpsRtpH=15\n"
-    "BitrateRtpL=180\nFpsRtpL=10\nLcdDelay=600\n\n"
+    "[Answering Machine]\nBitrate=2500\nWidth=800\nHeight=480\nBitrateRtpH=800\nFpsRtpH=15\n"
+    "BitrateRtpL=180\nFpsRtpL=10\nWidthLow=400\nHeightLow=288\nLcdDelay=600\n\n"
     "[Audio]\nFpsRtpH=1\nBitrate=250\n"
+    "[Netatmo]\nWidth=432\nHeight=240\n"
 )
 CONFIRM = {"confirm": "apply_camera_quality"}
 
@@ -79,7 +80,13 @@ def reboot() -> bool:
 
 
 @pytest.fixture
-def lab(binary: Path, tmp_path: Path, reboot: bool) -> Iterator[Lab]:
+def qt5() -> bool:
+    """Whether the device is firmware 3.0.x, which sends only the low stream."""
+    return False
+
+
+@pytest.fixture
+def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
     port, ui_port, own = free_tcp_ports(3)
     settings = tmp_path / "bt_answering_machine"
     settings.write_text(SETTINGS)
@@ -101,6 +108,8 @@ def lab(binary: Path, tmp_path: Path, reboot: bool) -> Iterator[Lab]:
     (tmp_path / "boot_id").write_text("boot-1\n")
     (tmp_path / "reboot-test.sh").write_text("#!/bin/sh\ntouch reboot-done\n")
     (tmp_path / "reboot-test.sh").chmod(0o700)
+    if qt5:
+        (tmp_path / "qt5-mark").touch()
     env = {**os.environ, "C300X_CAMERA_QUALITY_FILE": str(settings),
            "C300X_BOOT_ID_FILE": str(tmp_path / "boot_id"),
            "C300X_CAMERA_RUNNING_NOTE": str(tmp_path / "camera-running"),
@@ -126,23 +135,24 @@ def lab(binary: Path, tmp_path: Path, reboot: bool) -> Iterator[Lab]:
 
 def test_reads_the_values_of_the_high_resolution_stream(lab: Lab) -> None:
     assert lab.call() == {
-        "ok": True, "supported": True, "bitrate_kbps": 800, "fps": 15,
-        "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 25,
-        "running_bitrate_kbps": 800, "running_fps": 15,
+        "ok": True, "supported": True, "stream": "high", "bitrate_kbps": 800, "fps": 15,
+        "size": "688x480", "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 24,
+        "sizes": ["688x480", "720x576"],
+        "running_bitrate_kbps": 800, "running_fps": 15, "running_size": "688x480",
         "restart_required": False, "changed": False, "remount_ro_failed": False, "rebooting": False,
     }
 
 
 def test_writes_only_the_two_values_of_its_section_and_keeps_the_original(lab: Lab) -> None:
     mode = lab.settings.stat().st_mode
-    body = lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 25})
+    body = lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 24})
 
-    assert (body["bitrate_kbps"], body["fps"], body["changed"]) == (3000, 25, True)
+    assert (body["bitrate_kbps"], body["fps"], body["changed"]) == (3000, 24, True)
     # The device reads the file when it starts; reboot maintenance is off here.
     assert (body["running_bitrate_kbps"], body["running_fps"]) == (800, 15)
     assert body["restart_required"] is True and body["rebooting"] is False
     assert lab.settings.read_text() == SETTINGS.replace(
-        "BitrateRtpH=800\nFpsRtpH=15", "BitrateRtpH=3000\nFpsRtpH=25")
+        "BitrateRtpH=800\nFpsRtpH=15", "BitrateRtpH=3000\nFpsRtpH=24")
     assert lab.settings.stat().st_mode == mode
     assert lab.backup.read_text() == SETTINGS
     assert lab.call()["restart_required"] is True
@@ -164,7 +174,7 @@ def test_the_same_values_write_nothing(lab: Lab) -> None:
 
 @pytest.mark.parametrize(("payload", "error"), [
     ({"bitrate_kbps": 299}, "out_of_range"), ({"bitrate_kbps": 3001}, "out_of_range"),
-    ({"fps": 4}, "out_of_range"), ({"fps": 26}, "out_of_range"),
+    ({"fps": 4}, "out_of_range"), ({"fps": 25}, "out_of_range"),
     ({"bitrate_kbps": 0}, "out_of_range"), ({"fps": -1}, "out_of_range"),
     ({"fps": "25"}, "invalid_fps"), ({}, "value_required"),
     # A value that is not a whole number is refused, also beside a good one.
@@ -204,7 +214,7 @@ def test_a_file_without_the_values_is_reported_and_left_alone(lab: Lab, content:
 
 
 def test_removing_the_agent_puts_the_original_values_back(lab: Lab) -> None:
-    lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 25})
+    lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 24})
     # The device changed another value of the file meanwhile; that one stays.
     lab.settings.write_text(lab.settings.read_text().replace("LcdDelay=600", "LcdDelay=700"))
 
@@ -225,26 +235,34 @@ def test_restart_required_compares_the_values_with_what_the_device_started_with(
 
 
 def test_an_agent_that_restarts_without_the_device_keeps_what_the_device_runs(lab: Lab) -> None:
-    lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 25})
+    lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 24})
     lab.restart_agent()
     body = lab.call()
     assert (body["running_bitrate_kbps"], body["running_fps"]) == (800, 15)
     assert body["restart_required"] is True
+    # A note of an older agent, without the size, is not trusted.
+    note = lab.settings.parent / "camera-running"
+    note.write_text("boot-1 800 15\n")
+    lab.restart_agent()
+    assert lab.call()["running_fps"] == 24
+    note.write_text("boot-1 800 15 800 480\n")
+    lab.restart_agent()
+    assert lab.call()["running_fps"] == 15
     # A new boot of the device runs what the file has.
     lab.process.terminate()
     lab.process.wait(timeout=5)
     (lab.settings.parent / "boot_id").write_text("boot-2\n")
     lab.process = lab.start()
     body = lab.call()
-    assert (body["running_bitrate_kbps"], body["running_fps"], body["restart_required"]) == (3000, 25, False)
+    assert (body["running_bitrate_kbps"], body["running_fps"], body["restart_required"]) == (3000, 24, False)
 
 
 @pytest.mark.parametrize("content", [
     "[Answering Machine]\nLcdDelay=600\n",
-    "[Answering Machine]\nBitrateRtpH=3000\nFpsRtpH=25\nBitrateRtpH=900\n",
+    "[Answering Machine]\nBitrateRtpH=3000\nFpsRtpH=24\nBitrateRtpH=900\n",
 ])
 def test_removal_leaves_a_file_alone_that_lost_its_values(lab: Lab, content: str) -> None:
-    lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 25})
+    lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 24})
     lab.settings.write_text(content)
     result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                             capture_output=True, text=True, timeout=10, check=False)
@@ -276,7 +294,7 @@ def test_a_change_restarts_the_device_like_the_codec_switch(lab: Lab) -> None:
     done = lab.settings.parent / "reboot-done"
     assert lab.call({**CONFIRM, "fps": 20, "reboot": False})["rebooting"] is False
     assert not done.exists()
-    body = lab.call({**CONFIRM, "fps": 25})
+    body = lab.call({**CONFIRM, "fps": 24})
     assert body["rebooting"] is True and body["restart_required"] is True
     assert wait_for(done)
 
@@ -290,22 +308,61 @@ def test_values_the_device_already_runs_restart_nothing(lab: Lab) -> None:
 
 
 def test_disabled_reboot_maintenance_saves_without_a_restart(lab: Lab) -> None:
-    body = lab.call({**CONFIRM, "fps": 25})
+    body = lab.call({**CONFIRM, "fps": 24})
     assert body["rebooting"] is False and body["restart_required"] is True
-    assert "FpsRtpH=25" in lab.settings.read_text()
+    assert "FpsRtpH=24" in lab.settings.read_text()
 
 
-def test_a_qt5_device_is_refused_and_its_file_left_alone(lab: Lab) -> None:
-    (lab.settings.parent / "qt5-mark").touch()
-    assert lab.call()["supported"] is False
-    assert lab.call({**CONFIRM, "fps": 25}, status=409)["error"] == "camera_quality_unsupported"
+@pytest.mark.parametrize("qt5", [True])
+def test_firmware_3_sets_the_low_stream_its_only_stream(lab: Lab) -> None:
+    body = lab.call()
+    assert (body["stream"], body["bitrate_kbps"], body["fps"], body["size"]) == ("low", 180, 10, "400x288")
+    assert body["sizes"] == ["352x288", "400x288", "640x480", "704x576", "720x576"]
+    assert body["running_size"] == "400x288"
+    assert (body["bitrate_min"], body["bitrate_max"], body["fps_max"]) == (100, 2000, 25)
+    body = lab.call({**CONFIRM, "bitrate_kbps": 600, "fps": 25, "size": "720x576"})
+    assert body["changed"] is True and body["restart_required"] is True
+    assert lab.settings.read_text() == SETTINGS.replace(
+        "BitrateRtpL=180\nFpsRtpL=10\nWidthLow=400\nHeightLow=288",
+        "BitrateRtpL=600\nFpsRtpL=25\nWidthLow=720\nHeightLow=576")
+    assert lab.call({**CONFIRM, "bitrate_kbps": 2001}, status=400)["error"] == "camera_quality_out_of_range"
+    assert lab.call({**CONFIRM, "size": "688x480"}, status=400)["error"] == "camera_quality_invalid_size"
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env, cwd=lab.settings.parent,
+                            capture_output=True, text=True, timeout=10, check=False)
+    assert result.returncode == 0, result.stderr
+    assert lab.settings.read_text() == SETTINGS
+
+
+def test_the_full_camera_picture_is_chosen_by_width_and_height(lab: Lab) -> None:
+    body = lab.call({**CONFIRM, "size": "720x576"})
+    assert (body["size"], body["running_size"], body["restart_required"]) == ("720x576", "688x480", True)
+    assert lab.settings.read_text() == SETTINGS.replace("Width=800\nHeight=480\nBitrate", "Width=720\nHeight=480\nBitrate")
+    assert lab.call({**CONFIRM, "size": "688x480"})["restart_required"] is False
+    assert lab.settings.read_text() == SETTINGS
+    assert lab.call({**CONFIRM, "size": "800x600"}, status=400)["error"] == "camera_quality_invalid_size"
+    assert lab.call({**CONFIRM, "size": 720}, status=400)["error"] == "camera_quality_invalid_size"
+    assert lab.settings.read_text() == SETTINGS
+
+
+def test_a_size_the_file_already_gives_keeps_its_width_and_height(lab: Lab) -> None:
+    lab.settings.write_text(SETTINGS.replace("Width=800\nHeight=480\nBitrate", "Width=704\nHeight=576\nBitrate"))
+    body = lab.call({**CONFIRM, "size": "720x576", "fps": 20})
+    assert body["size"] == "720x576"
+    assert "Width=704\nHeight=576\n" in lab.settings.read_text()
+
+
+def test_removal_puts_back_the_original_size(lab: Lab) -> None:
+    lab.call({**CONFIRM, "size": "720x576", "bitrate_kbps": 3000, "fps": 24})
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+                            capture_output=True, text=True, timeout=10, check=False)
+    assert result.returncode == 0, result.stderr
     assert lab.settings.read_text() == SETTINGS
 
 
 def test_a_failed_backup_leaves_the_file_unchanged(lab: Lab) -> None:
     lab.backup.parent.parent.mkdir(parents=True, exist_ok=True)
     lab.backup.parent.write_text("not a directory")
-    assert lab.call({**CONFIRM, "fps": 25}, status=500)["error"] == "camera_quality_backup_failed"
+    assert lab.call({**CONFIRM, "fps": 24}, status=500)["error"] == "camera_quality_backup_failed"
     assert lab.settings.read_text() == SETTINGS
 
 
@@ -313,4 +370,4 @@ def test_a_value_outside_the_range_in_the_file_does_not_block_the_other(lab: Lab
     lab.settings.write_text(SETTINGS.replace("FpsRtpH=15", "FpsRtpH=30"))
     body = lab.call({**CONFIRM, "bitrate_kbps": 1200})
     assert (body["bitrate_kbps"], body["fps"]) == (1200, 30)
-    assert lab.call({**CONFIRM, "fps": 26}, status=400)["error"] == "camera_quality_out_of_range"
+    assert lab.call({**CONFIRM, "fps": 25}, status=400)["error"] == "camera_quality_out_of_range"

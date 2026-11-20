@@ -1781,8 +1781,12 @@ def test_camera_quality_reads_without_a_body_and_saves_only_the_given_values() -
     assert asyncio.run(api.async_camera_quality())["fps"] == 25
     asyncio.run(api.async_camera_quality(fps=25))
     asyncio.run(api.async_camera_quality(bitrate_kbps=3000, fps=20))
+    asyncio.run(api.async_camera_quality(size="720x576"))
     url = "http://agent.local:8080/api/v1/maintenance/camera-quality"
-    assert [request["args"] for request in session.requests] == [("GET", url), ("POST", url), ("POST", url)]
+    assert [request["args"] for request in session.requests] == [
+        ("GET", url), ("POST", url), ("POST", url), ("POST", url)]
+    assert session.requests[3]["kwargs"]["json"] == {
+        "confirm": "apply_camera_quality", "size": "720x576", "reboot": True}
     assert session.requests[0]["kwargs"].get("json") is None
     assert session.requests[1]["kwargs"]["json"] == {
         "confirm": "apply_camera_quality", "fps": 25, "reboot": True}

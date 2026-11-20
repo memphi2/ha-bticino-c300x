@@ -15,6 +15,9 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
 )
 
 from .api import C300XAgentApiError
@@ -23,10 +26,11 @@ from .schema_compat import vol
 
 BITRATE = "bitrate_kbps"
 FPS = "fps"
+SIZE = "size"
 
 
 def camera_quality_offered(entry: Any) -> bool:
-    """The agent offers the setting (not on firmware 3.0.x)."""
+    """The agent offers the setting; on firmware 3.0.x it is the low stream."""
 
     return entry_maintenance_action_is_advertised(entry, "camera_quality")
 
@@ -42,8 +46,19 @@ def _limit(status: Mapping[str, Any], key: str, fallback: int) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else fallback
 
 
+def _sizes(status: Mapping[str, Any]) -> list[str]:
+    offered = [size for size in status.get("sizes") or [] if isinstance(size, str) and size]
+    # A size the file already has but that is not offered can stay as it is.
+    current = status.get(SIZE)
+    if isinstance(current, str) and current and current not in offered:
+        offered.append(current)
+    return offered
+
+
 def _schema(status: Mapping[str, Any], values: Mapping[str, Any]) -> vol.Schema:
     return vol.Schema({
+        vol.Required(SIZE, default=values[SIZE]): SelectSelector(SelectSelectorConfig(
+            options=_sizes(status), mode=SelectSelectorMode.DROPDOWN)),
         vol.Required(BITRATE, default=values[BITRATE]): _number(
             _limit(status, "bitrate_min", 300), _limit(status, "bitrate_max", 3000), 50, "kbit/s"),
         vol.Required(FPS, default=values[FPS]): _number(
@@ -53,8 +68,8 @@ def _schema(status: Mapping[str, Any], values: Mapping[str, Any]) -> vol.Schema:
 
 def _placeholders(status: Mapping[str, Any]) -> dict[str, str]:
     running = (status.get("running_bitrate_kbps"), status.get("running_fps"))
-    known = all(isinstance(value, int) and value > 0 for value in running)
-    return {"running": f"{running[0]} kbit/s, {running[1]} fps" if known else "-"}
+    known = all(isinstance(value, int) and value > 0 for value in running) and status.get("running_size")
+    return {"running": f"{status['running_size']}, {running[0]} kbit/s, {running[1]} fps" if known else "-"}
 
 
 class CameraQualityOptionsStep:
@@ -86,10 +101,10 @@ class CameraQualityOptionsStep:
                 step_id="camera_quality", data_schema=vol.Schema({}), errors={"base": problem},
                 description_placeholders=_placeholders(status),
             ))
-        saved = {BITRATE: status.get(BITRATE), FPS: status.get(FPS)}
+        saved = {BITRATE: status.get(BITRATE), FPS: status.get(FPS), SIZE: status.get(SIZE)}
         errors: dict[str, str] = {}
         if user_input is not None:
-            wanted = {key: int(user_input[key]) for key in (BITRATE, FPS)}
+            wanted = {**{key: int(user_input[key]) for key in (BITRATE, FPS)}, SIZE: str(user_input[SIZE])}
             changes = {key: value for key, value in wanted.items() if value != saved[key]}
             if not changes:
                 return cast(ConfigFlowResult, await self.async_step_init())

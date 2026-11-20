@@ -155,7 +155,8 @@ int c300x_capabilities_json(
         maintenance_supported ? "true" : "false",
         maintenance_supported ? "true" : "false",
         (maintenance_supported && config->video_enabled && !context->camera_resolution_fixed) ? "true" : "false",
-        (maintenance_supported && config->video_enabled && !context->camera_resolution_fixed) ? "true" : "false",
+        /* Firmware 3.0.x too: there it sets the low stream. */
+        (maintenance_supported && config->video_enabled) ? "true" : "false",
         config->display_bridge_enabled ? "true" : "false"
     );
     return written >= 0 && (size_t)written < body_len;

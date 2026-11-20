@@ -7,11 +7,14 @@ Camera:
 - New **Camera resolution** setting (configuration entity): high or low
   resolution for the camera stream, applied from the next stream. High stays
   the default.
-- New **Camera quality** area in the settings for the high-resolution camera
-  stream: bit rate up to 3000 kbit/s and up to 25 frames per second instead
-  of the factory 800 kbit/s and 15. Like the audio codec, saving a change
-  restarts the device once, which then uses the new values. Not offered on
-  firmware 3.0.6.
+- New **Camera quality** area in the settings: picture size (the whole
+  720x576 camera picture instead of the factory 688x480 cut-out), bit rate up
+  to 3000 kbit/s and up to 24 frames per second instead of the factory
+  800 kbit/s and 15 for the high-resolution camera stream. On firmware 3.0.6
+  size, bit rate and frame rate of the low-resolution stream, the only one it
+  sends, which the Door Entry app gets as well.
+  Like the audio codec, saving a change restarts the device once, which then
+  uses the new values.
   Needs the agent update.
 - Firmware 3.0.6 is fixed to the low resolution, the only stream that firmware
   sends on; the setting is not offered there. Needs the agent update.

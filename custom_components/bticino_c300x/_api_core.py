@@ -11,7 +11,11 @@ from ._api_normalize import (
     _agent_error_field,
     _http_error_text,
 )
-from .agent_update import async_retry_update_maintenance_busy
+from .agent_update import (
+    MAINTENANCE_BUSY_ACTION_WAIT_SECONDS,
+    MAINTENANCE_BUSY_WAIT_SECONDS,
+    async_retry_update_maintenance_busy,
+)
 from .api_errors import (
     C300XAgentApiAuthError,
     C300XAgentApiConnectionError,
@@ -70,17 +74,20 @@ class _C300XApiCore:
 
         The agent runs one maintenance job at a time, also a short status
         read that Home Assistant asked for itself, and refuses every other
-        maintenance request meanwhile, before it does anything for it.
+        maintenance request meanwhile, before it does anything for it. A
+        read waits as long as such a job may take, an action only briefly.
+        A caller that waits itself (the update steps) decides the time.
         """
 
         return await async_retry_update_maintenance_busy(
             lambda: self._request_json_once(
                 method, path, json_data, extra_headers, request_timeout
-            )
+            ),
+            MAINTENANCE_BUSY_WAIT_SECONDS if method == "GET"
+            else MAINTENANCE_BUSY_ACTION_WAIT_SECONDS,
         )
 
     async def _request_json_once(
-
         self,
         method: str,
         path: str,

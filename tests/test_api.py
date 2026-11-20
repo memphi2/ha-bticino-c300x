@@ -1440,20 +1440,47 @@ def test_requests_refused_for_a_running_maintenance_job_are_repeated(monkeypatch
         assert (first["args"], first["kwargs"]["json"]) == (last["args"], last["kwargs"]["json"]), name
 
 
-def test_a_busy_agent_is_given_up_on_after_the_wait(monkeypatch) -> None:
+def _busy_clock(monkeypatch) -> list[float]:
+    """Time passes only in the pauses between two tries."""
+
     from custom_components.bticino_c300x import agent_update
 
-    clock = iter(range(0, 1000, 5))
+    pauses: list[float] = []
 
-    async def no_wait(_seconds: float) -> None:
-        return None
+    async def pause(seconds: float) -> None:
+        pauses.append(seconds)
 
-    monkeypatch.setattr(agent_update.asyncio, "sleep", no_wait)
-    monkeypatch.setattr(agent_update, "monotonic", lambda: float(next(clock)))
-    session = _QueuedSession([_BUSY] * 20)
+    monkeypatch.setattr(agent_update.asyncio, "sleep", pause)
+    monkeypatch.setattr(agent_update, "monotonic", lambda: sum(pauses))
+    return pauses
+
+
+def test_a_busy_agent_is_given_up_on_after_the_wait(monkeypatch) -> None:
+    pauses = _busy_clock(monkeypatch)
+    session = _QueuedSession([_BUSY] * 40)
+    with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
+        asyncio.run(_maintenance_api(session).async_device_user_status())
+    # A read waits as long as a job may take, with a pause before every new try.
+    assert sum(pauses) == 12.0 and len(session.requests) == len(pauses) == 12
+
+    pauses.clear()
+    session = _QueuedSession([_BUSY] * 40)
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(_maintenance_api(session).async_set_ssh_enabled(True))
-    assert 1 < len(session.requests) < 6
+    # An action holds its platform meanwhile and gives up sooner.
+    assert sum(pauses) == 3.0 and len(session.requests) == 3
+
+
+def test_a_caller_that_waits_itself_is_not_made_to_wait_twice(monkeypatch) -> None:
+    from custom_components.bticino_c300x import agent_update
+
+    pauses = _busy_clock(monkeypatch)
+    session = _QueuedSession([_BUSY] * 40)
+    api = _maintenance_api(session)
+    with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
+        asyncio.run(agent_update.async_retry_update_maintenance_busy(
+            lambda: api.async_set_ssh_enabled(True)))
+    assert sum(pauses) == 12.0 and len(session.requests) == 12
 
 
 def test_other_refusals_are_not_repeated() -> None:

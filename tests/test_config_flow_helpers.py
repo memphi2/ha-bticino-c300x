@@ -2912,7 +2912,6 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
         flow.async_step_reconfigure_dashboard_entity_display(
             entity_display_form["data_schema"]({
                 "Status page \u203a Forwarding": {
-                    "Name": "friendly_name",
                     "Secondary line": "last_changed",
                 },
                 "Alarm page \u203a Stair Light": {},

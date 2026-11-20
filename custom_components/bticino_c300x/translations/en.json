@@ -135,7 +135,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Display tiles",
-        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "reconfigure": {
         "title": "Reconfigure BTicino C300X",
@@ -248,7 +248,7 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Display tiles",
-        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "user_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
@@ -818,7 +818,7 @@
       },
       "dashboard_entity_display": {
         "title": "Display tiles",
-        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       },
       "init": {
         "title": "C300X settings",

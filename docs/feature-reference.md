@@ -655,7 +655,7 @@ entity id added. With more than two tiles the sections start collapsed.
 | Field | Meaning |
 | --- | --- |
 | **Width**, **Height** | Half or full; Automatic keeps the usual size of the entity type. |
-| **Name** | The Home Assistant name, the entity id, or a typed text of your own. Left empty, the Home Assistant name is shown. |
+| **Name** | A text of your own. Left empty, the Home Assistant name is shown. A tile saved earlier to show its entity ID shows the ID here; overwrite or empty it. |
 | **Secondary line** | State, entity id, last changed, last updated, or nothing. |
 
 Missing or unavailable entities retain their configuration and show unavailable

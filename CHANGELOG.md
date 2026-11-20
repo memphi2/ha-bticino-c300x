@@ -38,6 +38,8 @@ Configuration:
   (switched off, or without entities) has no number and follows them, and free
   sections come last as **Page +**. A page added without a position goes to
   the end. Saved settings and the display order are unchanged.
+- The **Name** of a tile is a plain text field: type a name of your own, or
+  leave it empty for the name from Home Assistant.
 - Agent and supplied maintenance credentials are validated before normal
   setup, reconfiguration or connection options are saved. Rejected keys are
   told apart from an unreachable agent, with translated form errors and

@@ -135,7 +135,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Display-Kacheln",
-        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "reconfigure": {
         "title": "BTicino C300X neu konfigurieren",
@@ -248,7 +248,7 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Display-Kacheln",
-        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "user_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
@@ -818,7 +818,7 @@
       },
       "dashboard_entity_display": {
         "title": "Display-Kacheln",
-        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: der Name aus Home Assistant oder die Entitäts-ID - oder tippe einfach einen eigenen Text ein.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
+        "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "init": {
         "title": "C300X-Einstellungen",

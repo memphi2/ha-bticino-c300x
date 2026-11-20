@@ -388,9 +388,9 @@ def test_tiles_form_labels_and_choices_are_translated_in_every_language() -> Non
     """The tiles form reads its field labels and choices from the selectors."""
 
     from custom_components.bticino_c300x.config_flow_forms import (
+        dashboard_entity_name_display_selector,
         dashboard_entity_secondary_info_selector,
         dashboard_entity_tile_size_selector,
-        dashboard_tile_name_selector,
     )
     from custom_components.bticino_c300x.config_flow_tiles import (
         TILE_LABEL_TRANSLATION_KEY,
@@ -403,7 +403,7 @@ def test_tiles_form_labels_and_choices_are_translated_in_every_language() -> Non
             field.config["translation_key"]: set(field.config["options"])
             for field in (
                 dashboard_entity_tile_size_selector(),
-                dashboard_tile_name_selector(),
+                dashboard_entity_name_display_selector(),
                 dashboard_entity_secondary_info_selector(),
             )
         },

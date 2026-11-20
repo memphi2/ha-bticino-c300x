@@ -9,8 +9,6 @@ from homeassistant.helpers import selector
 
 from .const import (
     ALARM_DOMAIN,
-    DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
-    DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     WEATHER_DOMAIN,
@@ -91,19 +89,6 @@ def dashboard_entity_name_display_selector() -> Any:
     """Return the selector for one dashboard entity title."""
 
     return _translated_choice("tile_name", DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS)
-
-
-def dashboard_tile_name_selector() -> Any:
-    """Return the name of a tile: one of the choices or a typed text."""
-
-    return _translated_choice(
-        "tile_name",
-        (
-            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-            DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
-        ),
-        custom_value=True,
-    )
 
 
 def dashboard_entity_custom_name_selector() -> Any:

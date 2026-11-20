@@ -135,7 +135,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Riquadri del display",
-        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: scrivi un nome tuo. Se il campo resta vuoto, il riquadro mostra il nome di Home Assistant.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "reconfigure": {
         "title": "Riconfigura BTicino C300X",
@@ -248,7 +248,7 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Riquadri del display",
-        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: scrivi un nome tuo. Se il campo resta vuoto, il riquadro mostra il nome di Home Assistant.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "user_dashboard_alarm": {
         "title": "Allarme (Alarmo)",
@@ -818,7 +818,7 @@
       },
       "dashboard_entity_display": {
         "title": "Riquadri del display",
-        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: il nome di Home Assistant o l'ID dell'entità - oppure scrivi semplicemente un testo tuo.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
+        "description": "Ogni riquadro ha una propria sezione, nell'ordine del display: prima la pagina, poi l'entità. Apri una sezione per modificare il suo riquadro.\n\n- **Larghezza** e **Altezza**: metà o piena. Automatico usa la dimensione abituale del tipo di entità. Ad altezza piena il riquadro mostra i tasti dell'entità.\n- **Nome**: scrivi un nome tuo. Se il campo resta vuoto, il riquadro mostra il nome di Home Assistant.\n- **Riga secondaria**: la seconda riga sotto il nome.\n\nL'azione rapida Alarmo non è su nessuna pagina; ha solo nome e riga secondaria."
       },
       "init": {
         "title": "Impostazioni C300X",

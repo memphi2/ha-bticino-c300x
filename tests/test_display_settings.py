@@ -87,7 +87,10 @@ def post_tiles_like_home_assistant(schema, changes=None):
 
     data = {}
     for key, tile_section in schema.schema.items():
-        values = {str(field): field.default() for field in tile_section.schema.schema}
+        values = {}
+        for field in tile_section.schema.schema:
+            suggested = (field.description or {}).get("suggested_value")
+            values[str(field)] = suggested if suggested is not None else field.default()
         values.update(changes or {})
         data[str(key)] = {
             name: value for name, value in values.items() if value not in (None, "")
@@ -336,7 +339,7 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     assert list(form["data_schema"].schema) == ["Study \u203a Room"]
     # The name shows the typed text; emptied, it is left out of the post.
     assert post_tiles_like_home_assistant(form["data_schema"])["Study \u203a Room"]["Name"] == "Desk"
-    posted = post_tiles_like_home_assistant(form["data_schema"], {"Name": "friendly_name"})
+    posted = post_tiles_like_home_assistant(form["data_schema"], {"Name": ""})
     result = asyncio.run(display_step(posted))
 
     assert result["type"] == "finished", result.get("errors")
@@ -723,10 +726,11 @@ def test_a_weather_entity_needs_no_entity_display_dialog(monkeypatch, flow_kind)
         # A name without a text leaves the Home Assistant name.
         ({"Name": ""}, {}),
         ({"Name": "   "}, {}),
-        ({"Name": "custom"}, {}),
-        # A typed text is a name of its own.
+        # A typed text is a name of its own, whatever it reads.
         ({"Name": " Desk "}, {"name": "custom", "custom_name": "Desk"}),
-        ({"Name": "entity_id"}, {"name": "entity_id"}),
+        ({"Name": "entity_id"}, {"name": "custom", "custom_name": "entity_id"}),
+        # The entity's own ID is what a tile saved to show its ID reads.
+        ({"Name": "light.room"}, {"name": "entity_id"}),
         ({"Width": "full", "Height": "half"}, {"width": "full", "height": "half"}),
         ({"Secondary line": "none"}, {"secondary": "none"}),
     ],
@@ -1399,10 +1403,10 @@ def test_the_tiles_form_has_a_section_per_tile_named_after_page_and_entity():
             "Breite": "full", "Height": "auto", "Name": "Desk", "Secondary line": "state",
         },
         "Study › Lamp (light.lamp)": {
-            "Breite": "auto", "Height": "auto", "Name": "entity_id", "Secondary line": "none",
+            "Breite": "auto", "Height": "auto", "Name": "light.lamp", "Secondary line": "none",
         },
         "Statusseite › Temperatur außen": {
-            "Breite": "auto", "Height": "auto", "Name": "friendly_name", "Secondary line": "state",
+            "Breite": "auto", "Height": "auto", "Secondary line": "state",
         },
         # The quick entity is no tile of a page and has no size.
         "Alarm page › Stair Light": {"Name": "Stairs", "Secondary line": "state"},
@@ -1418,10 +1422,14 @@ def test_the_tiles_form_has_a_section_per_tile_named_after_page_and_entity():
 
     # Posted as shown, nothing changes.
     assert stored(shown) == saved
-    # A tile whose section or field was not sent keeps what it showed.
+    # A tile whose section or field was not sent keeps what it showed. The
+    # name is the exception: a posted tile without one has had it removed.
     assert stored({}) == saved
-    assert stored({"Study › Lamp": {"Height": "half"}})["light.desk"] == {
+    assert stored({"Study › Lamp": {"Height": "half", "Name": "Desk"}})["light.desk"] == {
         **saved["light.desk"], "height": "half",
+    }
+    assert stored({"Study › Lamp": {"Height": "half"}})["light.desk"] == {
+        "page": "Study", "width": "full", "height": "half",
     }
     # A change reaches the entity of its section, also behind the shared name.
     changed = stored({**shown, "Study › Lamp (light.lamp)": {
@@ -1563,3 +1571,38 @@ def test_every_flow_leaves_the_energy_page_off_unless_switched_on(monkeypatch, f
 
     assert result["type"] == "finished", result.get("errors")
     assert result["data"]["energy_page"]["enabled"] is False
+
+
+def test_the_tile_name_is_a_text_field_and_emptying_it_brings_the_home_assistant_name_back():
+    saved = {
+        "light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"},
+        "light.hall": {"name": "entity_id", "page": "Study"},
+    }
+    settings = {
+        "dashboard_entities": ["light.room", "light.hall"],
+        "dashboard_pages": [{"name": "Study", "order": 1}],
+        "dashboard_entity_display_overrides": saved,
+    }
+    form = tile_form(settings, saved)
+    schema = form.schema
+    shown = post_tiles_like_home_assistant(schema)
+
+    # The field shows the name that was typed, and the ID where the tile was
+    # saved to show its ID. It offers no list to choose from.
+    assert shown["Study \u203a Room"]["Name"] == "Desk"
+    assert shown["Study \u203a Hall"]["Name"] == "light.hall"
+    for tile_section in schema.schema.values():
+        name = next(f for f in tile_section.schema.schema if str(f) == "Name")
+        assert "options" not in getattr(tile_section.schema.schema[name], "config", {})
+
+    # Home Assistant leaves an emptied field out of the post. Validation must
+    # not put the old name back.
+    emptied = post_tiles_like_home_assistant(schema, {"Name": ""})
+    assert all("Name" not in tile for tile in emptied.values())
+    fields = form.entity_fields(emptied)
+    assert {fields[form.fields[e]["name"]] for e in ("light.room", "light.hall")} == {"friendly_name"}
+    assert {fields[form.fields[e]["custom_name"]] for e in ("light.room", "light.hall")} == {""}
+    # A tile whose section was not posted at all keeps its name.
+    kept = form.entity_fields({})
+    assert kept[form.fields["light.room"]["custom_name"]] == "Desk"
+    assert kept[form.fields["light.hall"]["name"]] == "entity_id"

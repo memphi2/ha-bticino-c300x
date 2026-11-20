@@ -29,20 +29,20 @@ from .config_flow_dashboard import (
 )
 from .config_flow_dashboard_pages import dashboard_page_layout
 from .config_flow_forms import (
+    dashboard_entity_custom_name_selector as _name_selector,
+)
+from .config_flow_forms import (
     dashboard_entity_secondary_info_selector as _secondary_selector,
 )
 from .config_flow_forms import (
     dashboard_entity_tile_size_selector as _size_selector,
 )
-from .config_flow_forms import (
-    dashboard_tile_name_selector as _name_selector,
-)
 from .const import (
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
+    DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-    DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
     DOMAIN,
 )
@@ -98,20 +98,26 @@ class TileForm:
                 key: str(posted.get(self.labels[key], shown) or "").strip()
                 for key, shown in self.shown[title].items()
             }
+            if isinstance(user_input.get(title), dict):
+                # Home Assistant leaves an emptied text field out of the post,
+                # so a posted tile without a name has had its name removed.
+                values["name"] = str(posted.get(self.labels["name"]) or "").strip()
             names = self.fields[entity_id]
             for size in _SIZE_FIELDS:
                 if size in values:
                     result[names[size]] = values[size] or DASHBOARD_TILE_SIZE_AUTO
-            name = values["name"] or DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
-            # Anything that is not one of the choices is a name of its own.
-            custom = name not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS or (
-                name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM
-            )
-            result[names["name"]] = (
-                DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM if custom else name
-            )
+            name = values["name"]
+            # No text is the name from Home Assistant, any text a name of its
+            # own. The entity's own ID is how a tile saved to show its ID reads.
+            if not name:
+                mode = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
+            elif name == entity_id:
+                mode = DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID
+            else:
+                mode = DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM
+            result[names["name"]] = mode
             result[names["custom_name"]] = (
-                name if custom and name != DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM else ""
+                name if mode == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM else ""
             )
             result[names["secondary"]] = (
                 values["secondary"] or DASHBOARD_ENTITY_SECONDARY_INFO_STATE
@@ -202,9 +208,11 @@ def tile_form(
         if title in form.sections:
             title = f"{title} ({entity_id})"
         options = saved.get(entity_id, {})
-        name = options.get("name", DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME)
-        if name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM:
-            name = options.get("custom_name") or DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
+        name = ""
+        if options.get("name") == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM:
+            name = options.get("custom_name") or ""
+        elif options.get("name") == DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID:
+            name = entity_id
         values: dict[str, str] = {}
         selectors: dict[str, Any] = {}
         if entity_id in on_pages:
@@ -222,7 +230,11 @@ def tile_form(
         schema[vol.Required(title)] = section(
             vol.Schema(
                 {
-                    vol.Optional(labels[key], default=value): selectors[key]
+                    # The name has no default: Home Assistant would put it
+                    # back into a post that left the emptied field out.
+                    vol.Optional(labels[key], description={"suggested_value": value})
+                    if key == "name"
+                    else vol.Optional(labels[key], default=value): selectors[key]
                     for key, value in values.items()
                 }
             ),

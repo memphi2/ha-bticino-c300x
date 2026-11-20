@@ -24,7 +24,7 @@ from custom_components.bticino_c300x.dashboard_images import (
     scaled_jpeg,
 )
 
-BASE = "http://192.168.1.10:8123"
+BASE = "http://192.0.2.10:8123"
 
 
 def _environment(states, *, base=BASE, overrides=None, entities=None):
@@ -115,7 +115,7 @@ def test_two_pictures_fit_side_by_side_with_the_half_width_setting():
 def test_without_a_known_address_the_tile_is_left_out():
     hass, entry = _environment([_camera()], base="")
     assert not [item for item in _items(hass, entry) if item.get("kind") == "image"]
-    assert image_tile_base_url("http://192.168.1.10:8123/api/webhook/abc") == BASE
+    assert image_tile_base_url("http://192.0.2.10:8123/api/webhook/abc") == BASE
     assert image_tile_base_url("") == ""
     assert image_tile_base_url("ftp://host/x") == ""
 

@@ -30,6 +30,7 @@ from .dashboard_entities import (
     normalize_dashboard_entity_ids,
     normalize_dashboard_pages,
 )
+from .dashboard_images import IMAGE_TILE_DOMAINS
 from .dashboard_page_order import dashboard_navigation
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
@@ -84,7 +85,9 @@ def configured_alarm_page_entity_id(entry: BticinoC300XConfigEntry) -> str | Non
 
     value = entry_config_value(entry, CONF_ALARM_PAGE_ENTITY_ID)
     entities = _dashboard_entity_ids([value] if isinstance(value, str) else value)
-    return entities[0] if entities else None
+    if not entities or entities[0].split(".", 1)[0] in IMAGE_TILE_DOMAINS:
+        return None
+    return entities[0]
 
 
 def configured_weather_entity_id(entry: BticinoC300XConfigEntry) -> str | None:

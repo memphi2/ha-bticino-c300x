@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from aiohttp import web
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import State
 from PIL import Image
 
@@ -30,7 +31,7 @@ def _environment(states, *, base=BASE, overrides=None, entities=None):
     entities = entities or [state.entity_id for state in states]
     by_id = {state.entity_id: state for state in states}
     entry = SimpleNamespace(
-        entry_id="entry", domain="bticino_c300x",
+        entry_id="entry", domain="bticino_c300x", state=ConfigEntryState.LOADED,
         data={"shared_secret": "s3cret"},
         options={
             "device_ui_enabled": True,
@@ -169,6 +170,7 @@ def test_the_view_serves_only_signed_addresses_of_configured_picture_entities(mo
 
     for changes, ids in (
         ({"sig": "0" * 32}, (entry_id, entity_id)),
+        ({"sig": "\u00e9" * 32}, (entry_id, entity_id)),
         ({"sig": None}, (entry_id, entity_id)),
         ({"h": "4000"}, (entry_id, entity_id)),
         ({"w": "359"}, (entry_id, entity_id)),
@@ -182,6 +184,27 @@ def test_the_view_serves_only_signed_addresses_of_configured_picture_entities(mo
         with pytest.raises(web.HTTPNotFound):
             asyncio.run(view.get(request, *ids))
     assert len(fetched) == 1, "a refused request never reads a camera"
+
+    # The same address again within a few seconds reads the camera once; the
+    # address of a newer picture is never answered with the older one.
+    request, ids = _request(hass, source)
+    asyncio.run(view.get(request, *ids))
+    assert len(fetched) == 1
+    request, ids = _request(hass, source, rev="newer")
+    asyncio.run(view.get(request, *ids))
+    assert len(fetched) == 2
+
+    # Switching the display feature off or unloading the entry ends the access.
+    hass.data.clear()
+    request, ids = _request(hass, source)
+    entry.options["device_ui_enabled"] = False
+    with pytest.raises(web.HTTPNotFound):
+        asyncio.run(view.get(request, *ids))
+    entry.options["device_ui_enabled"] = True
+    entry.state = ConfigEntryState.NOT_LOADED
+    with pytest.raises(web.HTTPNotFound):
+        asyncio.run(view.get(request, *ids))
+    assert len(fetched) == 2
 
 
 def test_a_camera_that_fails_gives_an_error_instead_of_a_broken_picture(monkeypatch):
@@ -219,3 +242,79 @@ def test_only_a_new_picture_counts_as_a_change_of_the_display():
     assert not changed(idle, State("camera.door", "streaming", dict(idle.attributes)))
     assert changed(idle, _camera("tok-2"))
     assert changed(idle, State("camera.door", "idle", {**idle.attributes, "friendly_name": "Gate"}))
+
+
+def test_hostile_pictures_are_refused_before_they_are_decoded():
+    huge = io.BytesIO()
+    Image.new("L", (5000, 5000)).save(huge, "PNG")
+    assert len(huge.getvalue()) < 100_000, "small file, 25 million pixels"
+    with pytest.raises(ValueError):
+        scaled_jpeg(huge.getvalue(), 728, 200)
+    other = io.BytesIO()
+    Image.new("RGB", (64, 64)).save(other, "TIFF")
+    with pytest.raises(ValueError):
+        scaled_jpeg(other.getvalue(), 728, 200)
+
+
+def test_an_entity_without_a_picture_has_no_tile_and_never_reaches_the_payload_half_built():
+    for state in (None, State("camera.door", "unavailable")):
+        states = [state] if state else []
+        hass, entry = _environment(states, entities=["camera.door"])
+        items = _items(hass, entry)
+        assert not [item for item in items if item.get("kind") == "image"]
+    hass, entry = _environment([_camera()])
+    for item in _items(hass, entry):
+        assert not [key for key in item if key.startswith("_")]
+
+
+def test_a_picture_entity_stored_for_the_alarm_page_is_ignored():
+    from custom_components.bticino_c300x.dashboard_config import (
+        configured_alarm_page_entity_id,
+    )
+
+    entry = SimpleNamespace(data={}, options={"alarm_page_entity_id": "camera.door"})
+    assert configured_alarm_page_entity_id(entry) is None
+    entry.options["alarm_page_entity_id"] = "light.hall"
+    assert configured_alarm_page_entity_id(entry) == "light.hall"
+
+
+def test_pictures_are_read_through_home_assistants_camera_and_image_entities(monkeypatch):
+    from homeassistant.components import camera
+    from homeassistant.exceptions import HomeAssistantError
+
+    calls = []
+
+    async def get_image(hass, entity_id, **options):
+        calls.append((entity_id, options["timeout"], options["width"], options["height"]))
+        return SimpleNamespace(content=b"camera-bytes", content_type="image/jpeg")
+
+    monkeypatch.setattr(camera, "async_get_image", get_image)
+    read = dashboard_images._async_source_image
+    assert asyncio.run(read(SimpleNamespace(data={}), "camera.door", 359, 120)) == b"camera-bytes"
+    assert calls == [("camera.door", 10, 359, 120)]
+
+    class Picture:
+        async def async_image(self):
+            return b"image-bytes"
+
+    component = SimpleNamespace(get_entity=lambda entity_id: Picture() if entity_id == "image.map" else None)
+    hass = SimpleNamespace(data={"image": component})
+    assert asyncio.run(read(hass, "image.map", 728, 200)) == b"image-bytes"
+    for target in ("image.gone",):
+        with pytest.raises(dashboard_images.TileImageUnavailable):
+            asyncio.run(read(hass, target, 728, 200))
+
+    for error in (HomeAssistantError("off"), TimeoutError(), RuntimeError("integration bug")):
+        async def fail(*_args, _error=error, **_kwargs):
+            raise _error
+
+        monkeypatch.setattr(camera, "async_get_image", fail)
+        with pytest.raises(dashboard_images.TileImageUnavailable):
+            asyncio.run(read(SimpleNamespace(data={}), "camera.door", 728, 200))
+
+
+def test_the_view_is_registered_and_the_address_base_is_recorded():
+    root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
+    assert "hass.http.register_view(cast(Any, C300XTileImageView()))" in (root / "media.py").read_text()
+    assert "runtime_data.display_image_base_url = image_tile_base_url(webhook_url)" in (
+        root / "runtime_manager.py").read_text()

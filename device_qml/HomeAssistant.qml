@@ -1391,33 +1391,47 @@ Page {
                             property variant tileItem: parent ? parent.tileItem : ({})
                             anchors.fill: parent
                             Image {
+                                id: imagePicture
                                 cache: false
                                 anchors.fill: parent
                                 source: imageTile.tileItem.source || ""
                                 fillMode: Image.PreserveAspectFit
                             }
+                            Item {
+                                id: imageFrame
+                                anchors.centerIn: parent
+                                width: imagePicture.status === Image.Ready ? imagePicture.paintedWidth : parent.width
+                                height: imagePicture.status === Image.Ready ? imagePicture.paintedHeight : parent.height
+                            }
+                            UbuntuLightText {
+                                id: imageCaptionSize
+                                visible: false
+                                text: imageCaption.text
+                                textFormat: Text.PlainText
+                                font.pixelSize: 15
+                            }
                             Rectangle {
+                                id: imageCaptionBack
                                 visible: imageCaption.text !== ""
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                                height: 26
+                                anchors.left: imageFrame.left
+                                anchors.bottom: imageFrame.bottom
+                                anchors.leftMargin: 6
+                                anchors.bottomMargin: 6
+                                width: Math.min(imageCaptionSize.paintedWidth + 12, imageFrame.width - 12)
+                                height: 22
+                                radius: 4
                                 color: "#000000"
-                                opacity: 0.55
+                                opacity: 0.5
                             }
                             UbuntuLightText {
                                 id: imageCaption
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 8
-                                height: 26
+                                anchors.fill: imageCaptionBack
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
                                 text: imageTile.tileItem.caption || ""
                                 textFormat: Text.PlainText
                                 color: "#ffffff"
-                                font.pixelSize: 16
-                                horizontalAlignment: Text.AlignHCenter
+                                font.pixelSize: 15
                                 verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
                             }

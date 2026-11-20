@@ -404,3 +404,17 @@ def test_a_failed_read_is_not_repeated_by_the_requests_waiting_behind_it(monkeyp
     assert all(isinstance(result, web.HTTPServiceUnavailable) for result in results)
     assert len(reads) == 1
     assert hass.data[dashboard_images._CACHE_KEY]["locks"] == {}
+
+
+def test_the_name_is_a_label_inside_the_picture_not_a_bar_across_the_tile() -> None:
+    qml = (Path(__file__).resolve().parents[1] / "device_qml" / "HomeAssistant.qml").read_text(encoding="utf-8")
+    start = qml.index("id: mixedImageTileComponent")
+    tile = qml[start : qml.index("id: mixedEntityTileComponent", start)]
+    # The label follows the area the picture is painted in, which is narrower
+    # or lower than the tile when the proportions differ.
+    assert "width: imagePicture.status === Image.Ready ? imagePicture.paintedWidth : parent.width" in tile
+    assert "height: imagePicture.status === Image.Ready ? imagePicture.paintedHeight : parent.height" in tile
+    assert "anchors.left: imageFrame.left" in tile and "anchors.bottom: imageFrame.bottom" in tile
+    # It is as wide as the name, and never wider than the picture.
+    assert "width: Math.min(imageCaptionSize.paintedWidth + 12, imageFrame.width - 12)" in tile
+    assert "anchors.right: parent.right" not in tile

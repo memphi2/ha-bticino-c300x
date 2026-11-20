@@ -27,10 +27,10 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
  * on overflow of their unchanged 4096-byte buffer. */
 int c300x_command_job_start_capture(struct c300x_command_job *job, const char *program,
     const char *argument, char *out, size_t out_len, int timeout_ms);
-/* Exit-status-only legacy commands had no deadline and ignored output.
- * Keep those semantics without blocking the loop or creating another worker. */
+/* Exit-status-only commands that ignore output. timeout_ms 0 waits as long
+ * as the command runs; otherwise the job fails and is killed at the deadline. */
 int c300x_command_job_start_wait(struct c300x_command_job *job, const char *program,
-    char *const argv[]);
+    char *const argv[], int timeout_ms);
 int c300x_command_job_prepare(const struct c300x_command_job *job, struct pollfd *fd);
 void c300x_command_job_tick(struct c300x_command_job *job);
 void c300x_command_job_close(struct c300x_command_job *job);

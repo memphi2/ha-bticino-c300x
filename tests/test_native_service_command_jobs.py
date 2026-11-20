@@ -25,7 +25,8 @@ def binary(request, tmp_path_factory):
              '-DC300X_NATIVE_AGENT_VERSION=\\\"test\\\" '
              '-DC300X_SSH_INIT_SCRIPT=\\\"./service-test.sh\\\" '
              '-DC300X_SSH_STATUS_COMMAND=\\\"./status-test.sh\\\" '
-             '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\"')
+             '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\" '
+             '-DC300X_SSH_COMMAND_TIMEOUT_MS=2000 -DC300X_SSH_STATUS_TIMEOUT_MS=2000')
     if request.param:
         flags += " -fsanitize=address,undefined -fno-omit-frame-pointer"
     link = "-pthread -ldl " + str(ROOT / "native_agent/test/http_audio_codec_stub.c")
@@ -83,6 +84,22 @@ def test_slow_commands_leave_health_and_ui_responsive(lab, path, payload, expect
                     403)["error"] == "maintenance_unauthorized"
     lab.release()
     assert response(pending) == expected
+
+
+@pytest.mark.parametrize("path,payload,expected", [
+    (SSH, None, (200, {"ok": True, "enabled": False, "running": False})),
+    (SSH + "/actions/start", {"confirm": "start_ssh"},
+     (502, {"ok": False, "error": "maintenance_command_failed"})),
+])
+def test_a_hanging_ssh_command_ends_at_its_deadline_and_frees_maintenance(lab, path, payload, expected):
+    hang = "while [ ! -e release ]; do sleep 0.02; done\n"
+    scripts(lab, service=hang, status=hang)
+    started = time.monotonic()
+    assert response(lab.request(path, payload), expected[0]) == expected[1]
+    assert 1.5 < time.monotonic() - started < 6
+    # The slot is free again: the next request runs its own command.
+    scripts(lab)
+    assert response(lab.request(SSH))["running"] is True
 
 
 def test_ssh_get_waits_in_input_pool_without_new_busy_status_or_deadline(lab):

@@ -20,16 +20,16 @@ int main(int argc, char **argv)
     assert(argc == 3);
     c300x_command_job_init(&job);
     char *missing[] = {"/missing-c300x-test", NULL};
-    assert(!c300x_command_job_start_wait(&job, missing[0], missing));
+    assert(!c300x_command_job_start_wait(&job, missing[0], missing, 0));
     assert(c300x_command_job_prepare(&job, &fd) == -1 && fd.fd == -1);
     int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     assert(socket_fd >= 0);
     int high_fd = fcntl(socket_fd, F_DUPFD, 512);
     assert(high_fd >= 512);
     char *command[] = {argv[1], argv[2], NULL};
-    assert(c300x_command_job_start_wait(&job, argv[1], command));
+    assert(c300x_command_job_start_wait(&job, argv[1], command, 0));
     pid_t child = job.pid;
-    assert(!c300x_command_job_start_wait(&job, argv[1], command));
+    assert(!c300x_command_job_start_wait(&job, argv[1], command, 0));
     assert(job.pid == child && job.deadline_ms == 0);
     now += 1000000000;
     for (int i = 0; i < 20; i++) {

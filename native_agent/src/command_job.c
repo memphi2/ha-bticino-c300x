@@ -95,7 +95,7 @@ static int start_job(struct c300x_command_job *job, const char *program,
     }
     close(pipes[1]);
     job->output_fd = pipes[0];
-    job->deadline_ms = wait_only ? 0 : c300x_monotonic_ms() + timeout_ms;
+    job->deadline_ms = timeout_ms > 0 ? c300x_monotonic_ms() + timeout_ms : 0;
     return 1;
 
 fail_actions:
@@ -116,9 +116,9 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
 }
 
 int c300x_command_job_start_wait(struct c300x_command_job *job, const char *program,
-    char *const argv[])
+    char *const argv[], int timeout_ms)
 {
-    return start_job(job, program, argv, 0, 0, 1);
+    return start_job(job, program, argv, 0, timeout_ms, 1);
 }
 
 int c300x_command_job_start_capture(struct c300x_command_job *job, const char *program,

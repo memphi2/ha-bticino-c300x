@@ -12,6 +12,14 @@
 #ifndef C300X_SSH_STATUS_COMMAND
 #define C300X_SSH_STATUS_COMMAND "pidof dropbear >/dev/null 2>&1"
 #endif
+/* A hanging init script or status check must not hold the maintenance
+ * slot, and with it every other maintenance request, for good. */
+#ifndef C300X_SSH_COMMAND_TIMEOUT_MS
+#define C300X_SSH_COMMAND_TIMEOUT_MS 60000
+#endif
+#ifndef C300X_SSH_STATUS_TIMEOUT_MS
+#define C300X_SSH_STATUS_TIMEOUT_MS 15000
+#endif
 #ifndef C300X_REBOOT_PROGRAM
 #define C300X_REBOOT_PROGRAM "/sbin/reboot"
 #endif
@@ -53,14 +61,16 @@ static void ssh_status(int fd, int running)
 static int start_command(struct c300x_http_maintenance *owner, const char *program, const char *action)
 {
     char *argv[] = {(char *)program, (char *)action, NULL};
-    return c300x_command_job_start_wait(&owner->job, program, argv);
+    /* The reboot command is not cut short: the device goes down with it. */
+    return c300x_command_job_start_wait(&owner->job, program, argv,
+        action == NULL ? 0 : C300X_SSH_COMMAND_TIMEOUT_MS);
 }
 
 static int start_status(struct c300x_http_maintenance *owner, struct service_request *state)
 {
     char *argv[] = {"/bin/sh", "-c", C300X_SSH_STATUS_COMMAND, NULL};
     state->phase = STATUS_COMMAND;
-    return c300x_command_job_start_wait(&owner->job, argv[0], argv);
+    return c300x_command_job_start_wait(&owner->job, argv[0], argv, C300X_SSH_STATUS_TIMEOUT_MS);
 }
 
 static void accepted(int fd, enum service_action action)

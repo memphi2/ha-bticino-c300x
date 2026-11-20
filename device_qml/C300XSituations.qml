@@ -5,6 +5,7 @@ Flickable {
     property variant situations: ({})
     contentWidth: width
     contentHeight: content.height
+    interactive: contentHeight > height
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     C300XChecks {

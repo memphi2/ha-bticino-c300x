@@ -24,6 +24,7 @@ Item {
         anchors.bottom: parent.bottom
         width: parent.width
         clip: true
+        interactive: contentHeight > height
         model: root.events
         boundsBehavior: Flickable.StopAtBounds
         delegate: Item {

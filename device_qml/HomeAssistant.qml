@@ -758,6 +758,7 @@ Page {
         contentWidth: width
         contentHeight: notificationColumn.height
         flickableDirection: Flickable.VerticalFlick
+        interactive: contentHeight > height
         Column {
             id: notificationColumn
             width: notificationDetails.width
@@ -957,7 +958,7 @@ Page {
         contentWidth: width
         contentHeight: controlColumn.height
         flickableDirection: Flickable.VerticalFlick
-        interactive: !interactionActive
+        interactive: !interactionActive && contentHeight > height
         Column {
             id: controlColumn
             width: details.width
@@ -1129,6 +1130,7 @@ Page {
             height: parent.height - (notificationBanner.height > 0 ? notificationBanner.height + 9 : 0) - (badgeGrid.height > 0 ? badgeGrid.height + 9 : 0) - (pagerRow.height > 0 ? pagerRow.height + 9 : 0)
             contentWidth: width
             contentHeight: contentColumn.height
+            interactive: contentHeight > height
             clip: true
 
             Column {

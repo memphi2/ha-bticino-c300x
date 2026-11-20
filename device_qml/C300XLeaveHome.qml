@@ -47,6 +47,7 @@ Item {
         anchors.fill: parent
         contentWidth: width
         contentHeight: content.height
+        interactive: contentHeight > height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         Column {

@@ -17,8 +17,12 @@
  * The request stays in its client slot and is handled again when the worker
  * is done; the handler then gets the stored result from the same call. A
  * request owns the worker from its first call until it is answered, so other
- * requests with OpenWebNet calls wait, in the order the loop offers them. A
- * request that waited is not started when its caller has left meanwhile. */
+ * requests with OpenWebNet calls wait, in the order they arrived. A request
+ * that waited is not started when its caller has left meanwhile.
+ *
+ * A handler runs several times. What it checks before its first call it must
+ * not check again once the request owns the worker (async_owns): the command
+ * may be out already, and the answer has to be the one for that command. */
 struct c300x_openwebnet_async {
     struct c300x_request_worker worker;
     const char *refusal;
@@ -34,6 +38,8 @@ void c300x_openwebnet_async_close(struct c300x_openwebnet_async *async);
 int c300x_openwebnet_async_prepare(struct c300x_openwebnet_async *async, struct pollfd *fd);
 void c300x_openwebnet_async_tick(struct c300x_openwebnet_async *async, const struct pollfd *fd);
 void c300x_openwebnet_async_begin(struct c300x_openwebnet_async *async, int client_fd);
+/* Nonzero while the armed request has a call running or done. */
+int c300x_openwebnet_async_owns(const struct c300x_openwebnet_async *async);
 /* Nonzero after the handler: a call left the request unanswered. */
 int c300x_openwebnet_async_deferred(const struct c300x_openwebnet_async *async);
 /* After the handler: an error name when its command was not sent at all and

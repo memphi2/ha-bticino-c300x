@@ -80,10 +80,11 @@ class Lab:
     process: subprocess.Popen[bytes]
     connections: list[HTTPConnection] = field(default_factory=list)
 
-    def start(self, path: str, *, post: bool = False) -> HTTPConnection:
+    def start(self, path: str, *, post: bool = False, body: dict | None = None) -> HTTPConnection:
         conn = HTTPConnection("127.0.0.1", self.api_port, timeout=10)
         self.connections.append(conn)
-        conn.request("POST" if post else "GET", path, body="{}" if post else None,
+        post = post or body is not None
+        conn.request("POST" if post else "GET", path, body=json.dumps(body or {}) if post else None,
                      headers={"Authorization": "Bearer " + TOKEN})
         return conn
 
@@ -299,3 +300,54 @@ def test_waiting_requests_get_the_bus_in_the_order_they_arrived(lab: Lab) -> Non
     finish(ringer)
     finish(answering)
     assert lab.bus.frames == [PRESS, RELEASE, "*#8**33##", "*#8**41##", "*#8**40##"]
+
+
+def test_waiting_requests_whose_callers_left_give_their_places_to_new_ones(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    gone = [lab.start("/api/v1/answering-machine") for _ in range(3)]
+    lab.health_ms()
+    for conn in gone:
+        conn.close()
+    lab.health_ms()
+    ringer = lab.start("/api/v1/ringer")
+    lab.health_ms()
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    assert finish(ringer)["volume"] == 3
+
+
+def test_a_request_with_its_command_out_is_answered_for_that_command(lab: Lab) -> None:
+    write = "*#8**#41*40##"
+    assert finish(lab.start("/api/v1/ringer"))["volume"] == 3
+    lab.bus.hold(write)
+    volume = lab.start("/api/v1/ringer", body={"volume": 4})
+    assert lab.bus.seen.wait(5)
+    # A mute request takes the display meanwhile; before, it came after the volume.
+    lab.start("/api/v1/ringer", body={"muted": True})
+    lab.health_ms()
+
+    lab.bus.gate.set()
+    # This bus always reads back volume 3: the answer is the one for the write,
+    # not "the display is busy" from a check made again after the write.
+    assert finish(volume, 409)["error"] == "ringer_volume_not_applied"
+    assert lab.bus.frames.count(write) == 1
+
+
+def test_a_maintenance_write_waits_for_the_request_on_the_bus(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    write = lab.start("/api/v1/maintenance/auth", body={})
+    lab.health_ms()
+    write.sock.settimeout(0.3)
+    with pytest.raises(TimeoutError):
+        write.getresponse()
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    write2 = lab.start("/api/v1/maintenance/auth", body={})
+    assert write2.getresponse().status in (403, 404)
+    assert lab.health_ms() < 500

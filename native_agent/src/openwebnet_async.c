@@ -164,6 +164,11 @@ void c300x_openwebnet_async_begin(struct c300x_openwebnet_async *async, int clie
     c300x_openwebnet_hook = hook;
 }
 
+int c300x_openwebnet_async_owns(const struct c300x_openwebnet_async *async)
+{
+    return async->worker.armed_fd >= 0 && async->worker.owner_fd == async->worker.armed_fd;
+}
+
 int c300x_openwebnet_async_deferred(const struct c300x_openwebnet_async *async)
 {
     return async->worker.deferred;

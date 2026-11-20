@@ -6464,7 +6464,7 @@ static void handle_ringer_get(
     char body[2048];
     char error[C300X_MAX_ERROR_LEN];
     int muted, volume;
-    if (runtime->ringer_control.client_fd >= 0) {
+    if (runtime->ringer_control.client_fd >= 0 && !c300x_openwebnet_async_owns(&runtime->openwebnet)) {
         send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"ringer_gui_busy\"}\n");
         return;
     }
@@ -6542,7 +6542,9 @@ static int handle_ringer_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_volume\"}\n");
         return 1;
     }
-    if (!gui_confirmed && runtime->ringer_control.client_fd >= 0) {
+    /* Not asked again once this request has a command out: it is answered for that one. */
+    if (!gui_confirmed && runtime->ringer_control.client_fd >= 0
+        && !c300x_openwebnet_async_owns(&runtime->openwebnet)) {
         send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"ringer_gui_busy\"}\n");
         return 1;
     }
@@ -9670,6 +9672,14 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
 
     if (kind == LISTENER_API) {
         if (c300x_http_service_commands_defer(&runtime->maintenance, config, request)) {
+            free(request);
+            return 0;
+        }
+        /* A maintenance write may replace the configuration. It waits until the
+         * request that has a command on the bus is answered: that request runs
+         * again and must find the configuration it started with. */
+        if (strcmp(request->method, "POST") == 0 && strncmp(request->path, "/api/v1/maintenance/", 20) == 0
+            && c300x_request_worker_owned_by_other(&runtime->openwebnet.worker, client_fd)) {
             free(request);
             return 0;
         }

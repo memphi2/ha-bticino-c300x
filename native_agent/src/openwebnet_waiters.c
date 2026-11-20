@@ -15,6 +15,16 @@ int c300x_openwebnet_caller_left(int fd)
     return count == 0 || (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
 }
 
+int c300x_request_queue_drop_departed(struct c300x_request_queue *queue)
+{
+    for (int place = 0; place < queue->count; place++) {
+        if (c300x_openwebnet_caller_left(queue->places[place].fd)) {
+            return c300x_request_queue_remove(queue, queue->places[place].worker, queue->places[place].fd);
+        }
+    }
+    return 0;
+}
+
 int c300x_openwebnet_worker_start(pthread_t *thread, void *(*run)(void *), void *context, size_t stack_bytes)
 {
     pthread_attr_t attr;

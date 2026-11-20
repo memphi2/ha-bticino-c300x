@@ -103,8 +103,11 @@ shutdown lets a running sequence finish, so a pressed lock is released. If no
 thread can be started the call runs on the loop as before.
 
 The waiting places are shared with the media operations (`request_queue.c`):
-three in all. With the two requests the workers run, that leaves one of the
-six API client slots free for a request that needs no worker. A request that
+three in all. The requests of the two workers so never hold more than five of
+the six API client slots. (Other requests kept open - a status read deferred
+behind a maintenance job, an unfinished upload - still count against the six.)
+A waiting request whose caller has left gives its place to a new one when all
+places are taken. A request that
 finds no place is answered `openwebnet_busy` (502), and one that waited is
 answered `client_gone` (502) without being run when its caller has left; a
 caller that only closed its sending side counts as gone. Both are answered by
@@ -116,7 +119,13 @@ delete handlers. A call on the loop waits for a running worker first, so the
 bus sees one session at a time.
 
 A handler must return without any effect when `c300x_openwebnet_deferred()`
-is set after a failed call; `send_json` writes nothing in that state.
+is set after a failed call; `send_json` writes nothing in that state. A
+handler runs again from its start, so a state it checks before its first
+call must not be checked again once the request has a command out
+(`c300x_openwebnet_async_owns`); the ringer handlers do this for the display
+slot. A maintenance POST, which may replace the configuration, is held back
+while another request owns the bus worker. The call also runs on the loop when
+eight results of one request are stored already.
 
 `openwebnet.c` uses blocking IPv4 `connect`/`send`/`recv`, configured socket
 send/receive timeouts, and `select` for draining. Host parsing is numeric
@@ -167,7 +176,8 @@ the OpenWebNet worker (see above). A request that finds no place is answered
 `media_busy` (503). A caller that left does not cancel its operation; a start
 (activate, answer, home call start) that only waited is answered
 `client_gone` (503) without being run when its caller has left, a stop still
-runs. Only when no thread can be started does an operation run on the loop.
+runs, unless its place was given to a new request. Only when no thread or
+wake pipe can be created does an operation run on the loop.
 Shutdown lets a running operation end before the media owner is destroyed.
 Stops from elsewhere (CPU watchdog, a departing RTSP client) do not go
 through the worker and can run beside an operation, as they always could.
@@ -183,8 +193,9 @@ through the worker and can run beside an operation, as they always could.
 Still on the loop: the forwarding completion (`sync_ring_receiver_for_forwarding`
 -> `c300x_media_ring_receiver_stop` -> ring-thread join when disabling), which
 has no request of its own to hold; it waits for a running operation first.
-A request that uses both workers keeps what one holds for it while it waits
-for the other; it is released from both when it is answered.
+No handler uses both workers. One that will must take them in one fixed
+order; the request then keeps what the first holds for it while it waits for
+the second.
 Status routes take the media mutexes only briefly: the lifecycle waits above
 happen under `media_lifecycle_mutex` or without a lock, never under the bridge
 mutex that status reads. `/ui/media-closed` updates event state rather than

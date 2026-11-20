@@ -3,7 +3,7 @@
 
 /* The API has six client slots. Each of the two workers holds one for the
  * request it runs, and the requests waiting for either worker share these
- * places, so one slot always stays free for a request that needs no worker. */
+ * places, so worker requests alone never hold more than five of the six. */
 #define C300X_REQUEST_QUEUE_PLACES 3
 
 /* Requests waiting for a worker, in the order they arrived. */

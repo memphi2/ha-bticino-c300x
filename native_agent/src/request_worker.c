@@ -45,7 +45,6 @@ int c300x_request_worker_prepare(struct c300x_request_worker *worker, struct pol
     *fd = (struct pollfd){.fd = worker->running ? worker->wake[0] : -1, .events = POLLIN};
     if (worker->reaped || (worker->owner_fd == C300X_REQUEST_WORKER_FREE
                            && c300x_request_queue_first(worker->queue, worker) >= 0)) {
-        /* The longest waiting request takes the worker when it is offered. */
         worker->reaped = 0;
         return 0;
     }
@@ -98,6 +97,7 @@ int c300x_request_worker_abandon(struct c300x_request_worker *worker, int client
         return 0;
     }
     worker->owner_fd = worker->running ? C300X_REQUEST_WORKER_GONE : C300X_REQUEST_WORKER_FREE;
+    worker->reaped = 1; /* a request held back for this one is offered again */
     return 1;
 }
 
@@ -125,7 +125,10 @@ enum c300x_request_worker_turn c300x_request_worker_turn(struct c300x_request_wo
         worker->waited = c300x_request_queue_remove(worker->queue, worker, worker->armed_fd);
         return C300X_REQUEST_WORKER_MINE;
     }
-    if (!c300x_request_queue_add(worker->queue, worker, worker->armed_fd)) {
+    /* A waiting request whose caller left gives its place to this one. */
+    if (!c300x_request_queue_add(worker->queue, worker, worker->armed_fd)
+        && !(c300x_request_queue_drop_departed(worker->queue)
+             && c300x_request_queue_add(worker->queue, worker, worker->armed_fd))) {
         return C300X_REQUEST_WORKER_FULL;
     }
     worker->deferred = 1;
@@ -134,7 +137,11 @@ enum c300x_request_worker_turn c300x_request_worker_turn(struct c300x_request_wo
 
 int c300x_request_worker_caller_left(struct c300x_request_worker *worker)
 {
-    return worker->waited && c300x_openwebnet_caller_left(worker->armed_fd);
+    int waited = worker->waited;
+
+    /* Asked once, before the first job; later jobs of the request are not held up. */
+    worker->waited = 0;
+    return waited && c300x_openwebnet_caller_left(worker->armed_fd);
 }
 
 int c300x_request_worker_start(struct c300x_request_worker *worker)

@@ -16,6 +16,10 @@
   or removal. The codec route reuses its reboot continuation, not its response.
 - `http_audio_codec.c`: codec status/action validation and response ownership.
   Its native file transaction remains synchronous; only the reboot tail is a job.
+- `http_camera_quality.c`: camera quality status/action validation, the same
+  way as the codec route. `camera_quality.c` owns the synchronous file
+  transaction, `camera_settings.c` the key changes in the settings text and
+  `camera_quality_body.c` the offered sizes, limits and the response body.
 - `http_clients.c` / `http_client_input.c`: bounded slot admission/deferred
   dispatch versus request receive/framing/deadline handling.
 - `command_job.c`: spawn, bounded nonblocking pipe reads, monotonic deadline,

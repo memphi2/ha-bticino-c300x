@@ -1,7 +1,7 @@
-"""The camera quality area of the settings: bit rate and frame rate of the stream.
+"""The camera quality area of the settings: size, bit rate and frame rate of the stream.
 
-The two values live on the device, not in the entry: the area reads them when
-it opens and saves both in one write, after which the device restarts once.
+The values live on the device, not in the entry: the area reads them when it
+opens and saves them in one write, after which the device restarts once.
 It lives here as a mixin so the flow module stays within its size budget.
 """
 

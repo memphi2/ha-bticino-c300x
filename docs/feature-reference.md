@@ -50,7 +50,7 @@ one-time SSH installation remains a separate explicit step.
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
 | Video and audio | Door station video and audio, video and audio access on the C300X, live audio level, volume of ring recordings, connection paths for the live picture, talking through the HA camera view. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
 | Visitor Snapshot | Image width and height (688x480), delay (3 s), retention (14 days), date and time in the image (on). Offered only with video on. | No. |
-| Camera quality | Picture size (688x480 from the factory, or the whole 720x576 picture), bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–24 fps, 15 from the factory; at 25 the device sends only about 8) of the high-resolution camera stream; on firmware 3.0.x of the low-resolution stream, the only one it sends, which the Door Entry app gets as well (sizes 352x288 to 720x576, 400x288 from the factory; 100–2000 kbit/s, 180 from the factory; 5–25 fps, 10 from the factory; sizes other than 400x288 not yet tested on a 3.0.x device). The size also applies to the camera picture on the device display and to answering-machine recordings. The form shows the values saved on the device and the ones it runs with. Offered with video on. | Yes: saving a change writes both values in one step and restarts the device once, like the audio codec switch. The values stay on the device, not in Home Assistant. |
+| Camera quality | Picture size (688x480 from the factory, or the whole 720x576 picture), bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–24 fps, 15 from the factory; at 25 the device sends only about 8) of the high-resolution camera stream; on firmware 3.0.x of the low-resolution stream, the only one it sends, which the Door Entry app gets as well (sizes 352x288 to 720x576, 400x288 from the factory; 100–2000 kbit/s, 180 from the factory; 5–25 fps, 10 from the factory; sizes other than 400x288 not yet tested on a 3.0.x device). The size also applies to the camera picture on the device display and to answering-machine recordings. The form shows the values saved on the device and the ones it runs with. Offered with video on. | Yes: saving a change writes all values in one step and restarts the device once, like the audio codec switch. The values stay on the device, not in Home Assistant. |
 | Activations: locks, lights, stair light | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
 | Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | No. Stored in Home Assistant; the display asks for it. |
 | Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. | Yes, only when the Display patch is applied/restored. |
@@ -139,8 +139,9 @@ image.
 
 The image comes from the device display, not from the video stream. The
 display is 800×480 and shows the camera picture stretched to its own width; the
-device encodes the stream itself as 688×480. The default therefore gives the
-image the size and shape of the stream. The agent delivers the image in exactly
+device encodes the stream itself as 688×480 from the factory. The default
+therefore gives the image the size and shape of that stream; **Camera quality**
+can switch the stream to the whole 720×576 camera picture. The agent delivers the image in exactly
 the configured size (width 64–800, height 64–480) and Home Assistant does not
 rescale it. Setting 800×480 returns the display pixel for pixel. A size above
 the display's is not offered, because it would add no detail.
@@ -857,7 +858,7 @@ feature, the matching entity is not created.
 | `switch` | Answering machine | Device answering-machine enabled state. |
 | `switch` | Save images | Automatic visitor images on or off (on by default). |
 | `switch` | Touch tone | The display's touch-sound setting. |
-| `select` | Camera resolution | High (688×480) or low (400×288) camera stream, from the next stream on; high by default. Not offered on firmware 3.0.x, which is fixed to low. |
+| `select` | Camera resolution | High (688×480 from the factory) or low (400×288) camera stream, from the next stream on; high by default. The size, bit rate and frame rate of the high stream are set under Camera quality. Not offered on firmware 3.0.x, which is fixed to low; there Camera quality sets the low stream. |
 | `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |

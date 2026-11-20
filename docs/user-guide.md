@@ -40,6 +40,14 @@ Most users only need:
   Snapshot**; defaults are 688x480,
   3 seconds, 14 days and date and time on. Images and their shared camera/card preview are
   stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
+- **Configure > Camera quality** sets the picture size, bit rate and frame
+  rate of the camera stream: from the factory 688x480, 800 kbit/s and 15 fps,
+  at most the whole 720x576 picture, 3000 kbit/s and 24 fps. On firmware 3.0.x
+  it sets the low-resolution stream, the only one the device sends, which the
+  Door Entry app receives as well. The device reads these values only when it
+  starts, so saving a change restarts it once (about a minute). Removing the
+  agent puts the original values back. See
+  [Feature reference](feature-reference.md#setup-and-options).
 - Use the **C300X Doorbell Call Card** in **Doorstation + Home Call** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.
 - **Browse saved images and videos** is on by default (`show_media_history: true`). Browse
@@ -72,7 +80,7 @@ Most users only need:
 | Area | What to use |
 | --- | --- |
 | Doorbell and Ring Call | C300X Doorbell Call Card, Forwarding select, Doorbell event, Doorbell state, Answer/Hang Up services. |
-| On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`. |
+| On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`; picture size, bit rate and frame rate under Camera quality. |
 | Visitor images | Device-wide Save images switch; size, capture delay, retention and date and time under Visitor Snapshot; archive in HA Media and last-image previews. |
 | Media history | Enabled by default in the doorstation card; previous/next browses HA snapshots and indexed capture videos inline. Independent visibility switch; no recording or device-call action from browsing. |
 | Talkback | Secure browser frontend with microphone permission; HTTPS or Home Assistant Cloud is expected. |

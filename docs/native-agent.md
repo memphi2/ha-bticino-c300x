@@ -194,7 +194,7 @@ files are not backed up on the device.
 The remove-agent maintenance action is explicit and token protected. It first
 restores all display changes (Display patch, core hook and media-user label),
 then the IPv6 and IPv4 firewall scripts, stops the agent, restores the stock
-audio codec, removes the native-agent init files, agent directory and
+audio codec and the original camera quality values, removes the native-agent init files, agent directory and
 agent-owned backups, and schedules a reboot.
 SSH is started before and after the cleanup and is deliberately not removed. If
 a restore step fails, the script stops before deleting the backups.
@@ -323,7 +323,9 @@ Firmware `3.0.6` fails this check and is supported experimentally:
 - Its `bt_av_media` sends only the low-resolution video stream on to other
   receivers. The camera is fixed to that stream there
   (`video.av.highResolution: false`), and the Camera resolution entity is not
-  offered.
+  offered. Camera quality sets that low stream there (`BitrateRtpL`,
+  `FpsRtpL`, `WidthLow`, `HeightLow`); its sizes other than the factory
+  400x288 are not yet tested on a 3.0.6 device.
 - `bt_answering_machine` is another build with its own routing table.
 - As on the other versions, Ring Call and video need a device registered once
   through the Door Entry app: that creates the SIP user, domain and keystore

@@ -235,7 +235,7 @@ explicit user actions:
 - Home Assistant media-user setup or repair,
 - forwarding, ringer, answering-machine and memo/message commands,
 - Display patch and GUI reload,
-- firewall, MQTT, audio codec, SSH and reboot maintenance,
+- firewall, MQTT, audio codec, camera quality, SSH and reboot maintenance,
 - the display's local HA feedback preference,
 - configured device activation synchronization.
 

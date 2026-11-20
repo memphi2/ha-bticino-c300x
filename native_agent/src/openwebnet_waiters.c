@@ -48,7 +48,7 @@ int c300x_openwebnet_caller_left(int fd)
     return count == 0 || (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
 }
 
-int c300x_openwebnet_worker_start(pthread_t *thread, void *(*run)(void *), void *context)
+int c300x_openwebnet_worker_start(pthread_t *thread, void *(*run)(void *), void *context, size_t stack_bytes)
 {
     pthread_attr_t attr;
     sigset_t all, previous;
@@ -60,7 +60,7 @@ int c300x_openwebnet_worker_start(pthread_t *thread, void *(*run)(void *), void 
     /* A signal must not end a blocking bus read between press and release. */
     sigfillset(&all);
     pthread_sigmask(SIG_BLOCK, &all, &previous);
-    status = pthread_attr_setstacksize(&attr, 256 * 1024);
+    status = pthread_attr_setstacksize(&attr, stack_bytes);
     if (status == 0) {
         status = pthread_create(thread, &attr, run, context);
     }

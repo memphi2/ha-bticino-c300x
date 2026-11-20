@@ -43,6 +43,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "openwebnet_async.c": (6_500, 215),
         "openwebnet_waiters.c": (2_500, 95),
         "http_setup_page.c": (14_500, 95),
+        "request_worker.c": (5_000, 160),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name

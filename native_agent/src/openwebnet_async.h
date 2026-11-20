@@ -3,8 +3,7 @@
 
 #include "openwebnet_call.h"
 
-#include "openwebnet_waiters.h"
-#include "pthread_compat.h"
+#include "request_worker.h"
 
 #include <poll.h>
 
@@ -21,14 +20,7 @@
  * requests with OpenWebNet calls wait, in the order the loop offers them. A
  * request that waited is not started when its caller has left meanwhile. */
 struct c300x_openwebnet_async {
-    int wake[2];
-    int running;
-    pthread_t thread;
-    int owner_fd; /* -1: free, -2: its request ended while a call still runs */
-    int armed_fd;
-    int deferred;
-    int waiting;
-    struct c300x_openwebnet_waiters waiters;
+    struct c300x_request_worker worker;
     int result_count;
     int used[C300X_OPENWEBNET_ASYNC_RESULTS];
     struct c300x_openwebnet_call results[C300X_OPENWEBNET_ASYNC_RESULTS];

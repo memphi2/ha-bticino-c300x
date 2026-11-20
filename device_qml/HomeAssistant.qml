@@ -19,6 +19,7 @@ Page {
     property string uiLanguage: trsl.language
     property bool feedbackColorsEnabled: c300xDisplayPreferences.feedbackEnabled
     property variant dashboardPages: []
+    property variant pageTitles: []
     property variant badges: []
     property variant items: []
     property variant energy: ({})
@@ -1844,7 +1845,7 @@ Page {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         bar: true
-        links: visible ? Api.dashboardPageTabs(dashboardPages, uiText("start_page"), uiText("more")) : []
+        links: visible ? Api.dashboardPageTabs(pageTitles, uiText("start_page"), uiText("more")) : []
         columns: Math.max(1, links.length)
         current: Api.dashboardTabCurrent(pageCount, currentPageIndex, morePagesOpen)
         onSelected: Api.dashboardSelectTab(pageIndex, status, page)
@@ -1859,7 +1860,7 @@ Page {
         anchors.leftMargin: 36
         anchors.rightMargin: 36
         columns: 3
-        links: visible ? Api.dashboardMoreLinks(dashboardPages, uiText("start_page")) : []
+        links: visible ? Api.dashboardMoreLinks(pageTitles, uiText("start_page")) : []
         current: currentPageIndex
         onSelected: Api.dashboardSelectTab(pageIndex, status, page)
     }

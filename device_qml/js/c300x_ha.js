@@ -294,6 +294,9 @@ function dashboard(statusItem, pageItem) {
         pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         pageItem.decimalComma = data.decimalComma === true
         assignDashboardValue(pageItem, "dashboardPages", pages)
+        var titles = []
+        for (var t = 0; t < pages.length; t++) titles.push({title: pages[t] ? pages[t].title || pages[t].name || "" : ""})
+        assignDashboardValue(pageItem, "pageTitles", titles)
         pageItem.pageCount = pages.length
         pageItem.tabNavigation = data.navigation === "tabs"
         if (!pageItem.tabNavigation || pages.length <= TAB_SLOTS) pageItem.morePagesOpen = false

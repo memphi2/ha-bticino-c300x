@@ -116,6 +116,9 @@ function respond(revision, count, navigation) {
 }
 respond("a", 5, "tabs");
 assert.equal(board.tabNavigation, true);
+// The bar reads the titles from a small list of their own: reading the whole
+// page list converts every tile of every page once more per refresh.
+assert.deepEqual(plain(board.pageTitles), titled(["P0", "P1", "P2", "P3", "P4"]));
 board.morePagesOpen = true;
 respond("b", 6, "tabs");
 assert.equal(board.morePagesOpen, true, "a refresh keeps the open list");
@@ -132,9 +135,10 @@ const qml = fs.readFileSync(path.resolve(__dirname, "../../device_qml/HomeAssist
 const component = fs.readFileSync(path.resolve(__dirname, "../../device_qml/C300XPageNavigation.qml"), "utf8");
 for (const line of [
     "visible: tabNavigation && pageCount > 1 && !detailOpen && !notificationsOpen",
-    'links: visible ? Api.dashboardPageTabs(dashboardPages, uiText("start_page"), uiText("more")) : []',
+    'links: visible ? Api.dashboardPageTabs(pageTitles, uiText("start_page"), uiText("more")) : []',
     "current: Api.dashboardTabCurrent(pageCount, currentPageIndex, morePagesOpen)",
-    'links: visible ? Api.dashboardMoreLinks(dashboardPages, uiText("start_page")) : []',
+    'links: visible ? Api.dashboardMoreLinks(pageTitles, uiText("start_page")) : []',
+    "property variant pageTitles: []",
     "visible: morePagesOpen && tabBar.visible",
     "visible: pageCount > 1 && !tabNavigation",
     "height: pageCount > 1 && !tabNavigation ? 38 : 0",

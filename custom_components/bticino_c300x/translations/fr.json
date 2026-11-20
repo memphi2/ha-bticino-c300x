@@ -896,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Les réglages de cette page. La position est sa place parmi les pages, de 1 à 12, en comptant les pages que l'écran n'affiche pas ; les autres pages sont renumérotées autour d'elle. Une entité choisie ici qu'une autre page affiche passe sur cette page. Une page personnelle sans nom ni entités est supprimée.",
+        "description": "Les réglages de cette page. La position est sa place parmi les pages, de 1 à 12 ; les autres pages sont renumérotées autour d'elle. Une entité choisie ici qu'une autre page affiche passe sur cette page. Une page personnelle sans nom ni entités est supprimée.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",

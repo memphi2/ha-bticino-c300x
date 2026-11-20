@@ -896,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "The settings of this page. The position is its place among the pages, from 1 to 12, counting pages the display does not show; the other pages are numbered around it. An entity chosen here that another page shows moves to this page. A page of your own without a name and entities is removed.",
+        "description": "The settings of this page. The position is its place among the pages, from 1 to 12; the other pages are numbered around it. An entity chosen here that another page shows moves to this page. A page of your own without a name and entities is removed.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",

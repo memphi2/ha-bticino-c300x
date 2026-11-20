@@ -121,7 +121,9 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
         "dispatch_event_internal(runtime->config, runtime, event_type, data_json, ttl_seconds, 0, 0)"
         in http
     )
-    assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in http
+    # The media actions of API requests run beside the HTTP loop.
+    media_actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
+    assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in media_actions
     assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
     assert 'dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0)' in http
     assert "c300x_media_session_stop_in_progress(runtime->video)" in http

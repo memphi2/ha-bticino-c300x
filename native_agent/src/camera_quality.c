@@ -212,7 +212,8 @@ int c300x_camera_quality_remove_patches(const char **error)
     if (!read_values(backup, &original)) {
         return 0;
     }
-    /* A file the device replaced meanwhile (a firmware update) is not ours to change. */
+    /* A file without the values (a firmware update) is left alone; the
+     * factory values are the same on every firmware. */
     if (!c300x_camera_quality_read(&quality) || memcmp(&quality.saved, &original, sizeof(original)) == 0) {
         return 1;
     }

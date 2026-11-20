@@ -252,7 +252,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore` | maintenance | Restores full display QML patch. |
 | `GET` | `/api/v1/maintenance/camera-resolution` | maintenance | Reads the camera resolution. |
 | `POST` | `/api/v1/maintenance/camera-resolution` | maintenance | Saves the camera resolution for the next stream. |
-| `GET` | `/api/v1/maintenance/camera-quality` | maintenance | Reads bit rate and frame rate of the high-resolution camera stream. |
+| `GET` | `/api/v1/maintenance/camera-quality` | maintenance | Reads size, bit rate and frame rate of the camera stream Home Assistant receives (the low one on firmware 3.0.x). |
 | `POST` | `/api/v1/maintenance/camera-quality` | maintenance | Saves them and restarts the device after confirmation. |
 | `GET` | `/api/v1/maintenance/audio-codec` | maintenance | Reads the device audio codec (speex/PCMU) state. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/apply` | maintenance | Switches the device to PCMU and reboots after confirmation. |

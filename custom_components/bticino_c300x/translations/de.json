@@ -896,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Die Einstellungen dieser Seite. Die Position ist ihr Platz in der Reihenfolge auf dem Display, von 1 bis 12; die Seiten dazwischen rücken auf. Eine hier gewählte Entität, die eine andere Seite zeigt, wechselt auf diese Seite. Eine eigene Seite ohne Name und Entitäten wird entfernt.",
+        "description": "Die Einstellungen dieser Seite. Die Position ist ihr Platz unter den Seiten, von 1 bis 12, nicht gezeigte Seiten zählen mit; die anderen rücken um sie herum. Eine hier gewählte Entität, die eine andere Seite zeigt, wechselt auf diese Seite. Eine eigene Seite ohne Name und Entitäten wird entfernt.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",

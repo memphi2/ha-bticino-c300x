@@ -418,3 +418,28 @@ def test_every_page_form_sent_as_it_opens_saves_what_the_whole_form_would() -> N
         post = unchanged_pages_post(single._dashboard_options)[key]
         assert _step(single, "dashboard_pages", {key: post})["step_id"] == "dashboard_page_list"
         assert entry.options == whole.options, key
+
+
+def test_an_energy_page_with_every_view_off_holds_no_place() -> None:
+    hidden = {"enabled": True, "position": 2, "views": []}
+    entry = _five_pages(**{CONF_ENERGY_PAGE: dict(hidden)})
+    _save_page(entry, "page_2", {"name": "Doors", "position": 3, "entities": ["light.doors"]})
+    assert [page["name"] for page in sorted(
+        entry.options[CONF_DASHBOARD_PAGES], key=lambda page: page["order"]
+    )] == [DASHBOARD_STATUS_PAGE, "Garden", "Doors", "Cellar", "Attic"]
+    assert entry.options[CONF_ENERGY_PAGE]["position"] == 2
+
+
+def test_an_emptied_position_keeps_a_page_switched_off_where_it_is() -> None:
+    entry = _five_pages(**{CONF_ENERGY_PAGE: {"enabled": False, "position": 7}})
+    values = _energy(7, enabled=False)
+    del values["position"]
+    _save_page(entry, CONF_ENERGY_PAGE, values)
+    assert entry.options[CONF_ENERGY_PAGE]["position"] == 7
+
+
+def test_a_position_is_read_as_the_whole_form_reads_it() -> None:
+    from custom_components.bticino_c300x.config_flow_display_menu import _position
+
+    assert [_position(value) for value in (2.5, "2", 0, 99, 3.0)] == [3, 2, 1, 12, 3]
+    assert [_position(value) for value in (None, True, float("nan"), "x", [2])] == [None] * 5

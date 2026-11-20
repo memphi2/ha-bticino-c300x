@@ -896,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Le impostazioni di questa pagina. La posizione è il suo posto nell'ordine del display, da 1 a 12; le pagine intermedie si spostano. Un'entità scelta qui che un'altra pagina mostra passa a questa pagina. Una pagina personale senza nome ed entità viene rimossa.",
+        "description": "Le impostazioni di questa pagina. La posizione è il suo posto tra le pagine, da 1 a 12, contando le pagine che il display non mostra; le altre pagine vengono rinumerate attorno a essa. Un'entità scelta qui che un'altra pagina mostra passa a questa pagina. Una pagina personale senza nome ed entità viene rimossa.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",

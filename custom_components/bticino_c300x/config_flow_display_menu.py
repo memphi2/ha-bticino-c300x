@@ -35,9 +35,9 @@ from .config_flow_dashboard_pages import (
     page_section_key,
 )
 from .config_flow_features import current_feature_options
-from .const import CONF_DEVICE_UI_ENABLED
+from .const import CONF_DEVICE_UI_ENABLED, CONF_ENERGY_PAGE
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT
-from .dashboard_page_order import SPECIAL_PAGE_ORDER
+from .dashboard_page_order import SPECIAL_PAGE_ORDER, page_position
 from .schema_compat import vol
 
 PAGE_LIST_STEP = "dashboard_page_list"
@@ -122,8 +122,8 @@ def single_page_post(
     before = _position(saved.get(PAGE_POSITION_FIELD))
     after = _position(values.get(PAGE_POSITION_FIELD))
     had_place = _holds_place(key, saved)
-    if after is None and had_place and before is not None and PAGE_POSITION_FIELD in saved:
-        # An emptied position keeps the page where it is.
+    if after is None and before is not None:
+        # An emptied position keeps the page where it is, also one switched off.
         values[PAGE_POSITION_FIELD] = after = before
     post[key] = values
     if _holds_place(key, {**saved, **values}) and (not had_place or after != before):
@@ -144,18 +144,19 @@ def single_page_post(
 
 def _holds_place(key: str, values: dict[str, Any]) -> bool:
     if key in SPECIAL_PAGE_ORDER:
-        return values.get(PAGE_ENABLED_FIELD) is True
+        # The Energy page with every view off is hidden, as the saved pages see it.
+        return values.get(PAGE_ENABLED_FIELD) is True and (key != CONF_ENERGY_PAGE or any(
+            value is True for field, value in values.items() if field.startswith("view_")
+        ))
     return key == page_section_key(1) or bool(
         str(values.get(PAGE_NAME_FIELD) or "").strip() or values.get(PAGE_ENTITIES_FIELD)
     )
 
 
 def _position(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+    if value is None or isinstance(value, (bool, list, dict)):
         return None
-    if value in (float("inf"), float("-inf")):
-        return None
-    return round(value)
+    return page_position(value, 0) or None
 
 
 def single_page_schema(

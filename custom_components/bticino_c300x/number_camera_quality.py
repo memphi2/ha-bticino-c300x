@@ -21,6 +21,67 @@ from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
 
 SIGNAL_CAMERA_QUALITY = f"{DOMAIN}_camera_quality"
+# Each change restarts the device; changes to both numbers made within this
+# time are saved together, so the device restarts once.
+CAMERA_QUALITY_BATCH_SECONDS = 10.0
+
+
+class _CameraQualityBatch:
+    """The changes of both numbers of one entry, saved in one write."""
+
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
+        self._entry = entry
+        self.delay = CAMERA_QUALITY_BATCH_SECONDS
+        self._changes: dict[str, int] = {}
+        self._result: asyncio.Future[Mapping[str, Any]] | None = None
+        self._timer: asyncio.TimerHandle | None = None
+        self._task: asyncio.Task[None] | None = None
+
+    async def async_submit(self, field: str, value: int) -> Mapping[str, Any]:
+        """Wait for the write that carries this change and return its status."""
+
+        loop = asyncio.get_running_loop()
+        self._changes[field] = value
+        if self._result is None:
+            self._result = loop.create_future()
+            self._result.add_done_callback(_retrieve)
+        result = self._result
+        if self._timer is not None:
+            self._timer.cancel()
+        self._timer = loop.call_later(self.delay, self._start_write)
+        return await asyncio.shield(result)
+
+    def _start_write(self) -> None:
+        changes, result = self._changes, self._result
+        self._changes, self._result, self._timer = {}, None, None
+        if result is not None:
+            self._task = asyncio.get_running_loop().create_task(self._write(changes, result))
+
+    async def _write(self, changes: dict[str, int], result: asyncio.Future[Mapping[str, Any]]) -> None:
+        try:
+            status = await self._entry.runtime_data.api.async_camera_quality(**changes)
+        except Exception as err:  # noqa: BLE001 - handed to every waiting change
+            if not result.done():
+                result.set_exception(err)
+            return
+        if not result.done():
+            result.set_result(status)
+
+    @callback
+    def cancel(self) -> None:
+        """Drop changes not written yet; the entities are going away."""
+
+        for pending in (self._timer, self._task, self._result):
+            if pending is not None:
+                pending.cancel()
+        self._changes, self._result, self._timer, self._task = {}, None, None, None
+
+
+def _retrieve(result: asyncio.Future[Mapping[str, Any]]) -> None:
+    # Every waiting change sees the error; this keeps asyncio from logging it
+    # again when a waiting change was cancelled.
+    if not result.cancelled():
+        result.exception()
 
 
 class C300XCameraQualityNumber(C300XEntity, NumberEntity):
@@ -39,10 +100,11 @@ class C300XCameraQualityNumber(C300XEntity, NumberEntity):
     _refresh_on_reconnect = True
 
     def __init__(
-        self, entry: BticinoC300XConfigEntry, key: str, field: str, unit: str,
-        minimum: int, maximum: int, step: int,
+        self, entry: BticinoC300XConfigEntry, batch: _CameraQualityBatch, key: str, field: str,
+        unit: str, minimum: int, maximum: int, step: int,
     ) -> None:
         super().__init__(entry, key)
+        self._batch = batch
         self._attr_translation_key = key
         self._field = field
         self._limit = "bitrate" if field == "bitrate_kbps" else "fps"
@@ -67,6 +129,7 @@ class C300XCameraQualityNumber(C300XEntity, NumberEntity):
 
         await super().async_added_to_hass()
         self.async_on_remove(self._cancel_refresh)
+        self.async_on_remove(self._batch.cancel)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_CAMERA_QUALITY, self._handle_status)
         )
@@ -77,11 +140,16 @@ class C300XCameraQualityNumber(C300XEntity, NumberEntity):
         )
 
     async def async_set_native_value(self, value: float) -> None:
-        """Save the value on the device, which restarts to use it."""
+        """Save the value on the device, which restarts to use it.
 
-        api = self._entry.runtime_data.api
+        A change to the other number made meanwhile goes into the same write.
+        """
+
+        wanted = int(value)
+        self._pending = wanted if wanted != self._attr_native_value else None
+        self.async_write_ha_state()
         try:
-            status = await api.async_camera_quality(**{self._field: int(value)})
+            status = await self._batch.async_submit(self._field, wanted)
         except C300XAgentApiError as err:
             # A refused or failed write may still have changed the file.
             await self.async_update()
@@ -167,9 +235,11 @@ def _is_int(value: object) -> bool:
 def camera_quality_numbers(entry: BticinoC300XConfigEntry) -> list[NumberEntity]:
     """The two numbers; the limits are replaced by what the agent reports."""
 
+    batch = _CameraQualityBatch(entry)
     return [
         C300XCameraQualityNumber(
-            entry, "camera_bitrate", "bitrate_kbps", UnitOfDataRate.KILOBITS_PER_SECOND, 300, 3000, 50
+            entry, batch, "camera_bitrate", "bitrate_kbps", UnitOfDataRate.KILOBITS_PER_SECOND,
+            300, 3000, 50,
         ),
-        C300XCameraQualityNumber(entry, "camera_frame_rate", "fps", "fps", 5, 25, 1),
+        C300XCameraQualityNumber(entry, batch, "camera_frame_rate", "fps", "fps", 5, 25, 1),
     ]

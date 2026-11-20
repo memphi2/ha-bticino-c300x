@@ -58,6 +58,7 @@ def _numbers(api: _QualityApi) -> tuple[C300XCameraQualityNumber, C300XCameraQua
     assert isinstance(bitrate, C300XCameraQualityNumber) and isinstance(fps, C300XCameraQualityNumber)
     for entity in (bitrate, fps):
         entity.async_write_ha_state = lambda: None  # type: ignore[method-assign]
+    bitrate._batch.delay = 0
     return bitrate, fps
 
 
@@ -128,3 +129,87 @@ def test_a_device_file_without_the_values_makes_the_numbers_unavailable() -> Non
     asyncio.run(fps.async_update())
     assert bitrate.available is False and bitrate.native_value is None
     assert fps.available is False
+
+
+def test_changes_to_both_numbers_are_saved_in_one_write() -> None:
+    api = _QualityApi()
+    bitrate, fps = _numbers(api)
+    bitrate._batch.delay = 0.05
+
+    async def both() -> None:
+        await asyncio.gather(bitrate.async_set_native_value(3000.0), fps.async_set_native_value(25.0))
+
+    asyncio.run(both())
+    # One write, so the device restarts once.
+    assert api.calls == [{"bitrate_kbps": 3000, "fps": 25}]
+    assert bitrate.extra_state_attributes["pending_value"] == 3000
+    assert fps.extra_state_attributes["pending_value"] == 25
+
+
+def test_a_failed_write_is_reported_to_every_change_it_carried() -> None:
+    api = _QualityApi()
+    bitrate, fps = _numbers(api)
+    bitrate._batch.delay = 0.05
+
+    async def both() -> list[Any]:
+        api.fail = True
+        results = await asyncio.gather(bitrate.async_set_native_value(3000.0),
+                                       fps.async_set_native_value(25.0), return_exceptions=True)
+        api.fail = False
+        return results
+
+    results = asyncio.run(both())
+    assert all(isinstance(result, HomeAssistantError) for result in results)
+    assert api.calls[0] == {"bitrate_kbps": 3000, "fps": 25}
+
+
+def test_removing_the_numbers_drops_a_change_not_written_yet() -> None:
+    api = _QualityApi()
+    bitrate, _fps = _numbers(api)
+    bitrate._batch.delay = 30
+
+    async def removed() -> None:
+        pending = asyncio.ensure_future(bitrate.async_set_native_value(3000.0))
+        await asyncio.sleep(0)
+        bitrate._batch.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+
+    asyncio.run(removed())
+    assert api.calls == []
+
+
+def test_a_status_from_the_other_number_updates_only_the_same_entry() -> None:
+    api = _QualityApi()
+    bitrate, _fps = _numbers(api)
+    asyncio.run(bitrate.async_update())
+    status = {"supported": True, "bitrate_kbps": 2000, "fps": 15, "running_bitrate_kbps": 800,
+              "running_fps": 15, "restart_required": True}
+    bitrate._handle_status("other-entry", status)
+    assert bitrate.extra_state_attributes["pending_value"] is None
+    bitrate._handle_status("entry-1", status)
+    assert bitrate.extra_state_attributes == {"restart_required": True, "pending_value": 2000}
+
+
+def test_the_numbers_read_again_when_the_device_is_back_after_the_restart() -> None:
+    from types import SimpleNamespace
+
+    api = _QualityApi()
+    bitrate, _fps = _numbers(api)
+    scheduled: list[Any] = []
+    connection = bitrate._entry.runtime_data.connection_state
+    asyncio.run(bitrate.async_update())
+    bitrate._handle_connection("entry-1")  # nothing pending: no read
+    asyncio.run(bitrate.async_set_native_value(3000.0))
+    bitrate.hass = SimpleNamespace(async_create_task=scheduled.append)  # type: ignore[assignment]
+    connection.available = False
+    bitrate._handle_connection("entry-1")
+    bitrate._handle_connection("other-entry")
+    assert scheduled == []
+    connection.available = True
+    bitrate._handle_connection("entry-1")
+    assert len(scheduled) == 1
+    api.restarted()
+    asyncio.run(scheduled[0])
+    assert bitrate.native_value == 3000 and bitrate.extra_state_attributes["restart_required"] is False
+

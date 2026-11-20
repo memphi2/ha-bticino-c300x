@@ -174,6 +174,37 @@ def test_python_and_agent_2_0_2_patch_tables_match() -> None:
         assert patch.writes == patcher.PATCHES[index].writes
 
 
+def test_python_and_agent_3_0_6_patch_tables_match() -> None:
+    import re
+
+    patcher = _load_patcher()
+    source = (ROOT / "native_agent" / "src" / "device_routing.c").read_text(
+        encoding="utf-8"
+    )
+    table = source[source.index("PATCHES_3_0_6[] = {"):]
+    table = table[: table.index("};")]
+
+    assert patcher.STOCK_SHA256_3_0_6 in source
+    assert "{C300X_DEVICE_PATCH_STOCK_SHA256_3_0_6, PATCHES_3_0_6, ARRAY_LEN(PATCHES_3_0_6)}" in source
+    assert table.count('{"p') == len(patcher.PATCHES_3_0_6)
+    for index, patch in enumerate(patcher.PATCHES_3_0_6):
+        row = (
+            f'{{"{patch.name}", 0x{patch.offset:x}, {patch.range_len}, '
+            f'"{patch.expected_range_sha256}", "{patch.patched_range_sha256}", '
+            f"PATCH_306_{index}_WRITES, ARRAY_LEN(PATCH_306_{index}_WRITES)}}"
+        )
+        assert row in table
+        # The writes of the agent's table are the builder's, byte for byte.
+        entries = re.search(
+            rf"PATCH_306_{index}_WRITES\[\] = \{{(.*?)\}};\n", source
+        ).group(1)
+        writes = []
+        for offset, name in re.findall(r"\{(\d+), (PATCH_306_\d+_WRITE_\d+),", entries):
+            values = re.search(rf"{name}\[\] = \{{([^}}]*)\}};", source).group(1)
+            writes.append(patcher.Write(int(offset), bytes(int(v, 16) for v in values.split(","))))
+        assert tuple(writes) == patch.writes
+
+
 def test_patch_routing_selects_the_2_0_2_table(tmp_path: Path) -> None:
     patcher = _load_patcher()
     data = bytearray(b"0123456789abcdef")

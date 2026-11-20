@@ -1427,6 +1427,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 ## Compatibility
 
 Agent `2.7.0` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x` and `2.0.x`. `firmware_family` reflects `device.firmware` of the agent
+`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
 config and is `unknown` when that value is empty, which is what the installer
-writes. Of the `2.0.x` family only `2.0.2` is supported. The release notes list the agent changes of each version.
+writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
+experimentally. The release notes list the agent changes of each version.

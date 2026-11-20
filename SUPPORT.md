@@ -14,7 +14,7 @@
 - Home Assistant validation baseline: `2026.10.x` and `2026.11.x`
 - CI tests the fixed minimum and resolves the latest stable Home Assistant on every run.
 - Python: `3.14`
-- C300X firmware: `1.7.x or 2.0.2`
+- C300X firmware: `1.7.x, 2.0.2 or 3.0.6 (experimental)`
 
 ## Maintenance Scope
 

@@ -307,6 +307,19 @@ def test_values_the_device_already_runs_restart_nothing(lab: Lab) -> None:
     assert not (lab.settings.parent / "reboot-done").exists()
 
 
+@pytest.mark.parametrize("reboot", [True])
+def test_a_change_restarts_also_when_the_running_values_are_unknown(lab: Lab) -> None:
+    # The file had no values when the agent started, so it cannot tell what runs.
+    lab.settings.write_text("[Answering Machine]\nWidth=800\n")
+    (lab.settings.parent / "camera-running").unlink(missing_ok=True)
+    lab.restart_agent()
+    lab.settings.write_text(SETTINGS)
+    assert lab.call()["running_fps"] == 0
+    body = lab.call({**CONFIRM, "fps": 20})
+    assert body["rebooting"] is True and body["restart_required"] is True
+    assert wait_for(lab.settings.parent / "reboot-done")
+
+
 def test_disabled_reboot_maintenance_saves_without_a_restart(lab: Lab) -> None:
     body = lab.call({**CONFIRM, "fps": 24})
     assert body["rebooting"] is False and body["restart_required"] is True

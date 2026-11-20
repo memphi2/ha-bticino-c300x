@@ -152,6 +152,8 @@ static int write_values(struct c300x_camera_quality *quality, const struct c300x
     }
     quality->changed = ok;
     quality->remount_ro_failed = ro_failed;
+    /* Not knowing what the device runs, only a restart makes the change count. */
+    quality->restart_required |= ok && running.bitrate_kbps <= 0;
     return ok;
 }
 

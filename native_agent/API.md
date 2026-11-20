@@ -1417,7 +1417,8 @@ only the low-resolution stream, that one (`"stream": "low"`):
 
 `bitrate_kbps`, `fps` and `size` are the saved values, `running_*` the ones
 the device started with (`0` and `""` when the agent cannot tell), and
-`restart_required` is `true` while the two differ. `sizes` lists the sizes a
+`restart_required` is `true` while the two differ, and in the answer to a
+change while the running values are not known. `sizes` lists the sizes a
 request may choose. The high stream takes 300–3000 kbit/s and 5–24 fps: at
 25 fps the device drops its frame rate control and sends about 8 frames per
 second. The low stream takes 100–2000 kbit/s (the device lowers the bit rate

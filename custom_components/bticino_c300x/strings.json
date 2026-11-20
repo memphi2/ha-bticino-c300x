@@ -896,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Name, position and entities of a page. Positions run from 1 to 12; pages with the same position are ordered Energy, Agenda, Leave home and Situations, then the other pages. A page without a name and entities is removed.",
+        "description": "The settings of this page. The position is its place in the order of the display, from 1 to 12; the pages in between make room. An entity chosen here that another page shows moves to this page. A page of your own without a name and entities is removed.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",

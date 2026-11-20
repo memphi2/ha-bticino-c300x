@@ -1669,7 +1669,7 @@ class BticinoC300XOptionsFlow(
         schema = _dashboard_pages_schema(self._dashboard_options, user_input)
         if self._page_key is not None:
             schema = single_page_schema(self._dashboard_options, self._page_key, user_input)
-            errors = single_page_errors(self._page_key, errors)
+            errors = single_page_errors(self._dashboard_options, self._page_key, errors)
             if user_input is not None:
                 posted = single_page_post(self._dashboard_options, self._page_key, user_input)
         return self.async_show_form(

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Inserisci prima l'indirizzo del C300X. Se il device agent nativo non e raggiungibile, Home Assistant può guidare un'installazione una tantum prima di chiedere le chiavi e le funzioni.",
+        "description": "Inserisci prima l'indirizzo del C300X. Se il device agent nativo non è raggiungibile, Home Assistant può guidare un'installazione una tantum prima di chiedere le chiavi e le funzioni.",
         "data": {
           "name": "Nome",
           "agent_host": "Indirizzo del C300X",
@@ -896,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Nome, posizione ed entità di una pagina. Le posizioni vanno da 1 a 12; a parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le altre pagine, in quest'ordine. Una pagina senza nome ed entità viene rimossa.",
+        "description": "Le impostazioni di questa pagina. La posizione è il suo posto nell'ordine del display, da 1 a 12; le pagine intermedie si spostano. Un'entità scelta qui che un'altra pagina mostra passa a questa pagina. Una pagina personale senza nome ed entità viene rimossa.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",

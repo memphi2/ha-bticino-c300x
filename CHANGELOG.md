@@ -30,7 +30,9 @@ Settings:
 - The settings menu has one **Display** entry. It opens a menu with the
   Display patch, the pages, the tiles and Alarmo.
 - **Display pages** is a list of the pages. A page opens a short form with
-  its own fields instead of one form with all pages.
+  its own fields instead of one form with all pages. A new position moves
+  the pages in between by one, and an entity that another page shows moves
+  to the opened page with its tile settings.
 - The setup texts say access key and maintenance key throughout, as the
   fields do.
 

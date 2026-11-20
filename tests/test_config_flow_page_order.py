@@ -172,10 +172,10 @@ def test_page_descriptions_distinguish_built_in_and_custom_pages(name, custom):
     )
     options = catalog["options"]["step"]["dashboard_pages"]
     assert setup == reconfigure and custom in setup
-    # Every built-in page is named, in the setup form and above a single page.
+    # The setup form names every built-in page; a single page form shows one page.
     for key in SPECIAL_PAGE_ORDER:
         built_in = options["sections"][key]["name"].split(":", 1)[1].strip()
-        assert built_in in setup and built_in in options["description"], key
+        assert built_in in setup, key
     keys = [str(marker) for marker in dashboard_pages_schema({}).schema]
     assert keys[:5] == ["page_1", *SPECIAL_PAGE_ORDER]
     assert len(keys[5:]) == 7

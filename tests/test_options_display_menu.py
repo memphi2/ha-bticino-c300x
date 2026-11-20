@@ -14,6 +14,7 @@ from custom_components.bticino_c300x.const import (
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PAGES,
+    CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_DEVICE_UI_ENABLED,
     CONF_ENERGY_PAGE,
     CONF_VIDEO_ENABLED,
@@ -186,10 +187,109 @@ def test_a_page_error_comes_back_on_the_same_single_page_form() -> None:
     assert list(_section_fields(refused)) == ["page_3"]
     assert refused["description_placeholders"]["page_3_name"] == ": doors"
     assert entry.options == before
-    taken = _step(flow, "dashboard_pages", {
-        "page_3": {"name": "Garden", "entities": ["switch.entry"]},
+
+
+def _names(entry: SimpleNamespace) -> list[str]:
+    return [page["name"] for page in entry.options[CONF_DASHBOARD_PAGES]]
+
+
+def _save_page(entry: SimpleNamespace, key: str, values: dict[str, Any]) -> dict[str, Any]:
+    flow = _options_flow(entry)
+    _step(flow, "dashboard_page_list")
+    _step(flow, key)
+    return _step(flow, "dashboard_pages", {key: values})
+
+
+def test_a_new_position_swaps_a_page_with_its_neighbour() -> None:
+    later = _pages_entry()
+    _save_page(later, "page_2", {
+        "name": "Doors", "position": 3, "entities": ["switch.entry", "light.hall"],
     })
-    assert taken["errors"] == {"page_3": "dashboard_entity_on_several_pages"}
+    assert _names(later) == [DASHBOARD_STATUS_PAGE, "Garden", "Doors"]
+
+    earlier = _pages_entry()
+    _save_page(earlier, "page_3", {"name": "Garden", "position": 2, "entities": ["sensor.garden"]})
+    assert _names(earlier) == [DASHBOARD_STATUS_PAGE, "Garden", "Doors"]
+
+
+def test_a_new_position_moves_only_the_pages_in_between() -> None:
+    entry = _pages_entry()
+    entry.options[CONF_DASHBOARD_ENTITIES].append("light.cellar")
+    entry.options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES]["light.cellar"] = {"page": "Cellar"}
+    entry.options[CONF_DASHBOARD_PAGES].append({"name": "Cellar", "order": 4})
+    entry.options[CONF_ENERGY_PAGE] = {"enabled": True, "position": 2}
+
+    _save_page(entry, "page_4", {"name": "Cellar", "position": 3, "entities": ["light.cellar"]})
+
+    assert _names(entry) == [DASHBOARD_STATUS_PAGE, "Cellar", "Doors", "Garden"]
+    assert entry.options[CONF_ENERGY_PAGE]["position"] == 2
+
+
+def test_an_added_page_lands_at_the_position_it_asks_for() -> None:
+    entry = _pages_entry()
+    flow = _options_flow(entry)
+    _step(flow, "dashboard_page_list")
+    _step(flow, "page_new")
+    _step(flow, "dashboard_pages", {
+        "page_4": {"name": "Cellar", "position": 2, "entities": ["light.cellar"]},
+    })
+    assert _names(entry) == [DASHBOARD_STATUS_PAGE, "Cellar", "Doors", "Garden"]
+
+
+def test_an_entity_another_page_shows_moves_with_its_tile_settings() -> None:
+    entry = _pages_entry()
+    result = _save_page(entry, "page_3", {
+        "name": "Garden", "position": 3, "entities": ["sensor.garden", "switch.entry"],
+    })
+    assert result["step_id"] == "dashboard_page_list"
+    overrides = entry.options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES]
+    assert overrides["switch.entry"] == {"secondary": "last_changed", "page": "Garden"}
+    assert overrides["light.hall"] == {"page": "Doors"}
+    assert entry.options[CONF_DASHBOARD_ENTITIES] == ["light.hall", "sensor.garden", "switch.entry"]
+
+
+def test_an_error_the_opened_page_causes_is_shown_on_that_page() -> None:
+    entry = _pages_entry()
+    before = dict(entry.options)
+    # The check names the later page; the form shows the one that was changed.
+    refused = _save_page(entry, "page_2", {
+        "name": "garden", "position": 2, "entities": ["switch.entry"],
+    })
+    assert refused["errors"] == {"page_2": "dashboard_page_name_duplicate"}
+    assert entry.options == before
+
+
+def test_a_saved_error_of_another_page_is_shown_above_the_form() -> None:
+    entry = _pages_entry()
+    entry.options[CONF_WEATHER_ENTITY_ID] = "sensor.not_weather"
+    refused = _save_page(entry, "page_2", {
+        "name": "Doors", "position": 2, "entities": ["switch.entry", "light.hall"],
+    })
+    assert refused["errors"] == {"base": "invalid_weather_entity"}
+
+
+def test_the_status_page_is_saved_from_its_own_form() -> None:
+    entry = _pages_entry()
+    result = _save_page(entry, "page_1", {
+        "enabled": False, "position": 1, "weather_entity_id": "weather.other",
+    })
+    assert result["step_id"] == "dashboard_page_list"
+    assert entry.options[CONF_WEATHER_ENTITY_ID] == "weather.other"
+    assert entry.options[CONF_DASHBOARD_STATUS_PAGE_ENABLED] is False
+    assert _names(entry) == [DASHBOARD_STATUS_PAGE, "Doors", "Garden"]
+
+
+def test_the_add_entry_returns_to_the_list_when_no_page_is_free() -> None:
+    entry = _pages_entry()
+    for number in range(4, 9):
+        entity = f"light.room_{number}"
+        entry.options[CONF_DASHBOARD_ENTITIES].append(entity)
+        entry.options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES][entity] = {"page": f"Room {number}"}
+        entry.options[CONF_DASHBOARD_PAGES].append({"name": f"Room {number}", "order": number})
+    flow = _options_flow(entry)
+    listed = _step(flow, "dashboard_page_list")
+    assert "page_new" not in listed["menu_options"]
+    assert _step(flow, "page_new")["step_id"] == "dashboard_page_list"
 
 
 def test_a_built_in_page_is_switched_on_from_the_list() -> None:

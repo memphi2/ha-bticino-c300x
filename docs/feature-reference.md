@@ -475,7 +475,9 @@ pages. Pick a page to open a form with its fields only; saving returns to the
 list. Entries show the page's number and name, for example
 **Page 2: Living room**. A page the display does not show (switched off, or
 without entities) has no number and follows the shown pages; **Add a page**
-comes last. The setup and the reconfigure dialog show the same pages in one
+follows while a custom page is free. In a page's form a new position moves
+the pages in between by one, and an entity that another page shows moves to
+the opened page with its tile settings. The setup and the reconfigure dialog show the same pages in one
 form, one section each, with free sections titled **Page +**. Alarmo is not
 one of the pages: its Alarm page opens from the home page button and has an
 area of its own in the Display menu.

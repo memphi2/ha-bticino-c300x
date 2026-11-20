@@ -896,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Nom, position et entités d'une page. Les positions vont de 1 à 12 ; à position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les autres pages, dans cet ordre. Une page sans nom ni entités est supprimée.",
+        "description": "Les réglages de cette page. La position est sa place dans l'ordre de l'écran, de 1 à 12 ; les pages intermédiaires se décalent. Une entité choisie ici qu'une autre page affiche passe sur cette page. Une page personnelle sans nom ni entités est supprimée.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",

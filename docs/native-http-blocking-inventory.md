@@ -105,7 +105,7 @@ thread can be started the call runs on the loop as before.
 The waiting places are shared with the media operations (`request_queue.c`):
 three in all, beside the two requests the workers run. (Other requests kept
 open - a status read deferred behind a maintenance job, an admitted
-configuration write held behind the bus request, an unfinished upload - count
+configuration write held behind worker jobs, an unfinished upload - count
 against the six API client slots as well.) When all places are taken, a
 waiting request whose caller has left loses its place to the new request. It
 is marked and never run. The next time the loop offers it, it is answered
@@ -128,10 +128,13 @@ call must not be checked again once the request has a command out
 (`c300x_openwebnet_async_owns`); the ringer handlers do this for the display
 slot. The four maintenance POSTs that replace the configuration (auth, MQTT,
 legacy MQTT, MQTT migration) hold themselves back, each after its own
-admission check, while another request owns the bus worker or the media
-worker; a request that is not admitted is answered at once. The media worker
-reads the live configuration on its thread, and a request that runs again
-checks its token again. A held write whose caller has left is not applied.
+admission check, while either worker has a job that is not theirs - one
+whose request is not answered yet, or one that still runs after its request
+was answered (an activation ended early by a ring); a request that is not
+admitted is answered at once. The media worker reads the live configuration
+on its thread, and a request that runs again checks its token again. A write
+whose caller has closed the connection, also only its sending side, is never
+applied, held or not.
 Held writes take none of the three waiting places and go by client slot, not
 by arrival; with the admin token they can fill the client slots. The call also runs on the loop when
 eight results of one request are stored already.

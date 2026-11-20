@@ -253,10 +253,10 @@ static void send_openwebnet_refusal(int client_fd, const char *error)
 }
 /* A handler that is about to replace the configuration asks this once it has
  * admitted its request, before it does anything. Nonzero: it returns at once.
- * While a request has work on one of the two workers the write is not
- * answered and runs again later: that request runs again too, and the worker
- * may read the configuration meanwhile, so both must find the one the request
- * started with. A write whose caller has closed the connection, also only its
+ * While either worker has a job that is not this request's, the write is not
+ * answered and runs again later: the worker may read the configuration
+ * meanwhile, and the job's request, if it is not answered yet, runs again too;
+ * both must find the configuration the job started with. A write whose caller has closed the connection, also only its
  * sending side, is not applied, whether it was held or not. */
 static int config_write_waits(struct agent_runtime *runtime, int client_fd)
 {

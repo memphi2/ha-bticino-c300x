@@ -55,7 +55,8 @@ class Lab:
         (self.root / "hold").write_text("")
 
     def release(self) -> None:
-        (self.root / "hold").unlink(missing_ok=True)
+        for name in ("hold", "hold-activate"):
+            (self.root / name).unlink(missing_ok=True)
 
     def held_stop(self, path: str = STOP) -> HTTPConnection:
         self.hold()

@@ -1,6 +1,7 @@
 /* Stands in for the media bridge in whole-agent tests: every operation is
- * written to media.log, and the session stop waits while a file "hold"
- * exists in the working directory. */
+ * written to media.log. In the working directory, a file "hold" holds the
+ * session stop, "hold-activate" holds an activation, and "ring" reports a
+ * ring call as active. */
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>

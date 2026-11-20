@@ -371,6 +371,16 @@ def test_a_size_the_file_already_gives_keeps_its_width_and_height(lab: Lab) -> N
     assert "Width=704\nHeight=576\n" in lab.settings.read_text()
 
 
+def test_removal_after_an_update_to_firmware_3_puts_back_the_high_stream_too(lab: Lab) -> None:
+    # Changed on 1.7, the file kept through an update to 3.0.x, then the agent removed.
+    lab.call({**CONFIRM, "size": "720x576", "bitrate_kbps": 3000, "fps": 24})
+    (lab.settings.parent / "qt5-mark").touch()
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env, cwd=lab.settings.parent,
+                            capture_output=True, text=True, timeout=10, check=False)
+    assert result.returncode == 0, result.stderr
+    assert lab.settings.read_text() == SETTINGS
+
+
 def test_removal_puts_back_the_original_size(lab: Lab) -> None:
     lab.call({**CONFIRM, "size": "720x576", "bitrate_kbps": 3000, "fps": 24})
     result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,

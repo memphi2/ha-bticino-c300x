@@ -44,6 +44,11 @@ int c300x_camera_quality_read(struct c300x_camera_quality *quality);
 /* As _read, but with video off or no values only names the stream; returns
  * whether the setting is supported. */
 int c300x_camera_quality_status(struct c300x_camera_quality *quality, int video_enabled);
+/* The four values of one stream in a settings file; 0 without them. */
+int c300x_camera_quality_read_values(const char *path, int low, struct c300x_camera_values *values);
+/* camera_running.c: the values the device started with, from a note of this
+ * boot or else from the settings file, which is then noted; 0 when unknown. */
+int c300x_camera_running_values(const char *settings, int low, struct c300x_camera_values *out);
 /* Writes the values when they are in range; size NULL keeps the size.
  * error names the failed step. */
 int c300x_camera_quality_apply(struct c300x_camera_quality *quality, int bitrate_kbps, int fps,

@@ -989,7 +989,8 @@ def test_weather_card_stays_on_the_status_page_until_placed():
     pages = {page["title"]: page for page in payload["data"]["pages"]}
     assert list(pages) == ["C300X", ""]
     assert "weather" in pages["C300X"]
-    assert _kinds(pages["C300X"]) == ["weather", "navigation"]
+    # The favourites bar is the default, so the status page has no page buttons.
+    assert _kinds(pages["C300X"]) == ["weather"]
     assert _kinds(pages[""]) == ["light.one", "light.two"]
 
 

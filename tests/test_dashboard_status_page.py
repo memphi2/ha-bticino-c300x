@@ -140,6 +140,7 @@ def test_notifications_remain_available_with_all_energy_subpages_off(monkeypatch
 def test_status_navigation_precedes_tiles_with_or_without_weather(monkeypatch, with_weather) -> None:
     entry = FakeEntry(data={
         CONF_DEVICE_UI_ENABLED: True,
+        "dashboard_navigation": "pager",
         CONF_ENERGY_PAGE: {"enabled": True, "views": ["now"]},
         CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {"sensor.temperature": {"page": "C300X"}},

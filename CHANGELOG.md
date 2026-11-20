@@ -10,6 +10,12 @@ Camera:
 - Firmware 3.0.6 is fixed to the low resolution, the only stream that firmware
   sends on; the setting is not offered there. Needs the agent update.
 
+Display:
+
+- The favourites bar is the default page navigation. An entry that never
+  chose keeps the bar after the update; to keep the previous and next arrows,
+  choose **Arrows** under **Page navigation** in the display settings.
+
 ## v2.7.0 - 2026-11-20
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

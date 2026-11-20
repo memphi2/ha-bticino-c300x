@@ -499,8 +499,8 @@ pages. It is one setting for all pages.
 
 | Choice | On the display |
 | --- | --- |
-| **Arrows (previous / next)** | The row with `<`, the page number and `>` under the tiles. This is the default. |
-| **Favourites bar** | A bar along the bottom edge with one button per page. The current page is marked in yellow. |
+| **Favourites bar** | A bar along the bottom edge with one button per page. The current page is marked in yellow. This is the default. |
+| **Arrows (previous / next)** | The row with `<`, the page number and `>` under the tiles. |
 
 The bar has four places and follows the page positions. With up to four pages
 every page has its button. With more pages the first three have one and the

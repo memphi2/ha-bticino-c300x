@@ -47,7 +47,9 @@ def test_energy_with_status_agenda_48_checks_and_notifications(monkeypatch, noti
     contacts = [f"binary_sensor.ground_floor_window_{index:02d}" for index in range(24)]
     lights = [f"light.ground_floor_room_{index:02d}" for index in range(24)]
     entry = SimpleNamespace(entry_id="energy-budget", title="Energy budget", data={"device_ui_enabled": True},
-                            options={"energy_page": {"enabled": True, "views": [view["id"] for view in energy["energy"]["views"]]},
+                            # The arrows add page buttons to the status page: the larger payload.
+                            options={"dashboard_navigation": "pager",
+                                     "energy_page": {"enabled": True, "views": [view["id"] for view in energy["energy"]["views"]]},
                                      "agenda_page": {"enabled": True, "calendars": ["calendar.family"]},
                                      "leave_home_page": {"enabled": True, "contacts": contacts, "lights": lights}},
                             async_on_unload=lambda _callback: None,

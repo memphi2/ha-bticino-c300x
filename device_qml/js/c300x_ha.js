@@ -565,7 +565,8 @@ function dashboardPageLinks(pageItem) {
 var TAB_SLOTS = 4
 
 function dashboardTabTitle(pageData, index, startTitle) {
-    return dashboardPageTitle(pageData) || startTitle || String(index + 1)
+    if (!pageData || !(pageData.title || pageData.name)) return String(index + 1)
+    return dashboardPageTitle(pageData) || startTitle
 }
 
 function dashboardPageTabs(pages, startTitle, moreTitle) {

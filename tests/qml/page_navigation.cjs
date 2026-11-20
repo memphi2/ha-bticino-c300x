@@ -56,6 +56,14 @@ assert.deepEqual(plain(api.dashboardPageTabs(five, "Home", "More")), [
     {index: 2, title: "Rooms"}, {index: -1, title: "More"}]);
 assert.deepEqual(plain(api.dashboardMoreLinks(five, "Home")),
     [{index: 3, title: "Garden"}, {index: 4, title: "Agenda"}]);
+// Only the status page is the start page. A page without a title, which holds
+// tiles that have no page name, shows its number as the page list always did.
+assert.deepEqual(plain(api.dashboardPageTabs([{title: "C300X"}, {title: ""}, {title: "Rooms"}], "Home", "More"))
+    .map(tab => tab.title), ["Home", "2", "Rooms"]);
+assert.deepEqual(plain(api.dashboardPageTabs([{}, {title: "Home Assistant"}], "Home", "More"))
+    .map(tab => tab.title), ["1", "Home"]);
+assert.deepEqual(plain(api.dashboardMoreLinks(titled(["A", "B", "C", "", "E"]), "Home"))
+    .map(tab => tab.title), ["4", "E"]);
 // Every page is reachable exactly once, for every page count the display supports.
 for (let count = 1; count <= 14; count++) {
     const pages = titled(Array.from({length: count}, (_, i) => "P" + i));

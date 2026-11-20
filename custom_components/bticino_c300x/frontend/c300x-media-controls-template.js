@@ -13,7 +13,10 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     /* Text on the picture has no plate: white with a dark outline, as the time written into an image. */
     .stamp, .info { color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 3px #000; }
     /* The time of a video sits where an image carries its own: lower right, same size. */
-    .stamp { --c300x-stamp-size: max(10px, 2.5cqw); position: absolute; right: calc(var(--c300x-stamp-size) / 3);
+    /* Without container units the time keeps a fixed size. */
+    .stamp, .toolbar { --c300x-stamp-size: 12px; }
+    @supports (width: 1cqw) { .stamp, .toolbar { --c300x-stamp-size: max(10px, 2.5cqw); } }
+    .stamp { position: absolute; right: calc(var(--c300x-stamp-size) / 3);
       bottom: calc(var(--c300x-stamp-size) / 3); max-width: calc(100% - 16px); margin: 0;
       font-size: var(--c300x-stamp-size); line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .info { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 112px); display: flex;
@@ -24,7 +27,7 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .toolbar { position: absolute; bottom: 8px; inset-inline: 8px; display: flex; align-items: center; gap: 2px;
       padding: 0 6px; border-radius: 20px; pointer-events: auto; background: rgb(0 0 0 / .5);
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-    .toolbar[data-dated] { bottom: calc(max(10px, 2.5cqw) * 1.5 + 8px); }
+    .toolbar[data-dated] { bottom: calc(var(--c300x-stamp-size) * 1.5 + 8px); }
     .timeline { order: 1; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 4px; }
     .buttons { display: contents; }
     .play { order: 0; } .spacer, .mute, .volume { order: 2; }
@@ -53,7 +56,9 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .next, .close { right: 8px; }
     .close, .fullscreen { top: 8px; }
     .fullscreen { right: 56px; }
-    @container (max-width: 280px) { .volume { width: 40px; flex-basis: 40px; } button { width: 32px; height: 32px; flex-basis: 32px; }
+    /* A narrow card gives the row to the seek bar: first the volume slider goes, then the times. */
+    @container (max-width: 340px) { .timeline:not([hidden]) ~ .buttons .volume { display: none; } }
+    @container (max-width: 280px) { .elapsed { display: none; } .volume { width: 40px; flex-basis: 40px; } button { width: 32px; height: 32px; flex-basis: 32px; }
       .nav { top: calc(50% - 16px); } .fullscreen { right: 48px; } }
   </style>
   <div class="archive" hidden>

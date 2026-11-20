@@ -180,20 +180,20 @@ export class C300XMediaHistory {
     const navigation = ++this.navigation, selected = this.selected?.id;
     if (!await this.load() || navigation !== this.navigation || this.busy || !this.active) return;
     if (selected && !this.selected) return;
-    if (!this.selected) this.stillId = this.shownStill()?.id ?? null;
-    const first = this.stillId && this.items[0]?.id === this.stillId ? 1 : 0;
-    const index = this.selected ? this.items.findIndex((item) => item.id === this.selected.id) : first - 1;
+    const items = this.browseItems();
+    const index = this.selected ? items.findIndex((item) => item.id === this.selected.id) : -1;
     const next = index + direction;
-    if (next < first) { this.clearMedia(); return; }
-    if (next < this.items.length) await this.select(this.items[next]);
+    if (next < 0) { this.clearMedia(); return; }
+    if (next < items.length) await this.select(items[next]);
     else { this.error = this.items.length ? "" : "empty"; this.onChange(); }
   }
 
-  // The card already shows the newest image as its still; browsing starts behind it.
-  shownStill() {
-    const newest = this.items[0];
-    return newest?.kind === "image" && this.stillAt !== null
-      && Math.abs(newest.at - this.stillAt) < 0.001 ? newest : null;
+  // The card shows one saved image as its still already, wherever it sits
+  // among the items; browsing leaves that one out.
+  browseItems() {
+    if (this.stillAt === null) return this.items;
+    const still = this.items.find((item) => item.kind === "image" && Math.abs(item.at - this.stillAt) < 0.001);
+    return still ? this.items.filter((item) => item !== still) : this.items;
   }
 
   async select(item) {

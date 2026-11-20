@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=905a2f688412789c";
-import { mediaDate, mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=905a2f688412789c";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=905a2f688412789c";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=47fbb8bc22672ee8";
+import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=47fbb8bc22672ee8";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=47fbb8bc22672ee8";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -189,9 +189,9 @@ export class C300XMediaControls extends HTMLElement {
     const available = c.enabled && h.active && !c.busy;
     n.previous.hidden = !available;
     n.next.hidden = !available;
-    const index = h.selected ? h.items.findIndex((item) => item.id === h.selected.id)
-      : h.shownStill() ? 0 : -1;
-    n.previous.disabled = !!h.listPromise || (!h.dirty && index === h.items.length - 1);
+    const items = h.browseItems();
+    const index = h.selected ? items.findIndex((item) => item.id === h.selected.id) : -1;
+    n.previous.disabled = !!h.listPromise || (!h.dirty && index === items.length - 1);
     n.next.disabled = !this.browsing || !!h.listPromise;
     n.expand.hidden = !c.expandAvailable || c.expanded;
     n.close.hidden = !c.expanded;
@@ -215,7 +215,7 @@ export class C300XMediaControls extends HTMLElement {
     if (this.isVideo) n.toolbar.setAttribute("data-dated", "");
     else n.toolbar.removeAttribute("data-dated");
     if (h.selected) {
-      const date = mediaDate(c.hass, h.selected.at), label = `${this.label(h.selected.kind)}: ${date}`;
+      const date = mediaStamp(c.hass, h.selected.at), label = `${this.label(h.selected.kind)}: ${date}`;
       this.img.alt = label;
       this.video.setAttribute("aria-label", label);
       if (this.isVideo) {

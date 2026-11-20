@@ -381,7 +381,12 @@ test("the time of a video is written like the time in an image and has no plate"
   for (const rule of [/\.stamp \{[^}]*\}/, /\.info \{[^}]*\}/]) assert.doesNotMatch(template.match(rule)[0], /background/);
   assert.match(template, /\.stamp, \.info \{ color: #fff; text-shadow:/);
   // The bar of a video ends above the line of the time.
-  assert.match(template, /\.toolbar\[data-dated\] \{ bottom: calc\(max\(10px, 2\.5cqw\) \* 1\.5 \+ 8px\); \}/);
+  assert.match(template, /\.toolbar\[data-dated\] \{ bottom: calc\(var\(--c300x-stamp-size\) \* 1\.5 \+ 8px\); \}/);
+  // Time and bar share one size, also where the browser has no container units.
+  assert.match(template, /\.stamp, \.toolbar \{ --c300x-stamp-size: 12px; \}\n\s*@supports \(width: 1cqw\) \{ \.stamp, \.toolbar \{ --c300x-stamp-size: max\(10px, 2\.5cqw\); \} \}/);
+  // A narrow card keeps the seek bar usable.
+  assert.match(template, /@container \(max-width: 340px\) \{ \.timeline:not\(\[hidden\]\) ~ \.buttons \.volume \{ display: none; \} \}/);
+  assert.match(template, /@container \(max-width: 280px\) \{ \.elapsed \{ display: none; \}/);
 });
 
 test("new media modules keep HA controls on a picture that fills the card, without device APIs", () => {

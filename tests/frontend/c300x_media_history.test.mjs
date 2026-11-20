@@ -99,8 +99,7 @@ test("the image the card shows as its still is not shown again as the first save
   s.configure({ stillAt: 40 });
   await s.history.step(1);
   assert.equal(s.history.selected.id, video.id);
-  // Browsing hides the still; the way back still ends at it, not at its saved copy.
-  s.configure({ stillAt: null });
+  // The way back ends at the still, not at its saved copy.
   await s.history.step(1);
   assert.equal(s.history.selected.id, older.id);
   await s.history.step(-1);
@@ -117,6 +116,36 @@ test("the image the card shows as its still is not shown again as the first save
   other.configure({ stillAt: 12 });
   await other.history.step(1);
   assert.equal(other.history.selected.id, still.id);
+});
+
+test("the still is left out also when a video is newer than it", async (t) => {
+  const video = item("a", "video", 50), still = item("b", "image", 40), older = item("c", "image", 20);
+  const s = harness(t, [video, still, older]);
+  s.configure({ stillAt: 40 });
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, video.id);
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, older.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected.id, video.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected, null);
+});
+
+test("an image that becomes the still while browsing is left out on the way back", async (t) => {
+  const still = item("a", "image", 40), video = item("b", "video", 30);
+  const s = harness(t, [still, video]);
+  s.configure({ stillAt: 40 });
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, video.id);
+  const newer = item("d", "image", 50);
+  s.history.items = [newer, still, video];
+  s.configure({ stillAt: 50 });
+  await s.history.step(-1);
+  // The image that was the still is an ordinary saved file now.
+  assert.equal(s.history.selected.id, still.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected, null);
 });
 
 test("metadata insertion preserves playing file identity and removal/revision change closes it", async (t) => {

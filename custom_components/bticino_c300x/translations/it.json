@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Inserisci prima l'indirizzo del C300X. Se il device agent nativo non e raggiungibile, Home Assistant può guidare un'installazione una tantum prima di chiedere token e funzioni.",
+        "description": "Inserisci prima l'indirizzo del C300X. Se il device agent nativo non è raggiungibile, Home Assistant può guidare un'installazione una tantum prima di chiedere le chiavi e le funzioni.",
         "data": {
           "name": "Nome",
           "agent_host": "Indirizzo del C300X",
@@ -25,7 +25,7 @@
       },
       "bootstrap_install": {
         "title": "Installa agent C300X nativo",
-        "description": "Scrive sul C300X l'agent nativo, una configurazione token generata, lo script di avvio e i file di supporto display tramite SSH. Le credenziali SSH sono usate solo per questa installazione e non vengono salvate.",
+        "description": "Scrive sul C300X l'agent nativo, una configurazione con chiavi generate, lo script di avvio e i file di supporto display tramite SSH. Le credenziali SSH sono usate solo per questa installazione e non vengono salvate.",
         "data": {
           "bootstrap_ssh_username": "Utente SSH C300X",
           "bootstrap_ssh_password": "Password SSH C300X"
@@ -33,7 +33,7 @@
       },
       "agent_auth": {
         "title": "Credenziali device agent",
-        "description": "Inserisci i token per l'agent nativo raggiungibile. Lascia vuoto il token API solo mentre l'agent e ancora in modalità bootstrap noAuth.",
+        "description": "Inserisci le chiavi dell'agent nativo raggiungibile. Lascia vuota la chiave di accesso solo mentre l'agent è ancora in modalità bootstrap noAuth.",
         "data": {
           "agent_token": "Chiave di accesso",
           "maintenance_token": "Chiave di manutenzione"
@@ -139,7 +139,7 @@
       },
       "reconfigure": {
         "title": "Riconfigura BTicino C300X",
-        "description": "Aggiorna connessione del device agent, token manutenzione o ruota le credenziali webhook.",
+        "description": "Aggiorna la connessione del device agent o la chiave di manutenzione, oppure ruota le credenziali webhook.",
         "data": {
           "agent_host": "Indirizzo del C300X",
           "agent_port": "Porta",
@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe sezioni seguono l'ordine del display e i titoli indicano il numero di pagina. Una pagina che il display non mostra (disattivata o senza entità) non ha numero e si trova sotto le pagine mostrate. Una sezione «Pagina +» è libera: compilala per aggiungere una pagina.",
+        "description": "Una sezione per pagina: la pagina di stato, fino a sette pagine personali e le pagine integrate Energia, Agenda, Esci di casa e Situazioni. Una sezione senza nome ed entità resta inutilizzata; «Pagina +» è libera. Le posizioni vanno da 1 a 12; a parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le altre pagine, in quest'ordine.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -465,7 +465,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe sezioni seguono l'ordine del display e i titoli indicano il numero di pagina. Una pagina che il display non mostra (disattivata o senza entità) non ha numero e si trova sotto le pagine mostrate. Una sezione «Pagina +» è libera: compilala per aggiungere una pagina.",
+        "description": "Una sezione per pagina: la pagina di stato, fino a sette pagine personali e le pagine integrate Energia, Agenda, Esci di casa e Situazioni. Una sezione senza nome ed entità resta inutilizzata; «Pagina +» è libera. Le posizioni vanno da 1 a 12; a parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le altre pagine, in quest'ordine.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -672,7 +672,7 @@
     "error": {
       "agent_bundle_missing": "Il bundle ARMHF dell'agent non e incluso. Compila/prepara il bundle di release prima di usare l'installer.",
       "device_install_failed": "Installazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
-      "device_install_verify_failed": "L'installazione è terminata, ma l'agent nativo non risponde con il token generato.",
+      "device_install_verify_failed": "L'installazione è terminata, ma l'agent nativo non risponde con la chiave di accesso generata.",
       "invalid_agent_port": "Inserisci una porta valida per il device agent.",
       "invalid_agent_host": "Inserisci l'host del device agent.",
       "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile dal C300X, oppure lasciare vuoto.",
@@ -693,7 +693,7 @@
       "invalid_dashboard_entity_display_overrides": "Un'impostazione del display non è valida. Controlla i nomi personalizzati e i nomi delle pagine (al massimo 60 caratteri).",
       "dashboard_page_name_reserved": "C300X è il nome interno della pagina di stato; scegli un altro nome di pagina.",
       "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
-      "dashboard_entity_on_several_pages": "Un'entità e scelta su più pagine; lasciala su una sola pagina.",
+      "dashboard_entity_on_several_pages": "Un'entità è scelta su più pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
       "invalid_snapshot_option": "Inserisci numeri interi: 1-300 secondi, 1-365 giorni, larghezza 64-800 e altezza 64-480.",
@@ -800,7 +800,7 @@
       },
       "dashboard": {
         "title": "Display e patch display",
-        "description": "Pagine Home Assistant sul display del C300X.\n\nPatch display sul dispositivo: {qml_patch_status}.\n\nAttivare o disattivare il patch display scrive file del display sul dispositivo e ne ricarica la schermata; può richiedere fino a circa 60 secondi. Lo stato cambia quando il dispositivo lo conferma.\n\nCon il patch display attivo, il menu delle impostazioni offre anche **Pagine del display** (meteo e cosa viene mostrato dove) e **Riquadri del display**.",
+        "description": "Pagine Home Assistant sul display del C300X.\n\nPatch display sul dispositivo: {qml_patch_status}.\n\nAttivare o disattivare il patch display scrive file del display sul dispositivo e ne ricarica la schermata; può richiedere fino a circa 60 secondi. Lo stato cambia quando il dispositivo lo conferma.\n\nCon il patch display attivo, il menu Display offre anche **Pagine del display** (meteo e cosa viene mostrato dove) e **Riquadri del display**.",
         "data": {
           "device_ui_enabled": "Pagine Home Assistant sul display",
           "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
@@ -822,16 +822,13 @@
       },
       "init": {
         "title": "Impostazioni C300X",
-        "description": "Scegli cosa vuoi modificare. Ogni sezione si salva da sola all'invio e ti riporta qui; le altre sezioni mantengono le loro impostazioni. Per uscire da una sezione senza modifiche, inviala così com'è.",
+        "description": "Scegli cosa vuoi modificare. Ogni sezione si salva da sola all'invio e ti riporta al menu da cui è stata aperta; le altre sezioni mantengono le loro impostazioni. Per uscire da una sezione senza modifiche, inviala così com'è.",
         "menu_options": {
           "connection": "Connessione al C300X",
           "features": "Video e audio",
           "visitor_snapshot": "Istantanea visitatore",
           "device_activations": "Attivazioni: serrature, luci, luce scale",
-          "dashboard_alarm": "Allarme (Alarmo)",
-          "dashboard": "Display e patch display",
-          "dashboard_pages": "Pagine del display",
-          "dashboard_entity_display": "Riquadri del display",
+          "display": "Display",
           "done": "Fatto"
         },
         "menu_option_descriptions": {
@@ -839,11 +836,50 @@
           "features": "Immagine dal vivo, conversazione, volumi e accesso video e audio sul C300X.",
           "visitor_snapshot": "Dimensione dell'immagine del visitatore salvata, ritardo di acquisizione, conservazione e data scritta nell'immagine.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
-          "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",
-          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, navigazione tra le pagine, comportamento dopo un'azione e azioni consentite.",
-          "dashboard_pages": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
-          "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro.",
+          "display": "Patch display, pagine, riquadri e Alarmo.",
           "done": "Chiudi le impostazioni. Tutto ciò che è stato inviato è già salvato."
+        }
+      },
+      "display": {
+        "title": "Display",
+        "description": "Tutto ciò che il display del C300X mostra da Home Assistant. Pagine e riquadri compaiono qui quando il patch display è attivo.",
+        "menu_options": {
+          "dashboard": "Display e patch display",
+          "dashboard_page_list": "Pagine del display",
+          "dashboard_entity_display": "Riquadri del display",
+          "dashboard_alarm": "Allarme (Alarmo)",
+          "init": "Indietro"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, navigazione tra le pagine, comportamento dopo un'azione e azioni consentite.",
+          "dashboard_page_list": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
+          "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro.",
+          "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",
+          "init": "Torna al menu delle impostazioni."
+        }
+      },
+      "dashboard_page_list": {
+        "title": "Pagine del display",
+        "description": "Scegli una pagina per modificarla. L'elenco segue l'ordine del display. Una pagina senza numero non viene mostrata: è disattivata o non ha entità.",
+        "menu_options": {
+          "page_1": "Pagina{page_1_position}: Pagina di stato",
+          "page_2": "Pagina{page_2_position}{page_2_name}",
+          "page_3": "Pagina{page_3_position}{page_3_name}",
+          "page_4": "Pagina{page_4_position}{page_4_name}",
+          "page_5": "Pagina{page_5_position}{page_5_name}",
+          "page_6": "Pagina{page_6_position}{page_6_name}",
+          "page_7": "Pagina{page_7_position}{page_7_name}",
+          "page_8": "Pagina{page_8_position}{page_8_name}",
+          "agenda_page": "Pagina{agenda_page_position}: Agenda",
+          "leave_home_page": "Pagina{leave_home_page_position}: Esci di casa",
+          "energy_page": "Pagina{energy_page_position}: Energia",
+          "situations_page": "Pagina{situations_page_position}: Situazioni",
+          "page_new": "Aggiungi una pagina",
+          "display": "Indietro"
+        },
+        "menu_option_descriptions": {
+          "page_new": "Fino a sette pagine personali.",
+          "display": "Torna al menu Display."
         }
       },
       "dashboard_alarm": {
@@ -860,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Configura cinque pagine predefinite (Stato, Energia, Agenda, Esci di casa e Situazioni) e fino a sette pagine personalizzate. Ogni pagina ha una propria sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 è la prima. Se vuota, vale la posizione predefinita.\n- **Entità**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entità può stare su una sola pagina.\n\nUna sezione senza nome né entità resta inutilizzata. Alarmo ha un'area propria nel menu delle impostazioni.\n\nEnergia, Agenda, Esci di casa e Situazioni sono pagine aggiuntive attivabili indipendentemente. Ogni pagina può occupare una posizione da 1 a 12. A parità di posizione, Energia, Agenda, Esci di casa e Situazioni precedono le pagine normali, in questo ordine.\n\nLe sezioni seguono l'ordine del display e i titoli indicano il numero di pagina. Una pagina che il display non mostra (disattivata o senza entità) non ha numero e si trova sotto le pagine mostrate. Una sezione «Pagina +» è libera: compilala per aggiungere una pagina.",
+        "description": "Le impostazioni di questa pagina. La posizione è il suo posto tra le pagine, da 1 a 12; le altre pagine vengono rinumerate attorno a essa. Un'entità scelta qui che un'altra pagina mostra passa a questa pagina. Una pagina personale senza nome ed entità viene rimossa.",
         "sections": {
           "page_1": {
             "name": "Pagina{page_1_position}: Pagina di stato",
@@ -1065,7 +1101,7 @@
       "invalid_dashboard_entity_display_overrides": "Un'impostazione del display non è valida. Controlla i nomi personalizzati e i nomi delle pagine (al massimo 60 caratteri).",
       "dashboard_page_name_reserved": "C300X è il nome interno della pagina di stato; scegli un altro nome di pagina.",
       "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
-      "dashboard_entity_on_several_pages": "Un'entità e scelta su più pagine; lasciala su una sola pagina.",
+      "dashboard_entity_on_several_pages": "Un'entità è scelta su più pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
       "dashboard_page_name_missing": "Una pagina con entità ha bisogno di un nome; il display lo mostra come titolo della pagina.",
       "required": "Questo campo è obbligatorio.",

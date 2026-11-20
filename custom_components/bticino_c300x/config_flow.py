@@ -78,6 +78,12 @@ from .config_flow_dashboard_pages import (
 from .config_flow_dashboard_pages import (
     dashboard_pages_schema as _dashboard_pages_schema,
 )
+from .config_flow_display_menu import (
+    DisplayMenuSteps,
+    single_page_errors,
+    single_page_post,
+    single_page_schema,
+)
 from .config_flow_features import (
     current_connection_options as _current_connection_options,
 )
@@ -1387,7 +1393,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
 
 class BticinoC300XOptionsFlow(
-    SnapshotOptionsStep, OptionsMenuSteps, config_entries.OptionsFlow,
+    SnapshotOptionsStep, DisplayMenuSteps, OptionsMenuSteps, config_entries.OptionsFlow,
 ):
     """Handle C300X options.
 
@@ -1412,6 +1418,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Show the settings areas."""
 
+        self._page_key = None
+        self._return_step = "init"
         return self.async_show_menu(
             step_id="init",
             menu_options=[*_options_menu(self._config_entry), "done"],
@@ -1640,9 +1648,10 @@ class BticinoC300XOptionsFlow(
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
-            dashboard_input, errors = _dashboard_pages_input(
-                self._dashboard_options, user_input
-            )
+            posted = user_input
+            if self._page_key is not None:
+                posted = single_page_post(self._dashboard_options, self._page_key, user_input)
+            dashboard_input, errors = _dashboard_pages_input(self._dashboard_options, posted)
             if errors:
                 return self._async_show_options_dashboard_pages_form(user_input, errors)
             self._dashboard_options = dashboard_input
@@ -1654,15 +1663,21 @@ class BticinoC300XOptionsFlow(
         user_input: dict[str, Any] | None,
         errors: dict[str, str],
     ) -> FlowResult:
-        """Show the pages of the C300X display dashboard options."""
+        """Show the pages form, or the one page opened from the page list."""
 
+        posted = user_input
         schema = _dashboard_pages_schema(self._dashboard_options, user_input)
+        if self._page_key is not None:
+            schema = single_page_schema(self._dashboard_options, self._page_key, user_input)
+            errors = single_page_errors(self._dashboard_options, self._page_key, errors)
+            if user_input is not None:
+                posted = single_page_post(self._dashboard_options, self._page_key, user_input)
         return self.async_show_form(
             step_id="dashboard_pages",
             data_schema=schema,
             errors=errors,
             description_placeholders=_dashboard_pages_placeholders(
-                self._dashboard_options, user_input
+                self._dashboard_options, posted
             ),
         )
 

@@ -1,5 +1,5 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=8cfee17e2e7b2905";
-import "./c300x-media-controls.js?v=8cfee17e2e7b2905";
+import { c300xMediaState } from "./c300x-state-model.js?v=2a51663329509534";
+import "./c300x-media-controls.js?v=2a51663329509534";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -90,6 +90,9 @@ export class C300XCardMedia {
       scaledVolume: !!card._webrtc?.gainEngaged,
       volume: card._playbackVolume ?? 1, muted: card._playbackMuted === true,
       still: this.card._snapshotEl?.hidden === false,
+      // While browsing the still is hidden, but it is what the card returns to.
+      stillAt: card._snapshotUrl && (card._snapshotEl?.hidden === false || this.browsing)
+        ? card._snapshotCapturedAt : null,
       expandAvailable: typeof this.frame?.showModal === "function", expanded: this.expanded,
       fullscreenAvailable: this.expanded && typeof this.target?.requestFullscreen === "function",
       fullscreen: this.target?.ownerDocument?.fullscreenElement === this.target

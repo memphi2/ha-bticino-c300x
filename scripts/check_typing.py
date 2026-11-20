@@ -53,6 +53,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/config_flow_input.py",
     "custom_components/bticino_c300x/config_flow_identity.py",
     "custom_components/bticino_c300x/config_flow_options_menu.py",
+    "custom_components/bticino_c300x/config_flow_display_menu.py",
     "custom_components/bticino_c300x/const.py",
     "custom_components/bticino_c300x/dashboard_weather.py",
     "custom_components/bticino_c300x/dashboard_entities.py",

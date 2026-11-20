@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Gib zuerst die C300X-Adresse ein. Wenn der native Device-Agent nicht erreichbar ist, kann Home Assistant vor Token- und Funktionsauswahl durch eine einmalige Agent-Installation führen.",
+        "description": "Gib zuerst die C300X-Adresse ein. Wenn der native Device-Agent nicht erreichbar ist, kann Home Assistant vor der Eingabe der Schlüssel und der Funktionsauswahl durch eine einmalige Agent-Installation führen.",
         "data": {
           "name": "Name",
           "agent_host": "Adresse des C300X",
@@ -25,7 +25,7 @@
       },
       "bootstrap_install": {
         "title": "Nativen C300X-Agent installieren",
-        "description": "Schreibt den nativen Agent, eine generierte Token-Konfiguration, das Startscript und die Display-Supportdateien per SSH auf den C300X. SSH-Zugangsdaten werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
+        "description": "Schreibt den nativen Agent, eine Konfiguration mit generierten Schlüsseln, das Startscript und die Display-Supportdateien per SSH auf den C300X. SSH-Zugangsdaten werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
         "data": {
           "bootstrap_ssh_username": "C300X-SSH-User",
           "bootstrap_ssh_password": "C300X-SSH-Passwort"
@@ -33,7 +33,7 @@
       },
       "agent_auth": {
         "title": "Device-Agent-Zugangsdaten",
-        "description": "Gib die Token für den erreichbaren nativen Agent ein. Lasse den API-Token nur leer, solange der Agent noch im noAuth-Bootstrap-Modus läuft.",
+        "description": "Gib die Schlüssel des erreichbaren nativen Agent ein. Lasse den Zugangsschlüssel nur leer, solange der Agent noch im noAuth-Bootstrap-Modus läuft.",
         "data": {
           "agent_token": "Zugangsschlüssel",
           "maintenance_token": "Wartungsschlüssel"
@@ -139,7 +139,7 @@
       },
       "reconfigure": {
         "title": "BTicino C300X neu konfigurieren",
-        "description": "Aktualisiert Device-Agent-Verbindung, Maintenance-Token oder rotiert Webhook-Zugangsdaten.",
+        "description": "Aktualisiert die Device-Agent-Verbindung oder den Wartungsschlüssel oder rotiert die Webhook-Zugangsdaten.",
         "data": {
           "agent_host": "Adresse des C300X",
           "agent_port": "Port",
@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie Abschnitte stehen in der Reihenfolge des Displays, ihre Überschriften zeigen die Seitennummer. Eine Seite, die das Display nicht zeigt (ausgeschaltet oder ohne Entitäten), hat keine Nummer und steht unter den angezeigten Seiten. Ein Abschnitt „Seite +“ ist frei: ausfüllen, um eine Seite anzulegen.",
+        "description": "Ein Abschnitt je Seite: die Statusseite, bis zu sieben eigene Seiten und die vordefinierten Seiten Energie, Termine, Haus verlassen und Situationen. Ein Abschnitt ohne Name und Entitäten bleibt unbenutzt; „Seite +“ ist frei. Positionen gehen von 1 bis 12; bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor den übrigen Seiten, in dieser Reihenfolge.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -465,7 +465,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie Abschnitte stehen in der Reihenfolge des Displays, ihre Überschriften zeigen die Seitennummer. Eine Seite, die das Display nicht zeigt (ausgeschaltet oder ohne Entitäten), hat keine Nummer und steht unter den angezeigten Seiten. Ein Abschnitt „Seite +“ ist frei: ausfüllen, um eine Seite anzulegen.",
+        "description": "Ein Abschnitt je Seite: die Statusseite, bis zu sieben eigene Seiten und die vordefinierten Seiten Energie, Termine, Haus verlassen und Situationen. Ein Abschnitt ohne Name und Entitäten bleibt unbenutzt; „Seite +“ ist frei. Positionen gehen von 1 bis 12; bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor den übrigen Seiten, in dieser Reihenfolge.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",
@@ -672,7 +672,7 @@
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",
       "device_install_failed": "Die SSH-Installation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
-      "device_install_verify_failed": "Die Installation ist fertig, aber der native Agent antwortet nicht mit dem generierten Token.",
+      "device_install_verify_failed": "Die Installation ist fertig, aber der native Agent antwortet nicht mit dem generierten Zugangsschlüssel.",
       "invalid_agent_port": "Gib einen gültigen Device-Agent-Port ein.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
       "invalid_callback_base_url": "Eine vom C300X erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
@@ -800,7 +800,7 @@
       },
       "dashboard": {
         "title": "Display und Display-Patch",
-        "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Einstellungsmenü zusätzlich **Display-Seiten** (Wetter und was wo angezeigt wird) und **Display-Kacheln**.",
+        "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Display-Menü zusätzlich **Display-Seiten** (Wetter und was wo angezeigt wird) und **Display-Kacheln**.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
@@ -822,16 +822,13 @@
       },
       "init": {
         "title": "C300X-Einstellungen",
-        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest, und führt hierher zurück; die anderen Bereiche behalten ihre Einstellungen. Um einen Bereich ohne Änderung zu verlassen, sende ihn unverändert ab.",
+        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest, und führt in das Menü zurück, aus dem er geöffnet wurde; die anderen Bereiche behalten ihre Einstellungen. Um einen Bereich ohne Änderung zu verlassen, sende ihn unverändert ab.",
         "menu_options": {
           "connection": "Verbindung zum C300X",
           "features": "Video und Audio",
           "visitor_snapshot": "Besucher-Snapshot",
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
-          "dashboard_alarm": "Alarm (Alarmo)",
-          "dashboard": "Display und Display-Patch",
-          "dashboard_pages": "Display-Seiten",
-          "dashboard_entity_display": "Display-Kacheln",
+          "display": "Display",
           "done": "Fertig"
         },
         "menu_option_descriptions": {
@@ -839,11 +836,50 @@
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
-          "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
-          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Verhalten nach einer Aktion und erlaubte Aktionen.",
-          "dashboard_pages": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
-          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
+          "display": "Display-Patch, Seiten, Kacheln und Alarmo.",
           "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
+        }
+      },
+      "display": {
+        "title": "Display",
+        "description": "Alles, was das Display des C300X aus Home Assistant zeigt. Seiten und Kacheln erscheinen hier, sobald der Display-Patch an ist.",
+        "menu_options": {
+          "dashboard": "Display und Display-Patch",
+          "dashboard_page_list": "Display-Seiten",
+          "dashboard_entity_display": "Display-Kacheln",
+          "dashboard_alarm": "Alarm (Alarmo)",
+          "init": "Zurück"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Verhalten nach einer Aktion und erlaubte Aktionen.",
+          "dashboard_page_list": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
+          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
+          "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
+          "init": "Zurück zum Einstellungsmenü."
+        }
+      },
+      "dashboard_page_list": {
+        "title": "Display-Seiten",
+        "description": "Wähle eine Seite, um sie zu ändern. Die Liste folgt der Reihenfolge auf dem Display. Eine Seite ohne Nummer zeigt das Display nicht: Sie ist ausgeschaltet oder hat keine Entitäten.",
+        "menu_options": {
+          "page_1": "Seite{page_1_position}: Statusseite",
+          "page_2": "Seite{page_2_position}{page_2_name}",
+          "page_3": "Seite{page_3_position}{page_3_name}",
+          "page_4": "Seite{page_4_position}{page_4_name}",
+          "page_5": "Seite{page_5_position}{page_5_name}",
+          "page_6": "Seite{page_6_position}{page_6_name}",
+          "page_7": "Seite{page_7_position}{page_7_name}",
+          "page_8": "Seite{page_8_position}{page_8_name}",
+          "agenda_page": "Seite{agenda_page_position}: Termine",
+          "leave_home_page": "Seite{leave_home_page_position}: Haus verlassen",
+          "energy_page": "Seite{energy_page_position}: Energie",
+          "situations_page": "Seite{situations_page_position}: Situationen",
+          "page_new": "Seite hinzufügen",
+          "display": "Zurück"
+        },
+        "menu_option_descriptions": {
+          "page_new": "Bis zu sieben eigene Seiten.",
+          "display": "Zurück zum Display-Menü."
         }
       },
       "dashboard_alarm": {
@@ -860,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Konfiguriere fünf vordefinierte Seiten (Status, Energie, Termine, Haus verlassen und Situationen) und bis zu sieben eigene Seiten. Jede Seite hat einen eigenen Abschnitt:\n\n- **Name**: steht auf dem Display als Überschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Standardposition.\n- **Entitäten**: erscheinen als Kacheln in der gewählten Reihenfolge; zum Umsortieren ziehen. Eine Entität kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitäten bleibt unbenutzt. Alarmo hat im Einstellungsmenü einen eigenen Bereich.\n\nEnergie, Termine, Haus verlassen und Situationen sind unabhängig schaltbare Zusatzseiten. Jede Seite kann auf Position 1 bis 12 stehen. Bei gleicher Position kommen Energie, Termine, Haus verlassen und Situationen vor normalen Seiten, in dieser Reihenfolge.\n\nDie Abschnitte stehen in der Reihenfolge des Displays, ihre Überschriften zeigen die Seitennummer. Eine Seite, die das Display nicht zeigt (ausgeschaltet oder ohne Entitäten), hat keine Nummer und steht unter den angezeigten Seiten. Ein Abschnitt „Seite +“ ist frei: ausfüllen, um eine Seite anzulegen.",
+        "description": "Die Einstellungen dieser Seite. Die Position ist ihr Platz unter den Seiten, von 1 bis 12; die anderen rücken um sie herum. Eine hier gewählte Entität, die eine andere Seite zeigt, wechselt auf diese Seite. Eine eigene Seite ohne Name und Entitäten wird entfernt.",
         "sections": {
           "page_1": {
             "name": "Seite{page_1_position}: Statusseite",

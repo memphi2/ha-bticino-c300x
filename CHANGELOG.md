@@ -25,8 +25,30 @@ Display:
 - The energy tabs, the Leave home buttons, tiles that open details, the
   detail tabs and the on/off switch show that they are pressed.
 
+Doorstation card:
+
+- Saved images and videos look alike while browsing. The time of a video
+  is written where an image carries its own, in the lower right corner and
+  in the same form; the label in the corner and the time have no plate
+  any more. The video controls are one row in a bar above the time, and the
+  arrows stay at one height.
+
+Settings:
+
+- The settings menu has one **Display** entry. It opens a menu with the
+  Display patch, the pages, the tiles and Alarmo.
+- **Display pages** is a list of the pages. A page opens a short form with
+  its own fields instead of one form with all pages. A new position moves
+  the pages in between by one, and an entity that another page shows moves
+  to the opened page with its tile settings.
+- The setup texts say access key and maintenance key throughout, as the
+  fields do.
+
 Fixed:
 
+- The card no longer shows the last image twice. Its saved copy came again
+  as the first step into the saved pictures and videos; browsing now starts
+  behind the image the card already shows.
 - The camera card no longer stays on a call the device has lost. After an
   agent restart during a live view or a call, the card kept offering
   **Hang up** without effect until Home Assistant was restarted.

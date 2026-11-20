@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { C300X_MEDIA_TRANSLATIONS, mediaDate, mediaLanguage, mediaLocalize } from "../../custom_components/bticino_c300x/frontend/c300x-media-translations.js";
+import { C300X_MEDIA_TRANSLATIONS, mediaLanguage, mediaLocalize, mediaStamp } from "../../custom_components/bticino_c300x/frontend/c300x-media-translations.js";
 
 class Node extends EventTarget {
   constructor() {
@@ -192,6 +192,9 @@ test("navigation swaps inline media without false browsing toggles or starting p
   assert.equal(c.img.hidden, true);
   assert.equal(c.video.hidden, false);
   assert.equal(c.nodes.stamp.hidden, false);
+  // The time of a video reads as the one written into an image, in its place.
+  assert.equal(c.nodes.stamp.textContent, mediaStamp(s.hass, 20));
+  assert.equal(c.nodes.toolbar.getAttribute("data-dated"), "");
   assert.equal(c.nodes.play.hidden, false);
   assert.equal(c.video.plays, 0);
   assert.equal(c.nodes.previous.disabled, true);
@@ -344,6 +347,19 @@ test("the picture requests the window, navigation lies on the picture and close 
   assert.doesNotMatch(template.slice(template.indexOf('<div class="toolbar"')), /"previous|"next/);
 });
 
+test("the arrow to older files follows the still of the card", async (t) => {
+  const video = item("a", "video", 45), image = item("b", "image", 40);
+  const s = harness(t, [video, image]), c = s.controls;
+  s.configure({ still: true, stillAt: 40 });
+  await c.history.step(1);
+  assert.equal(c.history.selected.id, video.id);
+  // Only the still is left behind the video.
+  assert.equal(c.nodes.previous.disabled, true);
+  // Another image became the still: the saved one can be reached again.
+  s.configure({ stillAt: 50 });
+  assert.equal(c.nodes.previous.disabled, false);
+});
+
 test("mode labels are text-only; volume normalization and language updates are safe", async (t) => {
   const s = harness(t, [], { enabled: false, label: '<img src="x">', volume: NaN, hasAudio: true }), c = s.controls;
   assert.equal(c.nodes.mode.textContent, '<img src="x">');
@@ -365,7 +381,26 @@ test("four standalone translations cover controls and follow HA language fallbac
   assert.equal(mediaLanguage({ locale: { language: "fr-CH" } }), "fr");
   assert.equal(mediaLocalize({ language: "it-IT" }, "play"), "Riproduci");
   assert.equal(mediaLocalize({ language: "zz" }, "play"), "Play");
-  assert.doesNotThrow(() => mediaDate({ language: "not_a_locale" }, 10));
+});
+
+test("the time of a video is written like the time in an image and has no plate", () => {
+  assert.equal(mediaStamp({ config: { time_zone: "Europe/Berlin" } }, Date.UTC(2026, 10, 20, 18, 0, 15) / 1000), "2026-11-20 19:00:15");
+  assert.equal(mediaStamp({ config: { time_zone: "UTC" } }, Date.UTC(2026, 0, 2, 0, 4, 5) / 1000), "2026-01-02 00:04:05");
+  assert.match(mediaStamp({ config: { time_zone: "No/Zone" } }, 10), /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
+  // A time that is no date gives no text and does not stop the card.
+  for (const at of [NaN, undefined, 1e16]) assert.equal(mediaStamp({}, at), "");
+  const template = readFileSync(new URL("../../custom_components/bticino_c300x/frontend/c300x-media-controls-template.js", import.meta.url), "utf8");
+  const stage = template.slice(template.indexOf('<div class="stage">'), template.indexOf('<div class="toolbar"'));
+  assert.match(stage, /<time class="stamp" hidden>/);
+  for (const rule of [/\.stamp \{[^}]*\}/, /\.info \{[^}]*\}/]) assert.doesNotMatch(template.match(rule)[0], /background/);
+  assert.match(template, /\.stamp, \.info \{ color: #fff; text-shadow:/);
+  // The bar of a video ends above the line of the time.
+  assert.match(template, /\.toolbar\[data-dated\] \{ bottom: calc\(var\(--c300x-stamp-size\) \* 1\.5 \+ 8px\); \}/);
+  // Time and bar share one size, also where the browser has no container units.
+  assert.match(template, /\.stamp, \.toolbar \{ --c300x-stamp-size: 12px; \}\n\s*@supports \(width: 1cqw\) \{ \.stamp, \.toolbar \{ --c300x-stamp-size: max\(10px, 2\.5cqw\); \} \}/);
+  // A narrow card keeps the seek bar usable.
+  assert.match(template, /@container \(max-width: 340px\) \{ \.timeline:not\(\[hidden\]\) ~ \.buttons \.volume \{ display: none; \} \}/);
+  assert.match(template, /@container \(max-width: 280px\) \{ \.elapsed \{ display: none; \}/);
 });
 
 test("new media modules keep HA controls on a picture that fills the card, without device APIs", () => {
@@ -375,7 +410,9 @@ test("new media modules keep HA controls on a picture that fills the card, witho
   assert.match(template, /\.stage \{ position: absolute; inset: 0;/);
   // The picture is never shrunk by the toolbar; only the arrows centre above it.
   assert.doesNotMatch(template, /\.(archive|stage) \{[^}]*toolbar-height/);
-  assert.match(template, /\.nav \{ top: calc\(\(100% - var\(--c300x-toolbar-height, 0px\)\) \/ 2 - 20px\); \}/);
+  // The arrows stay at one height while images and videos alternate.
+  assert.match(template, /\.nav \{ top: calc\(50% - 20px\); \}/);
+  assert.doesNotMatch(template, /toolbar-height/);
   assert.match(template, /object-fit: contain/);
   assert.match(template, /type="range"/);
   assert.match(template, /<ha-icon/);

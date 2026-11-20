@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Saisissez d'abord l'adresse du C300X. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les tokens et options.",
+        "description": "Saisissez d'abord l'adresse du C300X. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les clés et les options.",
         "data": {
           "name": "Nom",
           "agent_host": "Adresse du C300X",
@@ -25,7 +25,7 @@
       },
       "bootstrap_install": {
         "title": "Installer l'agent C300X natif",
-        "description": "Cette étape écrit l'agent natif, la configuration de tokens générée, le script de démarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
+        "description": "Cette étape écrit l'agent natif, une configuration avec des clés générées, le script de démarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
         "data": {
           "bootstrap_ssh_username": "Utilisateur SSH C300X",
           "bootstrap_ssh_password": "Mot de passe SSH C300X"
@@ -33,7 +33,7 @@
       },
       "agent_auth": {
         "title": "Identifiants de l'agent appareil",
-        "description": "Saisissez les tokens de l'agent natif joignable. Laissez le token API vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
+        "description": "Saisissez les clés de l'agent natif joignable. Laissez la clé d'accès vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
         "data": {
           "agent_token": "Clé d'accès",
           "maintenance_token": "Clé de maintenance"
@@ -139,7 +139,7 @@
       },
       "reconfigure": {
         "title": "Reconfigurer BTicino C300X",
-        "description": "Mettez à jour la connexion a l'agent, le token maintenance ou renouvelez les identifiants webhook.",
+        "description": "Mettez à jour la connexion à l'agent ou la clé de maintenance, ou renouvelez les identifiants webhook.",
         "data": {
           "agent_host": "Adresse du C300X",
           "agent_port": "Port",
@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
+        "description": "Une section par page : la page d'état, jusqu'à sept pages personnelles et les pages intégrées Énergie, Agenda, Quitter la maison et Situations. Une section sans nom ni entités reste inutilisée ; « Page + » est libre. Les positions vont de 1 à 12 ; à position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les autres pages, dans cet ordre.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -465,7 +465,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
+        "description": "Une section par page : la page d'état, jusqu'à sept pages personnelles et les pages intégrées Énergie, Agenda, Quitter la maison et Situations. Une section sans nom ni entités reste inutilisée ; « Page + » est libre. Les positions vont de 1 à 12 ; à position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les autres pages, dans cet ordre.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -672,7 +672,7 @@
     "error": {
       "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",
       "device_install_failed": "L'installation SSH a échoué. Vérifiez l'accès SSH et réessayez.",
-      "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec le token genere.",
+      "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec la clé d'accès générée.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",
@@ -800,7 +800,7 @@
       },
       "dashboard": {
         "title": "Écran et patch display",
-        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
+        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu Écran propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
@@ -822,16 +822,13 @@
       },
       "init": {
         "title": "Réglages C300X",
-        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène ici ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène au menu d'où elle a été ouverte ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
         "menu_options": {
           "connection": "Connexion au C300X",
           "features": "Vidéo et audio",
           "visitor_snapshot": "Instantané visiteur",
           "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
-          "dashboard_alarm": "Alarme (Alarmo)",
-          "dashboard": "Écran et patch display",
-          "dashboard_pages": "Pages de l'écran",
-          "dashboard_entity_display": "Tuiles de l'écran",
+          "display": "Écran",
           "done": "Terminé"
         },
         "menu_option_descriptions": {
@@ -839,11 +836,50 @@
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
-          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
-          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
-          "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
-          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "display": "Patch display, pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."
+        }
+      },
+      "display": {
+        "title": "Écran",
+        "description": "Tout ce que l'écran du C300X affiche depuis Home Assistant. Les pages et les tuiles apparaissent ici dès que le patch display est activé.",
+        "menu_options": {
+          "dashboard": "Écran et patch display",
+          "dashboard_page_list": "Pages de l'écran",
+          "dashboard_entity_display": "Tuiles de l'écran",
+          "dashboard_alarm": "Alarme (Alarmo)",
+          "init": "Retour"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
+          "dashboard_page_list": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
+          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
+          "init": "Retour au menu des réglages."
+        }
+      },
+      "dashboard_page_list": {
+        "title": "Pages de l'écran",
+        "description": "Choisissez une page pour la modifier. La liste suit l'ordre de l'écran. Une page sans numéro n'est pas affichée : elle est désactivée ou n'a pas d'entités.",
+        "menu_options": {
+          "page_1": "Page{page_1_position} : Page d'état",
+          "page_2": "Page{page_2_position}{page_2_name}",
+          "page_3": "Page{page_3_position}{page_3_name}",
+          "page_4": "Page{page_4_position}{page_4_name}",
+          "page_5": "Page{page_5_position}{page_5_name}",
+          "page_6": "Page{page_6_position}{page_6_name}",
+          "page_7": "Page{page_7_position}{page_7_name}",
+          "page_8": "Page{page_8_position}{page_8_name}",
+          "agenda_page": "Page{agenda_page_position} : Agenda",
+          "leave_home_page": "Page{leave_home_page_position} : Quitter la maison",
+          "energy_page": "Page{energy_page_position} : Énergie",
+          "situations_page": "Page{situations_page_position} : Situations",
+          "page_new": "Ajouter une page",
+          "display": "Retour"
+        },
+        "menu_option_descriptions": {
+          "page_new": "Jusqu'à sept pages personnelles.",
+          "display": "Retour au menu Écran."
         }
       },
       "dashboard_alarm": {
@@ -860,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
+        "description": "Les réglages de cette page. La position est sa place parmi les pages, de 1 à 12 ; les autres pages sont renumérotées autour d'elle. Une entité choisie ici qu'une autre page affiche passe sur cette page. Une page personnelle sans nom ni entités est supprimée.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",

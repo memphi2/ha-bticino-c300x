@@ -10,17 +10,29 @@ export const MEDIA_CONTROLS_TEMPLATE = `
       background: var(--c300x-media-background, #111); overflow: hidden; }
     .archive img, .archive video { display: block; width: 100%; height: 100%; object-fit: contain; }
     .stage { position: absolute; inset: 0; pointer-events: none; }
-    .stamp { position: absolute; right: 8px; bottom: calc(100% + 4px); max-width: calc(100% - 16px); margin: 0;
-      padding: 2px 4px; font-size: 12px; overflow-wrap: anywhere; color: #fff; background: rgb(0 0 0 / .65); }
+    /* Text on the picture has no plate: white with a dark outline, as the time written into an image. */
+    .stamp, .info { color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 3px #000; }
+    /* The time of a video sits where an image carries its own: lower right, same size. */
+    /* Without container units the time keeps a fixed size. */
+    .stamp, .toolbar { --c300x-stamp-size: 12px; }
+    @supports (width: 1cqw) { .stamp, .toolbar { --c300x-stamp-size: max(10px, 2.5cqw); } }
+    .stamp { position: absolute; right: calc(var(--c300x-stamp-size) / 3);
+      bottom: calc(var(--c300x-stamp-size) / 3); max-width: calc(100% - 16px); margin: 0;
+      font-size: var(--c300x-stamp-size); line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .info { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 112px); display: flex;
-      align-items: center; gap: 6px; padding: 2px 8px; border-radius: 10px; background: rgb(0 0 0 / .55); }
+      align-items: center; gap: 6px; padding: 2px 4px; }
     .mode, .status { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; font-size: 12px; }
     .status { opacity: .8; }
-    .toolbar { position: absolute; bottom: 0; inset-inline: 0; padding: 16px 4px 4px; pointer-events: auto;
-      background: linear-gradient(transparent, rgb(0 0 0 / .75)); }
-    .timeline { display: flex; align-items: center; gap: 6px; min-width: 0; height: 28px; padding: 0 4px; }
+    /* One row in a bar of its own; with a video it leaves the line of the time free below it. */
+    .toolbar { position: absolute; bottom: 8px; inset-inline: 8px; display: flex; align-items: center; gap: 2px;
+      padding: 0 6px; border-radius: 20px; pointer-events: auto; background: rgb(0 0 0 / .5);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    .toolbar[data-dated] { bottom: calc(var(--c300x-stamp-size) * 1.5 + 8px); }
+    .timeline { order: 1; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 4px; }
+    .buttons { display: contents; }
+    .play { order: 0; } .spacer, .mute, .volume { order: 2; }
+    .timeline:not([hidden]) ~ .buttons .spacer { display: none; }
     .elapsed { white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
-    .buttons { display: flex; align-items: center; gap: 0; min-width: 0; }
     .spacer { flex: 1; }
     button { width: 40px; height: 40px; flex: 0 0 40px; display: inline-flex; align-items: center;
       justify-content: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
@@ -38,14 +50,16 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .expand:hover { background: none; }
     .nav, .close, .fullscreen { background: rgb(0 0 0 / .5); transition: opacity 140ms ease; }
     .nav:hover, .close:hover, .fullscreen:hover { background: rgb(0 0 0 / .75); }
-    .nav { top: calc((100% - var(--c300x-toolbar-height, 0px)) / 2 - 20px); }
+    .nav { top: calc(50% - 20px); }
     .nav:disabled { opacity: 0; pointer-events: none; }
     .previous { left: 8px; }
     .next, .close { right: 8px; }
     .close, .fullscreen { top: 8px; }
     .fullscreen { right: 56px; }
-    @container (max-width: 280px) { .volume { width: 40px; flex-basis: 40px; } button { width: 32px; height: 32px; flex-basis: 32px; }
-      .nav { top: calc((100% - var(--c300x-toolbar-height, 0px)) / 2 - 16px); } .fullscreen { right: 48px; } }
+    /* A narrow card gives the row to the seek bar: first the volume slider goes, then the times. */
+    @container (max-width: 340px) { .timeline:not([hidden]) ~ .buttons .volume { display: none; } }
+    @container (max-width: 280px) { .elapsed { display: none; } .volume { width: 40px; flex-basis: 40px; } button { width: 32px; height: 32px; flex-basis: 32px; }
+      .nav { top: calc(50% - 16px); } .fullscreen { right: 48px; } }
   </style>
   <div class="archive" hidden>
     <img hidden alt="">
@@ -55,9 +69,9 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     <button class="expand" type="button"></button>
     ${button("previous nav", "chevron-left")}${button("next nav", "chevron-right")}${button("fullscreen", "fullscreen")}${button("close", "close")}
     <div class="info"><span class="mode"></span><span class="status" role="status" aria-live="polite"></span></div>
+    <time class="stamp" hidden></time>
   </div>
   <div class="toolbar" role="group">
-    <time class="stamp" hidden></time>
     <div class="timeline" hidden><input class="seek" type="range" min="0" max="0" step="0.1" value="0"><span class="elapsed">0:00 / 0:00</span></div>
     <div class="buttons">
       ${button("play", "play")}

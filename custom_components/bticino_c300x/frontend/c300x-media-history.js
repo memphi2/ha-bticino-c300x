@@ -67,7 +67,9 @@ export class C300XMediaHistory {
     this.version = 0;
   }
 
-  configure({ hass, entryId, enabled = true, connected = false, busy = false }) {
+  configure({ hass, entryId, enabled = true, connected = false, busy = false, stillAt = null }) {
+    // The capture time of the last image while the card shows it as its still.
+    this.stillAt = Number.isFinite(stillAt) ? stillAt : null;
     const identity = JSON.stringify([hass?.user?.id, hass?.user?.is_admin, hass?.user?.is_owner]);
     if (this.entryId !== entryId || this.connection !== hass?.connection
       || this.auth !== hass?.auth || this.identity !== identity) this.deactivate();
@@ -178,11 +180,20 @@ export class C300XMediaHistory {
     const navigation = ++this.navigation, selected = this.selected?.id;
     if (!await this.load() || navigation !== this.navigation || this.busy || !this.active) return;
     if (selected && !this.selected) return;
-    const index = this.selected ? this.items.findIndex((item) => item.id === this.selected.id) : -1;
-    const next = index + direction;
+    const next = this.neighbour(direction);
     if (next < 0) { this.clearMedia(); return; }
     if (next < this.items.length) await this.select(this.items[next]);
     else { this.error = this.items.length ? "" : "empty"; this.onChange(); }
+  }
+
+  // The card shows one saved image as its still already, wherever it sits
+  // among the items; browsing steps over that one.
+  neighbour(direction) {
+    const still = this.stillAt === null ? null
+      : this.items.find((item) => item.kind === "image" && Math.abs(item.at - this.stillAt) < 0.001);
+    let index = this.selected ? this.items.findIndex((item) => item.id === this.selected.id) : -1;
+    do index += direction; while (still && this.items[index] === still);
+    return index;
   }
 
   async select(item) {

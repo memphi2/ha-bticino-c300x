@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Enter the C300X address first. If the native device agent is not reachable, Home Assistant can guide a one-shot agent install before collecting tokens and feature options.",
+        "description": "Enter the C300X address first. If the native device agent is not reachable, Home Assistant can guide a one-shot agent install before asking for the keys and the feature options.",
         "data": {
           "name": "Name",
           "agent_host": "Address of the C300X",
@@ -25,7 +25,7 @@
       },
       "bootstrap_install": {
         "title": "Install native C300X agent",
-        "description": "This writes the native agent, generated token config, startup script, and display support files to the C300X through SSH. SSH credentials are used only for this install step and are not stored.",
+        "description": "This writes the native agent, a configuration with generated keys, the startup script, and display support files to the C300X through SSH. SSH credentials are used only for this install step and are not stored.",
         "data": {
           "bootstrap_ssh_username": "C300X SSH user",
           "bootstrap_ssh_password": "C300X SSH password"
@@ -33,7 +33,7 @@
       },
       "agent_auth": {
         "title": "Device agent credentials",
-        "description": "Enter the token details for the reachable native agent. Leave the API token empty only while the agent is still in noAuth bootstrap mode.",
+        "description": "Enter the keys of the reachable native agent. Leave the access key empty only while the agent is still in noAuth bootstrap mode.",
         "data": {
           "agent_token": "Access key",
           "maintenance_token": "Maintenance key"
@@ -139,7 +139,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure BTicino C300X",
-        "description": "Update device agent connection, maintenance token, or rotate webhook credentials.",
+        "description": "Update the device agent connection or the maintenance key, or rotate the webhook credentials.",
         "data": {
           "agent_host": "Address of the C300X",
           "agent_port": "Port",
@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe sections are listed in the order of the display, and their headings show the page number. A page the display does not show (switched off, or without entities) has no number and follows the shown pages. A section titled \"Page +\" is free: fill it in to add a page.",
+        "description": "One section per page: the Status page, up to seven pages of your own and the built-in pages Energy, Agenda, Leave home and Situations. A section without a name and entities stays unused; \"Page +\" is free. Positions run from 1 to 12; pages with the same position are ordered Energy, Agenda, Leave home and Situations, then the other pages.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -465,7 +465,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe sections are listed in the order of the display, and their headings show the page number. A page the display does not show (switched off, or without entities) has no number and follows the shown pages. A section titled \"Page +\" is free: fill it in to add a page.",
+        "description": "One section per page: the Status page, up to seven pages of your own and the built-in pages Energy, Agenda, Leave home and Situations. A section without a name and entities stays unused; \"Page +\" is free. Positions run from 1 to 12; pages with the same position are ordered Energy, Agenda, Leave home and Situations, then the other pages.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",
@@ -672,7 +672,7 @@
     "error": {
       "agent_bundle_missing": "The packaged ARMHF agent bundle is missing. Build/package the release bundle before using the installer.",
       "device_install_failed": "The SSH install failed. Check SSH access and try again.",
-      "device_install_verify_failed": "The installer finished, but the native agent did not answer with the generated token.",
+      "device_install_verify_failed": "The installer finished, but the native agent did not answer with the generated access key.",
       "invalid_agent_port": "Enter a valid device agent port.",
       "invalid_agent_host": "Enter the device agent host.",
       "invalid_callback_base_url": "Enter a reachable Home Assistant HTTP or HTTPS base URL, or leave it empty.",
@@ -800,7 +800,7 @@
       },
       "dashboard": {
         "title": "Display and Display patch",
-        "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the settings menu also offers **Display pages** (weather and what is shown where) and **Display tiles**.",
+        "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the Display menu also offers **Display pages** (weather and what is shown where) and **Display tiles**.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
@@ -822,16 +822,13 @@
       },
       "init": {
         "title": "C300X settings",
-        "description": "Choose what to change. Each area saves on its own when you submit it and brings you back here; the other areas keep their settings. To leave an area without a change, submit it as it is.",
+        "description": "Choose what to change. Each area saves on its own when you submit it and brings you back to the menu it was opened from; the other areas keep their settings. To leave an area without a change, submit it as it is.",
         "menu_options": {
           "connection": "Connection to the C300X",
           "features": "Video and audio",
           "visitor_snapshot": "Visitor Snapshot",
           "device_activations": "Activations: locks, lights, stair light",
-          "dashboard_alarm": "Alarm (Alarmo)",
-          "dashboard": "Display and Display patch",
-          "dashboard_pages": "Display pages",
-          "dashboard_entity_display": "Display tiles",
+          "display": "Display",
           "done": "Done"
         },
         "menu_option_descriptions": {
@@ -839,11 +836,50 @@
           "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
           "visitor_snapshot": "Size of the saved visitor image, capture delay, retention and the date written into the image.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
-          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
-          "dashboard": "Home Assistant pages on the display on or off, page navigation, behaviour after an action and allowed actions.",
-          "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
-          "dashboard_entity_display": "Size, name and secondary line of each tile.",
+          "display": "Display patch, pages, tiles and Alarmo.",
           "done": "Close the settings. Everything submitted is already saved."
+        }
+      },
+      "display": {
+        "title": "Display",
+        "description": "Everything the C300X display shows from Home Assistant. Pages and tiles appear here once the Display patch is on.",
+        "menu_options": {
+          "dashboard": "Display and Display patch",
+          "dashboard_page_list": "Display pages",
+          "dashboard_entity_display": "Display tiles",
+          "dashboard_alarm": "Alarm (Alarmo)",
+          "init": "Back"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Home Assistant pages on the display on or off, page navigation, behaviour after an action and allowed actions.",
+          "dashboard_page_list": "Weather, and which entities appear on which page and in which order.",
+          "dashboard_entity_display": "Size, name and secondary line of each tile.",
+          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
+          "init": "Back to the settings menu."
+        }
+      },
+      "dashboard_page_list": {
+        "title": "Display pages",
+        "description": "Pick a page to change it. The list follows the order of the display. A page without a number is not shown: it is switched off or has no entities.",
+        "menu_options": {
+          "page_1": "Page{page_1_position}: Status page",
+          "page_2": "Page{page_2_position}{page_2_name}",
+          "page_3": "Page{page_3_position}{page_3_name}",
+          "page_4": "Page{page_4_position}{page_4_name}",
+          "page_5": "Page{page_5_position}{page_5_name}",
+          "page_6": "Page{page_6_position}{page_6_name}",
+          "page_7": "Page{page_7_position}{page_7_name}",
+          "page_8": "Page{page_8_position}{page_8_name}",
+          "agenda_page": "Page{agenda_page_position}: Agenda",
+          "leave_home_page": "Page{leave_home_page_position}: Leave home",
+          "energy_page": "Page{energy_page_position}: Energy",
+          "situations_page": "Page{situations_page_position}: Situations",
+          "page_new": "Add a page",
+          "display": "Back"
+        },
+        "menu_option_descriptions": {
+          "page_new": "Up to seven pages of your own.",
+          "display": "Back to the Display menu."
         }
       },
       "dashboard_alarm": {
@@ -860,7 +896,7 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Configure five built-in pages (Status, Energy, Agenda, Leave home and Situations) and up to seven custom pages. Each page has its own section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the default position is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused. Alarmo has an area of its own in the settings menu.\n\nEnergy, Agenda, Leave home and Situations are independently enabled extra pages. Every page can be placed from 1 to 12. Equal positions put Energy, Agenda, Leave home and Situations before regular pages, in that order.\n\nThe sections are listed in the order of the display, and their headings show the page number. A page the display does not show (switched off, or without entities) has no number and follows the shown pages. A section titled \"Page +\" is free: fill it in to add a page.",
+        "description": "The settings of this page. The position is its place among the pages, from 1 to 12; the other pages are numbered around it. An entity chosen here that another page shows moves to this page. A page of your own without a name and entities is removed.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position}: Status page",

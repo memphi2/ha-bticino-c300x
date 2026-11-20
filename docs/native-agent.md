@@ -276,6 +276,12 @@ firmware glibc baseline and needs a C300X firmware sysroot through
 `C300X_DEVICE_SYSROOT`. Public CI runners do not ship that proprietary sysroot,
 so they still compile the ARMHF target and run `armhf-stack-check`, while local
 release builds must run the ABI check against the real device sysroot.
+One binary serves every supported firmware: it is built against the oldest
+(`1.7.19`), and the check also runs against each newer root file system named in
+`C300X_ABI_SYSROOTS` (by default the extracted `3.0.6` one, when it is there).
+For each it requires the libraries the agent links against, every versioned C
+library symbol it imports, and every function it loads at run time from
+`libcurl`, `libsrtp` and `libspeex`.
 `armhf-stack-check` rejects oversized or dynamic stack usage records for the
 ARMHF build.
 

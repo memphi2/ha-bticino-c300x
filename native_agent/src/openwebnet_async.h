@@ -3,8 +3,10 @@
 
 #include "openwebnet_call.h"
 
+#include "openwebnet_waiters.h"
+#include "pthread_compat.h"
+
 #include <poll.h>
-#include <pthread.h>
 
 #define C300X_OPENWEBNET_ASYNC_RESULTS 8
 
@@ -16,16 +18,17 @@
  * The request stays in its client slot and is handled again when the worker
  * is done; the handler then gets the stored result from the same call. A
  * request owns the worker from its first call until it is answered, so other
- * requests with OpenWebNet calls wait, in the order the loop offers them. */
+ * requests with OpenWebNet calls wait, in the order the loop offers them. A
+ * request that waited is not started when its caller has left meanwhile. */
 struct c300x_openwebnet_async {
     int wake[2];
     int running;
-    int finished;
     pthread_t thread;
     int owner_fd; /* -1: free, -2: its request ended while a call still runs */
     int armed_fd;
     int deferred;
     int waiting;
+    struct c300x_openwebnet_waiters waiters;
     int result_count;
     int used[C300X_OPENWEBNET_ASYNC_RESULTS];
     struct c300x_openwebnet_call results[C300X_OPENWEBNET_ASYNC_RESULTS];
@@ -40,4 +43,6 @@ void c300x_openwebnet_async_tick(struct c300x_openwebnet_async *async, const str
 void c300x_openwebnet_async_begin(struct c300x_openwebnet_async *async, int client_fd);
 /* Nonzero: the request is deferred; nothing was answered and it runs again. */
 int c300x_openwebnet_async_end(struct c300x_openwebnet_async *async);
+/* The request of this client is over, however it ended. */
+void c300x_openwebnet_async_abandon(struct c300x_openwebnet_async *async, int client_fd);
 #endif

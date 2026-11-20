@@ -30,6 +30,8 @@ struct c300x_openwebnet_call {
  * consulted on the HTTP loop thread only. */
 typedef int (*c300x_openwebnet_hook_fn)(struct c300x_openwebnet_call *call);
 extern c300x_openwebnet_hook_fn c300x_openwebnet_hook;
+/* Called on the loop thread before a call runs there; waits for a worker. */
+extern void (*c300x_openwebnet_before_inline)(void);
 
 /* Set by a hook that deferred a call. The caller of the OpenWebNet client
  * then has to return at once, without an answer or any other effect: it is
@@ -38,5 +40,10 @@ extern int c300x_openwebnet_call_deferred;
 int c300x_openwebnet_deferred(void);
 
 void c300x_openwebnet_execute(struct c300x_openwebnet_call *call);
+/* The same exchange: kind, target, commands and delay. */
+int c300x_openwebnet_call_same(const struct c300x_openwebnet_call *left, const struct c300x_openwebnet_call *right);
+void c300x_openwebnet_call_copy_result(struct c300x_openwebnet_call *call, const struct c300x_openwebnet_call *result);
+/* Fill in a failure without an exchange; returns nonzero for a hook. */
+int c300x_openwebnet_call_fail(struct c300x_openwebnet_call *call, const char *error);
 
 #endif

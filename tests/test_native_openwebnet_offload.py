@@ -222,3 +222,39 @@ def test_shutdown_lets_a_pressed_lock_be_released(lab: Lab) -> None:
 
     assert lab.process.wait(timeout=5) == 0
     assert lab.bus.frames == [PRESS, RELEASE]
+
+
+def test_more_waiting_requests_than_allowed_are_answered_busy(lab: Lab) -> None:
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    waiting = [lab.start("/api/v1/answering-machine") for _ in range(3)]
+    lab.health_ms()
+
+    # One more would start to use up the client slots of the API.
+    assert finish(lab.start("/api/v1/answering-machine"), 502) == {
+        "ok": False, "error": "openwebnet_busy"}
+    assert lab.health_ms() < 500
+    assert lab.bus.frames == [PRESS]
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    for conn in waiting:
+        assert finish(conn)["ok"] is True
+    assert lab.bus.frames == [PRESS, RELEASE, *["*#8**40##"] * 3]
+
+
+def test_a_waiting_request_whose_caller_left_is_not_run(lab: Lab) -> None:
+    lab.bus.hold("*#8**40##")
+    first = lab.start("/api/v1/answering-machine")
+    assert lab.bus.seen.wait(5)
+    late = lab.start(UNLOCK, post=True)
+    lab.health_ms()
+    late.close()
+    lab.health_ms()
+
+    lab.bus.gate.set()
+    assert finish(first)["ok"] is True
+    assert finish(lab.start("/api/v1/answering-machine"))["ok"] is True
+    # The door of a caller who gave up does not open afterwards.
+    assert lab.bus.frames == ["*#8**40##", "*#8**40##"]

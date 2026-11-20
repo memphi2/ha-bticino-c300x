@@ -39,7 +39,8 @@ static int connect_openwebnet(const struct c300x_openwebnet_call *config, char *
     int fd;
     struct sockaddr_in address;
 
-    fd = socket(AF_INET, SOCK_STREAM, 0);
+    /* The loop may start a child while a worker holds this socket. */
+    fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) {
         set_error(error, error_len, "openwebnet_socket_failed");
         return -1;
@@ -320,7 +321,31 @@ static int write_readback_now(
     return 1;
 }
 
+int c300x_openwebnet_call_same(const struct c300x_openwebnet_call *left, const struct c300x_openwebnet_call *right)
+{
+    return left->kind == right->kind && left->port == right->port
+        && left->timeout_ms == right->timeout_ms && left->delay_ms == right->delay_ms
+        && strcmp(left->host, right->host) == 0 && strcmp(left->first, right->first) == 0
+        && strcmp(left->second, right->second) == 0;
+}
+
+void c300x_openwebnet_call_copy_result(struct c300x_openwebnet_call *call, const struct c300x_openwebnet_call *result)
+{
+    call->ok = result->ok;
+    memcpy(call->reply, result->reply, sizeof(call->reply));
+    memcpy(call->readback, result->readback, sizeof(call->readback));
+    memcpy(call->error, result->error, sizeof(call->error));
+}
+
+int c300x_openwebnet_call_fail(struct c300x_openwebnet_call *call, const char *error)
+{
+    call->ok = 0;
+    snprintf(call->error, sizeof(call->error), "%s", error);
+    return 1;
+}
+
 c300x_openwebnet_hook_fn c300x_openwebnet_hook;
+void (*c300x_openwebnet_before_inline)(void);
 int c300x_openwebnet_call_deferred;
 
 int c300x_openwebnet_deferred(void)
@@ -365,6 +390,10 @@ static int run_call(const struct c300x_config *config, struct c300x_openwebnet_c
     c300x_copy_string(call->first, sizeof(call->first), first);
     c300x_copy_string(call->second, sizeof(call->second), second != NULL ? second : "");
     if (c300x_openwebnet_hook == NULL || !c300x_openwebnet_hook(call)) {
+        /* One session with the bus at a time: let a worker's exchange end first. */
+        if (c300x_openwebnet_before_inline != NULL) {
+            c300x_openwebnet_before_inline();
+        }
         c300x_openwebnet_execute(call);
     }
     set_error(error, error_len, call->error);

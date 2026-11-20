@@ -41,6 +41,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_service_commands.c": (10_000, 285),
         "http_audio_codec.c": (4_500, 110),
         "openwebnet_async.c": (6_500, 215),
+        "openwebnet_waiters.c": (2_500, 95),
         "http_setup_page.c": (14_500, 95),
     }
     for name, (size, lines) in limits.items():

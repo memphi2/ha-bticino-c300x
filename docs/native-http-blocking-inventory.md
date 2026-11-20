@@ -99,9 +99,13 @@ sent once. A request owns the worker until it is answered; other requests with
 OpenWebNet calls wait in their slots, without a busy response. A caller that
 left does not repeat or cancel its command, and shutdown lets a running
 sequence finish, so a pressed lock is released. If no thread can be started
-the call runs on the loop as before. Still on the loop: the GUI-confirmed
-ringer write (`/ui/ringer/next`), the forwarding refresh after an event, and
-the 3-second `wait_for_path_absent` of the two delete handlers.
+the call runs on the loop as before. Three requests may wait; one more is
+answered `openwebnet_busy` (502) so that waiting requests never use up the API
+client slots. A request that waited is not started when its caller has left.
+Still on the loop: the GUI-confirmed ringer write (`/ui/ringer/next`), the
+forwarding read at startup, and the 3-second `wait_for_path_absent` of the two
+delete handlers. A call on the loop waits for a running worker first, so the
+bus sees one session at a time.
 
 A handler must return without any effect when `c300x_openwebnet_deferred()`
 is set after a failed call; `send_json` writes nothing in that state.

@@ -6727,7 +6727,6 @@ static int handle_ringer_post(
             return 0;
         }
         if (!c300x_openwebnet_send(config, "*#8**33##", muted_reply, sizeof(muted_reply), error, sizeof(error))) {
-            if (c300x_openwebnet_deferred()) return 1;
             remember_ringer_muted(runtime, -1, NULL, NULL);
             send_device_error(client_fd, error);
             return 1;
@@ -6760,6 +6759,7 @@ static int handle_ringer_post(
             error,
             sizeof(error)
         )) {
+            /* A volume write without a mute change runs for the API request itself. */
             if (c300x_openwebnet_deferred()) return 1;
             remember_ringer_volume(runtime, -1, NULL);
             send_device_error(client_fd, error);
@@ -9811,6 +9811,7 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
 
     if (request == NULL) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        c300x_openwebnet_async_abandon(&runtime->openwebnet, client_fd);
         close_agent_socket(client_fd);
         return 1;
     }
@@ -9845,6 +9846,7 @@ static int handle_client(int client_fd, int kind, char *buffer, void *context)
     }
 
 cleanup:
+    c300x_openwebnet_async_abandon(&runtime->openwebnet, client_fd);
     free(request);
     if (close_client) {
         close_agent_socket(client_fd);

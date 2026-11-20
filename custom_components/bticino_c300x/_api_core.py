@@ -57,6 +57,17 @@ class _C300XApiCore:
         self._maintenance_token = maintenance_token
         self._timeout = timeout
 
+    async def _wait_out_maintenance_job(self, request: Any) -> Any:
+        """Repeat a request the agent refused because a maintenance job runs.
+
+        The agent runs one job at a time, also a short status read that Home
+        Assistant asked for itself, and answers every other one busy.
+        """
+
+        from .agent_update import async_retry_update_maintenance_busy
+
+        return await async_retry_update_maintenance_busy(request)
+
     async def _request_json(
         self,
         method: str,

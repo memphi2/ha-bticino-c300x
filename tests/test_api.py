@@ -1408,6 +1408,29 @@ def test_maintenance_request_omits_token_when_unconfigured() -> None:
     }
 
 
+def test_requests_refused_for_a_running_maintenance_job_are_repeated(monkeypatch) -> None:
+    from custom_components.bticino_c300x import agent_update
+
+    async def no_wait(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(agent_update.asyncio, "sleep", no_wait)
+    busy = (409, '{"ok": false, "error": "maintenance_busy"}')
+    calls = {
+        "device_user": lambda api: api.async_device_user_status(),
+        "ssh": lambda api: api.async_set_ssh_enabled(True),
+        "camera_resolution": lambda api: api.async_camera_resolution(high_resolution=False),
+    }
+    for name, call in calls.items():
+        session = _QueuedSession([busy, busy, (200, '{"ok": true, "running": true}')])
+        api = C300XAgentApi(
+            session,  # type: ignore[arg-type]
+            "http://agent.local:8080", "agent-token", maintenance_token="maintenance-token",
+        )
+        assert isinstance(asyncio.run(call(api)), dict), name
+        assert len(session.requests) == 3, name
+
+
 def test_set_ssh_enabled_uses_switch_endpoint() -> None:
     session = _FakeSession('{"ok": true, "running": true}')
     api = C300XAgentApi(

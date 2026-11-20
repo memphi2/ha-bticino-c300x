@@ -159,12 +159,12 @@ class _ApiMediaMixin(_C300XApiCore):
 
         return cast(
             "dict[str, Any]",
-            await self._request_json(
+            await self._wait_out_maintenance_job(lambda: self._request_json(
                 "GET" if high_resolution is None else "POST",
                 "/api/v1/maintenance/camera-resolution",
                 json_data=None if high_resolution is None else {"high_resolution": high_resolution},
                 extra_headers=self._maintenance_headers(),
-            ),
+            )),
         )
 
     async def async_audio_codec_status(self) -> dict[str, Any]:

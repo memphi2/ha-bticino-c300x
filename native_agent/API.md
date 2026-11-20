@@ -1058,8 +1058,8 @@ Validation examples:
 
 ## Maintenance Actions
 
-Execution is hybrid; **2.7 is incomplete and does not promise nonblocking HTTP
-for all operations**. QML status/patch, GUI reload, the read-only device-user
+Execution is hybrid; **not every operation is off the HTTP loop yet** (see
+`docs/native-http-blocking-inventory.md`). QML status/patch, GUI reload, the read-only device-user
 status script, SSH probe/start/stop and SSH-before-reboot/removal share one
 asynchronous job slot. Connections stay open until the existing response
 boundary; no new job ID, queue or early-success response is introduced.

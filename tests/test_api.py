@@ -1408,6 +1408,16 @@ def test_maintenance_request_omits_token_when_unconfigured() -> None:
     }
 
 
+_BUSY = (409, '{"ok": false, "error": "maintenance_busy"}')
+
+
+def _maintenance_api(session: object) -> C300XAgentApi:
+    return C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080", "agent-token", maintenance_token="maintenance-token",
+    )
+
+
 def test_requests_refused_for_a_running_maintenance_job_are_repeated(monkeypatch) -> None:
     from custom_components.bticino_c300x import agent_update
 
@@ -1415,20 +1425,42 @@ def test_requests_refused_for_a_running_maintenance_job_are_repeated(monkeypatch
         return None
 
     monkeypatch.setattr(agent_update.asyncio, "sleep", no_wait)
-    busy = (409, '{"ok": false, "error": "maintenance_busy"}')
     calls = {
         "device_user": lambda api: api.async_device_user_status(),
+        "ensure_user": lambda api: api.async_ensure_homeassistant_user(account_label="Home"),
         "ssh": lambda api: api.async_set_ssh_enabled(True),
         "camera_resolution": lambda api: api.async_camera_resolution(high_resolution=False),
+        "qml_status": lambda api: api.async_qml_patch_status(),
     }
     for name, call in calls.items():
-        session = _QueuedSession([busy, busy, (200, '{"ok": true, "running": true}')])
-        api = C300XAgentApi(
-            session,  # type: ignore[arg-type]
-            "http://agent.local:8080", "agent-token", maintenance_token="maintenance-token",
-        )
-        assert isinstance(asyncio.run(call(api)), dict), name
+        session = _QueuedSession([_BUSY, _BUSY, (200, '{"ok": true, "running": true}')])
+        assert isinstance(asyncio.run(call(_maintenance_api(session))), dict), name
         assert len(session.requests) == 3, name
+        first, last = session.requests[0], session.requests[-1]
+        assert (first["args"], first["kwargs"]["json"]) == (last["args"], last["kwargs"]["json"]), name
+
+
+def test_a_busy_agent_is_given_up_on_after_the_wait(monkeypatch) -> None:
+    from custom_components.bticino_c300x import agent_update
+
+    clock = iter(range(0, 1000, 5))
+
+    async def no_wait(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(agent_update.asyncio, "sleep", no_wait)
+    monkeypatch.setattr(agent_update, "monotonic", lambda: float(next(clock)))
+    session = _QueuedSession([_BUSY] * 20)
+    with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
+        asyncio.run(_maintenance_api(session).async_set_ssh_enabled(True))
+    assert 1 < len(session.requests) < 6
+
+
+def test_other_refusals_are_not_repeated() -> None:
+    session = _QueuedSession([(409, '{"ok": false, "error": "external_session_active"}'), (200, "{}")])
+    with pytest.raises(C300XAgentApiConnectionError):
+        asyncio.run(_maintenance_api(session).async_set_ssh_enabled(True))
+    assert len(session.requests) == 1
 
 
 def test_set_ssh_enabled_uses_switch_endpoint() -> None:

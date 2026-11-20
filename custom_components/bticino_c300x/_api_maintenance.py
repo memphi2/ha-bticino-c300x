@@ -137,9 +137,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
     async def async_device_user_status(self) -> dict[str, Any]:
         """Return non-sensitive Flexisip device-user status."""
 
-        data = await self._wait_out_maintenance_job(
-            lambda: self._request_json("GET", "/api/v1/device-user")
-        )
+        data = await self._request_json("GET", "/api/v1/device-user")
         return normalize_device_user_status(data)
 
     async def async_auth_config_status(self) -> AuthConfigStatus:
@@ -425,12 +423,12 @@ class _ApiMaintenanceMixin(_C300XApiCore):
     async def async_set_ssh_enabled(self, enabled: bool) -> dict[str, Any]:
         """Start or stop SSH through the maintenance API."""
 
-        data = await self._wait_out_maintenance_job(lambda: self._request_json(
+        data = await self._request_json(
             "POST",
             "/api/v1/maintenance/ssh",
             json_data={"enabled": enabled},
             extra_headers=self._maintenance_headers(),
-        ))
+        )
         return normalize_ssh_status(data)
 
     async def async_reboot(self) -> dict[str, Any]:

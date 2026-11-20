@@ -11,6 +11,7 @@ from ._api_normalize import (
     _agent_error_field,
     _http_error_text,
 )
+from .agent_update import async_retry_update_maintenance_busy
 from .api_errors import (
     C300XAgentApiAuthError,
     C300XAgentApiConnectionError,
@@ -57,18 +58,29 @@ class _C300XApiCore:
         self._maintenance_token = maintenance_token
         self._timeout = timeout
 
-    async def _wait_out_maintenance_job(self, request: Any) -> Any:
-        """Repeat a request the agent refused because a maintenance job runs.
+    async def _request_json(
+        self,
+        method: str,
+        path: str,
+        json_data: dict[str, Any] | None = None,
+        extra_headers: dict[str, str] | None = None,
+        request_timeout: float | None = None,
+    ) -> Any:
+        """Send a request, waiting out a maintenance job the agent is running.
 
-        The agent runs one job at a time, also a short status read that Home
-        Assistant asked for itself, and answers every other one busy.
+        The agent runs one maintenance job at a time, also a short status
+        read that Home Assistant asked for itself, and refuses every other
+        maintenance request meanwhile, before it does anything for it.
         """
 
-        from .agent_update import async_retry_update_maintenance_busy
+        return await async_retry_update_maintenance_busy(
+            lambda: self._request_json_once(
+                method, path, json_data, extra_headers, request_timeout
+            )
+        )
 
-        return await async_retry_update_maintenance_busy(request)
+    async def _request_json_once(
 
-    async def _request_json(
         self,
         method: str,
         path: str,

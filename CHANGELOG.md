@@ -11,6 +11,14 @@
   doors, lights and task lists you select, those that are open, on or have
   pending items. Read-only; unknown and unavailable entities stay visible. Off
   by default, with its own position among the pages (1 to 12).
+- The energy page loads again on the display. 2.6.0 shipped a display file
+  the device could not read, so the page stayed empty.
+- The display-pages form reads like the display: the shown pages come first,
+  in display order and numbered from 1. A built-in page that is switched off
+  has no number and follows them, and free sections come last as **Page +**.
+  2.6.0 listed the built-in pages first and numbered a switched-off page with
+  its stored position (Page 1, 2, 10, 11, 3, ...). Saved settings and the
+  display order are unchanged.
 - Setting up or removing the Home Assistant media user no longer stops the
   display label script after ten seconds. A slow write used to be killed
   without its cleanup, which could leave the device's root filesystem writable.

@@ -326,7 +326,12 @@ def test_a_change_with_unknown_running_values_stays_pending_until_a_restart(lab:
     lab.restart_agent()
     lab.settings.write_text(SETTINGS)
     assert lab.call({**CONFIRM, "fps": 20})["restart_required"] is True
-    assert lab.call()["restart_required"] is True
+    body = lab.call()
+    assert (body["running_fps"], body["restart_required"]) == (15, True)
+    # An agent restart within the same boot keeps it pending.
+    lab.restart_agent()
+    body = lab.call()
+    assert (body["running_fps"], body["restart_required"]) == (15, True)
 
 
 def test_disabled_reboot_maintenance_saves_without_a_restart(lab: Lab) -> None:

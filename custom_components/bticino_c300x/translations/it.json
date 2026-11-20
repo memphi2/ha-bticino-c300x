@@ -840,7 +840,7 @@
           "visitor_snapshot": "Dimensione dell'immagine del visitatore salvata, ritardo di acquisizione, conservazione e data scritta nell'immagine.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
           "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",
-          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, pulsanti della pagina iniziale, comportamento dopo un'azione e azioni consentite.",
+          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, navigazione tra le pagine, comportamento dopo un'azione e azioni consentite.",
           "dashboard_pages": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
           "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro.",
           "done": "Chiudi le impostazioni. Tutto ciò che è stato inviato è già salvato."

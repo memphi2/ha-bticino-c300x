@@ -477,3 +477,15 @@ def test_one_error_has_one_wording_in_setup_and_options() -> None:
         data = _load_json(path)
         for key in ("invalid_alarm_entity", "invalid_action_map", "required"):
             assert data["config"]["error"][key] == data["options"]["error"][key], (path.name, key)
+
+
+def test_the_display_menu_entry_names_only_what_its_form_offers() -> None:
+    """The start page buttons are no setting any more; the page navigation is."""
+
+    root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
+    removed = ("home page buttons", "Startseiten-Buttons", "boutons d'accueil", "pulsanti della pagina iniziale")
+    for name in ("strings.json", "translations/en.json", "translations/de.json", "translations/fr.json", "translations/it.json"):
+        options = json.loads((root / name).read_text(encoding="utf-8"))["options"]["step"]
+        text = options["init"]["menu_option_descriptions"]["dashboard"]
+        assert not any(word in text for word in removed), name
+        assert options["dashboard"]["data"]["dashboard_navigation"].lower() in text.lower(), name

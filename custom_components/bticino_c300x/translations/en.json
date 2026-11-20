@@ -840,7 +840,7 @@
           "visitor_snapshot": "Size of the saved visitor image, capture delay, retention and the date written into the image.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
           "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
-          "dashboard": "Home Assistant pages on the display on or off, home page buttons, behaviour after an action and allowed actions.",
+          "dashboard": "Home Assistant pages on the display on or off, page navigation, behaviour after an action and allowed actions.",
           "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
           "dashboard_entity_display": "Size, name and secondary line of each tile.",
           "done": "Close the settings. Everything submitted is already saved."

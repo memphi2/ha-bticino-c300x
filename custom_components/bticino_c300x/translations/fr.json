@@ -840,7 +840,7 @@
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
           "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
-          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, boutons d'accueil, comportement après une action et actions autorisées.",
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
           "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."

@@ -840,7 +840,7 @@
           "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
-          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Startseiten-Buttons, Verhalten nach einer Aktion und erlaubte Aktionen.",
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Verhalten nach einer Aktion und erlaubte Aktionen.",
           "dashboard_pages": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
           "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."

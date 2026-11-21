@@ -32,6 +32,8 @@ from custom_components.bticino_c300x.media_player import (  # noqa: E402
 
 # A status read the agent does not answer.
 NO_ANSWER = "no answer"
+# The sound is over, the agent still switches the speaker off.
+SWITCHING_OFF = "switching off"
 
 
 class _FakeApi:
@@ -55,7 +57,9 @@ class _FakeApi:
         self.events.append(f"status {result}")
         if result == NO_ANSWER:
             raise C300XAgentApiError("timeout")
-        return {"playing": result is None, "result": result or ""}
+        if result == SWITCHING_OFF:
+            return {"playing": False, "busy": True, "result": "preempted"}
+        return {"playing": result is None, "busy": result is None, "result": result or ""}
 
     async def async_stop_announcement(self) -> dict[str, Any]:
         self.stopped += 1
@@ -167,6 +171,23 @@ def test_a_second_sound_waits_until_the_first_is_over(speaker: Any) -> None:
     ]
 
 
+def test_a_second_sound_waits_until_the_speaker_is_switched_off(speaker: Any) -> None:
+    entity = speaker(None, SWITCHING_OFF, "played", "played")
+
+    async def run() -> None:
+        await asyncio.gather(
+            _played_to_the_end(entity, "first"), _played_to_the_end(entity, "second"),
+        )
+
+    asyncio.run(run())
+
+    # Uploaded while the agent still switches off, the second sound was refused.
+    assert entity._entry.runtime_data.api.events == [
+        "play first", "status None", "status switching off", "status played",
+        "play second", "status played",
+    ]
+
+
 def test_says_so_when_the_device_keeps_its_speaker_for_a_call(speaker: Any) -> None:
     entity = speaker("device_busy")
 
@@ -178,7 +199,8 @@ def test_says_so_when_the_device_keeps_its_speaker_for_a_call(speaker: Any) -> N
 
 
 def test_a_door_call_that_cuts_the_sound_is_no_error(speaker: Any) -> None:
-    entity = speaker(None, "preempted")
+    # The agent leaves the speaker to the device a moment before it is free again.
+    entity = speaker(None, SWITCHING_OFF, SWITCHING_OFF, "preempted")
 
     asyncio.run(_played_to_the_end(entity, "x"))
 
@@ -272,7 +294,7 @@ def test_ffmpeg_fetches_home_assistant_media_over_the_internal_address(
 ) -> None:
     hass: Any = SimpleNamespace(config=SimpleNamespace(api=SimpleNamespace(use_ssl=True, port=8123)))
     asked: list[dict[str, Any]] = []
-    internal = {"url": "http://192.168.1.2:8123"}
+    internal = {"url": "http://homeassistant.local:8123"}
 
     def process(_hass: Any, url: str, *, allow_relative_url: bool = False) -> str:
         assert allow_relative_url
@@ -288,7 +310,7 @@ def test_ffmpeg_fetches_home_assistant_media_over_the_internal_address(
     monkeypatch.setattr(media_player, "get_url", get_url)
 
     assert media_url_for_ffmpeg(hass, "/api/tts_proxy/a.mp3") == (
-        "http://192.168.1.2:8123/api/tts_proxy/a.mp3?authSig=x")
+        "http://homeassistant.local:8123/api/tts_proxy/a.mp3?authSig=x")
     assert asked == [{"allow_external": False, "allow_cloud": False}]
     internal["url"] = ""
     assert media_url_for_ffmpeg(hass, "/api/tts_proxy/a.mp3") == (

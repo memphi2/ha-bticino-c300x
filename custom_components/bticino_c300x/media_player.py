@@ -214,7 +214,8 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
             return None
         if not isinstance(status, dict):
             return None
-        if status.get("playing") is True:
+        # Until the speaker is switched off again the agent takes no new sound.
+        if status.get("playing") is True or status.get("busy") is True:
             return _PLAYING
         result = status.get("result")
         return result if isinstance(result, str) and result else None

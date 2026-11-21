@@ -703,8 +703,8 @@ door call took the speaker), `device_busy` (the device was using its speaker;
 nothing was switched), `sound_path_failed`, `play_failed` or `failed`. It is
 empty before the first sound and while one plays, and set as soon as the
 sound has ended. `started` turns true while a sound plays once the device let
-the agent have its speaker and the speaker is switched on; a device that uses it ends the sound as
-`device_busy` before that. `busy` stays true after the sound until the speaker is
+the agent have its speaker and the speaker is switched on; a device that uses
+it ends the sound as `device_busy` before that. `busy` stays true after the sound until the speaker is
 switched off again; no new piece or sound is taken while it is true.
 
 `POST /api/v1/announcements/audio` with `{"offset": 0, "data": "base64"}`
@@ -733,7 +733,8 @@ device for three seconds before it is switched off as above. A ring
 (`*8*1#1#…`) leaves the speaker to the device for a minute, also in the pauses
 in which the device is idle; every further frame of its call (`*8*…` other
 than locks and lights, for example the answering machine, answering and the
-end) starts the minute again. No frame ends it early. During it, and while the switching off
+end) starts the minute again, also for a switching off that already waits. No
+frame ends it early, and an agent that is restarted within it keeps it. During it, and while the switching off
 after a door frame waits, no new piece or sound is taken: the answer is
 `409 announcement_device_busy`. After a stop the speaker is switched off one
 second later. A switching off still due when the agent ends runs on after it.

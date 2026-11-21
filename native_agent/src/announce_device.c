@@ -68,6 +68,12 @@ const char *c300x_announce_result_of(int ending, int status)
         : status == 5 ? "play_failed" : "failed";
 }
 
+/* The device let the agent have its speaker and the play script switched it on. */
+int c300x_announce_started(const struct c300x_announce *announce)
+{
+    return c300x_announce_playing(announce) && strstr(announce->job.output, "speaker=on") != NULL;
+}
+
 #define JSON_BOOL(value) ((value) ? "true" : "false")
 
 void c300x_announce_status_json(const struct c300x_announce *announce, int duration_ms, char *body, size_t size)

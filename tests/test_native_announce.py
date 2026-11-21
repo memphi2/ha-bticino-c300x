@@ -152,6 +152,13 @@ class Lab:
             return False
         return True
 
+    def upload_when_free(self, sound: bytes) -> None:
+        deadline = time.monotonic() + 5
+        while self.call()["busy"]:
+            assert time.monotonic() < deadline
+            time.sleep(0.02)
+        self.upload(sound)
+
     def start_long_sound(self) -> None:
         (self.dir / "play-seconds").write_text("30\n")
         self.upload(wav(30))
@@ -371,6 +378,37 @@ def test_the_frames_of_a_rings_call_keep_the_speaker_the_devices(lab: Lab) -> No
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
 
     time.sleep(2.2)
+    lab.call("/actions/play", {"volume": 50})
+    assert lab.result() == "played"
+
+
+def test_a_frame_of_the_call_moves_a_waiting_switching_off(lab: Lab) -> None:
+    lab.start_long_sound()
+    send_udp_event(lab.udp_port, RING)
+    rang = time.monotonic()
+    while lab.player_alive():
+        time.sleep(0.01)
+    time.sleep(RING_HOLD - 1.5)
+    # The answering machine starts while the switching off sleeps.
+    send_udp_event(lab.udp_port, "*8*80#6#2*11##")
+
+    assert lab.result() == "preempted"
+    assert time.monotonic() - rang > 2 * RING_HOLD - 1.5
+    assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
+    assert lab.log().count("mixer ZL0_Mute_Rout=on") == 1
+
+
+def test_a_restarted_agent_keeps_the_hold_of_a_ring(lab: Lab) -> None:
+    send_udp_event(lab.udp_port, RING)
+    time.sleep(0.3)
+    assert lab.process is not None
+    lab.process.terminate()
+    lab.process.wait(timeout=5)
+    lab.restart()
+
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+    lab.wait_for("mixer ZL0_Mute_Rout=on", seconds=RING_HOLD + 5)
+    lab.upload_when_free(wav())
     lab.call("/actions/play", {"volume": 50})
     assert lab.result() == "played"
 

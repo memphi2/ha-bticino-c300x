@@ -47,12 +47,6 @@ int c300x_announce_playing(const struct c300x_announce *announce)
     return announce->job.pid > 0 && !announce->cleaning;
 }
 
-/* The device let the agent have its speaker and the play script switched it on. */
-int c300x_announce_started(const struct c300x_announce *announce)
-{
-    return c300x_announce_playing(announce) && strstr(announce->job.output, "speaker=on") != NULL;
-}
-
 int c300x_announce_busy(const struct c300x_announce *announce)
 {
     return announce->job.pid > 0 || announce->clean_delay >= 0;
@@ -175,6 +169,10 @@ void c300x_announce_door_frame(struct c300x_announce *announce, const char *fram
     if (strncmp(frame, "*8*1#1#", 7) == 0 || (announce->ring_until_ms > now && what >= 0
             && (what < 19 || what > 22))) {
         announce->ring_until_ms = now + announce->ring_hold_ms;
+        /* A switching off sleeps a fixed time: it starts again after the new hold. */
+        if (announce->cleaning) {
+            c300x_announce_preempt(announce);
+        }
     }
     if (c300x_announce_frame_takes_speaker(frame)) {
         c300x_announce_preempt(announce);
@@ -241,8 +239,10 @@ void c300x_announce_close(struct c300x_announce *announce)
         }
         job_over(announce, cleaned, announce->ending);
     }
-    if (announce->job.pid == 0 && announce->clean_delay >= 0) {
-        /* It finishes on its own after the agent has ended. */
+    if (announce->job.pid == 0 && (announce->clean_delay >= 0 || announce->ring_until_ms > c300x_monotonic_ms())) {
+        /* It finishes on its own after the agent has ended; one started
+         * agent takes it over with a ring's hold. */
+        announce->clean_delay = announce->clean_delay >= 0 ? announce->clean_delay : 0;
         start_clean(announce);
         announce->job.pid = 0;
     }

@@ -92,7 +92,7 @@ The fix is part of the packaged agent. Follow the
 updating only Home Assistant files does not apply the correction.
 
 If a PCMU stream still reboots the C300X, stop repeating the test, switch the
-**Audio codec** select back to **Speex (stock)** and reopen issue #55 with the
+**Audio codec** select back to **Speex** and reopen issue #55 with the
 versions, reproduction steps and sanitized diagnostics. Changing the device
 codec is an explicit maintenance operation that reboots the C300X.
 

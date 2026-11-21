@@ -10,6 +10,7 @@
 #include "http_setup_page.h"
 #include "http_audio_codec.h"
 #include "http_camera_quality.h"
+#include "http_announce.h"
 #include "camera_quality.h"
 #include "display_callback.h"
 #include "event_payload.h"
@@ -224,6 +225,7 @@ struct agent_runtime {
     struct c300x_http_file_transfers file_transfers;
     struct c300x_ringer_control ringer_control;
     struct c300x_http_maintenance maintenance;
+    struct c300x_announce announce;
     struct c300x_openwebnet_async openwebnet;
     struct c300x_video_control video_control;
     struct c300x_request_queue request_queue;
@@ -5111,6 +5113,10 @@ static void handle_udp_event(
     }
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
+    /* Door entry or multimedia traffic: the device may need its speaker now. */
+    if (strncmp(msg, "*8*", 3) == 0 || strncmp(msg, "*7*", 3) == 0) {
+        c300x_announce_preempt(&runtime->announce);
+    }
     int confirmed_muted;
     if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)) {
         /* A multicast write echo is intent, not completed hardware state. */
@@ -5328,6 +5334,7 @@ static void api_capabilities(
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
         .camera_resolution_fixed = c300x_device_display_is_qt5(),
+        .announcements_supported = c300x_announce_supported(),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
@@ -9049,7 +9056,8 @@ static void handle_api_request(
         || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config, request,
             run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
-            run_detached_command)) {
+            run_detached_command)
+        || c300x_http_announce_route(&runtime->announce, client_fd, request)) {
         return;
     }
 
@@ -9754,7 +9762,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -9789,6 +9797,7 @@ int c300x_run(struct c300x_config *config)
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
+    c300x_announce_init(&runtime->announce);
     (void)c300x_openwebnet_async_init(&runtime->openwebnet, &runtime->request_queue);
     (void)c300x_video_control_init(&runtime->video_control, &runtime->request_queue);
     runtime->display_client_fd = -1;
@@ -9910,6 +9919,8 @@ int c300x_run(struct c300x_config *config)
         poll_count += C300X_HTTP_MAX_FILE_TRANSFERS;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_http_maintenance_prepare(&runtime->maintenance, &poll_fds[poll_count++]));
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c300x_announce_prepare(&runtime->announce, &poll_fds[poll_count++]));
         openwebnet_poll_index = (int)poll_count;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_openwebnet_async_prepare(&runtime->openwebnet, &poll_fds[poll_count++]));
@@ -10050,6 +10061,7 @@ int c300x_run(struct c300x_config *config)
         /* Drain old descriptors before accept can reuse one of their numbers. */
         c300x_http_outputs_handle(&poll_fds[output_poll_index]);
         c300x_http_maintenance_tick(&runtime->maintenance);
+        c300x_announce_tick(&runtime->announce);
         c300x_openwebnet_async_tick(&runtime->openwebnet, &poll_fds[openwebnet_poll_index]);
         c300x_video_control_tick(&runtime->video_control, &poll_fds[video_control_poll_index]);
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
@@ -10193,6 +10205,7 @@ cleanup:
         c300x_touch_tone_close(&runtime->touch_tone);
         c300x_display_alerts_close(&runtime->display_alerts);
         c300x_http_maintenance_close(&runtime->maintenance);
+        c300x_announce_close(&runtime->announce);
         c300x_openwebnet_async_close(&runtime->openwebnet);
         c300x_video_control_close(&runtime->video_control);
         c300x_recent_events_clear(&runtime->recent_events);

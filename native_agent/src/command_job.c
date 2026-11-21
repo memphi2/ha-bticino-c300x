@@ -199,6 +199,7 @@ void c300x_command_job_tick(struct c300x_command_job *job)
     }
     if (reaped == job->pid || (reaped < 0 && wait_error == ECHILD)) {
         job->failed |= reaped < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0;
+        job->exit_status = reaped > 0 && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
         job->pid = 0;
         job->complete = 1;
         close_output(job);

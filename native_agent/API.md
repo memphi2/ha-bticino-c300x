@@ -192,6 +192,10 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/smartphone-forwarding` | API | Changes forwarding mode. |
 | `GET` | `/api/v1/ringer` | API | Reads ringer mute and volume state. |
 | `POST` | `/api/v1/ringer` | API | Changes ringer mute state or volume. |
+| `GET` | `/api/v1/announcements` | API | Reads whether a sound is playing and how the last one ended. |
+| `POST` | `/api/v1/announcements/audio` | API | Writes one piece of the sound file to play. |
+| `POST` | `/api/v1/announcements/actions/play` | API | Plays the sound file over the device speaker. |
+| `POST` | `/api/v1/announcements/actions/stop` | API | Ends the sound that is playing. |
 | `GET`, `POST` | `/api/v1/display/touch-tone` | API | Reads GUI-confirmed touch tone; POST `{"enabled":true}` waits up to five seconds for GUI acknowledgement. Requires the Display patch. |
 | `GET` | `/api/v1/answering-machine` | API | Reads answering-machine state. |
 | `POST` | `/api/v1/answering-machine` | API | Changes answering-machine enabled state. |
@@ -677,6 +681,51 @@ on the `0..10` scale. The firmware treats `0` as muted. OpenWebNet `41` stores
 the same UI value in tens, so the agent maps raw code `20` to API/UI volume
 `2`, raw code `10` to API/UI volume `1`, and raw code `0` to API/UI volume
 `0`.
+
+### Announcements
+
+The agent plays a sound file over the device speaker, for example speech that
+Home Assistant made. Capability `announcements.supported` is true where the
+device has the sound tools this needs (`aplay`, `amixer`, the audio chip tool
+and its configuration for playing).
+
+`GET /api/v1/announcements` returns
+
+```json
+{"ok": true, "supported": true, "playing": false, "result": "played",
+ "duration_ms": 0, "max_bytes": 2097152}
+```
+
+`result` tells how the last sound ended: `played`, `stopped`, `preempted` (a
+door call took the speaker), `device_busy` (the device was using its speaker;
+nothing was switched), `sound_path_failed`, `play_failed` or `failed`. It is
+empty before the first sound and while one plays.
+
+`POST /api/v1/announcements/audio` with `{"offset": 0, "data": "base64"}`
+writes one piece of the file. Pieces come in order; offset 0 starts a new
+file. The file is a WAV with 8000 Hz, 16 bit PCM, one or two channels, the
+only format the device's sound card takes, and at most `max_bytes` long
+(about two minutes). It lives in `/tmp` and is removed after playing.
+
+`POST /api/v1/announcements/actions/play` with `{"volume": 1..100}` checks the
+file and starts playing; the reply carries `duration_ms`. The volume follows
+the device's own table for playing and ringing. The agent switches the device
+to its state for local playing, loads the audio chip's configuration for it
+(to RAM only), unmutes the speaker, plays, and then mutes the speaker and sets
+its gain back.
+
+`POST /api/v1/announcements/actions/stop` ends the sound.
+
+A door call has priority: door entry or multimedia traffic on the bus ends the
+sound at once and frees the sound device, and nothing is switched back,
+because the device is setting up its speaker for the call at that moment. A
+touch tone or another sound of the device during an announcement can cut it
+short.
+
+Errors: `409 announcement_busy` while a sound plays, `409
+announcement_unsupported`, `400 announcement_invalid_audio`, `400
+announcement_invalid_volume`, `500 announcement_write_failed`, `500
+announcement_start_failed`.
 
 ### `POST /api/v1/ringer`
 

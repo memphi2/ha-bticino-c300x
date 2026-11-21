@@ -60,6 +60,7 @@ int c300x_capabilities_json(
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
         "\"activations\":{\"supported\":%s,\"count\":%d},"
         "\"call_events\":false,"
+        "\"announcements\":{\"supported\":%s},"
         "\"ringer\":{\"supported\":true,\"mute\":true,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"homeassistant\",\"blocked\"]},"
         "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
@@ -101,6 +102,7 @@ int c300x_capabilities_json(
         lock_name,
         (config->activations_enabled && activations_count > 0) ? "true" : "false",
         activations_count,
+        context->announcements_supported ? "true" : "false",
         context->ringer_min_volume,
         context->ringer_max_volume,
         context->ringer_volume_step,

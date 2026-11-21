@@ -44,6 +44,8 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "camera_quality.c": (7_500, 230),
         "camera_settings.c": (3_000, 100),
         "camera_quality_body.c": (4_000, 110),
+        "announce.c": (9_500, 250),
+        "http_announce.c": (3_500, 100),
         "device_file.c": (5_500, 210),
         "openwebnet_async.c": (6_500, 215),
         "openwebnet_waiters.c": (2_500, 95),

@@ -11,6 +11,7 @@ struct c300x_command_job {
     pid_t pid;
     int output_fd;
     int failed;
+    int exit_status; /* -1 unless the command exited by itself */
     int complete;
     long long deadline_ms;
     size_t used;

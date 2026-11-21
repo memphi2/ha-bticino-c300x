@@ -44,6 +44,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         }
         assert caps["locks"]["locks"] == [{"id": "front", "name": 'Front "door"\\entry'}]
         assert caps["activations"] == {"supported": True, "count": 3}
+        assert caps["announcements"] == {"supported": False}
         assert caps["ringer"] == {
             "supported": True, "mute": True, "volume": True,
             "min_volume": 0, "max_volume": 10, "step": 1,
@@ -61,6 +62,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         )
         assert speex == pcmu  # No unrelated capability changes with the codec.
     disabled = documents[4]["capabilities"]
+    assert disabled["announcements"] == {"supported": True}
     for feature in ("doorbell_video", "doorbell_call", "home_call", "activations", "memos", "system_metrics"):
         assert disabled[feature]["supported"] is False
     assert disabled["memos"]["watch"] is False

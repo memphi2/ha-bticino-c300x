@@ -152,11 +152,14 @@ class Lab:
             return False
         return True
 
-    def upload_when_free(self, sound: bytes) -> None:
+    def wait_free(self) -> None:
         deadline = time.monotonic() + 5
         while self.call()["busy"]:
             assert time.monotonic() < deadline
             time.sleep(0.02)
+
+    def upload_when_free(self, sound: bytes) -> None:
+        self.wait_free()
         self.upload(sound)
 
     def start_long_sound(self) -> None:
@@ -414,8 +417,8 @@ def test_a_restarted_agent_keeps_the_hold_of_a_ring(lab: Lab) -> None:
     assert lab.process is not None
     lab.process.terminate()
     lab.process.wait(timeout=5)
-    lab.restart()
     restarted = time.monotonic()
+    lab.restart()
 
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
     lab.wait_for("mixer ZL0_Mute_Rout=on", seconds=RING_HOLD + 5)
@@ -583,13 +586,25 @@ def test_a_sound_that_outlived_a_killed_agent_is_switched_off_by_the_next(lab: L
     time.sleep(0.3)
     assert lab.mixer("ZL0_Mute_Rout") == "off"
 
-    lab.restart()
     restarted = time.monotonic()
+    lab.restart()
 
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
     lab.wait_for("mixer TPA2028D1_Volume=0", seconds=RING_HOLD + 5)
     assert time.monotonic() - restarted > RING_HOLD
     assert lab.mixer("ZL0_Mute_Rout") == "on"
+
+
+def test_a_sound_uploaded_to_a_killed_agent_is_not_played(lab: Lab) -> None:
+    lab.upload(wav())
+    assert lab.process is not None
+    lab.process.kill()
+    lab.process.wait(timeout=5)
+    lab.restart()
+
+    lab.wait_for("mixer TPA2028D1_Volume=0", seconds=RING_HOLD + 5)
+    lab.wait_free()
+    assert lab.call("/actions/play", {"volume": 50}, status=400)["error"] == "announcement_invalid_audio"
 
 
 def test_a_sound_uploaded_before_a_restart_is_not_played(lab: Lab) -> None:

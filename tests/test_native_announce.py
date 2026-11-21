@@ -276,6 +276,16 @@ def test_a_sound_that_cannot_be_switched_on_never_counts_as_started(lab: Lab) ->
     assert lab.result() == "sound_path_failed"
 
 
+def test_a_sound_state_left_behind_with_the_sound_device_closed_does_not_block(lab: Lab) -> None:
+    # State 9 without anything playing: left by a switching off that could not finish.
+    lab.mixer("Zia_Aud_St", "9")
+    lab.upload(wav())
+    lab.call("/actions/play", {"volume": 50})
+
+    assert lab.result() == "played"
+    assert lab.mixer("Zia_Aud_St") == "0"
+
+
 @pytest.mark.parametrize("busy", ["state", "sound-device"])
 def test_does_not_touch_a_device_that_is_using_its_speaker(lab: Lab, busy: str) -> None:
     if busy == "state":
@@ -355,12 +365,12 @@ def test_no_sound_is_taken_for_a_while_after_a_ring(lab: Lab) -> None:
     assert lab.call("/audio", {"offset": 0, "data": "AAAA"}, status=409)["error"] == "announcement_device_busy"
     assert lab.log() == []
 
-    # An end frame, for example of a camera view, does not end the hold early.
+    # An end frame does not end the hold early: the hold starts again with it.
     send_udp_event(lab.udp_port, CALL_END)
     time.sleep(0.3)
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
 
-    time.sleep(RING_HOLD)
+    time.sleep(RING_HOLD + 1)
     lab.call("/actions/play", {"volume": 50})
     assert lab.result() == "played"
 

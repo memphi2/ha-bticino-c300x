@@ -783,8 +783,11 @@ browser play the same way; `ffmpeg` on Home Assistant does the conversion.
 - **A door call always wins.** A ring, a call or a camera request ends the
   sound at once. The attribute `last_result` then reads `preempted`; otherwise
   `played` or `stopped`, or `unknown` when the agent could not be asked.
-- While the device uses its speaker itself (a call, a ring, a message being
-  played), the action fails and says so; nothing is played.
+- During a door call, from the ring until the call has ended, and while the
+  device uses its speaker itself (a message being played), no sound is
+  started: the action fails and says so. Should the device take its speaker
+  just as a sound starts, the action can succeed and `last_result` then reads
+  `device_busy`.
 - A touch tone of the display during a sound can cut it short.
 
 Tested on firmware 1.7.19. Firmware 2.0.2 and 3.0.6 have the same sound parts,
@@ -848,15 +851,19 @@ data:
 
 The message is spoken by the [speaker](#speaker-and-text-to-speech); the title
 is not. Choose the engine once under **Configure > Speech**: a text-to-speech
-entity such as `tts.piper` and, if you like, a language. `tts_engine` and
-`language` in the data of one notification come before that setting. With
-neither, Home Assistant uses its default engine, which is the cloud one where
-Home Assistant Cloud is set up; choose a local engine to keep speech local.
-Changing the setting does not reload the integration.
+entity such as `tts.piper` and, if you like, a language. A language is saved
+as the engine names it, for example `de` as `de_DE` for Piper. A notification
+that names its own `tts_engine` speaks the `language` it names or the
+engine's own; one that names only `language` uses the engine of the setting.
+Without an engine anywhere, Home Assistant uses its default engine, which is
+the cloud one where Home Assistant Cloud is set up; choose a local engine to
+keep speech local. Changing the setting does not reload the integration.
 In `both` there is no tone, since it would hold the speaker the speech needs;
-a `sound_duration` above 0 is refused. Engine, language and speaker are
-checked before anything is shown, so a message that cannot be spoken is not
-shown either. The volume is the one of the speaker entity.
+a `sound_duration` above 0 is refused. The speaker, the engine and the
+language are checked before anything is shown. Speech can still fail after the
+notice is shown in `both`, for example when the engine cannot reach its
+service or a door call comes in; the action then fails and says why. The
+volume is the one of the speaker entity.
 
 Each duration accepts whole seconds from 0 to 300; zero disables that effect.
 `notification_id` is optional and reuses the existing notice ID rules. Title,

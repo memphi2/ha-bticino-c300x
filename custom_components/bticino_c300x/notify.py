@@ -41,9 +41,10 @@ def _async_set_notify_description(
             "notification_id replaces an existing notification with the same ID "
             "(1-64 lowercase letters, digits, underscores or hyphens). "
             "mode is display (default), speech (the message is only spoken over the "
-            "device speaker) or both (shown and spoken; no tone unless sound_duration "
-            "is given). tts_engine names the text-to-speech entity, for example "
-            "tts.piper; without it Home Assistant uses its default. language is optional."
+            "device speaker) or both (shown and spoken, without a tone; sound_duration "
+            "must be 0 or left out). tts_engine names the text-to-speech entity, for "
+            "example tts.piper; without it the engine chosen under Speech in the C300X "
+            "settings is used, else Home Assistant's default. language is optional."
         ),
         "example": {"severity": "info", "wake_duration": 30, "sound_duration": 30},
     })

@@ -27,13 +27,14 @@ Speaker:
 - **The C300X speaks.** New media player **Speaker** for the device's own
   loudspeaker. Use it with `tts.speak` and any text-to-speech engine, for
   example Piper for speech that stays local, or play sounds from the media
-  browser. It has a volume and a stop, and a door call ends a sound at once.
+  browser. It has a volume and a stop. A door call ends a sound at once, and
+  no sound starts while a call is under way.
   Tested on firmware 1.7.19. Needs the agent update.
 - **Spoken notifications.** The Notify action has a new `mode`: `display`
   (as before), `speech` (the message is only spoken) or `both` (shown on the
   display and spoken instead of the tone). The engine and language are
-  chosen under **Configure > Speech**, for example the local Piper;
-  `tts_engine` and `language` in one notification come first.
+  chosen under **Configure > Speech**, for example the local Piper; a
+  notification can also name its own `tts_engine` and `language`.
 
 Audio:
 

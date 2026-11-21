@@ -773,7 +773,7 @@ def test_both_mode_shows_the_message_without_tone_and_speaks_it(tmp_path, monkey
     {"announcements": False}, {"speaker": None}, {"speaker_state": "unavailable"},
 ], ids=["old agent", "no speaker entity", "speaker unavailable"])
 @pytest.mark.parametrize("mode", ["speech", "both"])
-def test_nothing_is_shown_when_the_message_cannot_be_spoken(tmp_path, monkeypatch, options, mode):
+def test_nothing_is_shown_when_the_speaker_cannot_be_used(tmp_path, monkeypatch, options, mode):
     async def run():
         async with speech_context(tmp_path, monkeypatch, **options) as (hass, entry, spoken):
             with pytest.raises(ServiceValidationError, match="agent|speaker"):

@@ -81,7 +81,8 @@ class _FakeApi:
         if result == SWITCHING_OFF:
             return {"playing": False, "busy": True, "result": "preempted"}
         if result == RESTARTED:
-            return {"playing": False, "busy": False, "result": ""}
+            # A restarted agent switches the speaker off without knowing the sound.
+            return {"playing": False, "busy": True, "result": ""}
         if result == STARTING:
             return {"playing": True, "started": False, "busy": True, "result": ""}
         return {"playing": result is None, "started": result is None, "busy": result is None,
@@ -245,6 +246,31 @@ def test_a_request_that_gives_up_lets_the_next_one_play(speaker: Any) -> None:
     assert entity._entry.runtime_data.api.played == [(b"next", 60)]
 
 
+def test_a_request_that_gives_up_in_the_middle_keeps_the_order(
+    speaker: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entity = speaker("played", "played")
+
+    async def convert(url: str) -> bytes:
+        if url == "broken":
+            raise HomeAssistantError("conversion failed")
+        await asyncio.sleep(0.05 if url == "long" else 0)
+        return url.encode()
+
+    monkeypatch.setattr(media_player, "async_sound_for_device", convert)
+
+    async def run() -> None:
+        first = asyncio.ensure_future(_played_to_the_end(entity, "long"))
+        await asyncio.sleep(0)
+        with pytest.raises(HomeAssistantError, match="conversion failed"):
+            await entity.async_play_media("music", "broken")
+        await asyncio.gather(first, _played_to_the_end(entity, "short"))
+
+    asyncio.run(run())
+
+    assert [sound for sound, _volume in entity._entry.runtime_data.api.played] == [b"long", b"short"]
+
+
 def test_a_second_sound_waits_until_the_speaker_is_switched_off(speaker: Any) -> None:
     entity = speaker(None, SWITCHING_OFF, "played", "played")
 
@@ -283,12 +309,22 @@ def test_a_device_that_uses_its_speaker_is_said_also_when_it_takes_a_moment(spea
     assert entity.extra_state_attributes == {"last_result": "device_busy"}
 
 
-def test_a_sound_counts_as_started_only_once_the_device_let_it_have_the_speaker(speaker: Any) -> None:
+def test_a_sound_counts_as_started_only_once_the_device_let_it_have_the_speaker(
+    speaker: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     entity = speaker(STARTING, None, "played")
+    # Following the started sound is slower than waiting for its start.
+    monkeypatch.setattr(media_player, "_POLL_SECONDS", 0.05)
 
-    asyncio.run(_played_to_the_end(entity, "x"))
+    async def run() -> None:
+        await entity.async_play_media("music", "x")
+        # The action returned once the agent said the device let it have the speaker.
+        assert entity._entry.runtime_data.api.events == ["play x", "status starting", "status None"]
+        assert entity._sound is not None
+        await entity._sound
 
-    assert entity._entry.runtime_data.api.events == ["play x", "status starting", "status None", "status played"]
+    asyncio.run(run())
+
     assert entity.extra_state_attributes == {"last_result": "played"}
 
 

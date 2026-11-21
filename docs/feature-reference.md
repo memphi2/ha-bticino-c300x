@@ -783,10 +783,12 @@ browser play the same way; `ffmpeg` on Home Assistant does the conversion.
   **Stop** ends the one that plays.
 - **A door call always wins.** A ring, a call or a camera request ends the
   sound at once. The attribute `last_result` then reads `preempted`; otherwise
-  `played` or `stopped`, or `unknown` when the agent could not be asked.
+  `played` or `stopped`, or `unknown` when the agent could not be asked or was
+  restarted during the sound.
 - During a door call, during a ring and its call up to a minute after their
-  last bus message, and while the device uses its speaker itself (a message
-  being played), no sound is started: the action fails and says so, and
+  last bus message, for a minute after the agent was restarted during a sound,
+  and while the device uses its speaker itself (a message being played), no
+  sound is started: the action fails and says so, and
   `last_result` reads `device_busy`. The action returns once the device has
   let the agent have its speaker. A sound the agent did not take reads
   `not_played`; one the device could not switch on or play reads

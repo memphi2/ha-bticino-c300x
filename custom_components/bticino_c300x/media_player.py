@@ -195,7 +195,11 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
                 self._async_sound(sound, started), f"{self.entity_id} announcement",
             )
         finally:
-            handed.set_result(None)
+            # One that gives up early still keeps its place until the one before has its turn.
+            if before is None or before.done():
+                handed.set_result(None)
+            else:
+                before.add_done_callback(lambda _before: handed.set_result(None))
         try:
             error = await asyncio.shield(started)
         except asyncio.CancelledError:

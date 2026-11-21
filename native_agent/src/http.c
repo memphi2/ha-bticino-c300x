@@ -9828,6 +9828,8 @@ int c300x_run(struct c300x_config *config)
         goto cleanup;
     }
     listener_count++;
+    /* Only the agent that has the API port: a second start must not end the first one's sound. */
+    c300x_announce_take_over(&runtime->announce);
 
     if (ui_listener_enabled) {
         listeners[listener_count].fd = make_listener(C300X_UI_LISTEN_HOST, config->ui_port);

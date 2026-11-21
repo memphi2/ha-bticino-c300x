@@ -1,5 +1,6 @@
 #include "announce_device.h"
 #include "announce.h"
+#include "announce_file.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +46,17 @@ const char C300X_ANNOUNCE_CLEAN_SCRIPT[] =
     "[ -z \"$3\" ] || put 'ZL0 Rout Gain Volume' \"$3\"\n"
     "[ \"$(val Zia_Aud_St)\" != 9 ] || put Zia_Aud_St 0\n"
     "exit 0\n";
+
+int c300x_announce_start_play(struct c300x_command_job *job, int gain, int seconds, int timeout_ms)
+{
+    char gain_text[16], seconds_text[16];
+    char *argv[] = {"/bin/sh", "-c", (char *)C300X_ANNOUNCE_PLAY_SCRIPT, "c300x-announce", (char *)c300x_announce_file(),
+        gain_text, seconds_text, NULL};
+
+    snprintf(gain_text, sizeof(gain_text), "%d", gain);
+    snprintf(seconds_text, sizeof(seconds_text), "%d", seconds);
+    return c300x_command_job_start_output(job, argv[0], argv, timeout_ms);
+}
 
 int c300x_announce_read_gain(const char *output)
 {

@@ -32,6 +32,10 @@ void c300x_announce_init(struct c300x_announce *announce)
     announce->gain = -1;
     announce->result = "";
     announce->ring_hold_ms = 1000LL * atoi(c300x_announce_path("C300X_ANNOUNCE_RING_HOLD", RING_HOLD_SECONDS));
+}
+
+void c300x_announce_take_over(struct c300x_announce *announce)
+{
     if (c300x_announce_end_leftover(&announce->gain)) {
         /* As after a door frame: what the old agent knew about the device is gone. */
         announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
@@ -68,17 +72,6 @@ int c300x_announce_write(const struct c300x_announce *announce, long offset,
 {
     *error = refusal(announce);
     return *error == NULL && c300x_announce_file_write(offset, data, len, error);
-}
-
-static int start_play(struct c300x_announce *announce, int gain, int seconds, int timeout_ms)
-{
-    char gain_text[16], seconds_text[16];
-    char *argv[] = {"/bin/sh", "-c", (char *)C300X_ANNOUNCE_PLAY_SCRIPT, "c300x-announce", (char *)c300x_announce_file(),
-        gain_text, seconds_text, NULL};
-
-    snprintf(gain_text, sizeof(gain_text), "%d", gain);
-    snprintf(seconds_text, sizeof(seconds_text), "%d", seconds);
-    return c300x_command_job_start_output(&announce->job, argv[0], argv, timeout_ms);
 }
 
 /* The switching off sleeps first until a ring's hold is over. */
@@ -123,7 +116,7 @@ int c300x_announce_play(struct c300x_announce *announce, int volume_percent,
     announce->ending = 0;
     announce->gain = -1;
     /* The device's own table for playing: speaker gain 26 at 10 % up to 74 at 100 %. */
-    if (!start_play(announce, 21 + volume_percent * 53 / 100, *duration_ms / 1000 + 2,
+    if (!c300x_announce_start_play(&announce->job, 21 + volume_percent * 53 / 100, *duration_ms / 1000 + 2,
             *duration_ms + 30000)) {
         return 0;
     }

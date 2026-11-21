@@ -507,6 +507,22 @@ def test_a_restarted_agent_ends_the_sound_of_one_that_was_killed(lab: Lab) -> No
     assert lab.call()["busy"] is False
 
 
+def test_a_second_agent_leaves_the_sound_of_the_running_one_alone(lab: Lab) -> None:
+    lab.start_long_sound()
+
+    assert lab.start is not None
+    second = lab.start()
+    # The API port is taken: it ends without having touched anything.
+    assert second.wait(timeout=10) == 2
+
+    assert lab.player_alive()
+    time.sleep(RING_HOLD + 2)
+    assert lab.player_alive()
+    assert "mixer ZL0_Mute_Rout=on" not in lab.log()
+    lab.call("/actions/stop", {})
+    assert lab.result() == "stopped"
+
+
 def test_a_restarted_agent_takes_over_the_switching_off_of_the_one_before(lab: Lab) -> None:
     lab.start_long_sound()
     send_udp_event(lab.udp_port, CAMERA_VIEW)

@@ -16,6 +16,9 @@ enum { C300X_ANNOUNCE_STOPPED = 6, C300X_ANNOUNCE_PREEMPTED = 7 };
 int c300x_announce_read_gain(const char *output);
 /* How a sound ended, from why the agent ended it and the play script's exit status. */
 const char *c300x_announce_result_of(int ending, int status);
+struct c300x_command_job;
+/* Starts the play script for the sound file with the speaker gain and the seconds to play. */
+int c300x_announce_start_play(struct c300x_command_job *job, int gain, int seconds, int timeout_ms);
 /* The status as the HTTP API answers it. */
 void c300x_announce_status_json(const struct c300x_announce *announce, int duration_ms, char *body, size_t size);
 /* Ends the play script or switching off of an agent that was killed or

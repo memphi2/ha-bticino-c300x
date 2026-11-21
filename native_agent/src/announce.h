@@ -20,6 +20,9 @@ struct c300x_announce {
 };
 
 void c300x_announce_init(struct c300x_announce *announce);
+/* Once this agent is the one that serves the device: ends what an agent
+ * before it left behind (a sound, a switching off) and takes its hold over. */
+void c300x_announce_take_over(struct c300x_announce *announce);
 int c300x_announce_supported(const struct c300x_announce *announce);
 /* A sound plays; switching the speaker off afterwards is not part of it. */
 int c300x_announce_playing(const struct c300x_announce *announce);

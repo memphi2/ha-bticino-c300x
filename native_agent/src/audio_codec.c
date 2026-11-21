@@ -397,8 +397,10 @@ static int switch_codec(
     char lb[C300X_MAX_PATH_LEN];
     char *stack_out = NULL;
     char *lin_out = NULL;
+    char *stack_before = NULL;
     size_t stack_len = 0;
     size_t lin_len = 0;
+    size_t stack_before_len = 0;
     int ro_failed;
 
     if (!c300x_audio_codec_read_status(status)) {
@@ -435,28 +437,34 @@ static int switch_codec(
      * either, so a transform failure can never leave one file half-patched
      * (an inconsistent speex/PCMU mix = garbage audio until restore). */
     if (!transform_file(stack_open_path(), patch_stack_open, pcmu, &stack_out, &stack_len, error, error_len)
-        || !transform_file(linphone_path(), patch_linphone, pcmu, &lin_out, &lin_len, error, error_len)) {
+        || !transform_file(linphone_path(), patch_linphone, pcmu, &lin_out, &lin_len, error, error_len)
+        || !c300x_device_file_read(stack_open_path(), &stack_before, &stack_before_len, NULL)) {
+        if (stack_out != NULL && lin_out != NULL) {
+            set_err(error, error_len, "read_failed");
+        }
         free(stack_out);
         free(lin_out);
+        free(stack_before);
         (void)c300x_device_file_remount("ro");
         return 0;
     }
+    /* Each write is atomic, so a file is either fully old or new. When the
+     * second write fails, stack_open.xml gets its content from before this
+     * switch back: the backups hold the original codec, which is not
+     * necessarily the one the device had before. */
     if (!c300x_device_file_write(stack_open_path(), stack_out, stack_len)
         || !c300x_device_file_write(linphone_path(), lin_out, lin_len)) {
-        /* The first write may have already flipped stack_open.xml before the
-         * second failed. Roll both files back from the backups so we never
-         * leave a mixed speex/PCMU state (garbage audio until a manual restore).
-         * the write is atomic, so each file is either fully old or new. */
-        (void)c300x_device_file_copy(sb, stack_open_path());
-        (void)c300x_device_file_copy(lb, linphone_path());
+        (void)c300x_device_file_write(stack_open_path(), stack_before, stack_before_len);
         free(stack_out);
         free(lin_out);
+        free(stack_before);
         (void)c300x_device_file_remount("ro");
         set_err(error, error_len, "write_failed");
         return 0;
     }
     free(stack_out);
     free(lin_out);
+    free(stack_before);
     /* The device files are already written. A busy root cannot undo that, and
      * the boot after this switch mounts read-only again, so report the failed
      * remount instead of failing an operation that succeeded. */

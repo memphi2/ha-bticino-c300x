@@ -205,3 +205,32 @@ def test_firmware_3_switches_to_speex_and_back_and_removal_keeps_its_pcmu(device
     result = _cli(device, "--restore-media-patches")
     assert result.returncode == 0, result.stderr
     assert (stack.read_text(), linphone.read_text()) == (PCMU_STACK, PCMU_LINPHONE)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root may write a read-only directory")
+@pytest.mark.parametrize("first,then", [("apply", "restore"), ("restore", "apply")])
+def test_a_failed_second_write_leaves_both_files_as_they_were(
+    device: dict[str, str], tmp_path: Path, first: str, then: str,
+) -> None:
+    # Firmware 1.7.19/2.0.2 (Speex) and 3.0.6 (PCMU): switch once, then back
+    # towards the original codec with linphone.conf that cannot be written.
+    stack = Path(device["C300X_AUDIO_STACK_OPEN"])
+    folder = tmp_path / "linphone-folder"
+    folder.mkdir()
+    linphone = folder / "linphone.conf"
+    if first == "restore":
+        stack.write_text(PCMU_STACK)
+        linphone.write_text(PCMU_LINPHONE)
+    else:
+        linphone.write_text(LINPHONE)
+    device["C300X_AUDIO_LINPHONE_CONF"] = str(linphone)
+    assert _cli(device, "--audio-codec", first).returncode == 0
+    before = (stack.read_text(), linphone.read_text())
+    folder.chmod(0o555)
+    try:
+        result = _cli(device, "--audio-codec", then)
+    finally:
+        folder.chmod(0o755)
+
+    assert result.returncode != 0
+    assert (stack.read_text(), linphone.read_text()) == before

@@ -39,27 +39,33 @@ RESTARTED = "restarted"
 
 
 class _FakeApi:
+    """An agent that takes a sound only while it is not busy with the last one."""
+
     def __init__(self, *results: str | None, refuse: bool = False, busy_once: bool = False,
                  door_call: bool = False) -> None:
         # What the agent answers to each status read: None while the sound plays.
         self.results = list(results)
         self.refuse = refuse
         # The agent still holds a sound the speaker does not know of.
-        self.busy_once = busy_once
+        self.busy = busy_once
         self.door_call = door_call
+        # Set: the agent answers a play only once it is set.
+        self.gate: asyncio.Event | None = None
         self.played: list[tuple[bytes, int]] = []
         self.events: list[str] = []
         self.stopped = 0
 
     async def async_play_announcement(self, sound: bytes, volume: int) -> dict[str, Any]:
+        if self.gate is not None:
+            await self.gate.wait()
         if self.refuse:
             raise C300XAgentApiError("announcement_unsupported")
         if self.door_call:
             raise C300XAgentApiError("announcement_device_busy")
-        if self.busy_once:
-            self.busy_once = False
+        if self.busy:
             self.events.append("refused busy")
             raise C300XAgentApiError("announcement_busy")
+        self.busy = True
         self.played.append((sound, volume))
         self.events.append(f"play {sound.decode()}")
         return {"ok": True, "playing": True}
@@ -69,6 +75,7 @@ class _FakeApi:
         self.events.append(f"status {result}")
         if result == NO_ANSWER:
             raise C300XAgentApiError("timeout")
+        self.busy = result in (None, SWITCHING_OFF)
         if result == SWITCHING_OFF:
             return {"playing": False, "busy": True, "result": "preempted"}
         if result == RESTARTED:
@@ -204,11 +211,12 @@ def test_a_second_sound_waits_until_the_speaker_is_switched_off(speaker: Any) ->
 
     asyncio.run(run())
 
-    # The agent refuses a sound while it still switches the speaker off.
+    # The first sound is over at once; the second is taken once the speaker is off.
     assert entity._entry.runtime_data.api.events == [
-        "play first", "status None", "status switching off", "status played",
-        "play second", "status played",
+        "play first", "status None", "status switching off",
+        "refused busy", "status played", "play second", "status played",
     ]
+    assert entity.extra_state_attributes == {"last_result": "played"}
 
 
 def test_says_so_when_the_device_keeps_its_speaker_for_a_call(speaker: Any) -> None:
@@ -231,8 +239,8 @@ def test_says_so_when_a_door_call_is_under_way(speaker: Any) -> None:
 
 
 def test_a_door_call_that_cuts_the_sound_is_no_error(speaker: Any) -> None:
-    # The agent leaves the speaker to the device a moment before it is free again.
-    entity = speaker(None, SWITCHING_OFF, SWITCHING_OFF, "preempted")
+    # The agent leaves the speaker to the device for the call; the sound is over at once.
+    entity = speaker(None, SWITCHING_OFF)
 
     asyncio.run(_played_to_the_end(entity, "x"))
 
@@ -264,10 +272,50 @@ def test_a_sound_the_agent_never_reports_ends_after_its_time(
 def test_says_so_when_the_agent_refuses_the_sound(speaker: Any) -> None:
     entity = speaker(refuse=True)
 
-    with pytest.raises(HomeAssistantError, match="was not played"):
+    with pytest.raises(HomeAssistantError, match="was not played: announcement_unsupported"):
         asyncio.run(entity.async_play_media("music", "x"))
 
     assert entity.state == MediaPlayerState.IDLE
+    assert entity.extra_state_attributes == {"last_result": "not_played"}
+
+
+def test_an_unexpected_failure_is_no_success(speaker: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    entity = speaker()
+
+    async def broken(_sound: bytes, _volume: int) -> None:
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(entity._entry.runtime_data.api, "async_play_announcement", broken)
+
+    with pytest.raises(HomeAssistantError, match="unexpectedly"):
+        asyncio.run(entity.async_play_media("music", "x"))
+
+    assert entity.extra_state_attributes == {"last_result": "failed"}
+
+
+def test_a_failure_nobody_waits_for_any_more_is_logged(
+    speaker: Any, caplog: pytest.LogCaptureFixture,
+) -> None:
+    entity = speaker(door_call=True)
+
+    async def run() -> None:
+        api = entity._entry.runtime_data.api
+        api.gate = asyncio.Event()
+        play = asyncio.create_task(entity.async_play_media("music", "x"))
+        for _ in range(100):
+            if entity._sound is not None:
+                break
+            await asyncio.sleep(0)
+        play.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await play
+        api.gate.set()
+        assert entity._sound is not None
+        await entity._sound
+
+    asyncio.run(run())
+
+    assert "using its speaker" in caplog.text
 
 
 def test_nothing_is_played_once_the_speaker_was_removed(

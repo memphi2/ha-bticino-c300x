@@ -783,11 +783,12 @@ browser play the same way; `ffmpeg` on Home Assistant does the conversion.
 - **A door call always wins.** A ring, a call or a camera request ends the
   sound at once. The attribute `last_result` then reads `preempted`; otherwise
   `played` or `stopped`, or `unknown` when the agent could not be asked.
-- During a door call, from the ring until the call has ended, and while the
-  device uses its speaker itself (a message being played), no sound is
-  started: the action fails and says so. Should the device take its speaker
-  just as a sound starts, the action can succeed and `last_result` then reads
-  `device_busy`.
+- During a door call, for a minute after a ring and while the device uses its
+  speaker itself (a message being played), no sound is started: the action
+  fails and says so, and `last_result` reads `device_busy`. Should the device
+  take its speaker just as a sound starts, the action can succeed with the
+  same `last_result`. A sound the agent did not take reads `not_played`, one
+  that broke off for another reason `failed`.
 - A touch tone of the display during a sound can cut it short.
 
 Tested on firmware 1.7.19. Firmware 2.0.2 and 3.0.6 have the same sound parts,

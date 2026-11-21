@@ -40,10 +40,10 @@ _LOGGER = logging.getLogger(__name__)
 # The agent knows after a moment whether the device let it have the speaker.
 _START_CHECK_SECONDS = 0.4
 _POLL_SECONDS = 0.5
-# Longer than the agent can be busy with a sound: its length and 30 seconds,
-# then switching the speaker off, after a door call three seconds later.
+# Longer than the agent lets a sound run: its length and 30 seconds.
 _END_MARGIN_SECONDS = 50
-# A sound the agent still holds, for example from before a reload, is waited for.
+# The agent switches the speaker off after a sound before it takes the next;
+# a sound it still holds, for example from before a reload, is waited for too.
 _BUSY_WAIT_SECONDS = 180
 # Conversions running at the same time.
 _CONVERSIONS = 2
@@ -85,6 +85,11 @@ def media_url_for_ffmpeg(hass: HomeAssistant, media_id: str) -> str:
             raise HomeAssistantError("The address of Home Assistant is unknown") from None
         base = f"{'https' if api.use_ssl else 'http'}://127.0.0.1:{api.port}"
     return f"{base}{url}"
+
+
+def _log_error(started: asyncio.Future[str | None]) -> None:
+    if started.result() is not None:
+        _LOGGER.warning("%s", started.result())
 
 
 @dataclass
@@ -179,7 +184,12 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
             self._sound = self.hass.async_create_background_task(
                 self._async_sound(sound, started), f"{self.entity_id} announcement",
             )
-        error = await asyncio.shield(started)
+        try:
+            error = await asyncio.shield(started)
+        except asyncio.CancelledError:
+            # Nobody waits for the answer any more: the log still gets it.
+            started.add_done_callback(_log_error)
+            raise
         if error is not None:
             raise HomeAssistantError(error)
 
@@ -213,12 +223,28 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
             return None
         if not isinstance(status, dict):
             return None
-        # Until the speaker is switched off again the agent takes no new sound.
-        if status.get("playing") is True or status.get("busy") is True:
+        if status.get("playing") is True:
             return _PLAYING
+        # The sound is over once the agent tells how, also while it still
+        # switches the speaker off, which after a door call takes a while.
         result = status.get("result")
+        if isinstance(result, str) and result:
+            return result
         # Free without a result: the agent was restarted while it played.
-        return result if isinstance(result, str) and result else "unknown"
+        return _PLAYING if status.get("busy") is True else "unknown"
+
+    async def _async_until_free(self) -> None:
+        """Wait until the agent has switched the speaker off after the last sound."""
+
+        deadline = time.monotonic() + _BUSY_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            try:
+                status = await self._entry.runtime_data.api.async_announcement_status()
+            except C300XAgentApiError:
+                status = None
+            if isinstance(status, dict) and status.get("busy") is False:
+                return
+            await asyncio.sleep(_POLL_SECONDS)
 
     def _finish(self, result: str) -> None:
         self._last_result = result
@@ -237,11 +263,7 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
         except C300XAgentApiError as err:
             if "announcement_busy" not in str(err):
                 raise
-        deadline = time.monotonic() + _BUSY_WAIT_SECONDS
-        while time.monotonic() < deadline:
-            if await self._async_check() not in (_PLAYING, None):
-                break
-            await asyncio.sleep(_POLL_SECONDS)
+        await self._async_until_free()
         await api.async_play_announcement(sound, volume)
 
     async def _async_until_over(self, sound: bytes, started: asyncio.Future[str | None]) -> str | None:
@@ -275,6 +297,7 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
             except C300XAgentApiError as err:
                 # During a door call the agent starts no sound at all.
                 if "announcement_device_busy" not in str(err):
+                    self._finish("not_played")
                     started.set_result(f"C300X announcement was not played: {err}")
                     return
                 result = "device_busy"
@@ -287,7 +310,7 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
             raise
         except Exception:
             _LOGGER.exception("Playing the C300X announcement failed")
-            result = None
+            result = "failed"
         if result in (_PLAYING, None):
             result = "unknown"
         self._finish(result)

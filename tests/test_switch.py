@@ -51,6 +51,7 @@ def test_config_switches_are_disabled_by_default() -> None:
         assert switch_class(_FakeEntry()).entity_registry_enabled_default is False
 
 
+
 def test_snapshot_switch_changes_manager_without_device_io(monkeypatch) -> None:
     import custom_components.bticino_c300x.switch as module
 
@@ -791,6 +792,13 @@ def test_gui_function_patch_switch_applies_and_restores_patch() -> None:
         )
     )
     entity = C300XGuiFunctionPatchSwitch(entry)  # type: ignore[arg-type]
+    saved: list[dict[str, Any]] = []
+
+    def update_entry(updated: Any, *, options: dict[str, Any]) -> None:
+        saved.append(options)
+        updated.options = options
+
+    entity.hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update_entry))
 
     asyncio.run(entity.async_turn_on())
     asyncio.run(entity.async_turn_off())
@@ -798,6 +806,11 @@ def test_gui_function_patch_switch_applies_and_restores_patch() -> None:
     assert entry.runtime_data.api.qml_patch_actions == ["apply", "restore"]
     assert entry.runtime_data.qml_patch_status["state"] == "original"
     assert entity.is_on is False
+    # The Display setting follows the switch, so saving the settings keeps it.
+    assert [options["device_ui_enabled"] for options in saved] == [True, False]
+    # A setting that already matches is not saved again.
+    asyncio.run(entity.async_turn_off())
+    assert len(saved) == 2
 
 
 def test_gui_function_patch_switch_marks_unavailable_when_refresh_fails() -> None:

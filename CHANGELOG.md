@@ -82,6 +82,13 @@ Settings:
 
 Fixed:
 
+- Saving the settings with the display turned on installs the Home
+  Assistant pages on the C300X, and saving it turned off restores the
+  original display. Before, the option only unlocked the settings, and the
+  pages came only from the hidden **Display patch** switch. The switch now
+  saves the option too, so both always agree. If the pages are missing
+  after the update, open **Configure > Display > Display and Display
+  patch** and submit it once.
 - The card no longer shows the last image twice. Its saved copy came again
   as the first step into the saved pictures and videos; browsing now starts
   behind the image the card already shows.

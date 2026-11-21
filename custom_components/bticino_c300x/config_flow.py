@@ -188,6 +188,7 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DISPLAY_SETTING_PENDING,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_ENERGY_PAGE,
     CONF_EVENT_WEBHOOK_ID,
@@ -214,6 +215,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .display_patch_sync import async_schedule_display_setting
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import ssh_login
@@ -934,6 +936,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_EVENT_WEBHOOK_TOKEN: secrets.token_urlsafe(32),
+                # Applied with the runtime data of the first start.
+                CONF_DISPLAY_SETTING_PENDING: True,
             },
             options={
                 CONF_ACTIONS: feature_data[CONF_ACTIONS],
@@ -1629,7 +1633,12 @@ class BticinoC300XOptionsFlow(
                 _dashboard_form_input(user_input),
                 feature_defaults,
             )
-            return await self._async_save_options(feature_defaults)
+            saved = dict(self._config_entry.options)
+            result = await self._async_save_options(feature_defaults)
+            if not result.get("errors") and dict(self._config_entry.options) == saved:
+                # Nothing was saved, so nothing reloads: the device follows here.
+                async_schedule_display_setting(self.hass, self._config_entry)
+            return result
 
         return await self._async_show_options_dashboard_form(
             user_input,

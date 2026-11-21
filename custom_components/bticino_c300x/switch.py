@@ -21,9 +21,14 @@ from .api import (
     C300XAgentApiError,
     C300XAgentApiUnsupportedError,
 )
-from .capabilities import auth_config_supported, entry_maintenance_action_is_advertised
+from .capabilities import (
+    auth_config_supported,
+    entry_device_ui_configured,
+    entry_maintenance_action_is_advertised,
+)
 from .const import (
     CONF_AGENT_TOKEN,
+    CONF_DEVICE_UI_ENABLED,
     CONF_MAINTENANCE_TOKEN,
     EVENT_AGENT_EVENT_RECEIVED,
     MEDIA_USER_SETUP_ENTITY_KEY,
@@ -520,6 +525,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
+        self._follow_with_setting(status, True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the display files."""
@@ -532,6 +538,19 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
+        self._follow_with_setting(status, False)
+
+    def _follow_with_setting(self, status: dict[str, Any], patched: bool) -> None:
+        """Save the Display setting the switch just carried out.
+
+        Saving the settings applies the Display setting to the device, so a
+        setting left the other way would undo the switch at the next save.
+        """
+
+        if status.get("patched") is not patched or entry_device_ui_configured(self._entry) is patched:
+            return
+        options = {**self._entry.options, CONF_DEVICE_UI_ENABLED: patched}
+        self.hass.config_entries.async_update_entry(self._entry, options=options)
 
     async def async_update(self) -> None:
         """Refresh Display patch state through the read-only status endpoint."""

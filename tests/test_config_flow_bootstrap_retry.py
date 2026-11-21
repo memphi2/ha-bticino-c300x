@@ -382,3 +382,20 @@ def test_bootstrap_asks_for_a_login_only_after_the_factory_login_was_refused(mon
         assert installer.await_count == 2
 
     asyncio.run(exercise())
+
+
+def test_a_new_entry_applies_its_display_setting_at_the_first_start(monkeypatch):
+    from custom_components.bticino_c300x.const import CONF_DISPLAY_SETTING_PENDING
+
+    flow = _bootstrap_flow(monkeypatch, AsyncMock())
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = Mock()
+    monkeypatch.setattr(
+        config_flow_auth, "async_validate_connection",
+        AsyncMock(return_value=({"device_id": "device-a"}, {})),
+    )
+    feature_data, errors = config_flow._feature_input({CONF_VIDEO_ENABLED: False})
+    assert not errors
+    result = asyncio.run(flow._async_create_setup_entry(feature_data))
+    assert result["type"] == "create_entry"
+    assert result["data"][CONF_DISPLAY_SETTING_PENDING] is True

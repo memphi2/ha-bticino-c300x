@@ -180,8 +180,11 @@ Details: [Blueprints](blueprints.md)
 These pages run on the C300X itself in its blue interface; they are not the
 Lovelace card or an embedded HA dashboard.
 
-1. Update the bundled agent, then enable and apply **Display patch** under
-   **Configure > Display > Display and Display patch**. Applying it restarts the device GUI.
+1. Update the bundled agent, then turn on **Display patch** under
+   **Configure > Display > Display and Display patch** and save. Saving applies
+   the patch, which restarts the device GUI; saving with the option off restores
+   the original display. The **Display patch** switch on the device page does the
+   same and saves the option with it.
 2. Open **Display > Display pages** and pick a page from the list. Choose an optional weather entity, name your pages,
    set their order and select the entities for each. Five built-in pages
    (Status, Energy, Agenda, Leave home and Situations) and up to seven custom

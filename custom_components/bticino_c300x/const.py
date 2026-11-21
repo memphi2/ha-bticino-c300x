@@ -11,6 +11,8 @@ CONF_ACTIONS_JSON = "actions_json"
 CONF_AGENT_TOKEN = "agent_token"
 CONF_AGENT_UPDATE_PAYLOAD_PENDING = "agent_update_payload_pending"
 CONF_AGENT_UPDATE_QML_PENDING = "agent_update_qml_pending"
+# A new entry applies its Display setting to the device at its first start.
+CONF_DISPLAY_SETTING_PENDING = "display_setting_pending"
 CONF_ALARM_ENTITY_ID = "alarm_entity_id"
 CONF_ALARM_PAGE_ENTITY_ID = "alarm_page_entity_id"
 CONF_AGENT_HOST = "agent_host"

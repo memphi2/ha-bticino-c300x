@@ -31,6 +31,10 @@ forwarding controls, messages and optional display pages.
 - **See and answer the door.** Local live video and talkback through the bundled
   card, doorbell events, and Ring Call answer/hang-up when forwarding is set to
   Home Assistant. Audio-only Home Call reaches the C300X display.
+- **Get a better camera picture.** Under **Camera quality** the stream can be
+  sharper (up to 3000 kbit/s instead of 800), smoother (up to 24 frames per
+  second instead of 15) and show the whole 720x576 camera picture instead of
+  the factory cut-out. For clearer sound, set the **Audio codec** to **PCMU**.
 - **Control the door station.** Door unlock, stair light, ringer mute,
   forwarding and answering-machine controls, plus stored video messages,
   voice memos and text memos where supported by the agent.

@@ -7,7 +7,8 @@ Camera:
 - New **Camera resolution** setting (configuration entity): high or low
   resolution for the camera stream, applied from the next stream. High stays
   the default.
-- New **Camera quality** area in the settings: picture size (the whole
+- **Better camera picture:** new **Camera quality** area in the settings. The
+  stream can be sharper, smoother and show more: picture size (the whole
   720x576 camera picture instead of the factory 688x480 cut-out), bit rate up
   to 3000 kbit/s and up to 24 frames per second instead of the factory
   800 kbit/s and 15 for the high-resolution camera stream. On firmware 3.0.6

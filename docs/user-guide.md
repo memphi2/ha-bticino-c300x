@@ -40,14 +40,19 @@ Most users only need:
   Snapshot**; defaults are 688x480,
   3 seconds, 14 days and date and time on. Images and their shared camera/card preview are
   stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
-- **Configure > Camera quality** sets the picture size, bit rate and frame
-  rate of the camera stream: from the factory 688x480, 800 kbit/s and 15 fps,
-  at most the whole 720x576 picture, 3000 kbit/s and 24 fps. On firmware 3.0.x
+- **Better camera picture:** the factory stream is modest (688x480, 800 kbit/s,
+  15 fps). **Configure > Camera quality** makes it sharper, smoother and
+  wider: up to the whole 720x576 camera picture, 3000 kbit/s and 24 fps. On firmware 3.0.x
   it sets the low-resolution stream, the only one the device sends, which the
   Door Entry app receives as well. The device reads these values only when it
   starts, so saving a change restarts it once (about a minute). Removing the
   agent puts the original values back. See
   [Feature reference](feature-reference.md#setup-and-options).
+- **Clearer sound:** set the **Audio codec** select to **PCMU**. The browser
+  plays PCMU as it is, so the agent no longer converts the sound between
+  Speex and PCMU; that gives clearer audio and leaves the device more room.
+  Switching restarts the C300X once. It writes the same codec settings that
+  BTicino ships on firmware 3.0.6, which already runs PCMU from the factory.
 - Use the **C300X Doorbell Call Card** in **Doorstation + Home Call** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.
 - **Browse saved images and videos** is on by default (`show_media_history: true`). Browse

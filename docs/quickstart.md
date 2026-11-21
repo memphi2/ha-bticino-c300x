@@ -240,6 +240,10 @@ For later updates, follow [Updates](advanced-maintenance.md#updates).
 
 Use [Feature reference](feature-reference.md) to decide what to enable next:
 
+- a better camera picture under **Configure > Camera quality** (sharper,
+  smoother, the whole camera picture; the device restarts once),
+- clearer sound with the **Audio codec** select on **PCMU** (the device
+  restarts once; firmware 3.0.6 runs PCMU already),
 - additional C300X activation buttons,
 - ringer mute and volume controls,
 - video-message and memo workflows,

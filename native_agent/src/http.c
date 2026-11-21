@@ -10183,6 +10183,10 @@ cleanup:
     if (shutdown_requested && result == 1) {
         result = 0;
     }
+    if (runtime != NULL) {
+        /* Before the API port is free: the next agent finds what this one leaves. */
+        c300x_announce_close(&runtime->announce);
+    }
     for (nfds_t index = 0; index < listener_count; index++) {
         close(listeners[index].fd);
     }
@@ -10207,7 +10211,6 @@ cleanup:
         c300x_touch_tone_close(&runtime->touch_tone);
         c300x_display_alerts_close(&runtime->display_alerts);
         c300x_http_maintenance_close(&runtime->maintenance);
-        c300x_announce_close(&runtime->announce);
         c300x_openwebnet_async_close(&runtime->openwebnet);
         c300x_video_control_close(&runtime->video_control);
         c300x_recent_events_clear(&runtime->recent_events);

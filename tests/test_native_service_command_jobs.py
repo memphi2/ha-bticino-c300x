@@ -183,6 +183,16 @@ def test_shutdown_actions_wait_for_ssh_but_ignore_its_failure(lab, path, confirm
     wait_until(lambda: (lab.root / (name + "-done")).exists())
 
 
+@pytest.mark.parametrize("path,confirm,name", [(REBOOT, "reboot", "reboot"), (REMOVE, "remove_agent", "remove")])
+def test_shutdown_actions_go_ahead_when_the_ssh_start_hangs_past_its_deadline(lab, path, confirm, name):
+    scripts(lab, service="while [ ! -e release ]; do sleep 0.02; done\n")
+    started = time.monotonic()
+    result = response(lab.request(path, {"confirm": confirm}), 202)
+    assert 1.5 < time.monotonic() - started < 6
+    assert result["action"] == confirm and result["scheduled"] is True
+    wait_until(lambda: (lab.root / (name + "-done")).exists())
+
+
 @pytest.mark.parametrize("delay", [0, -1])
 def test_nonpositive_reboot_delay_remains_rejected(lab, binary, delay):
     config = json.loads((lab.root / "config.json").read_text())

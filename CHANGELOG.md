@@ -36,8 +36,8 @@ Speaker:
 Audio:
 
 - The **Audio codec** select can switch to Speex also on firmware 3.0.6, which
-  comes with PCMU; it failed there before. Removing the agent puts back the
-  codec the device came with. The option is now called **Speex**, without
+  comes with PCMU; it failed there before. Not yet tested on a 3.0.6 device.
+  Removing the agent puts back the codec the device came with. The option is now called **Speex**, without
   "stock". Needs the agent update.
 
 Display:

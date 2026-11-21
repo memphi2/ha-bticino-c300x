@@ -1525,9 +1525,12 @@ and `GET` then reports `"supported": false`.
 `POST /api/v1/maintenance/audio-codec/actions/restore` with
 `{"confirm": "restore_audio_codec_patch"}` switches to speex. Both rewrite the
 same lines of `stack_open.xml` and `linphone.conf` in opposite directions, so
-speex is available also on firmware 3.0.6, which comes with PCMU. The first
-switch keeps a backup of the original files; removing the agent puts those
-back, whichever codec they had. The codec takes effect after a reboot. When one is needed, the agent starts SSH and reboots the
+speex is available also on firmware 3.0.6, which comes with PCMU (not yet
+tested on a 3.0.6 device). The first switch keeps a backup of the original
+files; removing the agent reads the original codec from them and rewrites the
+codec lines back to it, leaving the rest of both files as they are. When the
+second file cannot be written, the first gets its content from before the
+switch back. The codec takes effect after a reboot. When one is needed, the agent starts SSH and reboots the
 device, unless the request sends `"reboot": false` or reboot maintenance is
 disabled. A failed write returns `500` with `error: "audio_codec_apply_failed"`
 or `"audio_codec_restore_failed"`.

@@ -244,6 +244,22 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
             await asyncio.sleep(_POLL_SECONDS)
         await api.async_play_announcement(sound, volume)
 
+    async def _async_until_over(self, sound: bytes, started: asyncio.Future[str | None]) -> str | None:
+        """Follow a sound the agent took until it is over, or until its deadline."""
+
+        deadline = time.monotonic() + announcement_seconds(sound) + _END_MARGIN_SECONDS
+        await asyncio.sleep(_START_CHECK_SECONDS)
+        result = await self._async_check()
+        if result in (_PLAYING, None):
+            # Not known yet, or the agent did not answer this once.
+            self._attr_state = MediaPlayerState.PLAYING
+            self.async_write_ha_state()
+            started.set_result(None)
+        while result in (_PLAYING, None) and time.monotonic() < deadline:
+            await asyncio.sleep(_POLL_SECONDS)
+            result = await self._async_check()
+        return result
+
     async def _async_sound(self, sound: bytes, started: asyncio.Future[str | None]) -> None:
         """Play one sound and follow it until the device says it is over.
 
@@ -257,19 +273,13 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
             try:
                 await self._async_upload(sound)
             except C300XAgentApiError as err:
-                started.set_result(f"C300X announcement was not played: {err}")
-                return
-            deadline = time.monotonic() + announcement_seconds(sound) + _END_MARGIN_SECONDS
-            await asyncio.sleep(_START_CHECK_SECONDS)
-            result = await self._async_check()
-            if result in (_PLAYING, None):
-                # Not known yet, or the agent did not answer this once.
-                self._attr_state = MediaPlayerState.PLAYING
-                self.async_write_ha_state()
-                started.set_result(None)
-            while result in (_PLAYING, None) and time.monotonic() < deadline:
-                await asyncio.sleep(_POLL_SECONDS)
-                result = await self._async_check()
+                # During a door call the agent starts no sound at all.
+                if "announcement_device_busy" not in str(err):
+                    started.set_result(f"C300X announcement was not played: {err}")
+                    return
+                result = "device_busy"
+            else:
+                result = await self._async_until_over(sound, started)
         except asyncio.CancelledError:
             if not started.done():
                 started.set_result("The C300X speaker was removed while the sound started")

@@ -39,12 +39,14 @@ RESTARTED = "restarted"
 
 
 class _FakeApi:
-    def __init__(self, *results: str | None, refuse: bool = False, busy_once: bool = False) -> None:
+    def __init__(self, *results: str | None, refuse: bool = False, busy_once: bool = False,
+                 door_call: bool = False) -> None:
         # What the agent answers to each status read: None while the sound plays.
         self.results = list(results)
         self.refuse = refuse
         # The agent still holds a sound the speaker does not know of.
         self.busy_once = busy_once
+        self.door_call = door_call
         self.played: list[tuple[bytes, int]] = []
         self.events: list[str] = []
         self.stopped = 0
@@ -52,6 +54,8 @@ class _FakeApi:
     async def async_play_announcement(self, sound: bytes, volume: int) -> dict[str, Any]:
         if self.refuse:
             raise C300XAgentApiError("announcement_unsupported")
+        if self.door_call:
+            raise C300XAgentApiError("announcement_device_busy")
         if self.busy_once:
             self.busy_once = False
             self.events.append("refused busy")
@@ -105,8 +109,10 @@ class _FakeHass:
 def speaker(monkeypatch: pytest.MonkeyPatch) -> Any:
     """A speaker whose media goes through stand-ins for conversion and waiting."""
 
-    def make(*results: str | None, refuse: bool = False, busy_once: bool = False) -> C300XSpeaker:
-        entity = C300XSpeaker(_FakeEntry(_FakeApi(*results, refuse=refuse, busy_once=busy_once)))  # type: ignore[arg-type]
+    def make(*results: str | None, refuse: bool = False, busy_once: bool = False,
+             door_call: bool = False) -> C300XSpeaker:
+        api = _FakeApi(*results, refuse=refuse, busy_once=busy_once, door_call=door_call)
+        entity = C300XSpeaker(_FakeEntry(api))  # type: ignore[arg-type]
         entity.entity_id = "media_player.c300x_speaker"
         entity.hass = _FakeHass()  # type: ignore[assignment]
         entity.async_write_ha_state = lambda: None  # type: ignore[method-assign]
@@ -212,6 +218,15 @@ def test_says_so_when_the_device_keeps_its_speaker_for_a_call(speaker: Any) -> N
         asyncio.run(entity.async_play_media("music", "x"))
 
     assert entity.state == MediaPlayerState.IDLE
+    assert entity.extra_state_attributes == {"last_result": "device_busy"}
+
+
+def test_says_so_when_a_door_call_is_under_way(speaker: Any) -> None:
+    entity = speaker(door_call=True)
+
+    with pytest.raises(HomeAssistantError, match="using its speaker"):
+        asyncio.run(entity.async_play_media("music", "x"))
+
     assert entity.extra_state_attributes == {"last_result": "device_busy"}
 
 

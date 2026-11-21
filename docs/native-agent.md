@@ -193,8 +193,8 @@ files are not backed up on the device.
 
 The remove-agent maintenance action is explicit and token protected. It first
 restores all display changes (Display patch, core hook and media-user label),
-then the IPv6 and IPv4 firewall scripts, stops the agent, restores the stock
-audio codec and the original camera quality values, removes the native-agent init files, agent directory and
+then the IPv6 and IPv4 firewall scripts, stops the agent, restores the original
+audio codec and camera quality values, removes the native-agent init files, agent directory and
 agent-owned backups, and schedules a reboot.
 SSH is started before and after the cleanup and is deliberately not removed. If
 a restore step fails, the script stops before deleting the backups.

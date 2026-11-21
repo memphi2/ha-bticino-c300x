@@ -256,7 +256,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/camera-quality` | maintenance | Saves them and restarts the device after confirmation. |
 | `GET` | `/api/v1/maintenance/audio-codec` | maintenance | Reads the device audio codec (speex/PCMU) state. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/apply` | maintenance | Switches the device to PCMU and reboots after confirmation. |
-| `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Restores the stock speex codec and reboots after confirmation. |
+| `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Switches the device to speex and reboots after confirmation. |
 
 ## Health, Capabilities, State
 

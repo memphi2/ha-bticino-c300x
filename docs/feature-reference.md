@@ -876,6 +876,8 @@ other life-safety alerting system**.
 Popup, wake and the bounded stock short-beep signal are permitted only on the
 stock Home or HA page when the GUI is ready and no call is active or ringing.
 Alarmo, PIN entry, settings and other protected pages block these effects.
+They do not hold back speech: in `speech` and `both` the message is spoken
+also while such a page is open.
 With the matching agent and Display patch, a live GUI explicitly reports this
 protection: the action completes without a delivery error, keeps the HA notice,
 and logs that popup, wake and sound were suppressed. This is not confirmation

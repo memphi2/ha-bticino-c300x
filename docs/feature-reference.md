@@ -859,7 +859,7 @@ feature, the matching entity is not created.
 | `switch` | Save images | Automatic visitor images on or off (on by default). |
 | `switch` | Touch tone | The display's touch-sound setting. |
 | `select` | Camera resolution | High (688×480 from the factory) or low (400×288) camera stream, from the next stream on; high by default. The size, bit rate and frame rate of the high stream are set under Camera quality. Not offered on firmware 3.0.x, which is fixed to low; there Camera quality sets the low stream. |
-| `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly and restarts it once. `pcmu` is recommended: the browser plays it as it is, so the agent does not convert the sound, which gives clearer audio and leaves the device more room. The switch writes the same codec settings BTicino ships on firmware 3.0.6, which runs `pcmu` from the factory. |
+| `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly and restarts it once. `pcmu` is recommended: the browser plays it as it is, so the agent does not convert the sound, which gives clearer audio and leaves the device more room. The switch writes the same codec settings BTicino ships on firmware 3.0.6, which runs `pcmu` from the factory; there it is not offered. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |
 | `switch` | Display patch, API firewall patch, IPv6 firewall patch | Explicit device-side patch controls. |

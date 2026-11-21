@@ -5328,6 +5328,7 @@ static void api_capabilities(
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
         .camera_resolution_fixed = c300x_device_display_is_qt5(),
+        .audio_codec_fixed = c300x_device_display_is_qt5(),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,

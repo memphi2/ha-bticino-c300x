@@ -211,7 +211,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     """Select the on-demand/intercom audio codec (speex or native PCMU).
 
-    Disabled by default because native PCMU mode is experimental. Once enabled,
+    Disabled by default; firmware 3.0.x runs PCMU from the factory. Once enabled,
     this is the single source of truth in HA for the codec mode: the card reads
     this entity's state (no agent round-trip). Choosing an option patches the
     device config and reboots for the change to take effect.

@@ -42,11 +42,11 @@ static int contains(const char *data, const char *needle) {
     return data != NULL && strstr(data, needle) != NULL;
 }
 
-static int stack_open_has(const char *needle) {
+static int file_has(const char *path, const char *needle) {
     char *data = NULL;
     size_t len = 0;
     int hit;
-    if (!c300x_device_file_read(stack_open_path(), &data, &len, NULL)) {
+    if (!c300x_device_file_read(path, &data, &len, NULL)) {
         return 0;
     }
     hit = contains(data, needle);
@@ -54,7 +54,11 @@ static int stack_open_has(const char *needle) {
     return hit;
 }
 
-static void read_linphone_facts(int *is_pcmu, int *is_speex);
+static int stack_open_has(const char *needle) {
+    return file_has(stack_open_path(), needle);
+}
+
+static void read_linphone_facts(const char *path, int *is_pcmu, int *is_speex);
 
 int c300x_audio_codec_device_is_pcmu(void) {
     /* Require BOTH files to agree on PCMU (stack_open enable_speex=0 AND a
@@ -66,16 +70,16 @@ int c300x_audio_codec_device_is_pcmu(void) {
     if (!stack_open_has("<enable_speex>0</enable_speex>")) {
         return 0;
     }
-    read_linphone_facts(&lin_pcmu, &lin_speex);
+    read_linphone_facts(linphone_path(), &lin_pcmu, &lin_speex);
     return lin_pcmu;
 }
 
 /* Parse linphone.conf once into two consistency verdicts. A fully-PCMU config
  * needs [sound] rtp_map=PCMU AND the PCMU codec enabled AND speex/8000
- * disabled; fully-speex (stock) is the mirror. Anything else is neither, so the
+ * disabled; fully-speex is the mirror. Anything else is neither, so the
  * caller reports "partial" — this catches half-applied states the old
  * rtp_map-only check missed. Line-based, mirrors patch_linphone's section walk. */
-static void read_linphone_facts(int *is_pcmu, int *is_speex) {
+static void read_linphone_facts(const char *path, int *is_pcmu, int *is_speex) {
     char *data = NULL;
     size_t len = 0;
     size_t i = 0;
@@ -88,7 +92,7 @@ static void read_linphone_facts(int *is_pcmu, int *is_speex) {
 
     *is_pcmu = 0;
     *is_speex = 0;
-    if (!c300x_device_file_read(linphone_path(), &data, &len, NULL)) {
+    if (!c300x_device_file_read(path, &data, &len, NULL)) {
         return;
     }
     while (i < len) {
@@ -266,7 +270,7 @@ int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status) {
     }
     stack_pcmu = stack_open_has("<enable_speex>0</enable_speex>");
     stack_speex = stack_open_has("<enable_speex>1</enable_speex>");
-    read_linphone_facts(&lin_pcmu, &lin_speex);
+    read_linphone_facts(linphone_path(), &lin_pcmu, &lin_speex);
     if (stack_pcmu && lin_pcmu) {
         snprintf(status->state, sizeof(status->state), "pcmu");
     } else if (stack_speex && lin_speex) {
@@ -493,55 +497,27 @@ int c300x_audio_codec_restore(struct c300x_audio_codec_status *status, char *err
     return switch_codec(status, 0, error, error_len);
 }
 
-static int same_content(const char *a, const char *b)
+/* The codec the device came with, from the backups of the first switch. */
+static int original_codec_is_pcmu(const char *sb, const char *lb, int *pcmu)
 {
-    char *da = NULL, *db = NULL;
-    size_t la = 0, lb = 0;
-    int same = c300x_device_file_read(a, &da, &la, NULL) && c300x_device_file_read(b, &db, &lb, NULL)
-        && la == lb && memcmp(da, db, la) == 0;
-    free(da);
-    free(db);
-    return same;
-}
+    int lin_pcmu = 0;
+    int lin_speex = 0;
 
-/* The removal: the original files back, whichever codec they had. */
-static int restore_originals(char *error, size_t error_len)
-{
-    char sb[C300X_MAX_PATH_LEN];
-    char lb[C300X_MAX_PATH_LEN];
-    int copied;
-
-    if (!c300x_device_file_backup_path("stack_open.xml", sb, sizeof(sb))
-        || !c300x_device_file_backup_path("linphone.conf", lb, sizeof(lb))) {
-        set_err(error, error_len, "backup_path_failed");
-        return 0;
+    if (file_has(sb, "<enable_speex>0</enable_speex>") || file_has(sb, "<enable_speex>1</enable_speex>")) {
+        *pcmu = file_has(sb, "<enable_speex>0</enable_speex>");
+        return 1;
     }
-    if (access(sb, F_OK) != 0 || access(lb, F_OK) != 0) {
-        set_err(error, error_len, "no_backup");
-        return 0;
-    }
-    if (same_content(sb, stack_open_path()) && same_content(lb, linphone_path())) {
-        return 1; /* idempotent */
-    }
-    if (!c300x_device_file_remount("rw")) {
-        set_err(error, error_len, "remount_rw_failed");
-        return 0;
-    }
-    /* A copy that fails halfway is copied again: both files must be the originals. */
-    copied = (c300x_device_file_copy(sb, stack_open_path()) && c300x_device_file_copy(lb, linphone_path()))
-        || (c300x_device_file_copy(sb, stack_open_path()) && c300x_device_file_copy(lb, linphone_path()));
-    (void)c300x_device_file_remount("ro");
-    if (!copied || !same_content(sb, stack_open_path()) || !same_content(lb, linphone_path())) {
-        set_err(error, error_len, "restore_failed");
-        return 0;
-    }
-    return 1;
+    read_linphone_facts(lb, &lin_pcmu, &lin_speex);
+    *pcmu = lin_pcmu;
+    return lin_pcmu || lin_speex;
 }
 
 int c300x_audio_codec_remove_patches(char *error, size_t error_len)
 {
     char sb[C300X_MAX_PATH_LEN];
     char lb[C300X_MAX_PATH_LEN];
+    struct c300x_audio_codec_status status;
+    int pcmu = 0;
 
     if (!c300x_device_file_backup_path("stack_open.xml", sb, sizeof(sb))
         || !c300x_device_file_backup_path("linphone.conf", lb, sizeof(lb))) {
@@ -551,5 +527,11 @@ int c300x_audio_codec_remove_patches(char *error, size_t error_len)
     if (access(sb, F_OK) != 0 && access(lb, F_OK) != 0) {
         return 1; /* No managed codec changes on this device. */
     }
-    return restore_originals(error, error_len);
+    /* Only the codec lines go back: a firmware update may have replaced the
+     * rest of both files since the backups were taken. */
+    if (!original_codec_is_pcmu(sb, lb, &pcmu)) {
+        set_err(error, error_len, "no_backup");
+        return 0;
+    }
+    return switch_codec(&status, pcmu, error, error_len);
 }

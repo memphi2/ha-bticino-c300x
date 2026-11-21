@@ -227,7 +227,7 @@ class _ApiMediaMixin(_C300XApiCore):
         )
 
     async def async_restore_audio_codec(self, *, reboot: bool = True) -> dict[str, Any]:
-        """Restore the device to stock speex (patches config; reboots to apply)."""
+        """Switch the device to Speex (patches config; reboots to apply)."""
 
         return cast(
             "dict[str, Any]",

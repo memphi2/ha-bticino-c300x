@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "native_agent/scripts/remove_agent.sh"
 STACK = "<config><enable_speex>1</enable_speex></config>\n"
 LINPHONE = (
-    "[sound]\nrtp_ptnum=97\nrtp_map=speex/8000/1\n"
+    "[sound]\nrtp_ptnum=110\nrtp_map=speex/8000/1\n"
     "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=0\n"
     "[audio_codec_1]\nmime=speex\nrate=8000\nenabled=1\n"
 )
@@ -170,7 +170,9 @@ def test_uninstall_restores_the_codec_config_before_cleanup(device: dict[str, st
 
 def test_uninstall_keeps_files_if_codec_restore_fails(device: dict[str, str]) -> None:
     _set_pcmu_config(device)
-    (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "linphone.conf").unlink()
+    # A file the agent cannot read the codec lines of is never rewritten.
+    linphone = Path(device["C300X_AUDIO_LINPHONE_CONF"])
+    linphone.write_bytes(linphone.read_bytes().replace(b"\n", b"\r\n"))
     _assert_kept(device, _remove(device))
     assert "<enable_speex>0</enable_speex>" in Path(device["C300X_AUDIO_STACK_OPEN"]).read_text()
 
@@ -234,3 +236,31 @@ def test_a_failed_second_write_leaves_both_files_as_they_were(
 
     assert result.returncode != 0
     assert (stack.read_text(), linphone.read_text()) == before
+
+
+def test_removal_after_a_firmware_update_changes_only_the_codec_lines(device: dict[str, str]) -> None:
+    stack, linphone = Path(device["C300X_AUDIO_STACK_OPEN"]), Path(device["C300X_AUDIO_LINPHONE_CONF"])
+    _set_pcmu_config(device)
+    assert _cli(device, "--audio-codec", "restore").returncode == 0
+    # A firmware update of the same family replaces both files; the backups
+    # of the earlier firmware stay on their own partition.
+    updated_stack = STACK.replace("</config>", "<new_setting>1</new_setting></config>")
+    updated_linphone = LINPHONE + "[video]\nsize=vga\n"
+    stack.write_text(updated_stack)
+    linphone.write_text(updated_linphone)
+    for switch_first in (False, True):
+        if switch_first:
+            _set_pcmu_config(device)
+        result = _cli(device, "--restore-media-patches")
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (stack.read_text(), linphone.read_text()) == (updated_stack, updated_linphone)
+
+
+def test_removal_of_an_unchanged_device_with_a_single_backup_succeeds(device: dict[str, str]) -> None:
+    # The first switch saved stack_open.xml, then failed to save linphone.conf.
+    (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "stack_open.xml").write_text(STACK)
+    result = _cli(device, "--restore-media-patches")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert Path(device["C300X_AUDIO_STACK_OPEN"]).read_text() == STACK
+    assert Path(device["C300X_AUDIO_LINPHONE_CONF"]).read_text() == LINPHONE
+

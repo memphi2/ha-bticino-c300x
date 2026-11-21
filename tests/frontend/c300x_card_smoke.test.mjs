@@ -648,6 +648,29 @@ test("card derives the PCMU browser gain from HA state, zero for speex", async (
   assert.equal(card._cardGainDb(), 0);
 });
 
+test("card takes the codec from the camera where no codec select exists (firmware 3.0.x)", async () => {
+  const registry = installFakeDom();
+
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?card-gain-camera-test");
+
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({
+    type: "custom:c300x-doorbell-call-card",
+    entity: "camera.bticino_c300x_doorbell_camera",
+  });
+
+  const hass = fakeHass();
+  const camera = hass.states["camera.bticino_c300x_doorbell_camera"];
+  camera.attributes.doorstation_audio_gain_db = 6;
+  camera.attributes.device_audio_codec = "pcmu";
+  card.hass = hass;
+  assert.equal(card._cardGainDb(), 6);
+
+  camera.attributes.device_audio_codec = "speex";
+  assert.equal(card._cardGainDb(), 0);
+});
+
 test("card keeps its gain when the codec select entity blips to unavailable", async () => {
   const registry = installFakeDom();
 

@@ -576,6 +576,16 @@ def test_doorbell_camera_gain_attribute_comes_from_config_option() -> None:
     assert camera.extra_state_attributes["doorstation_audio_gain_db"] == 6.0
 
 
+def test_doorbell_camera_reports_the_device_codec_for_the_card() -> None:
+    # Firmware 3.0.x has no codec select; the card takes the codec from here.
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    assert "device_audio_codec" not in camera.extra_state_attributes
+    for talkback, codec in (("PCMU/8000", "pcmu"), ("speex/8000", "speex")):
+        entry.runtime_data.capabilities = {"doorbell_video": {"talkback_codec": talkback}}
+        assert camera.extra_state_attributes["device_audio_codec"] == codec
+
+
 def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
 

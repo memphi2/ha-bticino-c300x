@@ -48,6 +48,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_announce.c": (3_500, 100),
         "announce_file.c": (5_500, 160),
         "announce_device.c": (4_500, 110),
+        "announce_leftover.c": (2_500, 70),
         "device_file.c": (5_500, 210),
         "openwebnet_async.c": (6_500, 215),
         "openwebnet_waiters.c": (2_500, 95),

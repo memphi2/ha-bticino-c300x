@@ -1,12 +1,7 @@
 #include "announce_device.h"
-#include "announce_file.h"
 
-#include <dirent.h>
-#include <signal.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #define TOOLS \
     "A=${C300X_AMIXER:-/usr/bin/amixer}\n" \
@@ -32,64 +27,40 @@ const char C300X_ANNOUNCE_PLAY_SCRIPT[] =
     "\"$P\" -q -D plughw:0,0 -d \"$3\" \"$1\" || exit 5\n";
 
 /* After every sound the speaker is muted, the amplifier off and the gain as
- * before. Not when the device's software has meanwhile switched to a state of
- * its own or plays itself: then the speaker is its. Its sound driver sets the
- * state to off by itself when a playing ends. */
+ * before. While the device's software has a state of its own or plays itself,
+ * the speaker is its: switching off waits until the device is idle again, at
+ * most ten minutes. Its sound driver sets the state to off by itself when a
+ * playing ends. */
 const char C300X_ANNOUNCE_CLEAN_SCRIPT[] =
     TOOLS
     "sleep \"$1\"\n"
-    "case \"$(val Zia_Aud_St)\" in 0|9) ;; *) exit 0;; esac\n"
-    "grep -q closed \"$S\" || exit 0\n"
+    "n=0\n"
+    "until case \"$(val Zia_Aud_St)\" in 0|9) grep -q closed \"$S\";; *) false;; esac; do\n"
+    "n=$((n + 1)); [ \"$n\" -lt 300 ] || exit 0; sleep \"${C300X_ANNOUNCE_IDLE_POLL:-2}\"\n"
+    "done\n"
     "put 'ZL0 Mute Rout' on; put 'TPA2028D1 Volume' 0\n"
     "[ -z \"$2\" ] || put 'ZL0 Rout Gain Volume' \"$2\"\n"
     "[ \"$(val Zia_Aud_St)\" != 9 ] || put Zia_Aud_St 0\n"
     "exit 0\n";
 
-/* The play script of an agent that was killed outright, found by its name and
- * its sound file: it would hold the sound device and leave the speaker on. */
-static int leftover(const char *pid_name, const char *file)
+int c300x_announce_read_gain(const char *output)
 {
-    char path[64], args[4096], line[128];
-    const char *want[] = {"/bin/sh", "-c", NULL, "c300x-announce", file};
-    size_t len, at = 0;
-    int uid = -1, ok = 1;
-    FILE *in;
+    const char *line = strstr(output, "gain=");
+    char *end;
+    long gain;
 
-    snprintf(path, sizeof(path), "/proc/%s/status", pid_name);
-    if ((in = fopen(path, "r")) == NULL) {
-        return 0;
+    if (line == NULL) {
+        return -1;
     }
-    while (fgets(line, sizeof(line), in) != NULL && sscanf(line, "Uid: %d", &uid) != 1) {
-    }
-    fclose(in);
-    snprintf(path, sizeof(path), "/proc/%s/cmdline", pid_name);
-    if (uid != (int)getuid() || (in = fopen(path, "r")) == NULL) {
-        return 0;
-    }
-    len = fread(args, 1, sizeof(args) - 1, in);
-    fclose(in);
-    args[len] = '\0';
-    for (int i = 0; i < 5 && ok; i++) {
-        ok = at < len && (want[i] == NULL || strcmp(args + at, want[i]) == 0);
-        at += strlen(args + at) + 1;
-    }
-    return ok;
+    gain = strtol(line + 5, &end, 10);
+    return end != line + 5 && (*end == '\n' || *end == '\0') && gain >= 0 && gain <= 255 ? (int)gain : -1;
 }
 
-int c300x_announce_end_leftover(void)
+const char *c300x_announce_result_of(int ending, int status)
 {
-    DIR *proc = opendir("/proc");
-    struct dirent *entry;
-    int found = 0;
-
-    while (proc != NULL && (entry = readdir(proc)) != NULL) {
-        pid_t pid = (pid_t)atoi(entry->d_name);
-        if (pid > 1 && pid != getpid() && getpgid(pid) == pid && leftover(entry->d_name, c300x_announce_file())) {
-            found = kill(-pid, SIGKILL) == 0 || found;
-        }
+    if (ending == C300X_ANNOUNCE_PREEMPTED || ending == C300X_ANNOUNCE_STOPPED) {
+        return ending == C300X_ANNOUNCE_PREEMPTED ? "preempted" : "stopped";
     }
-    if (proc != NULL) {
-        closedir(proc);
-    }
-    return found;
+    return status == 0 ? "played" : status == 3 ? "device_busy" : status == 4 ? "sound_path_failed"
+        : status == 5 ? "play_failed" : "failed";
 }

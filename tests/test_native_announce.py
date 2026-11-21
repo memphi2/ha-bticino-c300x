@@ -62,6 +62,8 @@ SWITCH_OFF = ["mixer ZL0_Mute_Rout=on", "mixer TPA2028D1_Volume=0", "mixer ZL0_R
 # The player was killed, so the sound state is still the one of playing.
 SWITCH_OFF_AFTER_KILL = [*SWITCH_OFF, "mixer Zia_Aud_St=0"]
 RING = "*8*1#1#4#21*10##"
+# Seconds the agent leaves the speaker to the device after a ring, in the tests.
+RING_HOLD = 5
 CAMERA_VIEW = "*8*1#5#4#21*10##"
 CALL_END = "*8*3#1#4*21##"
 
@@ -126,8 +128,8 @@ class Lab:
             path.write_text(value + "\n")
         return path.read_text().strip()
 
-    def wait_for(self, line: str) -> None:
-        deadline = time.monotonic() + 5
+    def wait_for(self, line: str, seconds: float = 5) -> None:
+        deadline = time.monotonic() + seconds
         while not any(line in entry for entry in self.log()):
             assert time.monotonic() < deadline, self.log()
             time.sleep(0.01)
@@ -189,7 +191,9 @@ def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterato
            "C300X_APLAY": str(tmp_path / "aplay"), "C300X_ZL_TOOL": str(tmp_path / "zl-tool"),
            "C300X_ZL_PLAY_CONFIG": str(tmp_path / "play.cr"),
            "C300X_PCM_STATUS": str(tmp_path / "pcm-status"),
-           "C300X_ANNOUNCE_FILE": str(tmp_path / "announce.wav")}
+           "C300X_ANNOUNCE_FILE": str(tmp_path / "announce.wav"),
+           # Short stand-ins for the minute after a ring and the switch-off's look at the device.
+           "C300X_ANNOUNCE_RING_HOLD": str(RING_HOLD), "C300X_ANNOUNCE_IDLE_POLL": "0.2"}
     with (tmp_path / "agent.log").open("w") as log:
         def start() -> subprocess.Popen[bytes]:
             return subprocess.Popen([str(binary), "--config", str(tmp_path / "config.json")],
@@ -264,11 +268,17 @@ def test_a_door_call_takes_the_speaker_at_once_and_the_device_keeps_it(lab: Lab,
 
     body = lab.call()
     assert (body["playing"], body["busy"], body["result"]) == (False, True, "preempted")
-    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_busy"
-    send_udp_event(lab.udp_port, CALL_END)
-    assert lab.result() == "preempted"
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+    # Long after the wait for the device, the call still has the speaker.
+    time.sleep(RING_HOLD + 2)
+    assert lab.call()["busy"] is True
     assert lab.log()[-1].startswith("aplay -q")
     assert lab.mixer("ZL0_Mute_Rout") == "off"
+
+    # The call is over: the device is idle again and the speaker is switched off.
+    lab.mixer("Zia_Aud_St", "0")
+    assert lab.result() == "preempted"
+    assert lab.log()[-3:] == SWITCH_OFF
 
 
 def test_after_a_door_frame_without_a_call_the_speaker_is_switched_off(lab: Lab) -> None:
@@ -283,36 +293,55 @@ def test_after_a_door_frame_without_a_call_the_speaker_is_switched_off(lab: Lab)
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
 
 
-def test_during_a_call_the_speaker_is_left_to_the_device_until_the_call_ends(lab: Lab) -> None:
+def test_after_a_ring_the_speaker_is_left_to_the_device_for_its_pauses(lab: Lab) -> None:
     lab.start_long_sound()
     send_udp_event(lab.udp_port, RING)
-    lab.wait_for("aplay -q")
+    started = time.monotonic()
     while lab.player_alive():
         time.sleep(0.01)
 
-    # Between two ring tones the device lets go of its sound device for a moment.
-    time.sleep(4)
+    # In a pause of the ring tone the device is idle for a moment.
+    time.sleep(RING_HOLD - 1)
     assert lab.call()["busy"] is True
     assert lab.log()[-1].startswith("aplay -q")
 
-    send_udp_event(lab.udp_port, CALL_END)
     assert lab.result() == "preempted"
+    assert time.monotonic() - started > RING_HOLD
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
 
 
-def test_no_sound_is_started_during_a_call(lab: Lab) -> None:
+def test_no_sound_is_taken_for_a_while_after_a_ring(lab: Lab) -> None:
+    lab.upload(wav())
     send_udp_event(lab.udp_port, RING)
     # The agent hears the frame at once; the pause only orders it before the request.
     time.sleep(0.3)
-    lab.upload(wav())
 
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+    assert lab.call("/audio", {"offset": 0, "data": "AAAA"}, status=409)["error"] == "announcement_device_busy"
     assert lab.log() == []
 
+    # An end frame, for example of a camera view, does not end the hold early.
     send_udp_event(lab.udp_port, CALL_END)
     time.sleep(0.3)
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+
+    time.sleep(RING_HOLD)
     lab.call("/actions/play", {"volume": 50})
     assert lab.result() == "played"
+
+
+def test_an_agent_that_ends_after_a_ring_still_switches_the_speaker_off(lab: Lab) -> None:
+    lab.start_long_sound()
+    send_udp_event(lab.udp_port, RING)
+    while lab.player_alive():
+        time.sleep(0.01)
+
+    assert lab.process is not None
+    lab.process.terminate()
+    lab.process.wait(timeout=5)
+
+    lab.wait_for("mixer Zia_Aud_St=0", seconds=RING_HOLD + 5)
+    assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
 
 
 def test_a_stop_right_after_a_door_frame_still_leaves_the_speaker_to_the_device(lab: Lab) -> None:

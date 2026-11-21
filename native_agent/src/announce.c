@@ -9,15 +9,19 @@
 #include <string.h>
 #include <unistd.h>
 
-enum { PLAYED = 0, DEVICE_BUSY = 3, PATH_FAILED = 4, PLAY_FAILED = 5, STOPPED = 6, PREEMPTED = 7 };
+#define STOPPED C300X_ANNOUNCE_STOPPED
+#define PREEMPTED C300X_ANNOUNCE_PREEMPTED
 
 /* Seconds the device's software gets to take the speaker after a door call
  * frame before the speaker is switched off. */
 #define PREEMPT_CLEAN_DELAY 3
 /* After a stop the killed player has let go of the sound device. */
 #define STOP_CLEAN_DELAY 1
-/* A ring whose end frame was lost no longer counts after this. */
-#define CALL_MS (180 * 1000)
+/* How long the speaker is left to the device after the last ring frame. Its
+ * ring tone has pauses in which the sound device is free. */
+#define RING_HOLD_SECONDS "60"
+/* The switching off itself waits up to ten minutes for the device to be idle. */
+#define CLEAN_WAIT_SECONDS 610
 
 void c300x_announce_init(struct c300x_announce *announce)
 {
@@ -26,17 +30,12 @@ void c300x_announce_init(struct c300x_announce *announce)
     announce->clean_delay = -1;
     announce->gain = -1;
     announce->result = "";
+    announce->ring_hold_ms = 1000LL * atoi(c300x_announce_path("C300X_ANNOUNCE_RING_HOLD", RING_HOLD_SECONDS));
     if (c300x_announce_end_leftover()) {
         announce->clean_delay = STOP_CLEAN_DELAY;
     }
     /* A file from before a restart is never played. */
     (void)unlink(c300x_announce_file());
-}
-
-/* From a ring to the end of its call the speaker is the device's, also in pauses. */
-static int door_call(const struct c300x_announce *announce)
-{
-    return announce->call_until_ms > c300x_monotonic_ms();
 }
 
 int c300x_announce_playing(const struct c300x_announce *announce)
@@ -49,11 +48,22 @@ int c300x_announce_busy(const struct c300x_announce *announce)
     return announce->job.pid > 0 || announce->clean_delay >= 0;
 }
 
+/* Why no new sound is taken now, or NULL. During a ring, and while the
+ * switching off after a door frame waits for the device, the device has it. */
+static const char *refusal(const struct c300x_announce *announce)
+{
+    if (announce->ring_until_ms > c300x_monotonic_ms()
+        || (announce->door_hold && c300x_announce_busy(announce))) {
+        return "device_busy";
+    }
+    return c300x_announce_busy(announce) ? "busy" : NULL;
+}
+
 int c300x_announce_write(const struct c300x_announce *announce, long offset,
     const unsigned char *data, size_t len, const char **error)
 {
-    *error = "busy";
-    return !c300x_announce_busy(announce) && c300x_announce_file_write(offset, data, len, error);
+    *error = refusal(announce);
+    return *error == NULL && c300x_announce_file_write(offset, data, len, error);
 }
 
 static int start_play(struct c300x_announce *announce, int gain, int seconds, int timeout_ms)
@@ -67,20 +77,23 @@ static int start_play(struct c300x_announce *announce, int gain, int seconds, in
     return c300x_command_job_start_output(&announce->job, argv[0], argv, timeout_ms);
 }
 
+/* The switching off sleeps first until a ring's hold is over. */
 static void start_clean(struct c300x_announce *announce)
 {
     char delay_text[16], gain_text[16] = "";
     char *argv[] = {"/bin/sh", "-c", (char *)C300X_ANNOUNCE_CLEAN_SCRIPT, "c300x-announce-off", delay_text, gain_text, NULL};
+    long long ring_left = announce->ring_until_ms - c300x_monotonic_ms();
+    int delay = announce->clean_delay;
 
-    if (door_call(announce)) {
-        return;
+    if (ring_left > 0 && ring_left / 1000 + 1 > delay) {
+        delay = (int)(ring_left / 1000 + 1);
     }
-    snprintf(delay_text, sizeof(delay_text), "%d", announce->clean_delay);
+    snprintf(delay_text, sizeof(delay_text), "%d", delay);
     if (announce->gain >= 0) {
         snprintf(gain_text, sizeof(gain_text), "%d", announce->gain);
     }
     announce->cleaning = c300x_command_job_start_wait(&announce->job, argv[0], argv,
-        (announce->clean_delay + 10) * 1000);
+        (delay + CLEAN_WAIT_SECONDS) * 1000);
     if (announce->cleaning) {
         announce->clean_delay = -1;
     }
@@ -89,16 +102,11 @@ static void start_clean(struct c300x_announce *announce)
 int c300x_announce_play(struct c300x_announce *announce, int volume_percent,
     int *duration_ms, const char **error)
 {
-    *error = "busy";
-    if (c300x_announce_busy(announce)) {
+    if ((*error = refusal(announce)) != NULL) {
         return 0;
     }
     *error = "invalid_volume";
     if (volume_percent < 1 || volume_percent > 100) {
-        return 0;
-    }
-    *error = "device_busy";
-    if (door_call(announce)) {
         return 0;
     }
     *error = "invalid_audio";
@@ -142,15 +150,14 @@ void c300x_announce_preempt(struct c300x_announce *announce)
         end_job(announce, PREEMPTED);
     } else if (announce->clean_delay >= 0) {
         announce->clean_delay = PREEMPT_CLEAN_DELAY;
+        announce->door_hold = 1;
     }
 }
 
 void c300x_announce_door_frame(struct c300x_announce *announce, const char *frame)
 {
     if (strncmp(frame, "*8*1#1#", 7) == 0) {
-        announce->call_until_ms = c300x_monotonic_ms() + CALL_MS;
-    } else if (strncmp(frame, "*8*3#", 5) == 0) {
-        announce->call_until_ms = 0;
+        announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
     }
     if (c300x_announce_frame_takes_speaker(frame)) {
         c300x_announce_preempt(announce);
@@ -161,32 +168,29 @@ int c300x_announce_prepare(const struct c300x_announce *announce, struct pollfd 
 {
     int timeout = c300x_command_job_prepare(&announce->job, fd);
 
-    /* A switching off that is still due is tried again within a second. */
+    /* A switching off that could not start is tried again within a second. */
     return announce->job.pid == 0 && announce->clean_delay >= 0 ? 1000 : timeout;
 }
 
-static void read_gain(struct c300x_announce *announce)
+/* The job has ended: the sound's result, then the switching off it needs. */
+static void job_over(struct c300x_announce *announce, int cleaned, int ending)
 {
-    const char *line = strstr(announce->job.output, "gain=");
-    char *end;
-    long gain;
-
-    if (line == NULL) {
+    if (!cleaned) {
+        int gain = c300x_announce_read_gain(announce->job.output);
+        announce->gain = gain >= 0 ? gain : announce->gain;
+        announce->result = c300x_announce_result_of(ending, announce->job.exit_status);
+        (void)unlink(c300x_announce_file());
+    }
+    c300x_command_job_close(&announce->job);
+    c300x_command_job_init(&announce->job);
+    announce->cleaning = 0;
+    announce->ending = 0;
+    announce->door_hold = ending == PREEMPTED;
+    /* Done, or nothing was switched because the device had its speaker in use. */
+    if ((cleaned && ending != PREEMPTED) || (!cleaned && strcmp(announce->result, "device_busy") == 0)) {
         return;
     }
-    gain = strtol(line + 5, &end, 10);
-    if (end != line + 5 && (*end == '\n' || *end == '\0') && gain >= 0 && gain <= 255) {
-        announce->gain = (int)gain;
-    }
-}
-
-static const char *result_of(int ending, int status)
-{
-    if (ending == PREEMPTED || ending == STOPPED) {
-        return ending == PREEMPTED ? "preempted" : "stopped";
-    }
-    return status == PLAYED ? "played" : status == DEVICE_BUSY ? "device_busy"
-        : status == PATH_FAILED ? "sound_path_failed" : status == PLAY_FAILED ? "play_failed" : "failed";
+    announce->clean_delay = ending == PREEMPTED ? PREEMPT_CLEAN_DELAY : ending == STOPPED ? STOP_CLEAN_DELAY : 0;
 }
 
 void c300x_announce_tick(struct c300x_announce *announce)
@@ -194,52 +198,31 @@ void c300x_announce_tick(struct c300x_announce *announce)
     int cleaned = announce->cleaning;
     int ending = announce->ending;
 
-    if (announce->job.pid == 0) {
-        /* A switching off that could not start is tried again. */
-        if (announce->clean_delay >= 0) {
-            start_clean(announce);
+    if (announce->job.pid != 0) {
+        c300x_command_job_tick(&announce->job);
+        if (!announce->job.complete || announce->job.pid != 0) {
+            return;
         }
-        return;
+        job_over(announce, cleaned, ending);
     }
-    c300x_command_job_tick(&announce->job);
-    if (!announce->job.complete || announce->job.pid != 0) {
-        return;
+    if (announce->clean_delay >= 0) {
+        start_clean(announce);
     }
-    if (!cleaned) {
-        read_gain(announce);
-        announce->result = result_of(ending, announce->job.exit_status);
-        (void)unlink(c300x_announce_file());
-    }
-    c300x_command_job_close(&announce->job);
-    c300x_command_job_init(&announce->job);
-    announce->cleaning = 0;
-    announce->ending = 0;
-    if (cleaned && ending != PREEMPTED) {
-        return;
-    }
-    /* Nothing was switched when the device had its speaker in use. */
-    if (!cleaned && strcmp(announce->result, "device_busy") == 0) {
-        return;
-    }
-    announce->clean_delay = ending == PREEMPTED ? PREEMPT_CLEAN_DELAY : ending == STOPPED ? STOP_CLEAN_DELAY : 0;
-    start_clean(announce);
 }
 
 void c300x_announce_close(struct c300x_announce *announce)
 {
-    if (c300x_announce_playing(announce)) {
+    /* A sound, or a switching off a door frame ended; one under way finishes on its own. */
+    if (announce->job.pid > 0 && (!announce->cleaning || announce->ending == PREEMPTED)) {
+        int cleaned = announce->cleaning;
         end_job(announce, STOPPED);
-        /* The killed script is reaped and its output read for the gain. */
         for (int round = 0; round < 200 && announce->job.pid != 0; round++) {
             c300x_command_job_tick(&announce->job);
             if (announce->job.pid != 0) {
                 (void)usleep(10000);
             }
         }
-        read_gain(announce);
-        c300x_command_job_close(&announce->job);
-        c300x_command_job_init(&announce->job);
-        announce->clean_delay = STOP_CLEAN_DELAY;
+        job_over(announce, cleaned, announce->ending);
     }
     if (announce->job.pid == 0 && announce->clean_delay >= 0) {
         /* It finishes on its own after the agent has ended. */

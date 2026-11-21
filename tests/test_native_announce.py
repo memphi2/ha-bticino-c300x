@@ -533,6 +533,16 @@ def test_a_second_agent_leaves_the_sound_of_the_running_one_alone(lab: Lab) -> N
     assert lab.result() == "stopped"
 
 
+def test_a_second_agent_leaves_the_upload_of_the_running_one_alone(lab: Lab) -> None:
+    lab.upload(wav())
+
+    assert lab.start is not None
+    assert lab.start().wait(timeout=10) == 2
+
+    lab.call("/actions/play", {"volume": 50})
+    assert lab.result() == "played"
+
+
 def test_a_restarted_agent_takes_over_the_switching_off_of_the_one_before(lab: Lab) -> None:
     lab.start_long_sound()
     send_udp_event(lab.udp_port, CAMERA_VIEW)

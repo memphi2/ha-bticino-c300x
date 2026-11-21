@@ -20,8 +20,7 @@
 /* How long the speaker is left to the device after the last ring frame. Its
  * ring tone has pauses in which the sound device is free. */
 #define RING_HOLD_SECONDS "60"
-/* The switching off itself looks 300 times for an idle device, every two
- * seconds; the job's deadline lies well beyond. */
+/* Well beyond the switching off's own 300 looks for an idle device, every two seconds. */
 #define CLEAN_WAIT_SECONDS 1810
 
 void c300x_announce_init(struct c300x_announce *announce)
@@ -36,6 +35,7 @@ void c300x_announce_init(struct c300x_announce *announce)
 
 void c300x_announce_take_over(struct c300x_announce *announce)
 {
+    announce->serving = 1;
     if (c300x_announce_end_leftover(&announce->gain)) {
         /* As after a door frame: what the old agent knew about the device is gone. */
         announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
@@ -220,6 +220,10 @@ void c300x_announce_tick(struct c300x_announce *announce)
 
 void c300x_announce_close(struct c300x_announce *announce)
 {
+    /* An agent that never had the API port leaves the sound and file of the one that has. */
+    if (!announce->serving) {
+        return;
+    }
     /* A sound, or a switching off a door frame ended; one under way finishes on its own. */
     if (announce->job.pid > 0 && (!announce->cleaning || announce->ending == PREEMPTED)) {
         int cleaned = announce->cleaning;
@@ -233,8 +237,7 @@ void c300x_announce_close(struct c300x_announce *announce)
         job_over(announce, cleaned, announce->ending);
     }
     if (announce->job.pid == 0 && (announce->clean_delay >= 0 || announce->ring_until_ms > c300x_monotonic_ms())) {
-        /* It finishes on its own after the agent has ended; one started
-         * agent takes it over with a ring's hold. */
+        /* It finishes on its own, or the next agent takes it over with a ring's hold. */
         announce->clean_delay = announce->clean_delay >= 0 ? announce->clean_delay : 0;
         start_clean(announce);
         announce->job.pid = 0;

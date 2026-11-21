@@ -16,6 +16,7 @@ struct c300x_announce {
     long long ring_until_ms; /* the speaker is left to the device after a ring */
     long long ring_hold_ms;
     int door_hold;     /* the switching off follows a door frame */
+    int serving;       /* this agent has the API port and so the speaker */
     const char *result;
 };
 

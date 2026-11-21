@@ -738,10 +738,11 @@ frame ends it early, and an agent that is restarted within it keeps it. During i
 after a door frame waits, no new piece or sound is taken: the answer is
 `409 announcement_device_busy`. After a stop the speaker is switched off one
 second later. A switching off still due when the agent ends runs on after it.
-An agent that starts ends the player or switching off of one that was killed
-or restarted, takes over the gain to set back, and then acts as after a door
-frame: a minute without new sounds, then switching off. A touch tone or another sound of the device
-during an announcement can cut it short.
+An agent that starts and has the API port ends the player or switching off of
+one that was killed or restarted, takes over the gain to set back, and then
+acts as after a door frame: a minute without new sounds, then switching off.
+A touch tone or another sound of the device during an announcement can cut it
+short.
 
 Errors: `409 announcement_busy` while `busy` is true, `409
 announcement_device_busy` after a door frame as above, `409

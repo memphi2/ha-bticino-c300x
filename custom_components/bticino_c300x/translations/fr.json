@@ -787,7 +787,7 @@
         },
         "data_description": {
           "tts_engine": "Une entité de synthèse vocale de Home Assistant, par exemple tts.piper. Laisser vide pour le moteur par défaut.",
-          "tts_language": "Laisser vide pour la langue du moteur."
+          "tts_language": "Laisser vide pour la langue du moteur. Une langue que le moteur nomme autrement, par exemple de pour de_DE, est enregistrée sous le nom du moteur."
         }
       },
       "device_activations": {
@@ -1144,7 +1144,8 @@
       "camera_quality_unsupported": "Ce C300X ne propose pas le réglage de la qualité de la caméra.",
       "camera_quality_out_of_range": "En dehors de ce que l'appareil accepte pour ce flux ; seule la valeur enregistrée sur l'appareil peut rester telle quelle.",
       "camera_quality_restart_pending": "Enregistré, mais l'appareil n'a pas redémarré. Il utilise les nouvelles valeurs après son prochain redémarrage.",
-      "tts_engine_missing": "Cette entité de synthèse vocale n'existe pas."
+      "tts_engine_missing": "Cette entité de synthèse vocale n'existe pas.",
+      "tts_language_unsupported": "Le moteur ne sait pas parler cette langue."
     }
   },
   "entity": {

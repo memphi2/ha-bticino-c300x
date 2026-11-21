@@ -787,7 +787,7 @@
         },
         "data_description": {
           "tts_engine": "Eine Sprachausgabe-Entität von Home Assistant, zum Beispiel tts.piper. Leer lassen für die Standard-Engine.",
-          "tts_language": "Leer lassen für die Sprache der Engine."
+          "tts_language": "Leer lassen für die Sprache der Engine. Eine Sprache, die die Engine anders benennt, zum Beispiel de für de_DE, wird so gespeichert, wie die Engine sie nennt."
         }
       },
       "device_activations": {
@@ -1144,7 +1144,8 @@
       "camera_quality_unsupported": "Diese C300X bietet die Einstellung der Kameraqualität nicht an.",
       "camera_quality_out_of_range": "Außerhalb dessen, was das Gerät für diesen Stream annimmt; nur der auf dem Gerät gespeicherte Wert darf so bleiben.",
       "camera_quality_restart_pending": "Gespeichert, aber das Gerät wurde nicht neu gestartet. Es nutzt die neuen Werte nach seinem nächsten Neustart.",
-      "tts_engine_missing": "Diese Sprachausgabe-Entität gibt es nicht."
+      "tts_engine_missing": "Diese Sprachausgabe-Entität gibt es nicht.",
+      "tts_language_unsupported": "Diese Sprache kann die Engine nicht sprechen."
     }
   },
   "entity": {

@@ -701,9 +701,9 @@ async def speech_context(
     speaker_state="idle",
 ):
     """Notify with a speaker entity, a text-to-speech stand-in and a recording player."""
-    import sys
 
     from custom_components.bticino_c300x import notify_speech
+    from tests.test_config_flow_speech import use_tts_stand_in
 
     spoken = []
 
@@ -712,8 +712,7 @@ async def speech_context(
             raise HomeAssistantError("Invalid TTS provider selected")
         return f"media-source://tts/{engine or 'default'}?message={message}&language={language}"
 
-    monkeypatch.setitem(sys.modules, "homeassistant.components.tts",
-                        SimpleNamespace(generate_media_source_id=generate))
+    use_tts_stand_in(monkeypatch, generate)
     monkeypatch.setattr(notify_speech.er, "async_get", lambda _hass: SimpleNamespace(
         async_get_entity_id=lambda domain, platform, unique_id: speaker))
     async with notify_context(tmp_path, monkeypatch) as (hass, entry):
@@ -744,7 +743,8 @@ def test_speech_mode_only_speaks_the_message(tmp_path, monkeypatch):
                        data={"mode": "speech", "tts_engine": "tts.piper", "language": "de"})
             assert spoken == [{
                 "entity_id": "media_player.front_door_speaker",
-                "media_content_id": "media-source://tts/tts.piper?message=Test message&language=de",
+                # As the engine names the language.
+                "media_content_id": "media-source://tts/tts.piper?message=Test message&language=de_DE",
                 "media_content_type": "music", "announce": True,
             }]
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
@@ -806,6 +806,27 @@ def test_both_mode_still_speaks_when_the_display_did_not_confirm(tmp_path, monke
     asyncio.run(run())
 
 
+def test_a_named_engine_does_not_take_the_language_saved_for_another(tmp_path, monkeypatch):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            entry.options = {**entry.options, "tts_engine": "tts.piper", "tts_language": "de_DE"}
+            await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.cloud"})
+            assert [item["media_content_id"] for item in spoken] == [
+                "media-source://tts/tts.cloud?message=Test message&language=None"]
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("mode", ["speech", "both"])
+def test_a_language_the_engine_cannot_speak_is_named_and_nothing_is_shown(tmp_path, monkeypatch, mode):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            with pytest.raises(ServiceValidationError, match="cannot speak the language 'fr'"):
+                await send(hass, entry, data={"mode": mode, "tts_engine": "tts.piper", "language": "fr"})
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert notification_payload(entry) == [] and spoken == []
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("bad", [
     {"mode": "loud"}, {"mode": True}, {"mode": "speech", "tts_engine": ""},
     {"mode": "speech", "language": 5}, {"mode": "speech", "volume": 50},
@@ -828,8 +849,8 @@ def test_spoken_notification_uses_the_engine_and_language_of_the_settings(tmp_pa
             # What the call names comes before the settings.
             await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.cloud", "language": "en"})
             assert [item["media_content_id"] for item in spoken] == [
-                "media-source://tts/tts.piper?message=Test message&language=de",
-                "media-source://tts/tts.cloud?message=Test message&language=en",
+                "media-source://tts/tts.piper?message=Test message&language=de_DE",
+                "media-source://tts/tts.cloud?message=Test message&language=en-US",
             ]
     asyncio.run(run())
 

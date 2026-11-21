@@ -13,6 +13,7 @@ from homeassistant.helpers import selector
 from .capabilities import capability_is_supported
 from .const import CONF_TTS_ENGINE, CONF_TTS_LANGUAGE, SPEECH_OPTION_KEYS
 from .entry_config import speech_settings
+from .notify_speech import engine_language
 from .schema_compat import vol
 
 
@@ -51,7 +52,11 @@ class SpeechOptionsStep:
                 not engine.startswith("tts.") or self.hass.states.get(engine) is None
             ):
                 errors[CONF_TTS_ENGINE] = "tts_engine_missing"
+            elif language is not None and (spoken := engine_language(self.hass, engine, language)) is None:
+                errors[CONF_TTS_LANGUAGE] = "tts_language_unsupported"
             else:
+                # Saved as the engine names it.
+                language = spoken if language is not None else None
                 options = {key: value for key, value in entry.options.items() if key not in SPEECH_OPTION_KEYS}
                 options.update({
                     key: value for key, value in zip(SPEECH_OPTION_KEYS, (engine, language), strict=True)

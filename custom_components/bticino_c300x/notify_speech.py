@@ -8,6 +8,7 @@ from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import language as language_util
 
 from .const import DOMAIN
 from .entity import entry_entity_unique_id, supports_capability
@@ -23,14 +24,39 @@ class Speech:
     media_id: str
 
 
+def engine_language(hass: HomeAssistant, engine: str | None, language: str) -> str | None:
+    """The language as the engine names it, or None when it cannot speak it.
+
+    A language picked in Home Assistant is often named differently by the
+    engine, for example de for Piper's de_DE. Where the engine cannot be
+    asked, the language stays as it is and the engine itself decides.
+    """
+
+    try:
+        # Loaded only when used: text-to-speech is an optional part of Home Assistant.
+        from homeassistant.components import tts  # noqa: PLC0415
+        from homeassistant.components.tts.helper import get_engine_instance  # noqa: PLC0415
+
+        resolved = tts.async_resolve_engine(hass, engine)
+        instance = get_engine_instance(hass, resolved) if resolved is not None else None
+    except (ImportError, KeyError):
+        return language
+    supported = list(getattr(instance, "supported_languages", None) or [])
+    if not supported or language in supported:
+        return language
+    found = language_util.matches(language, supported, hass.config.country)
+    return found[0] if found else None
+
+
 def prepare_speech(
     hass: HomeAssistant, entry: BticinoC300XConfigEntry, message: str, *,
     engine: str | None = None, language: str | None = None,
 ) -> Speech:
     """Check everything that can be checked before anything is shown or spoken.
 
-    The engine and language of the call come first, then the ones chosen in
-    the settings; without any, Home Assistant takes its default engine.
+    An engine named in the call speaks in the language of the call or its
+    own; otherwise the engine and language of the settings are used, and
+    without any, Home Assistant's default engine.
     """
 
     if not supports_capability(entry, "announcements"):
@@ -46,14 +72,22 @@ def prepare_speech(
         raise ServiceValidationError("The C300X speaker entity is missing or disabled")
     if state.state == STATE_UNAVAILABLE:
         raise ServiceValidationError("The C300X speaker is unavailable; nothing was shown or spoken")
-    saved_engine, saved_language = speech_settings(entry)
+    if engine is None:
+        saved_engine, saved_language = speech_settings(entry)
+        engine, language = saved_engine, language or saved_language
+    if language is not None:
+        spoken = engine_language(hass, engine, language)
+        if spoken is None:
+            raise ServiceValidationError(
+                f"The text-to-speech engine cannot speak the language {language!r}; "
+                "choose another under Speech in the C300X settings or name it in language"
+            )
+        language = spoken
     try:
         # Loaded only when used: text-to-speech is an optional part of Home Assistant.
         from homeassistant.components import tts  # noqa: PLC0415
 
-        media_id = tts.generate_media_source_id(
-            hass, message, engine=engine or saved_engine, language=language or saved_language,
-        )
+        media_id = tts.generate_media_source_id(hass, message, engine=engine, language=language)
     except (HomeAssistantError, KeyError, ImportError) as err:
         raise ServiceValidationError(
             f"The text-to-speech engine cannot say the C300X notification ({err}); "

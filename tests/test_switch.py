@@ -37,7 +37,6 @@ def test_config_switches_are_disabled_by_default() -> None:
     config_switch_classes = (
         C300XHomeAssistantMediaUserSetupSwitch,
         C300XMaintenanceSshSwitch,
-        C300XGuiFunctionPatchSwitch,
         C300XFirewallPatchSwitch,
         C300XIpv6FirewallPatchSwitch,
         C300XNativeMqttBridgeSwitch,
@@ -50,6 +49,11 @@ def test_config_switches_are_disabled_by_default() -> None:
     for switch_class in config_switch_classes:
         assert switch_class(_FakeEntry()).entity_registry_enabled_default is False
 
+
+
+def test_display_patch_switch_is_shown_by_default() -> None:
+    # It is the way to apply or restore the Display patch by hand.
+    assert C300XGuiFunctionPatchSwitch(_FakeEntry()).entity_registry_enabled_default is True
 
 
 def test_snapshot_switch_changes_manager_without_device_io(monkeypatch) -> None:

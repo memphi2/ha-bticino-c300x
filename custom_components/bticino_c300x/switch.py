@@ -474,7 +474,6 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
     """Apply or restore the device Display patch."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "gui_function_patch"
 

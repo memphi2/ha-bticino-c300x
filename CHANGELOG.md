@@ -89,6 +89,8 @@ Fixed:
   saves the option too, so both always agree. If the pages are missing
   after the update, open **Configure > Display > Display and Display
   patch** and submit it once.
+- The **Display patch** switch is shown by default in new setups. Where it
+  was set up hidden before, enable it once on the device page.
 - The card no longer shows the last image twice. Its saved copy came again
   as the first step into the saved pictures and videos; browsing now starts
   behind the image the card already shows.

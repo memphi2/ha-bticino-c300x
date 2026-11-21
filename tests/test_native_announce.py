@@ -423,6 +423,19 @@ def test_a_restarted_agent_keeps_the_hold_of_a_ring(lab: Lab) -> None:
     assert lab.result() == "played"
 
 
+def test_a_device_without_the_sound_tools_is_not_touched_after_a_ring(lab: Lab) -> None:
+    (lab.dir / "zl-tool").unlink()
+    send_udp_event(lab.udp_port, RING)
+    time.sleep(0.3)
+    assert lab.process is not None
+    lab.process.terminate()
+    lab.process.wait(timeout=5)
+    lab.restart()
+
+    time.sleep(RING_HOLD + 3)
+    assert lab.log() == []
+
+
 def test_an_agent_that_ends_after_a_ring_still_switches_the_speaker_off(lab: Lab) -> None:
     lab.start_long_sound()
     send_udp_event(lab.udp_port, RING)

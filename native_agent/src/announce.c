@@ -239,7 +239,8 @@ void c300x_announce_close(struct c300x_announce *announce)
         }
         job_over(announce, cleaned, announce->ending);
     }
-    if (announce->job.pid == 0 && (announce->clean_delay >= 0 || announce->ring_until_ms > c300x_monotonic_ms())) {
+    if (announce->job.pid == 0 && (announce->clean_delay >= 0
+            || (announce->ring_until_ms > c300x_monotonic_ms() && c300x_announce_supported(announce)))) {
         /* It finishes on its own, or the next agent takes it over with a ring's hold. */
         announce->clean_delay = announce->clean_delay >= 0 ? announce->clean_delay : 0;
         start_clean(announce);

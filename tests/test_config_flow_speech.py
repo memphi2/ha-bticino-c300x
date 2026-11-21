@@ -35,7 +35,8 @@ def use_tts_stand_in(monkeypatch: pytest.MonkeyPatch, generate: Callable[..., st
 def tts_stand_in(generate: Callable[..., str] | None = None) -> SimpleNamespace:
 
     def resolve(_hass: Any, engine: str | None) -> str | None:
-        return engine if engine in ENGINE_LANGUAGES else None
+        # Home Assistant's default engine is the cloud one where it is set up.
+        return "tts.cloud" if engine is None else engine if engine in ENGINE_LANGUAGES else None
 
     def instance(_hass: Any, engine: str) -> SimpleNamespace:
         return SimpleNamespace(supported_languages=ENGINE_LANGUAGES[engine])
@@ -101,6 +102,14 @@ def test_a_language_is_saved_as_the_engine_names_it(engine: str, saved: str) -> 
     _open(entry, {"tts_engine": engine, "tts_language": "de"})
 
     assert speech_settings(entry) == (engine, saved)
+
+
+def test_a_language_without_an_engine_is_saved_as_the_default_engine_names_it() -> None:
+    entry = _entry()
+
+    _open(entry, {"tts_language": "de"})
+
+    assert speech_settings(entry) == (None, "de-DE")
 
 
 def test_a_language_the_engine_cannot_speak_is_refused() -> None:

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import array
 import asyncio
 import io
+import math
 import shutil
 import threading
 import wave
@@ -349,13 +351,19 @@ def _served(content: bytes) -> tuple[ThreadingHTTPServer, str]:
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
-def test_real_conversion_of_a_stereo_file_served_over_http() -> None:
+def test_real_conversion_of_a_stereo_file_has_one_tone_after_the_lead_in() -> None:
+    # Two seconds of stereo silence with one short tone at 0.5 s in both channels.
+    rate = 22050
+    samples = array.array("h", [0] * rate * 2 * 2)
+    for frame in range(int(rate * 0.5), int(rate * 0.55)):
+        value = int(12000 * math.sin(2 * math.pi * 1000 * frame / rate))
+        samples[2 * frame] = samples[2 * frame + 1] = value
     source = io.BytesIO()
     with wave.open(source, "wb") as out:
         out.setnchannels(2)
         out.setsampwidth(2)
-        out.setframerate(22050)
-        out.writeframes(b"\x00\x10\x00\x10" * 22050)
+        out.setframerate(rate)
+        out.writeframes(samples.tobytes())
 
     server, url = _served(source.getvalue())
     try:
@@ -365,5 +373,13 @@ def test_real_conversion_of_a_stereo_file_served_over_http() -> None:
 
     with wave.open(io.BytesIO(sound)) as result:
         assert (result.getframerate(), result.getnchannels(), result.getsampwidth()) == (8000, 1, 2)
-        # One second of sound, the lead-in for the speaker and the tail.
-        assert 1.5 <= result.getnframes() / 8000 <= 1.7
+        pcm = array.array("h", result.readframes(result.getnframes()))
+
+    def loudest(start: float, end: float) -> int:
+        return max(abs(value) for value in pcm[int(start * 8000):int(end * 8000)])
+
+    # The tone comes once, 300 ms later for the speaker to switch on; no echo of one channel.
+    assert loudest(0.78, 0.88) > 5000
+    assert loudest(0.40, 0.70) < 500
+    assert loudest(0.95, 1.40) < 500
+    assert 2.5 <= len(pcm) / 8000 <= 2.7

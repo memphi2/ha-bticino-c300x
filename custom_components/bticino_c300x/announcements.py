@@ -17,7 +17,11 @@ _RATE = 8000
 # The speaker needs a moment after it is switched on, and the last syllable
 # must not be cut. The small speaker carries no bass; an even loudness keeps
 # quiet speech understandable.
-_FILTER = "highpass=f=200,loudnorm=I=-16:TP=-1.5,adelay=300,apad=pad_dur=0.3"
+# Mono first: a delay or filter on a stereo input acts on one channel only.
+_FILTER = (
+    "aformat=channel_layouts=mono,highpass=f=200,loudnorm=I=-16:TP=-1.5,"
+    "adelay=300,apad=pad_dur=0.3"
+)
 
 
 async def async_sound_for_device(url: str) -> bytes:

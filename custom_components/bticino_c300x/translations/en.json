@@ -774,7 +774,7 @@
           "fps": "Frame rate"
         },
         "data_description": {
-          "size": "High stream: 688x480 (from the factory) is a cut-out of the camera picture, 720x576 the whole picture; the size also applies to the camera picture on the C300X display and to answering-machine recordings. Low stream on firmware 3.0.x: 400x288 from the factory; the other sizes are not tested on such a device yet.",
+          "size": "High stream: 688x480 (from the factory) is a cut-out of the camera picture, 704x576 the whole picture without the black side edges, still over the whole display; the size also applies to the camera picture on the C300X display and to answering-machine recordings. Low stream on firmware 3.0.x: 400x288 from the factory; the other sizes are not tested on such a device yet.",
           "bitrate_kbps": "From the factory 800 kbit/s, at most 3000. The low stream on firmware 3.0.x: 180 from the factory, 100-2000. More gives a sharper picture and uses more network.",
           "fps": "From the factory 15 frames per second; the high stream takes at most 24, since at 25 the device sends only about 8. The low stream on firmware 3.0.x: 10 from the factory, at most 25."
         }

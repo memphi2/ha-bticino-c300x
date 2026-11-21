@@ -774,7 +774,7 @@
           "fps": "Frequenza dei fotogrammi"
         },
         "data_description": {
-          "size": "Flusso alto: 688x480 (di fabbrica) è un ritaglio dell'immagine della telecamera, 720x576 l'immagine intera; la dimensione vale anche per l'immagine sul display del C300X e per le registrazioni della segreteria. Flusso basso del firmware 3.0.x: 400x288 di fabbrica; le altre dimensioni non sono ancora testate su un tale dispositivo.",
+          "size": "Flusso alto: 688x480 (di fabbrica) è un ritaglio dell'immagine della telecamera, 704x576 l'immagine intera senza i bordi neri laterali, sempre su tutto il display; la dimensione vale anche per l'immagine sul display del C300X e per le registrazioni della segreteria. Flusso basso del firmware 3.0.x: 400x288 di fabbrica; le altre dimensioni non sono ancora testate su un tale dispositivo.",
           "bitrate_kbps": "Di fabbrica 800 kbit/s, al massimo 3000. Il flusso basso del firmware 3.0.x: 180 di fabbrica, 100-2000. Di più dà un'immagine più nitida e usa più rete.",
           "fps": "Di fabbrica 15 fotogrammi al secondo; il flusso alto accetta al massimo 24, perché a 25 il dispositivo ne invia solo circa 8. Il flusso basso del firmware 3.0.x: 10 di fabbrica, al massimo 25."
         }

@@ -27,6 +27,14 @@ SETTINGS = (
     "[Netatmo]\nWidth=432\nHeight=240\n"
 )
 CONFIRM = {"confirm": "apply_camera_quality"}
+# The device's stack_open.xml as far as the cut goes; the rest stays as it is.
+STACK = (
+    "<?xml version=\"1.0\"?>\n<stack>\n<video>\n<crop>\n<left>16</left>\n<top>48</top>\n"
+    "<width>688</width>\n<height>480</height>\n</crop>\n<brightness>\n<min>30</min>\n"
+    "</brightness>\n</video>\n</stack>\n"
+)
+WHOLE_PICTURE = STACK.replace("<left>16</left>\n<top>48</top>\n<width>688</width>\n<height>480</height>",
+                              "<left>8</left>\n<top>0</top>\n<width>704</width>\n<height>576</height>")
 
 
 @pytest.fixture(scope="module")
@@ -46,6 +54,7 @@ class Lab:
     port: int
     settings: Path
     backup: Path
+    stack: Path
     env: dict[str, str]
     binary: Path
     start: Callable[[], subprocess.Popen[bytes]]
@@ -91,6 +100,8 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
     settings = tmp_path / "bt_answering_machine"
     settings.write_text(SETTINGS)
     settings.chmod(0o664)
+    stack = tmp_path / "stack_open.xml"
+    stack.write_text(STACK)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
         "api": {"token": TOKEN},
@@ -110,7 +121,7 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
     (tmp_path / "reboot-test.sh").chmod(0o700)
     if qt5:
         (tmp_path / "qt5-mark").touch()
-    env = {**os.environ, "C300X_CAMERA_QUALITY_FILE": str(settings),
+    env = {**os.environ, "C300X_CAMERA_QUALITY_FILE": str(settings), "C300X_CAMERA_CROP_FILE": str(stack),
            "C300X_BOOT_ID_FILE": str(tmp_path / "boot_id"),
            "C300X_CAMERA_RUNNING_NOTE": str(tmp_path / "camera-running"),
            "C300X_AUDIO_BACKUP_DIR": str(tmp_path / "backups"), "C300X_AUDIO_NO_REMOUNT": "1"}
@@ -122,7 +133,7 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
         wait_for_health(port)
         return process
 
-    lab = Lab(port, settings, tmp_path / "backups" / "bt_answering_machine", env, binary, start)
+    lab = Lab(port, settings, tmp_path / "backups" / "bt_answering_machine", stack, env, binary, start)
     try:
         lab.process = start()
         yield lab
@@ -137,7 +148,7 @@ def test_reads_the_values_of_the_high_resolution_stream(lab: Lab) -> None:
     assert lab.call() == {
         "ok": True, "supported": True, "stream": "high", "bitrate_kbps": 800, "fps": 15,
         "size": "688x480", "bitrate_min": 300, "bitrate_max": 3000, "fps_min": 5, "fps_max": 24,
-        "sizes": ["688x480", "720x576"],
+        "sizes": ["688x480", "704x576"],
         "running_bitrate_kbps": 800, "running_fps": 15, "running_size": "688x480",
         "restart_required": False, "changed": False, "remount_ro_failed": False, "rebooting": False,
     }
@@ -240,12 +251,13 @@ def test_an_agent_that_restarts_without_the_device_keeps_what_the_device_runs(la
     body = lab.call()
     assert (body["running_bitrate_kbps"], body["running_fps"]) == (800, 15)
     assert body["restart_required"] is True
-    # A note of an older agent, without the size, is not trusted.
+    # A note of an older agent, without the size or the cut, is not trusted.
     note = lab.settings.parent / "camera-running"
-    note.write_text("boot-1 800 15\n")
-    lab.restart_agent()
-    assert lab.call()["running_fps"] == 24
-    note.write_text("boot-1 800 15 800 480\n")
+    for old in ("boot-1 800 15\n", "boot-1 800 15 800 480\n"):
+        note.write_text(old)
+        lab.restart_agent()
+        assert lab.call()["running_fps"] == 24
+    note.write_text("boot-1 800 15 800 480 16 48 688 480\n")
     lab.restart_agent()
     assert lab.call()["running_fps"] == 15
     # A new boot of the device runs what the file has.
@@ -367,15 +379,45 @@ def test_firmware_3_without_the_values_still_names_its_low_stream(lab: Lab) -> N
     assert (body["supported"], body["stream"], body["bitrate_max"]) == (False, "low", 2000)
 
 
-def test_the_full_camera_picture_is_chosen_by_width_and_height(lab: Lab) -> None:
-    body = lab.call({**CONFIRM, "size": "720x576"})
-    assert (body["size"], body["running_size"], body["restart_required"]) == ("720x576", "688x480", True)
-    assert lab.settings.read_text() == SETTINGS.replace("Width=800\nHeight=480\nBitrate", "Width=720\nHeight=480\nBitrate")
+def test_the_whole_camera_picture_is_chosen_by_the_cut(lab: Lab) -> None:
+    body = lab.call({**CONFIRM, "size": "704x576"})
+    assert (body["size"], body["running_size"], body["restart_required"]) == ("704x576", "688x480", True)
+    # Width and Height stay: the display keeps showing the picture over its whole width.
+    assert lab.settings.read_text() == SETTINGS
+    assert lab.stack.read_text() == WHOLE_PICTURE
+    assert (lab.backup.parent / "stack_open.xml.camera").read_text() == STACK
+    # The audio codec switch keeps its own backup of the same file.
+    assert not (lab.backup.parent / "stack_open.xml").exists()
     assert lab.call({**CONFIRM, "size": "688x480"})["restart_required"] is False
-    assert lab.settings.read_text() == SETTINGS
-    assert lab.call({**CONFIRM, "size": "800x600"}, status=400)["error"] == "camera_quality_invalid_size"
-    assert lab.call({**CONFIRM, "size": 720}, status=400)["error"] == "camera_quality_invalid_size"
-    assert lab.settings.read_text() == SETTINGS
+    assert lab.stack.read_text() == STACK
+    for size in ("720x576", "800x600", 720):
+        assert lab.call({**CONFIRM, "size": size}, status=400)["error"] == "camera_quality_invalid_size"
+    assert (lab.settings.read_text(), lab.stack.read_text()) == (SETTINGS, STACK)
+
+
+def test_a_device_set_to_the_whole_picture_by_width_and_height_gets_the_cut(lab: Lab) -> None:
+    lab.settings.write_text(SETTINGS.replace("Width=800\nHeight=480\nBitrate", "Width=720\nHeight=480\nBitrate"))
+    assert lab.call()["size"] == "720x576"
+    lab.call({**CONFIRM, "size": "704x576"})
+    assert (lab.settings.read_text(), lab.stack.read_text()) == (SETTINGS, WHOLE_PICTURE)
+
+
+@pytest.mark.parametrize("stack", [
+    "", "<crop>\n<left>16</left>\n<top>48</top>\n<width>688</width>\n</crop>\n",
+    STACK.replace("<top>48</top>", "<top>48 </top>"), STACK + STACK,
+])
+def test_a_cut_file_without_its_four_numbers_is_reported_and_left_alone(lab: Lab, stack: str) -> None:
+    lab.stack.write_text(stack)
+    assert lab.call()["supported"] is False
+    assert lab.call({**CONFIRM, "size": "704x576"}, status=409)["error"] == "camera_quality_unsupported"
+    assert lab.stack.read_text() == stack
+
+
+@pytest.mark.parametrize("qt5", [True])
+def test_firmware_3_leaves_the_cut_file_alone(lab: Lab) -> None:
+    lab.stack.write_text("no cut here")
+    assert lab.call({**CONFIRM, "size": "704x576"})["size"] == "704x576"
+    assert lab.stack.read_text() == "no cut here"
 
 
 def test_a_size_the_file_already_gives_keeps_its_width_and_height(lab: Lab) -> None:
@@ -386,11 +428,15 @@ def test_a_size_the_file_already_gives_keeps_its_width_and_height(lab: Lab) -> N
 
 
 def test_removal_puts_back_the_original_size(lab: Lab) -> None:
-    lab.call({**CONFIRM, "size": "720x576", "bitrate_kbps": 3000, "fps": 24})
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
-                            capture_output=True, text=True, timeout=10, check=False)
-    assert result.returncode == 0, result.stderr
-    assert lab.settings.read_text() == SETTINGS
+    lab.call({**CONFIRM, "size": "704x576", "bitrate_kbps": 3000, "fps": 24})
+    # The device changed another part of the cut file meanwhile; that one stays.
+    lab.stack.write_text(lab.stack.read_text().replace("<min>30</min>", "<min>40</min>"))
+    for _ in range(2):
+        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+                                capture_output=True, text=True, timeout=10, check=False)
+        assert result.returncode == 0, result.stderr
+        assert lab.settings.read_text() == SETTINGS
+        assert lab.stack.read_text() == STACK.replace("<min>30</min>", "<min>40</min>")
 
 
 def test_a_failed_backup_leaves_the_file_unchanged(lab: Lab) -> None:

@@ -1,6 +1,7 @@
 #include "camera_quality.h"
 
 #include "c300x_agent.h"
+#include "camera_files.h"
 #include "device_file.h"
 
 #include <stdio.h>
@@ -22,24 +23,21 @@ static const char *settings_path(void)
     return env_or("C300X_CAMERA_QUALITY_FILE", "/home/bticino/cfg/bt_answering_machine");
 }
 
+/* The cut of the high stream; the device reads it at its start too. */
+static const char *crop_path(void)
+{
+    return env_or("C300X_CAMERA_CROP_FILE", "/home/bticino/cfg/stack_open.xml");
+}
+
 /* Firmware 3.0.x, the one with the Qt 5 display, sends only the low stream. */
 static int low_stream(void)
 {
     return c300x_device_display_is_qt5();
 }
 
-static int read_values(const char *path, struct c300x_camera_values *values)
+static int read_values(const char *path, const char *cut_path, struct c300x_camera_values *values)
 {
-    char *data = NULL;
-    size_t len = 0;
-    int ok;
-
-    if (!c300x_device_file_read(path, &data, &len, NULL)) {
-        return 0;
-    }
-    ok = strlen(data) == len && c300x_camera_settings_parse(data, low_stream(), values);
-    free(data);
-    return ok;
+    return c300x_camera_files_read(low_stream(), path, cut_path, values);
 }
 
 /* The values in the file when the device started. An agent that restarts
@@ -58,22 +56,23 @@ void c300x_camera_quality_note_running(void)
         fclose(fp);
     }
     if (boot[0] != '\0' && (fp = fopen(note, "r")) != NULL) {
-        int matched = fscanf(fp, "%63s %d %d %d %d", noted, &v.bitrate_kbps, &v.fps, &v.width, &v.height) == 5
-            && strcmp(noted, boot) == 0;
+        int matched = fscanf(fp, "%63s %d %d %d %d %d %d %d %d", noted, &v.bitrate_kbps, &v.fps, &v.width,
+            &v.height, &v.crop[0], &v.crop[1], &v.crop[2], &v.crop[3]) == 9 && strcmp(noted, boot) == 0;
         fclose(fp);
         if (matched && v.bitrate_kbps > 0 && v.fps > 0 && v.width > 0 && v.height > 0) {
             running = v;
             return;
         }
     }
-    if (!read_values(settings_path(), &v)) {
+    if (!read_values(settings_path(), crop_path(), &v)) {
         return;
     }
     running = v;
     /* A note cut short must not pass for the values the device runs. */
     if (boot[0] != '\0' && snprintf(temp, sizeof(temp), "%s.tmp", note) < (int)sizeof(temp)
         && (fp = fopen(temp, "w")) != NULL) {
-        int ok = fprintf(fp, "%s %d %d %d %d\n", boot, v.bitrate_kbps, v.fps, v.width, v.height) > 0;
+        int ok = fprintf(fp, "%s %d %d %d %d %d %d %d %d\n", boot, v.bitrate_kbps, v.fps, v.width, v.height,
+            v.crop[0], v.crop[1], v.crop[2], v.crop[3]) > 0;
         ok = fclose(fp) == 0 && ok;
         if (!ok || rename(temp, note) != 0) {
             unlink(temp);
@@ -88,7 +87,7 @@ int c300x_camera_quality_read(struct c300x_camera_quality *quality)
     quality->running = running;
     c300x_camera_quality_size_name(quality->low, &running, quality->running_size,
         sizeof(quality->running_size));
-    if (!read_values(settings_path(), &quality->saved)) {
+    if (!read_values(settings_path(), crop_path(), &quality->saved)) {
         return 0;
     }
     quality->supported = 1;
@@ -109,50 +108,23 @@ int c300x_camera_quality_status(struct c300x_camera_quality *quality, int video_
     return 0;
 }
 
-/* Writes the values, keeping everything else of the file. */
+/* Writes the values, keeping everything else of the files, and reads them back. */
 static int write_values(struct c300x_camera_quality *quality, const struct c300x_camera_values *values,
     const char **error)
 {
-    char backup[C300X_MAX_PATH_LEN];
-    char *data = NULL;
-    size_t len = 0;
-    int ok, ro_failed;
+    struct c300x_camera_values now = quality->saved;
+    int ro_failed = 0;
 
-    *error = "read_failed";
-    if (!c300x_device_file_backup_path("bt_answering_machine", backup, sizeof(backup))
-        || !c300x_device_file_read(settings_path(), &data, &len, NULL)) {
+    if (!c300x_camera_files_write(quality->low, &now, values, settings_path(), crop_path(), &ro_failed, error)) {
         return 0;
     }
-    if (strlen(data) != len) {
-        free(data);
-        return 0;
-    }
-    if ((data = c300x_camera_settings_with(data, quality->low, values)) == NULL) {
-        return 0;
-    }
-    *error = "backup_failed";
-    if (!c300x_device_file_mkdir_p(c300x_device_file_backup_dir())
-        || !c300x_device_file_backup_once(settings_path(), backup)) {
-        free(data);
-        return 0;
-    }
-    *error = "remount_rw_failed";
-    if (!c300x_device_file_remount("rw")) {
-        free(data);
-        return 0;
-    }
-    ok = c300x_device_file_write(settings_path(), data, strlen(data));
-    free(data);
-    /* A root that stays writable does not undo the write; the next start
-     * mounts it read-only again. */
-    ro_failed = !c300x_device_file_remount("ro");
-    *error = ok ? "target_state_mismatch" : "write_failed";
+    *error = "target_state_mismatch";
     if (!c300x_camera_quality_read(quality) || memcmp(&quality->saved, values, sizeof(*values)) != 0) {
         return 0;
     }
-    quality->changed = ok;
+    quality->changed = 1;
     quality->remount_ro_failed = ro_failed;
-    return ok;
+    return 1;
 }
 
 static int in_range(int value, int saved, int minimum, int maximum)
@@ -199,21 +171,29 @@ int c300x_camera_quality_apply(struct c300x_camera_quality *quality, int bitrate
 
 int c300x_camera_quality_remove_patches(const char **error)
 {
-    char backup[C300X_MAX_PATH_LEN];
+    char backup[C300X_MAX_PATH_LEN], cut_backup[C300X_MAX_PATH_LEN];
     struct c300x_camera_quality quality;
     struct c300x_camera_values original;
+    int settings_saved, cut_saved;
 
     *error = "";
     if (!c300x_device_file_backup_path("bt_answering_machine", backup, sizeof(backup))
-        || access(backup, F_OK) != 0) {
-        return 1; /* never changed on this device */
+        || !c300x_device_file_backup_path(C300X_CAMERA_CROP_BACKUP, cut_backup, sizeof(cut_backup))) {
+        return 1;
+    }
+    settings_saved = access(backup, F_OK) == 0;
+    cut_saved = !low_stream() && access(cut_backup, F_OK) == 0;
+    /* Never changed on this device; or files that lost the values meanwhile
+     * are left alone. */
+    if ((!settings_saved && !cut_saved) || !c300x_camera_quality_read(&quality)) {
+        return 1;
     }
     *error = "backup_unreadable";
-    if (!read_values(backup, &original)) {
+    if (!read_values(settings_saved ? backup : settings_path(), cut_saved ? cut_backup : crop_path(), &original)) {
         return 0;
     }
-    /* After a firmware update the file holds the factory values again. */
-    if (!c300x_camera_quality_read(&quality) || memcmp(&quality.saved, &original, sizeof(original)) == 0) {
+    /* After a firmware update the files hold the factory values again. */
+    if (memcmp(&quality.saved, &original, sizeof(original)) == 0) {
         return 1;
     }
     return write_values(&quality, &original, error);

@@ -42,7 +42,7 @@ Most users only need:
   stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
 - **Better camera picture:** the factory stream is modest (688x480, 800 kbit/s,
   15 fps). **Configure > Camera quality** makes it sharper, smoother and
-  wider: up to the whole 720x576 camera picture, 3000 kbit/s and 24 fps. On firmware 3.0.x
+  wider: up to the whole camera picture at 704x576, 3000 kbit/s and 24 fps. On firmware 3.0.x
   it sets the low-resolution stream, the only one the device sends, which the
   Door Entry app receives as well. The device reads these values only when it
   starts, so saving a change restarts it once (about a minute). Removing the

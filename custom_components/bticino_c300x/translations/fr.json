@@ -774,7 +774,7 @@
           "fps": "Fréquence d'images"
         },
         "data_description": {
-          "size": "Flux haut : 688x480 (d'usine) est un recadrage de l'image de la caméra, 720x576 l'image entière ; la taille s'applique aussi à l'image de la caméra sur l'écran du C300X et aux enregistrements du répondeur. Flux bas du firmware 3.0.x : 400x288 d'usine ; les autres tailles ne sont pas encore testées sur un tel appareil.",
+          "size": "Flux haut : 688x480 (d'usine) est un recadrage de l'image de la caméra, 704x576 l'image entière sans les bords noirs latéraux, toujours sur tout l'écran ; la taille s'applique aussi à l'image de la caméra sur l'écran du C300X et aux enregistrements du répondeur. Flux bas du firmware 3.0.x : 400x288 d'usine ; les autres tailles ne sont pas encore testées sur un tel appareil.",
           "bitrate_kbps": "800 kbit/s d'usine, au plus 3000. Le flux bas du firmware 3.0.x : 180 d'usine, 100-2000. Plus donne une image plus nette et utilise plus de réseau.",
           "fps": "15 images par seconde d'usine ; le flux haut accepte au plus 24, car à 25 l'appareil n'en envoie qu'environ 8. Le flux bas du firmware 3.0.x : 10 d'usine, au plus 25."
         }

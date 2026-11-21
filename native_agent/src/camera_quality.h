@@ -52,12 +52,15 @@ int c300x_camera_quality_apply(struct c300x_camera_quality *quality, int bitrate
  * that lost them meanwhile is left alone. */
 int c300x_camera_quality_remove_patches(const char **error);
 
-/* camera_quality_body.c: the limits and sizes offered and the JSON answer. */
+/* camera_sizes.c: the limits and sizes offered. */
 const struct c300x_camera_limits *c300x_camera_quality_limits(int low);
+/* The name of the offered size at index; NULL past the last. */
+const char *c300x_camera_quality_size_at(int low, size_t index);
 void c300x_camera_quality_size_name(int low, const struct c300x_camera_values *values,
     char *out, size_t out_len);
 /* Sets width and height for an offered size; 0 for any other name. */
 int c300x_camera_quality_size_values(int low, const char *name, struct c300x_camera_values *values);
+/* camera_quality_body.c: the JSON answer. */
 void c300x_camera_quality_body(const struct c300x_camera_quality *quality, int rebooting,
     char *body, size_t body_len);
 /* Sends that answer; context is the quality. */

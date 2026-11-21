@@ -67,7 +67,7 @@ Implementation reference:
 
 **Configure > Camera quality** shows the size, bit rate and frame rate the
 device runs with and the saved ones. A higher bit rate gives a sharper picture,
-the size 720x576 the whole camera picture instead of the factory 688x480
+the size 704x576 the whole camera picture instead of the factory 688x480
 cut-out, and up to 24 frames per second a smoother one. 25 is not offered:
 older firmware then turns its frame-rate control off and sends only about 8
 frames per second. Saving restarts the device once; the new values apply after

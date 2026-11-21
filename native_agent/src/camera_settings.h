@@ -9,6 +9,9 @@ struct c300x_camera_values {
     int fps;
     int width;
     int height;
+    /* High stream: the cut of the picture in stack_open.xml (left, top,
+     * width, height); 0 for the low stream. Not part of this file. */
+    int crop[4];
 };
 
 /* All four count only when each is in the [Answering Machine] section

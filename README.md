@@ -33,8 +33,8 @@ forwarding controls, messages and optional display pages.
   Home Assistant. Audio-only Home Call reaches the C300X display.
 - **Get a better camera picture.** Under **Camera quality** the stream can be
   sharper (up to 3000 kbit/s instead of 800), smoother (up to 24 frames per
-  second instead of 15) and show the whole 720x576 camera picture instead of
-  the factory cut-out. For clearer sound, set the **Audio codec** to **PCMU**.
+  second instead of 15) and show the whole camera picture at 704x576 instead
+  of the factory cut-out. For clearer sound, set the **Audio codec** to **PCMU**.
 - **Let the C300X speak.** The device loudspeaker is a media player: use it
   with `tts.speak` and a local engine such as Piper, or have a notification
   shown on the display, spoken, or both. A door call always takes priority.

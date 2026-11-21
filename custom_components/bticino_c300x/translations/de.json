@@ -774,7 +774,7 @@
           "fps": "Bildrate"
         },
         "data_description": {
-          "size": "Hoher Stream: 688x480 (ab Werk) ist ein Ausschnitt des Kamerabilds, 720x576 das ganze Bild; die Größe gilt auch für das Kamerabild auf dem Display der C300X und für Aufnahmen des Anrufbeantworters. Niedriger Stream auf Firmware 3.0.x: ab Werk 400x288; die anderen Größen sind auf einem solchen Gerät noch nicht getestet.",
+          "size": "Hoher Stream: 688x480 (ab Werk) ist ein Ausschnitt des Kamerabilds, 704x576 das ganze Bild ohne die schwarzen Seitenränder, weiterhin über das ganze Display; die Größe gilt auch für das Kamerabild auf dem Display der C300X und für Aufnahmen des Anrufbeantworters. Niedriger Stream auf Firmware 3.0.x: ab Werk 400x288; die anderen Größen sind auf einem solchen Gerät noch nicht getestet.",
           "bitrate_kbps": "Ab Werk 800 kbit/s, höchstens 3000. Der niedrige Stream auf Firmware 3.0.x: ab Werk 180, 100-2000. Mehr ergibt ein schärferes Bild und braucht mehr Netzwerk.",
           "fps": "Ab Werk 15 Bilder pro Sekunde; der hohe Stream nimmt höchstens 24, denn bei 25 sendet das Gerät nur etwa 8. Der niedrige Stream auf Firmware 3.0.x: ab Werk 10, höchstens 25."
         }

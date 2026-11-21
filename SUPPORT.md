@@ -2,10 +2,9 @@
 
 ## Supported Release Line
 
-- `2.8.x`: local development, not released
-- `2.7.x`: current stable (2.7.0)
-- `2.5.x`: previous stable; upgrade to 2.7.x for maintenance fixes
-- `2.4.x`: no longer maintained; upgrade to 2.7.x
+- `2.8.x`: current stable (2.8.0)
+- `2.7.x`: previous stable; upgrade to 2.8.x for maintenance fixes
+- `2.5.x`: no longer maintained; upgrade to 2.8.x
 - `2.6.0`: withdrawn because the energy page did not load on the display
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 

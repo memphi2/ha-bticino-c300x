@@ -9,15 +9,16 @@ from typing import Any
 
 from homeassistant.components.notify.legacy import BaseNotificationService
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.service import async_set_service_schema
 from homeassistant.setup import async_setup_component
 
 from .capabilities import entry_device_ui_enabled_or_patch_active
 from .const import DOMAIN
-from .display_alerts import async_send_display_alert
+from .display_alerts import alert_options, async_send_display_alert
 from .entry_types import BticinoC300XConfigEntry
 from .notify_names import notify_names
+from .notify_speech import async_speak, speaker_entity_id
 from .service_authorization import authorized_service
 
 _SERVICES = f"{DOMAIN}_notify_services"
@@ -38,7 +39,11 @@ def _async_set_notify_description(
             "(both default to 30; 0 disables the respective effect). "
             "expires_in is 1 to 604800 seconds (default 3600). "
             "notification_id replaces an existing notification with the same ID "
-            "(1-64 lowercase letters, digits, underscores or hyphens)."
+            "(1-64 lowercase letters, digits, underscores or hyphens). "
+            "mode is display (default), speech (the message is only spoken over the "
+            "device speaker) or both (shown and spoken; no tone unless sound_duration "
+            "is given). tts_engine names the text-to-speech entity, for example "
+            "tts.piper; without it Home Assistant uses its default. language is optional."
         ),
         "example": {"severity": "info", "wake_duration": 30, "sound_duration": 30},
     })
@@ -78,14 +83,35 @@ class C300XNotificationService(BaseNotificationService):
             raise ServiceValidationError("C300X display notification service is unloaded")
         if "target" in kwargs:
             raise ServiceValidationError("C300X notify targets are fixed per config entry")
+        # Everything is checked before anything is shown or spoken.
+        options = alert_options(kwargs.get("data"))
+        mode = options["mode"]
+        speaker = speaker_entity_id(self.hass, self.entry) if mode != "display" else None
         task = asyncio.current_task()
         assert task is not None
         self._pending.add(task)
+        unconfirmed: HomeAssistantError | None = None
         try:
-            await async_send_display_alert(
-                self.hass, self.entry, message,
-                title=kwargs.get("title", "Home Assistant"), data=kwargs.get("data"),
-            )
+            if mode != "speech":
+                try:
+                    await async_send_display_alert(
+                        self.hass, self.entry, message,
+                        title=kwargs.get("title", "Home Assistant"), data=kwargs.get("data"),
+                    )
+                except ServiceValidationError:
+                    raise
+                except HomeAssistantError as err:
+                    # The display may still have it; the spoken part is not lost with it.
+                    if speaker is None:
+                        raise
+                    unconfirmed = err
+            if speaker is not None:
+                await async_speak(
+                    self.hass, speaker, message,
+                    engine=options.get("tts_engine"), language=options.get("language"),
+                )
+            if unconfirmed is not None:
+                raise unconfirmed
         finally:
             self._pending.discard(task)
 

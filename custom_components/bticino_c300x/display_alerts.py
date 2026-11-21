@@ -42,8 +42,21 @@ ALERT_DATA_SCHEMA = vol.Schema(
         vol.Optional("expires_in", default=3600): vol.All(
             _integer, vol.Range(min=1, max=604800)
         ),
+        # Where the message goes: on the display, spoken over the speaker, or both.
+        vol.Optional("mode", default="display"): vol.In({"display", "speech", "both"}),
+        vol.Optional("tts_engine"): vol.All(str, vol.Length(min=1, max=255)),
+        vol.Optional("language"): vol.All(str, vol.Length(min=1, max=35)),
     }
 )
+
+
+def alert_options(data: dict[str, Any] | None) -> dict[str, Any]:
+    """Check the data of a notification before anything is shown or spoken."""
+
+    try:
+        return dict(ALERT_DATA_SCHEMA({} if data is None else data))
+    except vol.Invalid as err:
+        raise ServiceValidationError(f"Invalid C300X display notification: {err}") from err
 
 
 async def async_send_display_alert(
@@ -93,7 +106,8 @@ async def async_send_display_alert(
         "title": stored["title"],
         "message": stored["message"],
         "wake_duration": options["wake_duration"],
-        "sound_duration": options.get("sound_duration", 30),
+        # Spoken text takes the place of the tone.
+        "sound_duration": options.get("sound_duration", 0 if options["mode"] == "both" else 30),
         "expires_in": notice["expires_in"],
     }
     try:

@@ -225,6 +225,9 @@ wake and sound for all three severities: `info`, `warning` and `error`. Set
 safe Home/HA screens, never queued until the next wake, and are supplementary,
 not fire-alarm functionality. A protected screen or call suppresses the effects
 and leaves the notice in HA; a missing GUI connection reports a delivery error.
+With `mode: speech` or `mode: both` the message is spoken over the device
+loudspeaker instead of the tone; see
+[Speaker and text-to-speech](feature-reference.md#speaker-and-text-to-speech).
 
 Details: [Display controls](feature-reference.md#display-device-controls),
 [pages and tiles](feature-reference.md#display-settings) and

@@ -755,6 +755,41 @@ event trigger rather than polling the device or adding a calendar provider.
 For a reliable test, create the event more than 15 minutes in advance, as noted
 in the [Home Assistant calendar documentation](https://www.home-assistant.io/integrations/calendar/#automation).
 
+### Speaker and Text-to-Speech
+
+The C300X can speak. The integration adds a media player, **Speaker**, for the
+device's own loudspeaker. It is a target like any other speaker in Home
+Assistant:
+
+```yaml
+action: tts.speak
+target:
+  entity_id: tts.piper
+data:
+  media_player_entity_id: media_player.bticino_c300x_speaker
+  message: The washing machine is done.
+```
+
+The speech comes from the text-to-speech engine you choose in Home Assistant.
+With a local engine such as Piper nothing leaves your network: Home Assistant
+makes the speech, turns it into the one format the device plays (8000 Hz,
+mono, as on a telephone) and sends it to the device. Sounds from the media
+browser play the same way; `ffmpeg` on Home Assistant does the conversion.
+
+- The **volume** of the media player applies to the next sound. It follows the
+  device's own volume range for ringing.
+- One sound plays at a time, up to about 110 seconds; a second one is refused
+  while the first plays. **Stop** ends it.
+- **A door call always wins.** A ring, a call or a camera request ends the
+  sound at once. The attribute `last_result` then reads `preempted`; otherwise
+  `played` or `stopped`.
+- While the device uses its speaker itself (a call, a ring, a message being
+  played), the action fails and says so; nothing is played.
+- A touch tone of the display during a sound can cut it short.
+
+Tested on firmware 1.7.19. Firmware 2.0.2 and 3.0.6 have the same sound parts,
+but playing is not tested on such a device yet.
+
 ### Standard Notify Service
 
 With the display integration enabled, each entry registers a named Notify action.
@@ -793,6 +828,30 @@ retrying setup.
 | `info` (default) | 30 seconds | 30 seconds |
 | `warning` | 30 seconds | 30 seconds |
 | `error` | 30 seconds | 30 seconds |
+
+`mode` chooses where the message goes:
+
+| `mode` | Display | Speaker |
+| --- | --- | --- |
+| `display` (default) | Notice, wake and tone | Nothing |
+| `speech` | Nothing | The message is spoken |
+| `both` | Notice and wake, no tone | The message is spoken |
+
+```yaml
+action: notify.bticino_c300x
+data:
+  message: The front window is still open.
+  data:
+    mode: both
+    tts_engine: tts.piper
+```
+
+The message is spoken by the [speaker](#speaker-and-text-to-speech); the title
+is not. `tts_engine` names the text-to-speech entity; without it Home Assistant
+uses its default engine, which is the cloud one where Home Assistant Cloud is
+set up, so name a local engine to keep speech local. `language` is optional.
+In `both`, give `sound_duration` if you want the tone as well. The volume is
+the one of the speaker entity.
 
 Each duration accepts whole seconds from 0 to 300; zero disables that effect.
 `notification_id` is optional and reuses the existing notice ID rules. Title,
@@ -843,6 +902,7 @@ feature, the matching entity is not created.
 | Platform | Entity | Purpose |
 | --- | --- | --- |
 | `camera` | Doorbell camera | On-demand/Ring Call/Home Call media entry point. |
+| `media_player` | Speaker | The device loudspeaker as a target for text-to-speech and sounds; a door call ends a sound at once. |
 | `event` | Doorbell ring event | Ring-only event entity. |
 | `event` | Device event | Canonical native-agent events such as doorbell, call, ringer, forwarding, stair light, activation, memo and message changes. |
 | `sensor` | Media readiness | Aggregated media setup state and actionable failures. |

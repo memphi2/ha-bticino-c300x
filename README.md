@@ -35,6 +35,9 @@ forwarding controls, messages and optional display pages.
   sharper (up to 3000 kbit/s instead of 800), smoother (up to 24 frames per
   second instead of 15) and show the whole 720x576 camera picture instead of
   the factory cut-out. For clearer sound, set the **Audio codec** to **PCMU**.
+- **Let the C300X speak.** The device loudspeaker is a media player: use it
+  with `tts.speak` and a local engine such as Piper, or have a notification
+  shown on the display, spoken, or both. A door call always takes priority.
 - **Control the door station.** Door unlock, stair light, ringer mute,
   forwarding and answering-machine controls, plus stored video messages,
   voice memos and text memos where supported by the agent.

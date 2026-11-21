@@ -107,7 +107,7 @@ from .const import (
     SIGNAL_SYSTEM_METRICS_CHANGED,
 )
 from .device_user import media_user_attribute
-from .doorstation_audio import device_audio_codec_attribute, doorstation_audio_gain_db
+from .doorstation_audio import doorstation_audio_gain_db
 from .entity import C300XEntity, entry_config_value, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
@@ -292,7 +292,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             # not the agent) so the card can apply it client-side in PCMU mode
             # where the agent stays at passthrough.
             "doorstation_audio_gain_db": doorstation_audio_gain_db(self._entry),
-            **device_audio_codec_attribute(self._entry),
             **media_user_attribute(self._entry),
         }
 

@@ -68,14 +68,3 @@ async def async_ensure_doorstation_audio_gain(
         return
 
     await runtime.api.async_set_doorstation_audio_gain_db(desired)
-
-
-def device_audio_codec_attribute(entry: Any) -> dict[str, str]:
-    """The device codec from the agent, for the card where no codec select exists."""
-
-    capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", None)
-    video = capabilities.get("doorbell_video") if isinstance(capabilities, dict) else None
-    codec = video.get("talkback_codec") if isinstance(video, dict) else None
-    if not isinstance(codec, str) or not codec:
-        return {}
-    return {"device_audio_codec": "pcmu" if codec.upper().startswith("PCMU") else "speex"}

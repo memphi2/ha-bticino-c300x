@@ -14,7 +14,7 @@
 /* The device plays sound only in a sound state with the audio chip's
  * configuration for it loaded (to RAM, never saved), the speaker unmuted and
  * the amplifier on; the device's own software does the same for a voice
- * memo. The gain before is told to the agent. The script has no signal
+ * memo. The gain before, and that the speaker is on, are told to the agent. The script has no signal
  * handling: a stop or a door call ends its whole process group at once. */
 const char C300X_ANNOUNCE_PLAY_SCRIPT[] =
     TOOLS
@@ -26,6 +26,7 @@ const char C300X_ANNOUNCE_PLAY_SCRIPT[] =
     "put Zia_Aud_St 9 || exit 4\n"
     "LD_LIBRARY_PATH=/home/bticino/lib \"$Z\" DOWNLOAD_CR \"$C\" NOT_SAVE NOT_FORCE >/dev/null 2>&1 || exit 4\n"
     "put 'ZL0 Mute Rout' off && put 'ZL0 Rout Gain Volume' \"$2\" && put 'TPA2028D1 Volume' 9 || exit 4\n"
+    "echo speaker=on\n"
     "\"$P\" -q -D plughw:0,0 -d \"$3\" \"$1\" || exit 5\n";
 
 /* After every sound the speaker is muted, the amplifier off and the gain as

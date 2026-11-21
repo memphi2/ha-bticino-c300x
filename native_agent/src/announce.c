@@ -47,10 +47,10 @@ int c300x_announce_playing(const struct c300x_announce *announce)
     return announce->job.pid > 0 && !announce->cleaning;
 }
 
-/* The device let the agent have its speaker: the play script reported the gain. */
+/* The device let the agent have its speaker and the play script switched it on. */
 int c300x_announce_started(const struct c300x_announce *announce)
 {
-    return c300x_announce_playing(announce) && strstr(announce->job.output, "gain=") != NULL;
+    return c300x_announce_playing(announce) && strstr(announce->job.output, "speaker=on") != NULL;
 }
 
 int c300x_announce_busy(const struct c300x_announce *announce)

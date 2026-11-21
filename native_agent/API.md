@@ -703,7 +703,7 @@ door call took the speaker), `device_busy` (the device was using its speaker;
 nothing was switched), `sound_path_failed`, `play_failed` or `failed`. It is
 empty before the first sound and while one plays, and set as soon as the
 sound has ended. `started` turns true while a sound plays once the device let
-the agent have its speaker; a device that uses it ends the sound as
+the agent have its speaker and the speaker is switched on; a device that uses it ends the sound as
 `device_busy` before that. `busy` stays true after the sound until the speaker is
 switched off again; no new piece or sound is taken while it is true.
 

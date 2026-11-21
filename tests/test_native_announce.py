@@ -254,6 +254,21 @@ def test_says_when_the_device_let_it_have_the_speaker(lab: Lab) -> None:
     assert lab.call()["started"] is False
 
 
+def test_a_sound_that_cannot_be_switched_on_never_counts_as_started(lab: Lab) -> None:
+    tool = lab.dir / "zl-tool"
+    tool.write_text("#!/bin/sh\nsleep 1\nexit 1\n")
+    tool.chmod(0o755)
+    lab.upload(wav())
+    lab.call("/actions/play", {"volume": 50})
+
+    seen = []
+    while (body := lab.call())["playing"]:
+        seen.append(body["started"])
+        time.sleep(0.05)
+    assert seen and not any(seen)
+    assert lab.result() == "sound_path_failed"
+
+
 @pytest.mark.parametrize("busy", ["state", "sound-device"])
 def test_does_not_touch_a_device_that_is_using_its_speaker(lab: Lab, busy: str) -> None:
     if busy == "state":

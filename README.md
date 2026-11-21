@@ -6,7 +6,7 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Version: **2.7.0**.
+Development version: **2.8.0 (unreleased)**. Latest stable release: **2.7.0**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.

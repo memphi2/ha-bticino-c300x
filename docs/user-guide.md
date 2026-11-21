@@ -94,7 +94,8 @@ Most users only need:
 | Messages and memos | Video-message, text-memo and voice-memo sensors plus playback/write/delete services. |
 | Display pages | Five built-in pages (Status, Energy, Agenda, Leave home and Situations) plus up to seven custom pages, all with configurable positions; weather, entity controls and a separate Alarmo subpage with an optional quick action. |
 | Page navigation | Previous/next arrows (default) or a favourites bar along the bottom edge of the display: one button per page for up to four pages, otherwise three pages and More. Set in the display settings. |
-| Notifications | Standard Notify action with info, warning and error notices and bounded wake/sound on safe screens; protected screens and calls suppress effects. Not a life-safety alarm. |
+| Notifications | Standard Notify action with info, warning and error notices and bounded wake/sound on safe screens; protected screens and calls suppress effects. Each notice can be shown, spoken or both. Not a life-safety alarm. |
+| Speaker | Media player for the device loudspeaker: Text-to-Speech, short sounds and announcements; a door call always takes priority. |
 | Maintenance | Agent update/remove, SSH/noAuth, firewall, mDNS, GUI reload and reboot controls. |
 
 See [Feature reference](feature-reference.md) for the full entity and service

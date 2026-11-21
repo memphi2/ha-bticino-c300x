@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v2.8.0 - Unreleased
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
 
 Camera:
 

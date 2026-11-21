@@ -778,11 +778,11 @@ browser play the same way; `ffmpeg` on Home Assistant does the conversion.
 
 - The **volume** of the media player applies to the next sound. It follows the
   device's own volume range for ringing.
-- One sound plays at a time, up to about 110 seconds; a second one is refused
-  while the first plays. **Stop** ends it.
+- One sound plays at a time, up to about 110 seconds; a second one waits until
+  the first is over. **Stop** ends the one that plays.
 - **A door call always wins.** A ring, a call or a camera request ends the
   sound at once. The attribute `last_result` then reads `preempted`; otherwise
-  `played` or `stopped`.
+  `played` or `stopped`, or `unknown` when the agent could not be asked.
 - While the device uses its speaker itself (a call, a ring, a message being
   played), the action fails and says so; nothing is played.
 - A touch tone of the display during a sound can cut it short.
@@ -853,8 +853,10 @@ entity such as `tts.piper` and, if you like, a language. `tts_engine` and
 neither, Home Assistant uses its default engine, which is the cloud one where
 Home Assistant Cloud is set up; choose a local engine to keep speech local.
 Changing the setting does not reload the integration.
-In `both`, give `sound_duration` if you want the tone as well. The volume is
-the one of the speaker entity.
+In `both` there is no tone, since it would hold the speaker the speech needs;
+a `sound_duration` above 0 is refused. Engine, language and speaker are
+checked before anything is shown, so a message that cannot be spoken is not
+shown either. The volume is the one of the speaker entity.
 
 Each duration accepts whole seconds from 0 to 300; zero disables that effect.
 `notification_id` is optional and reuses the existing notice ID rules. Title,

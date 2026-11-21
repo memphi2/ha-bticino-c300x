@@ -696,7 +696,10 @@ def test_real_config_entry_unload_callbacks(tmp_path, monkeypatch):
 
 
 @asynccontextmanager
-async def speech_context(tmp_path, monkeypatch, *, announcements=True, speaker="media_player.front_door_speaker"):
+async def speech_context(
+    tmp_path, monkeypatch, *, announcements=True, speaker="media_player.front_door_speaker",
+    speaker_state="idle",
+):
     """Notify with a speaker entity, a text-to-speech stand-in and a recording player."""
     import sys
 
@@ -716,7 +719,7 @@ async def speech_context(tmp_path, monkeypatch, *, announcements=True, speaker="
     async with notify_context(tmp_path, monkeypatch) as (hass, entry):
         entry.runtime_data.capabilities["announcements"] = {"supported": announcements}
         if speaker is not None:
-            hass.states.async_set(speaker, "idle")
+            hass.states.async_set(speaker, speaker_state)
 
         async def play(call):
             spoken.append(dict(call.data))
@@ -757,15 +760,18 @@ def test_both_mode_shows_the_message_without_tone_and_speaks_it(tmp_path, monkey
             assert (alert["message"], alert["sound_duration"], alert["wake_duration"]) == ("Test message", 0, 30)
             assert [item["media_content_id"] for item in spoken] == [
                 "media-source://tts/default?message=Test message&language=None"]
-            # A tone on top of the speech is still possible when asked for.
-            await send(hass, entry, data={"mode": "both", "sound_duration": 5})
-            assert entry.runtime_data.api.async_send_display_alert.call_args.args[0]["sound_duration"] == 5
+            # The tone would hold the speaker the speech needs.
+            with pytest.raises(ServiceValidationError, match="leave out sound_duration"):
+                await send(hass, entry, data={"mode": "both", "sound_duration": 5})
+            assert entry.runtime_data.api.async_send_display_alert.await_count == 1
+            await send(hass, entry, data={"mode": "both", "sound_duration": 0})
+            assert entry.runtime_data.api.async_send_display_alert.call_args.args[0]["sound_duration"] == 0
     asyncio.run(run())
 
 
 @pytest.mark.parametrize("options", [
-    {"announcements": False}, {"speaker": None},
-], ids=["old agent", "no speaker entity"])
+    {"announcements": False}, {"speaker": None}, {"speaker_state": "unavailable"},
+], ids=["old agent", "no speaker entity", "speaker unavailable"])
 @pytest.mark.parametrize("mode", ["speech", "both"])
 def test_nothing_is_shown_when_the_message_cannot_be_spoken(tmp_path, monkeypatch, options, mode):
     async def run():
@@ -777,12 +783,14 @@ def test_nothing_is_shown_when_the_message_cannot_be_spoken(tmp_path, monkeypatc
     asyncio.run(run())
 
 
-def test_missing_text_to_speech_engine_is_named(tmp_path, monkeypatch):
+@pytest.mark.parametrize("mode", ["speech", "both"])
+def test_missing_text_to_speech_engine_is_named_and_nothing_is_shown(tmp_path, monkeypatch, mode):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             with pytest.raises(ServiceValidationError, match="text-to-speech engine"):
-                await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.missing"})
-            assert spoken == []
+                await send(hass, entry, data={"mode": mode, "tts_engine": "tts.missing"})
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert notification_payload(entry) == [] and spoken == []
     asyncio.run(run())
 
 

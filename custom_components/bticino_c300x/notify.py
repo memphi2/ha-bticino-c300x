@@ -18,7 +18,7 @@ from .const import DOMAIN
 from .display_alerts import alert_options, async_send_display_alert
 from .entry_types import BticinoC300XConfigEntry
 from .notify_names import notify_names
-from .notify_speech import async_speak, speaker_entity_id
+from .notify_speech import async_speak, prepare_speech
 from .service_authorization import authorized_service
 
 _SERVICES = f"{DOMAIN}_notify_services"
@@ -59,7 +59,7 @@ def _async_set_notify_description(
 
 
 class C300XNotificationService(BaseNotificationService):
-    """One fixed device target, with no URLs, audio files or commands."""
+    """One fixed device target, with no URLs, audio files or commands in its data."""
 
     def __init__(self, entry: BticinoC300XConfigEntry, name: str) -> None:
         self.entry = entry
@@ -86,7 +86,10 @@ class C300XNotificationService(BaseNotificationService):
         # Everything is checked before anything is shown or spoken.
         options = alert_options(kwargs.get("data"))
         mode = options["mode"]
-        speaker = speaker_entity_id(self.hass, self.entry) if mode != "display" else None
+        speech = None if mode == "display" else prepare_speech(
+            self.hass, self.entry, message,
+            engine=options.get("tts_engine"), language=options.get("language"),
+        )
         task = asyncio.current_task()
         assert task is not None
         self._pending.add(task)
@@ -102,14 +105,11 @@ class C300XNotificationService(BaseNotificationService):
                     raise
                 except HomeAssistantError as err:
                     # The display may still have it; the spoken part is not lost with it.
-                    if speaker is None:
+                    if speech is None:
                         raise
                     unconfirmed = err
-            if speaker is not None:
-                await async_speak(
-                    self.hass, self.entry, speaker, message,
-                    engine=options.get("tts_engine"), language=options.get("language"),
-                )
+            if speech is not None:
+                await async_speak(self.hass, speech)
             if unconfirmed is not None:
                 raise unconfirmed
         finally:

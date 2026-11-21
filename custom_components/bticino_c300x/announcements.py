@@ -47,6 +47,12 @@ async def async_sound_for_device(url: str) -> bytes:
     return sound.getvalue()
 
 
+def announcement_seconds(sound: bytes) -> float:
+    """Length of a sound made by async_sound_for_device."""
+
+    return max(0, len(sound) - 44) / (_RATE * 2)
+
+
 def announcement_volume(level: float) -> int:
     """The agent's volume, 1 to 100, for a Home Assistant volume level."""
 

@@ -1812,8 +1812,9 @@ def test_announcement_goes_in_small_pieces_in_order_and_is_then_played() -> None
     pieces = [request["kwargs"]["json"] for request in session.requests[:3]]
     assert [piece["offset"] for piece in pieces] == [0, 4500, 9000]
     assert b"".join(base64.b64decode(piece["data"]) for piece in pieces) == sound
-    # One piece with its JSON frame fits the agent's request size.
-    assert max(len(json.dumps(piece)) for piece in pieces) < 8192
+    # The agent reads request line, headers and body into 8192 bytes; the
+    # headers of this client take well under 1024 of them.
+    assert max(len(json.dumps(piece)) for piece in pieces) + 1024 < 8192
     assert session.requests[3]["kwargs"]["json"] == {"volume": 60}
 
 

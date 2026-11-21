@@ -40,8 +40,13 @@ _LOGGER = logging.getLogger(__name__)
 # The agent knows after a moment whether the device let it have the speaker.
 _START_CHECK_SECONDS = 0.4
 _POLL_SECONDS = 0.5
-# Longer than the agent itself lets a sound run (its length and 30 seconds).
-_END_MARGIN_SECONDS = 35
+# Longer than the agent can be busy with a sound: its length and 30 seconds,
+# then switching the speaker off, after a door call three seconds later.
+_END_MARGIN_SECONDS = 50
+# A sound the agent still holds, for example from before a reload, is waited for.
+_BUSY_WAIT_SECONDS = 180
+# Conversions running at the same time.
+_CONVERSIONS = 2
 _PLAYING = "playing"
 _RESULT_ERRORS = {
     "device_busy": "The C300X is using its speaker (call, ring or message); nothing was played",
@@ -73,7 +78,7 @@ def media_url_for_ffmpeg(hass: HomeAssistant, media_id: str) -> str:
     if not url.startswith("/"):
         return url
     try:
-        base = get_url(hass, allow_external=False, allow_cloud=False)
+        base = get_url(hass, allow_external=False, allow_cloud=False, allow_ip=True)
     except NoURLAvailableError:
         api = hass.config.api
         if api is None:
@@ -121,10 +126,13 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
         self._attr_volume_level = ANNOUNCEMENT_DEFAULT_VOLUME
         # One upload and one sound at a time: the agent holds a single file.
         self._turn = asyncio.Lock()
-        self._follow: asyncio.Task[None] | None = None
+        self._converting = asyncio.Semaphore(_CONVERSIONS)
+        self._sound: asyncio.Task[None] | None = None
         self._removed = False
 
     async def async_added_to_hass(self) -> None:
+        # Home Assistant adds the same entity again after its id was renamed.
+        self._removed = False
         await super().async_added_to_hass()
         data = await self.async_get_last_extra_data()
         saved = _SpeakerData.from_dict(data.as_dict()) if data is not None else None
@@ -137,8 +145,8 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         self._removed = True
-        if self._follow is not None:
-            self._follow.cancel()
+        if self._sound is not None:
+            self._sound.cancel()
         await super().async_will_remove_from_hass()
 
     async def async_set_volume_level(self, volume: float) -> None:
@@ -150,39 +158,30 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
     async def async_play_media(
         self, media_type: MediaType | str, media_id: str, **kwargs: Any,
     ) -> None:
-        """Play speech or another sound once the one before it is over."""
+        """Play speech or another sound once the one before it is over.
+
+        The sound is played and followed by a task of its own, so a caller that
+        gives up does not leave a sound playing that the speaker no longer knows.
+        """
 
         if media_source.is_media_source_id(media_id):
             media_id = (
                 await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
             ).url
-        sound = await async_sound_for_device(media_url_for_ffmpeg(self.hass, media_id))
+        async with self._converting:
+            sound = await async_sound_for_device(media_url_for_ffmpeg(self.hass, media_id))
         async with self._turn:
-            if self._follow is not None:
-                await asyncio.wait({self._follow})
+            if self._sound is not None:
+                await asyncio.wait({self._sound})
             if self._removed:
                 raise HomeAssistantError("The C300X speaker was removed; nothing was played")
-            api = self._entry.runtime_data.api
-            try:
-                await api.async_play_announcement(
-                    sound, announcement_volume(self._attr_volume_level or ANNOUNCEMENT_DEFAULT_VOLUME),
-                )
-            except C300XAgentApiError as err:
-                raise HomeAssistantError(f"C300X announcement was not played: {err}") from err
-            deadline = time.monotonic() + announcement_seconds(sound) + _END_MARGIN_SECONDS
-            await asyncio.sleep(_START_CHECK_SECONDS)
-            result = await self._async_check()
-            if result in (_PLAYING, None):
-                # Not known yet, or the agent did not answer this once.
-                self._attr_state = MediaPlayerState.PLAYING
-                self.async_write_ha_state()
-                self._follow = self.hass.async_create_background_task(
-                    self._async_follow(deadline), f"{self.entity_id} announcement",
-                )
-                return
-            self._finish(result)
-            if result in _RESULT_ERRORS:
-                raise HomeAssistantError(_RESULT_ERRORS[result])
+            started: asyncio.Future[str | None] = self.hass.loop.create_future()
+            self._sound = self.hass.async_create_background_task(
+                self._async_sound(sound, started), f"{self.entity_id} announcement",
+            )
+        error = await asyncio.shield(started)
+        if error is not None:
+            raise HomeAssistantError(error)
 
     async def async_media_stop(self) -> None:
         try:
@@ -218,7 +217,8 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
         if status.get("playing") is True or status.get("busy") is True:
             return _PLAYING
         result = status.get("result")
-        return result if isinstance(result, str) and result else None
+        # Free without a result: the agent was restarted while it played.
+        return result if isinstance(result, str) and result else "unknown"
 
     def _finish(self, result: str) -> None:
         self._last_result = result
@@ -226,23 +226,63 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
         if not self._removed:
             self.async_write_ha_state()
 
-    async def _async_follow(self, deadline: float) -> None:
-        """Follow the sound until the device says it is over.
+    async def _async_upload(self, sound: bytes) -> None:
+        """Hand the sound to the agent; one it still holds is waited for once."""
 
-        A status read that fails is tried again; the agent ends every sound
-        by the deadline, so after it the sound is over whatever the answer.
+        api = self._entry.runtime_data.api
+        volume = announcement_volume(self._attr_volume_level or ANNOUNCEMENT_DEFAULT_VOLUME)
+        try:
+            await api.async_play_announcement(sound, volume)
+            return
+        except C300XAgentApiError as err:
+            if "announcement_busy" not in str(err):
+                raise
+        deadline = time.monotonic() + _BUSY_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            if await self._async_check() not in (_PLAYING, None):
+                break
+            await asyncio.sleep(_POLL_SECONDS)
+        await api.async_play_announcement(sound, volume)
+
+    async def _async_sound(self, sound: bytes, started: asyncio.Future[str | None]) -> None:
+        """Play one sound and follow it until the device says it is over.
+
+        `started` gets None once the sound plays, or why it was not played. A
+        status read that fails is tried again; the agent ends every sound by
+        the deadline, so after it the sound is over whatever the answer.
         """
 
         result: str | None = None
         try:
+            try:
+                await self._async_upload(sound)
+            except C300XAgentApiError as err:
+                started.set_result(f"C300X announcement was not played: {err}")
+                return
+            deadline = time.monotonic() + announcement_seconds(sound) + _END_MARGIN_SECONDS
+            await asyncio.sleep(_START_CHECK_SECONDS)
+            result = await self._async_check()
+            if result in (_PLAYING, None):
+                # Not known yet, or the agent did not answer this once.
+                self._attr_state = MediaPlayerState.PLAYING
+                self.async_write_ha_state()
+                started.set_result(None)
             while result in (_PLAYING, None) and time.monotonic() < deadline:
                 await asyncio.sleep(_POLL_SECONDS)
                 result = await self._async_check()
+        except asyncio.CancelledError:
+            if not started.done():
+                started.set_result("The C300X speaker was removed while the sound started")
+            self._finish("unknown")
+            raise
         except Exception:
-            _LOGGER.exception("Following the C300X announcement failed")
+            _LOGGER.exception("Playing the C300X announcement failed")
             result = None
         if result in (_PLAYING, None):
             result = "unknown"
         self._finish(result)
-        if result in _RESULT_ERRORS:
-            _LOGGER.warning("%s", _RESULT_ERRORS[result])
+        error = _RESULT_ERRORS.get(result)
+        if not started.done():
+            started.set_result(error)
+        elif error is not None:
+            _LOGGER.warning("%s", error)

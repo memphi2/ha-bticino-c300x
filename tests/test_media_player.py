@@ -34,19 +34,27 @@ from custom_components.bticino_c300x.media_player import (  # noqa: E402
 NO_ANSWER = "no answer"
 # The sound is over, the agent still switches the speaker off.
 SWITCHING_OFF = "switching off"
+# The agent was restarted while it played: free, without a result.
+RESTARTED = "restarted"
 
 
 class _FakeApi:
-    def __init__(self, *results: str | None, refuse: bool = False) -> None:
+    def __init__(self, *results: str | None, refuse: bool = False, busy_once: bool = False) -> None:
         # What the agent answers to each status read: None while the sound plays.
         self.results = list(results)
         self.refuse = refuse
+        # The agent still holds a sound the speaker does not know of.
+        self.busy_once = busy_once
         self.played: list[tuple[bytes, int]] = []
         self.events: list[str] = []
         self.stopped = 0
 
     async def async_play_announcement(self, sound: bytes, volume: int) -> dict[str, Any]:
         if self.refuse:
+            raise C300XAgentApiError("announcement_unsupported")
+        if self.busy_once:
+            self.busy_once = False
+            self.events.append("refused busy")
             raise C300XAgentApiError("announcement_busy")
         self.played.append((sound, volume))
         self.events.append(f"play {sound.decode()}")
@@ -59,6 +67,8 @@ class _FakeApi:
             raise C300XAgentApiError("timeout")
         if result == SWITCHING_OFF:
             return {"playing": False, "busy": True, "result": "preempted"}
+        if result == RESTARTED:
+            return {"playing": False, "busy": False, "result": ""}
         return {"playing": result is None, "busy": result is None, "result": result or ""}
 
     async def async_stop_announcement(self) -> dict[str, Any]:
@@ -82,16 +92,23 @@ class _FakeEntry:
         )
 
 
+class _FakeHass:
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        return asyncio.get_running_loop()
+
+    def async_create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:
+        return asyncio.get_running_loop().create_task(coro)
+
+
 @pytest.fixture
 def speaker(monkeypatch: pytest.MonkeyPatch) -> Any:
     """A speaker whose media goes through stand-ins for conversion and waiting."""
 
-    def make(*results: str | None, refuse: bool = False) -> C300XSpeaker:
-        entity = C300XSpeaker(_FakeEntry(_FakeApi(*results, refuse=refuse)))  # type: ignore[arg-type]
+    def make(*results: str | None, refuse: bool = False, busy_once: bool = False) -> C300XSpeaker:
+        entity = C300XSpeaker(_FakeEntry(_FakeApi(*results, refuse=refuse, busy_once=busy_once)))  # type: ignore[arg-type]
         entity.entity_id = "media_player.c300x_speaker"
-        entity.hass = SimpleNamespace(  # type: ignore[assignment]
-            async_create_background_task=lambda coro, name: asyncio.get_running_loop().create_task(coro),
-        )
+        entity.hass = _FakeHass()  # type: ignore[assignment]
         entity.async_write_ha_state = lambda: None  # type: ignore[method-assign]
         return entity
 
@@ -107,8 +124,8 @@ def speaker(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 async def _played_to_the_end(entity: C300XSpeaker, media: str) -> None:
     await entity.async_play_media("music", media)
-    if entity._follow is not None:
-        await entity._follow
+    if entity._sound is not None:
+        await entity._sound
 
 
 def test_speaker_exists_only_where_the_agent_can_play_sound() -> None:
@@ -127,7 +144,8 @@ def test_plays_speech_at_its_volume_and_is_idle_again_when_the_device_is_done(sp
     async def run() -> None:
         await entity.async_play_media("music", "hello")
         assert entity.state == MediaPlayerState.PLAYING
-        await entity._follow
+        assert entity._sound is not None
+        await entity._sound
 
     asyncio.run(run())
 
@@ -152,7 +170,6 @@ def test_resolves_a_media_source_before_playing(speaker: Any, monkeypatch: pytes
     assert entity._entry.runtime_data.api.played[0][0] == b"/media/local/ding.wav"
     # A sound shorter than the first look is already over.
     assert entity.state == MediaPlayerState.IDLE
-    assert entity._follow is None
 
 
 def test_a_second_sound_waits_until_the_first_is_over(speaker: Any) -> None:
@@ -181,7 +198,7 @@ def test_a_second_sound_waits_until_the_speaker_is_switched_off(speaker: Any) ->
 
     asyncio.run(run())
 
-    # Uploaded while the agent still switches off, the second sound was refused.
+    # The agent refuses a sound while it still switches the speaker off.
     assert entity._entry.runtime_data.api.events == [
         "play first", "status None", "status switching off", "status played",
         "play second", "status played",
@@ -264,19 +281,84 @@ def test_nothing_is_played_once_the_speaker_was_removed(
     assert entity._entry.runtime_data.api.played == []
 
 
+def test_plays_again_after_its_id_was_renamed(speaker: Any) -> None:
+    entity = speaker("played")
+
+    async def run() -> None:
+        # Home Assistant removes the entity and adds the same one again.
+        await entity.async_will_remove_from_hass()
+        entity.async_get_last_extra_data = _no_saved_data  # type: ignore[method-assign]
+        await entity.async_added_to_hass()
+        await _played_to_the_end(entity, "x")
+
+    asyncio.run(run())
+
+    assert entity.extra_state_attributes == {"last_result": "played"}
+
+
+async def _no_saved_data() -> None:
+    return None
+
+
+def test_a_caller_that_gives_up_does_not_lose_the_playing_sound(speaker: Any) -> None:
+    entity = speaker(None, None, "played", "played")
+
+    async def run() -> None:
+        first = asyncio.create_task(entity.async_play_media("music", "first"))
+        for _ in range(100):
+            if entity._entry.runtime_data.api.played:
+                break
+            await asyncio.sleep(0)
+        # For example an automation that is restarted.
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        await _played_to_the_end(entity, "second")
+
+    asyncio.run(run())
+
+    assert entity._entry.runtime_data.api.events == [
+        "play first", "status None", "status None", "status played", "play second", "status played",
+    ]
+
+
+def test_waits_for_a_sound_the_agent_still_holds_from_before(speaker: Any) -> None:
+    # For example after a reload while a sound played.
+    entity = speaker(None, "played", "played", busy_once=True)
+
+    asyncio.run(_played_to_the_end(entity, "x"))
+
+    assert entity._entry.runtime_data.api.events == [
+        "refused busy", "status None", "status played", "play x", "status played",
+    ]
+    assert entity.extra_state_attributes == {"last_result": "played"}
+
+
+def test_a_sound_the_restarted_agent_forgot_is_over_at_once(speaker: Any) -> None:
+    entity = speaker(None, RESTARTED)
+
+    asyncio.run(_played_to_the_end(entity, "x"))
+
+    assert entity.extra_state_attributes == {"last_result": "unknown"}
+    assert entity.state == MediaPlayerState.IDLE
+
+
 def test_volume_is_kept_for_the_next_sound_and_over_a_restart(speaker: Any) -> None:
     entity = speaker("played", "played")
-    asyncio.run(entity.async_set_volume_level(1.0))
-    asyncio.run(entity.async_play_media("music", "x"))
-    assert entity.extra_restore_state_data.as_dict() == {"volume": 1.0}
 
     async def last_data() -> Any:
         # Saved while the entity was unavailable: the state has no volume, the data has.
         return SimpleNamespace(as_dict=lambda: {"volume": 0.25})
 
-    entity.async_get_last_extra_data = last_data  # type: ignore[method-assign]
-    asyncio.run(entity.async_added_to_hass())
-    asyncio.run(entity.async_play_media("music", "x"))
+    async def run() -> None:
+        await entity.async_set_volume_level(1.0)
+        await _played_to_the_end(entity, "x")
+        assert entity.extra_restore_state_data.as_dict() == {"volume": 1.0}
+        entity.async_get_last_extra_data = last_data  # type: ignore[method-assign]
+        await entity.async_added_to_hass()
+        await _played_to_the_end(entity, "x")
+
+    asyncio.run(run())
 
     assert [volume for _sound, volume in entity._entry.runtime_data.api.played] == [100, 25]
 
@@ -311,7 +393,8 @@ def test_ffmpeg_fetches_home_assistant_media_over_the_internal_address(
 
     assert media_url_for_ffmpeg(hass, "/api/tts_proxy/a.mp3") == (
         "http://homeassistant.local:8123/api/tts_proxy/a.mp3?authSig=x")
-    assert asked == [{"allow_external": False, "allow_cloud": False}]
+    # Also an internal address written as an IP, which HTTPS leaves out by default.
+    assert asked == [{"allow_external": False, "allow_cloud": False, "allow_ip": True}]
     internal["url"] = ""
     assert media_url_for_ffmpeg(hass, "/api/tts_proxy/a.mp3") == (
         "https://127.0.0.1:8123/api/tts_proxy/a.mp3?authSig=x")

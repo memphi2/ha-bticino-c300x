@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ._api_core import _C300XApiCore
+from ._api_core import _RESTART_WRITE_TIMEOUT, _C300XApiCore
 from ._api_normalize import (
     _doorbell_video_has_ring_call,
     _ok_response,
@@ -20,10 +20,6 @@ from .agent_contracts import (
 from .api_errors import (
     C300XAgentApiConnectionError,
 )
-
-# A write that restarts the device is answered after the agent started SSH,
-# which it gives up to 60 s.
-_RESTART_WRITE_TIMEOUT = 75.0
 
 
 class _ApiMediaMixin(_C300XApiCore):

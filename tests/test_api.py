@@ -3925,3 +3925,10 @@ def test_writes_that_restart_the_device_wait_for_the_ssh_start_before_it() -> No
     asyncio.run(api.async_restore_audio_codec())
     timeouts = [request["kwargs"]["timeout"] for request in session.requests]
     assert timeouts[0] < 60 and timeouts[1:] == [75.0, 75.0, 75.0]
+
+
+def test_reboot_and_removal_wait_for_the_ssh_start_before_them() -> None:
+    api, session = _audio_codec_api('{"ok": true, "scheduled": true}')
+    asyncio.run(api.async_reboot())
+    asyncio.run(api.async_remove_agent())
+    assert [request["kwargs"]["timeout"] for request in session.requests] == [75.0, 75.0]

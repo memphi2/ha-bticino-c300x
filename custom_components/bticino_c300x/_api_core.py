@@ -44,6 +44,10 @@ def _decode_text(raw: bytes, charset: str | None) -> str:
     except LookupError:
         return raw.decode("utf-8", errors="replace")
 
+# A request that restarts the device or removes the agent is answered after
+# the agent started SSH, which it gives up to 60 s.
+_RESTART_WRITE_TIMEOUT = 75.0
+
 
 class _C300XApiCore:
     """HTTP transport + shared helpers for the api mixins."""

@@ -1129,7 +1129,7 @@
       "camera_quality_failed": "Le C300X n'a pas enregistré les valeurs. Vérifiez la connexion et réessayez.",
       "camera_quality_unsupported": "Ce C300X ne propose pas le réglage de la qualité de la caméra.",
       "camera_quality_out_of_range": "En dehors de ce que l'appareil accepte pour ce flux ; seule la valeur enregistrée sur l'appareil peut rester telle quelle.",
-      "camera_quality_restart_pending": "Enregistré. Les redémarrages sont désactivés dans les paramètres de l'agent, l'appareil utilise donc les nouvelles valeurs après son prochain redémarrage."
+      "camera_quality_restart_pending": "Enregistré, mais l'appareil n'a pas redémarré. Il utilise les nouvelles valeurs après son prochain redémarrage."
     }
   },
   "entity": {

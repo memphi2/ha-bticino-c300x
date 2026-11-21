@@ -175,3 +175,16 @@ def test_a_save_without_a_restart_says_the_values_wait_for_the_next_one() -> Non
     assert form["data_schema"]({})["bitrate_kbps"] == 1500
     result = _open(_entry(api), {"size": "688x480", "bitrate_kbps": 1500.0, "fps": 15.0})
     assert (result["type"], result["step_id"]) == ("menu", "init")
+
+
+def test_a_save_that_restarts_the_device_goes_back_to_the_menu() -> None:
+    api = _QualityApi()
+    real = api.async_camera_quality
+
+    async def rebooting(**changes: Any) -> dict[str, Any]:
+        body = await real(**changes)
+        return {**body, "restart_required": True, "rebooting": True} if changes else body
+
+    api.async_camera_quality = rebooting  # type: ignore[method-assign]
+    result = _open(_entry(api), {"size": "688x480", "bitrate_kbps": 1500.0, "fps": 15.0})
+    assert (result["type"], result["step_id"]) == ("menu", "init")

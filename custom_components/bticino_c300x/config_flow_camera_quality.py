@@ -133,7 +133,7 @@ class CameraQualityOptionsStep:
                 except C300XAgentApiError:
                     errors["base"] = "camera_quality_failed"
                 else:
-                    # Restarts turned off in the agent: saved, but waiting.
+                    # Saved, but no restart (turned off in the agent, or it failed).
                     if result.get("restart_required") is not True or result.get("rebooting") is not False:
                         return cast(ConfigFlowResult, await self.async_step_init())
                     errors["base"] = "camera_quality_restart_pending"

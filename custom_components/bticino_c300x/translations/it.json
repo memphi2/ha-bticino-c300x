@@ -1129,7 +1129,7 @@
       "camera_quality_failed": "Il C300X non ha salvato i valori. Controlla la connessione e riprova.",
       "camera_quality_unsupported": "Questo C300X non offre l'impostazione della qualità della telecamera.",
       "camera_quality_out_of_range": "Fuori da ciò che il dispositivo accetta per questo flusso; solo il valore salvato sul dispositivo può restare così.",
-      "camera_quality_restart_pending": "Salvato. I riavvii sono disattivati nelle impostazioni dell'agente, quindi il dispositivo usa i nuovi valori dopo il suo prossimo riavvio."
+      "camera_quality_restart_pending": "Salvato, ma il dispositivo non si è riavviato. Usa i nuovi valori dopo il suo prossimo riavvio."
     }
   },
   "entity": {

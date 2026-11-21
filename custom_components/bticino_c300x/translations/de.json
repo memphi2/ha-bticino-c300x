@@ -25,7 +25,7 @@
       },
       "bootstrap_install": {
         "title": "Nativen C300X-Agent installieren",
-        "description": "Schreibt den nativen Agent, eine Konfiguration mit generierten Schlüsseln, das Startscript und die Display-Supportdateien per SSH auf den C300X. SSH-Zugangsdaten werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
+        "description": "Home Assistant meldet sich zuerst mit dem Werks-Login des C300X an. Gib SSH-User und Passwort nur ein, wenn das Gerät ihn abgelehnt hat; leer bleibt es beim Werks-Login. Schreibt den nativen Agent, eine Konfiguration mit generierten Schlüsseln, das Startscript und die Display-Supportdateien per SSH auf den C300X. SSH-Zugangsdaten werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
         "data": {
           "bootstrap_ssh_username": "C300X-SSH-User",
           "bootstrap_ssh_password": "C300X-SSH-Passwort"
@@ -700,7 +700,8 @@
       "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
       "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
       "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
-      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut."
+      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
+      "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
     }
   },
   "options": {
@@ -1466,7 +1467,7 @@
           },
           "ssh_install": {
             "title": "C300X Device-Agent per SSH neu installieren",
-            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant nutzt diese einmaligen SSH-Zugangsdaten, installiert den paketierten Agent und erneuert danach nur aktive Display- und Firewall-Patches, wenn sich die paketierte Patch-Quelle geändert hat. Die SSH-Zugangsdaten werden nicht gespeichert. Wenn du Home-Assistant-only Ring Calls nutzt, prüfe nach dem Update zusätzlich den Home-Assistant-Media-User-/Routing-Setup in den Integrationsoptionen.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nDisplay-Patch-Status: {qml_patch_status}\nGrund: {reason}",
+            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant meldet sich mit dem Werks-Login des C300X an, oder mit den hier eingegebenen SSH-Zugangsdaten, wenn das Gerät ihn abgelehnt hat, installiert den paketierten Agent und erneuert danach nur aktive Display- und Firewall-Patches, wenn sich die paketierte Patch-Quelle geändert hat. Die SSH-Zugangsdaten werden nicht gespeichert. Wenn du Home-Assistant-only Ring Calls nutzt, prüfe nach dem Update zusätzlich den Home-Assistant-Media-User-/Routing-Setup in den Integrationsoptionen.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nDisplay-Patch-Status: {qml_patch_status}\nGrund: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH-Benutzername",
               "bootstrap_ssh_password": "SSH-Passwort"
@@ -1476,7 +1477,8 @@
         "error": {
           "ssh_install_failed": "Die SSH-Reparaturinstallation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
           "update_failed": "Das Device-Agent-Update ist fehlgeschlagen. Prüfe, ob Maintenance-Zugriff aktiv ist, und versuche es erneut.",
-          "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle."
+          "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle.",
+          "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."

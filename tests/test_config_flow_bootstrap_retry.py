@@ -332,3 +332,53 @@ def test_keys_accepted_before_a_wrong_device_answer_are_kept(monkeypatch):
         assert result["type"] == "create_entry"
 
     asyncio.run(exercise())
+
+
+def _bootstrap_flow(monkeypatch, installer):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.context = {"source": "user"}
+    flow._setup_connection = {"name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091}
+    flow._async_abort_if_manual_setup_duplicate = AsyncMock()
+    flow._async_adopt_agent_unique_id = AsyncMock()
+    monkeypatch.setattr(config_flow, "async_ensure_installer_dependencies", AsyncMock())
+    monkeypatch.setattr(config_flow, "async_install_device_agent", installer)
+    monkeypatch.setattr(config_flow, "_async_probe_agent", AsyncMock(return_value="reachable"))
+    monkeypatch.setattr(config_flow, "async_migrate_legacy_mqtt_for_connection", AsyncMock())
+    return flow
+
+
+def test_bootstrap_installs_with_the_factory_login_without_asking(monkeypatch):
+    from custom_components.bticino_c300x.factory_login import factory_ssh_login
+
+    installer = AsyncMock()
+    flow = _bootstrap_flow(monkeypatch, installer)
+    result = asyncio.run(flow.async_step_agent_missing({"bootstrap_install_agent": True}))
+    assert result["step_id"] == "user_features"
+    request = installer.call_args.args[0]
+    assert (request.ssh_username, request.ssh_password) == factory_ssh_login()
+
+
+def test_bootstrap_asks_for_a_login_only_after_the_factory_login_was_refused(monkeypatch):
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+    from custom_components.bticino_c300x.factory_login import factory_ssh_login
+
+    installer = AsyncMock(side_effect=C300XDeviceInstallError("ssh_login_refused"))
+    flow = _bootstrap_flow(monkeypatch, installer)
+
+    async def exercise():
+        result = await flow.async_step_agent_missing({"bootstrap_install_agent": True})
+        assert result["step_id"] == "bootstrap_install"
+        assert result["errors"] == {"base": "ssh_login_refused"}
+        request = installer.call_args.args[0]
+        assert (request.ssh_username, request.ssh_password) == factory_ssh_login()
+        installer.side_effect = None
+        result = await flow.async_step_bootstrap_install({
+            CONF_BOOTSTRAP_SSH_USERNAME: " admin ", CONF_BOOTSTRAP_SSH_PASSWORD: "typed",
+        })
+        assert result["step_id"] == "user_features"
+        request = installer.call_args.args[0]
+        assert (request.ssh_username, request.ssh_password) == ("admin", "typed")
+        assert installer.await_count == 2
+
+    asyncio.run(exercise())

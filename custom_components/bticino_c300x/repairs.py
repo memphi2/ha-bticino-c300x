@@ -58,6 +58,7 @@ from .const import (
     SIGNAL_QML_PATCH_CHANGED,
 )
 from .device_installer import (
+    C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     async_ensure_installer_dependencies,
     async_install_device_agent,
@@ -65,6 +66,7 @@ from .device_installer import (
 from .device_user import homeassistant_account_label
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
+from .factory_login import LOGIN_REFUSED, ssh_login
 from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
@@ -477,6 +479,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         self._ssh_install_followup: (
             tuple[_ExternalPatchState, _ExternalPatchChanges] | None
         ) = None
+        self._ask_ssh_login = False
 
     async def async_step_init(
         self,
@@ -613,9 +616,12 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         if user_input is None:
             return self.async_show_form(
                 step_id="ssh_install",
-                data_schema=_ssh_install_schema(),
+                data_schema=_ssh_install_schema(self._ask_ssh_login),
                 description_placeholders=placeholders,
             )
+        ssh_username, ssh_password = ssh_login(
+            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+        )
 
         try:
             patch_state = await _async_capture_external_patch_state(entry)
@@ -624,10 +630,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 install_result = await async_install_device_agent(
                     C300XDeviceInstallRequest(
                         host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
-                        ssh_username=str(
-                            user_input.get(CONF_BOOTSTRAP_SSH_USERNAME, "")
-                        ).strip(),
-                        ssh_password=str(user_input.get(CONF_BOOTSTRAP_SSH_PASSWORD, "")),
+                        ssh_username=ssh_username,
+                        ssh_password=ssh_password,
                         agent_port=int(
                             entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                         ),
@@ -704,10 +708,12 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
             _LOGGER.warning("C300X SSH install failed: %s", _install_error_log_text(err))
+            refused = isinstance(err, C300XDeviceInstallError) and err.reason == LOGIN_REFUSED
+            self._ask_ssh_login = self._ask_ssh_login or refused
             return self.async_show_form(
                 step_id="ssh_install",
-                data_schema=_ssh_install_schema(),
-                errors={"base": "ssh_install_failed"},
+                data_schema=_ssh_install_schema(self._ask_ssh_login),
+                errors={"base": LOGIN_REFUSED if refused else "ssh_install_failed"},
                 description_placeholders=placeholders,
             )
 
@@ -715,7 +721,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         if entry.runtime_data.agent_update_state.update_required:
             return self.async_show_form(
                 step_id="ssh_install",
-                data_schema=_ssh_install_schema(),
+                data_schema=_ssh_install_schema(self._ask_ssh_login),
                 errors={"base": "update_verify_failed"},
                 description_placeholders=agent_update_repair_placeholders(
                     entry.runtime_data.agent_update_state,
@@ -1075,13 +1081,18 @@ async def _async_restore_external_patch_state(
         await busy_retry(api.async_reload_gui)
 
 
-def _ssh_install_schema() -> vol.Schema:
-    """Return the SSH repair schema for agents without self-update support."""
+def _ssh_install_schema(ask_login: bool) -> vol.Schema:
+    """Return the SSH repair schema for agents without self-update support.
 
+    The factory login is used until the device refused it; then a login is asked for.
+    """
+
+    if not ask_login:
+        return vol.Schema({})
     return vol.Schema(
         {
-            vol.Required(CONF_BOOTSTRAP_SSH_USERNAME): str,
-            vol.Required(CONF_BOOTSTRAP_SSH_PASSWORD): str,
+            vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
+            vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): str,
         }
     )
 

@@ -95,7 +95,9 @@ existing token values.
 ## SSH and noAuth
 
 SSH credentials are used only for explicit install or recovery steps. They are
-not stored by the integration.
+not stored by the integration. The installer first logs in with the C300X
+factory root login, which is built in (encoded, not secret: it is the same on
+every device). It asks for a login only when the device refuses that one.
 
 Since 2.1.0 this path uses an on-demand AsyncSSH client instead of Paramiko.
 It needs no SSH tools or add-on on the Home Assistant host. The device still

@@ -67,8 +67,10 @@ Apply the core GUI hook when Repairs requests it, then reload the device GUI.
 This hook is separate from the optional Home Assistant display pages. It is
 needed for media state tracking and synchronized ringer mute/unmute.
 
-The SSH credentials used during installation are one-time setup inputs. They
-are not stored in the Home Assistant config entry, diagnostics or logs.
+The installer logs in with the C300X factory root login. It asks for an SSH
+user and password only when the device refuses that login. Typed credentials
+are one-time setup inputs. They are not stored in the Home Assistant config
+entry, diagnostics or logs.
 
 ## 4. Choose the Standard Feature Set
 

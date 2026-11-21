@@ -76,6 +76,9 @@ Settings:
   to the opened page with its tile settings.
 - The setup texts say access key and maintenance key throughout, as the
   fields do.
+- **No SSH login to type in.** Installing the agent, at setup and in the
+  agent Repair, logs in with the C300X factory root login. User and password
+  are asked for only when the device refuses it.
 
 Fixed:
 

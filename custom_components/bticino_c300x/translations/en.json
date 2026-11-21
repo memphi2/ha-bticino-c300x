@@ -25,7 +25,7 @@
       },
       "bootstrap_install": {
         "title": "Install native C300X agent",
-        "description": "This writes the native agent, a configuration with generated keys, the startup script, and display support files to the C300X through SSH. SSH credentials are used only for this install step and are not stored.",
+        "description": "Home Assistant logs in with the factory login of the C300X first. Enter the SSH user and password only if the device refused it; left empty, the factory login is tried again. This writes the native agent, a configuration with generated keys, the startup script, and display support files to the C300X through SSH. SSH credentials are used only for this install step and are not stored.",
         "data": {
           "bootstrap_ssh_username": "C300X SSH user",
           "bootstrap_ssh_password": "C300X SSH password"
@@ -700,7 +700,8 @@
       "invalid_auth": "The C300X rejected the access key. Enter the current key.",
       "wrong_device": "This address belongs to a different C300X. The existing device was not changed.",
       "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
-      "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again."
+      "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again.",
+      "ssh_login_refused": "The C300X refused the SSH login. Enter the SSH user and password of the device."
     }
   },
   "options": {
@@ -1466,7 +1467,7 @@
           },
           "ssh_install": {
             "title": "Reinstall C300X device agent over SSH",
-            "description": "This installed agent cannot update itself yet. Home Assistant will use these one-time SSH credentials to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
+            "description": "This installed agent cannot update itself yet. Home Assistant will log in with the factory login of the C300X, or with the SSH credentials entered here once the device refused it, to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH username",
               "bootstrap_ssh_password": "SSH password"
@@ -1476,7 +1477,8 @@
         "error": {
           "ssh_install_failed": "The SSH repair install failed. Check SSH access and retry.",
           "update_failed": "The device-agent update failed. Check that maintenance access is enabled and retry.",
-          "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle."
+          "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle.",
+          "ssh_login_refused": "The C300X refused the SSH login. Enter the SSH user and password of the device."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+from unittest.mock import AsyncMock
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -15,6 +16,12 @@ import voluptuous_serialize
 from homeassistant.helpers import aiohttp_client
 from homeassistant.data_entry_flow import AbortFlow
 
+from custom_components.bticino_c300x.config_flow_qml import (  # noqa: E402
+    async_qml_patch_description_placeholders as _async_qml_patch_description_placeholders,
+)
+from custom_components.bticino_c300x.config_flow_qml import (  # noqa: E402
+    qml_patch_status_label as _qml_patch_status_label,
+)
 from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     BticinoC300XOptionsFlow,
     BticinoC300XConfigFlow,
@@ -23,7 +30,6 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _actions_json,
     _agent_auth_input,
     _agent_auth_schema,
-    _async_qml_patch_description_placeholders,
     _async_probe_agent,
     _bootstrap_install_schema,
     _clear_reconfigured_option_overrides,
@@ -36,7 +42,6 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _initial_connection_input,
     _options_connection_schema,
     _options_features_schema,
-    _qml_patch_status_label,
     _reconfigure_connection_schema,
     _reconfigure_connection_schema_from_current,
     _reconfigure_features_schema,
@@ -1306,13 +1311,23 @@ def test_agent_missing_without_connection_returns_user_form() -> None:
     assert result["step_id"] == "user"
 
 
-def test_agent_missing_choose_install_returns_bootstrap_form() -> None:
+def test_agent_missing_choose_install_shows_the_login_form_when_the_install_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
     flow._setup_connection = {
         CONF_NAME: "Door",
         CONF_AGENT_HOST: "c300x.local",
         CONF_AGENT_PORT: 8091,
     }
+    flow._async_abort_if_manual_setup_duplicate = AsyncMock()  # type: ignore[method-assign]
+    monkeypatch.setattr(config_flow_module, "async_ensure_installer_dependencies", AsyncMock())
+    monkeypatch.setattr(
+        config_flow_module,
+        "async_install_device_agent",
+        AsyncMock(side_effect=config_flow_module.C300XDeviceInstallError("device_install_failed")),
+    )
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
 
     result = asyncio.run(
@@ -1320,6 +1335,7 @@ def test_agent_missing_choose_install_returns_bootstrap_form() -> None:
     )
 
     assert result["step_id"] == "bootstrap_install"
+    assert result["errors"] == {"base": "device_install_failed"}
 
 
 def test_bootstrap_install_reports_install_error(

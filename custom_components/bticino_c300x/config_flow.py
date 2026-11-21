@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant import config_entries
@@ -143,6 +142,12 @@ from .config_flow_input import (
     _weather_entity_id,
 )
 from .config_flow_options_menu import OptionsMenuSteps
+from .config_flow_qml import (
+    QML_PATCH_STATUS_UNKNOWN as _QML_PATCH_STATUS_UNKNOWN,
+)
+from .config_flow_qml import (
+    async_qml_patch_description_placeholders as _async_qml_patch_description_placeholders,
+)
 from .config_flow_snapshot import SnapshotOptionsStep, SnapshotWizardSteps
 from .config_flow_speech import SpeechOptionsStep
 from .config_flow_tiles import TileForm as _TileForm
@@ -211,6 +216,7 @@ from .device_installer import (
 )
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
+from .factory_login import ssh_login
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -233,9 +239,6 @@ if TYPE_CHECKING:
 else:
     FlowResult = dict[str, Any]
 
-_QML_PATCH_STATUS_CACHE_TTL = timedelta(seconds=30)
-_QML_PATCH_STATUS_UNKNOWN = "unknown"
-_QML_PATCH_STATUS_UNAVAILABLE = "unavailable"
 _SETUP_VIDEO_ENABLED_DEFAULT = True
 _CREATE_HOMEASSISTANT_USER_DEFAULT = True
 _RECONFIGURED_OPTION_KEYS = frozenset(
@@ -299,6 +302,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         self._setup_alarm: dict[str, Any] = {}
         self._tile_form: _TileForm | None = None
         self._reconfigure_connection: dict[str, Any] = {}
+        self._factory_login_tried = False
         self._reconfigure_feature_data: dict[str, Any] = {}
         self._reconfigure_device_activations: list[dict[str, Any]] = []
         self._reconfigure_activation_edit_id: str | None = None
@@ -358,6 +362,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         if user_input is not None:
             if bool(user_input.get(CONF_BOOTSTRAP_INSTALL_AGENT, True)):
+                self._factory_login_tried = False
                 return await self.async_step_bootstrap_install()
             self._setup_agent_needs_token = False
             return await self.async_step_agent_auth()
@@ -378,16 +383,19 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             return await self.async_step_user()
 
         errors: dict[str, str] = {}
-        if user_input is not None:
+        # The factory login is tried first; the form asks only once it was refused.
+        if user_input is not None or not self._factory_login_tried:
+            self._factory_login_tried = True
             await self._async_abort_if_manual_setup_duplicate()
             api_token = secrets.token_urlsafe(32)
             maintenance_token = secrets.token_urlsafe(32)
+            ssh_username, ssh_password = ssh_login(
+                user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+            )
             request = C300XDeviceInstallRequest(
                 host=self._setup_connection[CONF_AGENT_HOST],
-                ssh_username=str(
-                    user_input.get(CONF_BOOTSTRAP_SSH_USERNAME, "")
-                ).strip(),
-                ssh_password=str(user_input.get(CONF_BOOTSTRAP_SSH_PASSWORD, "")),
+                ssh_username=ssh_username,
+                ssh_password=ssh_password,
                 agent_port=int(
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),
@@ -1914,70 +1922,3 @@ def _config_default(
     """Return an option override when present, otherwise setup data."""
 
     return entry_config_value(config_entry, key, default)
-
-
-async def _async_qml_patch_description_placeholders(
-    config_entry: BticinoC300XConfigEntry,
-) -> dict[str, str]:
-    """Return placeholders for the device Display patch status."""
-
-    return {
-        "qml_patch_status": await _async_display_patch_status_text(
-            _qml_patch_status_label(await _async_qml_patch_status(config_entry))
-        )
-    }
-
-
-async def _async_qml_patch_status(
-    config_entry: BticinoC300XConfigEntry,
-) -> dict[str, Any]:
-    """Return cached Display patch status, refreshing it only when useful."""
-
-    runtime_data = getattr(config_entry, "runtime_data", None)
-    if runtime_data is None:
-        return {}
-
-    cached_status = getattr(runtime_data, "qml_patch_status", {})
-    if not isinstance(cached_status, dict):
-        cached_status = {}
-
-    updated_at = getattr(runtime_data, "qml_patch_status_updated_at", None)
-    now = datetime.now(UTC)
-    if (
-        cached_status
-        and isinstance(updated_at, datetime)
-        and now - updated_at < _QML_PATCH_STATUS_CACHE_TTL
-    ):
-        return cached_status
-
-    api = getattr(runtime_data, "api", None)
-    if api is None:
-        return cached_status
-
-    try:
-        status = await api.async_qml_patch_status()
-    except C300XAgentApiError:
-        return cached_status or {
-            "available": False,
-            "state": _QML_PATCH_STATUS_UNAVAILABLE,
-        }
-
-    runtime_data.qml_patch_status = status
-    runtime_data.qml_patch_status_updated_at = now
-    return cast(dict[str, Any], status)
-
-
-def _qml_patch_status_label(status: dict[str, Any]) -> str:
-    """Return a concise, user-visible Display patch status label."""
-
-    if not status:
-        return _QML_PATCH_STATUS_UNKNOWN
-    if status.get("available") is False:
-        return _QML_PATCH_STATUS_UNAVAILABLE
-    patched = status.get("patched")
-    if patched is True:
-        return "patched"
-    if patched is False:
-        return "original"
-    state = str(status.get("state") or "").strip()
-    return state or _QML_PATCH_STATUS_UNKNOWN

@@ -778,6 +778,28 @@ def test_asyncssh_client_init_reports_connect_failures(monkeypatch: Any) -> None
         )
 
 
+def test_asyncssh_client_init_tells_a_refused_login(monkeypatch: Any) -> None:
+    class Error(Exception):
+        pass
+
+    class PermissionDenied(Error):
+        pass
+
+    async def connect(**_kwargs: Any) -> None:
+        raise PermissionDenied("refused")
+
+    module = types.SimpleNamespace(
+        __version__="2.24.1", Error=Error, PermissionDenied=PermissionDenied, connect=connect
+    )
+    monkeypatch.setitem(sys.modules, "asyncssh", module)
+    with pytest.raises(C300XDeviceInstallError, match="ssh_login_refused"):
+        device_installer._AsyncSshDeviceSshClient(
+            C300XDeviceInstallRequest(
+                host="c300x.local", ssh_username="root", ssh_password="secret",
+            )
+        )
+
+
 def test_asyncssh_client_init_reports_missing_dependency(monkeypatch: Any) -> None:
     monkeypatch.delitem(sys.modules, "asyncssh", raising=False)
 

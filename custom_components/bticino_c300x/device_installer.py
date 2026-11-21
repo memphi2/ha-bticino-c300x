@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
+from .factory_login import LOGIN_REFUSED
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -607,6 +608,9 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
         except (OSError, asyncssh.Error) as err:
             self._runner.close()
             self._closed = True
+            # Nothing was changed on the device: another login can be asked for.
+            if isinstance(err, getattr(asyncssh, "PermissionDenied", ())):
+                raise C300XDeviceInstallError(LOGIN_REFUSED) from err
             raise C300XDeviceInstallError("device_install_failed") from err
 
     async def _connect(self, request: C300XDeviceInstallRequest) -> Any:

@@ -1,4 +1,5 @@
 #include "http_announce.h"
+#include "announce_device.h"
 #include "http_util.h"
 #include "json_util.h"
 #include "media_base64.h"
@@ -29,13 +30,8 @@ static int refuse_error(int fd, const char *error)
 static int reply(const struct c300x_announce *announce, int fd, int duration_ms)
 {
     char body[256];
-    snprintf(body, sizeof(body),
-        "{\"ok\":true,\"supported\":%s,\"playing\":%s,\"busy\":%s,\"result\":\"%s\","
-        "\"duration_ms\":%d,\"max_bytes\":%d}\n",
-        c300x_announce_supported(announce) ? "true" : "false",
-        c300x_announce_playing(announce) ? "true" : "false",
-        c300x_announce_busy(announce) ? "true" : "false",
-        announce->result, duration_ms, C300X_ANNOUNCE_MAX_BYTES);
+
+    c300x_announce_status_json(announce, duration_ms, body, sizeof(body));
     c300x_http_send_json(fd, 200, "OK", body);
     return 1;
 }

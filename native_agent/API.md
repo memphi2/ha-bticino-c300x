@@ -694,15 +694,17 @@ door call.
 `GET /api/v1/announcements` returns
 
 ```json
-{"ok": true, "supported": true, "playing": false, "busy": false,
- "result": "played", "duration_ms": 0, "max_bytes": 2097152}
+{"ok": true, "supported": true, "playing": false, "started": false,
+ "busy": false, "result": "played", "duration_ms": 0, "max_bytes": 2097152}
 ```
 
 `result` tells how the last sound ended: `played`, `stopped`, `preempted` (a
 door call took the speaker), `device_busy` (the device was using its speaker;
 nothing was switched), `sound_path_failed`, `play_failed` or `failed`. It is
 empty before the first sound and while one plays, and set as soon as the
-sound has ended. `busy` stays true after the sound until the speaker is
+sound has ended. `started` turns true while a sound plays once the device let
+the agent have its speaker; a device that uses it ends the sound as
+`device_busy` before that. `busy` stays true after the sound until the speaker is
 switched off again; no new piece or sound is taken while it is true.
 
 `POST /api/v1/announcements/audio` with `{"offset": 0, "data": "base64"}`
@@ -728,14 +730,16 @@ A door call has priority: a call being set up or answered (`*8*1#…`,
 `*8*2#…`) ends the sound at once and frees the sound device. Locks, lights,
 video commands and the end of a call do not. The speaker is then left to the
 device for three seconds before it is switched off as above. A ring
-(`*8*1#1#…`) leaves the speaker to the device for a minute from its last ring
-frame, also in the pauses of the ring tone in which the device is idle; no
-other frame ends this minute early. During it, and while the switching off
+(`*8*1#1#…`) leaves the speaker to the device for a minute, also in the pauses
+in which the device is idle; every further frame of its call (`*8*…` other
+than locks and lights, for example the answering machine, answering and the
+end) starts the minute again. No frame ends it early. During it, and while the switching off
 after a door frame waits, no new piece or sound is taken: the answer is
 `409 announcement_device_busy`. After a stop the speaker is switched off one
 second later. A switching off still due when the agent ends runs on after it.
-An agent that starts ends the player of one that was killed while it played
-and switches the speaker off. A touch tone or another sound of the device
+An agent that starts ends the player or switching off of one that was killed
+or restarted, takes over the gain to set back, and then acts as after a door
+frame: a minute without new sounds, then switching off. A touch tone or another sound of the device
 during an announcement can cut it short.
 
 Errors: `409 announcement_busy` while `busy` is true, `409

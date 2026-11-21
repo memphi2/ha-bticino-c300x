@@ -214,8 +214,8 @@ def switch_on(lab: Lab, gain: int) -> list[str]:
 
 
 def test_status_names_the_limit_and_nothing_playing(lab: Lab) -> None:
-    assert lab.call() == {"ok": True, "supported": True, "playing": False, "busy": False, "result": "",
-                          "duration_ms": 0, "max_bytes": 2 * 1024 * 1024}
+    assert lab.call() == {"ok": True, "supported": True, "playing": False, "started": False, "busy": False,
+                          "result": "", "duration_ms": 0, "max_bytes": 2 * 1024 * 1024}
 
 
 def test_plays_a_sound_and_switches_the_speaker_on_only_for_it(lab: Lab) -> None:
@@ -239,6 +239,19 @@ def test_volume_follows_the_devices_own_table(lab: Lab) -> None:
     lab.call("/actions/play", {"volume": 10})
     assert lab.result() == "played"
     assert "mixer ZL0_Rout_Gain_Volume=26" in lab.log()
+
+
+def test_says_when_the_device_let_it_have_the_speaker(lab: Lab) -> None:
+    lab.start_long_sound()
+
+    deadline = time.monotonic() + 2
+    while not (body := lab.call())["started"]:
+        assert time.monotonic() < deadline, body
+        time.sleep(0.02)
+    assert body["playing"] is True
+    lab.call("/actions/stop", {})
+    assert lab.result() == "stopped"
+    assert lab.call()["started"] is False
 
 
 @pytest.mark.parametrize("busy", ["state", "sound-device"])
@@ -330,6 +343,23 @@ def test_no_sound_is_taken_for_a_while_after_a_ring(lab: Lab) -> None:
     assert lab.result() == "played"
 
 
+def test_the_frames_of_a_rings_call_keep_the_speaker_the_devices(lab: Lab) -> None:
+    lab.upload(wav())
+    send_udp_event(lab.udp_port, RING)
+    # The answering machine starts after the ring, a light is switched: only
+    # the first belongs to the call and holds the speaker longer.
+    time.sleep(RING_HOLD - 2)
+    send_udp_event(lab.udp_port, "*8*80#6#2*11##")
+    time.sleep(1.5)
+    send_udp_event(lab.udp_port, "*8*20*20##")
+    time.sleep(2)
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+
+    time.sleep(2.2)
+    lab.call("/actions/play", {"volume": 50})
+    assert lab.result() == "played"
+
+
 def test_an_agent_that_ends_after_a_ring_still_switches_the_speaker_off(lab: Lab) -> None:
     lab.start_long_sound()
     send_udp_event(lab.udp_port, RING)
@@ -416,10 +446,32 @@ def test_a_restarted_agent_ends_the_sound_of_one_that_was_killed(lab: Lab) -> No
     assert lab.player_alive()
     lab.restart()
 
-    lab.wait_for("mixer Zia_Aud_St=0")
     assert not lab.player_alive()
+    # What the old agent knew is gone: the new one acts as after a door frame.
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+    lab.wait_for("mixer Zia_Aud_St=0", seconds=RING_HOLD + 5)
     assert lab.log()[-3:] == ["mixer ZL0_Mute_Rout=on", "mixer TPA2028D1_Volume=0", "mixer Zia_Aud_St=0"]
     assert lab.call()["busy"] is False
+
+
+def test_a_restarted_agent_takes_over_the_switching_off_of_the_one_before(lab: Lab) -> None:
+    lab.start_long_sound()
+    send_udp_event(lab.udp_port, CAMERA_VIEW)
+    while lab.player_alive():
+        time.sleep(0.01)
+    time.sleep(0.5)
+
+    assert lab.process is not None
+    lab.process.terminate()
+    lab.process.wait(timeout=5)
+    lab.restart()
+
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+    lab.wait_for("mixer Zia_Aud_St=0", seconds=RING_HOLD + 5)
+    time.sleep(1)
+    # Switched off once, by the new agent, with the gain from before the sound.
+    assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
+    assert lab.log().count("mixer ZL0_Mute_Rout=on") == 1
 
 
 def _chunk(name: bytes, size: int, payload: bytes = b"") -> bytes:

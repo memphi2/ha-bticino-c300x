@@ -23,6 +23,8 @@ void c300x_announce_init(struct c300x_announce *announce);
 int c300x_announce_supported(const struct c300x_announce *announce);
 /* A sound plays; switching the speaker off afterwards is not part of it. */
 int c300x_announce_playing(const struct c300x_announce *announce);
+/* The device let the agent have its speaker for the sound that plays. */
+int c300x_announce_started(const struct c300x_announce *announce);
 /* Playing, or switching the speaker off: nothing new is taken. */
 int c300x_announce_busy(const struct c300x_announce *announce);
 /* One piece of the sound file in order; offset 0 starts a new file. */

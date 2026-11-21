@@ -8,14 +8,16 @@
 #include <string.h>
 #include <unistd.h>
 
-/* The play script of an agent that was killed outright, found by its name and
- * its sound file: it would hold the sound device and leave the speaker on. */
-static int leftover(const char *pid_name, const char *file)
+/* A play script or switching off of an agent that was killed or restarted,
+ * found by its name and its sound file. A play script would hold the sound
+ * device and leave the speaker on; a switching off would act behind the new
+ * agent's back. The gain a switching off was to set back is taken over. */
+static int leftover(const char *pid_name, const char *file, int *gain)
 {
     char path[64], args[4096], line[128];
-    const char *want[] = {"/bin/sh", "-c", NULL, "c300x-announce", file};
+    const char *word[7] = {NULL};
     size_t len, at = 0;
-    int uid = -1, ok = 1;
+    int uid = -1, words = 0;
     FILE *in;
 
     snprintf(path, sizeof(path), "/proc/%s/status", pid_name);
@@ -32,14 +34,20 @@ static int leftover(const char *pid_name, const char *file)
     len = fread(args, 1, sizeof(args) - 1, in);
     fclose(in);
     args[len] = '\0';
-    for (int i = 0; i < 5 && ok; i++) {
-        ok = at < len && (want[i] == NULL || strcmp(args + at, want[i]) == 0);
-        at += strlen(args + at) + 1;
+    for (; words < 7 && at < len; at += strlen(args + at) + 1) {
+        word[words++] = args + at;
     }
-    return ok;
+    if (words < 5 || strcmp(word[0], "/bin/sh") != 0 || strcmp(word[1], "-c") != 0 || strcmp(word[4], file) != 0
+        || (strcmp(word[3], "c300x-announce") != 0 && strcmp(word[3], "c300x-announce-off") != 0)) {
+        return 0;
+    }
+    if (strcmp(word[3], "c300x-announce-off") == 0 && words == 7 && word[6][0] >= '0' && word[6][0] <= '9') {
+        *gain = atoi(word[6]);
+    }
+    return 1;
 }
 
-int c300x_announce_end_leftover(void)
+int c300x_announce_end_leftover(int *gain)
 {
     DIR *proc = opendir("/proc");
     struct dirent *entry;
@@ -47,7 +55,7 @@ int c300x_announce_end_leftover(void)
 
     while (proc != NULL && (entry = readdir(proc)) != NULL) {
         pid_t pid = (pid_t)atoi(entry->d_name);
-        if (pid > 1 && pid != getpid() && getpgid(pid) == pid && leftover(entry->d_name, c300x_announce_file())) {
+        if (pid > 1 && pid != getpid() && getpgid(pid) == pid && leftover(entry->d_name, c300x_announce_file(), gain)) {
             found = kill(-pid, SIGKILL) == 0 || found;
         }
     }

@@ -1,5 +1,7 @@
 #include "announce_device.h"
+#include "announce.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,7 +21,7 @@ const char C300X_ANNOUNCE_PLAY_SCRIPT[] =
     "P=${C300X_APLAY:-/usr/bin/aplay}\n"
     "Z=${C300X_ZL_TOOL:-/bin/zl38005_ioctl-v2}\n"
     "C=${C300X_ZL_PLAY_CONFIG:-/home/bticino/microsemi/MEMO_AM_PLAY.cr}\n"
-    "[ \"$(val Zia_Aud_St)\" = 0 ] && grep -q closed \"$S\" || exit 3\n"
+    "case \"$(val Zia_Aud_St)\" in 0|9) grep -q closed \"$S\" || exit 3;; *) exit 3;; esac\n"
     "echo \"gain=$(val 'ZL0 Rout Gain Volume')\"\n"
     "put Zia_Aud_St 9 || exit 4\n"
     "LD_LIBRARY_PATH=/home/bticino/lib \"$Z\" DOWNLOAD_CR \"$C\" NOT_SAVE NOT_FORCE >/dev/null 2>&1 || exit 4\n"
@@ -33,13 +35,13 @@ const char C300X_ANNOUNCE_PLAY_SCRIPT[] =
  * playing ends. */
 const char C300X_ANNOUNCE_CLEAN_SCRIPT[] =
     TOOLS
-    "sleep \"$1\"\n"
+    "sleep \"$2\"\n"
     "n=0\n"
     "until case \"$(val Zia_Aud_St)\" in 0|9) grep -q closed \"$S\";; *) false;; esac; do\n"
     "n=$((n + 1)); [ \"$n\" -lt 300 ] || exit 0; sleep \"${C300X_ANNOUNCE_IDLE_POLL:-2}\"\n"
     "done\n"
     "put 'ZL0 Mute Rout' on; put 'TPA2028D1 Volume' 0\n"
-    "[ -z \"$2\" ] || put 'ZL0 Rout Gain Volume' \"$2\"\n"
+    "[ -z \"$3\" ] || put 'ZL0 Rout Gain Volume' \"$3\"\n"
     "[ \"$(val Zia_Aud_St)\" != 9 ] || put Zia_Aud_St 0\n"
     "exit 0\n";
 
@@ -63,4 +65,16 @@ const char *c300x_announce_result_of(int ending, int status)
     }
     return status == 0 ? "played" : status == 3 ? "device_busy" : status == 4 ? "sound_path_failed"
         : status == 5 ? "play_failed" : "failed";
+}
+
+#define JSON_BOOL(value) ((value) ? "true" : "false")
+
+void c300x_announce_status_json(const struct c300x_announce *announce, int duration_ms, char *body, size_t size)
+{
+    snprintf(body, size,
+        "{\"ok\":true,\"supported\":%s,\"playing\":%s,\"started\":%s,\"busy\":%s,\"result\":\"%s\","
+        "\"duration_ms\":%d,\"max_bytes\":%d}\n",
+        JSON_BOOL(c300x_announce_supported(announce)), JSON_BOOL(c300x_announce_playing(announce)),
+        JSON_BOOL(c300x_announce_started(announce)), JSON_BOOL(c300x_announce_busy(announce)),
+        announce->result, duration_ms, C300X_ANNOUNCE_MAX_BYTES);
 }

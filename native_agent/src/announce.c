@@ -20,8 +20,9 @@
 /* How long the speaker is left to the device after the last ring frame. Its
  * ring tone has pauses in which the sound device is free. */
 #define RING_HOLD_SECONDS "60"
-/* The switching off itself waits up to ten minutes for the device to be idle. */
-#define CLEAN_WAIT_SECONDS 610
+/* The switching off itself looks 300 times for an idle device, every two
+ * seconds; the job's deadline lies well beyond. */
+#define CLEAN_WAIT_SECONDS 1810
 
 void c300x_announce_init(struct c300x_announce *announce)
 {
@@ -31,8 +32,11 @@ void c300x_announce_init(struct c300x_announce *announce)
     announce->gain = -1;
     announce->result = "";
     announce->ring_hold_ms = 1000LL * atoi(c300x_announce_path("C300X_ANNOUNCE_RING_HOLD", RING_HOLD_SECONDS));
-    if (c300x_announce_end_leftover()) {
-        announce->clean_delay = STOP_CLEAN_DELAY;
+    if (c300x_announce_end_leftover(&announce->gain)) {
+        /* As after a door frame: what the old agent knew about the device is gone. */
+        announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
+        announce->door_hold = 1;
+        announce->clean_delay = PREEMPT_CLEAN_DELAY;
     }
     /* A file from before a restart is never played. */
     (void)unlink(c300x_announce_file());
@@ -41,6 +45,12 @@ void c300x_announce_init(struct c300x_announce *announce)
 int c300x_announce_playing(const struct c300x_announce *announce)
 {
     return announce->job.pid > 0 && !announce->cleaning;
+}
+
+/* The device let the agent have its speaker: the play script reported the gain. */
+int c300x_announce_started(const struct c300x_announce *announce)
+{
+    return c300x_announce_playing(announce) && strstr(announce->job.output, "gain=") != NULL;
 }
 
 int c300x_announce_busy(const struct c300x_announce *announce)
@@ -81,7 +91,8 @@ static int start_play(struct c300x_announce *announce, int gain, int seconds, in
 static void start_clean(struct c300x_announce *announce)
 {
     char delay_text[16], gain_text[16] = "";
-    char *argv[] = {"/bin/sh", "-c", (char *)C300X_ANNOUNCE_CLEAN_SCRIPT, "c300x-announce-off", delay_text, gain_text, NULL};
+    char *argv[] = {"/bin/sh", "-c", (char *)C300X_ANNOUNCE_CLEAN_SCRIPT, "c300x-announce-off",
+        (char *)c300x_announce_file(), delay_text, gain_text, NULL};
     long long ring_left = announce->ring_until_ms - c300x_monotonic_ms();
     int delay = announce->clean_delay;
 
@@ -156,8 +167,14 @@ void c300x_announce_preempt(struct c300x_announce *announce)
 
 void c300x_announce_door_frame(struct c300x_announce *announce, const char *frame)
 {
-    if (strncmp(frame, "*8*1#1#", 7) == 0) {
-        announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
+    long long now = c300x_monotonic_ms();
+    int what = strncmp(frame, "*8*", 3) == 0 ? atoi(frame + 3) : -1;
+
+    /* A ring, and every frame of its call while the hold lasts (answer, answering
+     * machine, end), except locks and lights, keep the speaker the device's. */
+    if (strncmp(frame, "*8*1#1#", 7) == 0 || (announce->ring_until_ms > now && what >= 0
+            && (what < 19 || what > 22))) {
+        announce->ring_until_ms = now + announce->ring_hold_ms;
     }
     if (c300x_announce_frame_takes_speaker(frame)) {
         c300x_announce_preempt(announce);

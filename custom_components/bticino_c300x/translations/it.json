@@ -778,6 +778,18 @@
           "fps": "Di fabbrica 15 fotogrammi al secondo; il flusso alto accetta al massimo 24, perché a 25 il dispositivo ne invia solo circa 8. Il flusso basso del firmware 3.0.x: 10 di fabbrica, al massimo 25."
         }
       },
+      "speech": {
+        "title": "Sintesi vocale",
+        "description": "Le notifiche parlate (azione Notify con mode speech o both) usano questo motore e questa lingua. Con un motore locale come Piper nulla lascia la tua rete. Senza una scelta Home Assistant usa il suo motore predefinito, quello cloud se è configurato Home Assistant Cloud. tts_engine e language in una notifica hanno la precedenza su queste impostazioni.",
+        "data": {
+          "tts_engine": "Motore di sintesi vocale",
+          "tts_language": "Lingua"
+        },
+        "data_description": {
+          "tts_engine": "Un'entità di sintesi vocale di Home Assistant, per esempio tts.piper. Lasciare vuoto per il motore predefinito.",
+          "tts_language": "Lasciare vuoto per la lingua del motore."
+        }
+      },
       "device_activations": {
         "title": "Attivazioni: serrature, luci, luce scale",
         "description": "Attivazioni aggiuntive: {device_activation_count}\n\n{device_activation_items}\n\nScegli cosa fare e invia. Le modifiche vengono prima raccolte qui; con **Termina e salva** vengono salvate e il dispositivo viene aggiornato, e solo se le sue attivazioni sono diverse.",
@@ -843,6 +855,7 @@
           "visitor_snapshot": "Istantanea visitatore",
           "camera_quality": "Qualità della telecamera",
           "device_activations": "Attivazioni: serrature, luci, luce scale",
+          "speech": "Sintesi vocale",
           "display": "Display",
           "done": "Fatto"
         },
@@ -852,6 +865,7 @@
           "visitor_snapshot": "Dimensione dell'immagine del visitatore salvata, ritardo di acquisizione, conservazione e data scritta nell'immagine.",
           "camera_quality": "Dimensione, bit rate e frequenza dei fotogrammi del flusso; una modifica riavvia il dispositivo.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
+          "speech": "Motore di sintesi vocale e lingua delle notifiche parlate.",
           "display": "Patch display, pagine, riquadri e Alarmo.",
           "done": "Chiudi le impostazioni. Tutto ciò che è stato inviato è già salvato."
         }
@@ -1129,7 +1143,8 @@
       "camera_quality_failed": "Il C300X non ha salvato i valori. Controlla la connessione e riprova.",
       "camera_quality_unsupported": "Questo C300X non offre l'impostazione della qualità della telecamera.",
       "camera_quality_out_of_range": "Fuori da ciò che il dispositivo accetta per questo flusso; solo il valore salvato sul dispositivo può restare così.",
-      "camera_quality_restart_pending": "Salvato, ma il dispositivo non si è riavviato. Usa i nuovi valori dopo il suo prossimo riavvio."
+      "camera_quality_restart_pending": "Salvato, ma il dispositivo non si è riavviato. Usa i nuovi valori dopo il suo prossimo riavvio.",
+      "tts_engine_missing": "Questa entità di sintesi vocale non esiste."
     }
   },
   "entity": {

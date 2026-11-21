@@ -29,7 +29,9 @@ Speaker:
   Tested on firmware 1.7.19. Needs the agent update.
 - **Spoken notifications.** The Notify action has a new `mode`: `display`
   (as before), `speech` (the message is only spoken) or `both` (shown on the
-  display and spoken instead of the tone). `tts_engine` chooses the engine.
+  display and spoken instead of the tone). The engine and language are
+  chosen under **Configure > Speech**, for example the local Piper;
+  `tts_engine` and `language` in one notification come first.
 
 Audio:
 

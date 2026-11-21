@@ -107,7 +107,7 @@ class C300XNotificationService(BaseNotificationService):
                     unconfirmed = err
             if speaker is not None:
                 await async_speak(
-                    self.hass, speaker, message,
+                    self.hass, self.entry, speaker, message,
                     engine=options.get("tts_engine"), language=options.get("language"),
                 )
             if unconfirmed is not None:

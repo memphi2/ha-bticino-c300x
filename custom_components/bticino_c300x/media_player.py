@@ -7,14 +7,16 @@ import logging
 from typing import Any
 
 from homeassistant.components import media_source
-from homeassistant.components.media_player import (
+from homeassistant.components.media_player import MediaPlayerEntity
+from homeassistant.components.media_player.browse_media import (
     BrowseMedia,
+    async_process_play_media_url,
+)
+from homeassistant.components.media_player.const import (
     MediaPlayerDeviceClass,
-    MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
-    async_process_play_media_url,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError

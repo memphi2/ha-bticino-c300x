@@ -20,6 +20,7 @@ from .config_flow_dashboard import (
 )
 from .config_flow_forms import actions_json as _actions_json
 from .config_flow_forms import optional_suggested as _optional_suggested
+from .config_flow_speech import speech_offered
 from .config_schemas import (
     reconfigure_connection_schema as _reconfigure_connection_schema,
 )
@@ -474,5 +475,8 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
         menu.append("visitor_snapshot")
         if camera_quality_offered(config_entry):
             menu.append("camera_quality")
-    menu += ["device_activations", "display"]
+    menu.append("device_activations")
+    if speech_offered(config_entry):
+        menu.append("speech")
+    menu.append("display")
     return menu

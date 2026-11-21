@@ -55,6 +55,7 @@ from .const import (
     DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
     SIGNAL_CONNECTION_STATE_CHANGED,
+    SPEECH_OPTION_KEYS,
 )
 from .dashboard_images import image_tile_base_url
 from .data import (
@@ -481,7 +482,9 @@ def _entry_update_listener(
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
-        return data, dict(current.options)
+        # The speech settings are read when a notification is spoken.
+        options = {key: value for key, value in current.options.items() if key not in SPEECH_OPTION_KEYS}
+        return data, options
 
     previous = settings(entry)
 

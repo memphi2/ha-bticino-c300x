@@ -53,6 +53,10 @@ CONF_MAINTENANCE_TOKEN = "maintenance_token"
 CONF_ROTATE_SHARED_SECRET = "rotate_shared_secret"
 CONF_SHARED_SECRET = "shared_secret"
 CONF_VIDEO_ENABLED = "video_enabled"
+# Engine and language of spoken notifications; read when one is spoken.
+CONF_TTS_ENGINE = "tts_engine"
+CONF_TTS_LANGUAGE = "tts_language"
+SPEECH_OPTION_KEYS = (CONF_TTS_ENGINE, CONF_TTS_LANGUAGE)
 CONF_NATIVE_TWO_WAY_AUDIO = "native_two_way_audio"
 CONF_DOORSTATION_AUDIO_GAIN_DB = "doorstation_audio_gain_db"
 CONF_RING_CAPTURE_AUDIO_GAIN_DB = "ring_capture_audio_gain_db"

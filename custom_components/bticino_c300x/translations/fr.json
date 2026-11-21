@@ -778,6 +778,18 @@
           "fps": "15 images par seconde d'usine ; le flux haut accepte au plus 24, car à 25 l'appareil n'en envoie qu'environ 8. Le flux bas du firmware 3.0.x : 10 d'usine, au plus 25."
         }
       },
+      "speech": {
+        "title": "Synthèse vocale",
+        "description": "Les notifications parlées (action Notify avec mode speech ou both) utilisent ce moteur et cette langue. Avec un moteur local comme Piper, rien ne quitte votre réseau. Sans choix, Home Assistant utilise son moteur par défaut, celui du cloud si Home Assistant Cloud est configuré. tts_engine et language dans une notification passent avant ces réglages.",
+        "data": {
+          "tts_engine": "Moteur de synthèse vocale",
+          "tts_language": "Langue"
+        },
+        "data_description": {
+          "tts_engine": "Une entité de synthèse vocale de Home Assistant, par exemple tts.piper. Laisser vide pour le moteur par défaut.",
+          "tts_language": "Laisser vide pour la langue du moteur."
+        }
+      },
       "device_activations": {
         "title": "Activations : serrures, lumières, éclairage d'escalier",
         "description": "Activations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
@@ -843,6 +855,7 @@
           "visitor_snapshot": "Instantané visiteur",
           "camera_quality": "Qualité de la caméra",
           "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
+          "speech": "Synthèse vocale",
           "display": "Écran",
           "done": "Terminé"
         },
@@ -852,6 +865,7 @@
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "camera_quality": "Taille, débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "speech": "Moteur de synthèse vocale et langue des notifications parlées.",
           "display": "Patch display, pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."
         }
@@ -1129,7 +1143,8 @@
       "camera_quality_failed": "Le C300X n'a pas enregistré les valeurs. Vérifiez la connexion et réessayez.",
       "camera_quality_unsupported": "Ce C300X ne propose pas le réglage de la qualité de la caméra.",
       "camera_quality_out_of_range": "En dehors de ce que l'appareil accepte pour ce flux ; seule la valeur enregistrée sur l'appareil peut rester telle quelle.",
-      "camera_quality_restart_pending": "Enregistré, mais l'appareil n'a pas redémarré. Il utilise les nouvelles valeurs après son prochain redémarrage."
+      "camera_quality_restart_pending": "Enregistré, mais l'appareil n'a pas redémarré. Il utilise les nouvelles valeurs après son prochain redémarrage.",
+      "tts_engine_missing": "Cette entité de synthèse vocale n'existe pas."
     }
   },
   "entity": {

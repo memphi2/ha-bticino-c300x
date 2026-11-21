@@ -144,6 +144,7 @@ from .config_flow_input import (
 )
 from .config_flow_options_menu import OptionsMenuSteps
 from .config_flow_snapshot import SnapshotOptionsStep, SnapshotWizardSteps
+from .config_flow_speech import SpeechOptionsStep
 from .config_flow_tiles import TileForm as _TileForm
 from .config_flow_tiles import async_tile_entity_fields as _async_tile_entity_fields
 from .config_flow_tiles import async_tile_form as _async_tile_form
@@ -1394,7 +1395,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
 
 class BticinoC300XOptionsFlow(
-    SnapshotOptionsStep, CameraQualityOptionsStep, DisplayMenuSteps, OptionsMenuSteps,
+    SnapshotOptionsStep, CameraQualityOptionsStep, SpeechOptionsStep, DisplayMenuSteps, OptionsMenuSteps,
     config_entries.OptionsFlow,
 ):
     """Handle C300X options.

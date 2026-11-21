@@ -778,6 +778,18 @@
           "fps": "From the factory 15 frames per second; the high stream takes at most 24, since at 25 the device sends only about 8. The low stream on firmware 3.0.x: 10 from the factory, at most 25."
         }
       },
+      "speech": {
+        "title": "Speech",
+        "description": "Spoken notifications (Notify action with mode speech or both) use this engine and language. With a local engine such as Piper, nothing leaves your network. Without a choice, Home Assistant uses its default engine, which is the cloud one where Home Assistant Cloud is set up. tts_engine and language in a notification come before these settings.",
+        "data": {
+          "tts_engine": "Text-to-speech engine",
+          "tts_language": "Language"
+        },
+        "data_description": {
+          "tts_engine": "A text-to-speech entity of Home Assistant, for example tts.piper. Leave empty for the default engine.",
+          "tts_language": "Leave empty for the language of the engine."
+        }
+      },
       "device_activations": {
         "title": "Activations: locks, lights, stair light",
         "description": "Additional activations: {device_activation_count}\n\n{device_activation_items}\n\nPick what to do and submit. Changes are collected here first; with **Finish and save** they are saved and the device is updated, and only if its activations differ.",
@@ -843,6 +855,7 @@
           "visitor_snapshot": "Visitor Snapshot",
           "camera_quality": "Camera quality",
           "device_activations": "Activations: locks, lights, stair light",
+          "speech": "Speech",
           "display": "Display",
           "done": "Done"
         },
@@ -852,6 +865,7 @@
           "visitor_snapshot": "Size of the saved visitor image, capture delay, retention and the date written into the image.",
           "camera_quality": "Size, bit rate and frame rate of the camera stream; a change restarts the device.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
+          "speech": "Text-to-speech engine and language for spoken notifications.",
           "display": "Display patch, pages, tiles and Alarmo.",
           "done": "Close the settings. Everything submitted is already saved."
         }
@@ -1129,7 +1143,8 @@
       "camera_quality_failed": "The C300X did not save the values. Check the connection and try again.",
       "camera_quality_unsupported": "This C300X does not offer the camera quality setting.",
       "camera_quality_out_of_range": "Outside what the device takes for this stream; only the value saved on the device may stay as it is.",
-      "camera_quality_restart_pending": "Saved, but the device did not restart. It uses the new values after its next restart."
+      "camera_quality_restart_pending": "Saved, but the device did not restart. It uses the new values after its next restart.",
+      "tts_engine_missing": "This text-to-speech entity does not exist."
     }
   },
   "entity": {

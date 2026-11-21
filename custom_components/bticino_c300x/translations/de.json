@@ -778,6 +778,18 @@
           "fps": "Ab Werk 15 Bilder pro Sekunde; der hohe Stream nimmt höchstens 24, denn bei 25 sendet das Gerät nur etwa 8. Der niedrige Stream auf Firmware 3.0.x: ab Werk 10, höchstens 25."
         }
       },
+      "speech": {
+        "title": "Sprachausgabe",
+        "description": "Gesprochene Meldungen (Notify-Aktion mit mode speech oder both) nutzen diese Engine und Sprache. Mit einer lokalen Engine wie Piper verlässt nichts dein Netz. Ohne Auswahl nimmt Home Assistant seine Standard-Engine, die mit Home Assistant Cloud die aus der Cloud ist. tts_engine und language in einer Meldung gehen diesen Einstellungen vor.",
+        "data": {
+          "tts_engine": "Sprachausgabe-Engine",
+          "tts_language": "Sprache"
+        },
+        "data_description": {
+          "tts_engine": "Eine Sprachausgabe-Entität von Home Assistant, zum Beispiel tts.piper. Leer lassen für die Standard-Engine.",
+          "tts_language": "Leer lassen für die Sprache der Engine."
+        }
+      },
       "device_activations": {
         "title": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
         "description": "Zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
@@ -843,6 +855,7 @@
           "visitor_snapshot": "Besucher-Snapshot",
           "camera_quality": "Kameraqualität",
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
+          "speech": "Sprachausgabe",
           "display": "Display",
           "done": "Fertig"
         },
@@ -852,6 +865,7 @@
           "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "camera_quality": "Größe, Bitrate und Bildrate des Kamerastreams; eine Änderung startet das Gerät neu.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
+          "speech": "Sprachausgabe-Engine und Sprache für gesprochene Meldungen.",
           "display": "Display-Patch, Seiten, Kacheln und Alarmo.",
           "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
         }
@@ -1129,7 +1143,8 @@
       "camera_quality_failed": "Die C300X hat die Werte nicht gespeichert. Prüfe die Verbindung und versuche es erneut.",
       "camera_quality_unsupported": "Diese C300X bietet die Einstellung der Kameraqualität nicht an.",
       "camera_quality_out_of_range": "Außerhalb dessen, was das Gerät für diesen Stream annimmt; nur der auf dem Gerät gespeicherte Wert darf so bleiben.",
-      "camera_quality_restart_pending": "Gespeichert, aber das Gerät wurde nicht neu gestartet. Es nutzt die neuen Werte nach seinem nächsten Neustart."
+      "camera_quality_restart_pending": "Gespeichert, aber das Gerät wurde nicht neu gestartet. Es nutzt die neuen Werte nach seinem nächsten Neustart.",
+      "tts_engine_missing": "Diese Sprachausgabe-Entität gibt es nicht."
     }
   },
   "entity": {

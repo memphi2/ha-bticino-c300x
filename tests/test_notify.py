@@ -810,3 +810,18 @@ def test_invalid_speech_data_has_no_effect(tmp_path, monkeypatch, bad):
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
             assert notification_payload(entry) == [] and spoken == []
     asyncio.run(run())
+
+
+def test_spoken_notification_uses_the_engine_and_language_of_the_settings(tmp_path, monkeypatch):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            entry.options = {**entry.options, "tts_engine": "tts.piper", "tts_language": "de"}
+            await send(hass, entry, data={"mode": "speech"})
+            # What the call names comes before the settings.
+            await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.cloud", "language": "en"})
+            assert [item["media_content_id"] for item in spoken] == [
+                "media-source://tts/tts.piper?message=Test message&language=de",
+                "media-source://tts/tts.cloud?message=Test message&language=en",
+            ]
+    asyncio.run(run())
+

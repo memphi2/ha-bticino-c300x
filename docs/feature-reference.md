@@ -847,9 +847,12 @@ data:
 ```
 
 The message is spoken by the [speaker](#speaker-and-text-to-speech); the title
-is not. `tts_engine` names the text-to-speech entity; without it Home Assistant
-uses its default engine, which is the cloud one where Home Assistant Cloud is
-set up, so name a local engine to keep speech local. `language` is optional.
+is not. Choose the engine once under **Configure > Speech**: a text-to-speech
+entity such as `tts.piper` and, if you like, a language. `tts_engine` and
+`language` in the data of one notification come before that setting. With
+neither, Home Assistant uses its default engine, which is the cloud one where
+Home Assistant Cloud is set up; choose a local engine to keep speech local.
+Changing the setting does not reload the integration.
 In `both`, give `sound_duration` if you want the tone as well. The volume is
 the one of the speaker entity.
 

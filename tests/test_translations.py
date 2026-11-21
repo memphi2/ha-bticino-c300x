@@ -369,7 +369,7 @@ def test_options_menu_names_and_explains_every_area() -> None:
 
     menus = {
         "init": {
-            "features", "visitor_snapshot", "camera_quality", "device_activations", "connection",
+            "features", "visitor_snapshot", "camera_quality", "device_activations", "speech", "connection",
             "display", "done",
         },
         "display": {

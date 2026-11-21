@@ -8,6 +8,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 from .entity import entry_entity_unique_id, supports_capability
+from .entry_config import speech_settings
 from .entry_types import BticinoC300XConfigEntry
 
 
@@ -28,13 +29,18 @@ def speaker_entity_id(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> st
 
 
 async def async_speak(
-    hass: HomeAssistant, entity_id: str, message: str, *,
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, entity_id: str, message: str, *,
     engine: str | None = None, language: str | None = None,
 ) -> None:
     """Have a text-to-speech engine say the message and play it on the speaker.
 
-    Without an engine Home Assistant takes its default one.
+    The engine and language of the call come first, then the ones chosen in
+    the settings; without any, Home Assistant takes its default engine.
     """
+
+    saved_engine, saved_language = speech_settings(entry)
+    engine = engine or saved_engine
+    language = language or saved_language
 
     # Loaded only when used: text-to-speech is an optional part of Home Assistant.
     from homeassistant.components import tts  # noqa: PLC0415
@@ -43,8 +49,9 @@ async def async_speak(
         media_id = tts.generate_media_source_id(hass, message, engine=engine, language=language)
     except (HomeAssistantError, KeyError) as err:
         raise ServiceValidationError(
-            "No text-to-speech engine for the C300X notification; set one up in "
-            "Home Assistant or name it in tts_engine"
+            f"The text-to-speech engine cannot say the C300X notification ({err}); "
+            "choose an engine and language under Speech in the C300X settings "
+            "or name them in tts_engine and language"
         ) from err
     await hass.services.async_call(
         "media_player", "play_media",

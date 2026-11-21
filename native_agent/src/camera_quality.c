@@ -212,9 +212,7 @@ int c300x_camera_quality_remove_patches(const char **error)
     if (!read_values(backup, &original)) {
         return 0;
     }
-    /* A file without the values is left alone. After a firmware update the
-     * file holds the factory values, the same on every firmware, so there is
-     * nothing to put back. */
+    /* After a firmware update the file holds the factory values again. */
     if (!c300x_camera_quality_read(&quality) || memcmp(&quality.saved, &original, sizeof(original)) == 0) {
         return 1;
     }

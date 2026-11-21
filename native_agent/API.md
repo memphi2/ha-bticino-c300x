@@ -712,8 +712,8 @@ writes one piece of the file. Pieces come in order; offset 0 starts a new
 file. The file is a WAV with 8000 Hz, 16 bit PCM, one or two channels, the
 only format the device's sound card takes, and at most `max_bytes` long
 (about two minutes). It lives in `/tmp`, must be a file of the agent with a
-single name, and is removed when the sound ends or is refused and when the
-agent starts.
+single name, and is removed when the sound ends and when the agent starts or
+ends. A play that is refused keeps it.
 
 `POST /api/v1/announcements/actions/play` with `{"volume": 1..100}` checks the
 file and starts playing; the reply carries `duration_ms`. The volume follows

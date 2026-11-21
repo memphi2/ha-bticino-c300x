@@ -415,10 +415,23 @@ def test_a_restarted_agent_keeps_the_hold_of_a_ring(lab: Lab) -> None:
     lab.process.terminate()
     lab.process.wait(timeout=5)
     lab.restart()
+    restarted = time.monotonic()
 
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
     lab.wait_for("mixer ZL0_Mute_Rout=on", seconds=RING_HOLD + 5)
+    # The whole hold again: the new agent does not know when the ring was.
+    assert time.monotonic() - restarted > RING_HOLD
     lab.upload_when_free(wav())
+    lab.call("/actions/play", {"volume": 50})
+    assert lab.result() == "played"
+
+
+def test_frames_of_a_call_without_a_ring_start_no_hold(lab: Lab) -> None:
+    lab.upload(wav())
+    send_udp_event(lab.udp_port, "*8*80#6#2*11##")
+    send_udp_event(lab.udp_port, CALL_END)
+    time.sleep(0.3)
+
     lab.call("/actions/play", {"volume": 50})
     assert lab.result() == "played"
 
@@ -577,6 +590,17 @@ def test_a_sound_that_outlived_a_killed_agent_is_switched_off_by_the_next(lab: L
     lab.wait_for("mixer TPA2028D1_Volume=0", seconds=RING_HOLD + 5)
     assert time.monotonic() - restarted > RING_HOLD
     assert lab.mixer("ZL0_Mute_Rout") == "on"
+
+
+def test_a_sound_uploaded_before_a_restart_is_not_played(lab: Lab) -> None:
+    lab.upload(wav())
+    assert lab.process is not None
+    lab.process.terminate()
+    lab.process.wait(timeout=5)
+    lab.restart()
+
+    assert lab.call("/actions/play", {"volume": 50}, status=400)["error"] == "announcement_invalid_audio"
+    assert lab.log() == []
 
 
 def test_a_restarted_agent_takes_over_the_switching_off_of_the_one_before(lab: Lab) -> None:

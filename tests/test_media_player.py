@@ -34,7 +34,7 @@ from custom_components.bticino_c300x.media_player import (  # noqa: E402
 NO_ANSWER = "no answer"
 # The sound is over, the agent still switches the speaker off.
 SWITCHING_OFF = "switching off"
-# The agent was restarted while it played: free, without a result.
+# The agent was restarted while it played: no result, busy switching the speaker off.
 RESTARTED = "restarted"
 # Playing, but the device has not let the agent have its speaker yet.
 STARTING = "starting"
@@ -271,6 +271,32 @@ def test_a_request_that_gives_up_in_the_middle_keeps_the_order(
     assert [sound for sound, _volume in entity._entry.runtime_data.api.played] == [b"long", b"short"]
 
 
+def test_a_caller_that_leaves_in_the_middle_keeps_the_order(
+    speaker: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entity = speaker("played", "played")
+
+    async def convert(url: str) -> bytes:
+        await asyncio.sleep(0.05 if url == "long" else 0.02 if url == "left" else 0)
+        return url.encode()
+
+    monkeypatch.setattr(media_player, "async_sound_for_device", convert)
+
+    async def run() -> None:
+        first = asyncio.ensure_future(_played_to_the_end(entity, "long"))
+        await asyncio.sleep(0)
+        left = asyncio.ensure_future(entity.async_play_media("music", "left"))
+        await asyncio.sleep(0)
+        last = asyncio.ensure_future(_played_to_the_end(entity, "short"))
+        await asyncio.sleep(0)
+        left.cancel()
+        await asyncio.wait_for(asyncio.gather(first, last), 2)
+
+    asyncio.run(run())
+
+    assert [sound for sound, _volume in entity._entry.runtime_data.api.played] == [b"long", b"short"]
+
+
 def test_a_second_sound_waits_until_the_speaker_is_switched_off(speaker: Any) -> None:
     entity = speaker(None, SWITCHING_OFF, "played", "played")
 
@@ -354,6 +380,13 @@ def test_a_status_read_without_answer_is_tried_again(speaker: Any) -> None:
 
     assert entity.extra_state_attributes == {"last_result": "played"}
     assert entity.state == MediaPlayerState.IDLE
+
+
+def test_a_missing_answer_at_the_start_is_asked_for_again(speaker: Any) -> None:
+    entity = speaker(NO_ANSWER, "device_busy")
+
+    with pytest.raises(HomeAssistantError, match="using its speaker"):
+        asyncio.run(entity.async_play_media("music", "x"))
 
 
 def test_a_sound_the_agent_never_reports_ends_after_its_time(
@@ -442,6 +475,29 @@ def test_nothing_is_played_once_the_speaker_was_removed(
     asyncio.run(run())
 
     assert entity._entry.runtime_data.api.played == []
+
+
+def test_a_caller_gets_an_answer_when_the_speaker_is_removed_while_its_sound_starts(speaker: Any) -> None:
+    entity = speaker()
+    api = entity._entry.runtime_data.api
+
+    async def run() -> None:
+        # The agent does not answer the play request yet.
+        api.gate = asyncio.Event()
+        play = asyncio.create_task(entity.async_play_media("music", "x"))
+        for _step in range(5):
+            await asyncio.sleep(0)
+        sound = entity._sound
+        assert sound is not None
+        await entity.async_will_remove_from_hass()
+        with pytest.raises(HomeAssistantError, match="removed while the sound started"):
+            await asyncio.wait_for(play, 2)
+        await asyncio.wait({sound})
+        assert sound.cancelled()
+
+    asyncio.run(run())
+
+    assert api.played == []
 
 
 def test_plays_again_after_its_id_was_renamed(speaker: Any) -> None:

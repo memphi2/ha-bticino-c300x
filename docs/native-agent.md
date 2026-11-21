@@ -326,8 +326,6 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   offered. Camera quality sets that low stream there (`BitrateRtpL`,
   `FpsRtpL`, `WidthLow`, `HeightLow`); its sizes other than the factory
   400x288 are not yet tested on a 3.0.6 device.
-- It runs the PCMU audio codec from the factory, so the agent does not offer
-  the audio codec switch there.
 - `bt_answering_machine` is another build with its own routing table.
 - As on the other versions, Ring Call and video need a device registered once
   through the Door Entry app: that creates the SIP user, domain and keystore

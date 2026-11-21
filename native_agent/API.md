@@ -1469,9 +1469,7 @@ and `GET` then reports `"supported": false`.
 
 ### Audio Codec
 
-`GET /api/v1/maintenance/audio-codec` reads the codec state. On firmware 3.0.x,
-which runs PCMU from the factory, `maintenance.audio_codec_apply` and
-`maintenance.audio_codec_restore` are not advertised; the state stays readable.
+`GET /api/v1/maintenance/audio-codec` reads the codec state.
 
 `POST /api/v1/maintenance/audio-codec/actions/apply` with
 `{"confirm": "apply_audio_codec_patch"}` switches to PCMU;

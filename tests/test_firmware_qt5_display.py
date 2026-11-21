@@ -88,17 +88,6 @@ def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
     assert "config->video_enabled && !context->camera_resolution_fixed" in capabilities
 
 
-def test_the_agent_offers_no_codec_switch_on_a_qt5_display():
-    # Firmware 3.0.x runs PCMU from the factory: there is nothing to switch,
-    # and its stock is not the Speex the switch would go back to.
-    http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
-    capabilities = (NATIVE / "src/capabilities.c").read_text(encoding="utf-8")
-    assert ".audio_codec_fixed = c300x_device_display_is_qt5()," in http
-    switch = "(maintenance_supported && !context->audio_codec_fixed) ? \"true\" : \"false\",\n"
-    status = "        maintenance_supported ? \"true\" : \"false\",\n"
-    assert status + "        " + switch + "        " + switch in capabilities
-
-
 def test_the_agent_offers_no_display_patch_on_a_qt5_display(config_probe):
     # The installer enables the Display patch; a Qt 5 display has nothing to patch,
     # so the agent neither offers it nor its repairs.

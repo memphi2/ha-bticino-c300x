@@ -19,8 +19,6 @@ Camera:
   Needs the agent update.
 - Firmware 3.0.6 is fixed to the low resolution, the only stream that firmware
   sends on; the setting is not offered there. Needs the agent update.
-- The **Audio codec** select is not offered on firmware 3.0.6, which runs PCMU
-  from the factory. Needs the agent update.
 
 Display:
 

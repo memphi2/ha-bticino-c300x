@@ -317,6 +317,23 @@ def test_sound_is_made_into_the_format_of_the_device(monkeypatch: pytest.MonkeyP
     assert command[command.index("-protocol_whitelist") + 1] == "http,https,tcp,tls,crypto"
 
 
+def test_a_failed_conversion_does_not_tell_the_signature_or_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "http://user:secret@ha:8123/media/local/x.mp3?authSig=signature"
+
+    async def run(command: list[str], **_kwargs: Any) -> bytes:
+        raise HomeAssistantError(f"C300X announcement could not be converted: {url}: 404 Not Found" + "x" * 900)
+
+    monkeypatch.setattr(announcements, "_async_run_ffmpeg_command", run)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        asyncio.run(announcements.async_sound_for_device(url))
+
+    message = str(raised.value)
+    assert "http://ha/media/local/x.mp3: 404 Not Found" in message
+    assert "signature" not in message and "secret" not in message
+    assert len(message) <= 300
+
+
 @pytest.mark.parametrize("media", ["/config/secrets.yaml", "file:///etc/passwd", "rtsp://camera/stream"])
 def test_only_web_addresses_are_converted(media: str, monkeypatch: pytest.MonkeyPatch) -> None:
     async def run(*_args: Any, **_kwargs: Any) -> bytes:

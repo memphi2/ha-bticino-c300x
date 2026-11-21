@@ -14,6 +14,7 @@ from .ring_capture import _async_run_ffmpeg_command
 ANNOUNCEMENT_MAX_SECONDS = 110
 ANNOUNCEMENT_DEFAULT_VOLUME = 0.6
 _RATE = 8000
+_MAX_ERROR_LENGTH = 300
 # The speaker needs a moment after it is switched on, and the last syllable
 # must not be cut. The small speaker carries no bass; an even loudness keeps
 # quiet speech understandable.
@@ -27,19 +28,26 @@ _FILTER = (
 async def async_sound_for_device(url: str) -> bytes:
     """Turn media into the one format the device plays: WAV, 8000 Hz, 16 bit, mono."""
 
-    if urlsplit(url).scheme not in ("http", "https"):
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https"):
         raise HomeAssistantError("C300X announcement media must be an http or https address")
-    pcm = await _async_run_ffmpeg_command(
-        [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-            "-protocol_whitelist", "http,https,tcp,tls,crypto",
-            "-i", url, "-vn", "-t", str(ANNOUNCEMENT_MAX_SECONDS),
-            "-af", _FILTER, "-ac", "1", "-ar", str(_RATE), "-f", "s16le", "-",
-        ],
-        command_timeout=60,
-        error_prefix="C300X announcement could not be converted",
-        capture_stdout=True,
-    )
+    try:
+        pcm = await _async_run_ffmpeg_command(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+                "-protocol_whitelist", "http,https,tcp,tls,crypto",
+                "-i", url, "-vn", "-t", str(ANNOUNCEMENT_MAX_SECONDS),
+                "-af", _FILTER, "-ac", "1", "-ar", str(_RATE), "-f", "s16le", "-",
+            ],
+            command_timeout=60,
+            error_prefix="C300X announcement could not be converted",
+            capture_stdout=True,
+        )
+    except HomeAssistantError as err:
+        # The address can carry a signature or a password: only its path is told.
+        shown = f"{parts.scheme}://{parts.hostname or ''}{parts.path}"
+        message = str(err).replace(url, shown)
+        raise HomeAssistantError(message[:_MAX_ERROR_LENGTH]) from None
     if len(pcm) < 2:
         raise HomeAssistantError("C300X announcement media has no sound")
     sound = io.BytesIO()

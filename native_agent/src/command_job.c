@@ -121,6 +121,12 @@ int c300x_command_job_start_wait(struct c300x_command_job *job, const char *prog
     return start_job(job, program, argv, 0, timeout_ms, 1);
 }
 
+int c300x_command_job_start_output(struct c300x_command_job *job, const char *program,
+    char *const argv[], int timeout_ms)
+{
+    return start_job(job, program, argv, 0, timeout_ms, 0);
+}
+
 int c300x_command_job_start_capture(struct c300x_command_job *job, const char *program,
     const char *argument, char *out, size_t out_len, int timeout_ms)
 {

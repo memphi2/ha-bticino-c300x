@@ -687,42 +687,49 @@ the same UI value in tens, so the agent maps raw code `20` to API/UI volume
 The agent plays a sound file over the device speaker, for example speech that
 Home Assistant made. Capability `announcements.supported` is true where the
 device has the sound tools this needs (`aplay`, `amixer`, the audio chip tool
-and its configuration for playing).
+and its configuration for playing) and the agent receives the door entry
+events, without which a sound could not give way to a door call.
 
 `GET /api/v1/announcements` returns
 
 ```json
-{"ok": true, "supported": true, "playing": false, "result": "played",
- "duration_ms": 0, "max_bytes": 2097152}
+{"ok": true, "supported": true, "playing": false, "busy": false,
+ "result": "played", "duration_ms": 0, "max_bytes": 2097152}
 ```
 
 `result` tells how the last sound ended: `played`, `stopped`, `preempted` (a
 door call took the speaker), `device_busy` (the device was using its speaker;
 nothing was switched), `sound_path_failed`, `play_failed` or `failed`. It is
-empty before the first sound and while one plays.
+empty before the first sound and while one plays. `busy` stays true after the
+sound until the speaker is switched off again; no new piece or sound is taken
+while it is true.
 
 `POST /api/v1/announcements/audio` with `{"offset": 0, "data": "base64"}`
 writes one piece of the file. Pieces come in order; offset 0 starts a new
 file. The file is a WAV with 8000 Hz, 16 bit PCM, one or two channels, the
 only format the device's sound card takes, and at most `max_bytes` long
-(about two minutes). It lives in `/tmp` and is removed after playing.
+(about two minutes). It lives in `/tmp`, must be a file of the agent with a
+single name, and is removed when the sound ends or is refused and when the
+agent starts.
 
 `POST /api/v1/announcements/actions/play` with `{"volume": 1..100}` checks the
 file and starts playing; the reply carries `duration_ms`. The volume follows
 the device's own table for playing and ringing. The agent switches the device
 to its state for local playing, loads the audio chip's configuration for it
-(to RAM only), unmutes the speaker, plays, and then mutes the speaker and sets
-its gain back.
+(to RAM only), unmutes the speaker and plays. Afterwards it mutes the speaker,
+switches the amplifier off and sets the gain back, unless the device's
+software has meanwhile set a state of its own or plays itself.
 
-`POST /api/v1/announcements/actions/stop` ends the sound.
+`POST /api/v1/announcements/actions/stop` ends the sound at once.
 
-A door call has priority: door entry or multimedia traffic on the bus ends the
-sound at once and frees the sound device, and nothing is switched back,
-because the device is setting up its speaker for the call at that moment. A
-touch tone or another sound of the device during an announcement can cut it
-short.
+A door call has priority: a call being set up or answered (`*8*1#…`,
+`*8*2#…`) or video starting (`*7*…` other than `*7*0*##`) ends the sound at
+once and frees the sound device. Locks, lights and the end of a call do not.
+The speaker is then left to the device for three seconds; only if the device
+has not taken it by then is it switched off as above. A touch tone or another
+sound of the device during an announcement can cut it short.
 
-Errors: `409 announcement_busy` while a sound plays, `409
+Errors: `409 announcement_busy` while `busy` is true, `409
 announcement_unsupported`, `400 announcement_invalid_audio`, `400
 announcement_invalid_volume`, `500 announcement_write_failed`, `500
 announcement_start_failed`.

@@ -5113,8 +5113,7 @@ static void handle_udp_event(
     }
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
-    /* Door entry or multimedia traffic: the device may need its speaker now. */
-    if (strncmp(msg, "*8*", 3) == 0 || strncmp(msg, "*7*", 3) == 0) {
+    if (c300x_announce_frame_takes_speaker(msg)) {
         c300x_announce_preempt(&runtime->announce);
     }
     int confirmed_muted;
@@ -5334,7 +5333,7 @@ static void api_capabilities(
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
         .camera_resolution_fixed = c300x_device_display_is_qt5(),
-        .announcements_supported = c300x_announce_supported(),
+        .announcements_supported = runtime != NULL && c300x_announce_supported(&runtime->announce),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
@@ -9848,6 +9847,8 @@ int c300x_run(struct c300x_config *config)
         listener_count++;
     }
     udp_fd = create_udp_event_socket(config);
+    /* Without the door entry events a sound could not give way to a call. */
+    runtime->announce.door_events = udp_fd >= 0;
     if (config->video_enabled) {
         video = c300x_video_create(config, video_error, sizeof(video_error));
         if (video == NULL) {

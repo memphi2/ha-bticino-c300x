@@ -30,9 +30,11 @@ static int reply(const struct c300x_announce *announce, int fd, int duration_ms)
 {
     char body[256];
     snprintf(body, sizeof(body),
-        "{\"ok\":true,\"supported\":%s,\"playing\":%s,\"result\":\"%s\",\"duration_ms\":%d,\"max_bytes\":%d}\n",
-        c300x_announce_supported() ? "true" : "false",
-        c300x_announce_playing(announce) && !announce->cleaning ? "true" : "false",
+        "{\"ok\":true,\"supported\":%s,\"playing\":%s,\"busy\":%s,\"result\":\"%s\","
+        "\"duration_ms\":%d,\"max_bytes\":%d}\n",
+        c300x_announce_supported(announce) ? "true" : "false",
+        c300x_announce_playing(announce) ? "true" : "false",
+        c300x_announce_busy(announce) ? "true" : "false",
         announce->result, duration_ms, C300X_ANNOUNCE_MAX_BYTES);
     c300x_http_send_json(fd, 200, "OK", body);
     return 1;
@@ -53,6 +55,7 @@ static int write_piece(struct c300x_announce *announce, int fd, const struct req
     }
     c300x_json_string_field(request->body, "data", piece->text, sizeof(piece->text));
     ok = c300x_json_int_field(request->body, "offset", &offset)
+        && c300x_announce_plain_base64(piece->text)
         && c300x_media_base64_decode(piece->text, piece->bytes, sizeof(piece->bytes), &len)
         && c300x_announce_write(announce, offset, piece->bytes, len, &error);
     free(piece);
@@ -75,7 +78,7 @@ int c300x_http_announce_route(struct c300x_announce *announce, int fd, const str
     if (!post) {
         return 0;
     }
-    if (!c300x_announce_supported()) {
+    if (!c300x_announce_supported(announce)) {
         return refuse(fd, 409, "Conflict", "unsupported");
     }
     if (strcmp(action, "/audio") == 0) {

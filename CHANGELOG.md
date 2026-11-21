@@ -20,6 +20,13 @@ Camera:
 - Firmware 3.0.6 is fixed to the low resolution, the only stream that firmware
   sends on; the setting is not offered there. Needs the agent update.
 
+Audio:
+
+- The **Audio codec** select can switch to Speex also on firmware 3.0.6, which
+  comes with PCMU; it failed there before. Removing the agent puts back the
+  codec the device came with. The option is now called **Speex**, without
+  "stock". Needs the agent update.
+
 Display:
 
 - The favourites bar is the default page navigation. An entry that never

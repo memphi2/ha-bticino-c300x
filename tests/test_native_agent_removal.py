@@ -173,3 +173,35 @@ def test_uninstall_keeps_files_if_codec_restore_fails(device: dict[str, str]) ->
     (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "linphone.conf").unlink()
     _assert_kept(device, _remove(device))
     assert "<enable_speex>0</enable_speex>" in Path(device["C300X_AUDIO_STACK_OPEN"]).read_text()
+
+
+PCMU_STACK = "<config><enable_speex>0</enable_speex></config>\n"
+PCMU_LINPHONE = (
+    "[sound]\nrtp_ptnum=0\nrtp_map=PCMU/8000/1\n"
+    "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=1\n"
+    "[audio_codec_1]\nmime=speex\nrate=8000\nenabled=0\n"
+    "[audio_codec_2]\nmime=speex\nrate=16000\nenabled=0\n"
+)
+
+
+def test_firmware_3_switches_to_speex_and_back_and_removal_keeps_its_pcmu(device: dict[str, str]) -> None:
+    # Firmware 3.0.6 comes with PCMU and has no backup before the first switch.
+    stack, linphone = Path(device["C300X_AUDIO_STACK_OPEN"]), Path(device["C300X_AUDIO_LINPHONE_CONF"])
+    stack.write_text(PCMU_STACK)
+    linphone.write_text(PCMU_LINPHONE)
+    result = _cli(device, "--audio-codec", "restore")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["state"] == "speex"
+    assert stack.read_text() == PCMU_STACK.replace("<enable_speex>0", "<enable_speex>1")
+    assert linphone.read_text() == (
+        "[sound]\nrtp_ptnum=110\nrtp_map=speex/8000/1\n"
+        "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=0\n"
+        "[audio_codec_1]\nmime=speex\nrate=8000\nenabled=1\n"
+        "[audio_codec_2]\nmime=speex\nrate=16000\nenabled=0\n"
+    )
+    _set_pcmu_config(device)
+    assert (stack.read_text(), linphone.read_text()) == (PCMU_STACK, PCMU_LINPHONE)
+    assert _cli(device, "--audio-codec", "restore").returncode == 0
+    result = _cli(device, "--restore-media-patches")
+    assert result.returncode == 0, result.stderr
+    assert (stack.read_text(), linphone.read_text()) == (PCMU_STACK, PCMU_LINPHONE)

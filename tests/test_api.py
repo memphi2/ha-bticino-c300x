@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from collections.abc import AsyncIterator, Callable
 
@@ -1794,6 +1795,26 @@ def test_camera_quality_reads_without_a_body_and_saves_only_the_given_values() -
         "confirm": "apply_camera_quality", "bitrate_kbps": 3000, "fps": 20, "reboot": True}
     for request in session.requests:
         assert request["kwargs"]["headers"]["X-Bticino-C300X-Maintenance-Token"] == "maintenance-token"
+
+
+def test_announcement_goes_in_small_pieces_in_order_and_is_then_played() -> None:
+    api, session = _audio_codec_api('{"ok": true, "playing": true, "result": ""}')
+    sound = bytes(range(256)) * 40
+
+    asyncio.run(api.async_play_announcement(sound, 60))
+    assert asyncio.run(api.async_announcement_status())["playing"] is True
+    asyncio.run(api.async_stop_announcement())
+
+    root = "http://agent.local:8080/api/v1/announcements"
+    assert [request["args"] for request in session.requests] == [
+        ("POST", root + "/audio"), ("POST", root + "/audio"), ("POST", root + "/audio"),
+        ("POST", root + "/actions/play"), ("GET", root), ("POST", root + "/actions/stop")]
+    pieces = [request["kwargs"]["json"] for request in session.requests[:3]]
+    assert [piece["offset"] for piece in pieces] == [0, 4500, 9000]
+    assert b"".join(base64.b64decode(piece["data"]) for piece in pieces) == sound
+    # One piece with its JSON frame fits the agent's request size.
+    assert max(len(json.dumps(piece)) for piece in pieces) < 8192
+    assert session.requests[3]["kwargs"]["json"] == {"volume": 60}
 
 
 def test_ipv6_firewall_methods_use_separate_maintenance_endpoint() -> None:

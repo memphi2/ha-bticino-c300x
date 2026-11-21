@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from typing import Any, cast
 
 from ._api_core import _RESTART_WRITE_TIMEOUT, _C300XApiCore
@@ -20,6 +21,9 @@ from .agent_contracts import (
 from .api_errors import (
     C300XAgentApiConnectionError,
 )
+
+# Base64 of one piece and its JSON frame stay below the agent's request size.
+_ANNOUNCEMENT_PIECE = 4500
 
 
 class _ApiMediaMixin(_C300XApiCore):
@@ -234,4 +238,36 @@ class _ApiMediaMixin(_C300XApiCore):
                 extra_headers=self._maintenance_headers(),
                 request_timeout=max(self._timeout, _RESTART_WRITE_TIMEOUT),
             ),
+        )
+
+    async def async_announcement_status(self) -> dict[str, Any]:
+        """Return whether a sound is playing and how the last one ended."""
+
+        return cast("dict[str, Any]", await self._request_json("GET", "/api/v1/announcements"))
+
+    async def async_play_announcement(self, sound: bytes, volume: int) -> dict[str, Any]:
+        """Send a sound file (WAV, 8000 Hz, 16 bit) and play it over the speaker.
+
+        The agent takes a request body of a few kilobytes, so the file goes
+        in pieces, in order.
+        """
+
+        for offset in range(0, len(sound), _ANNOUNCEMENT_PIECE):
+            piece = base64.b64encode(sound[offset:offset + _ANNOUNCEMENT_PIECE]).decode()
+            await self._request_json(
+                "POST", "/api/v1/announcements/audio", json_data={"offset": offset, "data": piece},
+            )
+        return cast(
+            "dict[str, Any]",
+            await self._request_json(
+                "POST", "/api/v1/announcements/actions/play", json_data={"volume": volume},
+            ),
+        )
+
+    async def async_stop_announcement(self) -> dict[str, Any]:
+        """End the sound that is playing."""
+
+        return cast(
+            "dict[str, Any]",
+            await self._request_json("POST", "/api/v1/announcements/actions/stop", json_data={}),
         )

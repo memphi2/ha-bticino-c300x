@@ -557,3 +557,11 @@ def test_device_ui_setting_is_readable_on_a_real_config_entry() -> None:
 
     assert entry_device_ui_configured(entry) is True
     assert entry_device_ui_enabled(entry) is True
+
+
+def test_entry_platforms_include_the_speaker_only_where_the_agent_plays_sound() -> None:
+    entry = SimpleNamespace(data={}, options={})
+
+    assert "media_player" in _entry_platforms(entry, {"announcements": {"supported": True}})
+    assert "media_player" not in _entry_platforms(entry, {"announcements": {"supported": False}})
+    assert "media_player" not in _entry_platforms(entry, {})

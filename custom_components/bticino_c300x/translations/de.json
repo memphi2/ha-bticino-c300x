@@ -1219,6 +1219,11 @@
         }
       }
     },
+    "media_player": {
+      "speaker": {
+        "name": "Lautsprecher"
+      }
+    },
     "select": {
       "smartphone_forwarding_mode": {
         "name": "Weiterleitung",

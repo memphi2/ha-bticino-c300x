@@ -95,6 +95,7 @@ BASE_PLATFORMS = (
     "switch",
 )
 CAMERA_PLATFORM = "camera"
+SPEAKER_PLATFORM = "media_player"
 _LOGGER = logging.getLogger(__name__)
 _GUI_DEPENDENT_ENTITY_KEYS = (
     ("button", "delete_latest_video_message"),
@@ -616,12 +617,16 @@ def _entry_platforms(
 ) -> tuple[str, ...]:
     """Return platforms enabled for this config entry."""
 
+    platforms: tuple[str, ...] = BASE_PLATFORMS
     if _entry_video_enabled(entry) and capability_is_supported(
         capabilities or {},
         "doorbell_video",
     ):
-        return (*BASE_PLATFORMS, CAMERA_PLATFORM)
-    return BASE_PLATFORMS
+        platforms = (*platforms, CAMERA_PLATFORM)
+    # The speaker needs sound tools on the device that an older agent does not use.
+    if capability_is_supported(capabilities or {}, "announcements"):
+        platforms = (*platforms, SPEAKER_PLATFORM)
+    return platforms
 
 
 def _offline_setup_data(err: Exception) -> dict[str, Any]:

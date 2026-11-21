@@ -12,13 +12,11 @@
 #define STOPPED C300X_ANNOUNCE_STOPPED
 #define PREEMPTED C300X_ANNOUNCE_PREEMPTED
 
-/* Seconds the device's software gets to take the speaker after a door call
- * frame before the speaker is switched off. */
+/* Seconds the device's software gets to take the speaker after a door frame. */
 #define PREEMPT_CLEAN_DELAY 3
 /* After a stop the killed player has let go of the sound device. */
 #define STOP_CLEAN_DELAY 1
-/* How long the speaker is left to the device after the last ring frame. Its
- * ring tone has pauses in which the sound device is free. */
+/* The speaker stays the device's this long after a ring frame: its tone has pauses. */
 #define RING_HOLD_SECONDS "60"
 /* Well beyond the switching off's own 300 looks for an idle device, every two seconds. */
 #define CLEAN_WAIT_SECONDS 1810
@@ -199,6 +197,8 @@ static void job_over(struct c300x_announce *announce, int cleaned, int ending)
     announce->door_hold = ending == PREEMPTED;
     /* Done, or nothing was switched because the device had its speaker in use. */
     if ((cleaned && ending != PREEMPTED) || (!cleaned && strcmp(announce->result, "device_busy") == 0)) {
+        /* A finished switching off has set the gain back: a later one leaves it alone. */
+        announce->gain = cleaned ? -1 : announce->gain;
         return;
     }
     announce->clean_delay = ending == PREEMPTED ? PREEMPT_CLEAN_DELAY : ending == STOPPED ? STOP_CLEAN_DELAY : 0;

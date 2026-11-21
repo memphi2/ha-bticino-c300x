@@ -607,6 +607,28 @@ def test_a_sound_uploaded_to_a_killed_agent_is_not_played(lab: Lab) -> None:
     assert lab.call("/actions/play", {"volume": 50}, status=400)["error"] == "announcement_invalid_audio"
 
 
+def test_a_gain_already_set_back_is_not_written_again(lab: Lab) -> None:
+    lab.upload(wav())
+    lab.call("/actions/play", {"volume": 50})
+    assert lab.result() == "played"
+    # The device's software has set another gain since.
+    lab.mixer("ZL0_Rout_Gain_Volume", "60")
+
+    send_udp_event(lab.udp_port, RING)
+    time.sleep(0.3)
+    assert lab.process is not None
+    lab.process.terminate()
+    lab.process.wait(timeout=5)
+    lab.restart()
+    deadline = time.monotonic() + RING_HOLD + 5
+    while lab.log().count("mixer TPA2028D1_Volume=0") < 2:
+        assert time.monotonic() < deadline, lab.log()
+        time.sleep(0.05)
+    lab.wait_free()
+
+    assert lab.mixer("ZL0_Rout_Gain_Volume") == "60"
+
+
 def test_a_sound_uploaded_before_a_restart_is_not_played(lab: Lab) -> None:
     lab.upload(wav())
     assert lab.process is not None

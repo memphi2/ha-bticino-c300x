@@ -1458,8 +1458,9 @@ once, replaces those numbers and nothing else, keeps one backup of the
 original file under `/home/bticino/cfg/extra/c300x-device-file-backups/original`,
 writes a complete new file in one step, makes the root filesystem writable
 only for the write, and reads the result back. Removing the agent puts the
-original values back; a file that lost them meanwhile (a firmware update) is
-left alone.
+original values back; a file without the values is left alone. After a
+firmware update the file holds the factory values again, which are the same on
+every firmware, so there is nothing to put back.
 
 Capabilities advertise the setting as `maintenance.camera_quality` whenever
 video is enabled. A `POST` is answered `409` with

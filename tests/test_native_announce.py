@@ -543,6 +543,29 @@ def test_a_second_agent_leaves_the_upload_of_the_running_one_alone(lab: Lab) -> 
     assert lab.result() == "played"
 
 
+def test_a_sound_that_outlived_a_killed_agent_is_switched_off_by_the_next(lab: Lab) -> None:
+    (lab.dir / "play-seconds").write_text("1\n")
+    lab.upload(wav(1))
+    lab.call("/actions/play", {"volume": 50})
+    lab.wait_for("aplay -q")
+    assert lab.process is not None
+    lab.process.kill()
+    lab.process.wait(timeout=5)
+    # Nobody is there when the player ends by itself: the speaker stays on.
+    while lab.player_alive():
+        time.sleep(0.01)
+    time.sleep(0.3)
+    assert lab.mixer("ZL0_Mute_Rout") == "off"
+
+    lab.restart()
+    restarted = time.monotonic()
+
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+    lab.wait_for("mixer TPA2028D1_Volume=0", seconds=RING_HOLD + 5)
+    assert time.monotonic() - restarted > RING_HOLD
+    assert lab.mixer("ZL0_Mute_Rout") == "on"
+
+
 def test_a_restarted_agent_takes_over_the_switching_off_of_the_one_before(lab: Lab) -> None:
     lab.start_long_sound()
     send_udp_event(lab.udp_port, CAMERA_VIEW)

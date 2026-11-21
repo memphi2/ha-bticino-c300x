@@ -35,8 +35,11 @@ void c300x_announce_init(struct c300x_announce *announce)
 
 void c300x_announce_take_over(struct c300x_announce *announce)
 {
+    /* A killed agent's sound that played to its end left its file and the speaker on. */
+    int unplayed = access(c300x_announce_file(), F_OK) == 0;
+
     announce->serving = 1;
-    if (c300x_announce_end_leftover(&announce->gain)) {
+    if (c300x_announce_end_leftover(&announce->gain) || unplayed) {
         /* As after a door frame: what the old agent knew about the device is gone. */
         announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
         announce->door_hold = 1;

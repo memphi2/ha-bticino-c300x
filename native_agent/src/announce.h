@@ -13,6 +13,7 @@ struct c300x_announce {
     int clean_delay;   /* seconds; -1 while no switching off is due */
     int gain;          /* speaker gain before the sound, -1 if unknown */
     int door_events;   /* the agent hears door calls and can give way to them */
+    long long call_until_ms; /* a ring was heard and its call has not ended */
     const char *result;
 };
 
@@ -30,6 +31,8 @@ int c300x_announce_play(struct c300x_announce *announce, int volume_percent,
 void c300x_announce_stop(struct c300x_announce *announce);
 /* A frame of the door entry bus after which the device takes its speaker. */
 int c300x_announce_frame_takes_speaker(const char *frame);
+/* Every frame of the door entry bus: a door call ends a sound and holds off new ones. */
+void c300x_announce_door_frame(struct c300x_announce *announce, const char *frame);
 /* A door call takes the speaker at once. */
 void c300x_announce_preempt(struct c300x_announce *announce);
 int c300x_announce_prepare(const struct c300x_announce *announce, struct pollfd *fd);

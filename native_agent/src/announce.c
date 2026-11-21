@@ -1,5 +1,7 @@
 #include "announce.h"
+#include "announce_device.h"
 #include "announce_file.h"
+#include "time_util.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -12,43 +14,10 @@ enum { PLAYED = 0, DEVICE_BUSY = 3, PATH_FAILED = 4, PLAY_FAILED = 5, STOPPED = 
 /* Seconds the device's software gets to take the speaker after a door call
  * frame before the speaker is switched off. */
 #define PREEMPT_CLEAN_DELAY 3
-
-#define TOOLS \
-    "A=${C300X_AMIXER:-/usr/bin/amixer}\n" \
-    "S=${C300X_PCM_STATUS:-/proc/asound/card0/pcm0p/sub0/status}\n" \
-    "put() { \"$A\" -q cset \"name='$1'\" \"$2\"; }\n" \
-    "val() { \"$A\" cget \"name='$1'\" 2>/dev/null | sed -n 's/.*: values=//p'; }\n"
-
-/* The device plays sound only in a sound state with the audio chip's
- * configuration for it loaded (to RAM, never saved), the speaker unmuted and
- * the amplifier on; the device's own software does the same for a voice
- * memo. The gain before is told to the agent. The script has no signal
- * handling: a stop or a door call ends its whole process group at once. */
-static const char PLAY_SCRIPT[] =
-    TOOLS
-    "P=${C300X_APLAY:-/usr/bin/aplay}\n"
-    "Z=${C300X_ZL_TOOL:-/bin/zl38005_ioctl-v2}\n"
-    "C=${C300X_ZL_PLAY_CONFIG:-/home/bticino/microsemi/MEMO_AM_PLAY.cr}\n"
-    "[ \"$(val Zia_Aud_St)\" = 0 ] && grep -q closed \"$S\" || exit 3\n"
-    "echo \"gain=$(val 'ZL0 Rout Gain Volume')\"\n"
-    "put Zia_Aud_St 9 || exit 4\n"
-    "LD_LIBRARY_PATH=/home/bticino/lib \"$Z\" DOWNLOAD_CR \"$C\" NOT_SAVE NOT_FORCE >/dev/null 2>&1 || exit 4\n"
-    "put 'ZL0 Mute Rout' off && put 'ZL0 Rout Gain Volume' \"$2\" && put 'TPA2028D1 Volume' 9 || exit 4\n"
-    "\"$P\" -q -D plughw:0,0 -d \"$3\" \"$1\" || exit 5\n";
-
-/* After every sound the speaker is muted, the amplifier off and the gain as
- * before. Not when the device's software has meanwhile switched to a state of
- * its own or plays itself: then the speaker is its. Its sound driver sets the
- * state to off by itself when a playing ends. */
-static const char CLEAN_SCRIPT[] =
-    TOOLS
-    "sleep \"$1\"\n"
-    "case \"$(val Zia_Aud_St)\" in 0|9) ;; *) exit 0;; esac\n"
-    "grep -q closed \"$S\" || exit 0\n"
-    "put 'ZL0 Mute Rout' on; put 'TPA2028D1 Volume' 0\n"
-    "[ -z \"$2\" ] || put 'ZL0 Rout Gain Volume' \"$2\"\n"
-    "[ \"$(val Zia_Aud_St)\" != 9 ] || put Zia_Aud_St 0\n"
-    "exit 0\n";
+/* After a stop the killed player has let go of the sound device. */
+#define STOP_CLEAN_DELAY 1
+/* A ring whose end frame was lost no longer counts after this. */
+#define CALL_MS (180 * 1000)
 
 void c300x_announce_init(struct c300x_announce *announce)
 {
@@ -57,8 +26,17 @@ void c300x_announce_init(struct c300x_announce *announce)
     announce->clean_delay = -1;
     announce->gain = -1;
     announce->result = "";
+    if (c300x_announce_end_leftover()) {
+        announce->clean_delay = STOP_CLEAN_DELAY;
+    }
     /* A file from before a restart is never played. */
     (void)unlink(c300x_announce_file());
+}
+
+/* From a ring to the end of its call the speaker is the device's, also in pauses. */
+static int door_call(const struct c300x_announce *announce)
+{
+    return announce->call_until_ms > c300x_monotonic_ms();
 }
 
 int c300x_announce_playing(const struct c300x_announce *announce)
@@ -81,7 +59,7 @@ int c300x_announce_write(const struct c300x_announce *announce, long offset,
 static int start_play(struct c300x_announce *announce, int gain, int seconds, int timeout_ms)
 {
     char gain_text[16], seconds_text[16];
-    char *argv[] = {"/bin/sh", "-c", (char *)PLAY_SCRIPT, "c300x-announce", (char *)c300x_announce_file(),
+    char *argv[] = {"/bin/sh", "-c", (char *)C300X_ANNOUNCE_PLAY_SCRIPT, "c300x-announce", (char *)c300x_announce_file(),
         gain_text, seconds_text, NULL};
 
     snprintf(gain_text, sizeof(gain_text), "%d", gain);
@@ -92,8 +70,11 @@ static int start_play(struct c300x_announce *announce, int gain, int seconds, in
 static void start_clean(struct c300x_announce *announce)
 {
     char delay_text[16], gain_text[16] = "";
-    char *argv[] = {"/bin/sh", "-c", (char *)CLEAN_SCRIPT, "c300x-announce-off", delay_text, gain_text, NULL};
+    char *argv[] = {"/bin/sh", "-c", (char *)C300X_ANNOUNCE_CLEAN_SCRIPT, "c300x-announce-off", delay_text, gain_text, NULL};
 
+    if (door_call(announce)) {
+        return;
+    }
     snprintf(delay_text, sizeof(delay_text), "%d", announce->clean_delay);
     if (announce->gain >= 0) {
         snprintf(gain_text, sizeof(gain_text), "%d", announce->gain);
@@ -114,6 +95,10 @@ int c300x_announce_play(struct c300x_announce *announce, int volume_percent,
     }
     *error = "invalid_volume";
     if (volume_percent < 1 || volume_percent > 100) {
+        return 0;
+    }
+    *error = "device_busy";
+    if (door_call(announce)) {
         return 0;
     }
     *error = "invalid_audio";
@@ -137,7 +122,8 @@ int c300x_announce_play(struct c300x_announce *announce, int volume_percent,
 static void end_job(struct c300x_announce *announce, int why)
 {
     if (announce->job.pid > 0) {
-        announce->ending = why;
+        /* A stop does not turn a door call into a plain stop. */
+        announce->ending = announce->ending == PREEMPTED ? PREEMPTED : why;
         (void)kill(-announce->job.pid, SIGKILL);
     }
 }
@@ -159,9 +145,24 @@ void c300x_announce_preempt(struct c300x_announce *announce)
     }
 }
 
+void c300x_announce_door_frame(struct c300x_announce *announce, const char *frame)
+{
+    if (strncmp(frame, "*8*1#1#", 7) == 0) {
+        announce->call_until_ms = c300x_monotonic_ms() + CALL_MS;
+    } else if (strncmp(frame, "*8*3#", 5) == 0) {
+        announce->call_until_ms = 0;
+    }
+    if (c300x_announce_frame_takes_speaker(frame)) {
+        c300x_announce_preempt(announce);
+    }
+}
+
 int c300x_announce_prepare(const struct c300x_announce *announce, struct pollfd *fd)
 {
-    return c300x_command_job_prepare(&announce->job, fd);
+    int timeout = c300x_command_job_prepare(&announce->job, fd);
+
+    /* A switching off that is still due is tried again within a second. */
+    return announce->job.pid == 0 && announce->clean_delay >= 0 ? 1000 : timeout;
 }
 
 static void read_gain(struct c300x_announce *announce)
@@ -220,7 +221,7 @@ void c300x_announce_tick(struct c300x_announce *announce)
     if (!cleaned && strcmp(announce->result, "device_busy") == 0) {
         return;
     }
-    announce->clean_delay = ending == PREEMPTED ? PREEMPT_CLEAN_DELAY : 0;
+    announce->clean_delay = ending == PREEMPTED ? PREEMPT_CLEAN_DELAY : ending == STOPPED ? STOP_CLEAN_DELAY : 0;
     start_clean(announce);
 }
 
@@ -238,7 +239,9 @@ void c300x_announce_close(struct c300x_announce *announce)
         read_gain(announce);
         c300x_command_job_close(&announce->job);
         c300x_command_job_init(&announce->job);
-        announce->clean_delay = 0;
+        announce->clean_delay = STOP_CLEAN_DELAY;
+    }
+    if (announce->job.pid == 0 && announce->clean_delay >= 0) {
         /* It finishes on its own after the agent has ended. */
         start_clean(announce);
         announce->job.pid = 0;

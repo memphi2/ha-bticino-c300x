@@ -5113,9 +5113,7 @@ static void handle_udp_event(
     }
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
-    if (c300x_announce_frame_takes_speaker(msg)) {
-        c300x_announce_preempt(&runtime->announce);
-    }
+    c300x_announce_door_frame(&runtime->announce, msg);
     int confirmed_muted;
     if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)) {
         /* A multicast write echo is intent, not completed hardware state. */
@@ -5175,7 +5173,7 @@ static int join_udp_event_multicast_group(int fd, const struct c300x_config *con
     return 1;
 }
 
-static int create_udp_event_socket(const struct c300x_config *config)
+static int create_udp_event_socket(const struct c300x_config *config, int *joined)
 {
     int fd;
     struct sockaddr_in address;
@@ -5197,7 +5195,7 @@ static int create_udp_event_socket(const struct c300x_config *config)
         close(fd);
         return -1;
     }
-    (void)join_udp_event_multicast_group(fd, config);
+    *joined = join_udp_event_multicast_group(fd, config);
     return fd;
 }
 
@@ -9764,6 +9762,7 @@ int c300x_run(struct c300x_config *config)
     struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
+    int udp_joined = 0;
     struct c300x_mdns mdns;
     struct agent_runtime *runtime = NULL;
     struct c300x_video *video = NULL;
@@ -9846,9 +9845,9 @@ int c300x_run(struct c300x_config *config)
         }
         listener_count++;
     }
-    udp_fd = create_udp_event_socket(config);
+    udp_fd = create_udp_event_socket(config, &udp_joined);
     /* Without the door entry events a sound could not give way to a call. */
-    runtime->announce.door_events = udp_fd >= 0;
+    runtime->announce.door_events = udp_fd >= 0 && udp_joined;
     if (config->video_enabled) {
         video = c300x_video_create(config, video_error, sizeof(video_error));
         if (video == NULL) {

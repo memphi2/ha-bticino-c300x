@@ -14,6 +14,8 @@
 #ifdef __arm__
 #include <sys/syscall.h>
 #define ANNOUNCE_STAT struct stat64
+/* The raw syscall fills the kernel's layout: only with 32-bit time is it glibc's. */
+_Static_assert(sizeof(struct stat64) == 104, "struct stat64 must match the kernel's stat64");
 #define announce_fstat(fd, info) ((int)syscall(SYS_fstat64, (fd), (info)))
 #else
 #define ANNOUNCE_STAT struct stat
@@ -146,8 +148,7 @@ int c300x_announce_supported(const struct c300x_announce *announce)
 
 int c300x_announce_frame_takes_speaker(const char *frame)
 {
-    /* A call is set up (ring, intercom, camera view) or answered, or video
-     * starts. Locks, lights and the end of a call do not take the speaker. */
-    return strncmp(frame, "*8*1#", 5) == 0 || strncmp(frame, "*8*2#", 5) == 0
-        || (strncmp(frame, "*7*", 3) == 0 && strcmp(frame, "*7*0*##") != 0);
+    /* A call is set up (ring, intercom, camera view) or answered. Locks,
+     * lights, video commands and the end of a call do not take the speaker. */
+    return strncmp(frame, "*8*1#", 5) == 0 || strncmp(frame, "*8*2#", 5) == 0;
 }

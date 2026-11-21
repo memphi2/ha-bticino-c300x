@@ -9,7 +9,7 @@ import os
 import subprocess
 import time
 import wave
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from http.client import HTTPConnection
 from pathlib import Path
@@ -62,6 +62,8 @@ SWITCH_OFF = ["mixer ZL0_Mute_Rout=on", "mixer TPA2028D1_Volume=0", "mixer ZL0_R
 # The player was killed, so the sound state is still the one of playing.
 SWITCH_OFF_AFTER_KILL = [*SWITCH_OFF, "mixer Zia_Aud_St=0"]
 RING = "*8*1#1#4#21*10##"
+CAMERA_VIEW = "*8*1#5#4#21*10##"
+CALL_END = "*8*3#1#4*21##"
 
 
 def wav(seconds: float = 0.2, *, rate: int = 8000, channels: int = 1) -> bytes:
@@ -88,6 +90,14 @@ class Lab:
     udp_port: int
     dir: Path
     process: subprocess.Popen[bytes] | None = None
+    start: Callable[[], subprocess.Popen[bytes]] | None = None
+
+    def restart(self) -> None:
+        """Start the agent again, as the device does after it ended."""
+
+        assert self.start is not None
+        self.process = self.start()
+        wait_for_health(self.port)
 
     def call(self, action: str = "", payload: dict | None = None, *, status: int = 200) -> dict:
         conn = HTTPConnection("127.0.0.1", self.port, timeout=10)
@@ -181,17 +191,18 @@ def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterato
            "C300X_PCM_STATUS": str(tmp_path / "pcm-status"),
            "C300X_ANNOUNCE_FILE": str(tmp_path / "announce.wav")}
     with (tmp_path / "agent.log").open("w") as log:
-        process = subprocess.Popen([str(binary), "--config", str(tmp_path / "config.json")],
-                                   cwd=tmp_path, stdout=log, stderr=log, env=env)
+        def start() -> subprocess.Popen[bytes]:
+            return subprocess.Popen([str(binary), "--config", str(tmp_path / "config.json")],
+                                    cwd=tmp_path, stdout=log, stderr=log, env=env)
+
+        lab = Lab(port, udp_port, tmp_path, start=start)
         try:
-            wait_for_health(port)
-            lab = Lab(port, udp_port, tmp_path)
-            lab.process = process
+            lab.restart()
             yield lab
         finally:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=5)
+            if lab.process is not None and lab.process.poll() is None:
+                lab.process.terminate()
+                lab.process.wait(timeout=5)
 
 
 def switch_on(lab: Lab, gain: int) -> list[str]:
@@ -239,8 +250,7 @@ def test_does_not_touch_a_device_that_is_using_its_speaker(lab: Lab, busy: str) 
     assert lab.log() == []
 
 
-@pytest.mark.parametrize("frame", [RING, "*8*2#1#4*21##", "*8*1#5#4#21*10##", "*7*300#127#0#0#1#5#2*##"],
-                         ids=["ring", "answer", "camera view", "video"])
+@pytest.mark.parametrize("frame", [RING, "*8*2#1#4*21##", CAMERA_VIEW], ids=["ring", "answer", "camera view"])
 def test_a_door_call_takes_the_speaker_at_once_and_the_device_keeps_it(lab: Lab, frame: str) -> None:
     lab.start_long_sound()
 
@@ -255,6 +265,7 @@ def test_a_door_call_takes_the_speaker_at_once_and_the_device_keeps_it(lab: Lab,
     body = lab.call()
     assert (body["playing"], body["busy"], body["result"]) == (False, True, "preempted")
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_busy"
+    send_udp_event(lab.udp_port, CALL_END)
     assert lab.result() == "preempted"
     assert lab.log()[-1].startswith("aplay -q")
     assert lab.mixer("ZL0_Mute_Rout") == "off"
@@ -263,14 +274,58 @@ def test_a_door_call_takes_the_speaker_at_once_and_the_device_keeps_it(lab: Lab,
 def test_after_a_door_frame_without_a_call_the_speaker_is_switched_off(lab: Lab) -> None:
     lab.start_long_sound()
 
-    send_udp_event(lab.udp_port, RING)
+    send_udp_event(lab.udp_port, CAMERA_VIEW)
 
+    started = time.monotonic()
+    assert lab.result() == "preempted"
+    # The device had three seconds to take its speaker.
+    assert time.monotonic() - started > 2.5
+    assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
+
+
+def test_during_a_call_the_speaker_is_left_to_the_device_until_the_call_ends(lab: Lab) -> None:
+    lab.start_long_sound()
+    send_udp_event(lab.udp_port, RING)
+    lab.wait_for("aplay -q")
+    while lab.player_alive():
+        time.sleep(0.01)
+
+    # Between two ring tones the device lets go of its sound device for a moment.
+    time.sleep(4)
+    assert lab.call()["busy"] is True
+    assert lab.log()[-1].startswith("aplay -q")
+
+    send_udp_event(lab.udp_port, CALL_END)
     assert lab.result() == "preempted"
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
 
 
+def test_no_sound_is_started_during_a_call(lab: Lab) -> None:
+    send_udp_event(lab.udp_port, RING)
+    # The agent hears the frame at once; the pause only orders it before the request.
+    time.sleep(0.3)
+    lab.upload(wav())
+
+    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
+    assert lab.log() == []
+
+    send_udp_event(lab.udp_port, CALL_END)
+    time.sleep(0.3)
+    lab.call("/actions/play", {"volume": 50})
+    assert lab.result() == "played"
+
+
+def test_a_stop_right_after_a_door_frame_still_leaves_the_speaker_to_the_device(lab: Lab) -> None:
+    lab.start_long_sound()
+
+    send_udp_event(lab.udp_port, CAMERA_VIEW)
+    lab.call("/actions/stop", {})
+
+    assert lab.result() == "preempted"
+
+
 @pytest.mark.parametrize("frame", ["*1*1*21##", "*8*19*20##", "*8*20*20##", "*8*21*16##", "*8*91##",
-                                   "*8*3#1#4*21##", "*7*0*##"])
+                                   CALL_END, "*7*0*##", "*7*300#127#0#0#1#5#2*##", "*7*301#127#0#0#1##"])
 def test_locks_lights_and_the_end_of_a_call_do_not_interrupt(lab: Lab, frame: str) -> None:
     (lab.dir / "play-seconds").write_text("1\n")
     lab.upload(wav(1))
@@ -321,6 +376,21 @@ def test_an_agent_that_ends_while_playing_switches_the_speaker_off(lab: Lab) -> 
     lab.wait_for("mixer Zia_Aud_St=0")
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
     assert not (lab.dir / "announce.wav").exists()
+
+
+def test_a_restarted_agent_ends_the_sound_of_one_that_was_killed(lab: Lab) -> None:
+    lab.start_long_sound()
+
+    assert lab.process is not None
+    lab.process.kill()
+    lab.process.wait(timeout=5)
+    assert lab.player_alive()
+    lab.restart()
+
+    lab.wait_for("mixer Zia_Aud_St=0")
+    assert not lab.player_alive()
+    assert lab.log()[-3:] == ["mixer ZL0_Mute_Rout=on", "mixer TPA2028D1_Volume=0", "mixer Zia_Aud_St=0"]
+    assert lab.call()["busy"] is False
 
 
 def _chunk(name: bytes, size: int, payload: bytes = b"") -> bytes:

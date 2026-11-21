@@ -687,8 +687,9 @@ the same UI value in tens, so the agent maps raw code `20` to API/UI volume
 The agent plays a sound file over the device speaker, for example speech that
 Home Assistant made. Capability `announcements.supported` is true where the
 device has the sound tools this needs (`aplay`, `amixer`, the audio chip tool
-and its configuration for playing) and the agent receives the door entry
-events, without which a sound could not give way to a door call.
+and its configuration for playing) and the agent has joined the multicast
+group of the door entry events, without which a sound could not give way to a
+door call.
 
 `GET /api/v1/announcements` returns
 
@@ -723,13 +724,19 @@ software has meanwhile set a state of its own or plays itself.
 `POST /api/v1/announcements/actions/stop` ends the sound at once.
 
 A door call has priority: a call being set up or answered (`*8*1#…`,
-`*8*2#…`) or video starting (`*7*…` other than `*7*0*##`) ends the sound at
-once and frees the sound device. Locks, lights and the end of a call do not.
-The speaker is then left to the device for three seconds; only if the device
-has not taken it by then is it switched off as above. A touch tone or another
-sound of the device during an announcement can cut it short.
+`*8*2#…`) ends the sound at once and frees the sound device. Locks, lights,
+video commands and the end of a call do not. The speaker is then left to the
+device for three seconds; only if the device has not taken it by then is it
+switched off as above. After a ring (`*8*1#1#…`) this waits until the call has
+ended (`*8*3#…`, at the latest three minutes after the ring), and until then
+no new sound is started: `play` answers `409 announcement_device_busy`. After
+a stop the speaker is switched off one second later. An agent that starts
+ends the player of one that was killed while it played and switches the
+speaker off. A touch tone or another sound of the device during an
+announcement can cut it short.
 
 Errors: `409 announcement_busy` while `busy` is true, `409
+announcement_device_busy` during a door call, `409
 announcement_unsupported`, `400 announcement_invalid_audio`, `400
 announcement_invalid_volume`, `500 announcement_write_failed`, `500
 announcement_start_failed`.

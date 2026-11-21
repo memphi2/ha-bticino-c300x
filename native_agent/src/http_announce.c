@@ -19,7 +19,7 @@ static int refuse(int fd, int status, const char *reason, const char *error)
 
 static int refuse_error(int fd, const char *error)
 {
-    if (strcmp(error, "busy") == 0) {
+    if (strstr(error, "busy") != NULL) {
         return refuse(fd, 409, "Conflict", error);
     }
     return strncmp(error, "invalid_", 8) == 0 ? refuse(fd, 400, "Bad Request", error)

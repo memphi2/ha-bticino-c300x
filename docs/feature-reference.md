@@ -779,16 +779,19 @@ browser play the same way; `ffmpeg` on Home Assistant does the conversion.
 - The **volume** of the media player applies to the next sound. It follows the
   device's own volume range for ringing.
 - One sound plays at a time, up to about 110 seconds; a second one waits until
-  the first is over. **Stop** ends the one that plays.
+  the first is over, and sounds play in the order they were asked for.
+  **Stop** ends the one that plays.
 - **A door call always wins.** A ring, a call or a camera request ends the
   sound at once. The attribute `last_result` then reads `preempted`; otherwise
   `played` or `stopped`, or `unknown` when the agent could not be asked.
-- During a door call, for a minute after a ring and while the device uses its
-  speaker itself (a message being played), no sound is started: the action
-  fails and says so, and `last_result` reads `device_busy`. Should the device
-  take its speaker just as a sound starts, the action can succeed with the
-  same `last_result`. A sound the agent did not take reads `not_played`, one
-  that broke off for another reason `failed`.
+- During a door call, during a ring and its call up to a minute after their
+  last bus message, and while the device uses its speaker itself (a message
+  being played), no sound is started: the action fails and says so, and
+  `last_result` reads `device_busy`. The action returns once the device has
+  let the agent have its speaker. A sound the agent did not take reads
+  `not_played`; one the device could not switch on or play reads
+  `sound_path_failed` or `play_failed`, one that broke off for another reason
+  `failed`.
 - A touch tone of the display during a sound can cut it short.
 
 Tested on firmware 1.7.19. Firmware 2.0.2 and 3.0.6 have the same sound parts,
@@ -863,7 +866,8 @@ In `both` there is no tone, since it would hold the speaker the speech needs;
 a `sound_duration` above 0 is refused. The speaker, the engine and the
 language are checked before anything is shown. Speech can still fail after the
 notice is shown in `both`, for example when the engine cannot reach its
-service or a door call comes in; the action then fails and says why. The
+service or the device keeps its speaker for a door call; the action then fails
+and says why. A door call while the speech plays ends it without an error. The
 volume is the one of the speaker entity.
 
 Each duration accepts whole seconds from 0 to 300; zero disables that effect.
@@ -896,7 +900,8 @@ waiting GUI connection only; it does not prove GUI rendering, physical wake
 or audible output. A lost response does not prove non-delivery.
 
 This feature requires the matching **2.5.0 agent and display bundle**, including
-the reapplied Display patch. Test your notifications on the actual device before
+the reapplied Display patch; `speech` and `both` need the speaker of the
+**2.8.0 agent**. Test your notifications on the actual device before
 relying on an automation; a successful action is not proof of audible or visible
 delivery.
 

@@ -766,7 +766,7 @@
       },
       "camera_quality": {
         "title": "Qualità della telecamera",
-        "description": "Dimensione, bit rate e frequenza dei fotogrammi del flusso della telecamera che riceve Home Assistant: il flusso ad alta risoluzione, o sul firmware 3.0.x quello a bassa risoluzione, l'unico che invia, che riceve anche l'app Door Entry. Il C300X li legge solo all'avvio: salvare una modifica riavvia il dispositivo una volta, il che richiede circa un minuto.\n\nIl dispositivo funziona ora con: {running}",
+        "description": "Dimensione, bit rate e frequenza dei fotogrammi del flusso della telecamera ad alta risoluzione; sul firmware 3.0.x di quello a bassa risoluzione, l'unico che quel firmware invia e che riceve anche l'app Door Entry. Su un firmware precedente con **Risoluzione della telecamera** su Bassa, Home Assistant riceve il flusso a bassa risoluzione, che questi valori non modificano. Il C300X li legge solo all'avvio: salvare una modifica riavvia il dispositivo una volta, il che richiede circa un minuto.\n\nIl dispositivo funziona ora con: {running}",
         "data": {
           "size": "Dimensione dell'immagine",
           "bitrate_kbps": "Bit rate",

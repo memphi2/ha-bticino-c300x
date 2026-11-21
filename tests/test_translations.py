@@ -509,3 +509,17 @@ def test_the_display_menu_entry_names_only_what_its_form_offers() -> None:
         text = options["display"]["menu_option_descriptions"]["dashboard"]
         assert not any(word in text for word in removed), name
         assert options["dashboard"]["data"]["dashboard_navigation"].lower() in text.lower(), name
+
+
+def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_low() -> None:
+    # On older firmware the values belong to the high-resolution stream; with
+    # the Camera resolution select on Low, Home Assistant gets the other one.
+    base = Path(__file__).parents[1] / "custom_components" / "bticino_c300x"
+    for path in [base / "strings.json", *sorted((base / "translations").glob("*.json"))]:
+        texts = json.loads(path.read_text(encoding="utf-8"))
+        select = texts["entity"]["select"]["camera_resolution"]
+        description = texts["options"]["step"]["camera_quality"]["description"]
+
+        assert f"**{select['name']}**" in description, path.name
+        assert select["state"]["low"] in description, path.name
+

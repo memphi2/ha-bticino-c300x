@@ -28,10 +28,13 @@ function remember(entityId, ratio) {
   }
 }
 
-// `entityId` is a function: the card can be given another camera later.
+// `entityId` is a function: the camera is known only once Home Assistant is,
+// and the card can be given another one. The card calls `sync` then.
 export function c300xFollowPictureSize(host, video, entityId) {
+  let shown = "";
   const apply = (ratio) => {
     if (ratio) host.style.setProperty(PROPERTY, String(ratio));
+    else host.style.removeProperty(PROPERTY);
   };
   const follow = () => {
     const ratio = c300xPictureRatio(video.videoWidth, video.videoHeight);
@@ -40,7 +43,14 @@ export function c300xFollowPictureSize(host, video, entityId) {
     const id = entityId();
     if (id && stored(id) !== ratio) remember(id, ratio);
   };
-  apply(stored(entityId()));
+  const sync = () => {
+    const id = entityId() || "";
+    if (id === shown) return;
+    shown = id;
+    apply(id ? stored(id) : null);
+  };
+  sync();
   video.addEventListener("loadedmetadata", follow);
   video.addEventListener("resize", follow);
+  return { sync };
 }

@@ -4,10 +4,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HTTP_C = ROOT / "native_agent" / "src" / "http.c"
+DETECT_C = ROOT / "native_agent" / "src" / "device_detect.c"
 
 
 def test_native_agent_reads_firmware_from_stock_webserver_db() -> None:
-    source = HTTP_C.read_text(encoding="utf-8")
+    source = DETECT_C.read_text(encoding="utf-8")
 
     assert '#define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"' in source
     assert 'const char *open_tag = "<ver_webserver>";' in source
@@ -16,21 +17,21 @@ def test_native_agent_reads_firmware_from_stock_webserver_db() -> None:
 
 
 def test_native_agent_uses_configured_firmware_before_stock_fallback() -> None:
-    source = HTTP_C.read_text(encoding="utf-8")
-    resolver = source.rsplit("static void resolve_device_firmware(", 1)[1].split("\n}", 1)[0]
+    source = DETECT_C.read_text(encoding="utf-8")
+    resolver = source.rsplit("void c300x_device_firmware(", 1)[1].split("\n}", 1)[0]
 
-    configured_index = resolver.index("config->device_firmware[0] != '\\0'")
+    configured_index = resolver.index("configured[0] != '\\0'")
     fallback_index = resolver.index("read_firmware_from_webserver_db(out, out_len)")
 
     assert configured_index < fallback_index
-    assert "c300x_copy_string(out, out_len, config->device_firmware);" in resolver
+    assert "c300x_copy_string(out, out_len, configured);" in resolver
 
 
 def test_capabilities_escapes_resolved_firmware_value() -> None:
     source = HTTP_C.read_text(encoding="utf-8")
 
     assert "char firmware_value[C300X_MAX_VERSION_LEN];" in source
-    assert "resolve_device_firmware(config, firmware_value, sizeof(firmware_value));" in source
+    assert "c300x_device_firmware(config->device_firmware, firmware_value, sizeof(firmware_value));" in source
     renderer = (HTTP_C.parent / "capabilities.c").read_text(encoding="utf-8")
     assert ".device_firmware = firmware_value," in source
     assert "c300x_json_escape_string(context->device_firmware, device_firmware, sizeof(device_firmware));" in renderer

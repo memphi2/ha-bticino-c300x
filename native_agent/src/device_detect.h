@@ -1,6 +1,8 @@
 #ifndef C300X_DEVICE_DETECT_H
 #define C300X_DEVICE_DETECT_H
 
+#include <stddef.h>
+
 enum c300x_device_model {
     C300X_DEVICE_MODEL_C300X = 0,
     C300X_DEVICE_MODEL_C100X,
@@ -27,5 +29,10 @@ int c300x_device_camera_resolution_fixed(void);
 /* The Display patch can edit the display's QML files. Only the Qt 4 display
  * so far; the C100X files are on disk but not patched yet. */
 int c300x_device_display_files_patchable(void);
+
+/* The firmware version: the configured one, else <ver_webserver> of the
+ * vendor web server's database, which the installer relies on. Empty when
+ * neither is there. */
+void c300x_device_firmware(const char *configured, char *out, size_t out_len);
 
 #endif

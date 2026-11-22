@@ -11,6 +11,8 @@ GUI_ROOT="${C300X_QML_GUI_ROOT:-/home/bticino}"
 GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 PROC_DIR="${C300X_QML_PROC_DIR:-/proc}"
+QT5_MARKER="${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}"
+C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
 AGENT_BIN="${C300X_QML_AGENT_BIN:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/c300x-agent-native}"
 DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
@@ -1628,6 +1630,20 @@ restore_all_patch_files() {
     restore_core_patch_files
     restore_media_user_label_files
 }
+
+# Only the Qt 4 display files are patched; status stays readable everywhere.
+# A Qt 5 C300X display can still be restarted, its program is BtClass too.
+# The C100X's is not, so nothing is restarted there either.
+action_refused() {
+    [ "$ACTION" = "status" ] && return 1
+    [ -e "$C100X_MARKER" ] && return 0
+    [ "$ACTION" != "reload" ] && [ -e "$QT5_MARKER" ]
+}
+
+if action_refused; then
+    printf '{"ok":false,"available":false,"state":"unsupported_display"}\n'
+    exit 3
+fi
 
 case "$ACTION" in
     status)

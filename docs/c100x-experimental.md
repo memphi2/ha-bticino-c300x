@@ -6,6 +6,11 @@ offline against extracted firmware and synthetic fixtures. No C100X device
 or Home Assistant installation was accessed for this work. ABI compatibility
 does not establish runtime or hardware support.
 
+A contributor has since supplied observations from a Companion-modified 1.5.8
+device. See the [field-report cross-check](c100x-field-report.md) for verified
+binary matches, readback evidence and the remaining coexistence limits. These
+observations do not validate installation or runtime of this branch's agent.
+
 ## Prerequisites
 
 - An independently SSH-enabled C100X with a **known, working privileged SSH

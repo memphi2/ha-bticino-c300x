@@ -12,7 +12,7 @@ FIRMWARE_ROOT = Path(os.environ.get(
     "C300X_FIRMWARE_WORK", ROOT.parent / "c300x-fwpatch/work"
 ))
 FIRMWARES = ("c100x-1.5.8", "1.7.19", "2.0.2", "3.0.6")
-PATCH_OFFSETS = dict(zip(FIRMWARES, (0x27958, 0x282F8, 0x28300, 0x27014)))
+PATCH_OFFSETS = dict(zip(FIRMWARES, (0x27958, 0x282F8, 0x28300, 0x27014), strict=True))
 
 
 def original(firmware):

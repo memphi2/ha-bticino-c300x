@@ -8,7 +8,14 @@ import subprocess
 import time
 
 import pytest
-from test_native_agent_maintenance_jobs import HEADERS, QML, ROOT, Lab, response, wait_until
+from test_native_agent_maintenance_jobs import (
+    HEADERS,
+    QML,
+    ROOT,
+    Lab,
+    response,
+    wait_until,
+)
 
 from native_agent.test.smoke import api_get, free_tcp_port, wait_for_health
 

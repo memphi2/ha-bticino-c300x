@@ -3,5 +3,5 @@
   "agent_version": "2.9.0b1",
   "inputs_sha256": "0e39d414d1096e8b0483e6933a65a2a0f71e439c0fe8bda526d9892a9d8ec1c8",
   "binary_sha256": "4843729b507d9d79f6249b2ad462d1dec6bfbc0bc1278ec592e1211b8b9ff097",
-  "local_build_settings_sha256": "3b00b459739630377a77530d0c1e745126b4371a9980aca754c08b52a9a68167"
+  "local_build_settings_sha256": "59e301a5a233c68acdfd0e126c848a29bdbf810c9a3f874870b56869cfdce7b8"
 }

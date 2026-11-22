@@ -1,10 +1,15 @@
-# C100X Issue #51: Agent-Only Test Preparation
+# C100X Issue #51: Complete Test Package
 
 Status: local preparation, not a published beta or authorization to install.
 Target: **C100X, original firmware 1.5.8**, branch `c100x_1.5.8`.
 No release number has been selected. The current `2.8.2` metadata is inherited
 development metadata, not a C100X release designation. Do not distribute an old
 local ZIP merely because it has that version.
+
+The download is a **complete HA integration ZIP**, including the freshly built
+ARM agent, generated device bundle, all Lovelace card modules and documentation.
+"Agent-only" describes the first hardware acceptance phase, not a reduced ZIP.
+Unfinished GUI activation remains disabled even though adapter assets are included.
 
 ## What This First Test Covers
 
@@ -50,22 +55,21 @@ manual privileged overwrites or deliberately relabelled packages. They do not
 retrofit guards into old C300X software. Do not use HACS to replace a production
 integration for this test, or attach this ZIP to the stable/fw306 release.
 
-### Version and Channel Decision
+### Download Delivery
 
-Recommended first step: a privately handed-off, checksum-bound local test build,
-identified by commit and SHA256, without a public tag or HACS channel.
+The user uploads the verified ZIP directly as an attachment to **issue #51**.
+The accompanying issue comment identifies the exact source commit, ZIP filename,
+SHA256 and completed validation. There is no C100X tag, GitHub release, separate
+repository or HACS channel. Do not use a stable-release download with the same
+displayed version, GitHub's source-code archive, or an earlier issue attachment.
 
-For a later public beta, choose an unused canonical `X.Y.ZbN` version only after
-the maintainer selects the release plan. A beta tag in the existing repository is
-one shared prerelease stream, **not** a C100X-specific HACS channel; even
-`prerelease=true` and `latest=false` do not separate it from the fw306 beta.
-A dedicated distribution repository or a reviewed model-aware shared release
-policy is required before claiming separate channels. Both still need the HA
-domain/instance restriction above. A `+c100x` or `-c100x` suffix is rejected by
-the current version validator; do not work around it by relabelling metadata.
-
-Changing the version later requires a new build lock, package and checksums.
-No release-policy gate is relaxed by this preparation.
+Before external delivery, the final frozen source must pass the full local gate,
+browser checks and complete-package verification. Keep the public release block
+intact. Download the attachment and compare its SHA256 with the maintainer's
+comment, for example `sha256sum ha-bticino-c100x-issue51-local.zip` on Linux or
+`Get-FileHash .\ha-bticino-c100x-issue51-local.zip -Algorithm SHA256` in PowerShell.
+Do not continue on a mismatch. A checksum binds the delivered bytes; it does not
+prove hardware compatibility or create an independent firmware update channel.
 
 ## Before Any Installation
 
@@ -80,13 +84,141 @@ No release-policy gate is relaxed by this preparation.
    operation and Companion configuration. Securely preserve exact pre-test files
    and metadata outside the device as well as on-device recovery data. Do not
    overwrite a non-stock route with a stock original to make a check pass.
-4. Agree how the pre-test agent/startup/configuration will be restored, including
-   a failed-start case. On this Companion-modified device, generic uninstall is
-   not equivalent to restoration of its pre-test state. If that recovery path
-   is unknown, stop before installation, not after a failed startup.
+4. Complete the private backup below, verify its contents and retain a working
+   SSH session. On this Companion-modified device, generic uninstall is not
+   equivalent to restoration of its pre-test state. Stop if the specified paths
+   differ, are unexpected symlinks, or cannot be read.
 5. Prepare the separate HA test instance with only this package. Check the
    displayed device/model and explicit host before accepting SSH installation.
    Existing production HA instances and their stable/beta packages stay untouched.
+
+## Private Pre-Test Backup
+
+These are **tester instructions**, not commands run by the maintainer on the
+device. Execute them only for the explicitly authorized device while no call,
+recording or installer is active. Replace `C100X_HOST` with its confirmed address.
+Use the device's current SSH credentials and verify its host-key fingerprint;
+never disable host-key checking or put a password in a command line.
+
+On the tester's workstation, create a private directory (`umask 077` on Linux).
+The following SSH operations only read device files; archive output goes to the
+workstation. The archive contains credentials, user configuration and vendor
+files. **Never attach it, its contents or raw device configuration to GitHub.**
+
+```sh
+umask 077
+mkdir c100x-51-private
+cd c100x-51-private
+ssh root@C100X_HOST 'for p in \
+  /home/bticino/cfg/extra/c300x-native-agent \
+  /home/bticino/cfg/extra/c300x-device-file-backups \
+  /etc/init.d/c300x-native-agent /etc/rc5.d/S40c300x-native-agent \
+  /etc/network/if-pre-up.d/iptables /etc/network/if-pre-up.d/iptables6; do
+    if [ -e "$p" ] || [ -L "$p" ]; then
+      printf "present %s\n" "$p"
+    else
+      printf "absent %s\n" "$p"
+    fi
+  done' > presence.txt
+```
+
+Stop if SSH fails. Check `presence.txt`; keep both present and absent entries.
+Then stream a metadata-preserving archive of the configuration, relevant startup/
+firewall files and GUI/routing identity files:
+
+```sh
+ssh root@C100X_HOST 'set --
+  for p in home/bticino/cfg \
+    etc/init.d/c300x-native-agent etc/rc5.d/S40c300x-native-agent \
+    etc/network/if-pre-up.d/iptables etc/network/if-pre-up.d/iptables6 \
+    home/bticino/bin/gui/BtClass100 home/bticino/bin/BtClass100_qws \
+    home/bticino/bin/gui/skins/default/main.qml \
+    home/bticino/bin/gui/skins/default/MainPage.qml \
+    home/bticino/bin/gui/skins/default/EventManager.qml \
+    home/bticino/bin/bt_answering_machine; do
+      if [ -e "/$p" ] || [ -L "/$p" ]; then set -- "$@" "$p"; fi
+    done
+  exec tar -C / -cpf - "$@"' > pretest.tar.partial
+```
+
+Only after a zero exit status rename `pretest.tar.partial` to `pretest.tar` on the
+workstation. Run `tar -tvf pretest.tar` and `sha256sum pretest.tar`; record the hash
+privately. Confirm that configuration, the GUI/routing identity files, and every
+path marked present are represented with their expected modes/owners/link targets.
+Do not install after a tar warning, read failure, incomplete archive or unexpected
+layout. This live-file archive is not a disk image or a power-loss recovery method.
+
+Record whether the agent was running (`pidof c300x-agent-native`: exit 0 means
+present; exit 1 with no output means absent; errors are unknown), its previous
+version if already known, and the current GUI/routing SHA256 values. Keep the
+archive outside HA and outside the device. Preserve official-app and Companion
+accounts unchanged; their presence is not permission to migrate them.
+
+## Manual HA Installation
+
+1. Use a separate disposable HA instance meeting the minimum in `hacs.json`.
+   Create a full HA backup before the test. It must have no production C300X or
+   fw306 beta entries. Do not install this ZIP through HACS or a custom repository.
+2. Verify the issue attachment's SHA256. Inspect the ZIP: `manifest.json`,
+   `__init__.py`, `frontend/`, `device_agent/armhf/c300x-agent-native` and
+   `device_agent/bundle.json` must be at the ZIP root. This is not a standalone
+   agent binary and not a source-code checkout.
+3. Stop HA Core using the normal control for that test instance. Extract the
+   **entire ZIP** into `/config/custom_components/bticino_c300x/`. It must yield
+   `/config/custom_components/bticino_c300x/manifest.json`, not another nested
+   `custom_components` or repository folder. If a previous test integration is
+   present, move its entire directory outside `custom_components` first; do not
+   overlay files from different builds. Retain the old directory for rollback.
+4. Start HA Core. Check **Settings > System > Logs** for import/dependency errors.
+   A stopped or failed HA startup does not authorize any device changes.
+5. Under **Settings > Devices & services > Add integration**, search for
+   **BTicino C300X** (the integration retains its existing name). Enter only the
+   confirmed C100X host. Use SSH bootstrap only when offered and authorized.
+   Explicit current SSH credentials take precedence over any factory default.
+   Use a trusted isolated network: the legacy bootstrap SSH client currently does
+   not pin host keys (`known_hosts=None`). The manual backup SSH connection above
+   must still verify its host key; model/package guards are not host authentication.
+6. Follow the first-test restrictions below. Do not enable display, MQTT migration,
+   media-user setup or media features just to clear a Repair or populate a card.
+
+## Lovelace Card Setup
+
+The ZIP includes all current card ES modules; there is no separate npm build or
+card download for the tester. HA registers the bundled resource automatically
+after integration setup. The card picker currently calls it **C300X Doorbell Call
+Card**, also on C100X. Its type remains `custom:c300x-doorbell-call-card`.
+
+On the test dashboard select **Edit dashboard > Add card**. For the initial
+agent-only phase, confirm registration but do not enable media merely to obtain
+a camera entity. A missing/unavailable camera must leave media start buttons
+disabled and must not request the microphone. GUI restart, device ringer mute,
+key tone, Notify sound and TTS are not card features to enable in this test.
+
+Only in a separately approved media phase, select the camera entity belonging to
+the C100X test entry. A conservative card configuration is:
+
+```yaml
+type: custom:c300x-doorbell-call-card
+entity: camera.REPLACE_WITH_C100X_TEST_CAMERA
+mode: doorbell_call
+ringback_tone: false
+show_door_unlock: false
+show_stair_light: false
+show_media_history: false
+```
+
+Use the actual entity picker/name, not the placeholder. Do not press play, answer,
+Home Call, door or light during the first acceptance phase. Hidden controls are
+not an authorization boundary; the test plan and backend capability checks remain
+necessary. Later media tests require their own authorization and hardware evidence.
+
+For a missing/stale card, hard-reload the browser and inspect dashboard Resources
+(advanced mode). Keep one JavaScript-module entry beginning
+`/bticino_c300x/frontend/c300x-doorbell-call-card.js?v=`. The value is a content hash,
+not the inherited integration version. Do not replace it with a stable/HACS URL or
+maintain duplicate resources. YAML-managed resources need that same local URL
+with `type: module`; obtain its exact current `?v=` value from this test instance's
+registered resource or the package's validated handoff, not a guessed version.
 
 ## First Authorized Installation and Checks
 
@@ -98,9 +230,11 @@ The C100X bootstrap must leave legacy MQTT/Companion migration untouched.
 
 1. Install the approved package on the isolated HA test instance; authorize only
    the agreed C100X host. Leave GUI/display installation disabled.
-2. After agent installation, stop at feature selection for the first inspection.
-   Do not enable video/audio, display, MQTT migration or media-user setup. Do not
-   continue through a repair that proposes changing routing or existing users.
+2. After agent installation, pause at feature selection for the first inspection.
+   Leave video/audio, display and media-user creation disabled. After confirming
+   the host/model and unchanged vendor operation, finish setup with those features
+   off; do not invoke device actions or MQTT migration. If setup or a Repair demands
+   a routing/user change, stop instead of accepting it to complete the wizard.
 3. Check authenticated setup/status, C100X/1.5.8 identity, discovery and available
    capabilities. Display/mute/key-tone/GUI-restart capabilities must remain false.
    An exposed unsupported toggle is a failed acceptance check, not an invitation
@@ -119,7 +253,7 @@ authentication loss, non-stock identity refusal, or failed restoration. Do not
 repeat a failing installation, force a capability, delete backups, restart the
 entire vendor stack, or replace provisioned SIP accounts to recover.
 
-Use the agreed exact pre-test agent/configuration/startup recovery procedure.
+Use the exact pre-test backup and recovery steps below.
 Keep installation errors, hashes and recovery files. Report whether the agent
 is stopped, still running, or unknown; a retained file is not process readiness.
 Restoring files on disk does not unload QML or an executable already in memory.
@@ -144,6 +278,85 @@ routing backups. It cannot establish recovery of arbitrary Companion changes or
 unload an already running GUI. Do not run uninstall on the issue #51 device as a
 substitute for its pre-test backup.
 
+### Concrete First-Test Rollback
+
+This procedure restores only the paths changed by the agent-only installer. It
+does not recover an unknown GUI restart, media/routing migration, app provisioning
+change, power loss or inaccessible SSH. Stop and request assistance for those cases;
+do not substitute stock firmware files for the device's own pre-test files.
+
+1. Disable the C100X entry on the separate HA test instance and close its cards.
+   Retain the failed installation's redacted logs and the private backup. Verify
+   `pretest.tar` still has its recorded SHA256 before using it.
+2. Through the already verified SSH session, stop only `c300x-agent-native`, not
+   `bt_daemon`, the GUI, SIP server or Companion. If `pidof c300x-agent-native`
+   reports it running, send `killall c300x-agent-native` (TERM), then check once
+   per second for at most ten seconds. Proceed only after `pidof` returns exit 1
+   with empty output and no error. If it remains running, signalling fails without
+   a verified exit, or process state is unknown, stop recovery before changing files.
+3. Transfer the private archive back to a private temporary location on this
+   device, verify its SHA256 there, and keep SSH connected. Do not blindly extract
+   the full archive over `/`: it contains official-app/Companion configuration.
+4. Move the failed agent directory to a new private sibling name such as
+   `c300x-native-agent.issue51-failed-TIMESTAMP`; do not delete it or the managed
+   backup root. Reject unexpected symlinks and an already-existing destination.
+   If the agent directory was present before the test, restore **only**
+   `home/bticino/cfg/extra/c300x-native-agent` from the archive using metadata-
+   preserving tar extraction. If it was absent, leave the original path absent.
+   For example, after verifying the private archive at `/tmp/c100x-pretest.tar`,
+   `tar -C / -xpf /tmp/c100x-pretest.tar home/bticino/cfg/extra/c300x-native-agent`
+   restores that one archived tree. Never add the whole `home/bticino/cfg` tree
+   to this command; official-app/Companion state must not be rolled back wholesale.
+5. Restore the four startup/firewall paths in the table below. Remount `/` writable
+   only for these writes and return it read-only afterwards; a failed remount is a
+   stop condition, not permission to reboot. For paths recorded present, extract
+   the exact archived entry, preserving owner, permissions and symlink target.
+   For paths recorded absent, remove only that newly created file/link, never its
+   parent directory. Do not restore startup until the old agent tree is complete.
+   The root remount commands are `mount -o remount,rw /` and
+   `mount -o remount,ro /`. Extract each present entry by its relative archive path,
+   for example `tar -C / -xpf /tmp/c100x-pretest.tar etc/init.d/c300x-native-agent`.
+   Inspect an existing destination first; never extract through an unexpected
+   symlink. A file recorded absent can be removed with `rm -f` on that exact path
+   only after confirming it is the test-created file/link, not a directory.
+
+| Managed path | Pre-test present | Pre-test absent |
+| --- | --- | --- |
+| `/etc/init.d/c300x-native-agent` | Restore archived file and executable mode. | Remove only the test-created file. |
+| `/etc/rc5.d/S40c300x-native-agent` | Restore archived link/file exactly. | Remove only the test-created link/file. |
+| `/etc/network/if-pre-up.d/iptables` | Restore archived content, owner and mode. | Remove only the test-created file. |
+| `/etc/network/if-pre-up.d/iptables6` | Restore archived content, owner and mode. | Remove only the test-created file. |
+
+6. Compare restored files against the private archive, including modes/ownership
+   and link targets; verify GUI/routing hashes still equal the pre-test record.
+   Leave new backup/recovery material intact. If any comparison fails, leave the
+   agent stopped and startup disabled; do not reboot or retry installation.
+7. Start the restored agent via its restored init script only if it was running
+   before the test and the original tree/startup have been verified. If no agent
+   existed before the test, leave it absent and stopped. No automatic reboot is
+   part of this rollback. Check the vendor menus/app locally without operating a
+   door or starting media outside the agreed acceptance phase.
+8. To undo HA-side installation, stop HA Core, move this test integration directory
+   out of `custom_components`, and restore the previous directory or HA backup.
+   Restore/remove only this test instance's card/resource as appropriate, restart
+   HA and reload the browser. HA rollback does not undo device writes.
+
+Keep the failed agent directory, archive and recovery materials until recovery is
+confirmed. If SSH is lost or these paths differ from the captured layout, there is
+no claimed automatic recovery; this is a reason to stop before the first install.
+
+### Diagnostics for Issue #51
+
+Report the attachment filename, SHA256, source commit, HA version, agent version,
+reported model/firmware, observation duration and exact step that failed. Include
+the integration's **Download diagnostics** output only after reviewing/redacting
+identifiers, addresses and any sensitive fields. Add short redacted HA log excerpts,
+capability flags, whether the agent is stopped/running/unknown, and whether GUI/
+routing hashes stayed unchanged. For card problems include browser/version,
+resource URL/hash, screenshot and console error with private details removed.
+Never upload the private tar archive, config files, tokens, passwords, SIP accounts
+or complete routing configuration. Do not retry or force unsupported controls.
+
 ## Evidence and Remaining Work
 
 Existing offline evidence includes exact original-firmware routing checks,
@@ -153,10 +366,10 @@ under QEMU. Compilation does not instantiate vendor QML or validate hardware.
 See [experimental support](c100x-experimental.md) and the
 [page/control matrix](c100x-display-parity.md) for commands and scope.
 
-Before a public beta: select its version/distribution channel, complete the
-exact-source package/build-lock review, reconcile applicable stable safety fixes,
-and run the required PR-stage gates. No full gates were authorized during this
-preparation. Before display trials: establish isolated call-safe GUI supervision,
+Before issue attachment delivery: complete the exact-source review, full local
+gate, browser tests and fresh complete-package/build-lock verification. This full
+gate is now explicitly authorized; earlier preparation used focused checks only.
+It does not create canonical-main release evidence. Before display trials: establish isolated call-safe GUI supervision,
 failed-start readiness and runtime rollback, then test them on authorized hardware.
 Those are real remaining gaps; this agent-only test does not complete page parity.
 

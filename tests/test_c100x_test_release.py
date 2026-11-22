@@ -4,16 +4,17 @@ import asyncio
 import importlib
 import json
 import os
-from pathlib import Path
 import subprocess
+import zipfile
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
-from custom_components.bticino_c300x import agent_update, device_installer
 from test_agent_update import FakeHass, FakeUpdateApi
 from test_native_agent_update_legacy_bootstrap import _compile_updater
+
+from custom_components.bticino_c300x import agent_update, device_installer
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -140,3 +141,32 @@ def test_test_instructions_ship_with_the_local_package(monkeypatch, tmp_path):
     for name in ("test-release", "experimental", "display-parity", "field-report"):
         relative = f"docs/c100x-{name}.md"
         assert (tmp_path / relative).read_bytes() == (ROOT / relative).read_bytes()
+
+
+def test_complete_archive_contains_current_card_and_device_assets(monkeypatch, tmp_path):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    builder = importlib.import_module("build_hacs_release")
+    stager = importlib.import_module("stage_device_agent_bundle")
+    frontend = importlib.import_module("update_frontend_hashes")
+    binary = tmp_path / "synthetic-agent"
+    binary.write_bytes(b"offline packaging fixture, never executed")
+    monkeypatch.setattr(builder, "PACKAGE_ROOT", tmp_path / "package")
+    monkeypatch.setattr(builder, "stage_bundle", lambda path, **kwargs: stager.stage_bundle(
+        path, **kwargs, agent_binary=binary,
+    ))
+    builder._prepare_package("test")
+    archive = tmp_path / "c100x-test.zip"
+    builder._write_zip(archive)
+    with zipfile.ZipFile(archive) as zipped:
+        for name in frontend.FRONTEND_MODULES:
+            assert zipped.read(f"frontend/{name}") == (frontend.FRONTEND_DIR / name).read_bytes()
+        assert not frontend.update_frontend_import_hashes(frontend.frontend_bundle_hash(), check=True)
+        for name in ("__init__.py", "manifest.json", "frontend.py", "device_installer.py"):
+            assert zipped.read(name) == (builder.COMPONENT_SRC / name).read_bytes()
+        assert zipped.read("device_agent/armhf/c300x-agent-native") == binary.read_bytes()
+        assert zipped.read("device_agent/qml/c100x_bundle.sh")
+        assert zipped.read("docs/c100x-test-release.md") == (ROOT / "docs/c100x-test-release.md").read_bytes()
+        manifest = json.loads(zipped.read("device_agent/bundle.json"))
+        assert manifest["c100x_only"] is True
+        for item in manifest["files"]:
+            assert zipped.read(item["path"])

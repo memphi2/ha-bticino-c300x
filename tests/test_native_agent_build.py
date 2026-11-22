@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def build_tree(tmp_path):
     shutil.copy(ROOT / "native_agent/Makefile", tmp_path)
+    shutil.copytree(ROOT / "native_agent/qt5", tmp_path / "qt5")
     (tmp_path / "VERSION").write_text("1.0.0\n")
     source = tmp_path / "src"
     source.mkdir()

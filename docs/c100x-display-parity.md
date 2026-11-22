@@ -52,6 +52,9 @@ modules, C100X-owned frame/text/switch/skin components, physical-key focus,
 scroll reveal, numeric edit/confirm/cancel and history-bucket selection. The
 shared HA JS and original Qt4 pages are unchanged. Focused host Qt5 tests load
 every converted module and exercise offscreen actions and edit cancellation.
+The generated entity slider is also tested with the real page helpers: edit
+starts at the current value, one key advances one configured step, fractional
+and unaligned bounds are respected, and cancellation submits no command.
 This build is not yet an installed or advertised display adapter.
 
 This matrix is a target, not a declaration that every row works. Capability

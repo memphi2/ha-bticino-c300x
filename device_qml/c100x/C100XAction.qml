@@ -7,6 +7,9 @@ Item {
     property bool down: false
     property int keyboardSteps: 0
     property int keyboardPosition: 0
+    property int keyboardInitialPosition: 0
+    property bool keyboardBuckets: true
+    property real keyboardRangeRatio: 1
     property bool keyboardEditing: false
     property real mouseX: width / 2
     signal clicked(var mouse)
@@ -16,12 +19,18 @@ Item {
     signal canceled()
 
     function point() { return {x: mouseX, y: height / 2, accepted: true} }
+    function updatePosition() {
+        mouseX = keyboardBuckets ? (keyboardPosition + 0.5) * width / keyboardSteps
+            : keyboardPosition * keyboardRangeRatio * width / Math.max(1, keyboardSteps - 1)
+    }
     function activate() {
         if (!enabled || !visible) return
         if (keyboardSteps > 1) {
+            if (!keyboardEditing)
+                keyboardPosition = Math.max(0, Math.min(keyboardSteps - 1, keyboardInitialPosition))
             keyboardEditing = !keyboardEditing
             down = keyboardEditing
-            mouseX = (keyboardPosition + 0.5) * width / keyboardSteps
+            updatePosition()
             if (keyboardEditing) { actionPressed(point()); clicked(point()) }
             else actionReleased(point())
         } else {
@@ -34,7 +43,7 @@ Item {
     }
     function adjust(direction) {
         keyboardPosition = Math.max(0, Math.min(keyboardSteps - 1, keyboardPosition + direction))
-        mouseX = (keyboardPosition + 0.5) * width / keyboardSteps
+        updatePosition()
         positionChanged(point())
         clicked(point())
     }

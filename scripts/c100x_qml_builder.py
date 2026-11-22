@@ -41,8 +41,14 @@ def adapt_page(name: str, source: str) -> str:
     source = source.replace("onReleased:", "onActionReleased:")
     source = source.replace("if (pressed)", "if (down)")
     source = source.replace("id: sliderMouse\n", "id: sliderMouse\n"
-                            "                keyboardSteps: controlRow.numericRangeValid() ? "
-                            "Math.max(2, Math.ceil((control.max - control.min) / control.step) + 1) : 0\n")
+                            '                objectName: "c100xNumericSlider"\n'
+                            "                keyboardBuckets: false\n"
+                            "                keyboardSteps: controlRow.numericRangeValid() && hostPage ? "
+                            "hostPage.controlLastStep(control) + 1 : 0\n"
+                            "                keyboardInitialPosition: controlRow.numericRangeValid() && hostPage && "
+                            "!hostPage.controlValueUnset(control) ? Math.round((Number(control.value) - control.min) / control.step) : 0\n"
+                            "                keyboardRangeRatio: controlRow.numericRangeValid() ? "
+                            "Math.min(1, (keyboardSteps - 1) * control.step / (control.max - control.min)) : 1\n")
     source = source.replace('objectName: "energyHoursTap"',
                             'objectName: "energyHoursTap"\n                keyboardSteps: 24')
     source = source.replace('objectName: "energyPowerTap"',

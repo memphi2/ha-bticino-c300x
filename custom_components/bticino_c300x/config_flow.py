@@ -246,8 +246,9 @@ if TYPE_CHECKING:
 else:
     FlowResult = dict[str, Any]
 
-_SETUP_VIDEO_ENABLED_DEFAULT = True
-_CREATE_HOMEASSISTANT_USER_DEFAULT = True
+# This C100X-only test package must not provision media on first setup by default.
+_SETUP_VIDEO_ENABLED_DEFAULT = False
+_CREATE_HOMEASSISTANT_USER_DEFAULT = False
 _RECONFIGURED_OPTION_KEYS = frozenset(
     {
         *SNAPSHOT_DEFAULTS,
@@ -622,6 +623,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             feature_data, errors = _feature_input(
                 user_input,
                 default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
+                default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
             )
             if errors:
                 return self.async_show_form(

@@ -347,6 +347,11 @@ startup integration and, by its current default, the firewall allowance; it
 starts/restarts the **agent**, not the vendor GUI. Review these writes explicitly.
 The C100X bootstrap must leave legacy MQTT/Companion migration untouched.
 
+Video and automatic media-user creation default to off in this test package.
+Submitting the initial form unchanged does not enable media or provision SIP
+users. Enabling video alone does not authorize automatic SIP-user creation;
+that requires a separate explicit choice during an agreed later media trial.
+
 1. Install the approved package on the isolated HA test instance; authorize only
    the agreed C100X host. Leave GUI/display installation disabled.
 2. After agent installation, pause at feature selection for the first inspection.

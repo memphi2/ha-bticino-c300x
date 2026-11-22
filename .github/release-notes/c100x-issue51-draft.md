@@ -28,6 +28,8 @@ are not part of first-test acceptance.
 - C100X-only package guards reject C300X targets before supported HA uploads or
   SSH writes, including missing/invalid manifest cases. The new native updater
   adds its own check; old updaters do not.
+- Initial setup leaves video and automatic SIP-user creation off. Enabling
+  video later does not implicitly authorize SIP-user creation.
 - The bundled card registers locally with content-hashed resource URLs. Missing
   or unavailable media cannot start a stream or request the microphone. The
   first test does not authorize media, Home Call or door/light actions.

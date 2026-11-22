@@ -34,6 +34,7 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     QT5_RCC="${C300X_QML_QT5_RCC:-$QT5_AGENT_DIR/display-qt5.rcc}"
     QT5_OVERLAY_LIB="${C300X_QML_QT5_OVERLAY_LIB:-$QT5_AGENT_DIR/c300x-qrc-overlay.so}"
     QT5_WRAPPER_BACKUP="${C300X_QML_QT5_WRAPPER_BACKUP:-$QT5_BACKUP_ROOT/original/bin/BtClass_qws}"
+    QT5_LOG="${C300X_QML_QT5_LOG:-/tmp/c300x-display-qt5.log}"
     GUI_DIR="${C300X_QML_GUI_DIR:-$QT5_ROOT/skins/default}"
     BACKUP_DIR="${C300X_QML_BACKUP_DIR:-$QT5_BACKUP_ROOT/original/qt5/skins/default}"
 fi
@@ -1315,15 +1316,17 @@ qt5_overlay_state() {
 # The vendor start script with the overlay ahead of the plain start. A display
 # that ends with an error within a minute of starting with the overlay marks it
 # failed and starts as shipped; the next change of the patch clears the mark.
+# Its error output, where Qt reports QML errors, goes to a log of at most 64 KB.
 qt5_wrapper_text() {
-    awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" '
+    awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" -v errlog="$QT5_LOG" '
         $0 == "./bin/gui/BtClass &" && !done {
             print "# c300x-qrc-overlay: display pages of the Home Assistant integration"
             print "if [ -f \047" lib "\047 ] && [ -f \047" rcc "\047 ] && [ ! -e \047" rcc ".failed\047 ]; then"
             print "    c300x_start=$(date +%s)"
-            print "    LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 ./bin/gui/BtClass &"
+            print "    rm -f \047" errlog ".rc\047"
+            print "    { { LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 ./bin/gui/BtClass 2>&1 1>&3 3>&-; echo $? > \047" errlog ".rc\047; } | { head -c 65536 > \047" errlog "\047; cat > /dev/null; }; } 3>&1 &"
             print "    wait $!"
-            print "    c300x_rc=$?"
+            print "    c300x_rc=$(cat \047" errlog ".rc\047 2>/dev/null || echo 0)"
             print "    case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac"
             print "    [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc"
             print "    : > \047" rcc ".failed\047"

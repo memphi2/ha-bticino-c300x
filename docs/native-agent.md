@@ -333,8 +333,10 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   a file found twice from the first one. A display that ends with an error
   within a minute of such a start marks the overlay failed
   (`display-qt5.rcc.failed`, status `qt5_overlay: failed`) and starts as
-  shipped. Restoring the patch puts the vendor start script back. Not yet
-  tested on a 3.0.6 device.
+  shipped. Started with the overlay, the display's error output, where Qt
+  reports QML errors, goes to `/tmp/c300x-display-qt5.log` (at most 64 KB).
+  Restoring the patch puts the vendor start script back. Not yet tested on a
+  3.0.6 device.
 - Its `bt_av_media` sends only the low-resolution video stream on to other
   receivers. The camera is fixed to that stream there
   (`video.av.highResolution: false`), and the Camera resolution entity is not

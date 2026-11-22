@@ -99,6 +99,7 @@ class Device:
             "C300X_QML_QT5_RCC": str(self.rcc),
             "C300X_QML_QT5_OVERLAY_LIB": str(self.lib),
             "C300X_QML_QT5_WRAPPER_BACKUP": str(self.wrapper_backup),
+            "C300X_QML_QT5_LOG": str(self.root / "display-qt5.log"),
             "C300X_QML_GUI_WRAPPER": str(self.wrapper),
             "C300X_QML_GUI_ROOT": str(self.root),
             "C300X_QML_AGENT_BIN": str(self.programs["agent"]),
@@ -232,15 +233,19 @@ def test_the_swipe_threshold_patch_is_not_run_on_qt5(device: Device, tmp_path: P
     assert "--display-touch" not in calls.read_text()
 
 
-def _start_display(device: Device, tmp_path: Path, exit_code: int) -> list[str]:
+def _start_display(device: Device, tmp_path: Path, exit_code: int, stderr: str = "") -> list[str]:
     """Run the start script with a display program that ends at once with exit_code."""
 
     log = tmp_path / "starts"
     program = tmp_path / "bin/gui/BtClass"
     program.parent.mkdir(parents=True, exist_ok=True)
-    program.write_text(f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{log}"\nexit {exit_code}\n')
+    program.write_text(
+        f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{log}"\necho shown\n{stderr}\nexit {exit_code}\n'
+    )
     program.chmod(0o755)
-    subprocess.run(["sh", str(device.wrapper)], cwd=tmp_path, check=False, timeout=30)
+    result = subprocess.run(["sh", str(device.wrapper)], cwd=tmp_path, check=False, timeout=30,
+                            capture_output=True, text=True)
+    assert result.stdout.startswith("shown\n")
     return log.read_text().splitlines()
 
 
@@ -262,3 +267,12 @@ def test_the_next_change_clears_the_failed_mark(device: Device) -> None:
     Path(f"{device.rcc}.failed").write_text("")
     device.ok("restore")
     assert device.ok("apply")["qt5_overlay"] == "active"
+
+
+def test_the_display_errors_are_kept_in_a_bounded_log(device: Device, tmp_path: Path) -> None:
+    device.ok("apply")
+    error = "qrc:/skins/default/MainApp.qml:12: ReferenceError: trsl is not defined"
+    _start_display(device, tmp_path, 143, f'echo "{error}" >&2\nhead -c 200000 /dev/zero >&2')
+    log = (tmp_path / "display-qt5.log").read_bytes()
+    assert log.startswith(error.encode() + b"\n")
+    assert len(log) == 65536

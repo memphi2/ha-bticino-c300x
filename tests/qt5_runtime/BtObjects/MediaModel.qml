@@ -1,0 +1,4 @@
+import QtQuick 2.7
+Item { property var filters; property var containers; property var range; property var source; property var sortKey; property int count: 0; property QtObject obj: QtObject { property bool ipcCallMode: false; property bool autoOpen: false; property int unreadMessages: 3; property int unreadMemos: 4; property bool cameraOn: false; property int autoSwitch: 0; property int answeringMachineStatus: 0; property bool enabled: true; property int mode: 0; signal isAssaabloy(string name, string where, string lkid, string brid); function openLock() {} function releaseLock() {} function tvccOn() {} function cameraOn() {} }
+    property QtObject binder: QtObject { function getObject(i) { return null } }
+    function remove(o) {} function getObject(i) { return null } }

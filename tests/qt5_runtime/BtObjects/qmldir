@@ -1,0 +1,8 @@
+module BtObjects
+ObjectModel 2.0 ObjectModel.qml
+MediaModel 2.0 MediaModel.qml
+ObjectInterface 2.0 ObjectInterface.qml
+AnsweringMachine 2.0 AnsweringMachine.qml
+Container 2.0 Container.qml
+PlatformSettings 2.0 PlatformSettings.qml
+AnsweringMessage 2.0 AnsweringMessage.qml

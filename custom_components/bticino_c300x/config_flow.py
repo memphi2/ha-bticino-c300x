@@ -223,7 +223,7 @@ from .display_support import (
 )
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
-from .factory_login import ssh_login
+from .factory_login import login_model, ssh_login, uses_factory_login
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -398,12 +398,17 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             api_token = secrets.token_urlsafe(32)
             maintenance_token = secrets.token_urlsafe(32)
             ssh_username, ssh_password = ssh_login(
-                user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+                user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD,
+                login_model(self._setup_agent_info),
             )
             request = C300XDeviceInstallRequest(
                 host=self._setup_connection[CONF_AGENT_HOST],
                 ssh_username=ssh_username,
                 ssh_password=ssh_password,
+                factory_login=uses_factory_login(
+                    user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+                ),
+                device_model=login_model(self._setup_agent_info),
                 agent_port=int(
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),

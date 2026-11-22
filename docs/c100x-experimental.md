@@ -11,12 +11,15 @@ does not establish runtime or hardware support.
 - An independently SSH-enabled C100X with a **known, working privileged SSH
   credential** is required for the initial install. This project does not
   enable SSH on stock firmware or supply rooting instructions.
-- The automatic C300X factory login does **not** match the root password hash
-  in the inspected stock C100X 1.5.8 image. After that login is refused, enter
-  the device's actual SSH credentials in the installer. There is no verified
-  C100X default password in this project. Credentials are not stored in the
-  HA entry. An already installed agent can instead use its configured API and
-  maintenance tokens; these are different credentials, not SSH passwords.
+- The C100X factory credential supplied by the user has been verified offline
+  against the root password hash in the original C100X 1.5.8 image. This is not
+  a device login test and does not imply that a device's password is unchanged.
+  A known C100X uses that default directly. Before model detection, bootstrap
+  permits at most two factory credentials: unchanged C300X first, then C100X
+  only after authentication refusal. Connection/time-out failures do not cause
+  a second attempt. Explicit credentials always take priority, with no fallback.
+  Credentials are not stored in the HA entry. An installed agent can instead
+  use its configured API/maintenance tokens, which are not SSH passwords.
 - Keep the vendor SIP provisioning intact. The stock filesystem alone does
   not contain the runtime Flexisip users/domain/keystore data. Initial vendor
   app registration is an expected prerequisite, not something the integration

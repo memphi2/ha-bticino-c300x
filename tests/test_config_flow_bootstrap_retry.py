@@ -348,15 +348,19 @@ def _bootstrap_flow(monkeypatch, installer):
     return flow
 
 
-def test_bootstrap_installs_with_the_factory_login_without_asking(monkeypatch):
+@pytest.mark.parametrize("model", ["", "C100X", "C300X"])
+def test_bootstrap_installs_with_the_factory_login_without_asking(monkeypatch, model):
     from custom_components.bticino_c300x.factory_login import factory_ssh_login
 
     installer = AsyncMock()
     flow = _bootstrap_flow(monkeypatch, installer)
+    flow._setup_agent_info = {"device": {"model": model}}
     result = asyncio.run(flow.async_step_agent_missing({"bootstrap_install_agent": True}))
     assert result["step_id"] == "user_features"
     request = installer.call_args.args[0]
-    assert (request.ssh_username, request.ssh_password) == factory_ssh_login()
+    assert (request.ssh_username, request.ssh_password) == factory_ssh_login(model)
+    assert request.factory_login is True
+    assert request.device_model == model
 
 
 def test_bootstrap_asks_for_a_login_only_after_the_factory_login_was_refused(monkeypatch):
@@ -379,6 +383,7 @@ def test_bootstrap_asks_for_a_login_only_after_the_factory_login_was_refused(mon
         assert result["step_id"] == "user_features"
         request = installer.call_args.args[0]
         assert (request.ssh_username, request.ssh_password) == ("admin", "typed")
+        assert request.factory_login is False
         assert installer.await_count == 2
 
     asyncio.run(exercise())

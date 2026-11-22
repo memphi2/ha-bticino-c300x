@@ -13,7 +13,7 @@ import json
 import logging
 import shlex
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -27,7 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
-from .factory_login import LOGIN_REFUSED
+from .factory_login import LOGIN_REFUSED, factory_login_candidates
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -91,7 +91,7 @@ class C300XDeviceInstallRequest:
 
     host: str
     ssh_username: str
-    ssh_password: str
+    ssh_password: str = field(repr=False)
     agent_port: int = DEFAULT_AGENT_PORT
     remote_dir: str = DEFAULT_REMOTE_DIR
     apply_firewall_patch: bool = True
@@ -100,6 +100,8 @@ class C300XDeviceInstallRequest:
     device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P
     device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N
     device_activations: tuple[dict[str, Any], ...] = ()
+    factory_login: bool = False
+    device_model: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -637,11 +639,23 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
             self._closed = True
             # Nothing was changed on the device: another login can be asked for.
             if isinstance(err, getattr(asyncssh, "PermissionDenied", ())):
-                raise C300XDeviceInstallError(LOGIN_REFUSED) from err
-            raise C300XDeviceInstallError("device_install_failed") from err
+                raise C300XDeviceInstallError(LOGIN_REFUSED) from None
+            raise C300XDeviceInstallError("device_install_failed") from None
 
     async def _connect(self, request: C300XDeviceInstallRequest) -> Any:
-        return await self._asyncssh.connect(**_asyncssh_connect_kwargs(request))
+        candidates = ((request.ssh_username, request.ssh_password),)
+        defaults = factory_login_candidates(request.device_model)
+        if request.factory_login and candidates[0] == defaults[0]:
+            candidates = defaults
+        for index, (username, password) in enumerate(candidates):
+            try:
+                return await self._asyncssh.connect(**_asyncssh_connect_kwargs(
+                    replace(request, ssh_username=username, ssh_password=password)
+                ))
+            except getattr(self._asyncssh, "PermissionDenied", ()):
+                if index + 1 == len(candidates):
+                    raise
+        raise C300XDeviceInstallError(LOGIN_REFUSED)  # pragma: no cover
 
     def run(self, command: str, input_data: bytes | None = None) -> str:
         if self._closed or self._client.is_closed():

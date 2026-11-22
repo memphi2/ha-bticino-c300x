@@ -66,7 +66,7 @@ from .device_installer import (
 from .device_user import homeassistant_account_label
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
-from .factory_login import LOGIN_REFUSED, ssh_login
+from .factory_login import LOGIN_REFUSED, login_model, ssh_login, uses_factory_login
 from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
@@ -624,7 +624,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 description_placeholders=placeholders,
             )
         ssh_username, ssh_password = ssh_login(
-            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD,
+            login_model(getattr(entry.runtime_data, "agent_info", None)),
         )
 
         try:
@@ -636,6 +637,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                         host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
                         ssh_username=ssh_username,
                         ssh_password=ssh_password,
+                        factory_login=uses_factory_login(
+                            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+                        ),
+                        device_model=login_model(getattr(entry.runtime_data, "agent_info", None)),
                         agent_port=int(
                             entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                         ),

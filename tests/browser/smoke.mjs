@@ -133,7 +133,13 @@ try {
         const image = lab.card._snapshotEl;
         const rect = image.getBoundingClientRect();
         const media = lab.card.shadowRoot.querySelector(".media").getBoundingClientRect();
-        return { text: image.getAttribute("aria-label"), expected: new Date(1800000000000).toLocaleString(language),
+        // The time is written as in the saved pictures, the same in every language.
+        const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { hourCycle: "h23", year: "numeric",
+          month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+          ...(lab.hass.config?.time_zone ? { timeZone: lab.hass.config.time_zone } : {}) })
+          .formatToParts(new Date(1800000000000)).map(({ type, value }) => [type, value]));
+        const expected = `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+        return { text: image.getAttribute("aria-label"), expected,
           visible: !image.hidden, overlay: !!lab.card.shadowRoot.querySelector(".snapshot-label"),
           contained: rect.left >= media.left && rect.bottom <= media.bottom,
           top: Math.abs(rect.top - media.top), right: Math.abs(media.right - rect.right) };

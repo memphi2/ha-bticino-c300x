@@ -4,6 +4,12 @@
 #include "../src/http.c"
 
 static int listener, normal_reply, include_muted, only_muted, mismatched, malformed_readback, short_reply;
+static int display_patchable = 1;
+
+int __wrap_c300x_device_display_files_patchable(void)
+{
+    return display_patchable;
+}
 
 int __wrap_nanosleep(const struct timespec *requested, struct timespec *remaining)
 {
@@ -64,6 +70,24 @@ static void *openwebnet_server(void *unused)
 int main(int argc, char **argv)
 {
     assert(argc == 2);
+    if (!strcmp(argv[1], "unpatchable")) {
+        display_patchable = 0;
+        struct c300x_config config = {0};
+        struct agent_runtime *runtime = calloc(1, sizeof(*runtime));
+        int pair[2];
+        assert(runtime && socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+        c300x_ringer_control_init(&runtime->ringer_control);
+        /* No baseline, GUI connection or device: reject before any device I/O. */
+        assert(handle_ringer_post(pair[0], &config, runtime,
+            "{\"muted\":true,\"volume\":1}", 0) == 1);
+        char response[512] = {0};
+        assert(recv(pair[1], response, sizeof(response) - 1, 0) > 0);
+        assert(strstr(response, "400 Bad Request"));
+        assert(strstr(response, "ringer_mute_unsupported"));
+        assert(runtime->ringer_control.client_fd == -1);
+        close(pair[0]); close(pair[1]); free(runtime);
+        return 0;
+    }
     normal_reply = !strncmp(argv[1], "normal-", 7);
     short_reply = !strncmp(argv[1], "short-", 6);
     include_muted = strstr(argv[1], "combined") || !strcmp(argv[1], "normal-muted");

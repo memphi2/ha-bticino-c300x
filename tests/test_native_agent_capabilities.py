@@ -48,7 +48,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         assert caps["activations"] == {"supported": True, "count": 3}
         assert caps["announcements"] == {"supported": False}
         assert caps["ringer"] == {
-            "supported": True, "mute": True, "volume": True,
+            "supported": True, "mute": False, "volume": True,
             "min_volume": 0, "max_volume": 10, "step": 1,
         }
         assert caps["system_metrics"] == {
@@ -79,7 +79,8 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
     assert patchable["touch_tone"] == {"supported": True, "requires_display_patch": True}
     assert patchable["display_alerts"] is True
     assert patchable["display_bridge"] == {"supported": True, "configurable": True, "configured": True}
-    for feature in ("touch_tone", "display_alerts", "display_bridge"):
+    assert patchable["ringer"]["mute"] is True
+    for feature in ("touch_tone", "display_alerts", "display_bridge", "ringer"):
         disabled[feature] = patchable[feature]
     assert disabled == patchable  # Nothing else follows the display.
 

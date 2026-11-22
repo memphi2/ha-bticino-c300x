@@ -63,7 +63,7 @@ int c300x_capabilities_json(
         "\"activations\":{\"supported\":%s,\"count\":%d},"
         "\"call_events\":false,"
         "\"announcements\":{\"supported\":%s},"
-        "\"ringer\":{\"supported\":true,\"mute\":true,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
+        "\"ringer\":{\"supported\":true,\"mute\":%s,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"homeassistant\",\"blocked\"]},"
         "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
         "\"memos\":{\"supported\":%s,\"text\":true,\"voice\":true,\"media\":%s,\"source\":\"local_files\",\"watch\":%s,\"delete\":%s,\"write_text\":%s},"
@@ -106,6 +106,7 @@ int c300x_capabilities_json(
         (config->activations_enabled && activations_count > 0) ? "true" : "false",
         activations_count,
         context->announcements_supported ? "true" : "false",
+        context->display_patchable ? "true" : "false",
         context->ringer_min_volume,
         context->ringer_max_volume,
         context->ringer_volume_step,

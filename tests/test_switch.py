@@ -531,6 +531,21 @@ def test_ringer_unmuted_event_updates_switch_state() -> None:
     assert entity.is_on is False
 
 
+def test_ringer_mute_exclusion_does_not_disable_volume_or_events() -> None:
+    from custom_components.bticino_c300x.capabilities import events_for_capabilities
+    from custom_components.bticino_c300x.number import _supports_ringer_volume
+
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={
+        "ringer": {"supported": True, "mute": False, "volume": True},
+    }))
+    entities = []
+    asyncio.run(async_setup_entry(None, entry, entities.extend))
+    assert not any(isinstance(entity, C300XRingerMuteSwitch) for entity in entities)
+    assert _supports_ringer_volume(entry)
+    assert "ringer.muted" in events_for_capabilities(entry.runtime_data.capabilities)
+    assert entry.runtime_data.api.ringer_reads == 0
+
+
 def test_ringer_switch_refreshes_and_updates_mute_state() -> None:
     entry = _FakeEntry()
     entity = C300XRingerMuteSwitch(entry)  # type: ignore[arg-type]

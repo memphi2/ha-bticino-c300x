@@ -6484,6 +6484,10 @@ static int handle_ringer_post(
         }
     }
     has_volume = c300x_json_int_field(request_body, "volume", &volume);
+    if (has_muted && !c300x_device_display_files_patchable()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_mute_unsupported\"}\n");
+        return 1;
+    }
     if (!has_muted && !has_volume) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_muted_required\"}\n");
         return 1;

@@ -194,6 +194,15 @@ def gate_capabilities(
     return result
 
 
+def ringer_mute_supported(capabilities: Mapping[str, Any]) -> bool:
+    """Keep legacy read/mute support, but honor an explicit mute exclusion."""
+
+    ringer = capabilities.get("ringer")
+    return capability_is_supported(capabilities, "ringer") and (
+        not isinstance(ringer, Mapping) or ringer.get("mute", True) is True
+    )
+
+
 def entry_gui_function_patch_active(entry: Any) -> bool:
     """Return true when the loaded entry reports the full C300X Display patch."""
 

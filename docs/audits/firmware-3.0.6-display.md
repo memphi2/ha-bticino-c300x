@@ -330,26 +330,36 @@ limited to the explicitly requested first 60 seconds and existing signal policy.
 
 ### Local Candidate Build
 
-The deferred build blocker is resolved for source commit `5a87f6f8`, without
-changing version `2.9.0b1`. The ARMHF agent and embedded Qt5 preload were rebuilt
+The deferred build blocker is resolved for source commit `244e988c`, without
+changing version `2.9.0b1`. This includes the stable shutdown-race port
+(`20456010`, from `17c5aee3`) and pinned release-evidence checks from `c5a1e988`,
+adapted without changing the beta release identity. The agent's shutdown signal
+now wakes an idle poll even when delivered just before polling or to a worker;
+this does not change GUI quarantine policy. Ten focused host/ASan/UBSan shutdown
+tests and 320 offline pipeline/package/version tests passed without skips. The
+80 downgrade-guard cases passed again after the ports; they are a rerun of the
+guard coverage above, not additional unique cases.
+
+The ARMHF agent and embedded Qt5 preload were rebuilt once after both ports
 using the private original 1.7.19 libraries. Both passed `check_agent_abi.py`
 against the original 1.7.19 and 3.0.6 roots. The stripped, packaged agent also
 passed the same dual-firmware ABI check.
 
 `native_agent/build-lock.json` now binds the current native/bundle inputs to
 packaged executable SHA-256
-`6bd5d3bd6ee6a4dcc3ec08e21f2ed0fdcc49289d3a24b9c27b9af99ed9908738`.
+`43834f896bed6acb0b72ed9aed8d9ed0ab559cd136b9b3477934bf5a8ecbbd88`.
 The local staged bundle and HACS ZIP were regenerated. `check_release_contents.py`
 verified exact source content and executable identity with both `--agent-binary`
 and `--build-lock`; `native_build_lock.py --check-inputs` passed. The bundle
 declares `qt5_recovery_version: 1` and retains file-set version 6.
 The local ZIP SHA-256 is
-`86b44db55842cbd771b48a728ebb1f7dcdb7f439980dace5f5ca334664a1b69f`;
+`bf428ffd6c4bb9093644400ebcaa9213673780abc7a0b4d129a9eddc8e241e34`;
 the regenerated checksums and SPDX document also passed their package checks.
 
 This resolves the stale binary/build-lock/package gap, not the device checks.
 No full gate was run; the earlier interrupted full validation is not a pass.
-Local release metadata remains `local-unverified`, not canonical CI evidence.
+Local release metadata remains `local-unverified`, not canonical CI evidence,
+and lists no validated HA versions or jobs without verified evidence.
 The startup-only first-60-second guard and excluded exit/signal statuses are
 unchanged. This local build is neither a publication nor an activation approval.
 

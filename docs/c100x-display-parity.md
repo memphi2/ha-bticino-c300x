@@ -105,6 +105,12 @@ is 6,509 bytes (29 entries), below the unchanged old 8,192-byte reader limit;
 staging rejects oversized manifests and stale adapter output directories.
 Restore does not extract current QML sources. Source delivery does not modify
 the vendor GUI, start a loader or change display capabilities.
+Agent removal now verifies exact stock display files, or runs this payload's
+verified restore and checks the resulting original hashes before deleting the
+agent/backups. Missing recovery code, unknown edits, damaged backups and a
+false-success response abort removal without reboot. Already-stock 1.5.8 can
+be removed without a payload. Retired generation directories remain on disk
+because a running GUI may still reference them; removal does not signal it.
 
 This build is not yet an installed or advertised display adapter. Supervised
 restart/readiness/automatic rollback, Notify and memo integration remain

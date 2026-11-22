@@ -69,8 +69,44 @@ remount_root_ro() {
     ROOT_WRITABLE=0
 }
 
+regular_unlinked_path() {
+    [ -f "$1" ] && [ ! -L "$1" ] && [ "$(stat -c %h "$1")" = 1 ] || return 1
+    check_path=$1
+    case "$check_path" in /*) ;; *) return 1 ;; esac
+    case "$check_path" in *'/../'*|*'/./'*|*/..|*/.|*'//'*) return 1 ;; esac
+    while [ "$check_path" != / ]; do
+        [ ! -L "$check_path" ] || return 1
+        check_path=${check_path%/*}
+        [ -n "$check_path" ] || check_path=/
+    done
+}
+
+c100x_stock_file() {
+    regular_unlinked_path "$1" && [ "$(sha256sum "$1" | awk '{print $1}')" = "$2" ]
+}
+
+c100x_stock_display() {
+    c100x_stock_file "$c100x_gui/main.qml" ff1740e9742951f5cda2225d605eae06141f43ee26d900ca21d7fdf14960e6fb \
+        && c100x_stock_file "$c100x_gui/MainPage.qml" ba3edae9b9e670dad86894f93747f510f07c2389f498697e5d20dd95b4cb8e80 \
+        && c100x_stock_file "$c100x_gui/EventManager.qml" 3ca4b5e8c27c8c8b283d533106091072e25632bb090d414ee4c1d93f3a06b181
+}
+
+restore_c100x_qml() {
+    c100x_gui=${C100X_GUI_DIR:-/home/bticino/bin/gui/skins/default}
+    c100x_payload=$AGENT_DIR/qml/c100x_bundle.sh
+    # Old packages had no adapter payload. Exact stock needs no recovery code.
+    c100x_stock_display && return 0
+    if ! regular_unlinked_path "$c100x_payload" || [ ! -x "$c100x_payload" ] \
+        || ! C100X_GUI_DIR="$c100x_gui" C100X_GUI_BIN="$C100X_MARKER" \
+            C100X_BACKUP_DIR="$BACKUP_ROOT/c100x-display" "$c100x_payload" restore \
+            >/dev/null 2>&1 || ! c100x_stock_display; then
+        printf 'Failed to restore C100X display; keeping agent files and backups in place\n' >&2
+        exit 1
+    fi
+}
+
 restore_qml() {
-    [ -e "$C100X_MARKER" ] && return 0
+    if [ -e "$C100X_MARKER" ]; then restore_c100x_qml; return; fi
     if [ ! -x "$QML_PATCH" ]; then
         printf 'Cannot verify GUI restoration without executable patch script; keeping agent files and backups in place\n' >&2
         exit 1

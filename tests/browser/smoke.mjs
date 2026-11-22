@@ -6,6 +6,7 @@ import { resolve, dirname, sep } from "node:path";
 import puppeteer from "puppeteer-core";
 import { checkSnapshotLayout } from "./snapshot_layout.mjs";
 import { checkC100xControls } from "./c100x_controls.mjs";
+import { checkPendingMicrophone } from "./pending_microphone.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontend = resolve(here, "../../custom_components/bticino_c300x/frontend");
@@ -49,6 +50,7 @@ try {
   await page.goto(origin);
   await page.waitForFunction(() => !!window.lab);
   await checkC100xControls(page, artifacts);
+  await checkPendingMicrophone(page);
   await checkSnapshotLayout(page, artifacts);
   const assertFooterLayout = async (label) => {
     const failures = await page.evaluate(() => {

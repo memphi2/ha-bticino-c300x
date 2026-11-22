@@ -72,6 +72,29 @@ integration-only update is insufficient. It needs no firmware patch or GUI
 change. For the validation scope, see
 [PCMU reboot troubleshooting](media-troubleshooting.md#device-reboots-after-pcmu-on-demand-video).
 
+## Beta Versions
+
+Betas use versions such as `2.9.0b1`; release candidates use `2.9.0rc1`. A
+beta uses the same integration, card and packaged agent as a stable release,
+with no separate repository or second integration entry.
+
+To install a published beta:
+
+1. Back up Home Assistant and read the beta's release notes.
+2. In Marketplace, enable this repository's **Pre-release** switch. In HACS,
+   open **Redownload**, enable beta versions and select the beta.
+3. Follow the normal [update steps](#updates), including the agent update
+   Repair. Installing the integration alone does not update the agent.
+
+Stable installations do not receive betas automatically. To leave the beta,
+disable pre-releases and select the stable release, or wait for the next one,
+then run the agent update Repair again. A Home Assistant backup does not
+restore the agent on the device.
+
+`2.9.0b1` is a beta for the display of firmware `3.0.6`, see
+[Display patch on firmware 3.0.6](#display-patch-on-firmware-306). On `1.7.x`
+and `2.0.2` it works like 2.8.1.
+
 ## Tokens
 
 Installer-based setup generates:
@@ -124,6 +147,28 @@ for Alarmo, weather or selected Home Assistant entities.
 The Display patch writes display files on the C300X and reloads the device UI.
 The operation can take up to about a minute. Use the integration status and
 Repairs instead of manually editing device files.
+
+### Display Patch on Firmware 3.0.6
+
+Beta from `2.9.0b1`, not yet tested on a device. On `3.0.6` the display files
+are built into the vendor display program, so the Display patch does not
+change them on disk: the agent reads the files it changes out of that program,
+patches them and keeps the result in its own folder, and the vendor start
+script of the display gets a few lines that load them at the next start. The
+display then has the same buttons and pages as on `1.7.x` and `2.0.2`. The
+touch fix for lost taps is not part of it; it changes a Qt 4 library that
+`3.0.6` does not have.
+
+- **Turning it off:** switch the Display patch off or remove the agent. Both
+  put the vendor start script back as it was, and the display starts as
+  shipped.
+- **When the display fails with the pages:** if the display ends with an error
+  within a minute of a start with the pages, it is started again as shipped,
+  and the Display patch status reads **applied, but the display started as
+  shipped**. Switching the Display patch off and on again tries once more.
+- **What to report:** the Display patch status, the integration diagnostics
+  and, if you can reach the device, `/tmp/c300x-display-qt5.log` (the display's
+  error output, at most 64 KB, cleared by a restart of the device).
 
 ## Core GUI Hook
 

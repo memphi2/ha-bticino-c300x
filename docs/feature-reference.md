@@ -471,6 +471,11 @@ the display library from 4 to 16 pixels, so a tap that moves a little is no
 longer taken for a swipe. The original library is backed up first; restoring
 the Display patch and removing the agent put it back.
 
+On firmware 3.0.6 the Display patch is a beta from 2.9.0b1, not yet tested on a
+device: the pages and buttons are the same, without the swipe threshold change.
+How it works there, how to undo it and what to report:
+[Display patch on firmware 3.0.6](advanced-maintenance.md#display-patch-on-firmware-306).
+
 Everything about the display is under **Configure > Display**. Switch the
 Display patch on under **Display and Display patch**; the Display menu then
 offers **Display pages** and **Display tiles**. Choose the weather and the entities with the normal

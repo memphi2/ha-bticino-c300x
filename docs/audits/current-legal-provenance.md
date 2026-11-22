@@ -1,8 +1,9 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-22. Integration and native agent `2.8.1`, a maintenance
-release that fixes the Display restore and clarifies settings of `2.8.0`.
-Version `2.8.0` is the successor of `2.7.0`, with speech and sounds on the
+Source review: 2026-11-22. Integration and native agent `2.9.0b1`, a beta on
+top of `2.8.1` that brings the display pages to firmware 3.0.6. Version `2.8.1`
+is a maintenance release that fixes the Display restore and clarifies settings
+of `2.8.0`. Version `2.8.0` is the successor of `2.7.0`, with speech and sounds on the
 device's speaker, spoken notifications and camera quality settings. This
 report covers the release source tree.
 
@@ -41,6 +42,14 @@ user selects there. The native agent uses system libraries supplied by its
 runtime, including optional device libraries loaded at runtime, and runs the
 device's own sound programs and audio chip configuration in place. These dependencies are not copied into the source
 repository and are not relicensed by the repository's Apache-2.0 declaration.
+
+On firmware 3.0.6 the display files are Qt resources inside the vendor display
+program. The agent reads the few files it changes from that program on the
+device, applies the project's edits there and keeps the result on the device;
+the release package carries only the project's own pages, its edit scripts and
+a small library of its own that loads them. No vendor display file is tracked
+or packaged. `scripts/extract_btclass_resources.py` and the Qt 5 runtime test
+read a firmware copy outside the repository for local checks only.
 
 The development requirement files contain direct version pins, not complete
 transitive lockfiles. An installed development environment is not authoritative

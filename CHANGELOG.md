@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.9.0b1 - Unreleased
+## v2.9.0b1 - 2026-11-22
 
 Beta for firmware 3.0.6, not yet tested on a device.
 
@@ -13,7 +13,8 @@ Display:
   integration. The agent update installs it; restoring the Display patch or
   removing the agent gives the display back as shipped. If the display does
   not start with the pages, it starts as shipped and the Display patch status
-  shows it.
+  reads **applied, but the display started as shipped**. The touch fix for lost
+  taps is not part of it on 3.0.6.
 
 ## v2.8.1 - 2026-11-22
 

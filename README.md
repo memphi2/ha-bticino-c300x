@@ -6,7 +6,7 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Development version: **2.9.0b1 (beta for firmware 3.0.6, unreleased)**. Latest stable release: **2.8.1**.
+Beta: **2.9.0b1** (display pages for firmware 3.0.6, not yet tested on a device). Latest stable release: **2.8.1**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.
@@ -78,7 +78,8 @@ off by default and requires HA 2026.11+ Labs and the integration option.
 - Home Assistant `2026.10.0` or newer.
 - BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`. Firmware `3.0.6` is
   supported experimentally, with the low-resolution camera stream; the Home
-  Assistant pages on its display are in a beta, not yet tested on a device.
+  Assistant pages on its display are in the [2.9 beta](#beta-versions), not yet
+  tested on a device.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
 
@@ -120,6 +121,15 @@ and restart Home Assistant. Then add the integration under
 
 Both installation methods use the same repository and release archive. Existing
 configuration entries and bundled cards remain unchanged when moving to Marketplace.
+
+### Beta Versions
+
+Betas are opt-in. The current beta, **2.9.0b1**, brings the Home Assistant
+pages to the display of firmware `3.0.6` and is not yet tested on a device; on
+`1.7.x` and `2.0.2` it works like 2.8.1. Enable **Pre-release** for this
+repository in Marketplace, or beta versions in HACS. Stable installations are
+not switched to a beta automatically. See
+[beta versions and returning to stable](docs/advanced-maintenance.md#beta-versions).
 
 ## First Setup
 

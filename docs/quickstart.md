@@ -178,7 +178,8 @@ Details: [Blueprints](blueprints.md)
 ## 9. Optional Native Display
 
 These pages run on the C300X itself in its blue interface; they are not the
-Lovelace card or an embedded HA dashboard.
+Lovelace card or an embedded HA dashboard. On firmware 3.0.6 they need the
+2.9 beta, see [Display patch on firmware 3.0.6](advanced-maintenance.md#display-patch-on-firmware-306).
 
 1. Update the bundled agent, then turn on **Home Assistant pages on the display**
    under **Configure > Display > Display and Display patch** and save. After the

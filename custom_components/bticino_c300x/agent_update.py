@@ -111,8 +111,11 @@ async def async_load_packaged_bundle_metadata(
 
 
 def bundle_supports_device(setup_data: Mapping[str, Any], bundle: Mapping[str, Any]) -> bool:
-    """Require explicit C100X support; do not infer it from a release version."""
+    """Check both compatibility and test-package isolation, never version order."""
 
+    only = bundle.get("c100x_only", False)
+    if not isinstance(only, bool) or (only and setup_data.get("model") != "C100X"):
+        return False
     return setup_data.get("model") != "C100X" or bundle.get("c100x_compatible") is True
 
 
@@ -256,7 +259,7 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
 
     setup_data = await api.async_validate_setup()
     if not bundle_supports_device(setup_data, bundle):
-        raise RuntimeError("device_model_incompatible: package does not declare C100X support")
+        raise RuntimeError("device_model_incompatible: package does not support this model")
 
     await async_retry_update_maintenance_busy(
         lambda: api.async_prepare_agent_update(

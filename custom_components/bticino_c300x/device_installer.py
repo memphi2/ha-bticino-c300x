@@ -196,6 +196,8 @@ def _install_device_agent_sync(
             config_bytes, _read_remote_config_sync(client, config_path)
         )
         _verify_c100x_bundle_sync(client, bundle, request.remote_dir)
+        if request.apply_gui_patch and _device_display_kind(client) == "qt5_ondisk":
+            raise C300XDeviceInstallError("device_install_verify_failed")
         merged_config = _apply_qt5_low_res_video_default(client, merged_config)
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
@@ -240,8 +242,7 @@ def _install_device_agent_sync(
 def _verify_c100x_bundle_sync(client: _DeviceSshClient, bundle: _ResolvedBundle, remote_dir: str) -> None:
     """Reject an unmarked package before any SSH install or repair writes."""
 
-    if _device_display_kind(client) != "qt5_ondisk":
-        return
+    c100x = _device_display_kind(client) == "qt5_ondisk"
     for payload in bundle.payload_files:
         if payload.remote_path != f"{remote_dir}/bundle.json":
             continue
@@ -249,6 +250,13 @@ def _verify_c100x_bundle_sync(client: _DeviceSshClient, bundle: _ResolvedBundle,
             manifest = json.loads(payload.source.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             break
+        if not isinstance(manifest, dict):
+            break
+        only = manifest.get("c100x_only", False)
+        if not isinstance(only, bool) or (only and not c100x):
+            break
+        if not c100x:
+            return
         if isinstance(manifest, dict) and manifest.get("c100x_compatible") is True:
             files = manifest.get("files")
             if not isinstance(files, list):
@@ -260,6 +268,9 @@ def _verify_c100x_bundle_sync(client: _DeviceSshClient, bundle: _ResolvedBundle,
             if binary is not None and hashlib.sha256(binary.source.read_bytes()).hexdigest() == expected:
                 return
         break
+    else:
+        if not c100x:
+            return
     raise C300XDeviceInstallError("device_model_incompatible")
 
 

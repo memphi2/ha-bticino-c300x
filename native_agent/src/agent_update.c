@@ -82,12 +82,16 @@ static int validate_agent_update_files(const struct c300x_config *config, const 
 
 int agent_update_model_compatible(const char *manifest)
 {
-    int compatible = 0;
+    int compatible = 0, only = 0;
+    const char *value;
+    if (manifest == NULL || !c300x_json_object_valid(manifest)) return 0;
+    if (c300x_json_find_member(manifest, manifest + strlen(manifest), "c100x_only", &value)
+        && (!c300x_json_bool_field(manifest, "c100x_only", &only)
+            || (only && c300x_device_model() != C300X_DEVICE_MODEL_C100X))) return 0;
     if (c300x_device_model() != C300X_DEVICE_MODEL_C100X) {
         return 1;
     }
-    return manifest != NULL && c300x_json_object_valid(manifest)
-        && c300x_json_bool_field(manifest, "c100x_compatible", &compatible)
+    return c300x_json_bool_field(manifest, "c100x_compatible", &compatible)
         && compatible;
 }
 

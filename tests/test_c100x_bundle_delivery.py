@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -109,7 +110,8 @@ def test_actual_old_reader_bootstraps_compact_payload(tmp_path, updaters, damage
 
     def apply(updater, success):
         result = subprocess.run([str(updater), str(agent), str(manifest), str(int(success))],
-                                capture_output=True, text=True, timeout=20)
+                                capture_output=True, text=True, timeout=20,
+                                env={**os.environ, "C100X_TEST_MODEL": "1"})
         assert result.returncode == 0, result.stderr
 
     apply(updaters[0], True)

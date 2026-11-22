@@ -703,7 +703,7 @@
       "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
       "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again.",
       "ssh_login_refused": "The C300X refused the SSH login. Enter the SSH user and password of the device.",
-      "device_model_incompatible": "This package does not declare C100X compatibility. Install a C100X-compatible integration package before updating or reinstalling the agent. No device files were replaced."
+      "device_model_incompatible": "This package does not support this device model. C100X-only test packages cannot update C300X devices. Install the matching package before updating or reinstalling the agent. No device files were replaced."
     }
   },
   "options": {
@@ -1507,7 +1507,7 @@
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded.",
-          "device_model_incompatible": "This package does not declare C100X compatibility. Install a C100X-compatible integration package before updating or reinstalling the agent. No device files were replaced."
+          "device_model_incompatible": "This package does not support this device model. C100X-only test packages cannot update C300X devices. Install the matching package before updating or reinstalling the agent. No device files were replaced."
         }
       },
       "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."

@@ -1022,7 +1022,8 @@ test("notification answer transport failure releases its own start and consumes 
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?notification-own-failure");
   const card = new (registry.get("c300x-doorbell-call-card"))();
-  card.setConfig({ entity: "camera.old" });
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
   card._updateState = () => {};
   card._prepareMicrophone = async () => {};
   let starts = 0;

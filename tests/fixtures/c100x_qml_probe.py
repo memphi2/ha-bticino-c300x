@@ -5,11 +5,16 @@ import os
 import sys
 from pathlib import Path
 
+from PyQt5 import sip
 from PyQt5.QtCore import QObject, QUrl, pyqtProperty, pyqtSlot
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest
-from PyQt5.QtQml import QQmlComponent, QQmlEngine, QQmlExpression, QQmlNetworkAccessManagerFactory
-from PyQt5 import sip
+from PyQt5.QtQml import (
+    QQmlComponent,
+    QQmlEngine,
+    QQmlExpression,
+    QQmlNetworkAccessManagerFactory,
+)
 
 
 class OfflineNetwork(QNetworkAccessManager):
@@ -187,5 +192,5 @@ for fixture in ("c100x_numeric_probe.qml", "c100x_bridge_probe.qml", "c100x_hook
     else:
         evaluate(item, "exercise()")
         sip.delete(item)
-print(json.dumps(errors, indent=2))
+sys.stdout.write(json.dumps(errors, indent=2) + "\n")
 sys.exit(bool(errors))

@@ -1,7 +1,7 @@
 """Generation-bound live connections, not PID/marker-based GUI readiness."""
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 

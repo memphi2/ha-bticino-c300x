@@ -1,12 +1,11 @@
 """Offline cross-checks for issue #51 comment 7084550618, not hardware tests."""
 
 import hashlib
-from pathlib import Path
 import subprocess
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pytest
-
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 
 ROOT = Path(__file__).resolve().parents[1]

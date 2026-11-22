@@ -1,11 +1,11 @@
 """Compile the injected hook fragments with the original Qt, without instances."""
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 import pytest
-
-from test_c100x_firmware_compile import firmware_case, firmware_probe, firmware_workspace  # noqa: F401
+from test_c100x_firmware_compile import firmware_case as firmware_case  # noqa: F401
+from test_c100x_firmware_compile import firmware_probe as firmware_probe
 
 ROOT = Path(__file__).resolve().parents[1]
 

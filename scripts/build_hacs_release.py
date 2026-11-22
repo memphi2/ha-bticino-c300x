@@ -61,9 +61,9 @@ def main() -> int:
     args = parser.parse_args()
 
     isolated = (ROOT / "c100x-test-policy.json").exists()
-    output = args.output or RELEASE_ROOT / (
-        "ha-bticino-c100x-issue51-local.zip" if isolated else "ha-bticino-c300x.zip"
-    )
+    default_output = (RELEASE_ROOT / "ha-bticino-c100x-issue51-local.zip"
+                      if isolated else RELEASE_ROOT / "ha-bticino-c300x.zip")
+    output = args.output or default_output
     if isolated and (not output.name.startswith("ha-bticino-c100x-") or output.suffix != ".zip"):
         parser.error("C100X test packages require a distinct ha-bticino-c100x-*.zip name")
     version = _integration_version()

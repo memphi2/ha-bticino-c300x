@@ -2,16 +2,22 @@
 
 import hashlib
 import json
+import shlex
 import shutil
 import subprocess
-import shlex
 
 import pytest
-
-from c100x_activation_lab import activation_binary, agent_lab, gui_peer  # noqa: F401
-from test_c100x_display_transaction import tree, run, assert_original, advance_source, fault_mv  # noqa: F401
-from test_c100x_qml_adapter import ROOT
+from c100x_activation_lab import activation_binary as activation_binary
+from c100x_activation_lab import agent_lab, gui_peer
 from test_c100x_bundle_delivery import payload
+from test_c100x_display_transaction import (
+    advance_source,
+    assert_original,
+    fault_mv,
+    run,
+)
+from test_c100x_display_transaction import tree as tree
+from test_c100x_qml_adapter import ROOT
 
 
 def generation(tree):

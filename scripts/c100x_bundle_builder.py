@@ -4,12 +4,13 @@ Fixed text members avoid archive path interpretation and codecs absent from the
 original firmware. Extraction never installs or restarts the GUI by itself.
 """
 
-from hashlib import sha256
-from pathlib import Path
 import re
 import tempfile
+from hashlib import sha256
+from pathlib import Path
 
-from c100x_qml_builder import ROOT, build as build_qml
+from c100x_qml_builder import ROOT
+from c100x_qml_builder import build as build_qml
 
 MEMBER = "device_agent/qml/c100x_bundle.sh"
 SCRIPTS = ("c100x_display.sh", "c100x_display_identity.sh", "c100x_display_trial.sh", "c100x_display_probe.sh", "c100x_hooks.awk")

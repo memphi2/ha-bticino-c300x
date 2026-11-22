@@ -643,7 +643,7 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
             raise C300XDeviceInstallError("device_install_failed") from None
 
     async def _connect(self, request: C300XDeviceInstallRequest) -> Any:
-        candidates = ((request.ssh_username, request.ssh_password),)
+        candidates: tuple[tuple[str, str], ...] = ((request.ssh_username, request.ssh_password),)
         defaults = factory_login_candidates(request.device_model)
         if request.factory_login and candidates[0] == defaults[0]:
             candidates = defaults

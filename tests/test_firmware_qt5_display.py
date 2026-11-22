@@ -131,7 +131,8 @@ def test_the_agent_skips_the_display_label_only_on_a_qt5_display():
     # tests/test_native_device_user_routes.py runs both routes on a Qt 5 display.
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     routes = (NATIVE / "src/http_device_user.c").read_text(encoding="utf-8")
-    assert routes.count("c300x_device_display_files_patchable()") == 2
+    # Creation, deletion and routing restoration all guard the Qt4 label path.
+    assert routes.count("c300x_device_display_files_patchable()") == 3
     detect = (NATIVE / "src/device_detect.c").read_text(encoding="utf-8")
     assert "skins/default" not in http + routes + detect
     assert "skins/default" not in (NATIVE / "src/config.c").read_text(encoding="utf-8")

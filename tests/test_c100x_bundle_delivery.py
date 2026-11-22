@@ -3,14 +3,14 @@
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
-
-from test_c100x_display_transaction import tree, assert_original  # noqa: F401
+from test_c100x_display_transaction import assert_original
+from test_c100x_display_transaction import tree as tree
 from test_native_agent_update_legacy_bootstrap import _compile_updater
 
 ROOT = Path(__file__).resolve().parents[1]

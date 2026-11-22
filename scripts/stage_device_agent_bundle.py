@@ -16,7 +16,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from c100x_bundle_builder import MEMBER as C100X_MEMBER, build as build_c100x_bundle
+from c100x_bundle_builder import MEMBER as C100X_MEMBER
+from c100x_bundle_builder import build as build_c100x_bundle
 from device_file_strip import (
     DEVICE_SOURCE_FILES,
     DeviceFileStripError,

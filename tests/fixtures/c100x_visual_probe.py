@@ -1,21 +1,26 @@
 """Render the real C100X adapter at stock logical size; never contact a service."""
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRectF, Qt, QUrl, pyqtProperty, pyqtSlot
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest
-from PyQt5.QtQml import QQmlComponent, QQmlEngine, QQmlExpression, QQmlNetworkAccessManagerFactory
+from PyQt5.QtQml import (
+    QQmlComponent,
+    QQmlEngine,
+    QQmlExpression,
+    QQmlNetworkAccessManagerFactory,
+)
 from PyQt5.QtQuick import QQuickView
 from PyQt5.QtTest import QTest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from check_display_layout import HOST, fixtures, intersection, layout_issues
-from check_energy_layout import make_fixtures
+from check_display_layout import HOST, fixtures, intersection, layout_issues  # noqa: E402
+from check_energy_layout import make_fixtures  # noqa: E402
 
 
 class OfflineNetwork(QNetworkAccessManager):
@@ -183,5 +188,5 @@ FocusScope {{ id: frame; width: 800; height: 480; focus: true; {HOST}
     app.processEvents()
 report["warnings"] = warnings
 (output / "report.json").write_text(json.dumps(report, indent=2))
-print(json.dumps({"cases": len(cases), "issues": report["issues"], "warnings": warnings}, indent=2))
+sys.stdout.write(json.dumps({"cases": len(cases), "issues": report["issues"], "warnings": warnings}, indent=2) + "\n")
 sys.exit(bool(report["issues"] or warnings))

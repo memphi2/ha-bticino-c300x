@@ -4,11 +4,11 @@ Never modifies firmware inputs or the Qt4 source pages. Installation is a
 separate transaction; building these files does not enable capabilities.
 """
 
-from pathlib import Path
 import argparse
+import hashlib
 import re
 import shutil
-import hashlib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = (

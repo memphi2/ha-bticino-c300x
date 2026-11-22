@@ -6,7 +6,6 @@ import subprocess
 import sys
 
 import pytest
-
 from test_c100x_qml_adapter import ROOT, builder
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 

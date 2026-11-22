@@ -152,7 +152,7 @@ Additional focused C100X checks:
 ```sh
 "$PY" -m pytest -q tests/test_c100x_display_transaction.py
 "$PY" -m pytest -q tests/test_c100x_gui_presence.py
-CURL_INCLUDE_DIR=/home/olli/.cache/c300x-https/headers/usr/include/x86_64-linux-gnu \
+CURL_INCLUDE_DIR="$HOME/.cache/c300x-https/headers/usr/include/x86_64-linux-gnu" \
   "$PY" -m pytest -q tests/test_c100x_activation.py
 PYTHONPATH=/tmp/c100x-qt5-runtime "$PY" -m pytest -q tests/test_c100x_qml_adapter.py
 "$PY" -m pytest -q tests/test_c100x_firmware_compile.py

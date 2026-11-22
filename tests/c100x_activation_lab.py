@@ -1,21 +1,20 @@
 """Local native-agent/probe harness. Never binds LAN or contacts a device/HA."""
 
-from contextlib import contextmanager
-from http.client import HTTPConnection
 import json
-import os
 import shutil
 import socket
 import subprocess
 import sys
 import threading
 import time
+from contextlib import contextmanager, suppress
+from http.client import HTTPConnection
 
 import pytest
-
-from native_agent.test.smoke import TOKEN, free_tcp_ports, wait_for_health
 from test_c100x_qml_adapter import ROOT
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
+
+from native_agent.test.smoke import TOKEN, free_tcp_ports, wait_for_health
 
 
 @pytest.fixture(scope="module")
@@ -124,10 +123,8 @@ def gui_peer(port, generation, *, responsive=True, blocked=False):
     finally:
         stop.set()
         for descriptor in sockets:
-            try:
+            with suppress(OSError):
                 descriptor.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
         thread.join(timeout=3)
         assert not thread.is_alive()
         assert not errors, errors

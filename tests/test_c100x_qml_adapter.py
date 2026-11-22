@@ -1,11 +1,11 @@
 """Focused page conversion and isolated Qt5 checks, not device acceptance."""
 
+import hashlib
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
-import shutil
-import hashlib
 from pathlib import Path
 
 import pytest

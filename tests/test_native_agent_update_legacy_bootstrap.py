@@ -1,7 +1,7 @@
 """Real legacy required-file preflight followed by the current updater."""
 
-import shutil
 import os
+import shutil
 import subprocess
 from pathlib import Path
 

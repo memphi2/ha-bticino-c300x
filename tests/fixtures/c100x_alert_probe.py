@@ -1,16 +1,21 @@
 """Host Qt5 alert IO/focus test; all XHRs are intercepted, never sent to a host."""
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
+from c100x_memory_reply import MemoryReply
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtNetwork import QNetworkAccessManager
-from PyQt5.QtQml import QQmlComponent, QQmlEngine, QQmlExpression, QQmlNetworkAccessManagerFactory
+from PyQt5.QtQml import (
+    QQmlComponent,
+    QQmlEngine,
+    QQmlExpression,
+    QQmlNetworkAccessManagerFactory,
+)
 from PyQt5.QtQuick import QQuickView
 from PyQt5.QtTest import QTest
-from c100x_memory_reply import MemoryReply
 
 pending = []
 requests = []
@@ -155,4 +160,4 @@ evaluate("startCall()")
 assert evaluate("alerts.notice === null && !alerts.soundReady()")
 view.close()
 assert not errors, errors
-print(json.dumps({"requests_intercepted": len(requests), "reserved_keys": len(reserved), "errors": errors}))
+sys.stdout.write(json.dumps({"requests_intercepted": len(requests), "reserved_keys": len(reserved), "errors": errors}) + "\n")

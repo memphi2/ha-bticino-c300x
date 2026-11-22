@@ -4,9 +4,9 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
+from test_config_flow_bootstrap_retry import _bootstrap_flow
 
 from custom_components.bticino_c300x import config_flow
-from test_config_flow_bootstrap_retry import _bootstrap_flow
 
 
 @pytest.mark.parametrize("model", ["C100X", "C300X", ""])

@@ -10,10 +10,15 @@ from unittest.mock import AsyncMock
 import pytest
 
 from custom_components.bticino_c300x.device_installer import (
-    C300XDeviceInstallRequest, _AsyncSshDeviceSshClient,
+    C300XDeviceInstallRequest,
+    _AsyncSshDeviceSshClient,
 )
 from custom_components.bticino_c300x.factory_login import (
-    factory_login_candidates, factory_ssh_login, login_model, ssh_login, uses_factory_login,
+    factory_login_candidates,
+    factory_ssh_login,
+    login_model,
+    ssh_login,
+    uses_factory_login,
 )
 
 

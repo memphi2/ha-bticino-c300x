@@ -19,6 +19,7 @@ from check_release_contents import validate_release_contents
 from manifest_version import read_integration_version
 from resolve_ha_version import stable_version
 from sbom_runtime import runtime_inventory
+from validation_evidence import load_verified_summary
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_MANIFEST = ROOT / "custom_components" / "bticino_c300x" / "manifest.json"
@@ -199,7 +200,24 @@ def _lts_evidence(
     native_agent_reused_from: str | None,
 ) -> dict[str, Any]:
     versions = _project_versions()
+    validation = None
+    evidence_path = os.environ.get("C300X_VALIDATION_EVIDENCE")
+    if evidence_path:
+        try:
+            validation = load_verified_summary(
+                Path(evidence_path), os.environ.get("C300X_VALIDATION_EVIDENCE_SHA256", ""),
+                _git_output("rev-parse", "HEAD") or "", os.environ.get("GITHUB_REPOSITORY", ""),
+                tag,
+            )
+        except (OSError, ValueError, KeyError, TypeError) as err:
+            raise ReleaseAssetError(f"Invalid canonical validation evidence: {err}") from err
+    elif os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("CI", "").lower() == "true":
+        raise ReleaseAssetError("CI release metadata requires canonical validation evidence")
     current_ha = os.environ.get("C300X_VALIDATED_CURRENT_HA_VERSION", versions["current_homeassistant"])
+    minimum_ha = versions["min_homeassistant"]
+    if validation is not None:
+        minimum_ha = validation["homeassistant"]["min-ha"]
+        current_ha = validation["homeassistant"]["current-ha"]
     try:
         if stable_version(current_ha) < stable_version(versions["min_homeassistant"]):
             raise ValueError("Validated HA version is below the supported minimum")
@@ -207,10 +225,12 @@ def _lts_evidence(
         raise ReleaseAssetError(str(err)) from err
     return {
         "release": tag,
-        "min_homeassistant": versions["min_homeassistant"],
+        "validation_status": f"canonical-{validation['source_branch']}-push" if validation is not None else "local-unverified",
+        "validation_evidence": validation,
+        "min_homeassistant": minimum_ha,
         "current_homeassistant": current_ha,
         "validated_homeassistant": [
-            versions["min_homeassistant"],
+            minimum_ha,
             current_ha,
         ],
         "python": versions["python"],
@@ -218,7 +238,9 @@ def _lts_evidence(
         "native_agent_rebuilt": native_agent_reused_from is None,
         "native_agent_reused_from": native_agent_reused_from,
         "native_agent_sysroot": _native_agent_sysroot_evidence(),
-        "validated_jobs": ["min-ha", "current-ha", "hacs", "hassfest"],
+        "validated_jobs": sorted(
+            name for run in validation["runs"].values() for name in run["jobs"]
+        ) if validation is not None else [],
     }
 
 

@@ -69,6 +69,21 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace \
             --env PYTHONDONTWRITEBYTECODE=1 --entrypoint python "$IMAGE" \
             scripts/check_ha_container_runtime.py --expect-ha "$HA_VERSION"
+      - name: Record validated HA version
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
+        env:
+          HA_VERSION: ${{ steps.ha-version.outputs.version }}
+        run: |
+          python scripts/validation_evidence.py "${{ matrix.name }}" \
+            --version "$HA_VERSION" --output .artifacts/validation-evidence.json
+      - name: Upload validated HA evidence
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ha-validation-${{ matrix.name }}-${{ github.run_attempt }}
+          path: .artifacts/validation-evidence.json
+          if-no-files-found: error
+          retention-days: 7
 
   dependabot:
     runs-on: ubuntu-26.04

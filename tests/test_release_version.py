@@ -107,7 +107,8 @@ def test_beta_publication_keeps_main_gate_assets_and_attestations():
     workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
     assert workflow["concurrency"]["cancel-in-progress"] is False
     publish = workflow["jobs"]["publish"]
-    assert set(publish["needs"]) == {"validate", "hacs", "hassfest", "main-validation", "browser"}
+    assert set(publish["needs"]) == {"main-validation"}
+    assert "verify_main_validation.py" in str(workflow["jobs"]["main-validation"])
     steps = {step.get("name"): step for step in publish["steps"]}
     command = steps["Publish GitHub Release assets"]["run"]
     assert "scripts/publish_release.py" in command

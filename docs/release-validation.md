@@ -17,6 +17,69 @@ changelog and release notes. The tagged commit must be the validated `main` HEAD
 with release checks, browser checks and verified provenance/SBOM attestations.
 Development branches are not a shortcut around the release gate.
 
+### Canonical CI Evidence
+
+Release tags do not repeat the full HA matrix, HACS, Hassfest or browser suite.
+PRs and pushes to `main` and `beta` still run all of them. Stable releases require
+the current `main` tip. Beta/RC tags retain the existing branch policy: use the
+current `beta` tip first, or `main` if only main matches the tagged commit.
+When both tips match, beta is selected and failed beta checks cannot fall back
+to main checks. The local `v2.9.0_fw3.0.6` development branch is not an additional
+release source; `2.9.0b1` stays unchanged by this pipeline work.
+
+Release requires successful **push runs on that selected branch** of the
+canonical `validate.yml`, `browser.yml` and `codeql.yml` workflows for the exact
+released commit. Tag, checkout, release workflow source and selected remote
+branch tip must agree. A successful PR, schedule, manually dispatched run, or
+run on the other branch is not interchangeable release evidence. Publication
+remains tag-bound; no branch override, merge bypass or firmware detection is added.
+
+`scripts/verify_main_validation.py` checks workflow IDs/paths and repository
+IDs, then every required job and step in the latest run's exact attempt.
+Dependabot policy, HACS, Hassfest, both HA legs, browser and all four CodeQL
+languages must succeed. Skipped, missing, failed, cancelled, duplicate or
+unexpected jobs fail closed. Partial reruns cannot combine jobs from different
+attempts; use **Re-run all jobs**. An older success cannot override a newer
+failure. Evidence must be no more than seven days old, including when retried.
+
+After each main/beta-push HA leg has passed the full validation and official
+container runtime checks, `scripts/validation_evidence.py` records the actual
+installed HA version and verifies it matches the resolved target. It uploads
+`ha-validation-<target>-<run_attempt>` with seven-day retention. Its small JSON
+binds repository, branch ref, source SHA, workflow ref/SHA/content digest, run ID
+and attempt.
+The minimum must equal the declared project minimum; current HA is the actual
+rolling version tested, not the local project baseline or a new PyPI query.
+
+The release verifier downloads by artifact ID from that run, checks GitHub's
+SHA256 archive digest, size, expiry, run/repository binding and payload identity.
+It does not execute or extract artifact files. Missing, foreign, stale,
+conflicting or malformed evidence fails publication. GitHub Actions' read API,
+the reviewed workflows at the released source commit, and immutable uploaded
+artifact bytes are the trust boundary, not artifact names or self-reported
+success. Workflow definitions and jobs are reviewed source; this gate does not
+replace branch protection, code review or security policy.
+
+The canonical branch gate emits a digest of the verified aggregate. The publish
+job fetches and verifies evidence again against that digest before building, and rechecks
+it immediately before publication. Concurrent reruns, a branch switch, or movement
+of the selected branch/tag fail these checks. `build-metadata.json` embeds the
+selected source branch, exact versions, job IDs, workflow/run/attempt bindings
+and artifact IDs/digests. No fifth public asset
+is added. CI metadata generation requires digest-pinned evidence; local metadata
+without evidence is explicitly `local-unverified` and claims no validated jobs.
+
+Release content/tag checks, the reviewed native build lock, packaging, SBOM,
+provenance and SBOM attestations, and remote downloaded-asset verification remain
+mandatory. No merge/admin bypass or device/HA activation is part of this gate.
+Artifact and attempt bindings use the documented
+[GitHub Actions artifact API](https://docs.github.com/en/rest/actions/artifacts)
+and [workflow jobs API](https://docs.github.com/en/rest/actions/workflow-jobs).
+Branch selection uses exact references from the
+[matching references API](https://docs.github.com/en/rest/git/refs#list-matching-references),
+not similarly named branches returned by its prefix lookup. A missing beta ref
+can fall back to main for prereleases; API failures cannot.
+
 New releases are drafts until their four downloaded assets match the validated
 local artifacts.
 Reruns verify existing assets, notes and channel without overwriting them;
@@ -41,14 +104,14 @@ direct stable successor to 2.1.3; 2.2.0 is withdrawn and is not an upgrade step.
 ## Isolated Integration Tests
 
 The HA matrix tests the fixed minimum from `project-versions.json` and the
-latest non-yanked stable release from PyPI on every run. Preview releases are
-excluded. The resolver pins that exact version before installing tools, so a
+latest non-yanked stable release from PyPI on every Validate run. Preview releases
+are excluded. The resolver pins that exact version before installing tools, so a
 dependency conflict fails the job instead of silently testing an older HA.
-The resolved version is logged and passed from release validation into build
+The resolved version is logged and passed from canonical branch evidence into build
 metadata. `current_homeassistant` in the version file is the local validation
 baseline, not a cap on the rolling CI target. Raising the minimum remains manual.
 
-Both Validate and Release also run `scripts/check_ha_container_runtime.py` in
+Validate also runs `scripts/check_ha_container_runtime.py` in
 the official HA container for each resolved version. These required checks use
 the image's own ffmpeg/ffprobe and HA event entities, not the Ubuntu host tools.
 They verify JPEG extraction from H.264 clips with unknown, limited and full color
@@ -92,9 +155,10 @@ System libraries and Python dependency pins are unchanged. The loader export
 applies only to the development shell and its children; start a fresh Python
 process after exporting it. Do not apply it to a running HA installation.
 
-Both Validate and Release use this setup in **both minimum/current HA matrix
-legs**. `--github-env` verifies the loaded cache path in a fresh subprocess before
-exporting it for later steps. `check_validate.py` also checks the default loader,
+Validate uses this setup in **both minimum/current HA matrix legs**; Release
+requires that exact branch-run evidence. `--github-env` verifies the loaded cache
+path in a fresh subprocess before exporting it for later steps.
+`check_validate.py` also checks the default loader,
 TurboJPEG 3 API, actual mapped library, JPEG encode/decode pixels and HA camera
 singleton before other gates. Missing/incompatible libraries fail the gate;
 no warning filters or fallback-success exceptions are added. A supported system

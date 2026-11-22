@@ -180,7 +180,7 @@ def _check(root: Path) -> list[str]:
                 "requirements-lock": tools,
             }
         )
-    for name in ("validate.yml", "release.yml"):
+    for name in ("validate.yml",):
         workflow = yaml.safe_load(
             (root / ".github/workflows" / name).read_text(encoding="utf-8")
         )
@@ -209,6 +209,29 @@ def _check(root: Path) -> list[str]:
             'python scripts/resolve_ha_version.py "${{ matrix.name }}"'
         ):
             failures.append(f"{name} must resolve the exact stable HA version before installation")
+    release = yaml.safe_load((root / ".github/workflows/release.yml").read_text(encoding="utf-8"))
+    jobs = release["jobs"]
+    gate = jobs["main-validation"]
+    publish = jobs["publish"]
+    if (
+        set(jobs) != {"main-validation", "publish"}
+        or publish.get("needs") != ["main-validation"]
+        or "if" in gate or gate.get("continue-on-error", False)
+    ):
+        failures.append("release must require canonical branch validation without a duplicate HA matrix")
+    verifier = [step for step in gate["steps"] if step.get("id") == "verified-main"]
+    if (
+        len(verifier) != 1
+        or "python scripts/verify_main_validation.py" not in verifier[0].get("run", "")
+        or "if" in verifier[0] or verifier[0].get("continue-on-error", False)
+    ):
+        failures.append("release must verify canonical exact-SHA validation evidence")
+    metadata = [step for step in publish["steps"] if step.get("name") == "Generate release metadata"]
+    if len(metadata) != 1 or metadata[0].get("env") != {
+        "C300X_VALIDATION_EVIDENCE": ".release/validation-evidence.json",
+        "C300X_VALIDATION_EVIDENCE_SHA256": "${{ needs.main-validation.outputs.evidence-digest }}",
+    }:
+        failures.append("release metadata must consume digest-pinned canonical HA evidence")
     return failures
 
 

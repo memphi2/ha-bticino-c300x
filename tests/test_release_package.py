@@ -38,6 +38,13 @@ RESERVED_DEVICE_PATCH_PATHS = (
 sys.path.insert(0, str(ROOT / "scripts"))
 
 
+@pytest.fixture(autouse=True)
+def local_metadata_environment(monkeypatch):
+    # These synthetic metadata tests model local builds, even when pytest runs in CI.
+    for name in ("CI", "GITHUB_ACTIONS", "C300X_VALIDATION_EVIDENCE", "C300X_VALIDATION_EVIDENCE_SHA256"):
+        monkeypatch.delenv(name, raising=False)
+
+
 def _load_release_builder():
     spec = importlib.util.spec_from_file_location("build_hacs_release", SCRIPT)
     assert spec is not None
@@ -113,6 +120,8 @@ def test_release_metadata_records_resolved_current_ha(monkeypatch):
     evidence = writer._lts_evidence(tag="v2.2.0", native_agent_reused_from=None)
     assert evidence["current_homeassistant"] == "2026.12.2"
     assert evidence["validated_homeassistant"] == ["2026.10.0", "2026.12.2"]
+    assert evidence["validation_status"] == "local-unverified"
+    assert evidence["validated_jobs"] == []
 
 
 @pytest.mark.parametrize("version", ["", "2026.11.0b1", "2026.9.4", "latest"])
@@ -459,17 +468,15 @@ def test_release_requires_browser_checks_at_the_verified_commit() -> None:
     release = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
     browser = yaml.safe_load((ROOT / ".github/workflows/browser.yml").read_text())
     jobs = release["jobs"]
-    assert "browser" in jobs["publish"]["needs"]
-    gate = jobs["browser"]
-    assert gate["uses"] == "./.github/workflows/browser.yml"
-    assert gate["needs"] == "main-validation"
-    assert gate["with"]["ref"] == "${{ needs.main-validation.outputs.commit }}"
-    assert "if" not in gate
-    assert not gate.get("continue-on-error", False)
+    assert jobs["publish"]["needs"] == ["main-validation"]
+    assert set(jobs) == {"main-validation", "publish"}
     main = jobs["main-validation"]
     assert main["outputs"]["commit"] == "${{ steps.verified-main.outputs.commit }}"
     verify = next(step for step in main["steps"] if step.get("id") == "verified-main")
-    assert 'echo "commit=$tag_sha" >> "$GITHUB_OUTPUT"' in verify["run"]
+    assert 'python scripts/verify_main_validation.py --tag "$RELEASE_TAG"' in verify["run"]
+    assert "if" not in main and "if" not in verify
+    assert not main.get("continue-on-error", False)
+    assert not verify.get("continue-on-error", False)
     # PyYAML's YAML 1.1 loader reads the workflow key "on" as True.
     assert browser[True]["workflow_call"]["inputs"]["ref"]["required"] is True
     browser_job = browser["jobs"]["browser"]
@@ -590,6 +597,8 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
     assert metadata["lts_evidence"] == {
         "release": tag,
+        "validation_status": "local-unverified",
+        "validation_evidence": None,
         "min_homeassistant": "2026.10.0",
         "current_homeassistant": "2026.11.1",
         "validated_homeassistant": ["2026.10.0", "2026.11.1"],
@@ -603,7 +612,7 @@ def test_release_assets_are_reproducible_for_same_zip(
             "fingerprint": None,
             "files": {},
         },
-        "validated_jobs": ["min-ha", "current-ha", "hacs", "hassfest"],
+        "validated_jobs": [],
     }
 
     checksum_lines = (first / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
@@ -1020,31 +1029,6 @@ def test_native_agent_startup_link_check_accepts_relative_rc_links() -> None:
     assert "agent_init_link_matches()" in ensure_link
 
 
-def _release_gate_branch(tmp_path: Path, tag: str, tip_of: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
-    release = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
-    gate = next(step for step in release["jobs"]["main-validation"]["steps"] if step.get("id") == "verified-main")
-    text = gate["run"]
-    start = text.index('case "${RELEASE_TAG#v}" in')
-    end = text.index("\nfi\n", text.index('if [ -z "$release_branch" ]')) + 4
-    origin, work = tmp_path / "origin.git", tmp_path / "work"
-
-    def git(*args: str, cwd: Path = work) -> str:
-        return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
-
-    git("init", "-q", "--bare", str(origin), cwd=tmp_path)
-    git("init", "-q", "-b", "main", str(work), cwd=tmp_path)
-    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
-    base = git("rev-parse", "HEAD")
-    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "tagged")
-    tagged = git("rev-parse", "HEAD")
-    git("remote", "add", "origin", str(origin))
-    for branch in ("main", "beta"):
-        git("push", "-q", "origin", f"{tagged if branch in tip_of else base}:refs/heads/{branch}")
-    script = f'set -euo pipefail\ntag_sha={tagged}\n{text[start:end]}echo "branch=$release_branch"\n'
-    return subprocess.run(["bash", "-c", script], cwd=work, env={**os.environ, "RELEASE_TAG": tag},
-                          capture_output=True, text=True, check=False)
-
-
 @pytest.mark.parametrize(
     ("tag", "tip_of", "branch"),
     [
@@ -1053,16 +1037,28 @@ def _release_gate_branch(tmp_path: Path, tag: str, tip_of: tuple[str, ...]) -> s
         ("v2.9.0b1", ("beta",), "beta"),
         ("v2.9.0rc1", ("beta",), "beta"),
         ("v2.9.0b1", ("main",), "main"),
+        ("v2.9.0b1", ("beta", "main"), "beta"),
         ("v2.9.0b1", (), None),
     ],
 )
 def test_a_beta_may_come_from_the_beta_branch_but_a_stable_release_only_from_main(
-    tmp_path: Path, tag: str, tip_of: tuple[str, ...], branch: str | None
+    tag: str, tip_of: tuple[str, ...], branch: str | None
 ) -> None:
-    result = _release_gate_branch(tmp_path, tag, tip_of)
+    from verify_main_validation import check_refs
+
+    sha = "a" * 40
+
+    class BranchRefs:
+        def get(self, path):
+            if path.startswith("/git/ref/tags/"):
+                return {"object": {"type": "commit", "sha": sha}}
+            name = path.rsplit("/", 1)[1]
+            return [{"ref": f"refs/heads/{name}", "object": {
+                "type": "commit", "sha": sha if name in tip_of else "b" * 40,
+            }}]
+
     if branch is None:
-        assert result.returncode == 1
-        assert "::error::Release tag" in result.stdout
+        with pytest.raises(ValueError, match="authorized branch HEAD"):
+            check_refs(BranchRefs(), tag, sha)
     else:
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert result.stdout.strip().endswith(f"branch={branch}")
+        assert check_refs(BranchRefs(), tag, sha) == branch

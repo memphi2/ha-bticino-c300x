@@ -168,9 +168,10 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "return ring_active;" in ring_talkback_body
     assert "protect_and_send_srtp(" in ring_talkback_body
     assert "TALKBACK_TARGET_PORT" not in ring_talkback_body
-    assert talkback_proxy_body.index("!forward_ring_talkback_packet") < (
-        talkback_proxy_body.index("(void)sendto(target_fd")
+    assert talkback_proxy_body.index("udp_talkback_peer_allowed") < (
+        talkback_proxy_body.index("!forward_ring_talkback_packet")
     )
+    assert "sendto(target_fd" not in talkback_proxy_body
 
 
 def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> None:

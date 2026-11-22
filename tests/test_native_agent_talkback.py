@@ -18,8 +18,8 @@ def test_native_agent_talkback_matches_c300x_speex_backchannel() -> None:
     assert "#define C300X_TALKBACK_RTP_PAYLOAD_TYPE 97" in header
     assert '#define C300X_TALKBACK_CODEC "speex/8000"' in header
     assert "bind_udp_port(C300X_TALKBACK_RTP_PORT)" in media_bridge
-    assert "TALKBACK_TARGET_PORT 4000" in media_bridge
-    assert 'inet_pton(AF_INET, "127.0.0.1", &target.sin_addr)' in media_bridge
+    assert "TALKBACK_TARGET_PORT" not in media_bridge
+    assert "udp_talkback_peer_allowed(bridge, &sender)" in media_bridge
     assert "forward_ring_talkback_packet(bridge, packet, n)" in media_bridge
     assert "forward_home_call_talkback_packet(bridge, packet, n)" in media_bridge
     assert "forward_ondemand_talkback_packet(bridge, packet, n)" in media_bridge

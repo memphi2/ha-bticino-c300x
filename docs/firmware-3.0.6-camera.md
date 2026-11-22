@@ -121,3 +121,24 @@ must not be added together as a unique-test total.
 
 The historical package hashes in the separate display audit describe its
 earlier checkpoint, not this rebuilt camera/maintenance candidate.
+
+## Local 2.9.0b2 Preparation
+
+The camera review reported no remaining findings. Stable was rechecked at
+`06f7396f`; that final local source is already included by the port. If stable
+changes again before publication, recompare its final published source before
+advancing this candidate. Beta-specific code never goes back into stable.
+
+The integration and native agent are bumped together to **2.9.0b2**, with a
+fresh build against 1.7.19 and passing ABI checks against 1.7.19 and 3.0.6.
+Its executable SHA-256 is
+`eeda7bc0d723a808fd7fc3691a33c6d21d6004b913c5a97c1fa11b0ca3c807d4`.
+The earlier 2.9.0b1 hash above remains a historical port checkpoint.
+
+The existing beta-first prerelease/main-only stable evidence policy required
+no production change. Additional b2 tag, channel, source-SHA and non-push
+rejection coverage passed with the focused release suites: **328 passed**.
+The final candidate still requires independent release-policy review and all
+full gates before PR. No push, tag, transport draft or publication is authorized
+until stable 2.8.2 publication and the outstanding gates are complete. Local
+metadata continues to report `local-unverified`.

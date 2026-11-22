@@ -91,9 +91,11 @@ disable pre-releases and select the stable release, or wait for the next one,
 then run the agent update Repair again. A Home Assistant backup does not
 restore the agent on the device.
 
-`2.9.0b1` is a beta for the display of firmware `3.0.6`, see
+`2.9.0b2` is a beta for the display and Low camera settings of firmware `3.0.6`, see
 [Display patch on firmware 3.0.6](#display-patch-on-firmware-306). On `1.7.x`
-and `2.0.2` it works like 2.8.1.
+and `2.0.2` it includes the stable 2.8.2 fixes. Additional Low sizes and their
+framing/performance remain untested on hardware; see
+[the offline camera evidence](firmware-3.0.6-camera.md).
 
 ## Tokens
 

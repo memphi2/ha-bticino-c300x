@@ -1,6 +1,6 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-22. Integration and native agent `2.9.0b1`, a beta on
+Source review: 2026-11-22. Integration and native agent `2.9.0b2`, a beta on
 top of `2.8.2` that brings the display pages to firmware 3.0.6. Version `2.8.2`
 adds bounded RTSP recovery, exact firewall restoration and optional High geometry
 for a verified older media build, not for firmware 3.0.6. Version `2.8.1`

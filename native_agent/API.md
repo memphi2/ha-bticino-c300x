@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.9.0b1`
+- Current agent version: `2.9.0b2`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -1660,7 +1660,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.9.0b1` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `2.9.0b2` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
 config and is `unknown` when that value is empty, which is what the installer
 writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,

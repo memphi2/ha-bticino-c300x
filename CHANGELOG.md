@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.9.0b2 - 2026-11-22
+
+Firmware 3.0.6 beta, not yet tested on a device. Includes final stable 2.8.2
+changes through `06f7396f`, without moving beta code into the stable line.
+
+- Camera transactions preserve rollback and saved/running state across agent
+  restarts; unknown running state alone does not request a reboot. Removal
+  verifies agent termination before restoration and retains recovery on failure.
+- Low keeps factory 400x288 and earlier sizes. Additional bounded choices are
+  320x240 (4:3), and 480x288, 640x384, 720x432 (5:3). Original 3.0.6 caps were
+  checked offline; actual framing, performance and operation remain untested
+  on hardware. No 3.0.6 High geometry patch is enabled.
+- Snapshot defaults are native 800x480; explicit user sizes stay unchanged.
+  The card preserves actual media dimensions and stable matching-ratio layout.
+- Qt5 display, routing and downgrade recovery remain beta-specific. The native
+  agent is rebuilt as 2.9.0b2; an agent update is required.
+- Release evidence keeps exact canonical beta pushes available only to
+  prereleases; stable releases still require main. Full checks, source/tag
+  binding, build-lock approval and attestations remain mandatory.
+
 ## v2.9.0b1 - 2026-11-22
 
 Beta for firmware 3.0.6, not yet tested on a device.

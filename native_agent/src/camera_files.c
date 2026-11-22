@@ -13,6 +13,18 @@ struct pending_file {
     char *data;
 };
 
+const char *c300x_camera_settings_path(void)
+{
+    const char *path = getenv("C300X_CAMERA_QUALITY_FILE");
+    return path != NULL && path[0] != '\0' ? path : "/home/bticino/cfg/bt_answering_machine";
+}
+
+const char *c300x_camera_crop_path(void)
+{
+    const char *path = getenv("C300X_CAMERA_CROP_FILE");
+    return path != NULL && path[0] != '\0' ? path : "/home/bticino/cfg/stack_open.xml";
+}
+
 char *c300x_camera_file_text(const char *path)
 {
     char *data = NULL;
@@ -56,7 +68,8 @@ static int backup(const struct pending_file *file)
     char path[C300X_MAX_PATH_LEN];
 
     return file->data == NULL || (c300x_device_file_backup_path(file->backup_name, path, sizeof(path))
-        && c300x_device_file_backup_once(file->path, path));
+        && c300x_device_file_backup_once(file->path, path)
+        && c300x_device_file_sync_parents(path));
 }
 
 int c300x_camera_files_write(int low, const struct c300x_camera_values *now,

@@ -9,6 +9,7 @@
  * functions return nonzero on success. */
 
 #define C300X_DEVICE_FILE_MAX 262144
+int c300x_device_file_sync_parents(const char *path);
 
 /* mode is "rw" or "ro". C300X_AUDIO_NO_REMOUNT=1 skips it, for tests. */
 int c300x_device_file_remount(const char *mode);

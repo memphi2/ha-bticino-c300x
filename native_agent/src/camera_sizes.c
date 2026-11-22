@@ -18,6 +18,7 @@ struct size_choice {
 static const struct size_choice HIGH_SIZES[] = {
     {"688x480", 800, 480, {16, 48, 688, 480}},
     {"704x576", 800, 480, {8, 0, 704, 576}},
+    {"960x576", 800, 480, {8, 0, 704, 576}},
 };
 /* Low stream: the device scales the 720x576 camera picture to WidthLow x
  * HeightLow; no larger, both multiples of 16 for the encoder. */

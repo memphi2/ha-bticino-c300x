@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .capabilities import entry_gui_function_patch_active
 from .config_audio import audio_gain_db_or_default
 from .config_flow_camera_quality import camera_quality_offered
 from .config_flow_dashboard import (
@@ -287,8 +288,11 @@ def current_feature_options(
                 CREATE_HOMEASSISTANT_USER_DEFAULT,
             )
         ),
+        # An entry from before the setting has it as its device is.
         CONF_DEVICE_UI_ENABLED: bool(
-            _config_default(config_entry, CONF_DEVICE_UI_ENABLED, False)
+            _config_default(
+                config_entry, CONF_DEVICE_UI_ENABLED, entry_gui_function_patch_active(config_entry)
+            )
         ),
         CONF_ACTIONS: _config_default(config_entry, CONF_ACTIONS, {}),
         CONF_DASHBOARD_PREVENT_RETURN: bool(

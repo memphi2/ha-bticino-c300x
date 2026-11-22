@@ -74,7 +74,11 @@ from .device_user import (
     device_user_bootstrap_satisfied,
     homeassistant_account_label,
 )
-from .display_patch_sync import async_apply_display_setting
+from .display_patch_sync import (
+    async_settle_display_setting,
+    display_setting_pending,
+    note_display_setting_saved,
+)
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
@@ -293,8 +297,8 @@ class C300XRuntimeManager:
             await self.async_sync_platform_gate_state()
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
-        if CONF_DISPLAY_SETTING_PENDING in self.entry.data:
-            await _async_apply_pending_display_setting(self.hass, self.entry)
+        if display_setting_pending(self.entry):
+            await async_settle_display_setting(self.hass, self.entry)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""
@@ -500,27 +504,18 @@ def _entry_update_listener(
             return
         was_dynamic_homepage = _dynamic_homepage_setting(previous)
         previous = current
-        # Before the reload: both need the runtime data that the reload
-        # replaces. Applying the patch already carries the home page mode.
-        if not await async_apply_display_setting(hass, updated):
-            await _async_reapply_display_patch_for_home_page(
-                updated,
-                was_dynamic_homepage=was_dynamic_homepage,
-            )
+        # The start after this reload brings the Display patch in line with
+        # the Display setting, with the agent the entry then talks to.
+        note_display_setting_saved(updated.entry_id)
+        # Before the reload: the re-apply needs the runtime data that the
+        # reload replaces.
+        await _async_reapply_display_patch_for_home_page(
+            updated,
+            was_dynamic_homepage=was_dynamic_homepage,
+        )
         await _async_update_listener(hass, updated)
 
     return listener
-
-
-async def _async_apply_pending_display_setting(
-    hass: HomeAssistant, entry: BticinoC300XConfigEntry
-) -> None:
-    """Apply the Display setting of a new entry once, at its first start."""
-
-    await async_apply_display_setting(hass, entry)
-    data = dict(entry.data)
-    data.pop(CONF_DISPLAY_SETTING_PENDING, None)
-    hass.config_entries.async_update_entry(entry, data=data)
 
 
 def _dynamic_homepage_setting(settings: tuple[dict[str, Any], dict[str, Any]]) -> bool:

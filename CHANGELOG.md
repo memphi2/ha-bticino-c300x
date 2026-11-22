@@ -83,13 +83,15 @@ Settings:
 
 Fixed:
 
-- Saving the settings with the display turned on installs the Home
-  Assistant pages on the C300X, and saving it turned off restores the
-  original display. Before, the option only unlocked the settings, and the
-  pages came only from the hidden **Display patch** switch. The switch now
-  saves the option too, so both always agree. If the pages are missing
-  after the update, open **Configure > Display > Display and Display
-  patch** and submit it once.
+- Saving the settings with **Home Assistant pages on the display** turned
+  on installs the pages on the C300X once the integration has reloaded, and
+  saving it turned off restores the original display; a new setup does it
+  at its first start. Before, the option only unlocked the settings, and the
+  pages came only from the hidden **Display patch** switch. When the C300X
+  cannot be reached then, the next start tries again. The switch now saves
+  the option too, so a later save keeps what it did. If the pages are
+  missing after the update, open **Configure > Display > Display and
+  Display patch** and submit it once.
 - The **Display patch** switch is shown by default in new setups. Where it
   was set up hidden before, enable it once on the device page.
 - The card no longer shows the last image twice. Its saved copy came again

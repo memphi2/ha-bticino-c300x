@@ -2466,7 +2466,9 @@ def _options_flow(entry):
     entry.update_listeners = [object()]
     flow = BticinoC300XOptionsFlow(entry)
     flow.hass = SimpleNamespace(  # type: ignore[assignment]
-        config_entries=SimpleNamespace(async_update_entry=update_entry),
+        config_entries=SimpleNamespace(
+            async_update_entry=update_entry, async_schedule_reload=lambda _entry_id: None
+        ),
     )
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
     flow.async_create_entry = lambda **kwargs: {  # type: ignore[method-assign]
@@ -2605,6 +2607,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         },
         options={},
         runtime_data=None,
+        entry_id="entry-areas",
     )
     # Without the Display patch there are no pages or tiles to set up.
     assert _options_menu_of(entry) == [

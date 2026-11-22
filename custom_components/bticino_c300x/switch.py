@@ -79,7 +79,8 @@ async def async_setup_entry(
     entities.append(C300XMaintenanceNoAuthSwitch(entry))
     entities.append(C300XMdnsDiscoverySwitch(entry))
     entities.append(C300XMaintenanceSshSwitch(entry))
-    entities.append(C300XGuiFunctionPatchSwitch(entry))
+    if not _agent_has_no_display_patch(entry):
+        entities.append(C300XGuiFunctionPatchSwitch(entry))
     entities.append(C300XFirewallPatchSwitch(entry))
     entities.append(C300XIpv6FirewallPatchSwitch(entry))
     entities.append(C300XNativeMqttBridgeSwitch(entry))
@@ -468,6 +469,17 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
     def _apply_status(self, status: dict[str, Any]) -> None:
         self._running = status.get("running")
         self._attr_available = True
+
+
+def _agent_has_no_display_patch(entry: BticinoC300XConfigEntry) -> bool:
+    """Whether an agent with maintenance says that it has no Display patch."""
+
+    maintenance = getattr(entry.runtime_data, "capabilities", {}).get("maintenance")
+    return (
+        isinstance(maintenance, dict)
+        and maintenance.get("supported") is True
+        and maintenance.get("qml_patch") is False
+    )
 
 
 class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):

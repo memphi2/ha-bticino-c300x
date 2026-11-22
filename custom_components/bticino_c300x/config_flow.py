@@ -215,7 +215,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
-from .display_patch_sync import async_schedule_display_setting
+from .display_patch_sync import note_display_setting_saved
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import ssh_login
@@ -936,7 +936,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_EVENT_WEBHOOK_TOKEN: secrets.token_urlsafe(32),
-                # Applied with the runtime data of the first start.
+                # The first start applies the Display setting to the device.
                 CONF_DISPLAY_SETTING_PENDING: True,
             },
             options={
@@ -1636,8 +1636,10 @@ class BticinoC300XOptionsFlow(
             saved = dict(self._config_entry.options)
             result = await self._async_save_options(feature_defaults)
             if not result.get("errors") and dict(self._config_entry.options) == saved:
-                # Nothing was saved, so nothing reloads: the device follows here.
-                async_schedule_display_setting(self.hass, self._config_entry)
+                # Nothing was saved, so nothing reloads: the start of this reload
+                # brings a device that differs in line.
+                note_display_setting_saved(self._config_entry.entry_id)
+                self.hass.config_entries.async_schedule_reload(self._config_entry.entry_id)
             return result
 
         return await self._async_show_options_dashboard_form(

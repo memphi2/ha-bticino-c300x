@@ -1634,3 +1634,17 @@ def test_media_user_setup_needs_the_display_label_only_where_there_is_a_display_
     }
 
     assert entity.is_on is is_on
+
+
+def test_an_agent_without_the_display_patch_gets_no_display_patch_switch() -> None:
+    def switches(maintenance: dict[str, Any]) -> list[Any]:
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={"maintenance": maintenance}))
+        entities: list[Any] = []
+        asyncio.run(async_setup_entry(None, entry, entities.extend))  # type: ignore[arg-type]
+        return [entity for entity in entities if isinstance(entity, C300XGuiFunctionPatchSwitch)]
+
+    # Firmware 3.0.x with its Qt 5 display says so; the switch would stay unavailable.
+    assert switches({"supported": True, "qml_patch": False}) == []
+    assert len(switches({"supported": True, "qml_patch": True})) == 1
+    # An agent that has not answered yet keeps the switch.
+    assert len(switches({})) == 1

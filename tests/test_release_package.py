@@ -119,7 +119,7 @@ def test_release_metadata_records_resolved_current_ha(monkeypatch):
     monkeypatch.setenv("C300X_VALIDATED_CURRENT_HA_VERSION", "2026.12.2")
     evidence = writer._lts_evidence(tag="v2.2.0", native_agent_reused_from=None)
     assert evidence["current_homeassistant"] == "2026.12.2"
-    assert evidence["validated_homeassistant"] == ["2026.10.0", "2026.12.2"]
+    assert evidence["validated_homeassistant"] == []
     assert evidence["validation_status"] == "local-unverified"
     assert evidence["validated_jobs"] == []
 
@@ -601,7 +601,7 @@ def test_release_assets_are_reproducible_for_same_zip(
         "validation_evidence": None,
         "min_homeassistant": "2026.10.0",
         "current_homeassistant": "2026.11.1",
-        "validated_homeassistant": ["2026.10.0", "2026.11.1"],
+        "validated_homeassistant": [],
         "python": "3.14",
         "firmware_target": "1.7.x, 2.0.2 or 3.0.6 (experimental)",
         "native_agent_rebuilt": True,

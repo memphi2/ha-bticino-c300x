@@ -216,16 +216,68 @@ def _check(root: Path) -> list[str]:
     if (
         set(jobs) != {"main-validation", "publish"}
         or publish.get("needs") != ["main-validation"]
-        or "if" in gate or gate.get("continue-on-error", False)
+        or any("if" in job or job.get("continue-on-error", False) for job in (gate, publish))
     ):
         failures.append("release must require canonical branch validation without a duplicate HA matrix")
+    for job, ref in (
+        (gate, "${{ github.sha }}"),
+        (publish, "${{ needs.main-validation.outputs.commit }}"),
+    ):
+        checkouts = [step for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@")]
+        if (
+            len(checkouts) != 1 or job["steps"][0] != checkouts[0]
+            or checkouts[0].get("with", {}).get("ref") != ref
+            or "if" in checkouts[0] or checkouts[0].get("continue-on-error", False)
+        ):
+            failures.append("release checkouts must pin the run SHA and verified commit before executing code")
+    if gate.get("outputs") != {
+        "commit": "${{ steps.verified-main.outputs.commit }}",
+        "evidence-digest": "${{ steps.verified-main.outputs.evidence-digest }}",
+    }:
+        failures.append("release gate must expose the verified commit and evidence digest")
     verifier = [step for step in gate["steps"] if step.get("id") == "verified-main"]
     if (
         len(verifier) != 1
-        or "python scripts/verify_main_validation.py" not in verifier[0].get("run", "")
+        or verifier[0].get("run", "").strip() != (
+            'python scripts/verify_main_validation.py --tag "$RELEASE_TAG" \\\n'
+            '  --wait-seconds 900 --output .release/validation-evidence.json'
+        )
         or "if" in verifier[0] or verifier[0].get("continue-on-error", False)
     ):
         failures.append("release must verify canonical exact-SHA validation evidence")
+    publish_steps = publish["steps"]
+    for name, output in (
+        ("Verify canonical validation evidence", ".release/validation-evidence.json"),
+        ("Recheck canonical evidence before publication", ".release/rechecked-validation-evidence.json"),
+    ):
+        checks = [step for step in publish_steps if step.get("name") == name]
+        if (
+            len(checks) != 1
+            or checks[0].get("run", "").strip() != (
+                'test -n "$EVIDENCE_DIGEST"\n'
+                'python scripts/verify_main_validation.py --tag "$RELEASE_TAG" \\\n'
+                f'  --expect-digest "$EVIDENCE_DIGEST" --output {output}'
+            )
+            or checks[0].get("env") != {
+                "GH_TOKEN": "${{ github.token }}",
+                "RELEASE_TAG": "${{ steps.release-tag.outputs.tag }}",
+                "EVIDENCE_DIGEST": "${{ needs.main-validation.outputs.evidence-digest }}",
+            }
+            or "if" in checks[0] or checks[0].get("continue-on-error", False)
+        ):
+            failures.append(f"release must require digest-pinned evidence: {name}")
+    names = [step.get("name") for step in publish_steps]
+    ordered = (
+        "Verify canonical validation evidence", "Build HACS release zip",
+        "Generate release metadata", "Verify generated attestations",
+        "Recheck canonical evidence before publication", "Publish GitHub Release assets",
+    )
+    if (
+        any(names.count(name) != 1 for name in ordered)
+        or [names.index(name) for name in ordered] != sorted(names.index(name) for name in ordered)
+        or names[-2:] != list(ordered[-2:])
+    ):
+        failures.append("release must recheck evidence before building and immediately before publishing")
     metadata = [step for step in publish["steps"] if step.get("name") == "Generate release metadata"]
     if len(metadata) != 1 or metadata[0].get("env") != {
         "C300X_VALIDATION_EVIDENCE": ".release/validation-evidence.json",

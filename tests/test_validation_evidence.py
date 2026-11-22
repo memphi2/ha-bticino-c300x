@@ -232,6 +232,27 @@ def test_rerun_during_verification_fails(api, monkeypatch):
         verifier.verify(api, REPO, "v2.8.2", SHA)
 
 
+def test_complete_rerun_binds_only_current_attempt_evidence(api):
+    previous_artifacts = copy.deepcopy(api.artifacts)
+    for runs in api.runs.values():
+        runs[0]["run_attempt"] = 2
+        for job in api.jobs[runs[0]["id"]]:
+            job["run_attempt"] = 2
+            job["id"] += 10000
+    for target, artifact in zip(evidence.TARGETS, api.artifacts, strict=True):
+        api.payloads[target]["run_attempt"] = 2
+        artifact.update(id=artifact["id"] + 100, name=f"ha-validation-{target}-2")
+        api.repack(target)
+    api.artifacts.extend(previous_artifacts)
+
+    result = verifier.verify(api, REPO, "v2.8.2", SHA)
+    for run in result["runs"].values():
+        assert run["attempt"] == 2
+        assert f"/actions/runs/{run['id']}/attempts/2/jobs" in api.reads
+    assert result["runs"]["validate.yml"]["artifacts"]["min-ha"]["id"] == 101
+    assert "/actions/artifacts/1/zip" not in api.reads
+
+
 def test_pagination_consumes_structured_pages_and_rejects_truncation(monkeypatch):
     api = verifier.GitHub(REPO)
     pages = [{"total_count": 2, "jobs": [{"id": 1}]}, {"total_count": 2, "jobs": [{"id": 2}]}]
@@ -263,6 +284,7 @@ def test_metadata_consumes_exact_gate_bytes_and_records_run_bindings(api, tmp_pa
     monkeypatch.setattr(writer, "_git_output", lambda *args: SHA)
     value = writer._lts_evidence(tag="v2.8.2", native_agent_reused_from=None)
     assert value["current_homeassistant"] == "2026.12.2"
+    assert value["validated_homeassistant"] == ["2026.10.0", "2026.12.2"]
     assert value["validation_status"] == "canonical-main-push"
     assert value["validation_evidence"] == result
     assert "browser" in value["validated_jobs"] and "dependabot" in value["validated_jobs"]
@@ -299,6 +321,8 @@ def test_workflows_bind_evidence_and_preserve_full_pr_main_checks():
     assert gate_steps.index(setup) < gate_steps.index(verify)
     assert set(jobs) == {"main-validation", "publish"}
     assert jobs["publish"]["needs"] == ["main-validation"]
+    assert jobs["main-validation"]["steps"][0]["with"]["ref"] == "${{ github.sha }}"
+    assert jobs["publish"]["steps"][0]["with"]["ref"] == "${{ needs.main-validation.outputs.commit }}"
     publish = jobs["publish"]["steps"]
     by_name = {step.get("name"): step for step in publish}
     for name in ("Verify canonical validation evidence", "Recheck canonical evidence before publication"):
@@ -339,21 +363,30 @@ def test_generator_only_records_actual_installed_main_push_version(tmp_path, mon
         assert not output.exists()
 
 
-@pytest.mark.parametrize("change", [None, "digest", "workflow-sha", "workflow-ref", "summary-sha", "summary-minimum"])
-def test_release_cli_and_metadata_digest_binding(api, tmp_path, monkeypatch, change):
+@pytest.mark.parametrize("tag", ["v2.8.2", "v2.9.0b1"])
+@pytest.mark.parametrize("change", [
+    None, "digest", "workflow-sha", "workflow-ref", "run-sha", "run-ref",
+    "run-event", "dispatch", "summary-sha", "summary-minimum",
+])
+def test_release_cli_and_metadata_digest_binding(api, tmp_path, monkeypatch, change, tag):
+    if tag == "v2.9.0b1":
+        beta_api(api)
     monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("GITHUB_SHA", "b" * 40 if change == "run-sha" else SHA)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main" if change == "run-ref" else f"refs/tags/{tag}")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", {"run-event": "pull_request", "dispatch": "workflow_dispatch"}.get(change, "push"))
     monkeypatch.setenv("GITHUB_WORKFLOW_SHA", "b" * 40 if change == "workflow-sha" else SHA)
-    monkeypatch.setenv("GITHUB_WORKFLOW_REF", "foreign" if change == "workflow-ref" else f"{REPO}/.github/workflows/release.yml@refs/tags/v2.8.2")
+    monkeypatch.setenv("GITHUB_WORKFLOW_REF", "foreign" if change == "workflow-ref" else f"{REPO}/.github/workflows/release.yml@refs/tags/{tag}")
     monkeypatch.setattr(verifier.subprocess, "check_output", lambda *args, **kwargs: SHA)
     monkeypatch.setattr(verifier, "GitHub", lambda repository: api)
-    expected = verifier.verify(api, REPO, "v2.8.2", SHA)
+    expected = verifier.verify(api, REPO, tag, SHA)
     data = (json.dumps(expected, indent=2, sort_keys=True) + "\n").encode()
     digest = hashlib.sha256(data).hexdigest()
     output = tmp_path / "verified.json"
     github_output = tmp_path / "output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-    monkeypatch.setattr(sys, "argv", ["verify", "--tag", "v2.8.2", "--output", str(output), "--expect-digest", "0" * 64 if change == "digest" else digest])
-    if change in {"digest", "workflow-sha", "workflow-ref"}:
+    monkeypatch.setattr(sys, "argv", ["verify", "--tag", tag, "--output", str(output), "--expect-digest", "0" * 64 if change == "digest" else digest])
+    if change in {"digest", "workflow-sha", "workflow-ref", "run-sha", "run-ref", "run-event"}:
         with pytest.raises(ValueError):
             verifier.main()
         assert not output.exists() and not github_output.exists()
@@ -367,11 +400,11 @@ def test_release_cli_and_metadata_digest_binding(api, tmp_path, monkeypatch, cha
         expected["homeassistant"]["min-ha"] = "2026.10.1"
     output.write_text(json.dumps(expected))
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
-    if change is not None:
+    if change in {"summary-sha", "summary-minimum"}:
         with pytest.raises(ValueError):
-            evidence.load_verified_summary(output, digest, SHA, REPO, "v2.8.2")
+            evidence.load_verified_summary(output, digest, SHA, REPO, tag)
     else:
-        assert evidence.load_verified_summary(output, digest, SHA, REPO, "v2.8.2") == expected
+        assert evidence.load_verified_summary(output, digest, SHA, REPO, tag) == expected
 
 
 def beta_api(api):

@@ -194,6 +194,9 @@ def main() -> int:
     args = parser.parse_args()
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     require(re.fullmatch(r"[0-9a-f]{40}", sha) is not None, "Invalid source SHA")
+    require(os.environ["GITHUB_SHA"] == sha, "Release run SHA differs from checkout")
+    require(os.environ["GITHUB_REF"] == f"refs/tags/{args.tag}", "Release run must use the release tag")
+    require(os.environ["GITHUB_EVENT_NAME"] in {"push", "workflow_dispatch"}, "Untrusted release event")
     require(os.environ["GITHUB_WORKFLOW_SHA"] == sha, "Release workflow must come from released source SHA")
     require(os.environ["GITHUB_WORKFLOW_REF"] == f"{os.environ['GITHUB_REPOSITORY']}/.github/workflows/release.yml@refs/tags/{args.tag}", "Untrusted release workflow ref")
     deadline = time.monotonic() + args.wait_seconds

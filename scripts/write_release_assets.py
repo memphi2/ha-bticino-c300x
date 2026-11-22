@@ -232,7 +232,7 @@ def _lts_evidence(
         "validated_homeassistant": [
             minimum_ha,
             current_ha,
-        ],
+        ] if validation is not None else [],
         "python": versions["python"],
         "firmware_target": versions["c300x_firmware"],
         "native_agent_rebuilt": native_agent_reused_from is None,

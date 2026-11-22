@@ -33,6 +33,9 @@ released commit. Tag, checkout, release workflow source and selected remote
 branch tip must agree. A successful PR, schedule, manually dispatched run, or
 run on the other branch is not interchangeable release evidence. Publication
 remains tag-bound; no branch override, merge bypass or firmware detection is added.
+The gate checks out the immutable release run SHA; publication checks out the
+commit emitted by that gate, never a newly resolved tag. Manual release retries
+must run from the release tag with the same run and workflow source SHA.
 
 `scripts/verify_main_validation.py` checks workflow IDs/paths and repository
 IDs, then every required job and step in the latest run's exact attempt.
@@ -67,7 +70,8 @@ of the selected branch/tag fail these checks. `build-metadata.json` embeds the
 selected source branch, exact versions, job IDs, workflow/run/attempt bindings
 and artifact IDs/digests. No fifth public asset
 is added. CI metadata generation requires digest-pinned evidence; local metadata
-without evidence is explicitly `local-unverified` and claims no validated jobs.
+without evidence is explicitly `local-unverified` and claims no validated jobs
+or HA versions (the configured version baselines remain informational).
 
 Release content/tag checks, the reviewed native build lock, packaging, SBOM,
 provenance and SBOM attestations, and remote downloaded-asset verification remain

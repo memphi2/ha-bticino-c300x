@@ -263,9 +263,9 @@ corrupt-copy cases and 17 original 3.0.6 removal/HTTP cases. These groups overla
 earlier runs; do not sum them into a unique full-suite result. Forty wrapper
 lifecycle cases and three alert cases (one original QtQml, two host JS/QML
 transport fixtures) passed separately. A private 1.7.19 patch/restore round-trip
-and 23 selected Qt5 HA activation/update-follow-up cases passed too. Build-lock
-regeneration and the final candidate build are coordinated separately; these
-tests do not certify that an older staged binary contains wrapper-check.
+and 23 selected Qt5 HA activation/update-follow-up cases passed too. The final
+candidate build below now includes wrapper-check; these earlier tests alone
+did not certify that older staged binaries contained it.
 
 ### Downgrade Recovery Guard
 
@@ -327,8 +327,31 @@ protected. Capability metadata is not cryptographic publisher authentication or
 proof of the target binary's behavior. The manual full-removal prerequisite and
 checking the running stock GUI remain mandatory. Startup quarantine remains
 limited to the explicitly requested first 60 seconds and existing signal policy.
-The final beta candidate build, ABI check, build-lock regeneration and bundle
-staging are deferred; the current source review is not an activation approval.
+
+### Local Candidate Build
+
+The deferred build blocker is resolved for source commit `5a87f6f8`, without
+changing version `2.9.0b1`. The ARMHF agent and embedded Qt5 preload were rebuilt
+using the private original 1.7.19 libraries. Both passed `check_agent_abi.py`
+against the original 1.7.19 and 3.0.6 roots. The stripped, packaged agent also
+passed the same dual-firmware ABI check.
+
+`native_agent/build-lock.json` now binds the current native/bundle inputs to
+packaged executable SHA-256
+`6bd5d3bd6ee6a4dcc3ec08e21f2ed0fdcc49289d3a24b9c27b9af99ed9908738`.
+The local staged bundle and HACS ZIP were regenerated. `check_release_contents.py`
+verified exact source content and executable identity with both `--agent-binary`
+and `--build-lock`; `native_build_lock.py --check-inputs` passed. The bundle
+declares `qt5_recovery_version: 1` and retains file-set version 6.
+The local ZIP SHA-256 is
+`86b44db55842cbd771b48a728ebb1f7dcdb7f439980dace5f5ca334664a1b69f`;
+the regenerated checksums and SPDX document also passed their package checks.
+
+This resolves the stale binary/build-lock/package gap, not the device checks.
+No full gate was run; the earlier interrupted full validation is not a pass.
+Local release metadata remains `local-unverified`, not canonical CI evidence.
+The startup-only first-60-second guard and excluded exit/signal statuses are
+unchanged. This local build is neither a publication nor an activation approval.
 
 ## Focused Reproduction
 

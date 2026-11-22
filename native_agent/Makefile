@@ -34,12 +34,24 @@ else
 ARMHF_PTHREAD_LDFLAGS := -Wl,--no-as-needed -l:libpthread.so.0 -l:libdl.so.2
 endif
 ARMHF_LDFLAGS ?= -pthread $(ARMHF_PTHREAD_LDFLAGS) -nostartfiles
+# Preloaded into the Qt 5 display program of firmware 3.0.x; see qt5/qrc_overlay.c.
+QT5_OVERLAY := $(ARMHF_BUILD_DIR)/c300x-qrc-overlay.so
+ifneq ($(C300X_DEVICE_SYSROOT),)
+QT5_OVERLAY_LDFLAGS := -Wl,-rpath-link,$(C300X_DEVICE_SYSROOT)/lib -L$(C300X_DEVICE_SYSROOT)/lib -l:libdl.so.2 -l:libc.so.6
+else
+QT5_OVERLAY_LDFLAGS := -ldl
+endif
 
-.PHONY: all armhf armhf-abi-check armhf-stack-check check smoke clean FORCE
+.PHONY: all armhf armhf-qt5 armhf-abi-check armhf-stack-check check smoke clean FORCE
 
 all: $(TARGET)
 
 armhf: $(ARMHF_TARGET)
+
+armhf-qt5: $(QT5_OVERLAY)
+
+$(QT5_OVERLAY): qt5/qrc_overlay.c $(ARMHF_BUILD_DIR)/build-settings | $(ARMHF_BUILD_DIR)
+	$(ARMHF_CC) $(ARMHF_CFLAGS) -fPIC -shared $< -o $@ $(QT5_OVERLAY_LDFLAGS)
 
 armhf-abi-check: $(ARMHF_TARGET)
 	$(PYTHON) ../scripts/check_agent_abi.py $(ARMHF_TARGET) --readelf $(ARMHF_READELF) $(foreach root,$(C300X_DEVICE_SYSROOT) $(C300X_ABI_SYSROOTS),--sysroot $(root))

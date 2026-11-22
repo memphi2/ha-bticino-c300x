@@ -1018,3 +1018,51 @@ def test_native_agent_startup_link_check_accepts_relative_rc_links() -> None:
     assert "realpath(C300X_AGENT_INIT_LINK, resolved)" in link_check
     assert "strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0" in link_check
     assert "agent_init_link_matches()" in ensure_link
+
+
+def _release_gate_branch(tmp_path: Path, tag: str, tip_of: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+    release = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    gate = next(step for step in release["jobs"]["main-validation"]["steps"] if step.get("id") == "verified-main")
+    text = gate["run"]
+    start = text.index('case "${RELEASE_TAG#v}" in')
+    end = text.index("\nfi\n", text.index('if [ -z "$release_branch" ]')) + 4
+    origin, work = tmp_path / "origin.git", tmp_path / "work"
+
+    def git(*args: str, cwd: Path = work) -> str:
+        return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "--bare", str(origin), cwd=tmp_path)
+    git("init", "-q", "-b", "main", str(work), cwd=tmp_path)
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+    base = git("rev-parse", "HEAD")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "tagged")
+    tagged = git("rev-parse", "HEAD")
+    git("remote", "add", "origin", str(origin))
+    for branch in ("main", "beta"):
+        git("push", "-q", "origin", f"{tagged if branch in tip_of else base}:refs/heads/{branch}")
+    script = f'set -euo pipefail\ntag_sha={tagged}\n{text[start:end]}echo "branch=$release_branch"\n'
+    return subprocess.run(["bash", "-c", script], cwd=work, env={**os.environ, "RELEASE_TAG": tag},
+                          capture_output=True, text=True, check=False)
+
+
+@pytest.mark.parametrize(
+    ("tag", "tip_of", "branch"),
+    [
+        ("v2.9.0", ("main",), "main"),
+        ("v2.9.0", ("beta",), None),
+        ("v2.9.0b1", ("beta",), "beta"),
+        ("v2.9.0rc1", ("beta",), "beta"),
+        ("v2.9.0b1", ("main",), "main"),
+        ("v2.9.0b1", (), None),
+    ],
+)
+def test_a_beta_may_come_from_the_beta_branch_but_a_stable_release_only_from_main(
+    tmp_path: Path, tag: str, tip_of: tuple[str, ...], branch: str | None
+) -> None:
+    result = _release_gate_branch(tmp_path, tag, tip_of)
+    if branch is None:
+        assert result.returncode == 1
+        assert "::error::Release tag" in result.stdout
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.stdout.strip().endswith(f"branch={branch}")

@@ -193,10 +193,17 @@ restore_media_patches() {
 # last, before the reboot: the running display keeps the replaced file open,
 # so the root file system stays writable until then. Without a valid backup
 # the changed library stays, which only keeps the wider tap tolerance.
+# Without a valid stock backup the library stays as it is (wider tap
+# tolerance); any other failure keeps the backup for another removal.
 restore_display_library() {
-    if ! "$AGENT_DIR/c300x-agent-native" --display-touch restore >/dev/null 2>&1; then
-        printf 'Display library not restored; it keeps the wider tap tolerance\n' >&2
-    fi
+    touch_result="$("$AGENT_DIR/c300x-agent-native" --display-touch restore 2>/dev/null || true)"
+    case "$touch_result" in
+        *'"ok":true'*) return 0 ;;
+        *'"error":"touch_backup_invalid"'*)
+            printf 'Display library not restored; it keeps the wider tap tolerance\n' >&2
+            return 0 ;;
+    esac
+    return 1
 }
 
 schedule_reboot() {
@@ -213,13 +220,16 @@ if ! restore_file_or_remove_block "$IPTABLES" "$IPTABLES_BACKUP" "# c300x-native
     printf 'Failed to restore IPv4 firewall patch; keeping agent files and backups in place\n' >&2
     exit 1
 fi
+if ! restore_display_library; then
+    printf 'Failed to restore the display library; keeping agent files and backups in place\n' >&2
+    exit 1
+fi
 stop_agent
 restore_media_patches
 if ! remove_startup; then
     printf 'Failed to remove startup files; keeping agent files and backups in place\n' >&2
     exit 1
 fi
-restore_display_library
 rm -rf "$AGENT_DIR" "$BACKUP_ROOT"
 start_ssh
 schedule_reboot

@@ -376,10 +376,12 @@ def test_a_cut_off_write_leaves_no_temporary_file_behind(device: _Device) -> Non
     assert device.target.read_bytes() == device.stock
 
 
-def test_the_removal_restores_the_library_last() -> None:
+def test_the_removal_restores_the_library_before_anything_it_cannot_undo() -> None:
+    # A failed restore keeps the agent, its start and the backup of the library.
     script = (NATIVE / "scripts/remove_agent.sh").read_text(encoding="utf-8")
     tail = script[script.rindex("start_ssh\nrestore_qml"):]
-    assert tail.index("remove_startup") < tail.index("restore_display_library") < tail.index('rm -rf "$AGENT_DIR"')
+    assert tail.index("restore_qml") < tail.index("restore_display_library") < tail.index("stop_agent")
+    assert tail.index("stop_agent") < tail.index("remove_startup") < tail.index('rm -rf "$AGENT_DIR"')
 
 
 def test_a_written_copy_is_checked_before_it_replaces_the_library(tmp_path: Path) -> None:

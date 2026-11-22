@@ -333,3 +333,46 @@ exit 0
         assert Path(env["C300X_INIT_SCRIPT"]).is_file()
         assert Path(env["C300X_INIT_LINK"]).is_file()
     assert not list(Path(env["TMPDIR"]).iterdir())
+
+
+def _display_library_restore(env, answer):
+    """The agent answers its library restore with `answer`; the rest works."""
+
+    binary = Path(env["C300X_AGENT_DIR"], "c300x-agent-native")
+    binary.write_text(
+        '#!/bin/sh\nif [ "$1" = "--display-touch" ]; then\n'
+        f"    printf '%s\\n' '{answer}'\n    exit 1\nfi\n"
+        'printf "media-restore\\n" >> "$CALL_LOG"\nexit 0\n'
+    )
+    binary.chmod(0o700)
+
+
+def test_a_display_library_that_could_not_be_written_back_keeps_its_backup(local_device):
+    env = local_device
+    library = Path(env["C300X_BACKUP_ROOT"], "original/usr/lib/libQtGuiE.so.4.8.7")
+    library.parent.mkdir(parents=True)
+    library.write_text("stock\n")
+    _display_library_restore(env, '{"ok":false,"error":"remount_rw_failed"}')
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode != 0
+    assert "keeping agent files and backups" in result.stderr
+    assert library.read_text() == "stock\n"
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+    # Still before the agent is stopped: it keeps running as it was.
+    assert Path(env["C300X_INIT_SCRIPT"]).is_file()
+    assert "reboot" not in Path(env["CALL_LOG"]).read_text().splitlines()
+
+
+def test_a_display_library_without_a_valid_backup_does_not_block_the_removal(local_device):
+    env = local_device
+    _display_library_restore(env, '{"ok":false,"error":"touch_backup_invalid"}')
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 0, result.stderr
+    assert "wider tap tolerance" in result.stderr
+    assert not Path(env["C300X_AGENT_DIR"]).exists()

@@ -299,7 +299,8 @@ removes startup files and the agent directory (including `config.json`), and on
 success also removes its managed device-file backup root before scheduling a
 device reboot. It starts SSH for recovery. On restoration failure it reports an
 error and retains agent files/backups; this is not a promise that every earlier
-step was rolled back. It is not a factory reset and does not erase HA media or
+step was rolled back. Only a display library without a valid stock backup does
+not stop it: the library keeps the wider tap tolerance. It is not a factory reset and does not erase HA media or
 HA backups. Review any remaining device users/settings separately; never assume
 all device credentials or unrelated firmware configuration were reset.
 

@@ -193,11 +193,13 @@ files are not backed up on the device.
 
 The remove-agent maintenance action is explicit and token protected. It first
 restores all display changes (Display patch, core hook and media-user label),
-then the IPv6 and IPv4 firewall scripts, stops the agent, restores the original
+then the IPv6 and IPv4 firewall scripts and the display library, stops the agent, restores the original
 audio codec and camera quality values, removes the native-agent init files, agent directory and
 agent-owned backups, and schedules a reboot.
 SSH is started before and after the cleanup and is deliberately not removed. If
-a restore step fails, the script stops before deleting the backups.
+a restore step fails, the script stops before deleting the backups. The one
+exception is a display library without a valid stock backup: it keeps the wider
+tap tolerance and the removal goes on.
 
 System metrics are sampled by the agent every 30 seconds by default, not polled
 by Home Assistant. HTTP and push use the same completed sample. CPU changes at

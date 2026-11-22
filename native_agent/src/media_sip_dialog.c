@@ -119,15 +119,15 @@ void c300x_media_sip_send_ring_bye(
     char call_id[128];
     char tagged_to[640];
     char request[2048];
-    const char *request_uri = remote_contact_uri != NULL && remote_contact_uri[0] != '\0'
-        ? remote_contact_uri
-        : "sip:c300x@127.0.0.1:5060";
 
     c300x_media_sip_header_value(invite, "To:", to, sizeof(to));
     c300x_media_sip_header_value(invite, "From:", from, sizeof(from));
     c300x_media_sip_header_value(invite, "Call-ID:", call_id, sizeof(call_id));
     c300x_media_sip_make_tagged_to(to, to_tag, tagged_to, sizeof(tagged_to));
-    if (tagged_to[0] == '\0' || from[0] == '\0' || call_id[0] == '\0') {
+    if (
+        remote_contact_uri == NULL || remote_contact_uri[0] == '\0'
+        || tagged_to[0] == '\0' || from[0] == '\0' || call_id[0] == '\0'
+    ) {
         return;
     }
     snprintf(
@@ -142,7 +142,7 @@ void c300x_media_sip_send_ring_bye(
         "CSeq: 111 BYE\r\n"
         "User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\r\n"
         "Content-Length: 0\r\n\r\n",
-        request_uri,
+        remote_contact_uri,
         C300X_MEDIA_SIP_DEFAULT_PORT,
         (long)time(NULL),
         tagged_to,

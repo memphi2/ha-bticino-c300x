@@ -7,6 +7,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "device_user.h"
+#include "device_detect.h"
 #include "string_util.h"
 
 #include <errno.h>
@@ -603,7 +604,7 @@ static int parse_users_file(
         line[line_len] = '\0';
         if (first_token(line, token, sizeof(token)) && strchr(token, '@') != NULL) {
             if (split_sip_aor(token, user, sizeof(user), host, sizeof(host))) {
-                if (strcmp(user, "c300x") == 0) {
+                if (strcmp(user, c300x_device_sip_user()) == 0) {
                     if (device_domain != NULL && device_domain[0] == '\0') {
                         (void)copy_checked(device_domain, device_domain_len, host);
                     }
@@ -1268,7 +1269,7 @@ int c300x_device_user_media_identity(
             && strchr(token, '@') != NULL
             && split_sip_aor(token, user, sizeof(user), token_host, sizeof(token_host))
         ) {
-            if (strcmp(user, "c300x") == 0 && device_domain[0] == '\0') {
+            if (strcmp(user, c300x_device_sip_user()) == 0 && device_domain[0] == '\0') {
                 (void)copy_checked(device_domain, sizeof(device_domain), token_host);
             } else if (user_is_homeassistant(user) && ha_aor[0] == '\0') {
                 (void)copy_checked(ha_aor, sizeof(ha_aor), token);
@@ -1292,7 +1293,7 @@ int c300x_device_user_media_identity(
         }
         if (ok && sip_string_is_safe(identity->domain)) {
             ok = snprintf(identity->from_aor, sizeof(identity->from_aor), "%s@%s", identity->from_user, identity->domain) < (int)sizeof(identity->from_aor)
-                && snprintf(identity->to_aor, sizeof(identity->to_aor), "c300x@%s", identity->domain) < (int)sizeof(identity->to_aor);
+                && snprintf(identity->to_aor, sizeof(identity->to_aor), "%s@%s", c300x_device_sip_user(), identity->domain) < (int)sizeof(identity->to_aor);
         }
     }
     free_file_buffer(&users);

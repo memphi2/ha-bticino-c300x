@@ -27,6 +27,10 @@ const char *c300x_display_kind_name(enum c300x_display_kind kind);
  * for its board. */
 int c300x_device_camera_resolution_fixed(void);
 
+/* The device's own SIP account. The vendor names it after the model:
+ * c300x, and c100x on the Classe 100X. */
+const char *c300x_device_sip_user(void);
+
 /* The Display patch can edit the display's QML files. Only the Qt 4 display
  * so far; the C100X files are on disk but not patched yet. */
 int c300x_device_display_files_patchable(void);

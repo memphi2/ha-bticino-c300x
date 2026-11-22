@@ -14,6 +14,8 @@ NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
     [
         ("no_device_user", "homeassistant_user_ok", True),
         ("with_device_user", "homeassistant_user_ok", True),
+        ("c100x_device_user", "homeassistant_user_ok", True),
+        ("c300x_user_on_c100x", "homeassistant_user_ok", True),
         ("missing_ha_user", "homeassistant_user_missing", False),
         ("missing_domain", "media_identity_missing", False),
         ("bad_internal_route", "homeassistant_routes_inconsistent", False),
@@ -39,8 +41,11 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
     domain = "device.example"
     ha_user = f"homeassistant-local@{domain}"
     users = f"version:1\napp-local@{domain} md5:fixture\n{ha_user} md5:fixture\n"
-    if case == "with_device_user":
+    c100x = case in {"c100x_device_user", "c300x_user_on_c100x"}
+    if case in {"with_device_user", "c300x_user_on_c100x"}:
         users += f"c300x@{domain} md5:fixture\n"
+    elif case == "c100x_device_user":
+        users += f"c100x@{domain} md5:fixture\n"
     elif case == "missing_ha_user":
         users = f"version:1\napp-local@{domain} md5:fixture\n"
     elif case == "missing_domain":
@@ -68,6 +73,9 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
         encoding="utf-8",
     )
     webserver_db = tmp_path / "dbfiles_ws.xml"
+    c100x_display = tmp_path / "BtClass100"
+    if c100x:
+        c100x_display.write_bytes(b"")
     binary = tmp_path / "self-test-user"
     subprocess.run(
         [
@@ -76,6 +84,7 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             *(f"-D{name}={json.dumps(str(path))}" for name, path in paths.items()),
             f"-DC300X_FIRMWARE_INFO_XML={json.dumps(str(webserver_db))}",
+            f"-DC300X_C100X_DISPLAY_MARKER={json.dumps(str(c100x_display))}",
             str(NATIVE / "test/self_test_user_test.c"),
             str(NATIVE / "src/self_test.c"),
             str(NATIVE / "src/device_user.c"),
@@ -100,7 +109,7 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
     user = status["checks"]["homeassistant_user"]
     assert user["reason"] == user_reason
     assert user["ok"] is (user_reason == "homeassistant_user_ok")
-    assert user["device_user_present"] is (case == "with_device_user")
+    assert user["device_user_present"] is (case in {"with_device_user", "c100x_device_user"})
     assert status["ok"] is overall_ok
     if overall_ok:
         assert payload["identity_available"] is True
@@ -142,6 +151,9 @@ def test_native_account_line_is_added_to_a_file_without_a_final_newline(tmp_path
             f"-DFLEXISIP_ACCOUNTS_FILE={json.dumps(str(tmp_path / 'accounts.txt'))}",
             str(NATIVE / "test/device_user_accounts_test.c"),
             str(NATIVE / "src/string_util.c"),
+            str(NATIVE / "src/device_detect.c"),
+            str(NATIVE / "src/file_io.c"),
+            str(NATIVE / "src/sha256.c"),
             "-o", str(binary),
         ], check=True, capture_output=True, text=True,
     )

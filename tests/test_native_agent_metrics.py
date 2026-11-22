@@ -5,6 +5,8 @@ import subprocess
 import textwrap
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -233,6 +235,9 @@ def test_native_agent_device_user_removes_only_homeassistant_from_external_route
             #include <string.h>
 
             #include "src/string_util.c"
+            #include "src/sha256.c"
+            #include "src/file_io.c"
+            #include "src/device_detect.c"
             #include "src/device_user.c"
 
             static int check_route(
@@ -337,8 +342,9 @@ def test_native_agent_device_user_removes_only_homeassistant_from_external_route
     assert run_result.returncode == 0, run_result.stderr
 
 
+@pytest.mark.parametrize("device_user", ["c300x", "c100x"])
 def test_native_agent_device_user_bootstraps_local_only_flexisip_files(
-    tmp_path: Path,
+    tmp_path: Path, device_user: str
 ) -> None:
     flexisip_dir = tmp_path / "etc" / "flexisip"
     users_dir = flexisip_dir / "users"
@@ -351,6 +357,9 @@ def test_native_agent_device_user_bootstraps_local_only_flexisip_files(
     route_conf = users_dir / "route.conf"
     test_source = tmp_path / "device_user_bootstrap_test.c"
     test_binary = tmp_path / "device_user_bootstrap_test"
+    c100x_display = tmp_path / "BtClass100"
+    if device_user == "c100x":
+        c100x_display.write_bytes(b"")
 
     flexisip_dir.mkdir(parents=True)
     flexisip_config.parent.mkdir(parents=True)
@@ -377,8 +386,13 @@ def test_native_agent_device_user_bootstraps_local_only_flexisip_files(
             #define FLEXISIP_ROUTE_INT_FILE {json.dumps(str(route_int))}
             #define FLEXISIP_ROUTE_EXT_FILE {json.dumps(str(route_ext))}
             #define FLEXISIP_ROUTE_ACTIVE_FILE {json.dumps(str(route_conf))}
+            #define C300X_C100X_DISPLAY_MARKER {json.dumps(str(c100x_display))}
+            #define DEVICE_USER "{device_user}"
 
             #include "src/string_util.c"
+            #include "src/sha256.c"
+            #include "src/file_io.c"
+            #include "src/device_detect.c"
             #include "src/device_user.c"
 
             static char *read_all(const char *path)
@@ -456,7 +470,7 @@ def test_native_agent_device_user_bootstraps_local_only_flexisip_files(
                     strstr(users, "version:1\\n") == NULL
                     || strstr(users, "homeassistant-") == NULL
                     || strstr(users, "@local-device.example md5:") == NULL
-                    || strstr(users, "c300x@local-device.example") != NULL
+                    || strstr(users, DEVICE_USER "@local-device.example") != NULL
                 ) {{
                     fprintf(stderr, "unexpected users file: %s\\n", users);
                     return 14;
@@ -488,7 +502,7 @@ def test_native_agent_device_user_bootstraps_local_only_flexisip_files(
                 if (
                     strcmp(identity.domain, "local-device.example") != 0
                     || strncmp(identity.from_user, "homeassistant-", 14) != 0
-                    || strcmp(identity.to_aor, "c300x@local-device.example") != 0
+                    || strcmp(identity.to_aor, DEVICE_USER "@local-device.example") != 0
                 ) {{
                     fprintf(
                         stderr,

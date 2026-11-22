@@ -10,7 +10,10 @@ from typing import Any, cast
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers import selector
 
-from .capabilities import capability_is_supported
+from .capabilities import (
+    capability_is_supported,
+    entry_device_ui_enabled_or_patch_active,
+)
 from .const import CONF_TTS_ENGINE, CONF_TTS_LANGUAGE, SPEECH_OPTION_KEYS
 from .entry_config import speech_settings
 from .notify_speech import engine_language
@@ -18,10 +21,14 @@ from .schema_compat import vol
 
 
 def speech_offered(entry: Any) -> bool:
-    """Offer the area where the agent can play sound."""
+    """Offer the area where the agent can play sound and the Notify action exists.
+
+    The settings are read only when a notification is spoken, and the Notify
+    action comes with the Home Assistant pages on the display.
+    """
 
     capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", {})
-    return capability_is_supported(capabilities, "announcements")
+    return capability_is_supported(capabilities, "announcements") and entry_device_ui_enabled_or_patch_active(entry)
 
 
 def _schema(engine: str | None, language: str | None) -> vol.Schema:

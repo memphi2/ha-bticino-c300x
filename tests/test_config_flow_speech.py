@@ -14,6 +14,7 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
+    CONF_DEVICE_UI_ENABLED,
     CONF_VIDEO_ENABLED,
 )
 from custom_components.bticino_c300x.entry_config import speech_settings
@@ -50,11 +51,13 @@ def _tts(monkeypatch: pytest.MonkeyPatch) -> None:
     use_tts_stand_in(monkeypatch)
 
 
-def _entry(*, announcements: bool = True, options: dict[str, Any] | None = None) -> SimpleNamespace:
+def _entry(
+    *, announcements: bool = True, display: bool = True, options: dict[str, Any] | None = None
+) -> SimpleNamespace:
     return SimpleNamespace(
         entry_id="entry-1",
         data={CONF_AGENT_HOST: "agent.local", CONF_AGENT_PORT: 8091, CONF_AGENT_TOKEN: "token",
-              CONF_VIDEO_ENABLED: True},
+              CONF_VIDEO_ENABLED: True, CONF_DEVICE_UI_ENABLED: display},
         options=dict(options or {}),
         runtime_data=SimpleNamespace(capabilities={"announcements": {"supported": announcements}}),
     )
@@ -71,6 +74,9 @@ def _open(entry: SimpleNamespace, user_input: dict[str, Any] | None = None) -> d
 def test_the_area_is_offered_only_where_the_device_can_speak() -> None:
     assert "speech" in _options_menu_of(_entry())
     assert "speech" not in _options_menu_of(_entry(announcements=False))
+    # Its settings are for spoken notifications, and the Notify action comes
+    # with the Home Assistant pages on the display.
+    assert "speech" not in _options_menu_of(_entry(display=False))
 
 
 def test_the_form_starts_from_the_saved_engine_and_language() -> None:

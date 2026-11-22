@@ -35,7 +35,8 @@ Speaker:
   (as before), `speech` (the message is only spoken) or `both` (shown on the
   display and spoken instead of the tone). The engine and language are
   chosen under **Configure > Speech**, for example the local Piper; a
-  notification can also name its own `tts_engine` and `language`.
+  notification can also name its own `tts_engine` and `language`. Like the
+  Notify action itself, this needs **Home Assistant pages on the display**.
 
 Audio:
 

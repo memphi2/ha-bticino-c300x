@@ -864,6 +864,9 @@ engine's own; one that names only `language` uses the engine of the setting.
 Without an engine anywhere, Home Assistant uses its default engine, which is
 the cloud one where Home Assistant Cloud is set up; choose a local engine to
 keep speech local. Changing the setting does not reload the integration.
+The Notify action, and with it **Configure > Speech**, exists only with
+**Home Assistant pages on the display** turned on; `tts.speak` on the speaker
+works without it.
 In `both` there is no tone, since it would hold the speaker the speech needs;
 a `sound_duration` above 0 is refused. The speaker, the engine and the
 language are checked before anything is shown. Speech can still fail after the

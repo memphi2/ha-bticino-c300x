@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.8.2 - 2026-11-22
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+Fixed:
+
+- On-demand video no longer ends by itself one to three seconds after it
+  started. The agent closed a viewer's connection when it took the video a
+  little late, for example over WiFi; it now skips that piece of video. A
+  viewer that takes no video for 5 seconds is still disconnected. Needs the
+  agent update.
+
 ## v2.8.1 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

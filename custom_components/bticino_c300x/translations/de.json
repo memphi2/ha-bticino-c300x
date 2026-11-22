@@ -1238,7 +1238,27 @@
     },
     "media_player": {
       "speaker": {
-        "name": "Lautsprecher"
+        "name": "Lautsprecher",
+        "state": {
+          "idle": "Bereit",
+          "playing": "Spielt ab"
+        },
+        "state_attributes": {
+          "last_result": {
+            "name": "Letzter Ton",
+            "state": {
+              "played": "Abgespielt",
+              "preempted": "Von einem Türruf unterbrochen",
+              "stopped": "Gestoppt",
+              "device_busy": "Lautsprecher belegt",
+              "sound_path_failed": "Lautsprecher ließ sich nicht einschalten",
+              "play_failed": "Konnte nicht abgespielt werden",
+              "failed": "Unerwartet beendet",
+              "not_played": "Nicht abgespielt",
+              "unknown": "Unbekannt"
+            }
+          }
+        }
       }
     },
     "select": {

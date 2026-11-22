@@ -1238,7 +1238,27 @@
     },
     "media_player": {
       "speaker": {
-        "name": "Haut-parleur"
+        "name": "Haut-parleur",
+        "state": {
+          "idle": "Prêt",
+          "playing": "Lecture en cours"
+        },
+        "state_attributes": {
+          "last_result": {
+            "name": "Dernier son",
+            "state": {
+              "played": "Joué",
+              "preempted": "Interrompu par un appel de porte",
+              "stopped": "Arrêté",
+              "device_busy": "Haut-parleur occupé",
+              "sound_path_failed": "Le haut-parleur n'a pas pu être activé",
+              "play_failed": "Lecture impossible",
+              "failed": "Terminé de façon inattendue",
+              "not_played": "Non joué",
+              "unknown": "Inconnu"
+            }
+          }
+        }
       }
     },
     "select": {

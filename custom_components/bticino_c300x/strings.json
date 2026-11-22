@@ -1238,7 +1238,27 @@
     },
     "media_player": {
       "speaker": {
-        "name": "Speaker"
+        "name": "Speaker",
+        "state": {
+          "idle": "Ready",
+          "playing": "Playing"
+        },
+        "state_attributes": {
+          "last_result": {
+            "name": "Last sound",
+            "state": {
+              "played": "Played",
+              "preempted": "Cut off by a door call",
+              "stopped": "Stopped",
+              "device_busy": "Speaker in use",
+              "sound_path_failed": "Speaker could not be switched on",
+              "play_failed": "Could not be played",
+              "failed": "Ended unexpectedly",
+              "not_played": "Not played",
+              "unknown": "Unknown"
+            }
+          }
+        }
       }
     },
     "select": {

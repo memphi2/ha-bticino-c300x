@@ -62,6 +62,29 @@ def test_the_snapshot_size_says_why_480_is_the_limit_and_what_keeps_a_576_pictur
             assert "800×480" in data[area]["error"]["invalid_snapshot_option"], path.name
 
 
+# Every value the speaker's last_result can take: the agent's endings
+# (native_agent/src/announce_device.c) and the ones media_player.py sets itself.
+SPEAKER_RESULTS = {
+    "played", "preempted", "stopped", "device_busy", "sound_path_failed", "play_failed",
+    "failed", "not_played", "unknown",
+}
+
+
+def test_the_speaker_shows_its_state_and_last_result_in_words_with_a_state_icon() -> None:
+    from custom_components.bticino_c300x.media_player import _RESULT_ERRORS
+
+    assert set(_RESULT_ERRORS) <= SPEAKER_RESULTS
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        speaker = _load_json(path)["entity"]["media_player"]["speaker"]
+        assert set(speaker["state"]) == {"idle", "playing"}, path.name
+        last_result = speaker["state_attributes"]["last_result"]
+        assert last_result["name"]
+        assert set(last_result["state"]) == SPEAKER_RESULTS, path.name
+        assert all(last_result["state"].values())
+    icons = _load_json(INTEGRATION / "icons.json")["entity"]["media_player"]["speaker"]
+    assert icons == {"default": "mdi:bullhorn-outline", "state": {"playing": "mdi:bullhorn"}}
+
+
 def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> None:
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)

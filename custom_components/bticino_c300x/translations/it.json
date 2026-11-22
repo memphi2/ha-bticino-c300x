@@ -1238,7 +1238,27 @@
     },
     "media_player": {
       "speaker": {
-        "name": "Altoparlante"
+        "name": "Altoparlante",
+        "state": {
+          "idle": "Pronto",
+          "playing": "In riproduzione"
+        },
+        "state_attributes": {
+          "last_result": {
+            "name": "Ultimo suono",
+            "state": {
+              "played": "Riprodotto",
+              "preempted": "Interrotto da una chiamata alla porta",
+              "stopped": "Fermato",
+              "device_busy": "Altoparlante occupato",
+              "sound_path_failed": "Impossibile attivare l'altoparlante",
+              "play_failed": "Riproduzione non riuscita",
+              "failed": "Terminato in modo imprevisto",
+              "not_played": "Non riprodotto",
+              "unknown": "Sconosciuto"
+            }
+          }
+        }
       }
     },
     "select": {

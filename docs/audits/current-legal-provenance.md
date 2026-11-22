@@ -1,7 +1,8 @@
 # Current Legal and Provenance Audit Snapshot
 
 Source review: 2026-11-22. Integration and native agent `2.9.0b1`, a beta on
-top of `2.8.1` that brings the display pages to firmware 3.0.6. Version `2.8.1`
+top of `2.8.2` that brings the display pages to firmware 3.0.6. Version `2.8.2`
+adds bounded RTSP recovery and exact firewall restoration. Version `2.8.1`
 is a maintenance release that fixes the Display restore and clarifies settings
 of `2.8.0`. Version `2.8.0` is the successor of `2.7.0`, with speech and sounds on the
 device's speaker, spoken notifications and camera quality settings. This

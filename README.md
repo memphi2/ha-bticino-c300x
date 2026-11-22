@@ -2,11 +2,11 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/quality-scale.md)
-[![Release](https://img.shields.io/badge/release-v2.8.1-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.8.2-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Beta: **2.9.0b1** (display pages for firmware 3.0.6, not yet tested on a device). Latest stable release: **2.8.1**.
+Beta: **2.9.0b1** (display pages for firmware 3.0.6, not yet tested on a device), including the fixes from **2.8.2**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.

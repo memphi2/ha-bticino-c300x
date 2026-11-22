@@ -8,6 +8,8 @@ import subprocess
 import pytest
 from test_display_layout_harness import SCRIPT, qt_python
 
+from scripts.setup_qt4_runtime import probe_command, runtime_paths
+
 ROOT = SCRIPT.parents[1]
 QML = ROOT / "device_qml/C300XEnergyConsumers.qml"
 
@@ -22,14 +24,11 @@ def test_consumers_js_contract_extremes_and_hysteresis():
 
 
 def test_consumers_qt4_runtime_labels():
-    paths = [os.environ.get("C300X_QT4_" + key) for key in ("QEMU", "ROOTFS", "PROBE", "IMPORTS")]
-    if not all(paths):
-        pytest.skip("Optional offline Qt4 ARM runtime requires C300X_QT4_QEMU/ROOTFS/PROBE/IMPORTS")
-    qemu, rootfs, probe, imports = paths
-    result = subprocess.run([
-        qemu, "-L", rootfs, "-E", f"LD_LIBRARY_PATH={rootfs}/usr/lib:{rootfs}/lib",
-        probe, str(ROOT / "tests/qml/energy_consumers_qt4.qml"), imports,
-    ], env={**os.environ, "PROBE_CREATE": "1"}, capture_output=True, text=True, timeout=30)
+    paths = runtime_paths()
+    if paths is None:
+        pytest.skip("Optional Qt 4 ARM runtime: run scripts/setup_qt4_runtime.py --sysroot PRIVATE_ROOTFS")
+    result = subprocess.run(probe_command(paths, ROOT / "tests/qml/energy_consumers_qt4.qml"),
+                            env={**os.environ, "PROBE_CREATE": "1"}, capture_output=True, text=True, timeout=30)
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "C300X_CONSUMERS_QT4_PASS 214" in output, output

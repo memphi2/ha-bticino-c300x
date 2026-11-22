@@ -7550,6 +7550,32 @@ static int firewall_backup_available(const char *backup_path)
     return path_exists(backup_path);
 }
 
+static size_t length_without_final_newlines(const char *text)
+{
+    size_t len = strlen(text);
+    while (len > 0 && text[len - 1] == '\n') {
+        len--;
+    }
+    return len;
+}
+
+/* The block goes in with or without a blank line before it, so cutting it out
+ * cannot tell the vendor's trailing blank lines from ours. A backup that
+ * differs only in those is the original file, byte for byte. */
+static void firewall_use_matching_backup(const char *backup_path, char *desired, size_t desired_len)
+{
+    char *backup = calloc(1, desired_len);
+    int backup_exists = 0;
+    size_t len = length_without_final_newlines(desired);
+
+    if (backup != NULL && desired[0] != '\0' && firewall_backup_available(backup_path)
+        && firewall_read_file(backup_path, backup, desired_len, &backup_exists) && backup_exists
+        && length_without_final_newlines(backup) == len && memcmp(backup, desired, len) == 0) {
+        c300x_copy_string(desired, desired_len, backup);
+    }
+    free(backup);
+}
+
 static int firewall_block_bounds_for(
     const char *content,
     const char *begin_marker,
@@ -8167,6 +8193,7 @@ static int firewall_restore(
         free(workspace);
         return 0;
     }
+    firewall_use_matching_backup(config->maintenance_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
     if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_firewall_backup_path)) {
         int backup_exists = 0;
         if (!firewall_read_file(
@@ -8392,6 +8419,7 @@ static int ipv6_firewall_restore(
         free(workspace);
         return 0;
     }
+    firewall_use_matching_backup(config->maintenance_ipv6_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
     if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         int backup_exists = 0;
         if (!firewall_read_file(

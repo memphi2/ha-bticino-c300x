@@ -3,7 +3,7 @@
 ## Supported Release Line
 
 - `2.9.x`: beta 2.9.0b1 for firmware 3.0.6, not yet tested on a device
-- `2.8.x`: current stable (2.8.1)
+- `2.8.x`: current stable (2.8.2)
 - `2.7.x`: previous stable; upgrade to 2.8.x for maintenance fixes
 - `2.5.x`: no longer maintained; upgrade to 2.8.x
 - `2.6.0`: withdrawn because the energy page did not load on the display

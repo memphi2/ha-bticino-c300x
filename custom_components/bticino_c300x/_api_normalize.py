@@ -512,6 +512,7 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
         "backup_available": _optional_bool(data.get("backup_available")),
         "core_backup_available": _optional_bool(data.get("core_backup_available")),
         "gui_running": _optional_bool(data.get("gui_running")),
+        "qt5_overlay": _optional_string(data.get("qt5_overlay")),
         "raw": data.get("raw", data),
     }
 

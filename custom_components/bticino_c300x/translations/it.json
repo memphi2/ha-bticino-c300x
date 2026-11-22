@@ -1717,7 +1717,8 @@
         "patched": "applicato",
         "original": "non applicato (file originali)",
         "unknown": "sconosciuto",
-        "unavailable": "non disponibile"
+        "unavailable": "non disponibile",
+        "display_failed": "applicato, ma il display è partito nello stato originale"
       }
     }
   },

@@ -74,7 +74,7 @@ def qml_patch_status_label(status: dict[str, Any]) -> str:
         return _STATUS_UNAVAILABLE
     patched = status.get("patched")
     if patched is True:
-        return "patched"
+        return "display_failed" if status.get("qt5_overlay") == "failed" else "patched"
     if patched is False:
         return "original"
     state = str(status.get("state") or "").strip()

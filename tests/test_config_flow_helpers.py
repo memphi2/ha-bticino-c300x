@@ -2373,6 +2373,8 @@ def test_submitted_dashboard_clears_omitted_optional_fields():
         ({"available": True, "patched": False}, "original"),
         ({"available": True, "state": "partial", "patched": None}, "partial"),
         ({"available": True, "state": "restore_needed"}, "restore_needed"),
+        ({"available": True, "patched": True, "qt5_overlay": "active"}, "patched"),
+        ({"available": True, "patched": True, "qt5_overlay": "failed"}, "display_failed"),
     ],
 )
 def test_qml_patch_status_label_is_concise(

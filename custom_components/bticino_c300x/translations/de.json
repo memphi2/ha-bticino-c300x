@@ -1717,7 +1717,8 @@
         "patched": "angewendet",
         "original": "nicht angewendet (Originaldateien)",
         "unknown": "unbekannt",
-        "unavailable": "nicht abrufbar"
+        "unavailable": "nicht abrufbar",
+        "display_failed": "angewendet, aber das Display startete im Originalzustand"
       }
     }
   },

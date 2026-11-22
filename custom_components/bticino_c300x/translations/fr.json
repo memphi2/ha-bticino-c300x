@@ -1717,7 +1717,8 @@
         "patched": "appliqué",
         "original": "non appliqué (fichiers d'origine)",
         "unknown": "inconnu",
-        "unavailable": "indisponible"
+        "unavailable": "indisponible",
+        "display_failed": "appliqué, mais l'écran a démarré dans son état d'origine"
       }
     }
   },

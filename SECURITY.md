@@ -98,6 +98,16 @@ RTSP readiness probe and ring capture do not yet fully support these separate
 credentials; configuring them manually can disable those integration features.
 Do not treat an absolute credential-bearing stream URL as a complete workaround.
 
+UDP talkback on port 40004 is accepted only from the IP address of a live,
+played RTSP connection admitted by that policy, and only into an active protected
+media session. Idle traffic is discarded, never relayed to the local audio port.
+HA ring recording uses its same-host FFmpeg reader for this admission; packets
+sent before PLAY or after disconnect are discarded. WebRTC uses the separate
+RTSP backchannel. This IP binding is a trusted-LAN restriction, not per-packet
+cryptographic authentication: a shared/NATed host or source-IP spoofing can defeat
+it. Keep both ports restricted to trusted clients. A separate-host UDP sender
+without its own played RTSP connection is not admitted.
+
 ## Legacy SSH Bootstrap
 
 First installation and explicit SSH recovery use

@@ -111,6 +111,14 @@
       "homeassistant_media_user_setup": {
         "default": "mdi:account-wrench"
       }
+    },
+    "media_player": {
+      "speaker": {
+        "default": "mdi:bullhorn-outline",
+        "state": {
+          "playing": "mdi:bullhorn"
+        }
+      }
     }
   },
   "services": {

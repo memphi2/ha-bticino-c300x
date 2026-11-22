@@ -75,7 +75,7 @@
         },
         "data_description": {
           "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -83,7 +83,7 @@
       },
       "user_device_activations": {
         "title": "Zusätzliche Geräteaktivierungen",
-        "description": "Konfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "description": "Weitere Türschlösser und Lichter der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nKonfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
@@ -188,7 +188,7 @@
         },
         "data_description": {
           "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -196,7 +196,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Zusätzliche Geräteaktivierungen",
-        "description": "Konfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "description": "Weitere Türschlösser und Lichter der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nKonfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
@@ -696,7 +696,7 @@
       "dashboard_entity_on_several_pages": "Eine Entität ist auf mehreren Seiten gewählt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480.",
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480. Das Bild wird vom 800×480-Display gelesen.",
       "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
       "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
       "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
@@ -759,7 +759,7 @@
         },
         "data_description": {
           "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Standard 480, die Höhe des Geräte-Videostreams und des Displays. Bereich 64-480.",
+          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -793,7 +793,7 @@
       },
       "device_activations": {
         "title": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
-        "description": "Zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
+        "description": "Weitere Türschlösser und Lichter der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nZusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
@@ -1136,7 +1136,7 @@
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
       "required": "Dieses Feld ist erforderlich.",
-      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480.",
+      "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480. Das Bild wird vom 800×480-Display gelesen.",
       "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
       "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
       "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
@@ -1238,7 +1238,27 @@
     },
     "media_player": {
       "speaker": {
-        "name": "Lautsprecher"
+        "name": "Lautsprecher",
+        "state": {
+          "idle": "Bereit",
+          "playing": "Spielt ab"
+        },
+        "state_attributes": {
+          "last_result": {
+            "name": "Letzter Ton",
+            "state": {
+              "played": "Abgespielt",
+              "preempted": "Von einem Ruf oder der Kameraansicht unterbrochen",
+              "stopped": "Gestoppt",
+              "device_busy": "Lautsprecher belegt",
+              "sound_path_failed": "Lautsprecher ließ sich nicht einschalten",
+              "play_failed": "Konnte nicht abgespielt werden",
+              "failed": "Unerwartet beendet",
+              "not_played": "Nicht abgespielt",
+              "unknown": "Unbekannt"
+            }
+          }
+        }
       }
     },
     "select": {

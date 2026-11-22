@@ -152,6 +152,8 @@ def test_failed_startup_install_never_publishes_bundle_manifest(tmp_path):
       for missing in QML_SUCCESS],
     json.dumps({"ok": False, "state": "reload_failed", "patched": None,
                 "core_patched": None, "gui_running": False}),
+    *[json.dumps({**QML_SUCCESS, "qt5_overlay": overlay})
+      for overlay in ("failed", "incomplete", "off", "unknown")],
 ])
 def test_failed_qml_result_preserves_old_manifest(tmp_path, payload):
     result, calls = _run_install(tmp_path, apply_qml=True, qml_result=payload)

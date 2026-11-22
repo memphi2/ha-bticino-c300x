@@ -38,6 +38,7 @@ from .const import (
     SIGNAL_SETTING_STATE,
 )
 from .device_user import homeassistant_account_label
+from .display_activation import display_activation_confirmed
 from .entity import (
     C300XEntity,
     entry_config_value,
@@ -497,7 +498,10 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """Return whether the Display patch is fully applied."""
 
-        patched = _qml_patch_status(self._entry).get("patched")
+        status = _qml_patch_status(self._entry)
+        patched = status.get("patched")
+        if not display_activation_confirmed(status, required=patched is not False):
+            return None
         return patched if isinstance(patched, bool) else None
 
     @property
@@ -512,6 +516,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
             "core_patched": status.get("core_patched"),
             "core_backup_available": status.get("core_backup_available"),
             "gui_running": status.get("gui_running"),
+            **({"qt5_overlay": status["qt5_overlay"]} if status.get("qt5_overlay") is not None else {}),
         }
 
     @property
@@ -558,7 +563,11 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         setting left the other way would undo the switch at the next save.
         """
 
-        if status.get("patched") is not patched or entry_device_ui_configured(self._entry) is patched:
+        if (
+            status.get("patched") is not patched
+            or not display_activation_confirmed(status, required=patched)
+            or entry_device_ui_configured(self._entry) is patched
+        ):
             return
         options = {**self._entry.options, CONF_DEVICE_UI_ENABLED: patched}
         self.hass.config_entries.async_update_entry(self._entry, options=options)

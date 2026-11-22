@@ -2780,6 +2780,8 @@ def test_restore_external_patch_state_skips_gui_reload_after_runtime_update_when
 def test_restore_external_patch_state_reconciles_qt5_runtime_even_without_optional_pages(full_patch) -> None:
     api = FakePatchApi()
     api.qml_status["qt5_overlay"] = "active"
+    api.qml_status["gui_running"] = True
+    api.qml_status["core_patched"] = True
     entry = FakeEntry(runtime_data=FakeRuntimeData(api))
     state = _ExternalPatchState(
         qml_patch_required=full_patch, firewall_patched=False,
@@ -2793,6 +2795,27 @@ def test_restore_external_patch_state_reconciles_qt5_runtime_even_without_option
         *(["apply_qml", "qml_status"] if full_patch else []),
         "reload_gui", "qml_status",
     ]
+
+
+@pytest.mark.parametrize("full_patch", [False, True])
+def test_failed_qt5_runtime_followup_remains_pending_after_same_bundle_retry(monkeypatch, full_patch):
+    from custom_components.bticino_c300x import repairs
+    api = FakePatchApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    entry.runtime_data.qml_patch_status = {"qt5_overlay": "failed"}
+    hass = FakeHass(entry)
+    state = _ExternalPatchState(qml_patch_required=full_patch, firewall_patched=False,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    repairs._remember_qml_followup(hass, entry, state, {"runtime_changed": True})
+    assert entry.data["agent_update_qml_pending"] is full_patch
+    async def quarantined(_entry, *, apply_full_patch):
+        assert apply_full_patch is full_patch
+        raise C300XAgentApiError("quarantined")
+    monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", quarantined)
+    with pytest.raises(C300XAgentApiError, match="quarantined"):
+        asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
+    repairs._remember_qml_followup(hass, entry, state, {})
+    assert entry.data["agent_update_qml_pending"] is full_patch
 
 
 def test_restore_external_patch_state_reenables_ipv6_endpoint_before_apply() -> None:

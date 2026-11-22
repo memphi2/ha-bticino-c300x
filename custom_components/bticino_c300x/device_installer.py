@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
+from .display_activation import display_activation_confirmed
 from .factory_login import LOGIN_REFUSED
 
 if TYPE_CHECKING:
@@ -932,6 +933,7 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
         or result.get("core_patched") is not True
         or result.get("gui_running") is not True
         or (action == "apply" and result.get("patched") is not True)
+        or not display_activation_confirmed(result)
     ):
         raise C300XDeviceInstallError("device_install_verify_failed")
 

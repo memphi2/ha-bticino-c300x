@@ -10,9 +10,9 @@ Display:
   works on the Qt 5 display of 3.0.6, whose display files are built into the
   vendor program. The home page gets the Alarm and Home Assistant buttons, with
   the Alarm, Home Assistant and Energy pages and the other pages of the
-  integration. The agent update installs it; restoring the Display patch or
-  removing the agent gives the display back as shipped. If the display does
-  not start with the pages, it starts as shipped and the Display patch status
+  integration. Switching off the optional pages retains the core hooks;
+  full removal restores the vendor startup script. If the display exits with
+  an error within the first minute, it starts as shipped and the patch status
   reads **applied, but the display started as shipped**. The touch fix for lost
   taps is not part of it on 3.0.6.
 - **Display recovery:** activation and restore retain the previous resources,
@@ -21,6 +21,8 @@ Display:
   requires an explicit full removal and apply after investigating the error.
   Apply repairs missing or outdated activation files even when the pages did
   not change, and runtime-only updates refresh the display preload too.
+  Installation and settings no longer confirm a quarantined or incomplete
+  overlay as active; unsuccessful display follow-up remains pending.
   Offline fault injection does not establish device or watchdog safety.
 
 ## v2.8.2 - 2026-11-22

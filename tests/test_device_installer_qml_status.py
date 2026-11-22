@@ -66,6 +66,9 @@ def _install(*, apply_gui_patch: bool = True) -> tuple[str, ...]:
     json.dumps({"ok": True, "core_patched": False, "gui_running": True, "patched": True}),
     json.dumps({"ok": True, "core_patched": True, "gui_running": False, "patched": True}),
     json.dumps({"ok": 1, "core_patched": True, "gui_running": True, "patched": True}),
+    *[json.dumps({"ok": True, "core_patched": True, "gui_running": True,
+                  "patched": True, "qt5_overlay": overlay})
+      for overlay in ("failed", "incomplete", "off", "unknown")],
 ])
 def test_unsuccessful_patch_cannot_report_install_success(
     client: FakeClient, action: str, response: str
@@ -99,3 +102,9 @@ def test_verified_core_and_optional_full_patch_succeed(
     assert _install(apply_gui_patch=apply_gui_patch) == ()
     assert client.closed
     assert client.actions == (["core-apply", "apply"] if apply_gui_patch else ["core-apply"])
+
+
+def test_verified_qt5_activation_succeeds(client: FakeClient) -> None:
+    for action in client.responses:
+        client.responses[action] = json.dumps({**json.loads(_success(action)), "qt5_overlay": "active"})
+    assert _install() == ()

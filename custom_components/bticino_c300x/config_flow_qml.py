@@ -72,9 +72,14 @@ def qml_patch_status_label(status: dict[str, Any]) -> str:
         return QML_PATCH_STATUS_UNKNOWN
     if status.get("available") is False:
         return _STATUS_UNAVAILABLE
+    overlay = status.get("qt5_overlay")
+    if overlay == "failed":
+        return "display_failed"
+    if overlay == "incomplete" or (overlay == "off" and status.get("patched") is True):
+        return "partial"
     patched = status.get("patched")
     if patched is True:
-        return "display_failed" if status.get("qt5_overlay") == "failed" else "patched"
+        return "patched"
     if patched is False:
         return "original"
     state = str(status.get("state") or "").strip()

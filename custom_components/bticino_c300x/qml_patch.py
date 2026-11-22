@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .agent_update import async_retry_update_maintenance_busy
+from .api_errors import C300XAgentApiError
+from .display_activation import display_activation_confirmed, require_display_activation
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 
@@ -79,6 +81,9 @@ async def async_restore_qml_patches_after_update(
     async with _qml_patch_lock(entry):
         core_status = await busy_retry(api.async_apply_qml_core_patch)
         _store_qml_patch_status(entry, core_status)
+        require_display_activation(core_status)
+        if core_status.get("qt5_overlay") is not None and core_status.get("core_patched") is not True:
+            raise C300XAgentApiError("Qt 5 display core patch is not confirmed")
         if apply_full_patch:
             full_patch = _apply_full_patch_action(entry)
             await _async_run_qml_patch_action_unlocked(
@@ -90,7 +95,14 @@ async def async_restore_qml_patches_after_update(
                 refresh=lambda entry: async_refresh_qml_patch_status(entry, wait_busy=True),
             )
         await busy_retry(api.async_reload_gui)
-        return await async_refresh_qml_patch_status(entry, wait_busy=True)
+        status = await async_refresh_qml_patch_status(entry, wait_busy=True)
+        require_display_activation(status)
+        if status.get("qt5_overlay") is not None and (
+            status.get("core_patched") is not True
+            or (apply_full_patch and status.get("patched") is not True)
+        ):
+            raise C300XAgentApiError("Qt 5 display patch is not confirmed after update")
+        return status
 
 
 async def async_apply_qml_core_patch_and_confirm(
@@ -109,12 +121,14 @@ async def async_apply_qml_core_patch_and_confirm(
             _store_qml_patch_status(entry, previous_status)
             _notify_status_changed(status_changed)
             raise
-        if action_status.get("core_patched") is not True:
+        if action_status.get("core_patched") is not True or not display_activation_confirmed(action_status):
             _store_qml_patch_status(entry, action_status)
             _notify_status_changed(status_changed)
+            require_display_activation(action_status)
             return action_status
         status = await async_refresh_qml_patch_status(entry)
         _notify_status_changed(status_changed)
+        require_display_activation(status)
         return status
 
 
@@ -175,12 +189,16 @@ async def _async_run_qml_patch_action_unlocked(
         _store_qml_patch_status(entry, previous_status)
         _notify_status_changed(status_changed)
         raise
-    if action_status.get("patched") is not expected_patched:
+    if action_status.get("patched") is not expected_patched or not display_activation_confirmed(
+        action_status, required=expected_patched,
+    ):
         _store_qml_patch_status(entry, action_status)
         _notify_status_changed(status_changed)
+        require_display_activation(action_status, required=expected_patched)
         return action_status
     status = await refresh(entry)
     _notify_status_changed(status_changed)
+    require_display_activation(status, required=expected_patched)
     return status
 
 

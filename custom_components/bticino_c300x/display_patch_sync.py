@@ -22,6 +22,7 @@ from .agent_update import async_retry_update_maintenance_busy
 from .api import C300XAgentApiError
 from .capabilities import entry_device_ui_configured, maintenance_action_is_advertised
 from .const import CONF_DISPLAY_SETTING_PENDING, SIGNAL_QML_PATCH_CHANGED
+from .display_activation import display_activation_confirmed
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .qml_patch import (
@@ -36,8 +37,13 @@ _LOGGER = logging.getLogger(__name__)
 def _differs(status: dict[str, Any], wanted: bool) -> bool | None:
     """Whether the device differs from the setting; None when it does not say."""
 
+    if status.get("qt5_overlay") == "failed":
+        # Repeated setup/settings saves must not retry a quarantined overlay.
+        return None
     patched = status.get("patched")
     if isinstance(patched, bool):
+        if patched is wanted and not display_activation_confirmed(status, required=wanted):
+            return True if status.get("qt5_overlay") in ("incomplete", "off") and wanted else None
         return patched is not wanted
     # Only some of the files are there: neither the pages nor the original.
     return True if status.get("state") == "partial" else None
@@ -79,7 +85,7 @@ async def async_apply_display_setting(
             compact_error_text(err),
         )
         return None
-    if status.get("patched") is not wanted:
+    if status.get("patched") is not wanted or not display_activation_confirmed(status, required=wanted):
         _LOGGER.warning("C300X Display patch did not reach the state of the Display setting")
         return None
     return True

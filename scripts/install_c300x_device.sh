@@ -217,7 +217,7 @@ except (ValueError, UnicodeError):
     result = None
 if not isinstance(result, dict) or not all(
     result.get(key) is True for key in ("ok", "patched", "core_patched", "gui_running")
-):
+) or result.get("qt5_overlay") not in (None, "active"):
     sys.exit("QML patch verification failed; bundle manifest was not updated")
 ' <<<"$qml_result"
     printf '%s\n' "$qml_result"

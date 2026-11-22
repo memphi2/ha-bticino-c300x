@@ -88,6 +88,33 @@ def test_a_device_that_says_nothing_or_does_not_follow_stays_to_do(monkeypatch):
     assert _apply(_entry(True, capabilities={})) is None
 
 
+@pytest.mark.parametrize("wanted", [False, True])
+def test_quarantined_display_is_neither_confirmed_nor_automatically_retried(monkeypatch, wanted):
+    calls = _device(monkeypatch, {"patched": True, "qt5_overlay": "failed", "gui_running": True})
+    entry = _entry(wanted, data={CONF_DISPLAY_SETTING_PENDING: True})
+    updates = []
+    manager = _manager(entry, updates)
+    asyncio.run(display_patch_sync.async_settle_display_setting(manager.hass, entry))
+    assert calls == []
+    assert updates == []
+    assert CONF_DISPLAY_SETTING_PENDING in entry.data
+
+
+@pytest.mark.parametrize("overlay", ["off", "incomplete"])
+def test_incomplete_activation_is_repaired_even_with_patched_files(monkeypatch, overlay):
+    calls = _device(monkeypatch, {"patched": True, "qt5_overlay": overlay, "gui_running": True})
+    assert _apply(_entry(True)) is True
+    assert calls == ["apply"]
+
+
+def test_failed_activation_after_setting_apply_is_not_confirmed(monkeypatch):
+    _device(monkeypatch, {"patched": False, "qt5_overlay": "off", "gui_running": True})
+    async def failed(*_args):
+        return {"patched": True, "qt5_overlay": "failed", "gui_running": True}
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", failed)
+    assert _apply(_entry(True)) is None
+
+
 def test_without_a_setting_or_the_agent_action_nothing_is_to_do(monkeypatch):
     calls = _device(monkeypatch, {"patched": False})
     assert _apply(_entry(None)) is False

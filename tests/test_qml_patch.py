@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 from custom_components.bticino_c300x.const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
 from custom_components.bticino_c300x.entry_locks import clear_entry_locks
 from custom_components.bticino_c300x.qml_patch import (
@@ -96,6 +97,44 @@ def test_refresh_qml_patch_status_stores_device_status() -> None:
     assert status == {"available": True, "patched": True}
     assert entry.runtime_data.qml_patch_status == status
     assert entry.runtime_data.qml_patch_status_updated_at is not None
+
+
+@pytest.mark.parametrize("overlay", ["failed", "incomplete", "off", "unknown"])
+@pytest.mark.parametrize("late", [False, True])
+@pytest.mark.parametrize("core", [False, True])
+def test_qt5_confirmation_rejects_action_and_late_activation_failure(overlay, late, core):
+    active = {"available": True, "patched": True, "core_patched": True,
+              "gui_running": True, "qt5_overlay": "active"}
+    failed = {**active, "qt5_overlay": overlay}
+    api = _FakeApi(status=failed if late else active,
+                   apply_status=active if late else failed,
+                   core_apply_status=active if late else failed)
+    entry = _entry(api)
+    run = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+    with pytest.raises(C300XAgentApiError, match="activation is not confirmed"):
+        asyncio.run(run(entry))
+    assert entry.runtime_data.qml_patch_status == failed
+    assert api.calls == (["apply_qml_core" if core else "apply_qml"] + (["qml_status"] if late else []))
+
+
+@pytest.mark.parametrize("late", [False, True])
+def test_qt5_update_failure_stays_visible_without_following_core_failure_with_reload(late):
+    active = {"available": True, "patched": True, "core_patched": True,
+              "gui_running": True, "qt5_overlay": "active"}
+    failed = {**active, "qt5_overlay": "failed"}
+    api = _FakeApi(status=failed, core_apply_status=active if late else failed)
+    entry = _entry(api)
+    with pytest.raises(C300XAgentApiError, match="activation is not confirmed"):
+        asyncio.run(async_restore_qml_patches_after_update(entry, apply_full_patch=False))
+    assert entry.runtime_data.qml_patch_status == failed
+    assert api.calls == ["apply_qml_core", *(["reload_gui", "qml_status"] if late else [])]
+
+
+def test_qt5_restore_can_confirm_complete_removal():
+    original = {"available": True, "patched": False, "core_patched": False,
+                "gui_running": True, "qt5_overlay": "off"}
+    api = _FakeApi(status=original, restore_status=original)
+    assert asyncio.run(async_restore_qml_patch_and_confirm(_entry(api))) == original
 
 
 def test_apply_qml_patch_confirms_with_fresh_status() -> None:

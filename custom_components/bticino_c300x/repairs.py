@@ -694,6 +694,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             self._ssh_install_followup = (patch_state, changes)
             _remember_qml_followup(self.hass, entry, patch_state, {
                 "qml_patch_changed": changes.qml_patch_changed,
+                "runtime_changed": changes.runtime_changed,
             })
             setup_data = await _async_wait_for_agent_after_update(entry.runtime_data.api)
             await _async_restore_external_patch_state(
@@ -957,7 +958,12 @@ class _ExternalPatchChanges:
 
 def _remember_qml_followup(hass: HomeAssistant, entry: Any,
                            state: _ExternalPatchState, result: dict[str, Any]) -> None:
-    if result.get("qml_patch_changed") is True:
+    status = getattr(entry.runtime_data, "qml_patch_status", {})
+    qt5_runtime_changed = (
+        result.get("runtime_changed") is True
+        and isinstance(status, Mapping) and status.get("qt5_overlay") is not None
+    )
+    if result.get("qml_patch_changed") is True or qt5_runtime_changed:
         hass.config_entries.async_update_entry(entry, data={
             **entry.data,
             CONF_AGENT_UPDATE_QML_PENDING: (

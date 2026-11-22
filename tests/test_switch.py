@@ -782,6 +782,18 @@ def test_gui_function_patch_switch_uses_read_only_status() -> None:
     assert entity.extra_state_attributes["state"] == "original"
 
 
+@pytest.mark.parametrize("overlay", ["failed", "incomplete", "off"])
+def test_gui_function_patch_switch_exposes_unconfirmed_activation_without_saving_success(overlay):
+    entry = _FakeEntry()
+    status = {"patched": True, "core_patched": True, "gui_running": True, "qt5_overlay": overlay}
+    entry.runtime_data.qml_patch_status = status
+    entity = C300XGuiFunctionPatchSwitch(entry)
+    assert entity.is_on is None
+    assert entity.extra_state_attributes["qt5_overlay"] == overlay
+    # No hass is attached: a false success would try to save the options here.
+    entity._follow_with_setting(status, True)
+
+
 def test_gui_function_patch_switch_applies_and_restores_patch() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(

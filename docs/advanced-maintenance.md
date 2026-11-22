@@ -173,6 +173,15 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
   resources, startup wrapper, preload library and quarantine state together.
   If rollback cannot finish, recovery files are retained and the overlay stays
   blocked. Do not delete recovery files or quarantine to force a GUI restart.
+- **Confirmation:** installed files alone do not confirm activation. The
+  installer rejects a quarantined or incomplete overlay; settings and update
+  follow-up stay pending instead of accepting the stock fallback as success.
+  An active overlay and a running process are still not proof that every QML
+  page loaded correctly. Device checks remain required before merging this beta.
+- **Returning to stable:** on 3.0.6, run the beta's `qml_patch.sh restore-all`
+  and confirm `qt5_overlay: off` with the stock GUI running before replacing
+  the agent with stable 2.8.2. That release has no Qt 5 overlay recovery code;
+  switching off just the optional pages is not a complete removal.
 - **What to report:** the Display patch status, the integration diagnostics
   and, if you can reach the device, `/tmp/c300x-display-qt5.log` (the display's
   error output, at most 64 KB, cleared by a restart of the device).

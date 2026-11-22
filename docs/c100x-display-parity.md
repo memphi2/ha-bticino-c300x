@@ -61,6 +61,12 @@ requests and actual state readback. It cancels requests and unloads the page on
 call, active call, Soft-AP, commissioning or keyboard transition blocking.
 Offline Qt5 tests check PIN disposal, foreign loader-source rejection and settings;
 isolated protocol tests check expiry, replay, late replies and failed readback.
+The Qt5 visual/key probe covers 80 component states at 800x480: navigation,
+Agenda, Leave Home, entity controls, Situations/Checks and all five Energy views
+(four languages, normal/stress data). It checks captured pixels, text bounds,
+overlap and Up/Down reachability, with C/H/1-8 forwarded to the parent handler.
+Container-fitted consumer-axis labels fix a measured Qt5 font overflow. This
+does not yet cover every full Dashboard/Alarmo modal state or physical keys.
 The separate `c100x_display.sh` disk transaction now verifies the exact original
 GUI binary, wrapper, event manager and both edited QML sources. It stages a
 complete hash-manifested adapter directory, installs an inert menu hook first,

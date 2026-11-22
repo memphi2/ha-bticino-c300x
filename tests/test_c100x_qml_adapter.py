@@ -83,3 +83,15 @@ def test_pages_load_in_isolated_qt5(tmp_path):
     ], env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
        capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_page_layouts_and_hardware_key_focus_in_qt5(tmp_path):
+    if importlib.util.find_spec("PyQt5") is None:
+        pytest.skip("Optional host PyQt5 absent")
+    source = tmp_path / "c100x"
+    builder.build(source)
+    result = subprocess.run([
+        sys.executable, str(ROOT / "tests/fixtures/c100x_visual_probe.py"), str(source), str(tmp_path / "screenshots"),
+    ], env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
+       capture_output=True, text=True, timeout=90)
+    assert result.returncode == 0, result.stdout + result.stderr

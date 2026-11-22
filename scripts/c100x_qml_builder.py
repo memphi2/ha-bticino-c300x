@@ -56,6 +56,10 @@ def adapt_page(name: str, source: str) -> str:
                             'objectName: "energyPowerTap"\n                keyboardSteps: root.powerBuckets')
     if name == "Alarm.qml":
         source = source.replace("id: page\n", 'id: page\n    backgroundColor: "#123a69"\n', 1)
+    if name == "C300XEnergyConsumers.qml":
+        source = source.replace('objectName: "consumerTick"',
+                                'objectName: "consumerTick"\n                        fontSizeMode: Text.Fit\n'
+                                '                        minimumPixelSize: 10')
     if "import QtQuick 1." in source or "import Components" in source or "tabView" in source:
         raise ValueError(f"Unadapted Qt4 dependency in {name}")
     return source

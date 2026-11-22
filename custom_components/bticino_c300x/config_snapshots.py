@@ -12,13 +12,13 @@ CONF_SNAPSHOT_RETENTION = "snapshot_retention_days"
 CONF_SNAPSHOT_WIDTH = "snapshot_width"
 CONF_SNAPSHOT_HEIGHT = "snapshot_height"
 CONF_SNAPSHOT_TIMESTAMP = "snapshot_timestamp"
-# The agent reads the image from the 800x480 display and delivers it in exactly
-# this size; nothing rescales it afterwards. 688x480 is the size the device
-# encodes its video stream in, which the display only stretches to its own width.
+# Snapshots read the 800x480 display framebuffer, not the encoded video stream.
+# The default preserves its pixels and 5:3 aspect ratio. Explicit sizes are
+# resampled by the agent; Home Assistant does not resize them again.
 SNAPSHOT_DEFAULTS = {
     CONF_SNAPSHOT_DELAY: 3,
     CONF_SNAPSHOT_RETENTION: 14,
-    CONF_SNAPSHOT_WIDTH: 688,
+    CONF_SNAPSHOT_WIDTH: 800,
     CONF_SNAPSHOT_HEIGHT: 480,
     CONF_SNAPSHOT_TIMESTAMP: True,
 }
@@ -36,7 +36,7 @@ class SnapshotOptions:
 
     delay_seconds: int = 3
     retention_days: int = 14
-    size: tuple[int, int] = (688, 480)
+    size: tuple[int, int] = (800, 480)
     # Write the capture date and time into the stored image.
     timestamp: bool = True
 

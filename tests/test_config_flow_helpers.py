@@ -2682,7 +2682,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _flow, snapshot_form = _options_area(entry, "visitor_snapshot")
     assert snapshot_form["step_id"] == "visitor_snapshot"
     assert snapshot_form["data_schema"]({}) == {
-        "snapshot_width": 688,
+        "snapshot_width": 800,
         "snapshot_height": 480,
         "snapshot_delay_seconds": 3,
         "snapshot_retention_days": 14,

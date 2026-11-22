@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Write date and time into the image"
         },
         "data_description": {
-          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
+          "snapshot_width": "Default 800: snapshots read the 800×480 display framebuffer, independently of the video stream size. The agent resizes the full frame to the chosen dimensions; Home Assistant does not resize it again. Range 64-800.",
+          "snapshot_height": "Default 480. Use 800×480 for native display pixels or, for example, 400×240 to preserve its 5:3 shape. Other proportions stretch the image. Even a 960×576 stream is captured from the 800×480 display. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Write date and time into the image"
         },
         "data_description": {
-          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
+          "snapshot_width": "Default 800: snapshots read the 800×480 display framebuffer, independently of the video stream size. The agent resizes the full frame to the chosen dimensions; Home Assistant does not resize it again. Range 64-800.",
+          "snapshot_height": "Default 480. Use 800×480 for native display pixels or, for example, 400×240 to preserve its 5:3 shape. Other proportions stretch the image. Even a 960×576 stream is captured from the 800×480 display. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -758,8 +758,8 @@
           "snapshot_timestamp": "Write date and time into the image"
         },
         "data_description": {
-          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
+          "snapshot_width": "Default 800: snapshots read the 800×480 display framebuffer, independently of the video stream size. The agent resizes the full frame to the chosen dimensions; Home Assistant does not resize it again. Range 64-800.",
+          "snapshot_height": "Default 480. Use 800×480 for native display pixels or, for example, 400×240 to preserve its 5:3 shape. Other proportions stretch the image. Even a 960×576 stream is captured from the 800×480 display. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -767,14 +767,14 @@
       },
       "camera_quality": {
         "title": "Camera quality",
-        "description": "Size, bit rate and frame rate of the high-resolution camera stream; on firmware 3.0.x of the low-resolution one, the only stream that firmware sends, which the Door Entry app gets as well. On older firmware with **Camera resolution** set to Low, Home Assistant receives the low-resolution stream, which these values do not change. The C300X reads them only when it starts: saving a change restarts the device once, which takes about a minute.\n\nThe device currently runs with: {running}",
+        "description": "Size, bit rate and frame rate of the high camera stream; on firmware 3.0.x of the low stream, also received by the Door Entry app. On older firmware with **Camera resolution** set to Low, Home Assistant receives the low stream, which these settings do not change. Saving a change requires a normal device reboot, not just an agent restart; allow about a minute.\n\n960x576 is opt-in. Applying or restoring it verifies an original backup on the device, never distributed; original permissions and ownership are preserved. The geometry patch includes only project-authored patch logic and checks, no vendor code or firmware files.\n\nThe device currently runs with: {running}",
         "data": {
           "size": "Picture size",
           "bitrate_kbps": "Bit rate",
           "fps": "Frame rate"
         },
         "data_description": {
-          "size": "High stream: 688x480 (from the factory) is a cut-out of the camera picture, 704x576 the whole picture without the black side edges, still over the whole display; the size also applies to the camera picture on the C300X display and to answering-machine recordings. Low stream on firmware 3.0.x: 400x288 from the factory; the other sizes are not tested on such a device yet.",
+          "size": "High: original 688x480 factory cut-out or 704x576 with all 576 lines; 704x576 does not match the LCD's 5:3 proportions. Optional 960x576 requires an exact verified C300X firmware 1.7.19 or 2.0.2 media executable, each with its own original/patched full SHA-256 pair. Live video is device-tested on 1.7.19; 2.0.2 is checked offline only. It scales the 704x576 crop before the existing encoder to match the 800x480 LCD, without adding native camera detail. 960x576 answering-machine recordings are unverified. Low on firmware 3.0.x: factory 400x288; 320x240 is compact 4:3, 480x288, 640x384 and 720x432 match the LCD ratio of 5:3. Legacy 352x288, 640x480, 704x576 and 720x576 remain available. The 3.0.6 configuration and encoder caps were checked offline, but non-factory sizes, their framing and performance remain untested on a device. Low sizes do not patch the binary or change the LCD viewport; 960x576 is not offered for 3.0.x.",
           "bitrate_kbps": "From the factory 800 kbit/s, at most 3000. The low stream on firmware 3.0.x: 180 from the factory, 100-2000. More gives a sharper picture and uses more network.",
           "fps": "From the factory 15 frames per second; the high stream takes at most 24, since at 25 the device sends only about 8. The low stream on firmware 3.0.x: 10 from the factory, at most 25."
         }

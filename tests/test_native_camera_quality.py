@@ -60,6 +60,21 @@ class Lab:
     start: Callable[[], subprocess.Popen[bytes]]
     process: subprocess.Popen[bytes] | None = None
 
+    @property
+    def removal_env(self) -> dict[str, str]:
+        """The beta removal CLI also verifies/restores its routing binary."""
+        original = Path(os.environ.get(
+            "C300X_FIRMWARE_WORK", ROOT.parent / "c300x-fwpatch/work"
+        )) / "rootfs-3.0.6/home/bticino/bin/bt_answering_machine"
+        if not original.is_file():
+            pytest.skip("local original routing firmware is not distributed")
+        target = self.settings.parent / "routing-bin/bt_answering_machine"
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(original.read_bytes())
+        target.chmod(0o755)
+        return {**self.env, "C300X_ROUTING_TARGET_DIR": str(target.parent),
+                "C300X_ROUTING_BACKUP_DIR": str(self.settings.parent / "routing-backup")}
+
     def restart_agent(self) -> None:
         """The agent starts again while the device keeps running."""
         assert self.process is not None
@@ -95,13 +110,31 @@ def qt5() -> bool:
 
 
 @pytest.fixture
-def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
+def media_image(request: pytest.FixtureRequest) -> bytes:
+    if getattr(request, "param", None) != "stock":
+        return b"unrecognized test firmware"
+    paths = list((ROOT.parent / "c300x-fwpatch/work/rootfs-1.7.19/home/bticino/bin").glob("b?_av_me?ia"))
+    if not paths:
+        pytest.skip("local original firmware is not distributed")
+    assert len(paths) == 1
+    import hashlib
+    image = paths[0].read_bytes()
+    assert hashlib.sha256(image).hexdigest() == "97b61ad80e67c1b3ea494956568645b93c7fe3ef359f77af9c7e2ad6dff1bf9e"
+    return image
+
+
+@pytest.fixture
+def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool, media_image: bytes) -> Iterator[Lab]:
     port, ui_port, own = free_tcp_ports(3)
     settings = tmp_path / "bt_answering_machine"
     settings.write_text(SETTINGS)
     settings.chmod(0o664)
     stack = tmp_path / "stack_open.xml"
     stack.write_text(STACK)
+    (tmp_path / "media-target").write_bytes(media_image)
+    (tmp_path / "media-target").chmod(0o755)
+    (tmp_path / "running_media").write_bytes(media_image)
+    (tmp_path / "running_media").chmod(0o755)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
         "api": {"token": TOKEN},
@@ -124,6 +157,11 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
     env = {**os.environ, "C300X_CAMERA_QUALITY_FILE": str(settings), "C300X_CAMERA_CROP_FILE": str(stack),
            "C300X_BOOT_ID_FILE": str(tmp_path / "boot_id"),
            "C300X_CAMERA_RUNNING_NOTE": str(tmp_path / "camera-running"),
+           "C300X_CAMERA_UPDATE_LOCK": str(tmp_path / "camera-update.lock"),
+           "C300X_MEDIA_GEOMETRY_TARGET": str(tmp_path / "media-target"),
+           "C300X_MEDIA_GEOMETRY_RUNNING_TARGET": str(tmp_path / "running_media"),
+           "C300X_MEDIA_GEOMETRY_BACKUP": str(tmp_path / "backups/media_geometry/original"),
+           "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
            "C300X_AUDIO_BACKUP_DIR": str(tmp_path / "backups"), "C300X_AUDIO_NO_REMOUNT": "1"}
     log = (tmp_path / "agent.log").open("w")
 
@@ -230,7 +268,7 @@ def test_removing_the_agent_puts_the_original_values_back(lab: Lab) -> None:
     lab.settings.write_text(lab.settings.read_text().replace("LcdDelay=600", "LcdDelay=700"))
 
     for _ in range(2):
-        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
                                 capture_output=True, text=True, timeout=10, check=False)
         assert result.returncode == 0, result.stderr
         assert lab.settings.read_text() == SETTINGS.replace("LcdDelay=600", "LcdDelay=700")
@@ -276,7 +314,7 @@ def test_an_agent_that_restarts_without_the_device_keeps_what_the_device_runs(la
 def test_removal_leaves_a_file_alone_that_lost_its_values(lab: Lab, content: str) -> None:
     lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 24})
     lab.settings.write_text(content)
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
     assert lab.settings.read_text() == content
@@ -286,7 +324,7 @@ def test_removal_puts_back_an_original_value_outside_the_offered_range(lab: Lab)
     original = SETTINGS.replace("FpsRtpH=15", "FpsRtpH=30")
     lab.settings.write_text(original)
     lab.call({**CONFIRM, "bitrate_kbps": 1000, "fps": 20})
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
     assert lab.settings.read_text() == original
@@ -356,7 +394,8 @@ def test_disabled_reboot_maintenance_saves_without_a_restart(lab: Lab) -> None:
 def test_firmware_3_sets_the_low_stream_its_only_stream(lab: Lab) -> None:
     body = lab.call()
     assert (body["stream"], body["bitrate_kbps"], body["fps"], body["size"]) == ("low", 180, 10, "400x288")
-    assert body["sizes"] == ["352x288", "400x288", "640x480", "704x576", "720x576"]
+    assert body["sizes"] == ["320x240", "352x288", "400x288", "480x288", "640x384",
+                             "640x480", "704x576", "720x432", "720x576"]
     assert body["running_size"] == "400x288"
     assert (body["bitrate_min"], body["bitrate_max"], body["fps_max"]) == (100, 2000, 25)
     body = lab.call({**CONFIRM, "bitrate_kbps": 600, "fps": 25, "size": "720x576"})
@@ -366,7 +405,7 @@ def test_firmware_3_sets_the_low_stream_its_only_stream(lab: Lab) -> None:
         "BitrateRtpL=600\nFpsRtpL=25\nWidthLow=720\nHeightLow=576")
     assert lab.call({**CONFIRM, "bitrate_kbps": 2001}, status=400)["error"] == "camera_quality_out_of_range"
     assert lab.call({**CONFIRM, "size": "688x480"}, status=400)["error"] == "camera_quality_invalid_size"
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env, cwd=lab.settings.parent,
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env, cwd=lab.settings.parent,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
     assert lab.settings.read_text() == SETTINGS
@@ -432,7 +471,7 @@ def test_removal_puts_back_the_original_size(lab: Lab) -> None:
     # The device changed another part of the cut file meanwhile; that one stays.
     lab.stack.write_text(lab.stack.read_text().replace("<min>30</min>", "<min>40</min>"))
     for _ in range(2):
-        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
                                 capture_output=True, text=True, timeout=10, check=False)
         assert result.returncode == 0, result.stderr
         assert lab.settings.read_text() == SETTINGS

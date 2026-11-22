@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
         },
         "data_description": {
-          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
+          "snapshot_width": "800 par défaut : les instantanés proviennent du framebuffer de l'écran 800×480, indépendamment de la taille du flux vidéo. L'agent redimensionne l'image entière aux dimensions choisies ; Home Assistant ne la redimensionne pas à nouveau. Plage 64-800.",
+          "snapshot_height": "480 par défaut. Utilisez 800×480 pour les pixels natifs de l'écran ou, par exemple, 400×240 pour conserver son rapport 5:3. D'autres proportions déforment l'image. Même un flux 960×576 est capturé depuis l'écran 800×480. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
         },
         "data_description": {
-          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
+          "snapshot_width": "800 par défaut : les instantanés proviennent du framebuffer de l'écran 800×480, indépendamment de la taille du flux vidéo. L'agent redimensionne l'image entière aux dimensions choisies ; Home Assistant ne la redimensionne pas à nouveau. Plage 64-800.",
+          "snapshot_height": "480 par défaut. Utilisez 800×480 pour les pixels natifs de l'écran ou, par exemple, 400×240 pour conserver son rapport 5:3. D'autres proportions déforment l'image. Même un flux 960×576 est capturé depuis l'écran 800×480. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -758,8 +758,8 @@
           "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
         },
         "data_description": {
-          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
+          "snapshot_width": "800 par défaut : les instantanés proviennent du framebuffer de l'écran 800×480, indépendamment de la taille du flux vidéo. L'agent redimensionne l'image entière aux dimensions choisies ; Home Assistant ne la redimensionne pas à nouveau. Plage 64-800.",
+          "snapshot_height": "480 par défaut. Utilisez 800×480 pour les pixels natifs de l'écran ou, par exemple, 400×240 pour conserver son rapport 5:3. D'autres proportions déforment l'image. Même un flux 960×576 est capturé depuis l'écran 800×480. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -767,14 +767,14 @@
       },
       "camera_quality": {
         "title": "Qualité de la caméra",
-        "description": "Taille, débit et fréquence d'images du flux caméra haute résolution ; sur le firmware 3.0.x, du flux basse résolution, le seul que ce firmware envoie et que reçoit aussi l'application Door Entry. Sur un firmware plus ancien avec **Résolution de la caméra** sur Basse, Home Assistant reçoit le flux basse résolution, que ces valeurs ne modifient pas. Le C300X ne les lit qu'au démarrage : enregistrer une modification redémarre l'appareil une fois, ce qui prend environ une minute.\n\nL'appareil fonctionne actuellement avec : {running}",
+        "description": "Taille, débit et fréquence d'images du flux caméra haut ; sur le firmware 3.0.x, du flux bas, également reçu par l'application Door Entry. Sur un firmware plus ancien avec **Résolution de la caméra** sur Basse, Home Assistant reçoit le flux bas, que ces réglages ne modifient pas. Enregistrer une modification nécessite un redémarrage normal de l'appareil, pas seulement de l'agent ; prévoir environ une minute.\n\n960x576 est facultatif. L'application ou la restauration vérifie une sauvegarde originale sur l'appareil, jamais distribuée ; les permissions et le propriétaire d'origine sont conservés. Le correctif de géométrie contient uniquement la logique de modification et les vérifications propres au projet, sans code du fabricant ni fichiers de firmware.\n\nL'appareil fonctionne actuellement avec : {running}",
         "data": {
           "size": "Taille de l'image",
           "bitrate_kbps": "Débit",
           "fps": "Fréquence d'images"
         },
         "data_description": {
-          "size": "Flux haut : 688x480 (d'usine) est un recadrage de l'image de la caméra, 704x576 l'image entière sans les bords noirs latéraux, toujours sur tout l'écran ; la taille s'applique aussi à l'image de la caméra sur l'écran du C300X et aux enregistrements du répondeur. Flux bas du firmware 3.0.x : 400x288 d'usine ; les autres tailles ne sont pas encore testées sur un tel appareil.",
+          "size": "Flux haut : recadrage d'usine 688x480 ou 704x576 avec les 576 lignes ; 704x576 ne correspond pas aux proportions 5:3 de l'écran LCD. L'option 960x576 exige un exécutable média exact vérifié du firmware C300X 1.7.19 ou 2.0.2, chacun avec sa propre paire SHA-256 complète pour l'original et le fichier modifié. Vidéo en direct testée sur appareil avec 1.7.19 ; 2.0.2 vérifié hors ligne uniquement. Elle redimensionne le recadrage 704x576 avant l'encodeur existant pour correspondre au LCD 800x480, sans ajouter de détails natifs à la caméra. Les enregistrements du répondeur en 960x576 ne sont pas vérifiés. Firmware 3.0.x, flux bas : 400x288 en usine ; 320x240 est un format 4:3 compact, 480x288, 640x384 et 720x432 correspondent au rapport 5:3 du LCD. 352x288, 640x480, 704x576 et 720x576 restent disponibles. Configuration et caps de l’encodeur 3.0.6 vérifiées hors ligne ; les autres tailles, leur cadrage et leurs performances restent non testés sur appareil. Ces tailles ne modifient ni le binaire ni la zone LCD. 960x576 n’est pas proposé sur 3.0.x.",
           "bitrate_kbps": "800 kbit/s d'usine, au plus 3000. Le flux bas du firmware 3.0.x : 180 d'usine, 100-2000. Plus donne une image plus nette et utilise plus de réseau.",
           "fps": "15 images par seconde d'usine ; le flux haut accepte au plus 24, car à 25 l'appareil n'en envoie qu'environ 8. Le flux bas du firmware 3.0.x : 10 d'usine, au plus 25."
         }

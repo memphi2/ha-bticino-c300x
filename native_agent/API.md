@@ -1484,7 +1484,7 @@ only the low-resolution stream, that one (`"stream": "low"`):
 {"ok": true, "supported": true, "stream": "high", "bitrate_kbps": 800, "fps": 15,
  "size": "688x480", "running_bitrate_kbps": 800, "running_fps": 15,
  "running_size": "688x480", "bitrate_min": 300, "bitrate_max": 3000,
- "fps_min": 5, "fps_max": 24, "sizes": ["688x480", "720x576"],
+ "fps_min": 5, "fps_max": 24, "sizes": ["688x480", "704x576", "960x576"],
  "restart_required": false, "changed": false, "remount_ro_failed": false,
  "rebooting": false}
 ```
@@ -1494,14 +1494,22 @@ the device started with (`0` and `""` when the agent cannot tell), and
 `restart_required` is `true` while the two differ. When the file could not be
 read at the agent's start, the agent takes the values the file has before its
 first change as the running ones. `sizes` lists the sizes a
-request may choose. The high stream takes 300–3000 kbit/s and 5–24 fps: at
+request may choose. `960x576` is included only for the exact verified C300X
+1.7.19 and 2.0.2 media executables, either original or patched. Each build
+requires its own matching stock backup; build IDs are not normalized away. Other builds retain the
+legacy High sizes. The high stream takes 300–3000 kbit/s and 5–24 fps: at
 25 fps the device drops its frame rate control and sends about 8 frames per
 second. The low stream takes 100–2000 kbit/s (the device lowers the bit rate
 at run time and raises it again only up to 2000) and 5–25 fps, in the sizes
-352x288, 400x288 (from the factory), 640x480, 704x576 and 720x576; the sizes
-other than 400x288 are not tested on a 3.0.x device yet.
+320x240, 352x288, 400x288 (from the factory), 480x288, 640x384, 640x480,
+704x576, 720x432 and 720x576. The added 480x288, 640x384 and 720x432 choices have the LCD's
+5:3 ratio; 320x240 is a compact 4:3 choice. Original 3.0.6 Low caps were
+checked offline, not on hardware. Sizes other than 400x288, their framing and
+performance remain untested on a 3.0.x device. Low writes only configuration;
+it does not patch the executable or change the LCD window. 960x576 is never
+offered for the Low path. See [3.0.6 Low evidence](../docs/firmware-3.0.6-camera.md).
 
-`POST` with `{"confirm": "apply_camera_quality", "size": "720x576",
+`POST` with `{"confirm": "apply_camera_quality", "size": "960x576",
 "bitrate_kbps": 3000, "fps": 24}` saves new values and returns the same body;
 each value may be left out and then stays as it is. Like the audio codec
 switch, the agent then restarts the device when the saved values differ from
@@ -1513,17 +1521,33 @@ rate outside the limits is answered `400` with
 `camera_quality_invalid_bitrate` or `camera_quality_invalid_fps`, and a
 request with no value with `camera_quality_value_required`. A value the file
 already has may stay even when it is outside the limits.
+An active or starting media session rejects changes with `409` and
+`camera_quality_media_session_active`. Geometry changes additionally require
+an exact known executable and a verified original backup; unknown files or
+invalid backups are not overwritten.
+Concurrent camera maintenance is rejected with `409` and
+`camera_quality_update_busy`, without changing configuration or the executable.
 
 The device keeps the values in the `[Answering Machine]` section of
 `/home/bticino/cfg/bt_answering_machine` and reads that file only when it
 starts: `BitrateRtpH`, `FpsRtpH`, `Width` and `Height` for the high stream,
 `BitrateRtpL`, `FpsRtpL`, `WidthLow` and `HeightLow` for the low one. For the
 high stream the device crops the camera picture when `Width` is more than
-1.5 times `Height` (800x480 from the factory gives 688x480) and sends the
-whole 720x576 picture otherwise, so the size `720x576` is written as
-`Width=720`, `Height=480`; the same values also set the camera picture on the
-device display and answering-machine recordings. The low stream is scaled to
-`WidthLow` x `HeightLow`.
+1.5 times `Height`. The offered sizes keep `Width=800`, `Height=480`, which
+also describe the LCD output, and adjust the crop in `stack_open.xml`:
+`688x480` uses `(16,48,688,480)`; `704x576` uses `(8,0,704,576)`.
+`960x576` uses the latter crop plus two hash-pinned instruction replacements
+in the original media program. Both High caps filters then request width 960
+before the existing hardware encoder; the height remains 576. There is no
+additional encoding stage. Selecting a legacy size restores the original
+binary. The low stream is scaled to `WidthLow` x `HeightLow` and is not patched.
+The 960x576 live test does not establish the answering-machine recording format.
+
+Saved geometry and running geometry are distinguished using the actual running
+executable and process generation, including after an agent-only restart.
+If the running geometry cannot be verified, `running_size` is empty. Unknown
+status alone does not trigger a reboot; confirmed changes remain pending until
+the device has restarted. There is no periodic geometry polling.
 
 The agent changes the file only when each of the four values is there exactly
 once, replaces those numbers and nothing else, keeps one backup of the
@@ -1531,8 +1555,9 @@ original file under `/home/bticino/cfg/extra/c300x-device-file-backups/original`
 writes a complete new file in one step, makes the root filesystem writable
 only for the write, and reads the result back. Removing the agent puts the
 original values back; a file without the values is left alone. After a
-firmware update the file holds the factory values again, which are the same on
-every firmware, so there is nothing to put back.
+firmware update, only recognized binaries can be modified; a backup from a
+different build must never be used to restore the new executable. An unsuccessful
+media restoration aborts agent removal before agent files and backups are deleted.
 
 Capabilities advertise the setting as `maintenance.camera_quality` whenever
 video is enabled. A `POST` is answered `409` with

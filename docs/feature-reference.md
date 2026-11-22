@@ -49,8 +49,8 @@ one-time SSH installation remains a separate explicit step.
 | --- | --- | --- |
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
 | Video and audio | Door station video and audio, video and audio access on the C300X, live audio level, volume of ring recordings, connection paths for the live picture, talking through the HA camera view. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
-| Visitor Snapshot | Image width and height (688x480), delay (3 s), retention (14 days), date and time in the image (on). Offered only with video on. | No. |
-| Camera quality | Picture size (688x480 from the factory, or the whole picture at 704x576 without the black side edges), bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–24 fps, 15 from the factory; at 25 the device sends only about 8) of the high-resolution camera stream; on firmware 3.0.x of the low-resolution stream, the only one it sends, which the Door Entry app gets as well (sizes 352x288 to 720x576, 400x288 from the factory; 100–2000 kbit/s, 180 from the factory; 5–25 fps, 10 from the factory; sizes other than 400x288 not yet tested on a 3.0.x device). The size also applies to the camera picture on the device display and to answering-machine recordings. The form shows the values saved on the device and the ones it runs with. Offered with video on. | Yes: saving a change writes all values in one step and restarts the device once, like the audio codec switch. The values stay on the device, not in Home Assistant. |
+| Visitor Snapshot | Image width and height (800x480, the native display framebuffer), delay (3 s), retention (14 days), date and time in the image (on). Offered only with video on. | No. |
+| Camera quality | Original high-stream sizes 688x480 and 704x576; optional 960x576 only for exact verified C300X firmware 1.7.19 or 2.0.2 media binaries (2.0.2 checked offline only). High bit rate 300–3000 kbit/s (factory 800), frame rate 5–24 fps (factory 15). Firmware 3.0.x keeps its low stream: bounded sizes 320x240 to 720x576, including 5:3 options 480x288, 640x384 and 720x432 (factory 400x288), 100–2000 kbit/s (factory 180), 5–25 fps (factory 10); non-factory sizes remain untested on a 3.0.x device. The form distinguishes saved and running values. See [Camera quality](#camera-quality). Offered with video on. | Yes: changes require a normal device reboot. The 960x576 option additionally patches the verified media binary with an original backup; returning to a legacy size restores that binary. Settings stay on the device, not in Home Assistant. |
 | Activations: locks, lights, stair light | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
 | Speech | Text-to-speech engine and language for spoken notifications. Offered where the agent can play sound and **Home Assistant pages on the display** is on. | No. Read when a notification is spoken; saving reloads nothing. |
 | Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | No. Stored in Home Assistant; the display asks for it. |
@@ -94,6 +94,62 @@ agent have different effects on settings, media and backups.
 | Ring Capture and local analysis | Services and blueprints. | Writes local MP4/WAV/JPEG/JSON below allowed Home Assistant paths; local Wyoming transcription is optional. |
 | Media readiness and Repairs | Diagnostic sensor and Repair flows. | Media prerequisites can be repaired; the selected Ring Call forwarding target is reported but never changed by a Repair. |
 
+### Camera Quality
+
+Firmware **3.0.x uses Low**, not the older High pipeline. Its factory size
+remains **400x288**. The beta additionally offers compact **320x240 (4:3)**
+and **480x288 / 640x384 / 720x432 (5:3)**, alongside the existing Low sizes. The 5:3
+choices match the LCD's ratio, not its pixel count, and do not alter its
+viewport. Only the device's Low configuration changes; no binary patch is
+needed. Original 3.0.6 code and encoder caps were checked offline, but
+non-factory sizes, visual framing and performance are **not device-tested**.
+Keep the factory setting unless deliberately testing another size.
+See [offline evidence and limitations](firmware-3.0.6-camera.md).
+
+Open **Configure > Camera quality** to choose the device's picture size, bit
+rate and frame rate. The original **688x480** factory cut-out and **704x576**
+full-height high-stream choices remain available with their original behavior.
+The optional **960x576** high-stream choice is not applied automatically.
+
+**960x576 is restricted to exact verified media executables from C300X
+firmware 1.7.19 and 2.0.2, each checked against its own full SHA-256 pair for
+the original and patched files.** A firmware version label alone is not enough. Other
+executables and firmware retain their existing choices; this does not enable
+high video on firmware 3.0.x/Qt5 or change its low-stream path.
+
+The distributed geometry patch contains only project-authored patch logic and
+checks. It does not include a firmware binary, vendor files or copied vendor
+code. It operates on the executable already on the device; the verified
+original backup remains on that device and is never distributed. It preserves
+the original file permissions and ownership; it is not restricted to mode 0600.
+
+The camera input is 720x576. The configured crop keeps **704x576**, excluding
+eight side columns on each side but retaining all **576 lines**. The optional
+patch scales this picture to **960x576 before the existing encoder**, matching
+the **5:3** proportions of the **800x480 LCD**. It does not add transcoding or
+create native 960-pixel camera detail. The LCD stays 800x480, and HA snapshots
+still read that framebuffer rather than the encoded stream.
+
+Applying the option requires a verified backup of the original media executable.
+Selecting 688x480 or 704x576 again restores the verified original executable
+and applies the selected legacy configuration. A patched executable requires
+an existing valid original backup; a missing or invalid backup blocks restore.
+The patch does not contain original manufacturer code or reconstruct an original
+executable. Do not delete recovery backups
+or force the patch onto an unrecognized binary.
+Saving either change uses a **normal device reboot**, not an agent-only or
+GUI-only restart. Choose a time without an active call or recording, wait for
+the device to return, then open a new stream. Saved values are not proof that
+the currently running process has already adopted them.
+
+High frame rate remains limited to **24 fps**: at 25, the older firmware turns
+off its frame-rate control and delivers only about 8 fps. A higher bit rate
+can reduce compression artifacts, but increase it only as the network allows.
+The 960x576 live picture has been confirmed on the 1.7.19 test device; 2.0.2
+has been checked offline only. **960x576
+built-in answering-machine recordings have not been verified**. Do not infer
+their output size from the live stream or LCD.
+
 ### Card Buttons
 
 The card editor lets you show or hide **Open door** and **Staircase light**
@@ -131,21 +187,26 @@ The **Save images** switch belongs to the C300X device and is on by default.
 It controls automatic images for doorbell rings and HA video streams, regardless
 of whether a Home Assistant dashboard is open. No browser capture is used.
 **Configure > Visitor Snapshot** holds the image width and height (default
-**688×480**), the image delay (default **3 seconds**), retention (default **14
+**800×480**), the image delay (default **3 seconds**), retention (default **14
 days**) and whether the capture date and time are written into the image
 (default on, lower right corner). The area is offered only while video is
 enabled; setup and reconfiguration show it as a step of its own after the video
 and audio page. A call or stream that ends before capture may not produce an
 image.
 
-The image comes from the device display, not from the video stream. The
-display is 800×480 and shows the camera picture stretched to its own width; the
-device encodes the stream itself as 688×480 from the factory. The default
-therefore gives the image the size and shape of that stream; **Camera quality**
-can switch the stream to the whole 704×576 camera picture. The agent delivers the image in exactly
-the configured size (width 64–800, height 64–480) and Home Assistant does not
-rescale it. Setting 800×480 returns the display pixel for pixel. A size above
-the display's is not offered, because it would add no detail.
+The image comes from the device's **800×480 display framebuffer**, not directly
+from the encoded video stream. The default preserves the display pixels and
+its **5:3** aspect ratio, including when the high stream is set to **960×576**.
+Snapshots remain limited to 800×480; the higher stream resolution does not add
+pixels to the framebuffer. The agent resizes the full frame to the configured
+size (width 64–800, height 64–480), without cropping. Home Assistant does not
+resize it again. For a smaller image with the same proportions, use **400×240**;
+other proportions stretch the image. This does not undo any cropping or
+scaling already applied by the device before the framebuffer is read.
+
+Previously saved sizes, including **688×480**, remain unchanged. To use the
+native proportions for future captures, select **800×480** under **Visitor
+Snapshot**. Existing images are not resized or rewritten.
 
 The agent reads the existing video background only while the firmware media
 process is using it. It does not start or answer a call, change forwarding,
@@ -955,7 +1016,7 @@ feature, the matching entity is not created.
 | `switch` | Answering machine | Device answering-machine enabled state. |
 | `switch` | Save images | Automatic visitor images on or off (on by default). |
 | `switch` | Touch tone | The display's touch-sound setting. |
-| `select` | Camera resolution | High (688×480 from the factory) or low (400×288) camera stream, from the next stream on; high by default. The size, bit rate and frame rate of the high stream are set under Camera quality. Not offered on firmware 3.0.x, which is fixed to low; there Camera quality sets the low stream. |
+| `select` | Camera resolution | High (688×480 from the factory) or low (400×288) camera stream, from the next stream on; high by default. This selects a stream, not the optional 960x576 patch. High size, bit rate and frame rate are set under [Camera quality](#camera-quality). Not offered on firmware 3.0.x, which is fixed to low; there Camera quality sets the low stream. |
 | `select` | Audio codec | Device audio codec `speex` or `pcmu` (firmware 1.7.19 and 2.0.2 come with `speex`, 3.0.6 with `pcmu`); changes the device configuration explicitly and restarts it once. `pcmu` is recommended: the browser plays it as it is, so the agent does not convert the sound, which gives clearer audio and leaves the device more room. The switch writes the same codec settings BTicino ships on firmware 3.0.6, which runs `pcmu` from the factory. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |

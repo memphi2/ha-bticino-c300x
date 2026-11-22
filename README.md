@@ -31,10 +31,20 @@ forwarding controls, messages and optional display pages.
 - **See and answer the door.** Local live video and talkback through the bundled
   card, doorbell events, and Ring Call answer/hang-up when forwarding is set to
   Home Assistant. Audio-only Home Call reaches the C300X display.
-- **Get a better camera picture.** Under **Camera quality** the stream can be
-  sharper (up to 3000 kbit/s instead of 800), smoother (up to 24 frames per
-  second instead of 15) and show the whole camera picture at 704x576 instead
-  of the factory cut-out. For clearer sound, set the **Audio codec** to **PCMU**.
+- **Choose the camera picture.** **Camera quality** keeps the original
+  688x480 and 704x576 high-stream choices, with up to 3000 kbit/s and 24 fps.
+  Optional **960x576** matches the display's 5:3 proportions while retaining
+  all 576 picture lines. It requires an exact verified C300X firmware 1.7.19 or 2.0.2
+  media executable, a backed-up device patch and a normal device reboot.
+  It scales before the existing encoder, not through added transcoding, and
+  does not turn the camera input into native 960-pixel detail.
+  The geometry patch contains only project-authored patch logic and checks,
+  not firmware binaries, vendor files or copied vendor code. The original
+  executable backup stays on the device and is never distributed; its original
+  permissions and ownership are preserved. Live video is device-tested on
+  1.7.19; 2.0.2 has been checked offline only.
+  [Camera quality](docs/feature-reference.md#camera-quality) explains compatibility
+  and restoring the original behavior. For clearer sound, set **Audio codec** to **PCMU**.
 - **Let the C300X speak.** The device loudspeaker is a media player: use it
   with `tts.speak` and a local engine such as Piper, or have a notification
   shown on the display, spoken, or both. A door call always takes priority.
@@ -47,6 +57,8 @@ forwarding controls, messages and optional display pages.
   Live video and incoming rings take priority; browsing never starts, answers
   or stops a device call. Automatic [visitor images](docs/feature-reference.md#visitor-images)
   require **Save images** and need no open dashboard or image files on the C300X.
+  New snapshot settings default to the native **800x480** display size;
+  previously saved custom sizes remain unchanged.
   Clips require a separate capture automation, such as the bundled Ring capture
   blueprint. History does not include the device's answering-machine recordings.
 - **Use the C300X as a home-control display.** Keep the native blue interface

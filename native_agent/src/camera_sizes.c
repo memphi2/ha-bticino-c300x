@@ -18,12 +18,15 @@ struct size_choice {
 static const struct size_choice HIGH_SIZES[] = {
     {"688x480", 800, 480, {16, 48, 688, 480}},
     {"704x576", 800, 480, {8, 0, 704, 576}},
+    {"960x576", 800, 480, {8, 0, 704, 576}},
 };
-/* Low stream: the device scales the 720x576 camera picture to WidthLow x
- * HeightLow; no larger, both multiples of 16 for the encoder. */
+/* The 3.0.6 Low caps take WidthLow/HeightLow independently of the LCD window.
+ * Keep a bounded list below the 720x576 input, aligned to 16 pixels. The 5:3
+ * choices match the LCD ratio; non-factory sizes still need device testing. */
 static const struct size_choice LOW_SIZES[] = {
-    {"352x288", 352, 288, {0}}, {"400x288", 400, 288, {0}}, {"640x480", 640, 480, {0}},
-    {"704x576", 704, 576, {0}}, {"720x576", 720, 576, {0}},
+    {"320x240", 320, 240, {0}}, {"352x288", 352, 288, {0}}, {"400x288", 400, 288, {0}},
+    {"480x288", 480, 288, {0}}, {"640x384", 640, 384, {0}}, {"640x480", 640, 480, {0}},
+    {"704x576", 704, 576, {0}}, {"720x432", 720, 432, {0}}, {"720x576", 720, 576, {0}},
 };
 /* High: 25 fps is not 25 for the device, it drops its frame rate control
  * and sends about 8 fps. Low (firmware 3.0.x): the device lowers a bit rate

@@ -4,6 +4,18 @@
 
 Beta for firmware 3.0.6, not yet tested on a device.
 
+Camera and maintenance:
+
+- Includes the stable 2.8.2 camera transaction, running/pending status and
+  removal safety fixes, matching-ratio card layout and 800x480 snapshot default.
+  Existing explicit snapshot sizes and beta Qt5 recovery remain intact.
+- Additional Low choices: compact 320x240 (4:3), and 480x288 / 640x384 / 720x432 (5:3).
+  Factory 400x288 and all earlier Low choices remain available. Original
+  3.0.6 configuration/caps checked offline; non-factory sizes, framing and
+  performance remain untested on hardware. These choices do not patch the
+  media executable or change the LCD window. The older 960x576 High binary
+  patch is not enabled on firmware 3.0.6.
+
 Display:
 
 - **Home Assistant pages on firmware 3.0.6** (beta): the Display patch now
@@ -30,6 +42,21 @@ Display:
 ## v2.8.2 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+Camera:
+
+- Optional **960x576** High video on the verified C300X 1.7.19 and 2.0.2 media builds.
+  The existing hardware scales the full-height picture before encoding, matching
+  the display's 5:3 proportions without an extra encoding pass. Selecting it in
+  **Camera quality** backs up and patches the device program, adjusts the crop
+  and requires a device restart. Legacy sizes remain available; other firmware
+  builds and the low stream are unchanged. Needs the agent update.
+  Live-tested on 1.7.19; 2.0.2 has been checked offline against its original firmware.
+- Visitor snapshots default to the display's native **800x480** pixels.
+  Existing explicit sizes are kept. Set 800x480 to match the new High video's
+  proportions; snapshots do not acquire extra detail from its larger raster.
+- The card uses the matching 5:3 picture frame before live metadata arrives,
+  while preserving measured dimensions for legacy streams and archived media.
 
 Fixed:
 

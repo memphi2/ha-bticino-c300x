@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
         },
         "data_description": {
-          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
+          "snapshot_width": "Standard 800: Schnappschüsse lesen den 800×480-Display-Framebuffer, unabhängig von der Videostream-Größe. Der Agent skaliert das vollständige Bild auf die gewählten Maße; Home Assistant skaliert es nicht erneut. Bereich 64-800.",
+          "snapshot_height": "Standard 480. 800×480 erhält die Display-Pixel, z. B. 400×240 das Seitenverhältnis 5:3. Andere Proportionen verzerren das Bild. Auch bei einem 960×576-Stream stammt der Schnappschuss vom 800×480-Display. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
         },
         "data_description": {
-          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
+          "snapshot_width": "Standard 800: Schnappschüsse lesen den 800×480-Display-Framebuffer, unabhängig von der Videostream-Größe. Der Agent skaliert das vollständige Bild auf die gewählten Maße; Home Assistant skaliert es nicht erneut. Bereich 64-800.",
+          "snapshot_height": "Standard 480. 800×480 erhält die Display-Pixel, z. B. 400×240 das Seitenverhältnis 5:3. Andere Proportionen verzerren das Bild. Auch bei einem 960×576-Stream stammt der Schnappschuss vom 800×480-Display. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -758,8 +758,8 @@
           "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
         },
         "data_description": {
-          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
+          "snapshot_width": "Standard 800: Schnappschüsse lesen den 800×480-Display-Framebuffer, unabhängig von der Videostream-Größe. Der Agent skaliert das vollständige Bild auf die gewählten Maße; Home Assistant skaliert es nicht erneut. Bereich 64-800.",
+          "snapshot_height": "Standard 480. 800×480 erhält die Display-Pixel, z. B. 400×240 das Seitenverhältnis 5:3. Andere Proportionen verzerren das Bild. Auch bei einem 960×576-Stream stammt der Schnappschuss vom 800×480-Display. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -767,14 +767,14 @@
       },
       "camera_quality": {
         "title": "Kameraqualität",
-        "description": "Größe, Bitrate und Bildrate des hochauflösenden Kamerastreams; auf Firmware 3.0.x des niedrig aufgelösten, des einzigen, den diese Firmware sendet und den auch die Door-Entry-App bekommt. Steht auf älterer Firmware die **Kamera-Auflösung** auf Niedrig, empfängt Home Assistant den niedrig aufgelösten Stream, den diese Werte nicht ändern. Die C300X liest die Werte nur beim Start: Das Speichern einer Änderung startet das Gerät einmal neu, das dauert etwa eine Minute.\n\nDas Gerät läuft gerade mit: {running}",
+        "description": "Größe, Bitrate und Bildrate des hohen Kamerastreams; auf Firmware 3.0.x des niedrigen Streams, den auch die Door-Entry-App empfängt. Steht auf älterer Firmware die **Kamera-Auflösung** auf Niedrig, empfängt Home Assistant den niedrigen Stream, den diese Einstellungen nicht ändern. Das Speichern einer Änderung erfordert einen normalen Geräteneustart, nicht nur einen Agent-Neustart; rechne mit etwa einer Minute.\n\n960x576 ist freiwillig. Anwenden und Wiederherstellen prüfen ein Original-Backup auf dem Gerät, das niemals verteilt wird; ursprüngliche Dateirechte und Eigentümer bleiben erhalten. Der Geometrie-Patch enthält nur eigene Patch-Logik und Prüfungen, keinen Herstellercode oder Firmwaredateien.\n\nDas Gerät läuft gerade mit: {running}",
         "data": {
           "size": "Bildgröße",
           "bitrate_kbps": "Bitrate",
           "fps": "Bildrate"
         },
         "data_description": {
-          "size": "Hoher Stream: 688x480 (ab Werk) ist ein Ausschnitt des Kamerabilds, 704x576 das ganze Bild ohne die schwarzen Seitenränder, weiterhin über das ganze Display; die Größe gilt auch für das Kamerabild auf dem Display der C300X und für Aufnahmen des Anrufbeantworters. Niedriger Stream auf Firmware 3.0.x: ab Werk 400x288; die anderen Größen sind auf einem solchen Gerät noch nicht getestet.",
+          "size": "Hoher Stream: ursprünglicher 688x480-Werksausschnitt oder 704x576 mit allen 576 Zeilen; 704x576 entspricht nicht den 5:3-Proportionen des LCDs. Optionales 960x576 erfordert eine exakt verifizierte Mediendatei der C300X-Firmware 1.7.19 oder 2.0.2, jeweils mit eigenem vollständigen SHA-256-Paar für Original und Patch. Live-Video ist auf 1.7.19 am Gerät getestet; 2.0.2 wurde nur offline geprüft. Es skaliert den 704x576-Ausschnitt vor dem vorhandenen Encoder passend zum 800x480-LCD, ohne zusätzliche native Kameradetails. 960x576-Aufnahmen des Anrufbeantworters sind unbestätigt. Niedriger Stream auf Firmware 3.0.x: ab Werk 400x288; 320x240 ist kompaktes 4:3, 480x288, 640x384 und 720x432 entsprechen dem LCD-Seitenverhältnis 5:3. 352x288, 640x480, 704x576 und 720x576 bleiben verfügbar. Konfiguration und Encoder-Caps von 3.0.6 wurden offline geprüft; andere Größen, ihr Bildausschnitt und ihre Leistung sind am Gerät noch ungetestet. Low-Größen patchen keine Binärdatei und ändern nicht den LCD-Ausschnitt; 960x576 wird für 3.0.x nicht angeboten.",
           "bitrate_kbps": "Ab Werk 800 kbit/s, höchstens 3000. Der niedrige Stream auf Firmware 3.0.x: ab Werk 180, 100-2000. Mehr ergibt ein schärferes Bild und braucht mehr Netzwerk.",
           "fps": "Ab Werk 15 Bilder pro Sekunde; der hohe Stream nimmt höchstens 24, denn bei 25 sendet das Gerät nur etwa 8. Der niedrige Stream auf Firmware 3.0.x: ab Werk 10, höchstens 25."
         }

@@ -3,8 +3,10 @@
 #include "camera_quality.h"
 #include "device_routing.h"
 #include "display_qt5.h"
+#include "camera_running.h"
 #include "display_touch.h"
 #include "https_client.h"
+#include "media_geometry_patch.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -204,6 +206,9 @@ int main(int argc, char **argv)
             fprintf(stderr, "Failed to restore the camera quality: %s\n", quality_error);
             return 1;
         }
+        int pending = c300x_media_geometry_state(NULL) == C300X_MEDIA_GEOMETRY_STOCK
+            && c300x_camera_running_current_geometry() == C300X_MEDIA_GEOMETRY_PATCHED;
+        printf("{\"ok\":true,\"media_reboot_required\":%s}\n", json_bool(pending));
         return 0;
     }
 

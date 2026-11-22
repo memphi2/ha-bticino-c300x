@@ -2,7 +2,8 @@
 
 Source review: 2026-11-22. Integration and native agent `2.9.0b1`, a beta on
 top of `2.8.2` that brings the display pages to firmware 3.0.6. Version `2.8.2`
-adds bounded RTSP recovery and exact firewall restoration. Version `2.8.1`
+adds bounded RTSP recovery, exact firewall restoration and optional High geometry
+for a verified older media build, not for firmware 3.0.6. Version `2.8.1`
 is a maintenance release that fixes the Display restore and clarifies settings
 of `2.8.0`. Version `2.8.0` is the successor of `2.7.0`, with speech and sounds on the
 device's speaker, spoken notifications and camera quality settings. This
@@ -22,6 +23,15 @@ The repository contains its Apache-2.0 `LICENSE`, project `NOTICE`, trademark
 and non-affiliation notices, and a privacy notice. No tracked firmware images,
 APKs, packet captures, device backups, or native library binaries were found by
 the gate. Builds and device-specific inputs remain outside tracked source.
+
+The geometry patch consists of project-authored checking, backup and replacement
+logic, identification hashes, instruction locations and the two replacement
+instructions. It does not distribute the manufacturer's executable, a binary
+diff containing original code, or extracted firmware libraries. Restoration
+requires the verified original backup held on the user's device. Tests may read
+an original firmware file supplied locally, but no such fixture is checked in.
+Masked target names follow the other binary patches; masking is a naming
+convention, not a security control or legal clearance.
 
 The prior audit dated 2026-11-08 is superseded; its full text remains in
 Git history. Its search results and release-artifact checks are not evidence for

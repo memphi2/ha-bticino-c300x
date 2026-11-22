@@ -84,7 +84,7 @@ Recommended first-run choices:
 - Leave **Volume of ring recordings (dB)** at its default unless you use Ring
   Capture.
 - With video enabled, the **Visitor Snapshot** step follows; its defaults
-  (688x480, 3 seconds, 14 days, date and time in the image) are fine for a
+  (800x480, 3 seconds, 14 days, date and time in the image) are fine for a
   first test.
 - Leave **Additional device activations** empty unless you already know the
   C300X activation addresses you want as Home Assistant buttons.
@@ -159,7 +159,10 @@ existing camera framebuffer; JPEG conversion and storage happen in HA.
 - Open **Media > BTicino C300X Media** to browse saved images.
 - Change image size, delay, retention and the date and time in the image
   under **Configure > Visitor Snapshot**. Retention defaults to **14 days**,
-  the size to 688x480.
+  the size to **800x480**, the native display framebuffer at **5:3**. Saved
+  sizes, including the old 688x480 setting, are not migrated automatically.
+  Select 800x480 explicitly to change future captures; existing images stay
+  unchanged. A 960x576 live stream does not increase snapshot resolution.
 - Turn **Save images** off to stop new captures and hide the shared card/camera
   preview. Existing archives remain until they expire.
 - Images use the configured HA media directory, like recordings. Its normal
@@ -251,8 +254,14 @@ For later updates, follow [Updates](advanced-maintenance.md#updates).
 
 Use [Feature reference](feature-reference.md) to decide what to enable next:
 
-- a better camera picture under **Configure > Camera quality** (sharper,
-  smoother, the whole camera picture; the device restarts once),
+- a different camera picture under **Configure > Camera quality**: the original
+  688x480 and 704x576 choices remain available. Optional **960x576** retains
+  576 lines and matches the LCD's 5:3 proportions, but only for the exact
+  verified C300X firmware **1.7.19 or 2.0.2** media executables, each checked
+  by its own full-file hashes (2.0.2 checked offline only). Applying or restoring
+  this option requires a verified original backup and a normal device reboot;
+  save only when no call or recording is active. Other firmware and the Qt5
+  low stream are unchanged. See [Camera quality](feature-reference.md#camera-quality),
 - clearer sound with the **Audio codec** select on **PCMU** (the device
   restarts once; firmware 3.0.6 runs PCMU already),
 - additional C300X activation buttons,

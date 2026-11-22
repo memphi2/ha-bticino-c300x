@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Inserisci data e ora nell'immagine"
         },
         "data_description": {
-          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
-          "snapshot_height": "Al massimo 480: l'immagine viene letta dal display 800×480, quindi 576 non è possibile. Predefinito 480. Per un'immagine della telecamera di 704×576, circa 587×480 mantiene le proporzioni. Intervallo 64-480.",
+          "snapshot_width": "Predefinito 800: le istantanee provengono dal framebuffer del display 800×480, indipendentemente dalla dimensione del flusso video. L'agente ridimensiona l'intera immagine alle dimensioni scelte; Home Assistant non la ridimensiona nuovamente. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480. Usare 800×480 per i pixel nativi del display o, ad esempio, 400×240 per mantenere il rapporto 5:3. Altre proporzioni deformano l'immagine. Anche un flusso 960×576 viene acquisito dal display 800×480. Intervallo 64-480.",
           "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
           "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
           "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Inserisci data e ora nell'immagine"
         },
         "data_description": {
-          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
-          "snapshot_height": "Al massimo 480: l'immagine viene letta dal display 800×480, quindi 576 non è possibile. Predefinito 480. Per un'immagine della telecamera di 704×576, circa 587×480 mantiene le proporzioni. Intervallo 64-480.",
+          "snapshot_width": "Predefinito 800: le istantanee provengono dal framebuffer del display 800×480, indipendentemente dalla dimensione del flusso video. L'agente ridimensiona l'intera immagine alle dimensioni scelte; Home Assistant non la ridimensiona nuovamente. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480. Usare 800×480 per i pixel nativi del display o, ad esempio, 400×240 per mantenere il rapporto 5:3. Altre proporzioni deformano l'immagine. Anche un flusso 960×576 viene acquisito dal display 800×480. Intervallo 64-480.",
           "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
           "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
           "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
@@ -758,8 +758,8 @@
           "snapshot_timestamp": "Inserisci data e ora nell'immagine"
         },
         "data_description": {
-          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
-          "snapshot_height": "Al massimo 480: l'immagine viene letta dal display 800×480, quindi 576 non è possibile. Predefinito 480. Per un'immagine della telecamera di 704×576, circa 587×480 mantiene le proporzioni. Intervallo 64-480.",
+          "snapshot_width": "Predefinito 800: le istantanee provengono dal framebuffer del display 800×480, indipendentemente dalla dimensione del flusso video. L'agente ridimensiona l'intera immagine alle dimensioni scelte; Home Assistant non la ridimensiona nuovamente. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480. Usare 800×480 per i pixel nativi del display o, ad esempio, 400×240 per mantenere il rapporto 5:3. Altre proporzioni deformano l'immagine. Anche un flusso 960×576 viene acquisito dal display 800×480. Intervallo 64-480.",
           "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
           "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
           "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
@@ -767,14 +767,14 @@
       },
       "camera_quality": {
         "title": "Qualità della telecamera",
-        "description": "Dimensione, bit rate e frequenza dei fotogrammi del flusso della telecamera ad alta risoluzione; sul firmware 3.0.x di quello a bassa risoluzione, l'unico che quel firmware invia e che riceve anche l'app Door Entry. Su un firmware precedente con **Risoluzione della telecamera** su Bassa, Home Assistant riceve il flusso a bassa risoluzione, che questi valori non modificano. Il C300X li legge solo all'avvio: salvare una modifica riavvia il dispositivo una volta, il che richiede circa un minuto.\n\nIl dispositivo funziona ora con: {running}",
+        "description": "Dimensione, bit rate e frequenza dei fotogrammi del flusso alto della telecamera; sul firmware 3.0.x del flusso basso, ricevuto anche dall'app Door Entry. Su un firmware precedente con **Risoluzione della telecamera** su Bassa, Home Assistant riceve il flusso basso, che queste impostazioni non modificano. Salvare una modifica richiede un normale riavvio del dispositivo, non solo dell'agente; attendere circa un minuto.\n\n960x576 è facoltativo. Applicazione e ripristino verificano un backup originale sul dispositivo, mai distribuito; permessi e proprietario originali sono conservati. La patch geometrica contiene solo logica di modifica e verifiche sviluppate dal progetto, senza codice del produttore o file firmware.\n\nIl dispositivo funziona ora con: {running}",
         "data": {
           "size": "Dimensione dell'immagine",
           "bitrate_kbps": "Bit rate",
           "fps": "Frequenza dei fotogrammi"
         },
         "data_description": {
-          "size": "Flusso alto: 688x480 (di fabbrica) è un ritaglio dell'immagine della telecamera, 704x576 l'immagine intera senza i bordi neri laterali, sempre su tutto il display; la dimensione vale anche per l'immagine sul display del C300X e per le registrazioni della segreteria. Flusso basso del firmware 3.0.x: 400x288 di fabbrica; le altre dimensioni non sono ancora testate su un tale dispositivo.",
+          "size": "Flusso alto: ritaglio di fabbrica 688x480 o 704x576 con tutte le 576 righe; 704x576 non corrisponde alle proporzioni 5:3 del display LCD. L'opzione 960x576 richiede un eseguibile multimediale esatto verificato del firmware C300X 1.7.19 o 2.0.2, ciascuno con la propria coppia SHA-256 completa per l'originale e il file modificato. Video dal vivo testato sul dispositivo con 1.7.19; 2.0.2 verificato solo offline. Ridimensiona il ritaglio 704x576 prima dell'encoder esistente per adattarlo al display 800x480, senza aggiungere dettagli nativi della telecamera. Le registrazioni della segreteria in 960x576 non sono verificate. Firmware 3.0.x, flusso basso: 400x288 di fabbrica; 320x240 è un formato 4:3 compatto, 480x288, 640x384 e 720x432 corrispondono al rapporto LCD 5:3. Restano disponibili 352x288, 640x480, 704x576 e 720x576. Configurazione e caps dell’encoder 3.0.6 verificati offline; altre dimensioni, inquadratura e prestazioni non sono ancora testate sul dispositivo. Queste dimensioni non modificano il binario né la finestra LCD. 960x576 non è offerto su 3.0.x.",
           "bitrate_kbps": "Di fabbrica 800 kbit/s, al massimo 3000. Il flusso basso del firmware 3.0.x: 180 di fabbrica, 100-2000. Di più dà un'immagine più nitida e usa più rete.",
           "fps": "Di fabbrica 15 fotogrammi al secondo; il flusso alto accetta al massimo 24, perché a 25 il dispositivo ne invia solo circa 8. Il flusso basso del firmware 3.0.x: 10 di fabbrica, al massimo 25."
         }

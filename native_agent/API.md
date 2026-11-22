@@ -1639,7 +1639,9 @@ request has a monotonic five-second deadline. Diagnostics expose
 ## Compatibility
 
 Agent `2.8.2` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family` reflects `device.firmware` of the agent
-config and is `unknown` when that value is empty, which is what the installer
-writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
+`1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family`
+comes from `device.firmware` of the agent config or, when that is empty as the
+installer writes it, from the device's own web server database, the same
+firmware `GET /api/v1/capabilities` reports. Of the `2.0.x` family only `2.0.2`
+is supported, of `3.0.x` only `3.0.6`,
 experimentally. The release notes list the agent changes of each version.

@@ -264,10 +264,12 @@ def test_a_display_that_ends_normally_is_not_restarted(device: Device, tmp_path:
     assert device.ok("status")["qt5_overlay"] == "active"
 
 
-def test_the_next_change_clears_the_failed_mark(device: Device) -> None:
+def test_partial_changes_keep_quarantine_until_the_whole_overlay_is_removed(device: Device) -> None:
     device.ok("apply")
     Path(f"{device.rcc}.failed").write_text("")
     device.ok("restore")
+    assert device.ok("apply")["qt5_overlay"] == "failed"
+    assert device.ok("restore-all")["qt5_overlay"] == "off"
     assert device.ok("apply")["qt5_overlay"] == "active"
 
 

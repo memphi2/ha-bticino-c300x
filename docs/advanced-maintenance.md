@@ -159,13 +159,20 @@ display then has the same buttons and pages as on `1.7.x` and `2.0.2`. The
 touch fix for lost taps is not part of it; it changes a Qt 4 library that
 `3.0.6` does not have.
 
-- **Turning it off:** switch the Display patch off or remove the agent. Both
-  put the vendor start script back as it was, and the display starts as
-  shipped.
+- **Turning it off:** switching the Display patch off removes the optional
+  pages, but retains the core hooks. Removing the agent restores the vendor
+  start script and removes the complete overlay.
 - **When the display fails with the pages:** if the display ends with an error
   within a minute of a start with the pages, it is started again as shipped,
   and the Display patch status reads **applied, but the display started as
-  shipped**. Switching the Display patch off and on again tries once more.
+  shipped**. Updates and switching the optional pages off and on do not clear
+  this quarantine. After investigating the error, an explicit full removal
+  (`qml_patch.sh restore-all`) followed by an apply can retry it. Full removal
+  also removes the core hooks; use the installer or Repair to apply them again.
+- **Interrupted changes:** failed activation or restore rolls back the display
+  resources, startup wrapper, preload library and quarantine state together.
+  If rollback cannot finish, recovery files are retained and the overlay stays
+  blocked. Do not delete recovery files or quarantine to force a GUI restart.
 - **What to report:** the Display patch status, the integration diagnostics
   and, if you can reach the device, `/tmp/c300x-display-qt5.log` (the display's
   error output, at most 64 KB, cleared by a restart of the device).

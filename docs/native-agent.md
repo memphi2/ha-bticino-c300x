@@ -335,8 +335,14 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   (`display-qt5.rcc.failed`, status `qt5_overlay: failed`) and starts as
   shipped. Started with the overlay, the display's error output, where Qt
   reports QML errors, goes to `/tmp/c300x-display-qt5.log` (at most 64 KB).
-  Restoring the patch puts the vendor start script back. Not yet tested on a
-  3.0.6 device.
+  Full removal (`restore-all`) puts the vendor start script back. A partial
+  restore keeps the overlay for the remaining core hooks or user label.
+  Activation changes preserve the resource file, preload library, wrapper,
+  original wrapper backup and quarantine marker as one rollback unit. A
+  failed rollback retains its recovery copies and leaves the overlay blocked.
+  Updates and partial restores never clear quarantine; full removal followed
+  by an explicit apply is required to retry. Not yet tested on a 3.0.6 device;
+  process presence is not proof of QML readiness or watchdog safety.
 - Its `bt_av_media` sends only the low-resolution video stream on to other
   receivers. The camera is fixed to that stream there
   (`video.av.highResolution: false`), and the Camera resolution entity is not

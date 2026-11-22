@@ -15,6 +15,11 @@ Display:
   not start with the pages, it starts as shipped and the Display patch status
   reads **applied, but the display started as shipped**. The touch fix for lost
   taps is not part of it on 3.0.6.
+- **Display recovery:** activation and restore retain the previous resources,
+  startup wrapper, preload library and quarantine state for rollback. Failed
+  overlays remain disabled through updates and partial restores; retrying
+  requires an explicit full removal and apply after investigating the error.
+  Offline fault injection does not establish device or watchdog safety.
 
 ## v2.8.2 - 2026-11-22
 

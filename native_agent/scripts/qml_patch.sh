@@ -394,11 +394,7 @@ finish_write_action() {
             fi
         done
         if [ "${QT5_PUBLISHED:-0}" = "1" ]; then
-            if [ -f "$WRITE_TRANSACTION/.display-qt5.rcc" ]; then
-                mv -f "$WRITE_TRANSACTION/.display-qt5.rcc" "$QT5_RCC" || recovery_ok=0
-            else
-                rm -f "$QT5_RCC" || recovery_ok=0
-            fi
+            qt5_transaction_restore
         fi
     fi
     if [ "$recovery_ok" = "1" ]; then
@@ -454,6 +450,7 @@ run_write_action() {
             cp -p "$transaction_source" "$WRITE_TRANSACTION/$transaction_rel"
         fi
     done
+    qt5_transaction_save
     WRITE_TRANSACTION_READY=1
     "$@"
     qt5_publish
@@ -1315,7 +1312,7 @@ qt5_overlay_state() {
 
 # The vendor start script with the overlay ahead of the plain start. A display
 # that ends with an error within a minute of starting with the overlay marks it
-# failed and starts as shipped; the next change of the patch clears the mark.
+# failed and starts as shipped; only removing the entire overlay clears it.
 # Its error output, where Qt reports QML errors, goes to a log of at most 64 KB.
 qt5_wrapper_text() {
     awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" -v errlog="$QT5_LOG" '
@@ -1369,6 +1366,59 @@ qt5_wrapper_restore() {
     mv -f "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"
 }
 
+qt5_artifact_path() {
+    case "$1" in
+        rcc) qt5_target="$QT5_RCC" ;;
+        wrapper) qt5_target="$GUI_WRAPPER" ;;
+        library) qt5_target="$QT5_OVERLAY_LIB" ;;
+        original) qt5_target="$QT5_WRAPPER_BACKUP" ;;
+        failed) qt5_target="$QT5_RCC.failed" ;;
+    esac
+}
+
+qt5_transaction_save() {
+    [ "$QT5_DISPLAY" = "1" ] || return 0
+    mkdir "$WRITE_TRANSACTION/.qt5"
+    for qt5_artifact in rcc wrapper library original failed; do
+        qt5_artifact_path "$qt5_artifact"
+        if [ -L "$qt5_target" ] || { [ -e "$qt5_target" ] && [ ! -f "$qt5_target" ]; }; then
+            printf 'Unsupported display activation file: %s\n' "$qt5_target" >&2
+            return 1
+        fi
+        if [ -f "$qt5_target" ]; then
+            cp -p "$qt5_target" "$WRITE_TRANSACTION/.qt5/$qt5_artifact"
+        fi
+    done
+}
+
+qt5_restore_artifact() {
+    qt5_artifact_path "$1"
+    qt5_saved="$WRITE_TRANSACTION/.qt5/$1"
+    if [ -f "$qt5_saved" ]; then
+        # The wrapper may live on another filesystem. Keep the recovery copy
+        # until every artifact is restored; rename only beside the destination.
+        qt5_recovery="$qt5_target.c300x-recovery.$$"
+        if ! (umask 077; set -C; : > "$qt5_recovery") \
+            || ! cp -p "$qt5_saved" "$qt5_recovery" \
+            || ! mv -f "$qt5_recovery" "$qt5_target"; then
+            return 1
+        fi
+    else
+        rm -f "$qt5_target" || return 1
+    fi
+}
+
+qt5_transaction_restore() {
+    # A restart during recovery must not load a mixture of old and new files.
+    : > "$QT5_RCC.failed" || recovery_ok=0
+    for qt5_artifact in rcc library original wrapper; do
+        qt5_restore_artifact "$qt5_artifact" || recovery_ok=0
+    done
+    if [ "$recovery_ok" = "1" ]; then
+        qt5_restore_artifact failed || recovery_ok=0
+    fi
+}
+
 # Every file that differs from the firmware's, back in Qt 5 form, into the
 # resource file; with none left the start script is the vendor one again.
 qt5_publish() {
@@ -1394,15 +1444,14 @@ qt5_publish() {
         qt5_files="$qt5_files $rel"
     done
     rm -f "$qt5_stage/.original"
-    if [ -f "$QT5_RCC" ]; then
-        cp -p "$QT5_RCC" "$WRITE_TRANSACTION/.display-qt5.rcc"
-    fi
     QT5_PUBLISHED=1
+    : > "$QT5_RCC.failed"
     if [ -z "$qt5_files" ]; then
         rm -rf "$qt5_stage"
-        rm -f "$QT5_RCC" "$QT5_RCC.failed"
+        rm -f "$QT5_RCC"
         qt5_wrapper_restore
         rm -f "$QT5_OVERLAY_LIB"
+        rm -f "$QT5_RCC.failed"
         return
     fi
     qt5_result="$("$AGENT_BIN" --display-qt5 pack "$qt5_stage" "$QT5_RCC" $qt5_files 2>/dev/null || true)"
@@ -1414,7 +1463,6 @@ qt5_publish() {
             return 1
             ;;
     esac
-    rm -f "$QT5_RCC.failed"
     qt5_result="$("$AGENT_BIN" --display-qt5 overlay "$QT5_OVERLAY_LIB" 2>/dev/null || true)"
     case "$qt5_result" in
         *'"ok":true'*) ;;
@@ -1424,6 +1472,11 @@ qt5_publish() {
             ;;
     esac
     qt5_wrapper_install
+    if [ -f "$WRITE_TRANSACTION/.qt5/failed" ]; then
+        cp -p "$WRITE_TRANSACTION/.qt5/failed" "$QT5_RCC.failed"
+    else
+        rm -f "$QT5_RCC.failed"
+    fi
 }
 
 cleanup_staging() {

@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.8.3 - Unreleased
+
+Fixed:
+
+- Camera controls stay inactive when their camera is unavailable. Pending
+  microphone and answer requests are cancelled when the camera disappears or
+  the Ring Call ends, without interrupting a newer session.
+- UDP talkback accepts media only from a live, playing RTSP peer. Unsolicited
+  packets and packets from closed or parked sessions are discarded.
+  Needs the agent update.
+- Applying the routing patch verifies the complete supported firmware image
+  before changing it or its recovery copy. Needs the agent update.
+- Media-user setup preserves unrecognized active routing files and reports
+  unsupported routing instead of claiming readiness. Supported internal and
+  smartphone forwarding modes remain distinct. Needs the agent update.
+
+Settings:
+
+- Camera quality has shorter descriptions, retaining the device-restart warning
+  and explaining that available sizes depend on the installed device agent.
+
 ## v2.8.2 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

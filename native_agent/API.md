@@ -1051,6 +1051,12 @@ Returns non-sensitive Flexisip device-user and routing status. Important fields:
 The endpoint must derive the local SIP/domain state from device files. It must
 not hardcode device-specific SIP domains or account ids.
 
+An active route must use the recognized internal or external route symlink.
+An unrecognized link or regular active-route file reports `supported: false`,
+`routes_consistent: false` and `unsupported_active_route`. Internal readiness
+requires the HA destination in the active route; external forwarding deliberately
+excludes it.
+
 ### `POST /api/v1/maintenance/device-user/actions/ensure-homeassistant`
 
 Authentication: maintenance.
@@ -1068,6 +1074,11 @@ Request fields:
 ```
 
 `account_label` is optional.
+
+Unrecognized active routing is rejected before modifying routing binaries or SIP
+files. Applying the binary patch requires a complete known firmware hash, not
+only matching instruction ranges. These checks do not authorize replacing
+third-party routing files with stock configuration.
 
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 

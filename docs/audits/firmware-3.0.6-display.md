@@ -86,7 +86,7 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 | Backups/modes/ownership | **F/H** exact wrapper bytes and copied-tree mode/UID/GID restored; QML backups and unsafe-file checks exercised | Extracted-tree ownership is not evidence of on-device ownership or mount behavior |
 | Unchanged apply | **H** deterministic RCC, current embedded preload, wrapper comparison; missing/stale artifacts repaired | A running PID is not a QML-ready handshake |
 | Optional/core/label removal | **F/H** real core, label, full apply, optional restore and restore-all sequence; complete removal restores wrapper and removes overlay | Confirm native stock screen after removal: **D** |
-| Early startup failure | **H** wrapper failure/log/quarantine fixtures; bounded 64 KiB log | Only errors within 60 seconds qualify; exits 0,137,138,140,143, later exits and hangs are not a general watchdog recovery mechanism |
+| Early startup failure | **F/H** original wrapper under original ARM Bash 5.1.16 and host Bash; stock controls and bounded-log fixtures | Only errors within 60 seconds qualify; exits 0,137,138,140,143, later exits and hangs are not a general watchdog recovery mechanism |
 | Quarantine recovery | **H** updates and partial restore retain `.failed`; full removal precedes explicit retry | Diagnose actual Qt error and persistent marker before retry: **D** |
 | GUI versus agent restart | **H/static** agent restart does not reload mapped QML; maintenance reload goes through `qml_patch.sh reload`; post-update applies/reconciles and reloads separately | Vendor supervision and duplicate-start races on real firmware: **D** |
 | Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off, pending follow-up retained on failure | Complete update/reconnect on firmware: **D** |
@@ -136,6 +136,36 @@ observed alert-requested ScreenOff-to-Normal transition and relinquished on
 interaction. The firmware metadata confirms the API surface, **not** audible
 behavior, asynchronous wake cancellation or a real 30/30-second result.
 Native alert acceptance is transport acceptance, not proof of wake or sound.
+
+The follow-up executes the package-stripped alert controller in original ARM
+**QJSEngine/QtQml 5.15.7**, without a GUI or vendor plugin. The test covers
+0/30/300-second budgets, preemption, destruction, user interaction, delayed
+native-wake replies, synchronous preemption before beep, protected pages, clock
+rollback and pre-existing screen ownership. It reports `ALERT_LIFECYCLE_OK`.
+This closes the pure-JS engine gap, not the substituted audio/screen IO or
+vendor-signal delivery gap. Node tests still cover the QML transport boundary.
+
+### Startup Guard Boundary
+
+The guard is **startup-only**, not general reboot-loop protection. An abnormal
+exit after 60 seconds, including a crash from a lazy-loaded page, does not
+quarantine the overlay. Exit codes 0, 137, 138, 140 and 143 are excluded even
+during startup. In particular, 137/SIGKILL may mean OOM or watchdog termination;
+it is not evidence of an intentional restart. Hangs and successful exit after
+an ignored preload are not detected by this guard either. No policy expansion
+was made in this follow-up.
+
+Forty wrapper probes compare stock and patched wrappers under host Bash and
+the original firmware `/bin/sh` (a link to `/bin/bash.bash`, Bash 5.1.16).
+Only a harmless child runs; `local_alpha` and name-based signalling are
+substituted. Early abnormal exit falls back to stock and creates quarantine;
+excluded and late exits do not. SIGUSR1/2 reach the child and do not introduce
+an extra launch. Both stock and patched wrappers return 2 under this POSIX Bash
+probe on SIGTERM because the vendor trap uses bare `trap SIGTERM`; this is
+retained vendor behavior, not an integration repair. Stock `wait` returns 0
+after the child exits, while the patched wrapper propagates excluded/late exit
+codes. The supervisor's response to those codes remains a device-only gap.
+`qt5_overlay=active` describes installed artifacts, not an alive or ready GUI.
 
 ## Restoration Addendum
 
@@ -195,6 +225,7 @@ regression cases failed before correction, including eight using original
 the QML files, restores the stock wrapper and removes RCC/preload/quarantine.
 Partial restore and the activation rollback remain unchanged. Regression:
 `tests/test_qml_patch_qt5_recovery.py`, including rollback after reload failure.
+Fixed in `3dfd7cbb`; its initial focused recovery/rollback group passed 106 tests.
 
 **P1, baseline `3dfd7cbb`, `native_agent/scripts/qml_patch.sh:1367`:** wrapper
 restore checked only that a backup file existed. Empty, syntactically invalid,
@@ -214,6 +245,15 @@ successful-but-corrupt copy/rename and rw/ro remount failures. Failed recovery
 restores prior activation artifacts and keeps backups. A final ro-remount
 failure occurs after the new state is committed: it returns failure and keeps
 original backups, but does not claim to roll back that already-committed state.
+Fixed in `a052ff3b`. The follow-up Qt5 recovery/transaction/reconciliation/
+overlay/packer group passed 147 tests, with 15 additional focused identity and
+corrupt-copy cases and 17 original 3.0.6 removal/HTTP cases. These groups overlap
+earlier runs; do not sum them into a unique full-suite result. Forty wrapper
+lifecycle cases and three alert cases (one original QtQml, two host JS/QML
+transport fixtures) passed separately. A private 1.7.19 patch/restore round-trip
+and 23 selected Qt5 HA activation/update-follow-up cases passed too. Build-lock
+regeneration and the final candidate build are coordinated separately; these
+tests do not certify that an older staged binary contains wrapper-check.
 
 ## Focused Reproduction
 
@@ -237,6 +277,20 @@ The compile log records `FIRMWARE_QT_VERSION=5.15.7`, fifteen
 `COMPILE_STATUS=1` lines and `COMPILE_FAILURES=0`. To reproduce the old RCC
 failure, supply a pre-fix ARM overlay through `C300X_QT5_TEST_OVERLAY` to the
 resource tests. Never run the malformed resources in a device GUI.
+
+Follow-up reproduction (same private firmware environment, fresh temporary
+directories):
+
+```sh
+"$PYTHON" -m pytest -q tests/test_qml_patch_qt5_recovery.py tests/test_qt5_wrapper_identity.py
+"$PYTHON" -m pytest -q tests/test_qt5_firmware_wrapper_lifecycle.py
+"$PYTHON" -m pytest -q tests/test_qt5_firmware_alert_lifecycle.py
+```
+
+The original-QtQml runtime probe emits `FIRMWARE_QT_VERSION=5.15.7`,
+`JS_RESULT=ALERT_LIFECYCLE_OK`, `JS_ERROR=0`. The wrapper helper rejects unknown
+content with `display_wrapper_unknown`; tests require nonzero restore exit and
+unchanged recovery artifacts on failed restoration, not merely a diagnostic.
 
 ## Before Merge On Devices
 

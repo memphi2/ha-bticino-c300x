@@ -5252,6 +5252,7 @@ static void api_capabilities(
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
         .camera_resolution_fixed = c300x_device_camera_resolution_fixed(),
+        .display_patchable = c300x_device_display_files_patchable(),
         .announcements_supported = runtime != NULL && c300x_announce_supported(&runtime->announce),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),

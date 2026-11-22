@@ -1657,6 +1657,9 @@ int c300x_load_config(
          * offer, so its maintenance actions are not advertised either. */
         config->maintenance_qml_patch_enabled = 0;
     }
+    if (!c300x_device_display_restartable()) {
+        config->maintenance_gui_reload_enabled = 0;
+    }
     if (config->maintenance_qml_patch_enabled && config->maintenance_qml_patch_script[0] == '\0') {
         set_error(error, error_len, "maintenance.qmlPatch.script must be set when enabled");
         return 0;

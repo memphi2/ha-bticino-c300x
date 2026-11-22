@@ -67,5 +67,8 @@ int main(void)
     context.announcements_supported = 1;
     assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
     fputs(body, stdout);
+    context.display_patchable = 1;
+    assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
+    fputs(body, stdout);
     return 0;
 }

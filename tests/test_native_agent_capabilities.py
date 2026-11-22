@@ -22,7 +22,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
     )
     result = subprocess.run([str(binary)], check=True, capture_output=True, text=True)
     documents = [json.loads(line) for line in result.stdout.splitlines()]
-    assert len(documents) == 5
+    assert len(documents) == 6
     for index, document in enumerate(documents[:4]):
         caps = document["capabilities"]
         pcmu = bool(index % 2)
@@ -56,6 +56,10 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
             "temperature": True, "watch": True, "sample_interval_seconds": 30,
             "heartbeat_seconds": 600, "change_percent": 5,
         }
+        # A display without patchable files has no key beep, alerts or bridge.
+        assert caps["touch_tone"] == {"supported": False, "requires_display_patch": True}
+        assert caps["display_alerts"] is False
+        assert caps["display_bridge"] == {"supported": False, "configurable": False, "configured": True}
     for offset in (0, 2):
         speex = documents[offset]
         pcmu = documents[offset + 1]
@@ -71,6 +75,13 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
     assert disabled["system_metrics"]["watch"] is False
     assert disabled["answering_machine"]["messages"]["supported"] is False
     assert disabled["answering_machine"]["messages"]["watch"] is False
+    patchable = documents[5]["capabilities"]
+    assert patchable["touch_tone"] == {"supported": True, "requires_display_patch": True}
+    assert patchable["display_alerts"] is True
+    assert patchable["display_bridge"] == {"supported": True, "configurable": True, "configured": True}
+    for feature in ("touch_tone", "display_alerts", "display_bridge"):
+        disabled[feature] = patchable[feature]
+    assert disabled == patchable  # Nothing else follows the display.
 
 
 def test_capabilities_reads_running_video_codec_without_firmware_probe() -> None:

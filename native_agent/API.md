@@ -297,7 +297,10 @@ Important top-level fields:
 - `device.display_kind`: `qt4_ondisk` (C300X 1.7.x/2.0.x), `qt5_rcc` (C300X
   3.0.x, display files built into the program) or `qt5_ondisk` (C100X)
 - `device.firmware`
-- `capabilities`
+- `capabilities`. `touch_tone`, `display_alerts` and `display_bridge` are
+  supported only on a display whose files the Display patch can edit, the
+  `qt4_ondisk` display so far. `maintenance.gui_reload` is not offered on the
+  C100X, whose display program the agent does not restart.
 
 ### `GET /api/v1/state`
 

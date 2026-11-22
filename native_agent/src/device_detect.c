@@ -67,6 +67,11 @@ const char *c300x_device_sip_user(void)
     return c300x_device_model() == C300X_DEVICE_MODEL_C100X ? "c100x" : "c300x";
 }
 
+int c300x_device_display_restartable(void)
+{
+    return c300x_device_model() == C300X_DEVICE_MODEL_C300X;
+}
+
 int c300x_device_display_files_patchable(void)
 {
     return c300x_device_display_kind() == C300X_DISPLAY_QT4_ONDISK;

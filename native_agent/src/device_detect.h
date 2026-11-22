@@ -35,6 +35,10 @@ const char *c300x_device_sip_user(void);
  * so far; the C100X files are on disk but not patched yet. */
 int c300x_device_display_files_patchable(void);
 
+/* The display program can be restarted: BtClass of the C300X, on every
+ * firmware. The C100X's program is another one. */
+int c300x_device_display_restartable(void);
+
 /* The firmware version: the configured one, else <ver_webserver> of the
  * vendor web server's database, which the installer relies on. Empty when
  * neither is there. */

@@ -53,6 +53,7 @@ def config_probe(tmp_path_factory):
         if display_patch:
             config["maintenance"]["adminToken"] = "admin"
             config["maintenance"]["qmlPatch"] = {"enabled": True, "script": "/data/qml_patch.sh"}
+            config["maintenance"]["guiReload"] = {"enabled": True, "script": "/data/qml_patch.sh"}
         path = folder / "config.json"
         path.write_text(json.dumps(config), encoding="utf-8")
         command = [str(binary), str(path)] + ([] if save is None else [str(int(save))])
@@ -96,6 +97,8 @@ def test_the_agent_names_the_model_and_display_of_each_firmware(config_probe, qt
     # Only the Qt 4 display gets the Display patch so far; the Qt 5 firmwares
     # send only the low stream.
     assert answer["files_patchable"] == answer["display_patch"] == int(not qt5)
+    # The display program is restarted on every C300X, never on the C100X.
+    assert answer["restartable"] == answer["gui_reload"] == int(model == "C300X")
     assert answer["resolution_fixed"] == int(qt5)
     assert answer["high_resolution"] == int(not qt5)
 

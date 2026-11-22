@@ -35,7 +35,9 @@ def engine_language(hass: HomeAssistant, engine: str | None, language: str) -> s
     try:
         # Loaded only when used: text-to-speech is an optional part of Home Assistant.
         from homeassistant.components import tts  # noqa: PLC0415
-        from homeassistant.components.tts.helper import get_engine_instance  # noqa: PLC0415
+        from homeassistant.components.tts.helper import (
+            get_engine_instance,  # noqa: PLC0415
+        )
 
         resolved = tts.async_resolve_engine(hass, engine)
         instance = get_engine_instance(hass, resolved) if resolved is not None else None

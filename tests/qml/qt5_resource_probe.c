@@ -20,12 +20,23 @@ int main(int argc, char **argv)
     extern char **environ;
     environ = argv + argc + 1;
     setbuf(stdout, NULL);
-    if (argc != 3) return 2;
+    if (argc != 3 && argc != 4) return 2;
     void *core = dlopen("libQt5Core.so.5", RTLD_NOW | RTLD_GLOBAL);
     if (core == NULL) { fprintf(stderr, "%s\n", dlerror()); return 2; }
     printf("FIRMWARE_QT_VERSION=%s\n", ((const char *(*)(void))symbol(core, "qVersion"))());
     if (dlopen(argv[1], RTLD_NOW | RTLD_GLOBAL) == NULL) {
         fprintf(stderr, "%s\n", dlerror()); return 2;
+    }
+    if (argc == 4) {
+        /* Pinned 3.0.6 resource tables, checked by the Python test's hash.
+         * Register data only, never load or execute the vendor program. */
+        FILE *file = fopen(argv[3], "rb");
+        unsigned char *vendor = malloc(2799088);
+        if (file == NULL || vendor == NULL || fread(vendor, 1, 2799088, file) != 2799088) return 2;
+        fclose(file);
+        int ok = ((int (*)(int, const void *, const void *, const void *))
+            symbol(core, "_Z21qRegisterResourceDataiPKhS0_S0_"))(2, vendor + 0x35c6c, vendor + 0x3672c, vendor + 0x3791c);
+        printf("VENDOR_RESOURCES_REGISTERED=%d\n", ok);
     }
     void *path = calloc(1, 65536), *locale = calloc(1, 65536), *resource = calloc(1, 65536);
     if (path == NULL || locale == NULL || resource == NULL) return 2;

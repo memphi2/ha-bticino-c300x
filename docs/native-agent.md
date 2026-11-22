@@ -347,6 +347,10 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   is disabled, so unchanged resources compare byte-for-byte without a restart.
   Runtime-only updates reconcile the preload even with optional pages disabled.
   `qt5_overlay: incomplete` means activation files are missing or incomplete.
+  The preload checks every node/name/payload boundary of the generated v2 RCC
+  before giving pointers to Qt. Rejected resources are quarantined and the
+  stock resources remain available. See the [firmware display audit](audits/firmware-3.0.6-display.md)
+  for original-library evidence, the per-path matrix and device-only gaps.
   Not yet tested on a 3.0.6 device;
   process presence is not proof of QML readiness or watchdog safety.
 - Its `bt_av_media` sends only the low-resolution video stream on to other

@@ -184,6 +184,8 @@ int c300x_announce_prepare(const struct c300x_announce *announce, struct pollfd 
 /* The job has ended: the sound's result, then the switching off it needs. */
 static void job_over(struct c300x_announce *announce, int cleaned, int ending)
 {
+    int exit_status = announce->job.exit_status;
+
     if (!cleaned) {
         int gain = c300x_announce_read_gain(announce->job.output);
         announce->gain = gain >= 0 ? gain : announce->gain;
@@ -195,8 +197,10 @@ static void job_over(struct c300x_announce *announce, int cleaned, int ending)
     announce->cleaning = 0;
     announce->ending = 0;
     announce->door_hold = ending == PREEMPTED;
-    /* Done, or nothing was switched because the device had its speaker in use. */
-    if ((cleaned && ending != PREEMPTED) || (!cleaned && strcmp(announce->result, "device_busy") == 0)) {
+    /* Done, or nothing was switched because the device had its speaker in use.
+     * A switching off that gave up waiting for the device starts again. */
+    if ((cleaned && ending != PREEMPTED && exit_status == 0)
+        || (!cleaned && strcmp(announce->result, "device_busy") == 0)) {
         /* A finished switching off has set the gain back: a later one leaves it alone. */
         announce->gain = cleaned ? -1 : announce->gain;
         return;

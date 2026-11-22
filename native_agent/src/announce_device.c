@@ -32,15 +32,16 @@ const char C300X_ANNOUNCE_PLAY_SCRIPT[] =
 
 /* After every sound the speaker is muted, the amplifier off and the gain as
  * before. While the device's software has a state of its own or plays itself,
- * the speaker is its: switching off waits until the device is idle again, at
- * most ten minutes. Its sound driver sets the state to off by itself when a
- * playing ends. */
+ * the speaker is its: switching off waits until the device is idle again, ten
+ * minutes at a time, and says so when it gave up. Its sound driver sets the
+ * state to off by itself when a playing ends. */
 const char C300X_ANNOUNCE_CLEAN_SCRIPT[] =
     TOOLS
     "sleep \"$2\"\n"
     "n=0\n"
     "until case \"$(val Zia_Aud_St)\" in 0|9) grep -q closed \"$S\";; *) false;; esac; do\n"
-    "n=$((n + 1)); [ \"$n\" -lt 300 ] || exit 0; sleep \"${C300X_ANNOUNCE_IDLE_POLL:-2}\"\n"
+    "n=$((n + 1)); [ \"$n\" -lt \"${C300X_ANNOUNCE_IDLE_CHECKS:-300}\" ] || exit 6\n"
+    "sleep \"${C300X_ANNOUNCE_IDLE_POLL:-2}\"\n"
     "done\n"
     "put 'ZL0 Mute Rout' on; put 'TPA2028D1 Volume' 0\n"
     "[ -z \"$3\" ] || put 'ZL0 Rout Gain Volume' \"$3\"\n"

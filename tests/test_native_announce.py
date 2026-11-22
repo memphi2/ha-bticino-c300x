@@ -65,6 +65,8 @@ RING = "*8*1#1#4#21*10##"
 # Seconds the agent leaves the speaker to the device after a ring, in the tests.
 RING_HOLD = 5
 CAMERA_VIEW = "*8*1#5#4#21*10##"
+# Looks at the device before a switching off gives up and starts again, in the tests.
+IDLE_CHECKS = 10
 CALL_END = "*8*3#1#4*21##"
 
 
@@ -203,7 +205,8 @@ def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterato
            "C300X_PCM_STATUS": str(tmp_path / "pcm-status"),
            "C300X_ANNOUNCE_FILE": str(tmp_path / "announce.wav"),
            # Short stand-ins for the minute after a ring and the switch-off's look at the device.
-           "C300X_ANNOUNCE_RING_HOLD": str(RING_HOLD), "C300X_ANNOUNCE_IDLE_POLL": "0.2"}
+           "C300X_ANNOUNCE_RING_HOLD": str(RING_HOLD), "C300X_ANNOUNCE_IDLE_POLL": "0.2",
+           "C300X_ANNOUNCE_IDLE_CHECKS": str(IDLE_CHECKS)}
     with (tmp_path / "agent.log").open("w") as log:
         def start() -> subprocess.Popen[bytes]:
             return subprocess.Popen([str(binary), "--config", str(tmp_path / "config.json")],
@@ -339,6 +342,21 @@ def test_after_a_door_frame_without_a_call_the_speaker_is_switched_off(lab: Lab)
     # The device had three seconds to take its speaker.
     assert time.monotonic() - started > 2.5
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
+
+
+def test_a_switching_off_that_gave_up_waiting_for_the_device_starts_again(lab: Lab) -> None:
+    lab.start_long_sound()
+    # The door call keeps the device busy longer than one switching off waits.
+    lab.mixer("Zia_Aud_St", "3")
+    send_udp_event(lab.udp_port, CAMERA_VIEW)
+    time.sleep(3 + 2 * IDLE_CHECKS * 0.2 + 1)
+    assert "mixer ZL0_Mute_Rout=on" not in lab.log()[-4:]
+
+    # The call is over; the sound state of the killed player is left.
+    lab.mixer("Zia_Aud_St", "9")
+    lab.wait_for("mixer Zia_Aud_St=0", seconds=IDLE_CHECKS * 0.2 + 3)
+    assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
+    assert lab.result() == "preempted"
 
 
 def test_after_a_ring_the_speaker_is_left_to_the_device_for_its_pauses(lab: Lab) -> None:

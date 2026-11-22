@@ -1,6 +1,7 @@
 import QtQuick 2.7
 import "js/c300x_ha.js" as Api
 import "js/c100x_ringer.js" as Ringer
+import "js/c100x_presence.js" as Presence
 
 Item {
     id: bridge
@@ -11,6 +12,9 @@ Item {
     property bool running: false
     property bool stopped: false
     property var ringer: null
+    property var presence: null
+    property string generation: ""
+    property alias presenceRetry: presenceTimer
     property string language: Qt.locale().name
     property var preferences: bridge
     readonly property bool vendorReady: !!vendor && !!events && muteState >= 0 && commissionedState >= 0
@@ -46,6 +50,7 @@ Item {
     }
     function reconnectRinger() { if (!stopped && running && !blocked) ringerRetry.restart() }
     function sync() {
+        if (presence) presence.sync()
         if (!ringer) return
         ringerRetry.stop()
         if (!running || stopped || blocked) {
@@ -57,15 +62,19 @@ Item {
         }
     }
     onBlockedChanged: sync()
+    onVendorReadyChanged: sync()
+    onGenerationChanged: sync()
     onRunningChanged: sync()
     onTouchToneEnabledChanged: if (!applyingTouchTone && !stopped && running && !blocked) toneReport.restart()
     Timer { id: ringerRetry; interval: 30000; onTriggered: if (bridge.ringer) bridge.ringer.start() }
+    Timer { id: presenceTimer; interval: 1000; onTriggered: if (bridge.presence) bridge.presence.start() }
     Timer { id: toneRetry; interval: 30000; onTriggered: if (bridge.running && !bridge.blocked) Api.watchTouchTone(bridge) }
     Timer { id: toneReport; interval: 0; onTriggered: Api.reportTouchTone(bridge) }
     Timer { id: toneDeadline; interval: 5000; onTriggered: Api.retryTouchTone(bridge) }
     Timer { id: preferenceDeadline; interval: 5000; onTriggered: Api.cancelDisplayPreferences(bridge) }
     Component.onCompleted: {
         ringer = Ringer.create(bridge)
+        presence = Presence.create(bridge)
         sync()
     }
     Component.onDestruction: {
@@ -73,6 +82,7 @@ Item {
         ringerRetry.stop()
         toneReport.stop()
         if (ringer) ringer.stop()
+        if (presence) presence.stop()
         Api.stopTouchTone(bridge)
         Api.cancelDisplayPreferences(bridge)
     }

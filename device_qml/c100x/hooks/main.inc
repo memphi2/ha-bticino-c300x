@@ -26,6 +26,7 @@
             item.events = eventManager
             item.muteState = AudioState.RingtoneMute
             item.commissionedState = Commissioning.Commissioned
+            item.generation = "@RELEASE@".substring(7)
             item.running = true
         }
     }

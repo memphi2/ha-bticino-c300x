@@ -117,6 +117,16 @@ restart/readiness/automatic rollback, Notify and memo integration remain
 incomplete. The script reports `runtime_verified: false`;
 successful disk installation alone must not enable a capability.
 
+The bridge now holds a generation-bound sleeping connection to the native
+C100X-only loopback presence endpoint. It reports the vendor guard, cancels on
+guard/generation changes and disconnect, and renews once per minute. The native
+side expires stale sockets, rejects duplicates/cross-origin/non-loopback input,
+and checks the exact generation requested by an observer. A live blocked GUI
+is distinguished from an idle one. This introduces no periodic disk writes.
+Presence explicitly reports `installation_verified: false`: it is one input
+to a future supervised transaction, not permission to restart or advertise
+display capabilities. Both previous reviewed hook recipes remain recoverable.
+
 This matrix is a target, not a declaration that every row works. Capability
 flags must stay false until the matching hook, command acknowledgement,
 state readback, transactional installation and rollback are implemented and

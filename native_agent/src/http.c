@@ -3,6 +3,7 @@
 #include "agent_update.h"
 #include "c300x_agent.h"
 #include "device_detect.h"
+#include "c100x_gui_presence.h"
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "http_maintenance.h"
@@ -220,6 +221,7 @@ struct agent_runtime {
     struct voicemail_runtime voice_memos;
     struct c300x_ui_events ui_events;
     struct c300x_touch_tone touch_tone;
+    struct c100x_gui_presence c100x_presence;
     struct c300x_display_alerts display_alerts;
     struct c300x_http_clients http_clients;
     struct c300x_http_file_transfers file_transfers;
@@ -9432,6 +9434,8 @@ static int handle_ui_request(
     const struct request *request
 )
 {
+    if (!strcmp(request->path, "/ui/c100x/presence/next") || !strcmp(request->path, "/ui/c100x/presence/status"))
+        return c100x_gui_presence_route(&runtime->c100x_presence, client_fd, request, client_is_loopback(client_fd));
     if (strcmp(request->path, "/ui/preferences") == 0) {
         handle_ui_preferences(client_fd, config, request);
         return 1;
@@ -9718,7 +9722,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C100X_GUI_PRESENCE_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     int udp_joined = 0;
@@ -9752,6 +9756,7 @@ int c300x_run(struct c300x_config *config)
     c300x_ui_events_init(&runtime->ui_events);
     c300x_ringer_control_init(&runtime->ringer_control);
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
+    c100x_gui_presence_init(&runtime->c100x_presence);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
     c300x_announce_init(&runtime->announce);
@@ -9849,6 +9854,7 @@ int c300x_run(struct c300x_config *config)
         int ui_event_poll_slots[C300X_UI_EVENT_MAX_WAITERS];
         int ringer_poll_index, ringer_poll_count;
         int touch_tone_poll_index;
+        int c100x_presence_poll_index;
         int display_alerts_poll_index;
         int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
@@ -9975,6 +9981,9 @@ int c300x_run(struct c300x_config *config)
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_touch_tone_prepare(&runtime->touch_tone, &poll_fds[poll_count]));
         poll_count += C300X_TOUCH_TONE_POLL_FDS;
+        c100x_presence_poll_index = (int)poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c100x_gui_presence_prepare(&runtime->c100x_presence, &poll_fds[poll_count++]));
         display_alerts_poll_index = (int)poll_count;
         (void)c300x_display_alerts_prepare(&runtime->display_alerts, &poll_fds[poll_count]);
         poll_count += C300X_DISPLAY_ALERTS_POLL_FDS;
@@ -10028,6 +10037,7 @@ int c300x_run(struct c300x_config *config)
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
         c300x_ringer_control_expire(&runtime->ringer_control);
         c300x_touch_tone_tick(&runtime->touch_tone, &poll_fds[touch_tone_poll_index]);
+        c100x_gui_presence_tick(&runtime->c100x_presence, &poll_fds[c100x_presence_poll_index]);
         c300x_display_alerts_tick(&runtime->display_alerts, &poll_fds[display_alerts_poll_index]);
         if (poll_fds[callback_poll_index].revents) {
             apply_callback_results(runtime, time(NULL));
@@ -10168,6 +10178,7 @@ cleanup:
         c300x_ui_events_close_all(&runtime->ui_events, ui_event_send_json, NULL);
         c300x_ringer_control_close(&runtime->ringer_control);
         c300x_touch_tone_close(&runtime->touch_tone);
+        c100x_gui_presence_close(&runtime->c100x_presence);
         c300x_display_alerts_close(&runtime->display_alerts);
         c300x_http_maintenance_close(&runtime->maintenance);
         c300x_openwebnet_async_close(&runtime->openwebnet);

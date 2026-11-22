@@ -66,6 +66,10 @@ Doorstation card:
   in the same form; the label in the corner and the time have no plate
   any more. The video controls are one row in a bar above the time, and the
   arrows stay at one height.
+- The picture takes the shape of the camera stream, so the 704x576 size
+  of **Camera quality** is shown whole and without bars. The browser
+  remembers the shape per camera, so the card does not jump when the next
+  stream starts.
 
 Settings:
 

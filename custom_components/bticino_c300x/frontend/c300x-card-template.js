@@ -23,7 +23,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           position: fixed;
           inset: 0;
           margin: auto;
-          width: min(96vw, 1280px, calc((94vh - 64px) * 688 / 480));
+          width: min(96vw, 1280px, calc((94vh - 64px) * var(--c300x-picture-ratio, 688 / 480)));
           height: fit-content;
           max-height: 94vh;
           container-type: inline-size;
@@ -40,7 +40,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           position: relative;
           width: 100%;
           flex: 1 1 auto;
-          aspect-ratio: 688 / 480;
+          aspect-ratio: var(--c300x-picture-ratio, 688 / 480);
           background: #111;
           min-height: 0;
         }

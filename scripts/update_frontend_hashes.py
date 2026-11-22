@@ -29,6 +29,7 @@ FRONTEND_MODULES = (
     "c300x-media-controls-template.js",
     "c300x-media-history.js",
     "c300x-media-translations.js",
+    "c300x-picture-frame.js",
     "c300x-ringback-tone.js",
     "c300x-ring-preview-state.js",
     "c300x-state-model.js",

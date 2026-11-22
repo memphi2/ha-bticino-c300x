@@ -49,6 +49,8 @@ struct qt5_image {
     const struct qt5_layout *layout;
 };
 
+#define QT5_MAX_SCAN_FILES 4096
+
 struct qt5_node {
     char name[QT5_MAX_NAME_LEN + 1];
     uint32_t hash;
@@ -237,6 +239,158 @@ static int inflate_resource(const unsigned char *source, size_t source_len, unsi
     return ok;
 }
 
+static uint32_t qt_hash(const char *name);
+
+/* The offsets of every file below the root, sorted; 0 when the tree is broken. */
+static size_t image_file_offsets(const struct qt5_image *image, uint32_t *offsets, size_t max)
+{
+    size_t stack_max = max * 2;
+    uint32_t *stack = malloc(stack_max * sizeof(*stack));
+    size_t depth = 0;
+    size_t count = 0;
+    size_t visited = 0;
+
+    if (stack == NULL) {
+        return 0;
+    }
+    stack[depth++] = 0;
+    while (depth > 0) {
+        const unsigned char *entry;
+        uint32_t index = stack[--depth];
+
+        if (++visited > stack_max || !image_entry(image, index, &entry)) {
+            free(stack);
+            return 0;
+        }
+        if (be16(entry + 4) & 2u) {
+            uint32_t children = be32(entry + 6);
+            uint32_t first = be32(entry + 10);
+            if (children > max || first + children < first) {
+                free(stack);
+                return 0;
+            }
+            for (uint32_t i = 0; i < children; i++) {
+                if (depth >= stack_max) {
+                    free(stack);
+                    return 0;
+                }
+                stack[depth++] = first + i;
+            }
+        } else {
+            uint32_t offset = be32(entry + 10);
+            size_t slot = count;
+            if (count >= max) {
+                free(stack);
+                return 0;
+            }
+            while (slot > 0 && offsets[slot - 1] > offset) {
+                offsets[slot] = offsets[slot - 1];
+                slot--;
+            }
+            offsets[slot] = offset;
+            count++;
+        }
+    }
+    free(stack);
+    return count;
+}
+
+/* rcc writes the files of a resource one after the other, each as its length
+ * and its bytes, from offset 0: the one place where that chain fits is the
+ * start of the data. */
+static int image_find_data(struct qt5_image *image, struct qt5_layout *layout)
+{
+    uint32_t *offsets = malloc(QT5_MAX_SCAN_FILES * sizeof(*offsets));
+    size_t count;
+    size_t found = 0;
+    size_t data = 0;
+
+    if (offsets == NULL) {
+        return 0;
+    }
+    count = image_file_offsets(image, offsets, QT5_MAX_SCAN_FILES);
+    if (count < 2 || offsets[0] != 0) {
+        free(offsets);
+        return 0;
+    }
+    for (size_t base = 0; base + 4 <= image->len && found < 2; base++) {
+        size_t i;
+        for (i = 0; i + 1 < count; i++) {
+            size_t at = base + offsets[i];
+            if (at > image->len - 4 || offsets[i + 1] - offsets[i] < 4
+                || be32(image->bytes + at) != offsets[i + 1] - offsets[i] - 4) {
+                break;
+            }
+        }
+        if (i + 1 == count && base + offsets[count - 1] <= image->len - 4
+            && be32(image->bytes + base + offsets[count - 1]) <= image->len - 4 - base - offsets[count - 1]) {
+            data = base;
+            found++;
+        }
+    }
+    free(offsets);
+    if (found != 1) {
+        return 0;
+    }
+    layout->data = data;
+    return 1;
+}
+
+/* For a BtClass whose hash is not known: the resource with the display files
+ * starts its names with "skins", so its tree has a root and a first entry
+ * that both name offset 0 and are folders. Taken only when exactly one
+ * tree in the program fits and holds every file asked for. */
+static int image_search(struct qt5_image *image, struct qt5_layout *layout, char **rels, int count)
+{
+    unsigned char skins[16];
+    int matches = 0;
+    struct qt5_layout candidate = {"", 0, 0, 0};
+    const char *name = "skins";
+
+    put16(skins, 5);
+    put32(skins + 2, qt_hash(name));
+    for (int i = 0; i < 5; i++) {
+        skins[6 + 2 * i] = 0;
+        skins[7 + 2 * i] = (unsigned char)name[i];
+    }
+    for (size_t names = 0; names + sizeof(skins) <= image->len; names++) {
+        if (memcmp(image->bytes + names, skins, sizeof(skins)) != 0) {
+            continue;
+        }
+        for (size_t tree = 0; tree + 2 * QT5_ENTRY_LEN <= image->len; tree++) {
+            const unsigned char *p = image->bytes + tree;
+            struct qt5_image trial;
+            int all = 1;
+
+            if (be32(p) != 0 || be16(p + 4) != 2u || be32(p + 10) != 1u
+                || be32(p + 22) != 0 || be16(p + 26) != 2u) {
+                continue;
+            }
+            candidate.tree = tree;
+            candidate.names = names;
+            trial = *image;
+            trial.layout = &candidate;
+            for (int i = 0; i < count && all; i++) {
+                char path[QT5_MAX_PATH_LEN];
+                const unsigned char *entry;
+                if (!valid_rel(rels[i])) {
+                    all = 0;
+                    break;
+                }
+                snprintf(path, sizeof(path), "%s%s", QT5_PREFIX, rels[i]);
+                all = image_find(&trial, path, &entry);
+            }
+            if (all && image_find_data(&trial, &candidate)) {
+                *layout = candidate;
+                if (++matches > 1) {
+                    return 0;
+                }
+            }
+        }
+    }
+    return matches == 1;
+}
+
 static const char *image_read(const struct qt5_image *image, const unsigned char *entry,
     unsigned char **out, size_t *out_len)
 {
@@ -321,6 +475,7 @@ static int extract(int argc, char **argv)
     struct qt5_image image = {0};
     const char *error = NULL;
     unsigned written = 0;
+    struct qt5_layout found = {"", 0, 0, 0};
 
     if (argc < 2) {
         return print_result(0, "invalid_arguments", 0);
@@ -340,12 +495,15 @@ static int extract(int argc, char **argv)
             image.layout = &qt5_layouts[i];
         }
     }
-    if (image.layout == NULL) {
-        free(bytes);
-        return print_result(0, "display_program_unknown", 0);
-    }
     image.bytes = bytes;
     image.len = len;
+    if (image.layout == NULL) {
+        if (!image_search(&image, &found, argv + 1, argc - 1)) {
+            free(bytes);
+            return print_result(0, "display_program_unknown", 0);
+        }
+        image.layout = &found;
+    }
     for (int i = 1; i < argc && error == NULL; i++) {
         char path[QT5_MAX_PATH_LEN];
         char target[QT5_MAX_PATH_LEN * 2];

@@ -323,7 +323,8 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   Qt resources. `qml_patch.sh` recognises it by `/usr/lib/libQt5Core.so.5` and
   then works on a copy in `display-qt5/` under the agent folder: the agent
   reads the six display files the patch changes out of `BtClass`
-  (`--display-qt5 extract`, only for the known 3.0.6 build), the patch runs on
+  (`--display-qt5 extract`: at the known table offsets of the 3.0.6 build, for
+  another build where exactly one resource tree with those files is found), the patch runs on
   them as on Qt 4, and every changed file is packed, back in Qt 5 form, into
   `display-qt5.rcc` (`--display-qt5 pack`). The start script `BtClass_qws`
   gets `c300x-qrc-overlay.so` preloaded (`native_agent/qt5/qrc_overlay.c`,

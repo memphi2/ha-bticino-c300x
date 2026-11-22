@@ -120,10 +120,31 @@ def test_extracts_the_named_files_of_a_known_program(cli: Path, vendor_program: 
     assert not (tmp_path / "out/images").exists()
 
 
-def test_an_unknown_program_is_not_read(cli: Path, vendor_program: Path, tmp_path: Path) -> None:
+def test_another_build_is_read_where_its_tables_are_found(cli: Path, vendor_program: Path, tmp_path: Path) -> None:
     other = tmp_path / "BtClass"
-    other.write_bytes(vendor_program.read_bytes() + b"\0")
-    assert _run(cli, "extract", tmp_path / "out", "MainApp.qml", program=other) == (
+    other.write_bytes(b"\0" * 37 + vendor_program.read_bytes() + b"\0")
+    assert _run(cli, "extract", tmp_path / "out", "MainApp.qml", "HomePage.qml", program=other) == (
+        0, {"ok": True, "files": 2},
+    )
+    assert (tmp_path / "out/MainApp.qml").read_bytes() == VENDOR["MainApp.qml"]
+
+
+@pytest.mark.parametrize("case", ["no_tables", "two_trees", "file_not_in_it"])
+def test_a_program_without_one_clear_match_is_not_read(
+    cli: Path, vendor_program: Path, tmp_path: Path, case: str
+) -> None:
+    body = vendor_program.read_bytes()
+    rel = "MainApp.qml"
+    if case == "no_tables":
+        body = b"\x7fELF" + bytes(4096)
+    elif case == "two_trees":
+        body = body + b"\0" * 11 + body
+    else:
+        body = b"\0" * 3 + body
+        rel = "Other.qml"
+    other = tmp_path / "BtClass"
+    other.write_bytes(body)
+    assert _run(cli, "extract", tmp_path / "out", rel, program=other) == (
         1, {"ok": False, "error": "display_program_unknown"},
     )
     assert not (tmp_path / "out").exists()

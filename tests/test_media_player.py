@@ -641,6 +641,19 @@ def test_sound_is_made_into_the_format_of_the_device(monkeypatch: pytest.MonkeyP
     assert command[command.index("-protocol_whitelist") + 1] == "http,https,tcp,tls,crypto"
 
 
+def test_a_live_source_has_the_time_of_the_longest_sound(monkeypatch: pytest.MonkeyPatch) -> None:
+    timeouts: list[float] = []
+
+    async def run(_command: list[str], *, command_timeout: float, **_kwargs: Any) -> bytes:
+        timeouts.append(command_timeout)
+        return b"\x01\x00" * 800
+
+    monkeypatch.setattr(announcements, "_async_run_ffmpeg_command", run)
+    asyncio.run(announcements.async_sound_for_device("https://radio.example/live"))
+    # A stream arrives as it plays: its longest sound must fit, with room to fetch it.
+    assert timeouts[0] > announcements.ANNOUNCEMENT_MAX_SECONDS
+
+
 def test_a_failed_conversion_does_not_tell_the_signature_or_password(monkeypatch: pytest.MonkeyPatch) -> None:
     url = "http://user:secret@ha:8123/media/local/x.mp3?authSig=signature"
 

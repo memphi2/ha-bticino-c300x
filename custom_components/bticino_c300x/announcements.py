@@ -12,6 +12,8 @@ from .ring_capture import _async_run_ffmpeg_command
 
 # The agent takes about two minutes; a spoken message is far shorter.
 ANNOUNCEMENT_MAX_SECONDS = 110
+# A live source arrives as it plays: the longest sound and a margin to fetch it.
+_CONVERT_SECONDS = ANNOUNCEMENT_MAX_SECONDS + 30
 ANNOUNCEMENT_DEFAULT_VOLUME = 0.6
 _RATE = 8000
 _MAX_ERROR_LENGTH = 300
@@ -39,7 +41,7 @@ async def async_sound_for_device(url: str) -> bytes:
                 "-i", url, "-vn", "-t", str(ANNOUNCEMENT_MAX_SECONDS),
                 "-af", _FILTER, "-ac", "1", "-ar", str(_RATE), "-f", "s16le", "-",
             ],
-            command_timeout=60,
+            command_timeout=_CONVERT_SECONDS,
             error_prefix="C300X announcement could not be converted",
             capture_stdout=True,
         )

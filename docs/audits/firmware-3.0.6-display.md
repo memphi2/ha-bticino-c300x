@@ -152,8 +152,9 @@ exit after 60 seconds, including a crash from a lazy-loaded page, does not
 quarantine the overlay. Exit codes 0, 137, 138, 140 and 143 are excluded even
 during startup. In particular, 137/SIGKILL may mean OOM or watchdog termination;
 it is not evidence of an intentional restart. Hangs and successful exit after
-an ignored preload are not detected by this guard either. No policy expansion
-was made in this follow-up.
+an ignored preload are not detected by this guard either. Startup-only recovery
+is the explicitly selected policy; late-crash quarantine is intentionally not
+added. The existing timing and signal behavior remains unchanged.
 
 Forty wrapper probes compare stock and patched wrappers under host Bash and
 the original firmware `/bin/sh` (a link to `/bin/bash.bash`, Bash 5.1.16).

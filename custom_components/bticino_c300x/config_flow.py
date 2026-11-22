@@ -435,13 +435,17 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 if probe != "reachable":
                     errors["base"] = "device_install_verify_failed"
                 else:
+                    await self._async_adopt_agent_unique_id(api_token=api_token)
                     try:
-                        await async_migrate_legacy_mqtt_for_connection(
-                            self.hass,
-                            self._setup_connection,
-                            api_token=api_token,
-                            maintenance_token=maintenance_token,
-                        )
+                        # C100X trials must preserve Companion; unknown identity
+                        # is not permission to migrate another service either.
+                        if login_model(self._setup_agent_info) == "C300X":
+                            await async_migrate_legacy_mqtt_for_connection(
+                                self.hass,
+                                self._setup_connection,
+                                api_token=api_token,
+                                maintenance_token=maintenance_token,
+                            )
                     except C300XAgentApiError:
                         errors["base"] = "device_install_verify_failed"
                         return self.async_show_form(
@@ -449,7 +453,6 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                             data_schema=_bootstrap_install_schema(),
                             errors=errors,
                         )
-                    await self._async_adopt_agent_unique_id(api_token=api_token)
                     self._setup_agent_needs_token = False
                     return await self.async_step_user_features()
 

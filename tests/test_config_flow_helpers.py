@@ -1256,6 +1256,7 @@ def test_bootstrap_install_success_continues_to_feature_step(
         migrate_legacy,
     )
     async def agent_stable_unique_id(*_args: object, **_kwargs: object) -> None:
+        flow._setup_agent_info = {"device": {"model": "C300X"}}
         return None
 
     monkeypatch.setattr(

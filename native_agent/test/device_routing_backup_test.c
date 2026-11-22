@@ -123,12 +123,12 @@ int main(int argc, char **argv)
     assert(strcmp(error, "routing_backup_invalid") == 0);
     expect(target, "stock-2-0-2");
 
-    /* Nor over a patched 2.0.2 target, which is known by its ranges. */
+    /* Patched ranges without a matching whole-build backup are unsupported. */
     put(target, "patched-2-0-2");
     g_ranges_table = PATCHES_2_0_2;
     g_ranges_patched = 1;
     assert(c300x_device_routing_read_status(&status));
-    assert(strcmp(status.state, "patched") == 0);
+    assert(strcmp(status.state, "unsupported") == 0);
     assert(!c300x_device_routing_restore(&status, error, sizeof(error)));
     assert(strcmp(error, "routing_backup_invalid") == 0);
     expect(target, "patched-2-0-2");
@@ -144,17 +144,19 @@ int main(int argc, char **argv)
     expect(target, "stock-2-0-2xx");
     g_ranges_table = NULL;
 
-    /* Applying on 2.0.2 replaces the backup the other firmware left behind. */
+    /* Synthetic stock hashes without valid patch ranges must not replace
+     * recovery material. Real-build stale-backup replacement is tested using
+     * read-only firmware originals in test_native_routing_apply_identity.py. */
     put(backup, "stock-binary");
     put(target, "stock-2-0-2");
     assert(c300x_sha256_file_hex(target, g_stock_sha_2_0_2, sizeof(g_stock_sha_2_0_2)));
-    (void)c300x_device_routing_apply(&status, error, sizeof(error));
-    expect(backup, "stock-2-0-2");
+    assert(!c300x_device_routing_apply(&status, error, sizeof(error)));
+    expect(backup, "stock-binary");
 
-    /* Applying over a stock target replaces a backup that is not stock. */
+    /* Invalid ranges also leave a corrupt backup untouched. */
     put(target, "stock-binary");
     put(backup, "garbage");
-    (void)c300x_device_routing_apply(&status, error, sizeof(error));
-    expect(backup, "stock-binary");
+    assert(!c300x_device_routing_apply(&status, error, sizeof(error)));
+    expect(backup, "garbage");
     return 0;
 }

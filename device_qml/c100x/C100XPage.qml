@@ -60,8 +60,10 @@ FocusScope {
             move(event.key === Qt.Key_Up ? -1 : 1)
             event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            if (!selectedAction) move(1)
-            else if (selectedAction.visible && selectedAction.enabled) selectedAction.activate()
+            if (!event.isAutoRepeat) {
+                if (!selectedAction) move(1)
+                else if (selectedAction.visible && selectedAction.enabled) selectedAction.activate()
+            }
             event.accepted = true
         } else if (event.key === Qt.Key_Back || event.key === Qt.Key_Escape) {
             if (selectedAction && selectedAction.keyboardEditing) selectedAction.cancel()

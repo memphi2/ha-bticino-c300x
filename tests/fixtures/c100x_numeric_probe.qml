@@ -43,6 +43,9 @@ Item {
         require(detail.preview === 5, "lower limit must be reachable")
         slider.adjust(1)
         slider.activate()
+        require(slider.keyboardConfirming && !slider.keyboardApplySelected && submissions === 0, "confirmation must default to cancel")
+        slider.adjust(1)
+        slider.activate()
         require(submissions === 1 && submittedValue === "8" && !host.interactionActive, "confirm must submit once")
 
         detail.control = {kind: "number", command: "temperature", min: 15, max: 30, step: 0.5, value: 21.5}

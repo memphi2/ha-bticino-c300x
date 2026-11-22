@@ -4,12 +4,16 @@ import json
 import sys
 from pathlib import Path
 
+from c100x_memory_reply import MemoryReply
 from PyQt5.QtCore import QObject, QUrl, pyqtProperty
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtNetwork import QNetworkAccessManager
-from PyQt5.QtQml import QQmlComponent, QQmlEngine, QQmlExpression, QQmlNetworkAccessManagerFactory
-
-from c100x_memory_reply import MemoryReply
+from PyQt5.QtQml import (
+    QQmlComponent,
+    QQmlEngine,
+    QQmlExpression,
+    QQmlNetworkAccessManagerFactory,
+)
 
 
 class OfflineNetwork(QNetworkAccessManager):
@@ -73,9 +77,9 @@ def receive():
     global serial
     serial += 1
     now = evaluate("Date.now()")
-    command = dict(id=f"{serial:032x}", revision=f"{serial:032x}", notification_id="test",
-                   severity="warning", title="Test", message="Test", wake_duration=10, sound_duration=0,
-                   expires_in=300, remaining_ms=5000, expires=now + 5000, message_expires=now + 300000)
+    command = {"id": f"{serial:032x}", "revision": f"{serial:032x}", "notification_id": "test",
+               "severity": "warning", "title": "Test", "message": "Test", "wake_duration": 10, "sound_duration": 0,
+               "expires_in": 300, "remaining_ms": 5000, "expires": now + 5000, "message_expires": now + 300000}
     return evaluate(f"receive({json.dumps(command)})")
 
 
@@ -126,4 +130,4 @@ evaluate("global.commissioningStatus = 3; c100xHost.pageStack = null")
 assert evaluate("state().blocked && !state().coreBlocked")
 assert not receive()
 assert not errors, errors
-print("protected pages, unknown pages, regulation, guards and no deferred notices: passed")
+sys.stdout.write("protected pages, unknown pages, regulation, guards and no deferred notices: passed\n")

@@ -31,9 +31,17 @@ def tree(tmp_path):
         shutil.copy2(firmware / source, tmp_path / name)
     source = tmp_path / "source"
     builder.build(source)
-    env = {**os.environ, "C100X_GUI_DIR": str(gui), "C100X_SOURCE_DIR": str(source),
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    # Record persistence barriers without flushing the developer's entire host.
+    sync = tools / "sync"
+    sync.write_text('#!/bin/sh\nprintf "sync\\n" >> "$SYNC_LOG"\n')
+    sync.chmod(0o700)
+    env = {**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"],
+           "SYNC_LOG": str(tmp_path / "sync.log"), "C100X_GUI_DIR": str(gui), "C100X_SOURCE_DIR": str(source),
            "C100X_BACKUP_DIR": str(tmp_path / "backup"), "C100X_GUI_BIN": str(tmp_path / "binary"),
            "C100X_GUI_WRAPPER": str(tmp_path / "wrapper"), "C100X_NO_REMOUNT": "1",
+           "C100X_IDENTITY_SCRIPT": str(ROOT / "native_agent/scripts/c100x_display_identity.sh"),
            "C100X_HOOKS_AWK": str(ROOT / "native_agent/scripts/c100x_hooks.awk"), "TMPDIR": str(tmp_path)}
     return tmp_path, gui, stock, env
 
@@ -55,11 +63,86 @@ def installed(tree):
     return next(tree[1].glob(".c100x-*"))
 
 
+def advance_source(tree):
+    source = tree[0] / "source"
+    page = source / "C100XBridge.qml"
+    page.write_text(page.read_text() + "\n// Next adapter generation\n")
+    (source / "SHA256SUMS").write_text("".join(
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(source).as_posix()}\n"
+        for path in sorted(source.rglob("*")) if path.is_file() and path.name != "SHA256SUMS"
+    ))
+
+
+@pytest.mark.parametrize("action", ["apply", "restore"])
+def test_upgrade_or_restore_after_source_generation_changes(tree, action):
+    run(tree, "apply")
+    before = (tree[1] / "main.qml").read_bytes()
+    advance_source(tree)
+    run(tree, action)
+    if action == "apply":
+        assert (tree[1] / "main.qml").read_bytes() != before
+        run(tree, "restore")
+    assert_original(tree)
+
+
+@pytest.mark.parametrize("damage", ["deleted", "corrupt"])
+def test_restore_does_not_depend_on_current_package_source(tree, damage):
+    run(tree, "apply")
+    if damage == "deleted":
+        shutil.rmtree(tree[0] / "source")
+    else:
+        (tree[0] / "source/C100XBridge.qml").write_text("broken package")
+    run(tree, "restore")
+    assert_original(tree)
+
+
+def test_restore_survives_missing_package_transform_and_installed_payload(tree):
+    root, _, _, env = tree
+    transform = root / "transform.awk"
+    shutil.copy2(env["C100X_HOOKS_AWK"], transform)
+    env["C100X_HOOKS_AWK"] = str(transform)
+    run(tree, "apply")
+    shutil.rmtree(root / "source")
+    shutil.rmtree(installed(tree))
+    transform.unlink()
+    run(tree, "restore")
+    assert_original(tree)
+
+
+@pytest.mark.parametrize("file", ["main.inc", "menu.inc", "transform.awk", "SHA256SUMS"])
+def test_tampered_generation_record_cannot_authorize_restoration(tree, file):
+    run(tree, "apply")
+    record = next((tree[0] / "backup/generations").glob(".c100x-*"))
+    (record / file).write_text((record / file).read_text() + "\ncorrupt\n")
+    before = (tree[1] / "main.qml").read_bytes()
+    run(tree, "restore", False)
+    assert (tree[1] / "main.qml").read_bytes() == before
+
+
+def test_legacy_generation_is_migrated_from_known_hooks_not_current_package(tree):
+    run(tree, "apply")
+    shutil.rmtree(tree[0] / "backup/generations")
+    shutil.rmtree(tree[0] / "source")
+    run(tree, "restore")
+    assert_original(tree)
+
+
+def test_legacy_generation_with_modified_hooks_is_not_trusted(tree):
+    run(tree, "apply")
+    shutil.rmtree(tree[0] / "backup/generations")
+    (installed(tree) / "hooks/main.inc").write_text("unreviewed hook")
+    before = (tree[1] / "main.qml").read_bytes()
+    run(tree, "restore", False)
+    assert (tree[1] / "main.qml").read_bytes() == before
+
+
 def test_roundtrip_identity_modes_idempotence_and_stock_handlers(tree):
     root, gui, stock, _ = tree
     assert json.loads(run(tree, "status").stdout)["state"] == "stock"
     assert not (root / "backup").exists(), "stock status must be read-only"
+    assert not (root / "sync.log").exists()
     run(tree, "apply")
+    assert (root / "sync.log").read_text().count("sync\n") >= 5
     assert json.loads(run(tree, "status").stdout)["state"] == "installed"
     before = {name: (gui / name).read_bytes() for name in stock}
     run(tree, "apply")
@@ -181,7 +264,7 @@ def test_restore_works_with_failed_adapter_without_trusting_or_deleting_it(tree,
 def fault_mv(tree, mode):
     root, gui, _, env = tree
     tools = root / "tools"
-    tools.mkdir()
+    tools.mkdir(exist_ok=True)
     script = tools / "mv"
     script.write_text('''#!/bin/sh
 for target do :; done
@@ -207,8 +290,20 @@ def test_write_failure_rolls_back_both_stock_files(tree):
     assert (tree[0] / "backup/main.qml").exists()
 
 
+def test_failed_upgrade_retains_previous_generation_not_factory_state(tree):
+    run(tree, "apply")
+    before = {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    advance_source(tree)
+    fault_mv(tree, "fail")
+    run(tree, "apply", False)
+    assert before == {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    assert json.loads(run(tree, "status").stdout)["state"] == "installed"
+    run(tree, "restore")
+    assert_original(tree)
+
+
 @pytest.mark.parametrize("mode", ["kill_before", "kill_after"])
-def test_power_loss_recovery_at_main_switch(tree, mode):
+def test_process_interruption_recovery_at_main_switch(tree, mode):
     fault_mv(tree, mode)
     run(tree, "apply", False)
     run(tree, "recover")
@@ -235,7 +330,7 @@ def test_concurrent_transaction_is_rejected(tree):
 def test_readonly_remount_failure_rolls_back_and_reports_failure(tree):
     root, _, _, env = tree
     tools = root / "tools"
-    tools.mkdir()
+    tools.mkdir(exist_ok=True)
     mount = tools / "mount"
     mount.write_text('''#!/bin/sh
 if [ "$2" = remount,ro ] && [ ! -e "$MOUNT_FAILED" ]; then

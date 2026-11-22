@@ -10,6 +10,7 @@ BACKUP=${C100X_BACKUP_DIR:-/home/bticino/cfg/extra/c300x-device-file-backups/c10
 BIN=${C100X_GUI_BIN:-/home/bticino/bin/gui/BtClass100}
 WRAPPER=${C100X_GUI_WRAPPER:-/home/bticino/bin/BtClass100_qws}
 TRANSFORM=${C100X_HOOKS_AWK:-$AGENT/c100x_hooks.awk}
+IDENTITY=${C100X_IDENTITY_SCRIPT:-$AGENT/c100x_display_identity.sh}
 MAIN_SHA=ff1740e9742951f5cda2225d605eae06141f43ee26d900ca21d7fdf14960e6fb
 MENU_SHA=ba3edae9b9e670dad86894f93747f510f07c2389f498697e5d20dd95b4cb8e80
 WORK=
@@ -32,11 +33,14 @@ safe_path() {
     done
 }
 originals() { identity "$1/main.qml" "$MAIN_SHA" && identity "$1/MainPage.qml" "$MENU_SHA"; }
-verify_tree() {
-    safe_path "$1" && regular "$1/SHA256SUMS" || return 1
+valid_manifest() {
+    regular "$1" || return 1
     awk 'NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ ||
          $2 !~ /^((js|hooks)\/)?[A-Za-z0-9_]+\.(qml|js|inc)$/ || seen[$2]++ {exit 1}
-         END {if (NR < 20) exit 1}' "$1/SHA256SUMS" || return 1
+         END {if (NR < 20) exit 1}' "$1"
+}
+verify_tree() {
+    safe_path "$1" && valid_manifest "$1/SHA256SUMS" || return 1
     while read -r digest relative; do
         safe_path "$1/$relative" && identity "$1/$relative" "$digest" || return 1
     done < "$1/SHA256SUMS"
@@ -56,18 +60,22 @@ remount_ro() {
     RW=0
 }
 replace() {
+    if cmp -s "$1" "$2" && [ "$(stat -c %a "$1")" = "$(stat -c %a "$2")" ]; then return 0; fi
     cp -p "$1" "$STAGE/replace" && identity "$STAGE/replace" "$(hash "$1")" && sync && mv -f "$STAGE/replace" "$2" && sync
 }
-rollback() {
+restore_originals() {
     originals "$BACKUP" || return 1
     # main is the switch: disable the bridge before removing its menu entry.
     replace "$BACKUP/main.qml" "$GUI/main.qml" && replace "$BACKUP/MainPage.qml" "$GUI/MainPage.qml" && originals "$GUI"
+}
+rollback_previous() {
+    replace "$WORK/before/MainPage.qml" "$GUI/MainPage.qml" && replace "$WORK/before/main.qml" "$GUI/main.qml"
 }
 cleanup() {
     result=$?
     trap - EXIT HUP INT TERM
     if [ "$result" != 0 ] && [ "$DIRTY" = 1 ]; then
-        if rollback; then sync; else printf '%s\n' 'c100x_display: rollback failed; backups retained' >&2; fi
+        if rollback_previous; then sync; else printf '%s\n' 'c100x_display: rollback failed; backups retained' >&2; fi
     fi
     if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi
     if [ -n "$WORK" ]; then rm -rf "$WORK"; fi
@@ -77,18 +85,21 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 case "$ACTION" in status|apply|restore|recover) ;; *) fail 'unsupported action' ;; esac
-for path in "$GUI" "$SOURCE" "$BACKUP" "$BIN" "$WRAPPER" "$TRANSFORM"; do
+for path in "$GUI" "$BACKUP" "$BIN" "$WRAPPER" "$IDENTITY"; do
     safe_path "$path" || fail 'unsafe path'
 done
 identity "$BIN" 84e3f9fa36a4a3abffe39dd46b10b47074c6144287a2cd0f63bcce622770c3dc || fail 'unsupported GUI binary'
 identity "$WRAPPER" ad6d23db69795afb712751b3d92afbca3356d524b40bdb441de096b3d12c3612 || fail 'unsupported GUI wrapper'
 identity "$GUI/EventManager.qml" 3ca4b5e8c27c8c8b283d533106091072e25632bb090d414ee4c1d93f3a06b181 || fail 'unsupported event manager'
-verify_tree "$SOURCE" || fail 'invalid adapter source'
-regular "$TRANSFORM" || fail 'invalid transform'
-RELEASE=.c100x-$(hash "$SOURCE/SHA256SUMS")
-if [ "$ACTION" = status ] && originals "$GUI"; then
+regular "$IDENTITY" || fail 'identity helper unavailable'
+. "$IDENTITY"
+if [ "$ACTION" != apply ] && originals "$GUI"; then
     printf '%s\n' '{"ok":true,"state":"stock","runtime_verified":false}'
     exit 0
+fi
+if [ "$ACTION" = apply ]; then
+    verify_tree "$SOURCE" || fail 'invalid adapter source'
+    RELEASE=.c100x-$(hash "$SOURCE/SHA256SUMS")
 fi
 if [ "$ACTION" != status ]; then
     # Lock the verified immutable vendor inode read-only, before any remount.
@@ -116,29 +127,26 @@ if [ "$ACTION" != status ]; then
 fi
 originals "$BACKUP" || fail 'invalid original backup'
 if [ "$ACTION" != status ]; then sync; fi
-for file in main.qml MainPage.qml; do
-    case "$file" in main.qml) mode=main ;; *) mode=menu ;; esac
-    cp -p "$BACKUP/$file" "$WORK/$file"
-    awk -v mode="$mode" -v hooks="$SOURCE/hooks" -v release="$RELEASE" -f "$TRANSFORM" "$BACKUP/$file" > "$WORK/generated" || fail 'transform failed'
-    cat "$WORK/generated" > "$WORK/$file"
-done
-for file in main.qml MainPage.qml; do
-    regular "$GUI/$file" || fail 'unsafe target'
-    cmp -s "$GUI/$file" "$BACKUP/$file" || cmp -s "$GUI/$file" "$WORK/$file" || fail 'unknown target identity'
-done
-if [ "$ACTION" = apply ] || [ "$ACTION" = status ]; then
+if [ "$ACTION" = apply ]; then
+    archive_generation "$SOURCE" "$RELEASE" || fail 'invalid generation recipe'
+    render_generation "$BACKUP/generations/$RELEASE" "$RELEASE" "$WORK/new" || fail 'generation rendering failed'
     if [ -e "$GUI/$RELEASE" ] || [ -L "$GUI/$RELEASE" ]; then
-        verify_tree "$GUI/$RELEASE" && cmp -s "$SOURCE/SHA256SUMS" "$GUI/$RELEASE/SHA256SUMS" || fail 'invalid installed adapter'
+        verify_tree "$GUI/$RELEASE" && cmp -s "$BACKUP/generations/$RELEASE/SHA256SUMS" "$GUI/$RELEASE/SHA256SUMS" || fail 'invalid installed adapter'
     fi
 fi
+verify_current || fail 'unknown target identity'
 if [ "$ACTION" = status ]; then
-    if cmp -s "$GUI/main.qml" "$WORK/main.qml" && cmp -s "$GUI/MainPage.qml" "$WORK/MainPage.qml" && [ -d "$GUI/$RELEASE" ]; then
+    if [ -n "$ACTIVE_RELEASE" ] && cmp -s "$GUI/MainPage.qml" "$WORK/check/MainPage.qml" && verify_tree "$GUI/$ACTIVE_RELEASE"; then
         printf '%s\n' '{"ok":true,"state":"installed","runtime_verified":false}'
     else
         printf '%s\n' '{"ok":true,"state":"partial","runtime_verified":false}'
     fi
     exit 0
 fi
+mkdir "$WORK/before"
+cp -p "$GUI/main.qml" "$GUI/MainPage.qml" "$WORK/before/"
+verify_current || fail 'target changed before transaction'
+cmp -s "$GUI/main.qml" "$WORK/before/main.qml" && cmp -s "$GUI/MainPage.qml" "$WORK/before/MainPage.qml" || fail 'target changed during snapshot'
 STAGE=$(mktemp -d "$GUI/.c100x-stage.XXXXXX") || fail 'private GUI stage unavailable'
 if [ "$ACTION" = apply ]; then
     if [ ! -d "$GUI/$RELEASE" ]; then
@@ -147,20 +155,20 @@ if [ "$ACTION" = apply ]; then
             mkdir -p "$STAGE/payload/$(dirname "$relative")"
             cp "$SOURCE/$relative" "$STAGE/payload/$relative"
             chmod 644 "$STAGE/payload/$relative"
-        done < "$SOURCE/SHA256SUMS"
-        cp "$SOURCE/SHA256SUMS" "$STAGE/payload/SHA256SUMS"
+        done < "$BACKUP/generations/$RELEASE/SHA256SUMS"
+        cp "$BACKUP/generations/$RELEASE/SHA256SUMS" "$STAGE/payload/SHA256SUMS"
         find "$STAGE/payload" -type d -exec chmod 755 {} \;
-        verify_tree "$STAGE/payload" || fail 'staged adapter verification failed'
+        verify_tree "$STAGE/payload" && identity "$STAGE/payload/SHA256SUMS" "${RELEASE#.c100x-}" || fail 'staged adapter verification failed'
         mv "$STAGE/payload" "$GUI/$RELEASE"
         sync
     fi
     DIRTY=1
-    replace "$WORK/MainPage.qml" "$GUI/MainPage.qml" || fail 'menu replacement failed'
-    replace "$WORK/main.qml" "$GUI/main.qml" || fail 'main replacement failed'
-    cmp -s "$WORK/main.qml" "$GUI/main.qml" && cmp -s "$WORK/MainPage.qml" "$GUI/MainPage.qml" || fail 'commit verification failed'
+    replace "$WORK/new/MainPage.qml" "$GUI/MainPage.qml" || fail 'menu replacement failed'
+    replace "$WORK/new/main.qml" "$GUI/main.qml" || fail 'main replacement failed'
+    cmp -s "$WORK/new/main.qml" "$GUI/main.qml" && cmp -s "$WORK/new/MainPage.qml" "$GUI/MainPage.qml" || fail 'commit verification failed'
 else
     DIRTY=1
-    rollback || fail 'original restoration failed'
+    restore_originals || fail 'original restoration failed'
     originals "$GUI" || fail 'restore verification failed'
 fi
 sync

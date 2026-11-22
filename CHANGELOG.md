@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.9.0b1 - Unreleased
+
+Beta for firmware 3.0.6, not yet tested on a device.
+
+Display:
+
+- **Home Assistant pages on firmware 3.0.6** (beta): the Display patch now
+  works on the Qt 5 display of 3.0.6, whose display files are built into the
+  vendor program. The home page gets the Alarm and Home Assistant buttons, with
+  the Alarm, Home Assistant and Energy pages and the other pages of the
+  integration. The agent update installs it; restoring the Display patch or
+  removing the agent gives the display back as shipped. If the display does
+  not start with the pages, it starts as shipped and the Display patch status
+  shows it.
+
+Fixes:
+
+- The agent's answers to the Display patch script reached it empty on the
+  device, so restoring the Display patch reported the touch fix as failed.
+
 ## v2.8.0 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

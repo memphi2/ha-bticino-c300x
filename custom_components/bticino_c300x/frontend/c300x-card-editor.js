@@ -1,7 +1,7 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=002fb5e0b31c02fc";
+} from "./c300x-translations.js?v=a9f64c2dc0050354";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
@@ -9,7 +9,7 @@ import {
   c300xEntryId,
   c300xFirstEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=002fb5e0b31c02fc";
+} from "./c300x-entity-resolver.js?v=a9f64c2dc0050354";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 

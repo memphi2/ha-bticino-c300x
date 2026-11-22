@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import shutil
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -40,6 +41,30 @@ def test_physical_keys_leave_vendor_actions_untouched():
         assert key not in page
     assert "event.accepted = false" in page
     assert "if (c100xHost.blocked) return" in page
+
+
+def test_ringer_protocol_cancels_preemption_and_reports_actual_state():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the isolated protocol regression")
+    subprocess.run([node, str(ROOT / "tests/fixtures/c100x_ringer_probe.js"),
+                    str(ROOT / "device_qml/c100x/js/c100x_ringer.js")], check=True, timeout=10)
+
+
+def test_bridge_contract_matches_original_vendor_sources():
+    from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
+    original("c100x-1.5.8")
+    source = FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino/bin/gui/skins/default"
+    event = (source / "EventManager.qml").read_bytes()
+    assert hashlib.sha256(event).hexdigest() == "3ca4b5e8c27c8c8b283d533106091072e25632bb090d414ee4c1d93f3a06b181"
+    for name in (b"property bool callInProgress:", b"property bool callActive:"):
+        assert name in event
+    ringtone = (source / "Components/RingtoneItem.qml").read_text()
+    for expression in ("global.audioState.isRingtoneMute", "enableState(AudioState.RingtoneMute)",
+                       "disableState(AudioState.RingtoneMute)"):
+        assert expression in ringtone
+    assert 'prop: "beepEnabled"' in (source / "InstallerPage.qml").read_text()
+    assert "Commissioning.Commissioned" in (source / "main.qml").read_text()
 
 
 def test_pages_load_in_isolated_qt5(tmp_path):

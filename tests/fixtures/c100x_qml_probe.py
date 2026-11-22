@@ -142,14 +142,15 @@ else:
     evaluate(item, "exercise()")
     sip.delete(item)
 
-component = QQmlComponent(engine)
-component.setData(Path(__file__).with_name("c100x_numeric_probe.qml").read_bytes(),
-                  QUrl.fromLocalFile(str(source / "NumericProbe.qml")))
-item = component.create()
-if item is None:
-    errors.extend(error.toString() for error in component.errors())
-else:
-    evaluate(item, "exercise()")
-    sip.delete(item)
+for fixture in ("c100x_numeric_probe.qml", "c100x_bridge_probe.qml"):
+    component = QQmlComponent(engine)
+    component.setData(Path(__file__).with_name(fixture).read_bytes(),
+                      QUrl.fromLocalFile(str(source / fixture)))
+    item = component.create()
+    if item is None:
+        errors.extend(error.toString() for error in component.errors())
+    else:
+        evaluate(item, "exercise()")
+        sip.delete(item)
 print(json.dumps(errors, indent=2))
 sys.exit(bool(errors))

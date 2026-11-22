@@ -12,6 +12,8 @@ FocusScope {
     property var selectedAction: null
     property int count: 1
     property int currentIndex: 0
+    property bool lifecycleReady: false
+    property bool lifecycleActive: false
     signal backClicked()
     signal back()
     signal alarmRequested()
@@ -67,13 +69,25 @@ FocusScope {
             event.accepted = true
         }
     }
+    function syncLifecycle() {
+        if (!lifecycleReady) return
+        var active = visible && !c100xHost.blocked
+        if (active === lifecycleActive) return
+        lifecycleActive = active
+        resetInput()
+        if (active && root.aboutToShow) root.aboutToShow()
+        else if (!active && root.aboutToHide) root.aboutToHide()
+    }
+    onVisibleChanged: syncLifecycle()
     Connections {
-        target: root
-        onVisibleChanged: {
-            root.resetInput()
-            if (root.visible && root.aboutToShow) root.aboutToShow()
-            else if (!root.visible && root.aboutToHide) root.aboutToHide()
-        }
+        target: c100xHost
+        ignoreUnknownSignals: true
+        onBlockedChanged: root.syncLifecycle()
+    }
+    Component.onCompleted: { lifecycleReady = true; syncLifecycle() }
+    Component.onDestruction: {
+        resetInput()
+        if (lifecycleActive && root.aboutToHide) root.aboutToHide()
     }
     Rectangle { anchors.fill: parent; z: -1; color: root.backgroundColor }
     Item {

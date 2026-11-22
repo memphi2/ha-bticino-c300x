@@ -67,6 +67,7 @@ def build(destination: Path, source: Path = ROOT / "device_qml") -> None:
     for path in (source / "c100x").glob("*.qml"):
         shutil.copyfile(path, destination / path.name)
     shutil.copytree(source / "js", destination / "js", dirs_exist_ok=True)
+    shutil.copytree(source / "c100x" / "js", destination / "js", dirs_exist_ok=True)
 
 
 if __name__ == "__main__":

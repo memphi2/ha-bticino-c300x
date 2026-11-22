@@ -55,7 +55,14 @@ every converted module and exercise offscreen actions and edit cancellation.
 The generated entity slider is also tested with the real page helpers: edit
 starts at the current value, one key advances one configured step, fractional
 and unaligned bounds are respected, and cancellation submits no command.
-This build is not yet an installed or advertised display adapter.
+The separate loader now connects Dashboard, Alarmo and settings to this lifecycle.
+The C100X core bridge uses the original mute and beep properties, sleeping
+requests and actual state readback. It cancels requests and unloads the page on
+call, active call, Soft-AP, commissioning or keyboard transition blocking.
+Offline Qt5 tests check PIN disposal, foreign loader-source rejection and settings;
+isolated protocol tests check expiry, replay, late replies and failed readback.
+This build is not yet an installed or advertised display adapter. Notify,
+transactional delivery/recovery and memo integration remain incomplete.
 
 This matrix is a target, not a declaration that every row works. Capability
 flags must stay false until the matching hook, command acknowledgement,

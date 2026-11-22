@@ -177,6 +177,10 @@ The preparation ran focused groups, not a full suite:
   on temporary firmware copies, installed-adapter failure recovery, bounded stop
   and partial cleanup, plus host/ASan/UBSan shutdown tests. System operations are
   mocked; firmware originals are read-only. This is not device recovery evidence.
+- 83 tests for the refreshed build lock, compact bundle delivery/old-reader
+  bootstrap and C100X-only test-package isolation. The rebuilt manifest is
+  6,532 bytes with 29 entries, below the old 8,192-byte reader limit. Old updaters
+  still lack the new model guard; these delivery tests do not remove that limit.
 
 The ARM rebuild passes the 24,576-byte stack limit (maximum 24,200 bytes) and
 ABI checks against original 1.7.19, 2.0.2, 3.0.6 and C100X 1.5.8 sysroots.

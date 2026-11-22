@@ -59,6 +59,7 @@ int c300x_device_user_read_status(struct c300x_device_user_status *status)
     reads++;
     memset(status, 0, sizeof(*status));
     status->status_available = 1;
+    status->supported = 1;
     c300x_copy_string(status->account_label, sizeof(status->account_label), "A \"quoted\" label");
     return 1;
 }
@@ -207,7 +208,8 @@ int main(int argc, char **argv)
         assert(strstr(response_body, "\"account_label\":\"A \\\"quoted\\\" label\"") != NULL);
     } else if (strcmp(test_case, "success") == 0 || strcmp(test_case, "overflow") == 0
         || (strcmp(test_case, "missing") == 0 && strcmp(operation, "restore") == 0)) {
-        assert(response_status == 200 && writes == 1 && reads == 1);
+        assert(response_status == 200 && writes == 1
+            && reads == (strcmp(operation, "ensure") == 0 ? 2 : 1));
         assert(strcmp(write_reason, strcmp(operation, "restore") == 0
             ? "restore_homeassistant_media_user_setup" : "ensure_homeassistant_user") == 0);
         assert(restored == (strcmp(operation, "restore") == 0));

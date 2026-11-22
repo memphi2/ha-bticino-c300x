@@ -64,6 +64,15 @@ watchdog were not exercised. No reboot-loop absence is claimed.
 The earlier three fixes remain separate: `4c2781e4` transaction rollback,
 `bfedea13` artifact reconciliation, `0ae2093a` installer/sync confirmation.
 
+The subsequent restoration audit also confirmed a **P2** in the device-user
+HTTP path (`http_device_user.c:263` at `fcca4a51`): a zero shell exit was enough
+to continue routing restore even when label restoration reported `ok:false`.
+Label setup/status also accepted an installed but quarantined Qt5 label.
+The beta-specific adaptation validates structured outcomes and Qt5 label
+activation, while still running the label restore on Qt5 and retaining any
+unrelated quarantine. Original 3.0.6 QML/RCC restore runs through the actual
+HTTP handler in the isolated fixture; device writes are substitutes.
+
 ## Installation And Runtime Matrix
 
 | Path | Support and offline proof | Remaining uncertainty |

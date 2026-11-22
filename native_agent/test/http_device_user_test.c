@@ -195,7 +195,10 @@ int main(int argc, char **argv)
     }
     assert(responses == 1 && closes == asynchronous && owner.context == NULL);
     assert(c300x_http_maintenance_prepare(&owner, &fd) == -1 && fd.fd == -1);
-    if (strcmp(test_case, "unauthorized") == 0 || strcmp(test_case, "unconfirmed") == 0) {
+    if (strcmp(test_case, "report") == 0) {
+        printf("{\"status\":%d,\"writes\":%d,\"restored\":%d,\"body\":%s}\n",
+            response_status, writes, restored, response_body);
+    } else if (strcmp(test_case, "unauthorized") == 0 || strcmp(test_case, "unconfirmed") == 0) {
         assert(response_status == (strcmp(test_case, "unauthorized") == 0 ? 403 : 400));
         assert(!applied && !ensured && !restored && !reads && !writes);
     } else if (strcmp(operation, "status") == 0) {

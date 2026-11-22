@@ -500,6 +500,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             return self.async_abort(reason="entry_not_loaded")
         update_state = getattr(entry.runtime_data, "agent_update_state", None)
         placeholders = agent_update_repair_placeholders(update_state, entry.runtime_data)
+        if getattr(update_state, "reason", None) == "device_model_incompatible":
+            return self.async_abort(reason="device_model_incompatible")
         if not getattr(update_state, "self_update_repair_supported", False):
             # Whatever was submitted here was the empty confirm form, not SSH
             # credentials: show the SSH form, do not run an install with it.
@@ -613,6 +615,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             return self.async_abort(reason="entry_not_loaded")
         update_state = getattr(entry.runtime_data, "agent_update_state", None)
         placeholders = agent_update_repair_placeholders(update_state, entry.runtime_data)
+        if getattr(update_state, "reason", None) == "device_model_incompatible":
+            return self.async_abort(reason="device_model_incompatible")
         if user_input is None:
             return self.async_show_form(
                 step_id="ssh_install",

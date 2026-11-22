@@ -702,7 +702,8 @@
       "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
       "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
-      "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
+      "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
+      "device_model_incompatible": "Ce paquet ne declare pas la compatibilite C100X. Installez un paquet compatible C100X avant de mettre a jour ou de reinstaller l'agent. Aucun fichier de l'appareil n'a ete remplace."
     }
   },
   "options": {
@@ -1505,9 +1506,11 @@
           "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
+          "device_model_incompatible": "Ce paquet ne declare pas la compatibilite C100X. Installez un paquet compatible C100X avant de mettre a jour ou de reinstaller l'agent. Aucun fichier de l'appareil n'a ete remplace."
         }
-      }
+      },
+      "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
     },
     "device_agent_startup_disabled": {
       "title": "L'agent C300X ne démarre pas après redémarrage",

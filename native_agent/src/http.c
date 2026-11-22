@@ -8829,6 +8829,11 @@ static void handle_agent_update_apply(
         free(workspace);
         return;
     }
+    if (!agent_update_model_compatible(workspace->manifest)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"update_model_incompatible\"}\n");
+        free(workspace);
+        return;
+    }
     c300x_json_string_field(
         workspace->manifest,
         "bundle_hash",

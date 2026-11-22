@@ -7,6 +7,7 @@
 #include "agent_update.h"
 #include "agent_update_paths.h"
 #include "c300x_agent.h"
+#include "device_detect.h"
 #include "file_io.h"
 #include "json_util.h"
 #include "sha256.h"
@@ -78,6 +79,17 @@ static int apply_agent_update_init_script(
 );
 static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary);
 static int validate_agent_update_files(const struct c300x_config *config, const char *manifest);
+
+int agent_update_model_compatible(const char *manifest)
+{
+    int compatible = 0;
+    if (c300x_device_model() != C300X_DEVICE_MODEL_C100X) {
+        return 1;
+    }
+    return manifest != NULL && c300x_json_object_valid(manifest)
+        && c300x_json_bool_field(manifest, "c100x_compatible", &compatible)
+        && compatible;
+}
 
 struct update_backup {
     char target[C300X_MAX_PATH_LEN];
@@ -362,7 +374,7 @@ int apply_agent_update_files(
         memset(summary, 0, sizeof(*summary));
     }
     /* Never install an earlier file from an incomplete or corrupt staged bundle. */
-    if (!validate_agent_update_files(config, manifest)) {
+    if (!agent_update_model_compatible(manifest) || !validate_agent_update_files(config, manifest)) {
         return 0;
     }
     transaction = calloc(1, sizeof(*transaction));

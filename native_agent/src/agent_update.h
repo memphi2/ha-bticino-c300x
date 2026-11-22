@@ -55,6 +55,8 @@ int read_agent_bundle_metadata(
 
 int agent_init_link_matches(void);
 
+int agent_update_model_compatible(const char *manifest);
+
 int apply_agent_update_files(
     const struct c300x_config *config,
     const char *manifest,

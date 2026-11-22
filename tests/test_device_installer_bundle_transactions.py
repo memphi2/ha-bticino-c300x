@@ -234,7 +234,7 @@ int main(int argc, char **argv)
         "cc", "-std=c11", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
         "-Wall", "-Wextra", "-Werror", "-O2", "-I", str(native), str(source),
         *(str(native / name) for name in (
-            "agent_update.c", "file_io.c", "string_util.c", "json_util.c", "json_parse.c", "sha256.c",
+            "agent_update.c", "device_detect.c", "file_io.c", "string_util.c", "json_util.c", "json_parse.c", "sha256.c",
         )), "-o", str(binary),
     ], capture_output=True, text=True, check=False, timeout=30)
     assert compiled.returncode == 0, compiled.stderr

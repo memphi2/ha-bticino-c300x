@@ -8,6 +8,9 @@
 #include <unistd.h>
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
+#include "../src/device_detect.h"
+
+enum c300x_device_model c300x_device_model(void) { return C300X_DEVICE_MODEL_C300X; }
 
 static char init_script[512], init_link[512], denied_backup[512];
 static int fail_cleanup, cleanup_failures, root_writable_model;

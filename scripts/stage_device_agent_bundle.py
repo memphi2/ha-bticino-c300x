@@ -29,6 +29,7 @@ AGENT_BINARY = ROOT / "native_agent" / "build" / "armhf" / "c300x-agent-native"
 AGENT_VERSION_FILE = ROOT / "native_agent" / "VERSION"
 AGENT_API_VERSION = "1"
 AGENT_UPDATE_FILE_SET_VERSION = 6
+C100X_COMPATIBLE = True
 ARMHF_STRIP = "arm-linux-gnueabihf-strip"
 FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v2-api-rtsp-talkback"
 IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v2-api-rtsp-talkback"
@@ -195,6 +196,7 @@ def stage_bundle(
                 "api_version": AGENT_API_VERSION,
                 "update_file_set_version": AGENT_UPDATE_FILE_SET_VERSION,
                 "architecture": "armhf",
+                "c100x_compatible": C100X_COMPATIBLE,
                 "bundle_hash": bundle_hash,
                 "agent": "device_agent/armhf/c300x-agent-native",
                 "qml": "device_agent/qml",
@@ -301,6 +303,7 @@ def _bundle_hash(
             "api_version": api_version,
             "files": files,
             "groups": group_hashes,
+            "c100x_compatible": C100X_COMPATIBLE,
         },
         sort_keys=True,
         separators=(",", ":"),

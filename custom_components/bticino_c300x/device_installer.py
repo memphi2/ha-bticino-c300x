@@ -193,6 +193,7 @@ def _install_device_agent_sync(
         merged_config = _merge_existing_device_config(
             config_bytes, _read_remote_config_sync(client, config_path)
         )
+        _verify_c100x_bundle_sync(client, bundle, request.remote_dir)
         merged_config = _apply_qt5_low_res_video_default(client, merged_config)
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
@@ -232,6 +233,32 @@ def _install_device_agent_sync(
     finally:
         client.close()
     return tuple(changed_files)
+
+
+def _verify_c100x_bundle_sync(client: _DeviceSshClient, bundle: _ResolvedBundle, remote_dir: str) -> None:
+    """Reject an unmarked package before any SSH install or repair writes."""
+
+    if _device_display_kind(client) != "qt5_ondisk":
+        return
+    for payload in bundle.payload_files:
+        if payload.remote_path != f"{remote_dir}/bundle.json":
+            continue
+        try:
+            manifest = json.loads(payload.source.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            break
+        if isinstance(manifest, dict) and manifest.get("c100x_compatible") is True:
+            files = manifest.get("files")
+            if not isinstance(files, list):
+                break
+            expected = next((item.get("sha256") for item in files if isinstance(item, dict)
+                             and item.get("path") == f"device_agent/armhf/{REMOTE_AGENT_NAME}"), None)
+            binary = next((item for item in bundle.payload_files
+                           if item.remote_path == f"{remote_dir}/{REMOTE_AGENT_NAME}"), None)
+            if binary is not None and hashlib.sha256(binary.source.read_bytes()).hexdigest() == expected:
+                return
+        break
+    raise C300XDeviceInstallError("device_model_incompatible")
 
 
 def installer_bundle_status() -> dict[str, Any]:

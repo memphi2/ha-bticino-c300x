@@ -702,7 +702,8 @@
       "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
       "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
       "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
-      "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
+      "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
+      "device_model_incompatible": "Dieses Paket deklariert keine C100X-Kompatibilitaet. Installiere vor dem Agent-Update oder der Neuinstallation ein C100X-kompatibles Integrationspaket. Es wurden keine Geraetedateien ersetzt."
     }
   },
   "options": {
@@ -1505,9 +1506,11 @@
           "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
+          "device_model_incompatible": "Dieses Paket deklariert keine C100X-Kompatibilitaet. Installiere vor dem Agent-Update oder der Neuinstallation ein C100X-kompatibles Integrationspaket. Es wurden keine Geraetedateien ersetzt."
         }
-      }
+      },
+      "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
     },
     "device_agent_startup_disabled": {
       "title": "C300X Device-Agent startet nach Reboot nicht",

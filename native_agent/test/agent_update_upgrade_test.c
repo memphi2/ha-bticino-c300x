@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../src/agent_update.h"
+#include "../src/device_detect.h"
+
+enum c300x_device_model c300x_device_model(void)
+{
+    return getenv("C100X_TEST_MODEL") ? C300X_DEVICE_MODEL_C100X : C300X_DEVICE_MODEL_C300X;
+}
 
 static char init_script[512], init_link[512];
 

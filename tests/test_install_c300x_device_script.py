@@ -124,8 +124,11 @@ def test_complete_bundle_is_uploaded_before_publishing_manifest(tmp_path, monkey
         "device_agent/" + arg.split("/device_agent/", 1)[1]
         for call in uploads for arg in call[1:] if "/device_agent/" in arg
     }
-    # The old-updater tombstone is staging-only, never an SSH-installed source.
-    assert sources == (expected - {LEGACY_BOOTSTRAP_QML}) | {"device_agent/bundle.json"}
+    # This fixture omits the C100X policy and exercises the old C300X shell
+    # contract. The real C100X checkout blocks it before any upload; it cannot
+    # deliver the new adapter. The old-updater tombstone is staging-only too.
+    excluded = {LEGACY_BOOTSTRAP_QML, "device_agent/qml/c100x_bundle.sh"}
+    assert sources == (expected - excluded) | {"device_agent/bundle.json"}
     assert LEGACY_BOOTSTRAP_QML not in sources
     startup = next(i for i, call in enumerate(calls) if call[-1].startswith("sh -s -- "))
     manifest = next(i for i, call in enumerate(calls) if any(arg.endswith("/device_agent/bundle.json") for arg in call))

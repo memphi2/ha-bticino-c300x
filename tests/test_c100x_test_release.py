@@ -130,3 +130,13 @@ def test_legacy_installer_is_blocked_without_contact():
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 1
     assert "legacy installer has no model guard" in result.stderr
+
+
+def test_test_instructions_ship_with_the_local_package(monkeypatch, tmp_path):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    builder = importlib.import_module("build_hacs_release")
+    monkeypatch.setattr(builder, "PACKAGE_ROOT", tmp_path)
+    builder._copy_package_metadata()
+    for name in ("test-release", "experimental", "display-parity", "field-report"):
+        relative = f"docs/c100x-{name}.md"
+        assert (tmp_path / relative).read_bytes() == (ROOT / relative).read_bytes()

@@ -6,8 +6,12 @@ offline against extracted firmware and synthetic fixtures. No C100X device
 or Home Assistant installation was accessed for this work. ABI compatibility
 does not establish runtime or hardware support.
 
-A contributor has since supplied observations from a Companion-modified 1.5.8
-device. See the [field-report cross-check](c100x-field-report.md) for verified
+For the separately scoped issue #51 first test, use the
+[agent-only test preparation and recovery checklist](c100x-test-release.md).
+The release number/channel remain undecided; publication is blocked locally.
+
+A contributor has since supplied observations from a 1.5.8 device with Companion
+installed and non-stock routing. See the [field-report cross-check](c100x-field-report.md) for verified
 binary matches, readback evidence and the remaining coexistence limits. These
 observations do not validate installation or runtime of this branch's agent.
 
@@ -57,6 +61,11 @@ This branch's generated `device_agent/bundle.json` declares
 bundle hash; it expresses package compatibility, **not** proven hardware
 features or a public release designation.
 
+New local test bundles also declare `"c100x_only": true`, included in that
+hash. This branch's HA/SSH paths and new native updater reject them on C300X,
+including 3.0.6. Older updaters lack this reverse guard. The shared HA domain
+still requires a separate test instance; this is not an independent HACS channel.
+
 - HA marks a known-C100X/unmarked-package combination incompatible, with no
   self-update or SSH-reinstall repair offered. Direct API upload also checks
   current setup metadata before staging.
@@ -99,9 +108,10 @@ These steps require separate explicit authorization and have **not** been run:
 
 1. Confirm SSH credentials and backup/recovery access. Record firmware/model,
    vendor app operation, SIP provisioning and original changed-file hashes.
-2. Before any device display trial, finish supervised GUI restart/runtime recovery and verify
-   the complete rebuilt bundle/update path offline. Install only that reviewed local
-   package; check startup, API/maintenance auth, discovery and HA entities.
+2. Use the separate agent-only checklist first: install only the approved package
+   on an authorized C100X and check startup, API/maintenance auth and discovery.
+   Before any later display trial, finish supervised GUI restart/runtime recovery
+   and verify the complete rebuilt bundle/update path offline.
    A package whose display gate remains false must not patch/restart the GUI
    or expose display controls. Do not force the gate through metadata changes.
 3. For an explicitly enabled display trial, verify original backups, safe

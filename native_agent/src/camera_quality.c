@@ -30,7 +30,7 @@ static const char *crop_path(void)
     return env_or("C300X_CAMERA_CROP_FILE", "/home/bticino/cfg/stack_open.xml");
 }
 
-/* Firmware 3.0.x sends only the low stream. */
+/* C300X 3.0.x and the C100X send only the low stream. */
 static int low_stream(void)
 {
     return c300x_device_camera_resolution_fixed();

@@ -22,8 +22,9 @@ enum c300x_display_kind c300x_device_display_kind(void);
 const char *c300x_device_model_name(enum c300x_device_model model);
 const char *c300x_display_kind_name(enum c300x_display_kind kind);
 
-/* The camera sends other receivers only its low-resolution stream. True on
- * C300X 3.0.x; on the C100X kept until a device shows otherwise. */
+/* The camera sends other receivers only its low-resolution stream: C300X
+ * 3.0.x, and the C100X, whose bt_av_media builds no high-resolution branch
+ * for its board. */
 int c300x_device_camera_resolution_fixed(void);
 
 /* The Display patch can edit the display's QML files. Only the Qt 4 display

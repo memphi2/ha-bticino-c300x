@@ -58,7 +58,8 @@ const char *c300x_display_kind_name(enum c300x_display_kind kind)
 
 int c300x_device_camera_resolution_fixed(void)
 {
-    return c300x_device_display_kind() != C300X_DISPLAY_QT4_ONDISK;
+    return c300x_device_model() == C300X_DEVICE_MODEL_C100X
+        || c300x_device_display_kind() != C300X_DISPLAY_QT4_ONDISK;
 }
 
 int c300x_device_display_files_patchable(void)

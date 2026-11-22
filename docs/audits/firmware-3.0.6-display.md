@@ -90,6 +90,7 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 | Quarantine recovery | **H** updates and partial restore retain `.failed`; full removal precedes explicit retry | Diagnose actual Qt error and persistent marker before retry: **D** |
 | GUI versus agent restart | **H/static** agent restart does not reload mapped QML; maintenance reload goes through `qml_patch.sh reload`; post-update applies/reconciles and reloads separately | Vendor supervision and duplicate-start races on real firmware: **D** |
 | Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off, pending follow-up retained on failure | Complete update/reconnect on firmware: **D** |
+| Downgrade | **F/H** stable 2.8.2 payload refused without verified full removal; actual 3.0.6 restore-all then accepts it; Qt4 originals accepted | Guard requires this running updater; old agents and SSH/manual replacement bypass it; stock GUI restart: **D** |
 | Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation; Python publishes bundle identity after activation | Neither installer proves every page rendered |
 | HA options/switch/sync | **H** quarantine/incomplete status is not success; optional-page setting is distinct from core hooks; no quarantine auto-retry | State freshness after spontaneous device failure: **D** |
 | HA services/buttons/Repairs | **H** shared GUI action gates and core Repair honor Qt5 activation; notification storage is distinct from popup delivery | End-to-end physical action results: **D** |
@@ -266,13 +267,11 @@ and 23 selected Qt5 HA activation/update-follow-up cases passed too. Build-lock
 regeneration and the final candidate build are coordinated separately; these
 tests do not certify that an older staged binary contains wrapper-check.
 
-### Open Downgrade Guard
+### Downgrade Recovery Guard
 
-**P1, confirmed and not fixed in this follow-up:** the requirement to remove
-the complete Qt5 overlay before installing stable 2.8.2 is documentation, not
-an updater guard. `native_agent/src/agent_update.c:365` validates staged file
-integrity but does not require Qt5 recovery support while overlay artifacts
-remain. Two isolated current-updater probes (normal and ASan/UBSan) accepted a
+**P1, reproduced and fixed locally:** previously, the requirement to remove
+the complete Qt5 overlay before installing stable 2.8.2 was documentation, not
+an updater guard. Two isolated pre-fix updater probes (normal and ASan/UBSan) accepted a
 2.8.2 bundle staged from local source commit `40cb1aa4`, replaced the native
 payload and Qt5-aware `qml_patch.sh`, and retained the Qt5 artifact sentinels.
 Both reported 28 changed files. The staged executable was synthetic and never
@@ -283,12 +282,51 @@ Qt5 overlay restoration implementation.
 The probe is retained outside the repository as
 `/var/tmp/c300x-beta-downgrade-probe.py`; its output markers are
 `BETA_ACCEPTED_STABLE=1`, `QT5_RESTORE_SCRIPT_REPLACED=1` and
-`QT5_ARTIFACTS_RETAINED=1`. No stable code was changed. A future beta-side guard
-can use actual activation artifacts and target-bundle capability metadata
-without model detection; SSH/manual installation would need separate coverage.
-Until such a guard is implemented and tested, do not describe downgrade safety
-as complete. The manual full-removal prerequisite remains mandatory.
-This confirmed guard gap must be addressed separately before beta activation.
+`QT5_ARTIFACTS_RETAINED=1`. No stable code was changed.
+
+The beta bundle now declares integer `qt5_recovery_version: 1`, included in
+the bundle identity. This is a publisher contract for the complete runtime
+and recovery scripts, not a version-name heuristic or model detection. The
+native updater still validates staged file hashes first. Before any installed
+file backup, root remount, replacement or activation callback, it then requires
+one of these conditions:
+
+- The target declares exactly one top-level supported recovery version. Such
+  updates retain recovery even with a quarantined or incomplete overlay; they
+  do not clear quarantine or establish running-GUI activation.
+- For older/unsupported targets, all three activation artifacts
+  (`display-qt5.rcc`, `c300x-qrc-overlay.so`, `display-qt5.rcc.failed`) must be
+  absent, and the live wrapper must be a regular executable with the full
+  original 3.0.6 or shared 1.7.19/2.0.2 SHA-256. Empty files, dangling symlinks,
+  directories, filesystem errors, missing/modified/non-executable wrappers and
+  differing activation-path environment overrides are not proof of removal.
+
+Rejection is HTTP 409 `qt5_recovery_required`, without deleting the stage,
+scheduling a restart or replacing recovery. Existing maintenance serialization
+rejects update requests during another maintenance job. Extraction caches and
+original backups may remain after successful full removal; they do not activate
+the overlay. File-set version stays 6 so old phased bootstraps remain valid.
+
+`tests/test_firmware_beta_downgrade_guard.py` exercises the actual update entry
+point on host and ASan/UBSan, including stable source `40cb1aa4`, real 3.0.6
+resource extraction/patch/full removal, rejected removal with a non-executable
+original backup, and successful downgrade only after verified restoration.
+Negative cases assert unchanged installed bytes, modes, inodes and mtimes,
+zero remounts/activation callbacks and no update backups. Original Qt4 wrapper
+controls, malformed/duplicate capability metadata, payload corruption, retained
+quarantine, capable beta updates and no-write retry are covered too. Synthetic
+staged executables are never run; these tests do not prove firmware GUI startup.
+The focused run passed 130 tests without skips: 80 downgrade-guard cases plus
+50 update transaction, finalization, historical bootstrap and HA follow-up
+regressions. Five additional selected staging/bundle-identity tests passed.
+This is not a full gate or a firmware-runtime certification.
+
+The guard applies only when the running updater contains this implementation.
+Older beta/stable agents and direct SSH/manual installs are not retroactively
+protected. Capability metadata is not cryptographic publisher authentication or
+proof of the target binary's behavior. The manual full-removal prerequisite and
+checking the running stock GUI remain mandatory. Startup quarantine remains
+limited to the explicitly requested first 60 seconds and existing signal policy.
 The final beta candidate build, ABI check, build-lock regeneration and bundle
 staging are deferred; the current source review is not an activation approval.
 
@@ -322,6 +360,7 @@ directories):
 "$PYTHON" -m pytest -q tests/test_qml_patch_qt5_recovery.py tests/test_qt5_wrapper_identity.py
 "$PYTHON" -m pytest -q tests/test_qt5_firmware_wrapper_lifecycle.py
 "$PYTHON" -m pytest -q tests/test_qt5_firmware_alert_lifecycle.py
+"$PYTHON" -m pytest -q tests/test_firmware_beta_downgrade_guard.py tests/test_native_agent_update_legacy_bootstrap.py tests/test_firmware_beta_update_compatibility.py
 ```
 
 The original-QtQml runtime probe emits `FIRMWARE_QT_VERSION=5.15.7`,

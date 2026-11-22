@@ -8940,7 +8940,11 @@ static void handle_agent_update_apply(
     }
     if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest,
             &summary, apply_agent_update_firewall_patches)) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_apply_failed\"}\n");
+        if (summary.qt5_recovery_required) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"qt5_recovery_required\"}\n");
+        } else {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_apply_failed\"}\n");
+        }
         free(workspace);
         return;
     }

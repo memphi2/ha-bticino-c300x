@@ -259,7 +259,7 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
     size_t used = 0;
     assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[0].path, binary, sizeof(binary)));
     assert(write_binary_chunk(binary, (const unsigned char *)"original", 8, 0, 0700));
-    assert(c300x_appendf(manifest, sizeof(manifest), &used, "{\"files\":["));
+    assert(c300x_appendf(manifest, sizeof(manifest), &used, "{\"qt5_recovery_version\":1,\"files\":["));
     for (size_t i = 0; i + 1 < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
         const char *content = test_content(name);

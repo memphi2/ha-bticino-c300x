@@ -23,6 +23,10 @@
 #endif
 #include <unistd.h>
 
+#ifndef C300X_AGENT_GUI_WRAPPER
+#define C300X_AGENT_GUI_WRAPPER "/home/bticino/bin/BtClass_qws"
+#endif
+
 #ifdef __arm__
 #define C300X_UPDATE_STAT_STRUCT struct stat64
 #else
@@ -348,6 +352,68 @@ int agent_init_link_matches(void)
     return strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0;
 }
 
+static int update_has_qt5_recovery(const char *manifest)
+{
+    const char *end = manifest + strlen(manifest), *p = manifest;
+    unsigned found = 0;
+    int version = 0;
+    if (!c300x_json_object_valid(manifest)) return 0;
+    p += strspn(p, " \t\r\n") + 1;
+    /* Enumerate top-level members with the shared JSON parser: duplicates or
+     * nested declarations must not grant a recovery capability. */
+    while (*(p += strspn(p, " \t\r\n")) != '}') {
+        char key[128];
+        if (!c300x_json_decode_string(p, end, key, sizeof(key), &p)) return 0;
+        if (!strcmp(key, "qt5_recovery_version") && ++found > 1) return 0;
+        p += strspn(p, " \t\r\n") + 1;
+        p = c300x_json_skip_value(p, end);
+        if (p == NULL) return 0;
+        p += strspn(p, " \t\r\n");
+        if (*p == ',') p++;
+    }
+    return found == 1
+        && c300x_json_int_field_checked(manifest, "qt5_recovery_version", &version) == 1
+        && version == C300X_AGENT_QT5_RECOVERY_VERSION;
+}
+
+static int update_path_matches_environment(const char *name, const char *path)
+{
+    const char *value = getenv(name);
+    return value == NULL || *value == '\0' || strcmp(value, path) == 0;
+}
+
+static int update_display_recovery_safe(const struct c300x_config *config, const char *manifest)
+{
+    static const char *const artifacts[] = {
+        "display-qt5.rcc", "c300x-qrc-overlay.so", "display-qt5.rcc.failed"
+    };
+    static const char *const overrides[] = {"C300X_QML_QT5_RCC", "C300X_QML_QT5_OVERLAY_LIB"};
+    char base[C300X_MAX_PATH_LEN], path[C300X_MAX_PATH_LEN];
+    C300X_UPDATE_STAT_STRUCT info;
+    /* Capability describes the complete target bundle (runtime and scripts),
+     * not a device model. A capable update retains recovery even if state is
+     * unknown or quarantined. Older bundles require verified full removal. */
+    if (update_has_qt5_recovery(manifest)) return 1;
+    if (!agent_base_dir(config, base, sizeof(base))
+        || update_lstat(base, &info) != 0 || !S_ISDIR(info.st_mode)
+        || !update_path_matches_environment("C300X_AGENT_DIR", base)
+        || !update_path_matches_environment("C300X_QML_GUI_WRAPPER", C300X_AGENT_GUI_WRAPPER)) return 0;
+    for (size_t i = 0; i < sizeof(artifacts) / sizeof(artifacts[0]); i++) {
+        if (!c300x_join_path(path, sizeof(path), base, artifacts[i])
+            || (i < 2 && !update_path_matches_environment(overrides[i], path))
+            || update_lstat(path, &info) == 0 || errno != ENOENT) return 0;
+    }
+    /* Missing, nonregular, unreadable or modified wrapper is not proof of
+     * removal. These are original artifact hashes, never model detection. */
+    if (update_lstat(C300X_AGENT_GUI_WRAPPER, &info) != 0
+        || !S_ISREG(info.st_mode) || !(info.st_mode & 0111)
+        || info.st_size <= 0 || info.st_size > 16384) return 0;
+    return sha256_hex_matches(C300X_AGENT_GUI_WRAPPER,
+               "852a5b0f0755a738e4e25127cd10b903fbf9c2ebdb4109872d4e1d0aac13c59c")
+        || sha256_hex_matches(C300X_AGENT_GUI_WRAPPER,
+               "903eeca1eb142238f32345c6837125c29dcb2a5b63fb4eda935a82e70104229f");
+}
+
 int apply_agent_update_files(
     const struct c300x_config *config,
     const char *manifest,
@@ -363,6 +429,11 @@ int apply_agent_update_files(
     }
     /* Never install an earlier file from an incomplete or corrupt staged bundle. */
     if (!validate_agent_update_files(config, manifest)) {
+        return 0;
+    }
+    if (!update_display_recovery_safe(config, manifest)) {
+        if (summary != NULL) summary->qt5_recovery_required = 1;
+        fprintf(stderr, "qt5_recovery_required: target lacks Qt5 recovery; verify complete display removal before downgrade\n");
         return 0;
     }
     transaction = calloc(1, sizeof(*transaction));

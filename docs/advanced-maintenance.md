@@ -181,7 +181,12 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
 - **Returning to stable:** on 3.0.6, run the beta's `qml_patch.sh restore-all`
   and confirm `qt5_overlay: off` with the stock GUI running before replacing
   the agent with stable 2.8.2. That release has no Qt 5 overlay recovery code;
-  switching off just the optional pages is not a complete removal.
+  switching off just the optional pages is not a complete removal. The updated
+  beta native updater refuses a target without Qt 5 recovery with
+  `qt5_recovery_required` while overlay files, quarantine or an unverified
+  start script remain. It leaves the installed agent and recovery untouched.
+  Older agents and direct SSH/manual installations do not have this guard;
+  complete removal and checking the running stock GUI remain mandatory.
 - **What to report:** the Display patch status, the integration diagnostics
   and, if you can reach the device, `/tmp/c300x-display-qt5.log` (the display's
   error output, at most 64 KB, cleared by a restart of the device).

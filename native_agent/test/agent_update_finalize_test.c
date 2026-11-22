@@ -61,7 +61,7 @@ static void stage_bundle(struct c300x_config *config, const char *base, char *ma
     assert(c300x_join_path(config->config_path, sizeof(config->config_path), base, "config.json"));
     assert(c300x_join_path(init_script, sizeof(init_script), base, "init-script"));
     assert(c300x_join_path(init_link, sizeof(init_link), base, "init-link"));
-    assert(c300x_appendf(manifest, capacity, &used, "{\"files\":["));
+    assert(c300x_appendf(manifest, capacity, &used, "{\"qt5_recovery_version\":1,\"files\":["));
     for (size_t i = 0; i + 1 < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
         const char *content = !strcmp(name, "device_agent/init/c300x-native-agent")

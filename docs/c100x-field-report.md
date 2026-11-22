@@ -34,15 +34,24 @@ developer. Nothing from this branch was installed on that device.
   No display resizing or High-video geometry change follows from this report.
 - Flexisip is reported under comm name `flexisipwd-prox`; absence from a
   simplistic process-name filter is not absence of the service. The supplied
-  command line identifies the executable. No `openserver` process was reported,
-  but OpenWebNet answered; do not make that name a readiness prerequisite.
+  command line identifies the executable. Agent, installer and scripts do not
+  rely on a Flexisip process-name search; this is not a compatibility blocker.
+- `openserver` and `scsserver` are original firmware binaries, both listed in
+  `stack_open.xml`. The stock configuration identifies SCS port 20001 and OWN
+  port 20000. The readback therefore does not depend on a Companion-provided
+  OWN server. The helper's classification of scsserver as non-stock was wrong.
+  A missing separate `openserver` process name does not disprove the service;
+  whether another bt_daemon process hosts it has not been established.
 - `command -v start-stop-daemon` reportedly failed. The original image contains
   a BusyBox link in `/sbin` and a standalone binary in `/usr/sbin`; our init
   script sets both in PATH. The original BusyBox applet accepts our stop options
   with an absent temporary PID file under QEMU. That checks option parsing only,
-  not timed termination. Confirm the tester's paths/PATH before adding fallbacks.
-- Companion, mosquitto and scsserver were reported running. Port ownership,
-  credentials, route regeneration, registration and media lifecycle coexistence
+  not timed termination. The maintainer clarified that the helper shell lacked
+  sbin in PATH; no new fallback or tool-path question is required. Removal
+  already has its killall fallback. The Python installer and C agent do not
+  invoke this tool directly.
+- Companion and mosquitto were reported running. Credentials, route
+  regeneration, registration and media lifecycle coexistence
   remain unproven. Do not overwrite/remove their state or suggest a concurrent
   experimental install yet.
 
@@ -71,8 +80,9 @@ Companion-style route fixture exercises real target insertion, idempotence and
 removal; the original app and Companion destinations survive byte-identically.
 This narrow transformation test is not proof of complete Companion coexistence.
 
-Before a device trial, audit full media-user/account transactions and service
-port ownership with this modified baseline. Request the Companion version,
-explicit daemon-tool paths and GUI identity hashes read-only, with no SIP
-passwords, full user databases or unredacted device identifiers. Display
-capabilities remain false pending supervised activation/readiness/rollback.
+Tool PATH, stock OWN service, Flexisip process naming and the three specific
+binary identities are cleared offline, not outstanding questions. Preserve
+provisioned accounts/routes and finish the supervised activation/readiness/
+rollback path. GUI/wrapper/QML identity and actual activation remain separate
+hardware acceptance checks. Display capabilities remain false until that path
+is complete; the matching hashes are not permission to activate a device.

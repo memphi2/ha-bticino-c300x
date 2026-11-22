@@ -3,6 +3,7 @@
 import hashlib
 from pathlib import Path
 import subprocess
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -66,3 +67,15 @@ def test_original_vendor_provisioning_exists_independently_of_companion():
                        b"/etc/flexisip/users/users.db.txt", b"/etc/flexisip/users/accounts.txt",
                        b"/etc/flexisip/users/route_int.conf", b"/etc/flexisip/users/route_ext.conf"):
             assert b"\0" + marker + b"\0" in binary
+
+
+def test_own_and_scs_servers_are_in_original_firmware():
+    original("c100x-1.5.8")
+    firmware = FIRMWARE_ROOT / "rootfs-c100x-1.5.8"
+    config = ET.parse(firmware / "home/bticino/cfg/stack_open.xml")
+    names = {node.text for node in config.findall(".//bt_daemon/stackopen/*/name")}
+    assert {"openserver", "scsserver"} <= names
+    assert config.find(".//scsserver/port").text == "20001"
+    assert "20000" in {node.text for node in config.findall(".//port_open")}
+    for name in ("openserver", "scsserver"):
+        assert (firmware / "home/bticino/bin" / name).read_bytes().startswith(b"\x7fELF")

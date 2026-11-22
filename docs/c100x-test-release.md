@@ -71,6 +71,23 @@ comment, for example `sha256sum ha-bticino-c100x-issue51-local.zip` on Linux or
 Do not continue on a mismatch. A checksum binds the delivered bytes; it does not
 prove hardware compatibility or create an independent firmware update channel.
 
+Keep the exact commit and **final ZIP SHA256 in an external issue comment or
+handoff file**, not inside this ZIP. Inserting the ZIP's own hash would change it.
+Use this external record after freezing the source and completing validation:
+
+```text
+Source: <full final commit ID on c100x_1.5.8>
+Attachment: ha-bticino-c100x-issue51-local.zip
+SHA256: <all 64 hexadecimal digits of the final ZIP>
+C100X full gate: <result, date, command and retained log reference>
+Browser/package/build-lock checks: <results for this candidate>
+Scope: isolated HA, complete integration + agent + card; no GUI/media/actions
+```
+
+Redact private paths from public log excerpts. Any later source or archive change
+requires a newly bound candidate and corresponding validation. The remote
+`c100x_1.5.8` branch is for source visibility, not a substitute for that attachment.
+
 ## Before Any Installation
 
 1. The maintainer approves the exact commit, artifact SHA256, tester, device and first-test
@@ -89,8 +106,42 @@ prove hardware compatibility or create an independent firmware update channel.
    equivalent to restoration of its pre-test state. Stop if the specified paths
    differ, are unexpected symlinks, or cannot be read.
 5. Prepare the separate HA test instance with only this package. Check the
-   displayed device/model and explicit host before accepting SSH installation.
+   agreed device identity and explicit host before accepting SSH installation.
+   With no agent installed, HA may not yet know the model; the installer must
+   independently pass its SSH identity check before writing.
    Existing production HA instances and their stable/beta packages stay untouched.
+
+### Installer Write Set and Preconditions
+
+These instructions assume default paths and API port 8091. Custom directories,
+startup environment overrides or ports require a separately checked inventory.
+Record present/absent state, file type, numeric mode/UID/GID, bytes and literal
+symlink targets. Do not dereference links while recording their identity.
+
+| Write surface | Default bootstrap behavior |
+| --- | --- |
+| `/home/bticino/cfg/extra/c300x-native-agent/` | Writes the executable, generated QML assets, helper scripts, `bundle.json`, `config.json` and `c300x-agent.env`; may remove obsolete generated source. The whole previous tree is recovery material. |
+| `/etc/init.d/c300x-native-agent` | Replaces the rendered init script, mode 0700. |
+| `/etc/rc5.d/S40c300x-native-agent` | Creates/replaces the link to `/etc/init.d/c300x-native-agent`. Record a pre-existing link's literal target, not only its referent. |
+| `/etc/network/if-pre-up.d/iptables` | Adds/replaces its managed IPv4 block, retaining the live file's metadata. |
+| `/home/bticino/cfg/extra/c300x-device-file-backups/` | May gain `original/etc/network/if-pre-up.d/iptables` and parent directories. A new managed firewall backup is mode 0600 and omits managed blocks; it is **not** the exact pre-test firewall snapshot. Preserve any older recovery data. |
+| Live IPv4 INPUT rules | Adds missing ACCEPT rules for TCP 8091, TCP 6554 and UDP 40004 by default. Bootstrap opens these media ports even before media is enabled in HA. File rollback alone does not undo live rules. |
+| Agent runtime | Restarts only the native agent, writes/removes its PID file in its directory; completing HA setup can save callback configuration there. |
+| Staging | Uploads use `.new`; init uses `.c300x-native-agent-init.new` and `/etc/init.d/c300x-native-agent.new`. Firewall staging uses unique sibling files and `/tmp/c300x-firewall*` files. Inspect unexpected leftovers; never wildcard-delete them. |
+
+IPv6 firewall, vendor GUI, routing binaries, SIP accounts and Companion are not
+intended first-test writes. Their snapshots are comparison/recovery evidence, not
+permission to overwrite them during rollback. The original C100X 1.5.8 firewall
+paths above and `/etc/network/if-pre-up.d/iptables6` are regular files with mode
+0100 in the extracted image; preserve the actual device's recorded metadata,
+not a guessed 0755 mode.
+
+Stop before bootstrap if an existing init entry belongs to another service,
+writable targets/ancestors have unexpected symlinks, or the existing installation
+cannot be identified. Also require
+`/home/bticino/cfg/extra/c300x-device-file-backups/c100x-display/pending` to be
+absent, including a dangling symlink. Init can run pending GUI recovery on agent
+start, so such a marker is incompatible with this GUI-free first test.
 
 ## Private Pre-Test Backup
 
@@ -99,6 +150,32 @@ device. Execute them only for the explicitly authorized device while no call,
 recording or installer is active. Replace `C100X_HOST` with its confirmed address.
 Use the device's current SSH credentials and verify its host-key fingerprint;
 never disable host-key checking or put a password in a command line.
+
+Before capturing mutable agent configuration, record its running/stopped state
+and have the maintainer stop only the old native agent with the bounded TERM
+procedure in the rollback section. Do not stop vendor services or Companion.
+If that cannot be verified, do not bootstrap. A live vendor configuration archive
+is not a transactionally consistent snapshot of all vendor services.
+
+**Original-firmware path evidence:** `/etc/flexisip` is a symlink to
+`/home/bticino/cfg/extra/90/flexisip`. That persistent directory is absent from the
+extracted original image; this does not prove anything about the live device's
+users. `home/bticino/cfg` includes its contents only when the device still uses
+that layout and there are no unarchived symlink targets. The archive below also
+captures the `/etc/flexisip` link itself, without `-h`/dereferencing.
+
+Before archiving, record `readlink /etc/flexisip` and inspect symlinks beneath
+`/home/bticino/cfg` (`find /home/bticino/cfg -type l -print` is read-only).
+For the reported provisioned device, verify that the resolved Flexisip tree is
+readable and that its actual users/routes are included. Relevant paths include
+`users/users.db.txt`, `users/accounts.txt`, `users/route.conf`,
+`users/route_int.conf`, `users/route_ext.conf` and `domain-registration.conf` when
+present. Preserve absent files as absent; never manufacture accounts from stock.
+If a link resolves outside the captured tree, or its target is missing/unreadable,
+stop and agree an expanded private backup before installing. Do not follow links
+blindly. This is **not a complete Companion backup claim**: its executable,
+startup/configuration/state locations must be inventoried separately on the
+actual installation. First-test code must leave them unchanged.
 
 On the tester's workstation, create a private directory (`umask 077` on Linux).
 The following SSH operations only read device files; archive output goes to the
@@ -109,13 +186,17 @@ files. **Never attach it, its contents or raw device configuration to GitHub.**
 umask 077
 mkdir c100x-51-private
 cd c100x-51-private
-ssh root@C100X_HOST 'for p in \
+ssh root@C100X_HOST 'set -e
+  for p in \
   /home/bticino/cfg/extra/c300x-native-agent \
   /home/bticino/cfg/extra/c300x-device-file-backups \
   /etc/init.d/c300x-native-agent /etc/rc5.d/S40c300x-native-agent \
-  /etc/network/if-pre-up.d/iptables /etc/network/if-pre-up.d/iptables6; do
+  /etc/network/if-pre-up.d/iptables /etc/network/if-pre-up.d/iptables6 \
+  /etc/flexisip; do
     if [ -e "$p" ] || [ -L "$p" ]; then
       printf "present %s\n" "$p"
+      stat -c "metadata %a %u %g %h %F %n" "$p"
+      if [ -L "$p" ]; then readlink "$p"; fi
     else
       printf "absent %s\n" "$p"
     fi
@@ -123,6 +204,8 @@ ssh root@C100X_HOST 'for p in \
 ```
 
 Stop if SSH fails. Check `presence.txt`; keep both present and absent entries.
+Verify ancestor directories are readable/searchable before accepting absence;
+permission errors must not be interpreted as a missing file.
 Then stream a metadata-preserving archive of the configuration, relevant startup/
 firewall files and GUI/routing identity files:
 
@@ -131,6 +214,7 @@ ssh root@C100X_HOST 'set --
   for p in home/bticino/cfg \
     etc/init.d/c300x-native-agent etc/rc5.d/S40c300x-native-agent \
     etc/network/if-pre-up.d/iptables etc/network/if-pre-up.d/iptables6 \
+    etc/flexisip \
     home/bticino/bin/gui/BtClass100 home/bticino/bin/BtClass100_qws \
     home/bticino/bin/gui/skins/default/main.qml \
     home/bticino/bin/gui/skins/default/MainPage.qml \
@@ -148,6 +232,19 @@ path marked present are represented with their expected modes/owners/link target
 Do not install after a tar warning, read failure, incomplete archive or unexpected
 layout. This live-file archive is not a disk image or a power-loss recovery method.
 
+Capture the current IPv4 rules separately, before any installer invocation:
+
+```sh
+ssh root@C100X_HOST '/usr/sbin/iptables-save' > iptables-before.partial
+```
+
+Only after a zero exit status retain it as `iptables-before.txt`. The original
+firmware provides `/usr/sbin/iptables-save`; if the live tool is unavailable,
+stop rather than omitting this check. Keep this dump private. Repeat after the
+authorized bootstrap as `iptables-after.txt` and compare exact rules; counters
+alone can change naturally. Do not run `iptables-restore` or flush chains as a
+generic rollback shortcut.
+
 Record whether the agent was running (`pidof c300x-agent-native`: exit 0 means
 present; exit 1 with no output means absent; errors are unknown), its previous
 version if already known, and the current GUI/routing SHA256 values. Keep the
@@ -164,7 +261,9 @@ accounts unchanged; their presence is not permission to migrate them.
    `device_agent/bundle.json` must be at the ZIP root. This is not a standalone
    agent binary and not a source-code checkout.
 3. Stop HA Core using the normal control for that test instance. Extract the
-   **entire ZIP** into `/config/custom_components/bticino_c300x/`. It must yield
+   **entire ZIP** into `/config/custom_components/bticino_c300x/`. For Container/Core,
+   substitute the actual configured/mounted HA configuration directory for `/config`.
+   It must yield
    `/config/custom_components/bticino_c300x/manifest.json`, not another nested
    `custom_components` or repository folder. If a previous test integration is
    present, move its entire directory outside `custom_components` first; do not
@@ -193,6 +292,26 @@ agent-only phase, confirm registration but do not enable media merely to obtain
 a camera entity. A missing/unavailable camera must leave media start buttons
 disabled and must not request the microphone. GUI restart, device ringer mute,
 key tone, Notify sound and TTS are not card features to enable in this test.
+
+For an optional rendering-only check, first verify that
+`camera.c100x_issue51_not_connected` does **not** exist in Developer Tools > States.
+Add a Manual card with this intentionally unbound configuration on the isolated
+test instance, with no notification-answer query parameter in the dashboard URL:
+
+```yaml
+type: custom:c300x-doorbell-call-card
+entity: camera.c100x_issue51_not_connected
+mode: doorbell_call
+ringback_tone: false
+show_door_unlock: false
+show_stair_light: false
+show_media_history: false
+```
+
+The unavailable-camera state is expected. Confirm the card loads and media-start
+controls are disabled; no microphone request or device command is acceptable.
+Do not replace the missing entity with a different device's camera. This checks
+asset loading/inert UI only, not video, calls, device readiness or C100X GUI support.
 
 Only in a separately approved media phase, select the camera entity belonging to
 the C100X test entry. A conservative card configuration is:
@@ -307,7 +426,12 @@ do not substitute stock firmware files for the device's own pre-test files.
    `tar -C / -xpf /tmp/c100x-pretest.tar home/bticino/cfg/extra/c300x-native-agent`
    restores that one archived tree. Never add the whole `home/bticino/cfg` tree
    to this command; official-app/Companion state must not be rolled back wholesale.
-5. Restore the four startup/firewall paths in the table below. Remount `/` writable
+   Before starting a restored agent, remove only its restored
+   `/home/bticino/cfg/extra/c300x-native-agent/c300x-agent-native.pid` if it is a
+   regular file. This archived PID is historical evidence, not a live identity;
+   stop on an unexpected file type. A future verified start must create a new PID.
+5. Restore only the three installer-written startup/IPv4 paths in the table below.
+   Remount `/` writable
    only for these writes and return it read-only afterwards; a failed remount is a
    stop condition, not permission to reboot. For paths recorded present, extract
    the exact archived entry, preserving owner, permissions and symlink target.
@@ -325,18 +449,39 @@ do not substitute stock firmware files for the device's own pre-test files.
 | `/etc/init.d/c300x-native-agent` | Restore archived file and executable mode. | Remove only the test-created file. |
 | `/etc/rc5.d/S40c300x-native-agent` | Restore archived link/file exactly. | Remove only the test-created link/file. |
 | `/etc/network/if-pre-up.d/iptables` | Restore archived content, owner and mode. | Remove only the test-created file. |
-| `/etc/network/if-pre-up.d/iptables6` | Restore archived content, owner and mode. | Remove only the test-created file. |
+
+   The IPv6 firewall snapshot is for comparison, not routine restoration: this
+   bootstrap does not write it. Any unexpected IPv6, GUI, Flexisip or Companion
+   change leaves this rollback's scope and requires investigation. Preserve all
+   managed backup-root material for the maintainer; do not merge an archived
+   backup tree over new recovery data or delete it merely because it was absent
+   before the test.
 
 6. Compare restored files against the private archive, including modes/ownership
    and link targets; verify GUI/routing hashes still equal the pre-test record.
    Leave new backup/recovery material intact. If any comparison fails, leave the
    agent stopped and startup disabled; do not reboot or retry installation.
-7. Start the restored agent via its restored init script only if it was running
+7. Compare the saved live-rule snapshots. Only for a rule **absent before**, added
+   by this bootstrap and still present exactly once, the maintainer may remove
+   that exact addition. For the default ports the possible commands are:
+
+   ```sh
+   iptables -D INPUT -p tcp --dport 8091 -j ACCEPT
+   iptables -D INPUT -p tcp --dport 6554 -j ACCEPT
+   iptables -D INPUT -p udp --dport 40004 -j ACCEPT
+   ```
+
+   These are conditional alternatives, **not a block to paste blindly**. Never
+   delete a rule present before the test; verify the SSH recovery connection does
+   not depend on the rule being removed. Stop on ambiguity or command failure.
+   Verify with a fresh private `iptables-save`; do not flush chains, replay the
+   complete saved ruleset, or restart networking/vendor services.
+8. Start the restored agent via its restored init script only if it was running
    before the test and the original tree/startup have been verified. If no agent
    existed before the test, leave it absent and stopped. No automatic reboot is
    part of this rollback. Check the vendor menus/app locally without operating a
    door or starting media outside the agreed acceptance phase.
-8. To undo HA-side installation, stop HA Core, move this test integration directory
+9. To undo HA-side installation, stop HA Core, move this test integration directory
    out of `custom_components`, and restore the previous directory or HA backup.
    Restore/remove only this test instance's card/resource as appropriate, restart
    HA and reload the browser. HA rollback does not undo device writes.

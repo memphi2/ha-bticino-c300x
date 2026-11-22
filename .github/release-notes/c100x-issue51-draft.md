@@ -10,6 +10,9 @@ all generated device assets and current Lovelace card modules. "Agent-only"
 describes the initial hardware test, not the ZIP contents. Before posting this
 draft, add the final source commit, ZIP filename, SHA256 and successful full-gate/
 browser results. The user uploads that exact ZIP directly to issue #51.
+Keep those final identifiers in the external issue handoff, not as a self-hash
+inside the ZIP. Publishing the `c100x_1.5.8` source branch is not a release or
+permission to use a source archive in place of the verified attachment.
 
 This first test covers C100X agent installation/startup, authenticated status,
 identity and discovery, while preserving the official app's provisioned accounts
@@ -41,6 +44,14 @@ Read the [installation, recovery and test checklist](../../docs/c100x-test-relea
 before any separately authorized installation. Keep the approved artifact hash
 and exact pre-test recovery files. Do not force unsupported toggles, replace
 provisioned SIP accounts, or remove recovery backups after an error.
+
+The checklist records the exact installer write set, original presence and
+metadata, and IPv4 rules added during bootstrap. It captures the original
+`/etc/flexisip` link as well as requiring verification of its persistent target;
+it does not claim to back up arbitrary Companion layouts. A pending display
+recovery marker blocks this GUI-free trial. Rollback must not replay old PID
+files or overwrite untouched IPv6/GUI/SIP/Companion state. Card rendering can be
+checked with an explicitly missing entity while media remains disabled.
 
 Delivery checklist: verify the final commit, complete gate and artifact checksum;
 attach the complete ZIP; post the detailed manual HA/card installation, private

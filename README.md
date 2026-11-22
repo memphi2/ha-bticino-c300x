@@ -8,6 +8,13 @@
 
 Version: **2.8.2**.
 
+**C100X 1.5.8 / issue #51:** this branch prepares a complete integration, agent
+and card test ZIP, not a C300X stable update. Start with the
+[C100X manual installation, backup, card and recovery guide](docs/c100x-test-release.md).
+The verified ZIP is handed off as an issue attachment only after the final C100X
+gate. The first device test is agent-only: **no supported GUI activation or media
+trial is claimed**. Use an isolated HA instance, not Marketplace/HACS installation.
+
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.
 
@@ -107,6 +114,11 @@ Every contribution is voluntary and very welcome. Support and new features
 stay open to everyone either way.
 
 ## Installation
+
+For this branch's C100X issue #51 test, use the
+[manual test-package instructions](docs/c100x-test-release.md#manual-ha-installation),
+not the C300X Marketplace/HACS instructions below. Branch visibility is not a
+release, download approval or hardware-support claim.
 
 ### Home Assistant Marketplace
 

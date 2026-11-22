@@ -363,63 +363,50 @@ static const struct routing_variant *variant_for_stock_sha(const char *sha256)
     return NULL;
 }
 
-/* The firmware build a target file belongs to: by its stock hash, else by its
- * patched ranges, else by its stock ranges. NULL for a file of neither build. */
-static const struct routing_variant *target_variant(const char *target_path)
+/* readlink avoids the newer ARM libc stat ABI. The size check also requires
+ * a regular file; never follow a final-component symlink for restoration. */
+static int routing_regular_file(const char *path, size_t len)
 {
-    char sha256[65];
-    unsigned char *data = NULL;
-    size_t len = 0;
-    const struct routing_variant *variant = NULL;
-
-    if (c300x_sha256_file_hex(target_path, sha256, sizeof(sha256))) {
-        variant = variant_for_stock_sha(sha256);
-    }
-    if (variant == NULL && c300x_patch_read_file(target_path, &data, &len)) {
-        variant = variant_matching(data, len, 1);
-        if (variant == NULL) {
-            variant = variant_matching(data, len, 0);
-        }
-        free(data);
-    }
-    return variant;
+    char link;
+    return readlink(path, &link, 1) < 0 && errno == EINVAL
+        && c300x_patch_file_size_matches(path, len);
 }
 
-/* A backup is only worth restoring when it is the stock file: a truncated copy,
- * one of another firmware, or a patched one must never replace the target.
- * The backup folder outlives a firmware update, so the stock file of the other
- * supported firmware can lie there; it is refused whenever the target shows
- * which build the device runs. Only a target of neither build leaves that
- * open, and then any supported stock file is the better content. */
+/* Authenticate the entire backup, then reconstruct the target's original
+ * ranges in memory. Only that build's whole-file hash authorizes recovery,
+ * including interrupted patches. Markers and partial hashes are not identity. */
 static int backup_is_stock(const char *backup_path, const char *target_path)
 {
-    const struct routing_variant *expected = target_variant(target_path);
     const struct routing_variant *found;
     char sha256[65];
-    unsigned char *data = NULL;
-    size_t len = 0;
+    unsigned char *backup = NULL, *target = NULL;
+    size_t len = 0, target_len = 0;
+    int valid = 0;
 
-    if (c300x_sha256_file_hex(backup_path, sha256, sizeof(sha256))) {
-        found = variant_for_stock_sha(sha256);
-        if (found != NULL) {
-            return expected == NULL || found == expected;
+    if (!c300x_patch_read_file(backup_path, &backup, &len)
+        || !routing_regular_file(backup_path, len)
+        || !c300x_sha256_bytes_hex(backup, len, sha256, sizeof(sha256))
+        || (found = variant_for_stock_sha(sha256)) == NULL
+        || !routing_regular_file(target_path, len)
+        || !c300x_patch_read_file(target_path, &target, &target_len)
+        || target_len != len) {
+        goto done;
+    }
+    if (memcmp(target, backup, len) != 0) {
+        for (size_t index = 0; index < found->patch_count; index++) {
+            const struct c300x_patch_range *patch = &found->patches[index];
+            if (patch->offset > len || patch->range_len > len - patch->offset) {
+                goto done;
+            }
+            memcpy(target + patch->offset, backup + patch->offset, patch->range_len);
         }
     }
-    if (!c300x_patch_read_file(backup_path, &data, &len)) {
-        return 0;
-    }
-    /* The ranges only cover the patched bytes. A copy that was cut off behind
-     * the last range would pass them, so it must also be as long as the file
-     * it is a backup of: the patch never changes the length. */
-    if (!c300x_patch_file_size_matches(target_path, len)) {
-        free(data);
-        return 0;
-    }
-    found = expected != NULL
-        ? (variant_ranges_match(expected, data, len, 0) ? expected : NULL)
-        : variant_matching(data, len, 0);
-    free(data);
-    return found != NULL;
+    valid = c300x_sha256_bytes_hex(target, len, sha256, sizeof(sha256))
+        && strcmp(sha256, found->stock_sha256) == 0;
+done:
+    free(target);
+    free(backup);
+    return valid;
 }
 
 int c300x_device_routing_read_status(
@@ -619,7 +606,10 @@ int c300x_device_routing_restore(
 {
     char backup_path[C300X_MAX_PATH_LEN];
     char target_path[C300X_MAX_PATH_LEN];
+    char stage_dir[C300X_MAX_PATH_LEN];
+    char stage_path[C300X_MAX_PATH_LEN + 6];
     mode_t backup_mode;
+    int restored = 0;
 
     if (!device_patch_target_path(target_path, sizeof(target_path))) {
         set_error(error, error_len, "target_path_failed");
@@ -641,17 +631,32 @@ int c300x_device_routing_restore(
         set_error(error, error_len, "routing_backup_invalid");
         return 0;
     }
+    if (snprintf(stage_dir, sizeof(stage_dir), "%s.restore.XXXXXX", target_path)
+            >= (int)sizeof(stage_dir)
+        || snprintf(stage_path, sizeof(stage_path), "%s/file", stage_dir)
+            >= (int)sizeof(stage_path)) {
+        set_error(error, error_len, "target_tmp_path_failed");
+        return 0;
+    }
     if (!c300x_patch_remount_root("rw")) {
         set_error(error, error_len, "remount_rw_failed");
         return 0;
     }
-    if (!c300x_patch_copy_file_exact(backup_path, target_path, backup_mode)) {
-        (void)c300x_patch_remount_root("ro");
-        set_error(error, error_len, "routing_restore_failed");
-        return 0;
+    if (mkdtemp(stage_dir) != NULL) {
+        (void)snprintf(stage_path, sizeof(stage_path), "%s/file", stage_dir);
+        restored = c300x_patch_copy_file_exact(backup_path, stage_path, backup_mode)
+            && backup_is_stock(stage_path, target_path)
+            && rename(stage_path, target_path) == 0;
+        (void)unlink(stage_path);
+        (void)rmdir(stage_dir);
     }
     if (!remount_root_ro_or_error(error, error_len)) {
         return 0;
     }
-    return c300x_device_routing_read_status(status);
+    if (!restored || !c300x_device_routing_read_status(status)
+        || variant_for_stock_sha(status->file_sha256) == NULL) {
+        set_error(error, error_len, "routing_restore_failed");
+        return 0;
+    }
+    return 1;
 }

@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     /* A valid backup restores the target. */
     put(backup, "stock-binary");
     assert(c300x_sha256_file_hex(backup, g_stock_sha, sizeof(g_stock_sha)));
-    put(target, "modified");
+    put(target, "stock-binary");
     error[0] = '\0';
     assert(c300x_device_routing_restore(&status, error, sizeof(error)));
     expect(target, "stock-binary");
@@ -82,12 +82,12 @@ int main(int argc, char **argv)
     assert(strcmp(error, "routing_backup_invalid") == 0);
     expect(target, "modified");
 
-    /* A backup of another build passes by its ranges, when it is complete. */
+    /* Matching ranges and length are not a whole-file identity. */
     g_ranges_match = 1;
     put(backup, "other-build!");
     put(target, "modified-123");
-    assert(c300x_device_routing_restore(&status, error, sizeof(error)));
-    expect(target, "other-build!");
+    assert(!c300x_device_routing_restore(&status, error, sizeof(error)));
+    expect(target, "modified-123");
 
     /* A copy that was cut off behind the last range still has the ranges,
      * but it is shorter than the file: it must not replace the target. */
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
 
     /* So is its backup. */
     put(backup, "stock-2-0-2");
-    put(target, "modified-202");
+    put(target, "stock-2-0-2");
     assert(c300x_device_routing_restore(&status, error, sizeof(error)));
     expect(target, "stock-2-0-2");
 

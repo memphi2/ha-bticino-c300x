@@ -446,7 +446,7 @@ def test_options_menu_names_and_explains_every_area() -> None:
     menus = {
         "init": {
             "features", "visitor_snapshot", "camera_quality", "device_activations", "speech", "connection",
-            "display", "done",
+            "display", "dashboard_alarm", "done",
         },
         "display": {
             "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm", "init",

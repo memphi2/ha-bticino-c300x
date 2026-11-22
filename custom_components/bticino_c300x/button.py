@@ -574,11 +574,7 @@ def _connection_available(entry: BticinoC300XConfigEntry) -> bool:
 def _gui_required_action_available(entry: BticinoC300XConfigEntry) -> bool:
     if not _connection_available(entry):
         return False
-    runtime_data = getattr(entry, "runtime_data", None)
-    status = getattr(runtime_data, "qml_patch_status", {})
-    return entry_device_ui_enabled_or_patch_active(entry) and bool(
-        isinstance(status, dict) and status.get("patched") is True
-    )
+    return entry_device_ui_enabled_or_patch_active(entry) and entry_gui_function_patch_active(entry)
 
 
 def _memo_store_available(entry: BticinoC300XConfigEntry) -> bool:

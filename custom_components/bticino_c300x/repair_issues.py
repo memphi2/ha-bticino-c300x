@@ -22,6 +22,7 @@ from .const import (
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 from .device_user import device_user_repair_reason
+from .display_activation import display_activation_confirmed
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .media_readiness import media_readiness
@@ -420,6 +421,10 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
             "original",
             "partial",
         }
+        if not display_activation_confirmed(status):
+            missing = True
+            overlay = status.get("qt5_overlay")
+            core_state = "qt5_gui_unconfirmed" if overlay == "active" else "qt5_" + str(overlay)
     diagnostics = (
         runtime_data.diagnostics.qml_patch_diagnostics
         if runtime_data is not None

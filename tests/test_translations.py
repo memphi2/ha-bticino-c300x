@@ -21,6 +21,82 @@ def test_localized_translation_files_match_english_keys() -> None:
         assert _leaf_paths(localized) == _leaf_paths(english)
 
 
+ACTIVATIONS_HINT = {
+    "strings": ("Further door locks and lights", "are added here"),
+    "en": ("Further door locks and lights", "are added here"),
+    "de": ("Weitere Türschlösser und Lichter", "legst du hier an"),
+    "fr": ("Les serrures et lumières supplémentaires", "s'ajoutent ici"),
+    "it": ("Serrature e luci aggiuntive", "si aggiungono qui"),
+}
+
+
+def test_the_activations_form_says_that_further_locks_and_lights_are_added_there() -> None:
+    """Users looked elsewhere for a second door or a light; the form says it is the place."""
+
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        hint = ACTIVATIONS_HINT[path.stem]
+        for area, step in (
+            ("config", "user_device_activations"), ("config", "reconfigure_device_activations"),
+            ("options", "device_activations"),
+        ):
+            description = data[area]["step"][step]["description"]
+            first = description.split("\n\n", 1)[0]
+            assert all(part in first for part in hint), (path.name, step)
+
+
+def test_the_snapshot_size_says_why_480_is_the_limit_and_what_keeps_a_576_picture_in_shape() -> None:
+    """A user tried 576 for a 704x576 camera picture; the form says the display sets the limit."""
+
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for area, step in (
+            ("config", "user_visitor_snapshot"), ("config", "reconfigure_visitor_snapshot"),
+            ("options", "visitor_snapshot"),
+        ):
+            help_texts = data[area]["step"][step]["data_description"]
+            height = help_texts["snapshot_height"]
+            assert "800×480" in height and "704×576" in height and "587×480" in height, (path.name, step)
+            assert "800×480" in help_texts["snapshot_width"]
+        for area in ("config", "options"):
+            assert "800×480" in data[area]["error"]["invalid_snapshot_option"], path.name
+
+
+# Every value the speaker's last_result can take: the agent's endings
+# (native_agent/src/announce_device.c) and the ones media_player.py sets itself.
+SPEAKER_RESULTS = {
+    "played", "preempted", "stopped", "device_busy", "sound_path_failed", "play_failed",
+    "failed", "not_played", "unknown",
+}
+
+
+SPEAKER_PREEMPTED = {
+    "strings": "Interrupted by a call or camera view",
+    "en": "Interrupted by a call or camera view",
+    "de": "Von einem Ruf oder der Kameraansicht unterbrochen",
+    "fr": "Interrompu par un appel ou l'affichage caméra",
+    "it": "Interrotto da una chiamata o dalla vista telecamera",
+}
+
+
+def test_the_speaker_shows_its_state_and_last_result_in_words_with_a_state_icon() -> None:
+    from custom_components.bticino_c300x.media_player import _RESULT_ERRORS
+
+    assert set(_RESULT_ERRORS) <= SPEAKER_RESULTS
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        speaker = _load_json(path)["entity"]["media_player"]["speaker"]
+        assert set(speaker["state"]) == {"idle", "playing"}, path.name
+        last_result = speaker["state_attributes"]["last_result"]
+        assert last_result["name"]
+        assert set(last_result["state"]) == SPEAKER_RESULTS, path.name
+        # A door call, an intercom call and the camera view all take the speaker
+        # (native_agent/src/announce_frames.c).
+        assert last_result["state"]["preempted"] == SPEAKER_PREEMPTED[path.stem], path.name
+        assert all(last_result["state"].values())
+    icons = _load_json(INTEGRATION / "icons.json")["entity"]["media_player"]["speaker"]
+    assert icons == {"default": "mdi:bullhorn-outline", "state": {"playing": "mdi:bullhorn"}}
+
+
 def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> None:
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)

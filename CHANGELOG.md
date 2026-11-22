@@ -1,5 +1,29 @@
 # Changelog
 
+## v2.8.1 - 2026-11-22
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+Fixed:
+
+- The Display restore no longer reports `display_library_restore_failed`
+  after it has put the display library back. Agent commands on the C300X lost
+  their output when it went to a pipe, so the Display patch script read
+  nothing from the agent. Needs the agent update.
+
+Settings:
+
+- The activations step says that further door locks and lights, for example
+  for a second door, are added there, one activation each.
+- The visitor snapshot size explains its limit: the picture is read from the
+  800×480 display, so it is at most 480 high; for a 704×576 camera picture
+  about 587×480 keeps its shape. The error for an invalid size says the same.
+
+Speaker:
+
+- The speaker shows **Ready** or **Playing** with a matching icon, and its
+  last result in words, for example **Interrupted by a call or camera view**.
+
 ## v2.8.0 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

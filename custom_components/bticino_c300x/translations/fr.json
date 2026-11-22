@@ -75,7 +75,7 @@
         },
         "data_description": {
           "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 par défaut, la hauteur du flux vidéo de l'appareil et de l'écran. Plage 64-480.",
+          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -83,7 +83,7 @@
       },
       "user_device_activations": {
         "title": "Activations appareil supplémentaires",
-        "description": "Activations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
+        "description": "Les serrures et lumières supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",
@@ -188,7 +188,7 @@
         },
         "data_description": {
           "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 par défaut, la hauteur du flux vidéo de l'appareil et de l'écran. Plage 64-480.",
+          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -196,7 +196,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Activations appareil supplémentaires",
-        "description": "Activations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
+        "description": "Les serrures et lumières supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",
@@ -696,7 +696,7 @@
       "dashboard_entity_on_several_pages": "Une entité est choisie sur plusieurs pages ; gardez-la sur une seule page.",
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
-      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480.",
+      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480. L'image est lue sur l'écran 800×480.",
       "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
       "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
@@ -759,7 +759,7 @@
         },
         "data_description": {
           "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 par défaut, la hauteur du flux vidéo de l'appareil et de l'écran. Plage 64-480.",
+          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -793,7 +793,7 @@
       },
       "device_activations": {
         "title": "Activations : serrures, lumières, éclairage d'escalier",
-        "description": "Activations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
+        "description": "Les serrures et lumières supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",
@@ -1136,7 +1136,7 @@
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
       "required": "Ce champ est obligatoire.",
-      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480.",
+      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480. L'image est lue sur l'écran 800×480.",
       "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
       "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
@@ -1238,7 +1238,27 @@
     },
     "media_player": {
       "speaker": {
-        "name": "Haut-parleur"
+        "name": "Haut-parleur",
+        "state": {
+          "idle": "Prêt",
+          "playing": "Lecture en cours"
+        },
+        "state_attributes": {
+          "last_result": {
+            "name": "Dernier son",
+            "state": {
+              "played": "Joué",
+              "preempted": "Interrompu par un appel ou l'affichage caméra",
+              "stopped": "Arrêté",
+              "device_busy": "Haut-parleur occupé",
+              "sound_path_failed": "Le haut-parleur n'a pas pu être activé",
+              "play_failed": "Lecture impossible",
+              "failed": "Terminé de façon inattendue",
+              "not_played": "Non joué",
+              "unknown": "Inconnu"
+            }
+          }
+        }
       }
     },
     "select": {

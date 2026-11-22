@@ -67,6 +67,8 @@ def test_validate_workflow_runs_armhf_stack_check() -> None:
 
     assert "gcc-arm-linux-gnueabihf" in workflow
     assert "binutils-arm-linux-gnueabihf" in workflow
+    # tests/test_native_arm_start.py runs the ARM start code under qemu-arm.
+    assert "qemu-user" in workflow
     assert "python scripts/check_validate.py" in workflow
     assert '"make", "-C", "native_agent", "armhf-stack-check"' in validate_script
     assert "C300X_DEVICE_SYSROOT" in validate_script

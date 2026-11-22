@@ -119,7 +119,7 @@ def test_command_failure_does_not_expose_remote_output(ssh_server):
 def test_wrong_password_fails_cleanly(ssh_server):
     from dataclasses import replace
 
-    with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
+    with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
         installer._connect_device_client(replace(ssh_server, ssh_password="wrong"))
 
 

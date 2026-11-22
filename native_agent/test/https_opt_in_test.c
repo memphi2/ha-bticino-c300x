@@ -82,6 +82,9 @@ int main(int argc, char **argv)
     strcpy(config.maintenance_admin_token, "test-maintenance-token");
     config.maintenance_enabled = 1;
     runtime->config = &config;
+    /* As the agent starts them: no request owns a worker. */
+    (void)c300x_openwebnet_async_init(&runtime->openwebnet, &runtime->request_queue);
+    (void)c300x_video_control_init(&runtime->video_control, &runtime->request_queue);
 
     configure(&config, runtime, request, 1, "403 Forbidden");
     assert(!config.https_callbacks_enabled && runtime->agent_write_count == 0);

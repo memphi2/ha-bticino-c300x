@@ -11,6 +11,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from device_file_strip import strip_device_source  # noqa: E402
+
 spec = importlib.util.spec_from_file_location("c100x_qml_builder", ROOT / "scripts/c100x_qml_builder.py")
 builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
@@ -30,7 +33,7 @@ def test_parity_inventory_is_complete_and_sources_are_separate(tmp_path):
         assert "tabView" not in generated
     assert all(path.read_bytes() == content for path, content in before.items())
     for path in (source / "js").glob("*.js"):
-        assert (tmp_path / "js" / path.name).read_bytes() == path.read_bytes()
+        assert (tmp_path / "js" / path.name).read_text() == strip_device_source(path.read_text())
 
 
 def test_physical_keys_leave_vendor_actions_untouched():

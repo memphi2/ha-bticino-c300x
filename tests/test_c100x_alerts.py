@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 import pytest
-from test_c100x_qml_adapter import ROOT, builder
+from test_c100x_qml_adapter import ROOT, builder, strip_device_source
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 
 
@@ -25,7 +25,8 @@ def test_alert_adapter_uses_verified_stock_screen_api_and_no_guessed_sound(tmp_p
     assert "command.sound_duration === 0" in page
     assert "root.vendorScreen.simulateClick()" in page
     assert "root.vendorScreen.disableState(c100xHost.normalState)" in page
-    assert (tmp_path / "js/c300x_alerts.js").read_bytes() == (ROOT / "device_qml/js/c300x_alerts.js").read_bytes()
+    assert (tmp_path / "js/c300x_alerts.js").read_text() == strip_device_source(
+        (ROOT / "device_qml/js/c300x_alerts.js").read_text())
 
 
 def test_alert_wake_focus_ack_and_call_preemption_in_host_qt5(tmp_path):

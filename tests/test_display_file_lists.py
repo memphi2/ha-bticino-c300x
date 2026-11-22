@@ -44,6 +44,7 @@ def test_every_list_of_the_display_files_names_the_same_files() -> None:
 
 def test_c100x_templates_are_all_present_in_the_generated_adapter(tmp_path: Path) -> None:
     from c100x_qml_builder import build
+    from device_file_strip import STRIPPED_SUFFIXES, strip_device_source
 
     destination = tmp_path / "adapter"
     build(destination)
@@ -51,7 +52,9 @@ def test_c100x_templates_are_all_present_in_the_generated_adapter(tmp_path: Path
     templates = [path for path in source.rglob("*") if path.is_file()]
     assert templates
     for path in templates:
-        assert (destination / path.relative_to(source)).read_bytes() == path.read_bytes()
+        expected = (strip_device_source(path.read_text(), name=path.name).encode()
+                    if path.suffix in STRIPPED_SUFFIXES else path.read_bytes())
+        assert (destination / path.relative_to(source)).read_bytes() == expected
 
 
 def test_manual_installer_preserves_javascript_subdirectory() -> None:

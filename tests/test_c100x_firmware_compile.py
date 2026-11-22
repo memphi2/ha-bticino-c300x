@@ -100,7 +100,8 @@ def firmware_probe(firmware_workspace):
     return run
 
 
-def test_generated_c100x_pages_compile_with_firmware_qt5101(firmware_probe, firmware_case):
+def test_generated_c100x_pages_compile_with_firmware_qt5101(firmware_probe, firmware_case, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     spec = importlib.util.spec_from_file_location("c100x_builder", ROOT / "scripts/c100x_qml_builder.py")
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)

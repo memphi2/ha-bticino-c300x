@@ -10,6 +10,8 @@ import re
 import shutil
 from pathlib import Path
 
+from device_file_strip import STRIPPED_SUFFIXES, strip_device_file
+
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = (
     "Alarm.qml", "HomeAssistant.qml", "C300XAgenda.qml", "C300XAlerts.qml", "C300XChecks.qml",
@@ -124,6 +126,10 @@ def build(destination: Path, source: Path = ROOT / "device_qml") -> None:
     shutil.copytree(source / "c100x" / "js", destination / "js", dirs_exist_ok=True)
     shutil.copytree(source / "c100x" / "hooks", destination / "hooks", dirs_exist_ok=True)
     files = sorted(path for path in destination.rglob("*") if path.is_file() and path.name != "SHA256SUMS")
+    # Adaptation needs the source anchors; hash only the final delivered bytes.
+    for path in files:
+        if path.suffix in STRIPPED_SUFFIXES:
+            strip_device_file(path, path)
     (destination / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(destination).as_posix()}\n"
         for path in files

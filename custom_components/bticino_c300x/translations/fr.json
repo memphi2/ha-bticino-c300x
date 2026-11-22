@@ -767,16 +767,16 @@
       },
       "camera_quality": {
         "title": "Qualité de la caméra",
-        "description": "Taille, débit et fréquence d'images du flux caméra haut ; sur le firmware 3.0.x, du flux bas, également reçu par l'application Door Entry. Sur un firmware plus ancien avec **Résolution de la caméra** sur Basse, Home Assistant reçoit le flux bas, que ces réglages ne modifient pas. Enregistrer une modification nécessite un redémarrage normal de l'appareil, pas seulement de l'agent ; prévoir environ une minute.\n\n960x576 est facultatif. L'application ou la restauration vérifie une sauvegarde originale sur l'appareil, jamais distribuée ; les permissions et le propriétaire d'origine sont conservés. Le correctif de géométrie contient uniquement la logique de modification et les vérifications propres au projet, sans code du fabricant ni fichiers de firmware.\n\nL'appareil fonctionne actuellement avec : {running}",
+        "description": "Ces réglages s'appliquent à **Résolution de la caméra** : Haute, ou Basse sur le firmware 3.0.x. Enregistrer les modifications redémarre automatiquement l'appareil ; prévoir environ une minute.\n\nValeurs actuelles : {running}",
         "data": {
           "size": "Taille de l'image",
           "bitrate_kbps": "Débit",
           "fps": "Fréquence d'images"
         },
         "data_description": {
-          "size": "Flux haut : recadrage d'usine 688x480 ou 704x576 avec les 576 lignes ; 704x576 ne correspond pas aux proportions 5:3 de l'écran LCD. L'option 960x576 exige un exécutable média exact vérifié du firmware C300X 1.7.19 ou 2.0.2, chacun avec sa propre paire SHA-256 complète pour l'original et le fichier modifié. Vidéo en direct testée sur appareil avec 1.7.19 ; 2.0.2 vérifié hors ligne uniquement. Elle redimensionne le recadrage 704x576 avant l'encodeur existant pour correspondre au LCD 800x480, sans ajouter de détails natifs à la caméra. Les enregistrements du répondeur en 960x576 ne sont pas vérifiés. Firmware 3.0.x, flux bas : 400x288 en usine ; 320x240 est un format 4:3 compact, 480x288, 640x384 et 720x432 correspondent au rapport 5:3 du LCD. 352x288, 640x480, 704x576 et 720x576 restent disponibles. Configuration et caps de l’encodeur 3.0.6 vérifiées hors ligne ; les autres tailles, leur cadrage et leurs performances restent non testés sur appareil. Ces tailles ne modifient ni le binaire ni la zone LCD. 960x576 n’est pas proposé sur 3.0.x.",
-          "bitrate_kbps": "800 kbit/s d'usine, au plus 3000. Le flux bas du firmware 3.0.x : 180 d'usine, 100-2000. Plus donne une image plus nette et utilise plus de réseau.",
-          "fps": "15 images par seconde d'usine ; le flux haut accepte au plus 24, car à 25 l'appareil n'en envoie qu'environ 8. Le flux bas du firmware 3.0.x : 10 d'usine, au plus 25."
+          "size": "Les tailles dépendent du firmware et de l'agent installé sur l'appareil. L'option 960x576 respecte les proportions de l'écran, si proposée.",
+          "bitrate_kbps": "Des valeurs plus élevées améliorent l'image mais augmentent le trafic réseau.",
+          "fps": "Des valeurs plus élevées rendent les mouvements plus fluides ; le sélecteur indique les limites prises en charge."
         }
       },
       "speech": {

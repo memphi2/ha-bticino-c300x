@@ -145,10 +145,3 @@ int c300x_announce_supported(const struct c300x_announce *announce)
         && access(c300x_announce_path("C300X_ZL_TOOL", "/bin/zl38005_ioctl-v2"), X_OK) == 0
         && access(c300x_announce_path("C300X_ZL_PLAY_CONFIG", "/home/bticino/microsemi/MEMO_AM_PLAY.cr"), R_OK) == 0;
 }
-
-int c300x_announce_frame_takes_speaker(const char *frame)
-{
-    /* A call is set up (ring, intercom, camera view) or answered. Locks,
-     * lights, video commands and the end of a call do not take the speaker. */
-    return strncmp(frame, "*8*1#", 5) == 0 || strncmp(frame, "*8*2#", 5) == 0;
-}

@@ -140,18 +140,17 @@ def _device_info(entry: BticinoC300XConfigEntry) -> DeviceInfo:
     """Return C300X device metadata without extra device reads."""
 
     firmware = _agent_info_string(entry, "firmware")
-    model = "Classe 100X" if _agent_info_string(entry, "model") == "C100X" else "Classe 300X"
     if firmware is None:
         return DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             manufacturer="BTicino",
-            model=model,
+            model="Classe 300X",
             name=entry.title,
         )
     return DeviceInfo(
         identifiers={(DOMAIN, entry.entry_id)},
         manufacturer="BTicino",
-        model=model,
+        model="Classe 300X",
         name=entry.title,
         sw_version=firmware,
     )

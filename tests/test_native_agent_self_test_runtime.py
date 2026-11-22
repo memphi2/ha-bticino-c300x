@@ -67,7 +67,6 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
         "# c300x-native-agent firewall begin\n# c300x-native-agent firewall end\n",
         encoding="utf-8",
     )
-    webserver_db = tmp_path / "dbfiles_ws.xml"
     binary = tmp_path / "self-test-user"
     subprocess.run(
         [
@@ -75,13 +74,10 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
             "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             *(f"-D{name}={json.dumps(str(path))}" for name, path in paths.items()),
-            f"-DC300X_FIRMWARE_INFO_XML={json.dumps(str(webserver_db))}",
             str(NATIVE / "test/self_test_user_test.c"),
             str(NATIVE / "src/self_test.c"),
             str(NATIVE / "src/device_user.c"),
             str(NATIVE / "src/string_util.c"),
-            str(NATIVE / "src/device_detect.c"),
-            str(NATIVE / "src/file_io.c"),
             "-o", str(binary),
         ], check=True, capture_output=True, text=True,
     )
@@ -108,22 +104,6 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
         assert status["checks"]["device_routing"]["reason"] == "device_routing_missing"
     for path, original in originals.items():
         assert (path.read_bytes(), path.stat().st_mtime_ns) == original
-    if case == "no_device_user":
-        def family(configured: str) -> str:
-            answer = subprocess.run(
-                [str(binary), str(firewall), "1", configured], check=True, capture_output=True, text=True,
-            )
-            return json.loads(answer.stdout)["self_test"]["firmware_family"]
-
-        families = {"1.5.8": "1.5.x", "1.7.19": "1.7.x", "2.0.2": "2.0.x", "3.0.6": "3.0.x", "4.0.0": "unknown"}
-        for firmware, expected in families.items():
-            assert family(firmware) == expected, firmware
-        # The installer writes no firmware into the config: the device's own
-        # web server database tells it, as for the capabilities.
-        assert family("") == "unknown"
-        webserver_db.write_text("<x><ver_webserver> 1.5.8 </ver_webserver></x>", encoding="utf-8")
-        assert family("") == "1.5.x"
-        assert family("3.0.6") == "3.0.x"
 
 
 def test_native_account_line_is_added_to_a_file_without_a_final_newline(tmp_path: Path) -> None:

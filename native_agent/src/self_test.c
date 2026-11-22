@@ -1,6 +1,5 @@
 #include "self_test.h"
 
-#include "device_detect.h"
 #include "device_user.h"
 #include "device_routing.h"
 #include "string_util.h"
@@ -41,22 +40,16 @@ static const char *check_json(int value)
 
 static const char *firmware_family(const struct c300x_config *config)
 {
-    char firmware[C300X_MAX_VERSION_LEN];
-
-    c300x_device_firmware(config != NULL ? config->device_firmware : NULL, firmware, sizeof(firmware));
-    if (firmware[0] == '\0') {
+    if (config == NULL || config->device_firmware[0] == '\0') {
         return "unknown";
     }
-    if (strncmp(firmware, "1.5.", 4) == 0) {
-        return "1.5.x";
-    }
-    if (strncmp(firmware, "1.7.", 4) == 0) {
+    if (strncmp(config->device_firmware, "1.7.", 4) == 0) {
         return "1.7.x";
     }
-    if (strncmp(firmware, "2.0.", 4) == 0) {
+    if (strncmp(config->device_firmware, "2.0.", 4) == 0) {
         return "2.0.x";
     }
-    if (strncmp(firmware, "3.0.", 4) == 0) {
+    if (strncmp(config->device_firmware, "3.0.", 4) == 0) {
         return "3.0.x";
     }
     return "unknown";

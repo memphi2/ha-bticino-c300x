@@ -193,7 +193,6 @@ def _agent_info_attributes(agent_info: Mapping[str, Any]) -> dict[str, Any]:
             ("agent_version", version),
             ("api_version", agent_info.get("api_version")),
             ("model", agent_info.get("model")),
-            ("display_kind", agent_info.get("display_kind")),
             ("firmware", agent_info.get("firmware")),
         )
         if value is not None

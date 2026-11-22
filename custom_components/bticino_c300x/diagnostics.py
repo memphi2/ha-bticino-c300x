@@ -563,7 +563,6 @@ def _agent_info_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         "implementation": info.get("implementation"),
         "api_version": info.get("api_version"),
         "model": info.get("model"),
-        "display_kind": info.get("display_kind"),
         "firmware": info.get("firmware"),
         "device_id_configured": bool(device_id),
         "device_id_fingerprint": fnv1a64_fingerprint(str(device_id))

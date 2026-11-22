@@ -2,7 +2,6 @@
 #include "activation_discovery.h"
 #include "agent_update.h"
 #include "c300x_agent.h"
-#include "device_detect.h"
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "http_maintenance.h"
@@ -110,6 +109,7 @@
  * per byte must fit: the list is not paged. */
 #define C300X_MEMOS_RESPONSE_SIZE \
     (1024 + (2 * C300X_MAX_VOICEMAIL_MESSAGES * (C300X_MAX_MEMO_TEXT_JSON_LEN + 768)))
+#define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
 enum listener_kind {
     LISTENER_API = C300X_HTTP_KIND_API,
     LISTENER_UI = C300X_HTTP_KIND_UI
@@ -486,6 +486,11 @@ static void handle_config_normalize(
     const struct request *request
 );
 static int client_is_loopback(int client_fd);
+static void resolve_device_firmware(
+    const struct c300x_config *config,
+    char *out,
+    size_t out_len
+);
 static int validate_alarm_command(const char *value)
 {
     return strcmp(value, "arm_away") == 0
@@ -890,6 +895,82 @@ static int path_is_symlink(const char *path, int *is_symlink)
         return 1;
     }
     return 0;
+}
+
+static int firmware_version_is_safe(const char *value, size_t len)
+{
+    if (len == 0 || len >= C300X_MAX_VERSION_LEN) {
+        return 0;
+    }
+    for (size_t index = 0; index < len; index++) {
+        unsigned char ch = (unsigned char)value[index];
+        if (
+            (ch >= '0' && ch <= '9')
+            || (ch >= 'A' && ch <= 'Z')
+            || (ch >= 'a' && ch <= 'z')
+            || ch == '.'
+            || ch == '-'
+            || ch == '_'
+        ) {
+            continue;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+static int read_firmware_from_webserver_db(char *out, size_t out_len)
+{
+    char document[4096];
+    int truncated = 0;
+    const char *start;
+    const char *end;
+    const char *open_tag = "<ver_webserver>";
+    const char *close_tag = "</ver_webserver>";
+    size_t len;
+
+    if (!read_bounded_text_file(C300X_FIRMWARE_INFO_XML, document, sizeof(document), &truncated) || truncated) {
+        return 0;
+    }
+    start = strstr(document, open_tag);
+    if (start == NULL) {
+        return 0;
+    }
+    start += strlen(open_tag);
+    end = strstr(start, close_tag);
+    if (end == NULL || end <= start) {
+        return 0;
+    }
+    while (start < end && isspace((unsigned char)*start)) {
+        start++;
+    }
+    while (end > start && isspace((unsigned char)end[-1])) {
+        end--;
+    }
+    len = (size_t)(end - start);
+    if (!firmware_version_is_safe(start, len) || len >= out_len) {
+        return 0;
+    }
+    memcpy(out, start, len);
+    out[len] = '\0';
+    return 1;
+}
+
+static void resolve_device_firmware(
+    const struct c300x_config *config,
+    char *out,
+    size_t out_len
+)
+{
+    if (out_len == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (config != NULL && config->device_firmware[0] != '\0') {
+        c300x_copy_string(out, out_len, config->device_firmware);
+        return;
+    }
+    (void)read_firmware_from_webserver_db(out, out_len);
 }
 
 static int parse_file_mode(const char *value, mode_t fallback, mode_t *mode)
@@ -2689,7 +2770,7 @@ static void handle_camera_resolution(
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_high_resolution\"}\n");
             return;
         }
-        if (enabled && c300x_device_camera_resolution_fixed()) {
+        if (enabled && c300x_device_display_is_qt5()) {
             send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"high_resolution_unsupported\"}\n");
             return;
         }
@@ -5238,20 +5319,18 @@ static void api_capabilities(
         bundle_agent_version, sizeof(bundle_agent_version),
         bundle_api_version, sizeof(bundle_api_version)
     );
-    c300x_device_firmware(config->device_firmware, firmware_value, sizeof(firmware_value));
+    resolve_device_firmware(config, firmware_value, sizeof(firmware_value));
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_status(runtime->video, &video_status);
     }
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
-        .device_model = c300x_device_model_name(c300x_device_model()),
-        .display_kind = c300x_display_kind_name(c300x_device_display_kind()),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
-        .camera_resolution_fixed = c300x_device_camera_resolution_fixed(),
+        .camera_resolution_fixed = c300x_device_display_is_qt5(),
         .announcements_supported = runtime != NULL && c300x_announce_supported(&runtime->announce),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),

@@ -1,7 +1,6 @@
 /* Real route/job ownership, with all device file operations replaced locally. */
 #include "../src/http_device_user.h"
 #include "../src/device_user.h"
-#include "../src/device_detect.h"
 #include "../src/device_routing.h"
 #include "../src/string_util.h"
 
@@ -64,9 +63,9 @@ int c300x_device_user_read_status(struct c300x_device_user_status *status)
     return 1;
 }
 
-int c300x_device_display_files_patchable(void)
+int c300x_device_display_is_qt5(void)
 {
-    return strcmp(test_case, "qt5") != 0;
+    return strcmp(test_case, "qt5") == 0;
 }
 
 int c300x_device_routing_read_status(struct c300x_device_routing_status *status)

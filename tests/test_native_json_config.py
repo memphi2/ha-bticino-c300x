@@ -17,7 +17,6 @@ def test_json_decoding_and_private_config_creation(tmp_path, sanitize):
          "-Wall", "-Wextra", "-Werror", *flags,
          *(str(ROOT / source) for source in [
              "test/json_config_test.c", "src/json_util.c", "src/json_parse.c", "src/string_util.c",
-             "src/device_detect.c", "src/file_io.c", "src/sha256.c",
          ]), "-o", str(binary)], capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr

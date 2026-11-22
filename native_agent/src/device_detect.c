@@ -30,12 +30,14 @@ enum c300x_device_model c300x_device_model(void)
 
 enum c300x_display_kind c300x_device_display_kind(void)
 {
+    /* A known C100X must never receive the C300X Qt 4 file patch. */
+    if (c300x_device_model() == C300X_DEVICE_MODEL_C100X) {
+        return C300X_DISPLAY_QT5_ONDISK;
+    }
     if (access(C300X_QT5_DISPLAY_MARKER, F_OK) != 0) {
         return C300X_DISPLAY_QT4_ONDISK;
     }
-    return c300x_device_model() == C300X_DEVICE_MODEL_C100X
-        ? C300X_DISPLAY_QT5_ONDISK
-        : C300X_DISPLAY_QT5_RCC;
+    return C300X_DISPLAY_QT5_RCC;
 }
 
 const char *c300x_device_model_name(enum c300x_device_model model)

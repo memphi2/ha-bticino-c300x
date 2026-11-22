@@ -169,6 +169,32 @@ Qt Quick 1.1 imports and two vendor components are adapted for the local Qt 6
 renderer. This verifies layout, not Qt 4 firmware or device performance.
 PySide6 is a development-only tool, not an integration dependency.
 
+### Offline Qt 4 Runtime
+
+For the original Qt 4.8.7 engine, use a private, extracted C300X 1.7.19
+firmware root filesystem, `arm-linux-gnueabihf-gcc` and `qemu-arm`:
+
+```bash
+python scripts/setup_qt4_runtime.py --sysroot /private/rootfs-1.7.19
+python -m pytest tests/test_energy_consumers_layout.py::test_consumers_qt4_runtime_labels tests/test_qt4_runtime_setup.py
+```
+
+Setup builds and verifies the ARM probe in `$XDG_CACHE_HOME/c300x-dev/qt4-runtime`
+(default `~/.cache/c300x-dev/qt4-runtime`). Pytest discovers it automatically.
+Changed probe sources or damaged cache files fail explicitly: rerun setup.
+The existing `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and
+`C300X_QT4_IMPORTS` overrides remain supported when all four are set.
+
+The probe checks the actual Qt version and executes the unchanged consumer
+JavaScript through a non-rendering QML test component, including 214 numeric
+formatting checks. It uses a narrow Qt 4.8.7 ABI adapter because firmware
+development headers are unavailable. It does not render the display, load
+vendor plugins, prove device startup safety or replace hardware testing.
+Only trusted test QML should be passed to it. Firmware libraries stay in the
+private sysroot; setup neither copies them into the repository nor contacts,
+writes to or restarts a device. CI without that private runtime still skips
+the optional firmware-specific tests.
+
 ## Display Bundle Upgrade Tests
 
 File-set 6 adds `C300XChecks.qml`, `C300XSituations.qml` and

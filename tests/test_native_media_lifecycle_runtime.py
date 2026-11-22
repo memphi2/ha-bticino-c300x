@@ -24,6 +24,7 @@ def media_binaries(request, tmp_path_factory):
         ("media_start_stop", sources),
         ("media_rtsp_auth", ["media_rtsp_auth", "media_base64", "string_util"]),
         ("media_rtsp_writer", ["time_util"]),
+        ("media_rtsp_deadline", []),
         ("media_ring_stop", []),
     ):
         result = subprocess.run(
@@ -52,10 +53,19 @@ def test_ring_receiver_stop_ownership(media_binaries):
 
 
 @pytest.mark.parametrize("case", [
-    "response_after_rtp", "rtp_after_response", "audio_after_video", "framing", "timeouts", "partial_failure",
+    "response_after_rtp", "rtp_after_response", "audio_after_video", "framing", "timeouts", "partial_failure", "slow_reader", "stall_limit",
 ])
 def test_rtsp_writer(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_rtsp_writer"), case],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("case", [
+    "interrupt", "response_interrupt", "partial_interrupt", "short_writes", "partial_stall_fanout",
+])
+def test_rtsp_write_deadlines(media_binaries, case):
+    result = subprocess.run([str(media_binaries / "media_rtsp_deadline"), case],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
 

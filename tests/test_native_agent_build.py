@@ -69,8 +69,11 @@ def test_abi_gate_rejects_tool_errors_and_incompatible_versions(tmp_path, symbol
     tool = tmp_path / "readelf"
     tool.write_text(f"#!{sys.executable}\nprint({symbols!r})\nraise SystemExit({code})\n")
     tool.chmod(0o700)
+    # This fake readelf models version-info only. Real firmware symbol checks
+    # have separate fixtures and must not inherit the developer's sysroots.
     result = make(native, "-o", "build/armhf/c300x-agent-native", "armhf-abi-check",
-                  f"ARMHF_READELF={tool}", f"PYTHON={sys.executable}")
+                  f"ARMHF_READELF={tool}", f"PYTHON={sys.executable}",
+                  "C300X_DEVICE_SYSROOT=", "C300X_ABI_SYSROOTS=")
     assert (result.returncode == 0) is ok, result.stdout + result.stderr
     assert ("ARMHF ABI check passed" in result.stdout) is ok
 

@@ -1,10 +1,11 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-22. Integration and native agent `2.8.1`, a maintenance
-release that fixes the Display restore and clarifies settings of `2.8.0`.
-Version `2.8.0` is the successor of `2.7.0`, with speech and sounds on the
-device's speaker, spoken notifications and camera quality settings. This
-report covers the release source tree.
+Source review: 2026-11-22. Integration and native agent `2.8.2`, a maintenance
+release that keeps on-demand video running for a client that reads late.
+Version `2.8.1` fixed the Display restore and clarified settings of `2.8.0`,
+the successor of `2.7.0`, with speech and sounds on the device's speaker,
+spoken notifications and camera quality settings. This report covers the
+release source tree.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.

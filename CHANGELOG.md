@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.8.2 - 2026-11-22
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+Fixed:
+
+- Short pauses in receiving on-demand video, for example over WiFi, no longer
+  immediately close the connection when the next packet has not started.
+  The agent skips that packet and lets the viewer recover. Media writes stay
+  bounded for other viewers. An unfinished partial packet or five seconds
+  without sending a complete media packet still closes the connection.
+  Needs the agent update.
+- Turning the firewall patch off gives back the device's firewall script
+  exactly as it was. Before, it lost its trailing blank line. Needs the agent
+  update.
+
 ## v2.8.1 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

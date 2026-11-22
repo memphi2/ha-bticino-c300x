@@ -25,17 +25,46 @@ REMOVE_WORK="$(mktemp -d "${TMPDIR:-/tmp}/c300x-remove-agent.XXXXXX")" || {
 }
 RESTORE_STAGE=""
 ROOT_WRITABLE=0
+STARTUP_ACTIVE=0
+STARTUP_RO_FAILED=0
+MEDIA_REBOOT_REQUIRED=0
+FINAL_DELETE_STARTED=0
 cleanup_workspace() {
     cleanup_status=$?
     cleanup_failed=0
+    keep_workspace=0
     trap - EXIT HUP INT TERM
+    if [ "$STARTUP_ACTIVE" = 1 ]; then
+        if [ "$FINAL_DELETE_STARTED" = 1 ]; then
+            keep_workspace=1
+            printf 'Final deletion did not complete; remaining files and startup recovery retained at %s. No reboot scheduled\n' "$REMOVE_WORK" >&2
+        fi
+        if [ "$FINAL_DELETE_STARTED" = 1 ] && ! agent_tree_unchanged; then
+            cleanup_failed=1
+            printf 'Agent tree changed or cannot be verified; startup remains disabled. Repair the agent installation before restoring startup from %s/startup; preserve remaining backups and do not reboot until recovery is complete\n' "$REMOVE_WORK" >&2
+        elif restore_startup; then
+            printf 'Original startup entries restored; removal aborted, no reboot scheduled\n' >&2
+            if [ "$STARTUP_RO_FAILED" = 1 ]; then
+                if [ "$MEDIA_REBOOT_REQUIRED" = 1 ]; then
+                    printf 'The media restore verified stock files on disk while the patched media process is still running\n' >&2
+                fi
+                printf 'Root read-only remount failed after media restoration; perform a full device reboot before retrying removal\n' >&2
+            fi
+        else
+            cleanup_failed=1
+            keep_workspace=1
+            printf 'Startup rollback failed; recovery files retained at %s/startup. Do not reboot until the original startup entries are restored\n' "$REMOVE_WORK" >&2
+        fi
+    fi
     if [ -n "$RESTORE_STAGE" ]; then
         rm -rf "$RESTORE_STAGE" || cleanup_failed=1
     fi
     if [ "$ROOT_WRITABLE" = 1 ]; then
         mount -o remount,ro / >/dev/null 2>&1 || cleanup_failed=1
     fi
-    rm -rf "$REMOVE_WORK" || cleanup_failed=1
+    if [ "$keep_workspace" = 0 ]; then
+        rm -rf "$REMOVE_WORK" || cleanup_failed=1
+    fi
     if [ "$cleanup_status" = 0 ]; then
         cleanup_status=$cleanup_failed
     fi
@@ -201,37 +230,164 @@ restore_file_or_remove_block() {
     remount_root_ro
 }
 
-remove_startup() {
+startup_entry_matches() {
+    if [ -L "$1" ]; then
+        [ -L "$2" ] || return 1
+        readlink "$1" > "$REMOVE_WORK/link-before" || return 1
+        readlink "$2" > "$REMOVE_WORK/link-after" || return 1
+        cmp -s "$REMOVE_WORK/link-before" "$REMOVE_WORK/link-after" || return 1
+    else
+        [ -f "$1" ] && [ -f "$2" ] && [ ! -L "$2" ] || return 1
+        cmp -s "$1" "$2" || return 1
+    fi
+    startup_meta_before="$(stat -c '%a:%u:%g' "$1")" || return 1
+    startup_meta_after="$(stat -c '%a:%u:%g' "$2")" || return 1
+    [ "$startup_meta_before" = "$startup_meta_after" ]
+}
+
+save_startup_entry() {
+    if [ -L "$1" ] || [ -f "$1" ]; then
+        cp -a "$1" "$2" && startup_entry_matches "$1" "$2"
+    elif [ -e "$1" ]; then
+        return 1
+    else
+        : > "$2.absent"
+    fi
+}
+
+restore_startup_entry() {
+    if [ -f "$1.absent" ]; then
+        [ ! -e "$2" ] && [ ! -L "$2" ]
+        return $?
+    fi
+    startup_entry_matches "$1" "$2" && return 0
+    # Never follow a replacement symlink or overwrite a concurrent new entry.
+    [ ! -e "$2" ] && [ ! -L "$2" ] || return 1
+    RESTORE_STAGE="$(mktemp -d "${2}.c300x-startup.XXXXXX")" || return 1
+    startup_restore_rc=0
+    if ! cp -a "$1" "$RESTORE_STAGE/entry" \
+        || ! startup_entry_matches "$1" "$RESTORE_STAGE/entry" \
+        || ! mv -f "$RESTORE_STAGE/entry" "$2" \
+        || ! startup_entry_matches "$1" "$2"; then
+        startup_restore_rc=1
+    fi
+    if rm -rf "$RESTORE_STAGE"; then
+        RESTORE_STAGE=""
+    else
+        startup_restore_rc=1
+    fi
+    return "$startup_restore_rc"
+}
+
+restore_startup() {
     remount_root_rw || return 1
-    startup_rc=0
-    rm -f "$INIT_LINK" "$INIT_SCRIPT" || startup_rc=$?
-    remount_root_ro || {
-        if [ "$startup_rc" = 0 ]; then startup_rc=1; fi
-    }
-    return "$startup_rc"
+    startup_rollback_rc=0
+    restore_startup_entry "$REMOVE_WORK/startup/script" "$INIT_SCRIPT" || startup_rollback_rc=1
+    restore_startup_entry "$REMOVE_WORK/startup/link" "$INIT_LINK" || startup_rollback_rc=1
+    return "$startup_rollback_rc"
+}
+
+remove_startup() {
+    mkdir "$REMOVE_WORK/startup" \
+        && save_startup_entry "$INIT_SCRIPT" "$REMOVE_WORK/startup/script" \
+        && save_startup_entry "$INIT_LINK" "$REMOVE_WORK/startup/link" || return 1
+    remount_root_rw || return 1
+    STARTUP_ACTIVE=1
+    rm -f "$INIT_LINK" "$INIT_SCRIPT" || return 1
+    # Also detect a command which reports success without removing both entries.
+    [ ! -e "$INIT_LINK" ] && [ ! -L "$INIT_LINK" ] \
+        && [ ! -e "$INIT_SCRIPT" ] && [ ! -L "$INIT_SCRIPT" ] || return 1
+    if ! remount_root_ro; then
+        STARTUP_RO_FAILED=1
+        return 1
+    fi
+    return 0
+}
+
+agent_stopped() {
+    agent_pids="$(pidof c300x-agent-native 2> "$REMOVE_WORK/agent-probe-error")"
+    agent_probe_rc=$?
+    [ ! -s "$REMOVE_WORK/agent-probe-error" ] || return 2
+    case "$agent_probe_rc:$agent_pids" in
+        1:) return 0 ;;
+        0:?*) return 1 ;;
+        *) return 2 ;;
+    esac
 }
 
 stop_agent() {
-    if [ -f "$AGENT_DIR/c300x-agent-native.pid" ]; then
-        start-stop-daemon -K -p "$AGENT_DIR/c300x-agent-native.pid" >/dev/null 2>&1 || true
+    agent_stopped
+    case $? in 0) return 0 ;; 1) ;; *) return 1 ;; esac
+    # Match the process name, not a possibly stale PID file. TERM lets active
+    # native transactions finish; never proceed on signal delivery alone.
+    if ! killall c300x-agent-native >/dev/null 2>&1; then
+        agent_stopped
+        return $?
     fi
-    pidof c300x-agent-native >/dev/null 2>&1 && killall c300x-agent-native >/dev/null 2>&1 || true
+    stop_wait=10
+    while :; do
+        agent_stopped
+        case $? in 0) return 0 ;; 1) ;; *) return 1 ;; esac
+        [ "$stop_wait" -gt 0 ] || return 1
+        sleep 1 || return 1
+        stop_wait=$((stop_wait - 1))
+    done
+}
+
+agent_tree_entry() {
+    # Length-prefix paths/link targets so embedded newlines cannot alias entries.
+    printf '%s:%s\n' "${#1}" "$1" || return 1
+    stat -c '%f:%u:%g' "$1" || return 1
+    if [ -L "$1" ]; then
+        stat -c '%s' "$1" && readlink "$1"
+    elif [ -f "$1" ]; then
+        sha256sum < "$1"
+    elif [ -d "$1" ]; then
+        [ -r "$1" ] && [ -x "$1" ] || return 1
+        for tree_entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+            [ -e "$tree_entry" ] || [ -L "$tree_entry" ] || continue
+            agent_tree_entry "$tree_entry" || return 1
+        done
+    else
+        return 1
+    fi
+}
+
+agent_tree_manifest() {
+    [ -d "$AGENT_DIR" ] && [ ! -L "$AGENT_DIR" ] \
+        && [ -f "$AGENT_DIR/c300x-agent-native" ] \
+        && [ -x "$AGENT_DIR/c300x-agent-native" ] \
+        && [ ! -L "$AGENT_DIR/c300x-agent-native" ] || return 1
+    agent_tree_entry "$AGENT_DIR"
+}
+
+agent_tree_unchanged() {
+    agent_tree_manifest > "$REMOVE_WORK/agent-after-delete" \
+        && cmp -s "$REMOVE_WORK/agent-before-delete" "$REMOVE_WORK/agent-after-delete"
 }
 
 restore_media_patches() {
-    if ! C300X_AUDIO_BACKUP_DIR="$BACKUP_ROOT/original" \
+    if ! media_result="$(C300X_AUDIO_BACKUP_DIR="$BACKUP_ROOT/original" \
         C300X_ROUTING_BACKUP_DIR="$BACKUP_ROOT/original/home/bticino/bin" \
-        "$AGENT_DIR/c300x-agent-native" --restore-media-patches; then
+        "$AGENT_DIR/c300x-agent-native" --restore-media-patches)"; then
         printf 'Failed to restore media patches; keeping agent files and backups in place\n' >&2
         exit 1
     fi
+    # The CLI emits this fixed JSON record only after verifying restoration.
+    # Older agents returned no stdout. The pending flag explains a RO failure;
+    # it never bypasses rollback or schedules a reboot before cleanup.
+    case "$media_result" in
+        '{"ok":true,"media_reboot_required":true}') MEDIA_REBOOT_REQUIRED=1 ;;
+        '{"ok":true,"media_reboot_required":false}'|'') MEDIA_REBOOT_REQUIRED=0 ;;
+        *)
+            printf 'Invalid media restoration result; keeping agent files and backups in place\n' >&2
+            exit 1 ;;
+    esac
 }
 
-# The Display restore puts the stock display library back; this covers a
-# display that was restored before, with the library still changed. It runs
-# last, before the reboot: the running display keeps the replaced file open,
-# so the root file system stays writable until then. Without a valid backup
-# the changed library stays, which only keeps the wider tap tolerance.
+# Cover a display restored earlier with its library still changed. A running
+# process may keep the replaced library open; later RO failures still abort
+# removal and preserve startup entries, the agent and backups.
 # Without a valid stock backup the library stays as it is (wider tap
 # tolerance); any other failure keeps the backup for another removal.
 restore_display_library() {
@@ -251,6 +407,10 @@ schedule_reboot() {
 }
 
 start_ssh
+if ! stop_agent; then
+    printf 'Cannot verify agent termination; no restoration or deletion performed, keeping agent files and backups in place\n' >&2
+    exit 1
+fi
 restore_qml
 if ! restore_file_or_remove_block "$IPTABLES6" "$IPTABLES6_BACKUP" "# c300x-native-agent ipv6 firewall begin" "# c300x-native-agent ipv6 firewall end"; then
     printf 'Failed to restore IPv6 firewall patch; keeping agent files and backups in place\n' >&2
@@ -264,13 +424,24 @@ if ! restore_display_library; then
     printf 'Failed to restore the display library; keeping agent files and backups in place\n' >&2
     exit 1
 fi
-stop_agent
 restore_media_patches
+if ! agent_tree_manifest > "$REMOVE_WORK/agent-before-delete"; then
+    printf 'Cannot record agent recovery identity; keeping startup, agent files and backups in place\n' >&2
+    exit 1
+fi
 if ! remove_startup; then
     printf 'Failed to remove startup files; keeping agent files and backups in place\n' >&2
     exit 1
 fi
-rm -rf "$AGENT_DIR" "$BACKUP_ROOT"
+FINAL_DELETE_STARTED=1
+if ! rm -rf "$AGENT_DIR" "$BACKUP_ROOT" \
+    || [ -e "$AGENT_DIR" ] || [ -L "$AGENT_DIR" ] \
+    || [ -e "$BACKUP_ROOT" ] || [ -L "$BACKUP_ROOT" ]; then
+    printf 'Failed to finish deleting agent files and backups\n' >&2
+    exit 1
+fi
+STARTUP_ACTIVE=0
+FINAL_DELETE_STARTED=0
 start_ssh
 schedule_reboot
 

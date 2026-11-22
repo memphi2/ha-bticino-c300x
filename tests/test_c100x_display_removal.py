@@ -1,14 +1,18 @@
 """Actual removal, generated payload and firmware-copy display restoration."""
 
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
-
 from test_native_agent_removal import (  # noqa: F401
-    ROOT, device, removal_binary, _remove, _assert_kept, _assert_removed,
+    ROOT,
+    _assert_kept,
+    _assert_removed,
+    _remove,
+    device,
+    removal_binary,
 )
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 
@@ -17,7 +21,7 @@ from c100x_bundle_builder import build  # noqa: E402
 
 
 @pytest.fixture
-def c100x(device, tmp_path):
+def c100x(device, tmp_path):  # noqa: F811 - imported pytest fixture
     original("c100x-1.5.8")
     firmware = FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino"
     gui = Path(device["C300X_QML_GUI_DIR"])
@@ -99,3 +103,56 @@ def test_failed_display_restore_preserves_agent_and_recovery_without_reboot(c100
     assert (Path(env["C100X_BACKUP_DIR"]) / "main.qml").exists()
     log = Path(env["TEST_COMMAND_LOG"]).read_text().splitlines()
     assert "qt4-forbidden" not in log and "killall" not in log and "start-stop-daemon" not in log
+
+
+def test_unverified_stop_leaves_installed_c100x_display_untouched(c100x, tmp_path):
+    env, _, gui, _ = c100x
+    install(c100x)
+    before = {name: (gui / name).read_bytes() for name in ("main.qml", "MainPage.qml")}
+    for command, body in (("pidof", "printf '123\\n'\nexit 0"), ("killall", "exit 1")):
+        path = tmp_path / "commands" / command
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o700)
+    result = _remove(env)
+    _assert_kept(env, result)
+    assert "Cannot verify agent termination" in result.stderr
+    assert all((gui / name).read_bytes() == data for name, data in before.items())
+    assert (Path(env["C100X_BACKUP_DIR"]) / "main.qml").is_file()
+    log = Path(env["TEST_COMMAND_LOG"]).read_text().splitlines()
+    assert "mount" not in log and "qt4-forbidden" not in log
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_c100x_final_cleanup_failure_retains_verified_startup_recovery(c100x, tmp_path, partial):
+    env, payload, _, _ = c100x
+    install(c100x)
+    startup = {key: Path(env[key]).read_bytes() for key in ("C300X_INIT_SCRIPT", "C300X_INIT_LINK")}
+    real_rm = shutil.which("rm")
+    assert real_rm
+    command = tmp_path / "commands/rm"
+    command.write_text(
+        '#!/bin/sh\nif [ "${2:-}" = "$C300X_AGENT_DIR" ] '
+        '&& [ "${3:-}" = "$C300X_BACKUP_ROOT" ]; then\n'
+        + ('    printf damaged > "$2/qml/c100x_bundle.sh"\n' if partial else "")
+        + f'    exit 1\nfi\nexec "{real_rm}" "$@"\n'
+    )
+    command.chmod(0o700)
+    result = _remove(env)
+    assert result.returncode != 0
+    assert "Final deletion did not complete" in result.stderr
+    assert_stock(c100x)
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+    assert Path(env["C300X_BACKUP_ROOT"]).is_dir()
+    for key, content in startup.items():
+        path = Path(env[key])
+        if partial:
+            assert not path.exists()
+        else:
+            assert path.read_bytes() == content
+    recovery = list(tmp_path.glob("c300x-remove-agent.*/startup/script"))
+    assert len(recovery) == 1
+    assert recovery[0].read_bytes() == startup["C300X_INIT_SCRIPT"]
+    if partial:
+        assert payload.read_bytes() == b"damaged"
+        assert "startup remains disabled" in result.stderr
+    assert "reboot" not in Path(env["TEST_COMMAND_LOG"]).read_text().splitlines()

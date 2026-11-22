@@ -6,10 +6,23 @@ from pathlib import Path
 
 import pytest
 from test_native_agent_removal import (  # noqa: F401
-    ROOT, _assert_kept, _assert_removed, _remove, device,
+    ROOT,
+    _assert_kept,
+    _assert_removed,
+    _remove,
+)
+from test_native_agent_removal import (
+    device as device,
 )
 from test_native_routing_firmware_restore import (  # noqa: F401
-    FIRMWARE_ROOT, FIRMWARES, PATCH_OFFSETS, original, routing_binary, routing_run,
+    FIRMWARE_ROOT,
+    FIRMWARES,
+    PATCH_OFFSETS,
+    original,
+    routing_run,
+)
+from test_native_routing_firmware_restore import (
+    routing_binary as routing_binary,
 )
 
 
@@ -56,10 +69,14 @@ def _firmware_device(env, routing_binary, firmware):
     assert applied.returncode == 0, applied.stdout + applied.stderr
     env["GUI_CALL_LOG"] = str(target.parent / "gui-calls")
     if firmware == "c100x-1.5.8":
+        env["C100X_GUI_DIR"] = env["C300X_QML_GUI_DIR"]
+        gui_source = FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino/bin/gui/skins/default"
+        for name in ("main.qml", "MainPage.qml", "EventManager.qml"):
+            shutil.copy2(gui_source / name, Path(env["C300X_QML_GUI_DIR"]) / name)
         env["C300X_QML_C100X_MARKER"] = str(
             FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino/bin/gui/BtClass100"
         )
-        # A script that fails every call proves even GUI status is skipped.
+        # Exact stock C100X files need no payload or Qt4 patch-script calls.
         script = target.parent / "qml-not-supported"
         script.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$GUI_CALL_LOG"\nexit 99\n')
         script.chmod(0o700)

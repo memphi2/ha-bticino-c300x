@@ -56,7 +56,7 @@ Recommended first step: a privately handed-off, checksum-bound local test build,
 identified by commit and SHA256, without a public tag or HACS channel.
 
 For a later public beta, choose an unused canonical `X.Y.ZbN` version only after
-the parent selects the release plan. A beta tag in the existing repository is
+the maintainer selects the release plan. A beta tag in the existing repository is
 one shared prerelease stream, **not** a C100X-specific HACS channel; even
 `prerelease=true` and `latest=false` do not separate it from the fw306 beta.
 A dedicated distribution repository or a reviewed model-aware shared release
@@ -69,7 +69,7 @@ No release-policy gate is relaxed by this preparation.
 
 ## Before Any Installation
 
-1. Parent approves the exact commit, artifact SHA256, tester, device and first-test
+1. The maintainer approves the exact commit, artifact SHA256, tester, device and first-test
    scope. Rebuild/verify from that commit; keep the matching source and recovery
    package. No installation follows automatically from producing a ZIP.
 2. Confirm the device is C100X 1.5.8 and retain working privileged SSH/recovery
@@ -125,11 +125,24 @@ is stopped, still running, or unknown; a retained file is not process readiness.
 Restoring files on disk does not unload QML or an executable already in memory.
 No automatic GUI rollback or successful device recovery is claimed here.
 
-Uninstall must be tested later with verified routing backups and a reviewed
-removal build. The two newly reported stable removal issues (unchecked agent
-termination and lost startup recovery after final cleanup failure) must be
-checked/ported to this branch before an uninstall acceptance trial. Do not run
-uninstall on the issue #51 device as a substitute for its pre-test backup.
+Uninstall first verifies that the agent has stopped. After TERM it waits at most
+ten one-second intervals; an unknown process state, failed signal without verified
+exit, or timeout aborts before restoration or deletion. C100X display and routing
+restoration still require their verified identities and recovery paths; unknown
+modified files are not overwritten to force removal.
+
+Startup recovery stays armed through final cleanup. If deletion fails, private
+startup recovery files are retained and no reboot is scheduled. Startup entries
+are restored only if the entire remaining agent tree still matches its pre-delete
+identity, including content, modes, ownership and symlink targets. If the agent
+tree is partial, changed or unverifiable, startup remains disabled; use the printed
+recovery location to repair the installation before restoring startup or rebooting.
+This does not recreate already deleted files. Keep the external pre-test backup.
+
+Uninstall acceptance remains a separately authorized hardware phase with verified
+routing backups. It cannot establish recovery of arbitrary Companion changes or
+unload an already running GUI. Do not run uninstall on the issue #51 device as a
+substitute for its pre-test backup.
 
 ## Evidence and Remaining Work
 
@@ -153,12 +166,17 @@ and redacted errors. Never include credentials, tokens or private SIP routes.
 
 ### Local Preparation Checks
 
-The current preparation ran two focused groups, not a full suite:
+The preparation ran focused groups, not a full suite:
 
 - 150 tests for package/model isolation, legacy delivery, publication and package
   contracts. Native update fixtures use temporary paths and synthetic system calls.
 - 238 tests for bootstrap/identity, factory login, display gating and translations.
   The existing separate Alarmo option remains available even with display disabled.
+- 278 tests for removal, routing identity and shutdown regression after the safety
+  port. These include original C100X BusyBox under QEMU, actual native restoration
+  on temporary firmware copies, installed-adapter failure recovery, bounded stop
+  and partial cleanup, plus host/ASan/UBSan shutdown tests. System operations are
+  mocked; firmware originals are read-only. This is not device recovery evidence.
 
 The ARM rebuild passes the 24,576-byte stack limit (maximum 24,200 bytes) and
 ABI checks against original 1.7.19, 2.0.2, 3.0.6 and C100X 1.5.8 sysroots.

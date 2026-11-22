@@ -12,6 +12,10 @@ are not part of first-test acceptance.
 
 - Complete-file identity checks protect routing restoration; C100X restoration
   skips the unsupported C300X GUI-label operation.
+- Removal verifies agent termination before restoration, retains startup recovery
+  through cleanup, and leaves startup disabled if partial deletion changes the
+  agent tree. Failed removal never schedules a reboot; external recovery remains
+  necessary for already deleted files and unknown pre-test modifications.
 - C100X-only package guards reject C300X targets before supported HA uploads or
   SSH writes. The new native updater adds its own check; old updaters do not.
 - Additional display pages, key navigation, silent/wake Notify and read-only
@@ -28,7 +32,7 @@ before any separately authorized installation. Keep the approved artifact hash
 and exact pre-test recovery files. Do not force unsupported toggles, replace
 provisioned SIP accounts, or remove recovery backups after an error.
 
-Publication checklist: parent selects version/channel; replace this draft with
-the exact commit/artifact and completed checks; reconcile removal safety fixes;
+Publication checklist: the maintainer selects version/channel; replace this draft
+with the exact commit/artifact and completed checks; review the recovery limits;
 complete PR-stage validation. No push, release, installation or device test has
 been performed as part of this preparation.

@@ -45,6 +45,7 @@ def adapt_alerts(source: str) -> str:
         && typeof vendorScreen.simulateClick === "function" && typeof vendorScreen.disableState === "function"
         && typeof vendorScreen.stateChangedInt === "function"
     readonly property bool blocked: !screenReady || !c100xHost.running || c100xHost.blocked
+        || typeof c100xHost.alertsBlocked !== "boolean" || c100xHost.alertsBlocked
     onScreenReadyChanged: { if (screenReady) initialize(); else preempt() }
     C100XAlertKeys { anchors.fill: parent; controller: root; scroll: messageScroll }""")
     start = source.index("    function soundReady() {")

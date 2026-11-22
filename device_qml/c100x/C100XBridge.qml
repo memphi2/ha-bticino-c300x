@@ -12,6 +12,10 @@ Item {
     property int normalState: -1
     property int offState: -1
     property var focusWindow: null
+    // The verified hook's Loader supplies the vendor stack through its creation context.
+    property var pageStack: typeof mainStackView === "undefined" ? null : mainStackView
+    readonly property var homeItem: pageStack && pageStack.depth > 0 && typeof pageStack.get === "function" ? pageStack.get(0) : null
+    property bool homeRegulationActive: false
     property bool running: false
     property bool displayReady: false
     property bool stopped: false
@@ -29,6 +33,7 @@ Item {
         && typeof vendor.commissioningStatus === "number" && typeof vendor.blockKeyboard === "boolean"
     readonly property bool blocked: !vendorReady || events.callInProgress || events.callActive
         || vendor.commissioningStatus !== commissionedState || vendor.networkInfo.isSoftAp || vendor.blockKeyboard
+    readonly property bool alertsBlocked: blocked || !alertPageAllowed()
     readonly property bool touchToneEnabled: vendorReady && vendor.beepEnabled
     readonly property bool muted: vendorReady && vendor.audioState.isRingtoneMute
     property bool applyingTouchTone: false
@@ -40,6 +45,21 @@ Item {
     property bool busy: false
     property string errorKey: ""
     property alias deadline: preferenceDeadline
+
+    function alertPageAllowed() {
+        var current = pageStack ? pageStack.currentItem : null
+        if (!current || !current.visible) return false
+        if (current === homeItem && pageStack.depth === 1)
+            return typeof current.syncC100xMenu === "function" && current.c100xAvailable === true && !homeRegulationActive
+        if (current.c100xFullScreen !== true || !current.item || !current.item.visible || !current.item.pageItem) return false
+        return current.item.pageItem.visible && (current.item.pageName === "C100XMenu.qml" || current.item.pageName === "HomeAssistant.qml")
+    }
+    Connections {
+        target: bridge.homeItem
+        ignoreUnknownSignals: true
+        onRegulationState: bridge.homeRegulationActive = state
+    }
+    onHomeItemChanged: homeRegulationActive = false
 
     function load() { Api.loadDisplayPreferences(bridge) }
     function setFeedbackEnabled(value) { Api.saveDisplayPreferences(bridge, value) }

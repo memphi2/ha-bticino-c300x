@@ -13,6 +13,7 @@ FocusScope {
         id: host
         property bool running: true
         property bool blocked: false
+        readonly property bool alertsBlocked: blocked
         property string language: "en"
         property int normalState: 1
         property int offState: 0

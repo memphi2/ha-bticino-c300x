@@ -1,4 +1,5 @@
 #include "mdns.h"
+#include "device_detect.h"
 #include "string_util.h"
 
 #include <arpa/inet.h>
@@ -26,6 +27,18 @@
 #define C300X_MDNS_CLASS_IN 0x0001
 #define C300X_MDNS_CLASS_FLUSH_IN 0x8001
 #define C300X_MDNS_FALLBACK_ID "c300x-agent"
+
+static const char *mdns_default_name(void)
+{
+    return c300x_device_model() == C300X_DEVICE_MODEL_C100X ? "BTicino C100X" : "BTicino C300X";
+}
+
+static const char *mdns_display_name(const struct c300x_config *config)
+{
+    /* Older bootstrap configs saved the C300X default even on a C100X. */
+    return config->mdns_name[0] != '\0' && strcmp(config->mdns_name, "BTicino C300X") != 0
+        ? config->mdns_name : mdns_default_name();
+}
 
 static int mdns_open_socket(void);
 static void mdns_send_response(
@@ -377,7 +390,7 @@ static int mdns_build_response(
             txt_name,
             sizeof(txt_name),
             "name=%s",
-            config->mdns_name[0] != '\0' ? config->mdns_name : "BTicino C300X"
+            mdns_display_name(config)
         ) >= (int)sizeof(txt_name)
     ) {
         return 0;
@@ -482,7 +495,8 @@ static int mdns_build_response(
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_id)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_name)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_version)
-        || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, "model=C300X")
+        || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len,
+            c300x_device_model() == C300X_DEVICE_MODEL_C100X ? "model=C100X" : "model=C300X")
     ) {
         return 0;
     }
@@ -669,14 +683,14 @@ static void mdns_instance_name(
 {
     char base[48];
     const char *suffix = device_id;
-    const char *source = config->mdns_name[0] != '\0' ? config->mdns_name : "BTicino C300X";
+    const char *source = mdns_display_name(config);
 
     if (out_len == 0) {
         return;
     }
     mdns_sanitize_label(source, base, sizeof(base));
     if (base[0] == '\0') {
-        snprintf(base, sizeof(base), "%s", "BTicino C300X");
+        snprintf(base, sizeof(base), "%s", mdns_default_name());
     }
     if (strncmp(device_id, "c300x-", 6) == 0 && strlen(device_id) > 6) {
         suffix = device_id + strlen(device_id) - 6;

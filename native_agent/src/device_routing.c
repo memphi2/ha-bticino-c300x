@@ -89,12 +89,16 @@ static int device_patch_path(char *buffer, size_t buffer_len, const char *direct
 
 static int device_patch_target_path(char *buffer, size_t buffer_len)
 {
-    return device_patch_path(buffer, buffer_len, C300X_DEVICE_PATCH_TARGET_DIR);
+    const char *directory = getenv("C300X_ROUTING_TARGET_DIR");
+    return device_patch_path(buffer, buffer_len,
+        directory != NULL && directory[0] != '\0' ? directory : C300X_DEVICE_PATCH_TARGET_DIR);
 }
 
 static int device_patch_backup_path(char *buffer, size_t buffer_len)
 {
-    return device_patch_path(buffer, buffer_len, C300X_DEVICE_PATCH_BACKUP_DIR);
+    const char *directory = getenv("C300X_ROUTING_BACKUP_DIR");
+    return device_patch_path(buffer, buffer_len,
+        directory != NULL && directory[0] != '\0' ? directory : C300X_DEVICE_PATCH_BACKUP_DIR);
 }
 
 static int device_patch_temp_path(char *buffer, size_t buffer_len, const char *path)
@@ -609,4 +613,22 @@ int c300x_device_routing_restore(
         return 0;
     }
     return 1;
+}
+
+int c300x_device_routing_remove_patches(char *error, size_t error_len)
+{
+    char target_path[C300X_MAX_PATH_LEN];
+    char sha256[65];
+    unsigned char *data = NULL;
+    size_t len = 0;
+    struct c300x_device_routing_status status;
+    int stock = device_patch_target_path(target_path, sizeof(target_path))
+        && c300x_patch_read_file(target_path, &data, &len)
+        && routing_regular_file(target_path, len)
+        && c300x_sha256_bytes_hex(data, len, sha256, sizeof(sha256))
+        && variant_for_stock_sha(sha256) != NULL;
+    free(data);
+    /* A verified stock target needs no write or backup, even after a firmware
+     * update. Missing/unknown targets must not authorize deleting recovery. */
+    return stock || c300x_device_routing_restore(&status, error, error_len);
 }

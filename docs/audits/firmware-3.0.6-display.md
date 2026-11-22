@@ -137,6 +137,52 @@ interaction. The firmware metadata confirms the API surface, **not** audible
 behavior, asynchronous wake cancellation or a real 30/30-second result.
 Native alert acceptance is transport acceptance, not proof of wake or sound.
 
+## Restoration Addendum
+
+The separately requested routing/uninstall audit covers **C300X 1.7.19,
+2.0.2 and 3.0.6 only**. It adapts the shared restoration logic from
+`a371f84d` and `8a911207`; it does not import device detection, a C100X variant,
+or the GUI-skipping guard from `aecb8104`. A C100X executable is used solely
+as a rejected foreign-backup fixture. The Qt5 label path remains supported.
+
+- **P1, complete backup identity:** the former `backup_is_stock` could accept
+  matching patch ranges without authenticating the remaining file, and could
+  accept another firmware's stock backup when the target identity was
+  unknown. `fcca4a51` requires the backup's complete known hash and the target's
+  complete original hash after replacing only the known patch ranges in
+  memory. An interrupted patch is recoverable; unrelated corruption is not
+  silently replaced. Installation uses a private sibling staging directory,
+  verifies again before rename and checks the installed stock identity.
+- **P2, label outcome:** `df2a2022` is the beta-specific HTTP correction
+  described above. It runs Qt5 label restore instead of skipping it, checks
+  reported failures, and does not advertise quarantined labels as applied.
+- **P1, uninstall recovery retention:** before this addendum,
+  `main.c:192` at `df2a2022` restored codec/camera patches but no routing, while
+  `remove_agent.sh:233` could delete all backups. Removal now verifies that
+  routing is already stock or restores it successfully before that cleanup.
+  Unknown/missing targets and bad backups block cleanup and reboot.
+
+| Original-copy test path | 1.7.19 | 2.0.2 | 3.0.6 |
+| --- | --- | --- | --- |
+| Apply, restore patched/stock/interrupted target, exact bytes and mode | Passed | Passed | Passed |
+| Corrupt/patched/truncated/foreign backup, unknown/missing target, symlinks, rename/remount failure | Passed | Passed | Passed |
+| Full uninstall with patched/stock/stale-backup/interrupted routing | Passed | Passed | Passed, with actual generated RCC and original wrapper |
+| Failed uninstall retains agent/startup/backups, no reboot; retry after remount failure | Passed | Passed | Passed, without bypassing Qt5 restoration |
+
+The removal fixture uses the real CLI and script, real firmware executable
+copies and vendor QML. Process-control, mount and reboot commands are local
+stand-ins. Earlier removal stages may already have restored QML/firewall and
+stopped the agent before a later routing failure; retained files are recovery
+material, not a claim that every preceding change was rolled back.
+
+Focused tests: `test_native_routing_firmware_restore.py`,
+`test_native_device_routing_backup.py`, `test_device_routing.py`,
+`test_native_device_user_qt5.py`, `test_native_device_user_routes.py`,
+`test_native_routing_removal.py` and `test_native_agent_removal.py`.
+Results: 61 routing identity/backup tests, 76 device-user tests (including
+ASan/UBSan cases), and 49 removal tests passed. These counts are separate
+focused groups, not a full validation result.
+
 ## Focused Reproduction
 
 Set `PYTHON` to the existing project virtualenv, `FW306` and `FW1719` to

@@ -9,7 +9,7 @@ import pytest
 from tests import test_qml_patch_qt5_overlay as overlay
 from tests.test_qml_patch_qt5_overlay import Device
 from tests.test_qml_patch_qt5_overlay import programs as programs
-from tests.test_qml_patch_qt5_transactions import artifacts, snapshot
+from tests.test_qml_patch_qt5_transactions import artifacts, command_failure, snapshot
 
 
 @pytest.fixture(params=["fixture", "firmware"])
@@ -65,3 +65,70 @@ def test_cache_independent_restore_still_rolls_back_on_reload_failure(device, mo
     monkeypatch.setattr(overlay, "SCRIPT", script)
     assert device.ok("restore-all")["state"] == "reload_failed"
     assert snapshot(device) == before
+
+
+@pytest.mark.parametrize("fault", ["missing", "empty", "no-launch", "syntax", "patched", "same-size"])
+def test_unusable_original_wrapper_cannot_discard_recovery(device, fault):
+    if fault == "missing":
+        device.wrapper_backup.unlink()
+    elif fault == "empty":
+        device.wrapper_backup.write_bytes(b"")
+    elif fault == "no-launch":
+        device.wrapper_backup.write_text("#!/bin/sh\nexit 0\n")
+    elif fault == "syntax":
+        with device.wrapper_backup.open("a") as stream:
+            stream.write("\nif then\n")
+    elif fault == "patched":
+        device.wrapper_backup.write_bytes(device.wrapper.read_bytes())
+    else:
+        # Still executable shell with its launch marker, but not the original.
+        device.wrapper_backup.write_bytes(device.wrapper_backup.read_bytes().replace(b"eglfs", b"other", 1))
+    artifacts(device)["failed"].write_bytes(b"retain failure\n")
+    before = snapshot(device)
+    result = device.run("restore-all")
+    assert result.returncode != 0, result.stdout
+    assert snapshot(device) == before
+
+
+@pytest.mark.parametrize("fault", ["copy", "rename", "remount-rw", "remount-ro"])
+def test_restore_io_failure_never_reports_success(device, fault):
+    before = snapshot(device)
+    if fault in {"copy", "rename"}:
+        command = "cp" if fault == "copy" else "mv"
+        argument = "$3" if fault == "copy" else "$2"
+        env = command_failure(device, command, f'[ "{argument}" = "{device.wrapper}.c300x.tmp" ]')
+    else:
+        env = command_failure(device, "mount", f'[ "$2" = "remount,{fault[-2:]}" ]',
+                              effect="exit 1")
+        # All other mount invocations are local no-ops, never real remounts.
+        mount = device.root / "commands/mount"
+        mount.write_text(mount.read_text().split('exec "')[0] + "exit 0\n")
+        env["C300X_QML_NO_REMOUNT"] = "0"
+    result = device.run("restore-all", **env)
+    assert result.returncode != 0, result.stdout
+    assert '"ok":true' not in result.stdout
+    if fault == "remount-ro":
+        # The new state is committed before the final remount. Recovery material
+        # is retained, but a read-only remount error must not be called success.
+        assert device.wrapper_backup.read_bytes() == before["original"][0]
+        assert device.ok("status")["qt5_overlay"] == "off"
+    else:
+        assert snapshot(device) == before
+
+
+@pytest.mark.parametrize("command", ["cp", "mv"])
+def test_successful_but_corrupt_wrapper_copy_rolls_back(device, command):
+    before = snapshot(device)
+    argument = "$3" if command == "cp" else "$2"
+    env = command_failure(device, command, f'[ "{argument}" = "{device.wrapper}.c300x.tmp" ]',
+                          effect='printf corrupted > "$3"; exit 0')
+    result = device.run("restore-all", **env)
+    assert result.returncode != 0, result.stdout
+    assert snapshot(device) == before
+
+
+def test_corrupt_current_wrapper_uses_verified_original(device):
+    original = device.wrapper_backup.read_bytes()
+    device.wrapper.write_text("#!/bin/sh\nexit 0\n")
+    assert device.ok("restore-all")["qt5_overlay"] == "off"
+    assert device.wrapper.read_bytes() == original

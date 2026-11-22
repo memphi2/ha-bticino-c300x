@@ -57,6 +57,7 @@ def programs(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     cli = out / "display-qt5"
     subprocess.run(
         ["gcc", *FLAGS, f"-DC300X_DISPLAY_QT5_TEST_LAYOUT={','.join(layouts)}",
+         f'-DC300X_DISPLAY_QT5_TEST_WRAPPER={{"{hashlib.sha256(WRAPPER.encode()).hexdigest()}", {len(WRAPPER.encode())}}}',
          *(str(NATIVE / s) for s in SOURCES), str(overlay_blob(out)), "-o", str(cli), "-ldl"],
         check=True, capture_output=True, text=True,
     )

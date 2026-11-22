@@ -183,9 +183,7 @@ Results: 61 routing identity/backup tests, 76 device-user tests (including
 ASan/UBSan cases), and 49 removal tests passed. These counts are separate
 focused groups, not a full validation result.
 
-## Focused Reproduction
-
-### Follow-up Recovery Finding
+## Follow-up Recovery Findings
 
 **P2, baseline `b3192d0f`, `native_agent/scripts/qml_patch.sh:1516`:** full
 removal unnecessarily repacked resources and relied on the disposable
@@ -197,6 +195,27 @@ regression cases failed before correction, including eight using original
 the QML files, restores the stock wrapper and removes RCC/preload/quarantine.
 Partial restore and the activation rollback remain unchanged. Regression:
 `tests/test_qml_patch_qt5_recovery.py`, including rollback after reload failure.
+
+**P1, baseline `3dfd7cbb`, `native_agent/scripts/qml_patch.sh:1367`:** wrapper
+restore checked only that a backup file existed. Empty, syntactically invalid,
+non-launching or already-patched backups could be copied over the live wrapper
+and recovery reported successful with reload disabled. Eight regression cases
+failed before correction (fixture plus original-firmware copies). The native
+`--display-qt5 wrapper-check` now accepts only the complete known 3.0.6 wrapper
+hash listed above, on a regular non-symlink file. Installation, no-op candidate
+validation and restoration use that check; recovery checks both the staged copy
+and final installed original. A same-length valid-shell change is rejected too.
+The synthetic wrapper has a compile-time test-only entry, absent from production.
+No model detection or basename whitelist is involved. Unknown custom wrappers
+are intentionally refused, even if syntactically valid.
+
+Failure injection includes missing/invalid backups, failed copy/rename,
+successful-but-corrupt copy/rename and rw/ro remount failures. Failed recovery
+restores prior activation artifacts and keeps backups. A final ro-remount
+failure occurs after the new state is committed: it returns failure and keeps
+original backups, but does not claim to roll back that already-committed state.
+
+## Focused Reproduction
 
 Set `PYTHON` to the existing project virtualenv, `FW306` and `FW1719` to
 private read-only extracted roots, and `AUDIT` to a new directory under

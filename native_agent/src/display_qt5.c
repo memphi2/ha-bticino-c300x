@@ -1,6 +1,7 @@
 #include "display_qt5.h"
 
 #include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -809,8 +810,35 @@ static int overlay(int argc, char **argv)
     return print_result(1, NULL, 1);
 }
 
+static int wrapper_check(int argc, char **argv)
+{
+    static const struct { const char *sha256; size_t size; } originals[] = {
+        /* Original C300X 3.0.6 BtClass_qws, not a model-detection rule. */
+        {"852a5b0f0755a738e4e25127cd10b903fbf9c2ebdb4109872d4e1d0aac13c59c", 952},
+#ifdef C300X_DISPLAY_QT5_TEST_WRAPPER
+        C300X_DISPLAY_QT5_TEST_WRAPPER,
+#endif
+    };
+    char hash[65], link;
+    if (argc != 1) return print_result(0, "invalid_arguments", 0);
+    /* Use the shared ARM-compatible regular-file check before opening. */
+    if (readlink(argv[0], &link, 1) < 0 && errno == EINVAL) {
+        for (size_t i = 0; i < sizeof(originals) / sizeof(originals[0]); i++) {
+            if (c300x_patch_file_size_matches(argv[0], originals[i].size)
+                && c300x_sha256_file_hex(argv[0], hash, sizeof(hash))
+                && strcmp(hash, originals[i].sha256) == 0) {
+                return print_result(1, NULL, 1);
+            }
+        }
+    }
+    return print_result(0, "display_wrapper_unknown", 0);
+}
+
 int c300x_display_qt5_cli(int argc, char **argv)
 {
+    if (argc >= 1 && strcmp(argv[0], "wrapper-check") == 0) {
+        return wrapper_check(argc - 1, argv + 1);
+    }
     if (argc >= 1 && strcmp(argv[0], "overlay") == 0) {
         return overlay(argc - 1, argv + 1);
     }
@@ -820,6 +848,6 @@ int c300x_display_qt5_cli(int argc, char **argv)
     if (argc >= 1 && strcmp(argv[0], "pack") == 0) {
         return pack(argc - 1, argv + 1);
     }
-    fprintf(stderr, "fatal: invalid_arguments: --display-qt5 needs extract DIR REL..., pack ROOT OUT REL... or overlay PATH\n");
+    fprintf(stderr, "fatal: invalid_arguments: --display-qt5 needs extract DIR REL..., pack ROOT OUT REL..., overlay PATH or wrapper-check PATH\n");
     return 2;
 }

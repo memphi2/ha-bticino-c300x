@@ -1340,13 +1340,25 @@ qt5_wrapper_text() {
     ' "${1:-$QT5_WRAPPER_BACKUP}"
 }
 
+qt5_original_wrapper_valid() {
+    qt5_wrapper_result="$("$AGENT_BIN" --display-qt5 wrapper-check "$1" 2>/dev/null)" || return 1
+    case "$qt5_wrapper_result" in
+        *'"ok":true'*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 qt5_wrapper_install() {
     if [ -f "$GUI_WRAPPER" ] && ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
+        if ! qt5_original_wrapper_valid "$GUI_WRAPPER"; then
+            printf 'Unsupported display start script: %s\n' "$GUI_WRAPPER" >&2
+            return 1
+        fi
         mkdir -p "$(dirname "$QT5_WRAPPER_BACKUP")"
         cp -p "$GUI_WRAPPER" "$QT5_WRAPPER_BACKUP.tmp"
         mv -f "$QT5_WRAPPER_BACKUP.tmp" "$QT5_WRAPPER_BACKUP"
     fi
-    if [ ! -f "$QT5_WRAPPER_BACKUP" ] || ! qt5_wrapper_text > "$GUI_WRAPPER.c300x.tmp"; then
+    if ! qt5_original_wrapper_valid "$QT5_WRAPPER_BACKUP" || ! qt5_wrapper_text > "$GUI_WRAPPER.c300x.tmp"; then
         rm -f "$GUI_WRAPPER.c300x.tmp"
         printf 'Unsupported display start script: %s\n' "$GUI_WRAPPER" >&2
         return 1
@@ -1361,15 +1373,17 @@ qt5_wrapper_install() {
 }
 
 qt5_wrapper_restore() {
-    if [ -f "$GUI_WRAPPER" ] && ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
+    if qt5_original_wrapper_valid "$GUI_WRAPPER"; then
         return 0
     fi
-    if [ ! -f "$QT5_WRAPPER_BACKUP" ]; then
-        printf 'No original of the display start script: %s\n' "$QT5_WRAPPER_BACKUP" >&2
+    if ! qt5_original_wrapper_valid "$QT5_WRAPPER_BACKUP"; then
+        printf 'No verified original of the display start script: %s\n' "$QT5_WRAPPER_BACKUP" >&2
         return 1
     fi
     cp -p "$QT5_WRAPPER_BACKUP" "$GUI_WRAPPER.c300x.tmp"
+    qt5_original_wrapper_valid "$GUI_WRAPPER.c300x.tmp"
     mv -f "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"
+    qt5_original_wrapper_valid "$GUI_WRAPPER"
 }
 
 qt5_artifact_path() {
@@ -1497,7 +1511,8 @@ qt5_check_activation() {
     if [ -f "$GUI_WRAPPER" ] && ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
         qt5_wrapper_source="$GUI_WRAPPER"
     fi
-    if ! qt5_wrapper_text "$qt5_wrapper_source" > "$STAGING_DIR/.qt5-wrapper"; then
+    if ! qt5_original_wrapper_valid "$qt5_wrapper_source" \
+        || ! qt5_wrapper_text "$qt5_wrapper_source" > "$STAGING_DIR/.qt5-wrapper"; then
         printf 'No usable original display start script\n' >&2
         return 1
     fi

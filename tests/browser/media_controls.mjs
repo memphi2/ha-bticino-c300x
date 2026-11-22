@@ -147,17 +147,22 @@ try {
       }
       if (lab.controls.isVideo) {
         // Full screen is offered in the large view only.
-        const required = [".previous", ".next", ".play", ".seek", ".mute", ".volume"];
+        // A narrow card gives the row to the seek bar: up to 340 px the volume slider goes.
+        const required = [".previous", ".next", ".play", ".seek", ".mute"];
+        if (lab.controls.getBoundingClientRect().width > 340) required.push(".volume");
         if (lab.card._cardMedia?.expanded) required.push(".fullscreen");
         for (const selector of required) {
           const r = root.querySelector(selector).getBoundingClientRect();
           if (r.width <= 0 || r.height <= 0) failures.push(`missing video control: ${selector}`);
         }
-        const stamp = root.querySelector(".stamp").getBoundingClientRect();
+        const stampEl = root.querySelector(".stamp"), stamp = stampEl.getBoundingClientRect();
         const frame = root.querySelector(".archive").getBoundingClientRect();
-        // Lower right of the picture, just above the toolbar that lies on it.
+        // Where an image carries its own time: in the lower right corner, a third
+        // of its size away from the edges, with the toolbar right above it.
+        const inset = parseFloat(getComputedStyle(stampEl).fontSize) / 3;
         const bar = root.querySelector(".toolbar").getBoundingClientRect();
-        if (Math.abs(frame.right - stamp.right - 8) > 1 || stamp.bottom > bar.top + 1 || bar.top - stamp.bottom > 24) failures.push("timestamp not bottom-right");
+        if (Math.abs(frame.right - stamp.right - inset) > 1 || Math.abs(frame.bottom - stamp.bottom - inset) > 1
+          || bar.bottom > stamp.top + 1 || stamp.top - bar.bottom > 24) failures.push("timestamp not bottom-right");
         if (stamp.top < frame.top || stamp.left < frame.left) failures.push("timestamp outside picture");
       }
       return failures;
@@ -337,7 +342,14 @@ try {
           }, language);
           await layout(`${theme} ${width}px ${language} ${mobile ? "mobile" : "desktop"}`, true);
           assert.equal(await page.evaluate(() => lab.control(".stamp").textContent),
-            await page.evaluate(() => new Date(lab.controls.history.selected.at * 1000).toLocaleString(lab.hass.language)));
+            // Written as in the saved pictures, the same in every language.
+            await page.evaluate(() => {
+              const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { hourCycle: "h23", year: "numeric",
+                month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+                ...(lab.hass.config?.time_zone ? { timeZone: lab.hass.config.time_zone } : {}) })
+                .formatToParts(new Date(lab.controls.history.selected.at * 1000)).map(({ type, value }) => [type, value]));
+              return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+            }));
         }
         const prefix = `media-controls-${theme}-${mobile ? "mobile-" : ""}${width}`;
         await page.screenshot({ path: resolve(artifacts, `${prefix}-video.png`) });

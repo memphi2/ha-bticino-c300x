@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Saisissez d'abord l'adresse du C300X. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les tokens et options.",
+        "description": "Saisissez d'abord l'adresse du C300X. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les clés et les options.",
         "data": {
           "name": "Nom",
           "agent_host": "Adresse du C300X",
@@ -25,7 +25,7 @@
       },
       "bootstrap_install": {
         "title": "Installer l'agent C300X natif",
-        "description": "Cette étape écrit l'agent natif, la configuration de tokens générée, le script de démarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
+        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du C300X. Saisissez l'utilisateur et le mot de passe SSH seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape écrit l'agent natif, une configuration avec des clés générées, le script de démarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
         "data": {
           "bootstrap_ssh_username": "Utilisateur SSH C300X",
           "bootstrap_ssh_password": "Mot de passe SSH C300X"
@@ -33,7 +33,7 @@
       },
       "agent_auth": {
         "title": "Identifiants de l'agent appareil",
-        "description": "Saisissez les tokens de l'agent natif joignable. Laissez le token API vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
+        "description": "Saisissez les clés de l'agent natif joignable. Laissez la clé d'accès vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
         "data": {
           "agent_token": "Clé d'accès",
           "maintenance_token": "Clé de maintenance"
@@ -139,7 +139,7 @@
       },
       "reconfigure": {
         "title": "Reconfigurer BTicino C300X",
-        "description": "Mettez à jour la connexion a l'agent, le token maintenance ou renouvelez les identifiants webhook.",
+        "description": "Mettez à jour la connexion à l'agent ou la clé de maintenance, ou renouvelez les identifiants webhook.",
         "data": {
           "agent_host": "Adresse du C300X",
           "agent_port": "Port",
@@ -276,7 +276,7 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
+        "description": "Une section par page : la page d'état, jusqu'à sept pages personnelles et les pages intégrées Énergie, Agenda, Quitter la maison et Situations. Une section sans nom ni entités reste inutilisée ; « Page + » est libre. Les positions vont de 1 à 12 ; à position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les autres pages, dans cet ordre.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -465,7 +465,7 @@
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
+        "description": "Une section par page : la page d'état, jusqu'à sept pages personnelles et les pages intégrées Énergie, Agenda, Quitter la maison et Situations. Une section sans nom ni entités reste inutilisée ; « Page + » est libre. Les positions vont de 1 à 12 ; à position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les autres pages, dans cet ordre.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -672,7 +672,7 @@
     "error": {
       "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",
       "device_install_failed": "L'installation SSH a échoué. Vérifiez l'accès SSH et réessayez.",
-      "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec le token genere.",
+      "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec la clé d'accès générée.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",
@@ -700,7 +700,8 @@
       "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
       "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
-      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez."
+      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
+      "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
     }
   },
   "options": {
@@ -764,6 +765,32 @@
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
         }
       },
+      "camera_quality": {
+        "title": "Qualité de la caméra",
+        "description": "Taille, débit et fréquence d'images du flux caméra haute résolution ; sur le firmware 3.0.x, du flux basse résolution, le seul que ce firmware envoie et que reçoit aussi l'application Door Entry. Sur un firmware plus ancien avec **Résolution de la caméra** sur Basse, Home Assistant reçoit le flux basse résolution, que ces valeurs ne modifient pas. Le C300X ne les lit qu'au démarrage : enregistrer une modification redémarre l'appareil une fois, ce qui prend environ une minute.\n\nL'appareil fonctionne actuellement avec : {running}",
+        "data": {
+          "size": "Taille de l'image",
+          "bitrate_kbps": "Débit",
+          "fps": "Fréquence d'images"
+        },
+        "data_description": {
+          "size": "Flux haut : 688x480 (d'usine) est un recadrage de l'image de la caméra, 704x576 l'image entière sans les bords noirs latéraux, toujours sur tout l'écran ; la taille s'applique aussi à l'image de la caméra sur l'écran du C300X et aux enregistrements du répondeur. Flux bas du firmware 3.0.x : 400x288 d'usine ; les autres tailles ne sont pas encore testées sur un tel appareil.",
+          "bitrate_kbps": "800 kbit/s d'usine, au plus 3000. Le flux bas du firmware 3.0.x : 180 d'usine, 100-2000. Plus donne une image plus nette et utilise plus de réseau.",
+          "fps": "15 images par seconde d'usine ; le flux haut accepte au plus 24, car à 25 l'appareil n'en envoie qu'environ 8. Le flux bas du firmware 3.0.x : 10 d'usine, au plus 25."
+        }
+      },
+      "speech": {
+        "title": "Synthèse vocale",
+        "description": "Les notifications parlées (action Notify avec mode speech ou both) utilisent ce moteur et cette langue. Avec un moteur local comme Piper, rien ne quitte votre réseau. Sans choix, Home Assistant utilise son moteur par défaut, celui du cloud si Home Assistant Cloud est configuré. tts_engine et language dans une notification passent avant ces réglages.",
+        "data": {
+          "tts_engine": "Moteur de synthèse vocale",
+          "tts_language": "Langue"
+        },
+        "data_description": {
+          "tts_engine": "Une entité de synthèse vocale de Home Assistant, par exemple tts.piper. Laisser vide pour le moteur par défaut.",
+          "tts_language": "Laisser vide pour la langue du moteur. Une langue que le moteur nomme autrement, par exemple de pour de_DE, est enregistrée sous le nom du moteur."
+        }
+      },
       "device_activations": {
         "title": "Activations : serrures, lumières, éclairage d'escalier",
         "description": "Activations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
@@ -800,7 +827,7 @@
       },
       "dashboard": {
         "title": "Écran et patch display",
-        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu des réglages propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
+        "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu Écran propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
           "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
@@ -822,28 +849,68 @@
       },
       "init": {
         "title": "Réglages C300X",
-        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène ici ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène au menu d'où elle a été ouverte ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
         "menu_options": {
           "connection": "Connexion au C300X",
           "features": "Vidéo et audio",
           "visitor_snapshot": "Instantané visiteur",
+          "camera_quality": "Qualité de la caméra",
           "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
-          "dashboard_alarm": "Alarme (Alarmo)",
-          "dashboard": "Écran et patch display",
-          "dashboard_pages": "Pages de l'écran",
-          "dashboard_entity_display": "Tuiles de l'écran",
+          "speech": "Synthèse vocale",
+          "display": "Écran",
           "done": "Terminé"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
+          "camera_quality": "Taille, débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
-          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
-          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
-          "dashboard_pages": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
-          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "speech": "Moteur de synthèse vocale et langue des notifications parlées.",
+          "display": "Patch display, pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré."
+        }
+      },
+      "display": {
+        "title": "Écran",
+        "description": "Tout ce que l'écran du C300X affiche depuis Home Assistant. Les pages et les tuiles apparaissent ici dès que le patch display est activé.",
+        "menu_options": {
+          "dashboard": "Écran et patch display",
+          "dashboard_page_list": "Pages de l'écran",
+          "dashboard_entity_display": "Tuiles de l'écran",
+          "dashboard_alarm": "Alarme (Alarmo)",
+          "init": "Retour"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
+          "dashboard_page_list": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
+          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
+          "init": "Retour au menu des réglages."
+        }
+      },
+      "dashboard_page_list": {
+        "title": "Pages de l'écran",
+        "description": "Choisissez une page pour la modifier. La liste suit l'ordre de l'écran. Une page sans numéro n'est pas affichée : elle est désactivée ou n'a pas d'entités.",
+        "menu_options": {
+          "page_1": "Page{page_1_position} : Page d'état",
+          "page_2": "Page{page_2_position}{page_2_name}",
+          "page_3": "Page{page_3_position}{page_3_name}",
+          "page_4": "Page{page_4_position}{page_4_name}",
+          "page_5": "Page{page_5_position}{page_5_name}",
+          "page_6": "Page{page_6_position}{page_6_name}",
+          "page_7": "Page{page_7_position}{page_7_name}",
+          "page_8": "Page{page_8_position}{page_8_name}",
+          "agenda_page": "Page{agenda_page_position} : Agenda",
+          "leave_home_page": "Page{leave_home_page_position} : Quitter la maison",
+          "energy_page": "Page{energy_page_position} : Énergie",
+          "situations_page": "Page{situations_page_position} : Situations",
+          "page_new": "Ajouter une page",
+          "display": "Retour"
+        },
+        "menu_option_descriptions": {
+          "page_new": "Jusqu'à sept pages personnelles.",
+          "display": "Retour au menu Écran."
         }
       },
       "dashboard_alarm": {
@@ -860,7 +927,7 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'écran",
-        "description": "Configurez cinq pages prédéfinies (Statut, Énergie, Agenda, Quitter la maison et Situations) et jusqu'à sept pages personnalisées. Chaque page a sa propre section :\n\n- **Nom** : affiché comme titre de la page sur l'écran.\n- **Position** : ordre des pages, 1 est la première. Laissée vide, la position par défaut s'applique.\n- **Entités** : affichées comme tuiles dans l'ordre choisi ; faites-les glisser pour les réordonner. Une entité ne peut figurer que sur une page.\n\nUne section sans nom ni entités reste inutilisée. Alarmo a sa propre rubrique dans le menu des réglages.\n\nÉnergie, Agenda, Quitter la maison et Situations sont des pages supplémentaires activables indépendamment. Chaque page peut occuper une position de 1 à 12. À position égale, Énergie, Agenda, Quitter la maison et Situations précèdent les pages ordinaires, dans cet ordre.\n\nLes sections suivent l'ordre de l'écran et leurs titres indiquent le numéro de page. Une page que l'écran n'affiche pas (désactivée ou sans entités) n'a pas de numéro et se trouve sous les pages affichées. Une section « Page + » est libre : remplissez-la pour ajouter une page.",
+        "description": "Les réglages de cette page. La position est sa place parmi les pages, de 1 à 12 ; les autres pages sont renumérotées autour d'elle. Une entité choisie ici qu'une autre page affiche passe sur cette page. Une page personnelle sans nom ni entités est supprimée.",
         "sections": {
           "page_1": {
             "name": "Page{page_1_position} : Page d'état",
@@ -1073,7 +1140,13 @@
       "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
       "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
-      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez."
+      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
+      "camera_quality_failed": "Le C300X n'a pas enregistré les valeurs. Vérifiez la connexion et réessayez.",
+      "camera_quality_unsupported": "Ce C300X ne propose pas le réglage de la qualité de la caméra.",
+      "camera_quality_out_of_range": "En dehors de ce que l'appareil accepte pour ce flux ; seule la valeur enregistrée sur l'appareil peut rester telle quelle.",
+      "camera_quality_restart_pending": "Enregistré, mais l'appareil n'a pas redémarré. Il utilise les nouvelles valeurs après son prochain redémarrage.",
+      "tts_engine_missing": "Cette entité de synthèse vocale n'existe pas.",
+      "tts_language_unsupported": "Le moteur ne sait pas parler cette langue."
     }
   },
   "entity": {
@@ -1163,6 +1236,11 @@
         }
       }
     },
+    "media_player": {
+      "speaker": {
+        "name": "Haut-parleur"
+      }
+    },
     "select": {
       "smartphone_forwarding_mode": {
         "name": "Renvoi d'appel",
@@ -1175,8 +1253,15 @@
       "audio_codec": {
         "name": "Codec audio",
         "state": {
-          "speex": "Speex (usine)",
+          "speex": "Speex",
           "pcmu": "PCMU"
+        }
+      },
+      "camera_resolution": {
+        "name": "Résolution de la caméra",
+        "state": {
+          "high": "Haute",
+          "low": "Basse"
         }
       }
     },
@@ -1378,11 +1463,11 @@
         "step": {
           "confirm": {
             "title": "Mettre a jour l'agent C300X",
-            "description": "Home Assistant téléverse l'agent natif package via l'API de maintenance actuellement configurée. Les identifiants SSH ne sont pas nécessaires. Les patchs display et pare-feu actifs sont d'abord vérifiés en lecture seule et rafraîchis uniquement s'ils étaient déjà actifs et si la source de patch packagée a change. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}"
+            "description": "Home Assistant téléverse l'agent natif package via l'API de maintenance actuellement configurée. Les identifiants SSH ne sont pas nécessaires. Les patchs display et pare-feu actifs sont d'abord vérifiés en lecture seule et rafraîchis uniquement s'ils étaient déjà actifs et si la source de patch packagée a changé. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}"
           },
           "ssh_install": {
             "title": "Réinstaller l'agent C300X via SSH",
-            "description": "Cet agent installé ne peut pas encore se mettre à jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraîchira uniquement les patchs display et pare-feu actifs si la source de patch packagée a change. Les identifiants SSH ne sont pas stockés. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}",
+            "description": "Cet agent installé ne peut pas encore se mettre à jour lui-même. Home Assistant se connectera avec l'identifiant d'usine du C300X, ou avec les identifiants SSH saisis ici si l'appareil l'a refusé, pour installer l'agent package, puis rafraîchira uniquement les patchs display et pare-feu actifs si la source de patch packagée a changé. Les identifiants SSH ne sont pas stockés. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}",
             "data": {
               "bootstrap_ssh_username": "Utilisateur SSH",
               "bootstrap_ssh_password": "Mot de passe SSH"
@@ -1392,7 +1477,8 @@
         "error": {
           "ssh_install_failed": "La réparation par SSH a échoué. Vérifiez l'accès SSH et réessayez.",
           "update_failed": "La mise à jour de l'agent a échoué. Vérifiez que l'accès maintenance est actif et réessayez.",
-          "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible."
+          "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible.",
+          "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."

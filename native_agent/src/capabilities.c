@@ -60,6 +60,7 @@ int c300x_capabilities_json(
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
         "\"activations\":{\"supported\":%s,\"count\":%d},"
         "\"call_events\":false,"
+        "\"announcements\":{\"supported\":%s},"
         "\"ringer\":{\"supported\":true,\"mute\":true,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"homeassistant\",\"blocked\"]},"
         "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
@@ -69,7 +70,7 @@ int c300x_capabilities_json(
         "\"diagnostics\":{\"supported\":true,\"writes\":true,\"runtime\":true},"
         "\"device_user\":{\"supported\":true},"
         "\"auth\":{\"supported\":true,\"configurable\":true,\"no_auth\":%s,\"api_token_configured\":%s,\"maintenance_token_configured\":%s},"
-        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s,\"audio_codec_status\":%s,\"audio_codec_apply\":%s,\"audio_codec_restore\":%s},"
+        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s,\"audio_codec_status\":%s,\"audio_codec_apply\":%s,\"audio_codec_restore\":%s,\"camera_resolution\":%s,\"camera_quality\":%s},"
         "\"touch_tone\":{\"supported\":true,\"requires_display_patch\":true},"
         "\"display_alerts\":true,"
         "\"display_bridge\":{\"supported\":true,\"configurable\":true,\"configured\":%s}"
@@ -101,6 +102,7 @@ int c300x_capabilities_json(
         lock_name,
         (config->activations_enabled && activations_count > 0) ? "true" : "false",
         activations_count,
+        context->announcements_supported ? "true" : "false",
         context->ringer_min_volume,
         context->ringer_max_volume,
         context->ringer_volume_step,
@@ -154,6 +156,9 @@ int c300x_capabilities_json(
         maintenance_supported ? "true" : "false",
         maintenance_supported ? "true" : "false",
         maintenance_supported ? "true" : "false",
+        (maintenance_supported && config->video_enabled && !context->camera_resolution_fixed) ? "true" : "false",
+        /* Firmware 3.0.x too: there it sets the low stream. */
+        (maintenance_supported && config->video_enabled) ? "true" : "false",
         config->display_bridge_enabled ? "true" : "false"
     );
     return written >= 0 && (size_t)written < body_len;

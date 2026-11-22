@@ -102,7 +102,8 @@ int c300x_patch_copy_file_exact(const char *source, const char *target, mode_t m
     FILE *in;
     FILE *out;
     int fd;
-    unsigned char buffer[4096];
+    /* The backup volume is mounted sync: few large writes, not one per block. */
+    static unsigned char buffer[1 << 20];
     size_t read_len;
 
     if (!c300x_patch_ensure_parent_dir(target)) {
@@ -172,7 +173,8 @@ int c300x_patch_remount_root(const char *mode)
     int status;
 
     if (skip != NULL && skip[0] != '\0') {
-        return 1;
+        /* "ro_busy" stands for a root that cannot go read-only yet. */
+        return strcmp(skip, "ro_busy") != 0 || strcmp(mode, "ro") != 0;
     }
     if (snprintf(command, sizeof(command), "mount -o remount,%s / >/dev/null 2>&1", mode) >= (int)sizeof(command)) {
         return 0;

@@ -147,6 +147,8 @@ def test_async_setup_registers_frontend_services_and_websocket(
         # Written when the Lovelace card hint is opened or dismissed.
         "frontend_card_setup_dismissed",
         "frontend_card_setup_repair_version",
+        # Removed once a new entry applied its Display setting.
+        "display_setting_pending",
     ],
 )
 def test_payload_recovery_marker_does_not_reload_active_update(marker) -> None:

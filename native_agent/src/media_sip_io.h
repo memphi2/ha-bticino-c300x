@@ -2,6 +2,11 @@
 #define C300X_MEDIA_SIP_IO_H
 
 #include <stddef.h>
+#include <sys/types.h>
+
+/* Borrowed fd, synchronous write with the existing two-second monotonic
+ * budget. Does not close/shutdown or retry at the dialog/session level. */
+ssize_t c300x_media_sip_send_all(int fd, const void *buf, size_t len);
 
 /* One reader per socket. Returns a complete message length, 0 on idle timeout
  * (including keepalives), or -1 on EOF/error/incomplete or invalid framing.

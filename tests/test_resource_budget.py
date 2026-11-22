@@ -21,9 +21,9 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    # Ratchet down after extracting transport, file responses and callback I/O.
-    assert path.stat().st_size <= 425_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 12_300
+    # Ratchet down after transport, auth, command-backed maintenance routes and the setup page.
+    assert path.stat().st_size <= 365_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 10_450
 
 
 def test_extracted_http_modules_have_separate_budgets() -> None:
@@ -32,7 +32,32 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_response.c": (3_000, 110),
         # Reserve loopback GUI slots even when network clients fill the pool.
         "http_clients.c": (4_300, 135),
+        "http_client_input.c": (2_000, 60),
         "callback_queue.c": (6_500, 220),
+        "http_auth.c": (5_500, 165),
+        "http_maintenance.c": (8_000, 220),
+        "http_device_user.c": (13_000, 340),
+        "command_transaction.c": (4_500, 120),
+        "http_service_commands.c": (10_000, 285),
+        "http_audio_codec.c": (4_500, 110),
+        "http_camera_quality.c": (3_500, 85),
+        "camera_quality.c": (7_500, 230),
+        "camera_settings.c": (3_000, 100),
+        "camera_quality_body.c": (4_000, 110),
+        "announce.c": (9_500, 250),
+        "http_announce.c": (3_500, 100),
+        "announce_file.c": (5_500, 160),
+        "announce_device.c": (4_500, 110),
+        "announce_leftover.c": (2_500, 70),
+        "announce_frames.c": (2_000, 50),
+        "device_file.c": (5_500, 210),
+        "openwebnet_async.c": (6_500, 215),
+        "openwebnet_waiters.c": (2_500, 95),
+        "http_setup_page.c": (14_500, 95),
+        "request_worker.c": (5_000, 160),
+        "request_queue.c": (1_500, 55),
+        "video_control.c": (5_000, 165),
+        "http_media_actions.c": (7_500, 210),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name
@@ -46,6 +71,19 @@ def test_native_agent_capabilities_module_stays_small() -> None:
     assert source.stat().st_size <= 11_000
     assert source.read_text(encoding="utf-8").count("\n") <= 200
     assert header.stat().st_size <= 1_500
+
+
+def test_native_mqtt_output_modules_stay_bounded() -> None:
+    limits = {
+        "mqtt_bridge.c": (21_000, 730),
+        "mqtt_bridge.h": (2_000, 80),
+        "mqtt_output.c": (3_000, 100),
+        "mqtt_output.h": (1_500, 40),
+    }
+    for name, (size, lines) in limits.items():
+        path = ROOT / "native_agent/src" / name
+        assert path.stat().st_size <= size, name
+        assert path.read_text(encoding="utf-8").count("\n") <= lines, name
 
 
 def test_native_agent_event_payload_module_stays_small() -> None:

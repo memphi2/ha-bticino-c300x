@@ -157,21 +157,25 @@ def test_every_page_title_renders_its_position_in_all_flows_and_languages(name):
                 assert not any(char.isdigit() for char in title)
 
 
-@pytest.mark.parametrize("name,built_in,custom", [
-    ("strings.json", "five built-in pages", "seven custom pages"),
-    ("translations/en.json", "five built-in pages", "seven custom pages"),
-    ("translations/de.json", "fünf vordefinierte Seiten", "sieben eigene Seiten"),
-    ("translations/fr.json", "cinq pages", "sept pages"),
-    ("translations/it.json", "cinque pagine", "sette pagine"),
+@pytest.mark.parametrize("name,custom", [
+    ("strings.json", "seven pages of your own"),
+    ("translations/en.json", "seven pages of your own"),
+    ("translations/de.json", "sieben eigene Seiten"),
+    ("translations/fr.json", "sept pages"),
+    ("translations/it.json", "sette pagine"),
 ])
-def test_page_descriptions_distinguish_built_in_and_custom_pages(name, built_in, custom):
+def test_page_descriptions_distinguish_built_in_and_custom_pages(name, custom):
     catalog = json.loads((Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x" / name).read_text())
-    descriptions = [catalog[flow]["step"][step]["description"] for flow, step in (
-        ("config", "user_dashboard_pages"), ("config", "reconfigure_dashboard_pages"),
-        ("options", "dashboard_pages"),
-    )]
-    assert len(set(descriptions)) == 1
-    assert built_in in descriptions[0] and custom in descriptions[0]
+    setup, reconfigure = (
+        catalog["config"]["step"][step]["description"]
+        for step in ("user_dashboard_pages", "reconfigure_dashboard_pages")
+    )
+    options = catalog["options"]["step"]["dashboard_pages"]
+    assert setup == reconfigure and custom in setup
+    # The setup form names every built-in page; a single page form shows one page.
+    for key in SPECIAL_PAGE_ORDER:
+        built_in = options["sections"][key]["name"].split(":", 1)[1].strip()
+        assert built_in in setup, key
     keys = [str(marker) for marker in dashboard_pages_schema({}).schema]
     assert keys[:5] == ["page_1", *SPECIAL_PAGE_ORDER]
     assert len(keys[5:]) == 7

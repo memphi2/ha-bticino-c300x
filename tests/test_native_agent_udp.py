@@ -25,7 +25,8 @@ def test_udp_events_keep_bound_socket_when_multicast_join_fails() -> None:
     assert "IP_ADD_MEMBERSHIP" in join_body
     assert "continuing with bound UDP socket" in join_body
     assert "close(fd)" not in join_body
-    assert "(void)join_udp_event_multicast_group(fd, config);" in create_body
+    # The socket stays bound; whether door events arrive is only noted.
+    assert "*joined = join_udp_event_multicast_group(fd, config);" in create_body
     assert create_body.index("join_udp_event_multicast_group") < create_body.rindex(
         "return fd;"
     )

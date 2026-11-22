@@ -50,7 +50,9 @@ one-time SSH installation remains a separate explicit step.
 | Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
 | Video and audio | Door station video and audio, video and audio access on the C300X, live audio level, volume of ring recordings, connection paths for the live picture, talking through the HA camera view. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
 | Visitor Snapshot | Image width and height (688x480), delay (3 s), retention (14 days), date and time in the image (on). Offered only with video on. | No. |
+| Camera quality | Picture size (688x480 from the factory, or the whole picture at 704x576 without the black side edges), bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–24 fps, 15 from the factory; at 25 the device sends only about 8) of the high-resolution camera stream; on firmware 3.0.x of the low-resolution stream, the only one it sends, which the Door Entry app gets as well (sizes 352x288 to 720x576, 400x288 from the factory; 100–2000 kbit/s, 180 from the factory; 5–25 fps, 10 from the factory; sizes other than 400x288 not yet tested on a 3.0.x device). The size also applies to the camera picture on the device display and to answering-machine recordings. The form shows the values saved on the device and the ones it runs with. Offered with video on. | Yes: saving a change writes all values in one step and restarts the device once, like the audio codec switch. The values stay on the device, not in Home Assistant. |
 | Activations: locks, lights, stair light | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
+| Speech | Text-to-speech engine and language for spoken notifications. Offered where the agent can play sound and **Home Assistant pages on the display** is on. | No. Read when a notification is spoken; saving reloads nothing. |
 | Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | No. Stored in Home Assistant; the display asks for it. |
 | Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. | Yes, only when the Display patch is applied/restored. |
 | Display pages and tiles | Weather, entities per page, size, name and secondary line of each tile. | No. Stored in Home Assistant; the display asks for them. |
@@ -138,8 +140,9 @@ image.
 
 The image comes from the device display, not from the video stream. The
 display is 800×480 and shows the camera picture stretched to its own width; the
-device encodes the stream itself as 688×480. The default therefore gives the
-image the size and shape of the stream. The agent delivers the image in exactly
+device encodes the stream itself as 688×480 from the factory. The default
+therefore gives the image the size and shape of that stream; **Camera quality**
+can switch the stream to the whole 704×576 camera picture. The agent delivers the image in exactly
 the configured size (width 64–800, height 64–480) and Home Assistant does not
 rescale it. Setting 800×480 returns the display pixel for pixel. A size above
 the display's is not offered, because it would add no detail.
@@ -179,6 +182,8 @@ It is on by default and never starts additional recording or live video.
 
 ## Alarmo Display
 
+<p align="center"><img src="images/readme/display-alarmo-en.webp" alt="Alarmo modes, PIN keypad and a configured stair-light shortcut" width="480"></p>
+
 The optional native Alarmo page stays a subpage in the original blue C300X
 design. The configured return-after-standby setting still applies. It shows
 reported alarm state, readiness, blocking contacts and entry/exit countdowns.
@@ -188,7 +193,8 @@ blocks repeated taps; unavailable data is not displayed as a ready alarm.
 
 The Alarmo alarm panel and the **Quick action**, the optional quick action or
 status entity, are set in the **Alarm (Alarmo)** step right after the
-activations, in the setup, the reconfigure and the settings menu. They are kept
+activations in the setup and the reconfigure, and under **Configure > Display >
+Alarm (Alarmo)** in the settings. They are kept
 with the Display patch off, since the alarm commands do not need it. Leave it empty to hide this area. To retain a stair-light
 shortcut, select the integration's stair-light button explicitly. No stair-light
 action is inserted automatically. The picker offers buttons, switches, lights,
@@ -203,6 +209,8 @@ only after a failed event connection while the page is active.
 
 ## Display Home Page Buttons
 
+<p align="center"><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="480"></p>
+
 With the Display patch, the Alarm button appears when an alarm panel is configured;
 the Home Assistant button appears when a display page has configured content.
 Their positions stay reserved, so a change in availability does not rearrange
@@ -210,6 +218,17 @@ the other home-page buttons. A temporary connection failure keeps the last
 confirmed visibility instead of hiding both buttons.
 
 ## Display Device Controls
+
+<table>
+  <tr>
+    <td align="center"><strong>Sensor and switch tiles</strong><br><img src="images/readme/display-general-en.webp" alt="Page with a switch, temperature, CPU load, window and alarm tiles and the favourites bar" width="360"></td>
+    <td align="center"><strong>Light overview</strong><br><img src="images/readme/display-lights-en.webp" alt="Eight light tiles with state, brightness and on-off controls" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Brightness and color</strong><br><img src="images/readme/display-light-detail-en.webp" alt="Light detail page with brightness slider and color presets" width="360"></td>
+    <td align="center"><strong>Media player</strong><br><img src="images/readme/display-media-player-en.webp" alt="Media player with current program, pause, volume, mute and shuffle" width="360"></td>
+  </tr>
+</table>
 
 Select entities under **Display pages**. Supported controls include lights,
 covers, climate, fans, media players, locks, vacuums, valves, humidifiers and
@@ -371,6 +390,8 @@ detail views.
 
 ### Picture tiles
 
+<p align="center"><img src="images/readme/display-camera-en.webp" alt="Camera page with two picture tiles side by side" width="480"></p>
+
 A camera or image entity becomes a picture tile on the page you place it on.
 By default the tile spans the page and follows its picture: the picture is as
 wide as the tile, and the tile is as high as the picture's proportions make it.
@@ -445,25 +466,35 @@ it, keeps the original tone control and restores the page on removal. Unknown
 page layouts or a missing backup of an already patched page abort the operation
 instead of replacing the original with a guessed version.
 
-Switch the Display patch on under **Configure > Display and Display patch**;
-the settings menu then offers **Display pages** and **Display tiles**. Choose the weather and the entities with the normal
-HA selectors; Alarmo is set under **Alarm (Alarmo)**;
+On firmware 1.7.x and 2.0.2 the Display patch also raises the swipe threshold of
+the display library from 4 to 16 pixels, so a tap that moves a little is no
+longer taken for a swipe. The original library is backed up first; restoring
+the Display patch and removing the agent put it back.
+
+Everything about the display is under **Configure > Display**. Switch the
+Display patch on under **Display and Display patch**; the Display menu then
+offers **Display pages** and **Display tiles**. Choose the weather and the entities with the normal
+HA selectors; Alarmo is set under **Alarm (Alarmo)** in the same menu;
 control types come from their actual capabilities, not a manually chosen
 widget.
 
-The pages dialog has five built-in pages (Status, Energy, Agenda, Leave home and
-Situations) and up to seven custom pages, one section each. The sections follow
-the display order. Titles show the page's number and name, for example
+**Display pages** is a list of the pages in display order: five built-in pages
+(Status, Energy, Agenda, Leave home and Situations) and up to seven custom
+pages. Pick a page to open a form with its fields only; saving returns to the
+list. Entries show the page's number and name, for example
 **Page 2: Living room**. A page the display does not show (switched off, or
-without entities) has no number and follows the shown pages; free custom
-sections, titled **Page +**, come last. Alarmo is not one of
-the pages: its Alarm page opens from the home page button and has an area of
-its own in the settings menu.
+without entities) has no number and follows the shown pages; **Add a page**
+follows while a custom page is free. In a page's form a new position puts
+the page there and numbers the others around it, and an entity that another page shows moves to
+the opened page with its tile settings. The setup and the reconfigure dialog show the same pages in one
+form, one section each, with free sections titled **Page +**. Alarmo is not
+one of the pages: its Alarm page opens from the home page button and has an
+area of its own in the Display menu.
 
 | Field | Meaning |
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. The status page has none. |
-| **Position** | Order of all pages, 1 to 12. Left empty, an existing page returns to its section's number and a new page goes to the end. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
+| **Position** | Order of all pages, 1 to 12. In the settings a page takes the place it asks for and the other pages are numbered around it; left empty, a page stays where it is and a new page goes to the end. In the setup form, left empty, an existing page returns to its section's number. Equal positions put Energy, Agenda, Leave home, then Situations before regular pages; regular pages keep their section order. |
 | **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
 The status-page section carries the weather card at its top,
@@ -494,13 +525,20 @@ optional page preserves its position and selections for later use.
 
 #### Page navigation
 
+<table>
+  <tr>
+    <td align="center"><strong>Favourites bar</strong><br><img src="images/readme/display-start-en.webp" alt="Start page with the favourites bar along the bottom edge" width="360"></td>
+    <td align="center"><strong>More: the other pages</strong><br><img src="images/readme/display-more-en.webp" alt="The list of further pages that More opens" width="360"></td>
+  </tr>
+</table>
+
 **Page navigation** in the display settings chooses how the display changes
 pages. It is one setting for all pages.
 
 | Choice | On the display |
 | --- | --- |
-| **Arrows (previous / next)** | The row with `<`, the page number and `>` under the tiles. This is the default. |
-| **Favourites bar** | A bar along the bottom edge with one button per page. The current page is marked in yellow. |
+| **Favourites bar** | A bar along the bottom edge with one button per page. The current page is marked in yellow. This is the default. |
+| **Arrows (previous / next)** | The row with `<`, the page number and `>` under the tiles. |
 
 The bar has four places and follows the page positions. With up to four pages
 every page has its button. With more pages the first three have one and the
@@ -514,6 +552,8 @@ tiles keep the height they have above the arrows. Changing the page uses the
 dashboard that is already loaded and requests no data.
 
 ### Agenda
+
+<p align="center"><img src="images/readme/display-appointments-en.webp" alt="Agenda page with two upcoming events" width="480"></p>
 
 Enable **Agenda** in **Display pages** and select up to eight HA calendars.
 It shows up to five ongoing or upcoming events within the next seven days,
@@ -574,6 +614,14 @@ anyway and watches only the selected entities. It is off by default; its
 position defaults to 12 and can be set from 1 to 12.
 
 ### Energy Page
+
+<table>
+  <tr>
+    <td align="center"><strong>Now</strong><br><img src="images/readme/display-energy-flow-en.webp" alt="Energy page: current flow between grid, solar, battery and home" width="260"></td>
+    <td align="center"><strong>Power</strong><br><img src="images/readme/display-energy-power-en.webp" alt="Energy page: power over the day" width="260"></td>
+    <td align="center"><strong>Consumers</strong><br><img src="images/readme/display-energy-consumers-en.webp" alt="Energy page: consumers ranked by power" width="260"></td>
+  </tr>
+</table>
 
 The **Energy** section switches on an optional page that
 shows Home Assistant's own Energy setup (**Settings → Dashboards → Energy**).
@@ -714,6 +762,50 @@ event trigger rather than polling the device or adding a calendar provider.
 For a reliable test, create the event more than 15 minutes in advance, as noted
 in the [Home Assistant calendar documentation](https://www.home-assistant.io/integrations/calendar/#automation).
 
+### Speaker and Text-to-Speech
+
+The C300X can speak. The integration adds a media player, **Speaker**, for the
+device's own loudspeaker. It is a target like any other speaker in Home
+Assistant:
+
+```yaml
+action: tts.speak
+target:
+  entity_id: tts.piper
+data:
+  media_player_entity_id: media_player.bticino_c300x_speaker
+  message: The washing machine is done.
+```
+
+The speech comes from the text-to-speech engine you choose in Home Assistant.
+With a local engine such as Piper nothing leaves your network: Home Assistant
+makes the speech, turns it into the one format the device plays (8000 Hz,
+mono, as on a telephone) and sends it to the device. Sounds from the media
+browser play the same way; `ffmpeg` on Home Assistant does the conversion.
+
+- The **volume** of the media player applies to the next sound. It follows the
+  device's own volume range for ringing.
+- One sound plays at a time, up to about 110 seconds; a second one waits until
+  the first is over, and sounds play in the order they were asked for.
+  **Stop** ends the one that plays.
+- **A door call always wins.** A ring, a call or a camera request ends the
+  sound at once. The attribute `last_result` then reads `preempted`; otherwise
+  `played` or `stopped`, or `unknown` when the agent could not be asked or was
+  restarted during the sound.
+- During a door call, during a ring and its call up to a minute after their
+  last bus message, for a minute after the agent was restarted during a sound,
+  and while the device uses its speaker itself (a message being played), no
+  sound is started: the action fails and says so, and
+  `last_result` reads `device_busy`. The action returns once the device has
+  let the agent have its speaker. A sound the agent did not take reads
+  `not_played`; one the device could not switch on or play reads
+  `sound_path_failed` or `play_failed`, one that broke off for another reason
+  `failed`.
+- A touch tone of the display during a sound can cut it short.
+
+Tested on firmware 1.7.19. Firmware 2.0.2 and 3.0.6 have the same sound parts,
+but playing is not tested on such a device yet.
+
 ### Standard Notify Service
 
 With the display integration enabled, each entry registers a named Notify action.
@@ -753,6 +845,43 @@ retrying setup.
 | `warning` | 30 seconds | 30 seconds |
 | `error` | 30 seconds | 30 seconds |
 
+`mode` chooses where the message goes:
+
+| `mode` | Display | Speaker |
+| --- | --- | --- |
+| `display` (default) | Notice, wake and tone | Nothing |
+| `speech` | Nothing | The message is spoken |
+| `both` | Notice and wake, no tone | The message is spoken |
+
+```yaml
+action: notify.bticino_c300x
+data:
+  message: The front window is still open.
+  data:
+    mode: both
+    tts_engine: tts.piper
+```
+
+The message is spoken by the [speaker](#speaker-and-text-to-speech); the title
+is not. Choose the engine once under **Configure > Speech**: a text-to-speech
+entity such as `tts.piper` and, if you like, a language. A language is saved
+as the engine names it, for example `de` as `de_DE` for Piper. A notification
+that names its own `tts_engine` speaks the `language` it names or the
+engine's own; one that names only `language` uses the engine of the setting.
+Without an engine anywhere, Home Assistant uses its default engine, which is
+the cloud one where Home Assistant Cloud is set up; choose a local engine to
+keep speech local. Changing the setting does not reload the integration.
+The Notify action, and with it **Configure > Speech**, exists only with
+**Home Assistant pages on the display** turned on; `tts.speak` on the speaker
+works without it.
+In `both` there is no tone, since it would hold the speaker the speech needs;
+a `sound_duration` above 0 is refused. The speaker, the engine and the
+language are checked before anything is shown. Speech can still fail after the
+notice is shown in `both`, for example when the engine cannot reach its
+service or the device keeps its speaker for a door call; the action then fails
+and says why. A door call while the speech plays ends it without an error. The
+volume is the one of the speaker entity.
+
 Each duration accepts whole seconds from 0 to 300; zero disables that effect.
 `notification_id` is optional and reuses the existing notice ID rules. Title,
 message and `expires_in` use the same limits as above, with a default expiry of
@@ -763,6 +892,8 @@ other life-safety alerting system**.
 Popup, wake and the bounded stock short-beep signal are permitted only on the
 stock Home or HA page when the GUI is ready and no call is active or ringing.
 Alarmo, PIN entry, settings and other protected pages block these effects.
+They do not hold back speech: in `speech` and `both` the message is spoken
+also while such a page is open.
 With the matching agent and Display patch, a live GUI explicitly reports this
 protection: the action completes without a delivery error, keeps the HA notice,
 and logs that popup, wake and sound were suppressed. This is not confirmation
@@ -781,11 +912,21 @@ waiting GUI connection only; it does not prove GUI rendering, physical wake
 or audible output. A lost response does not prove non-delivery.
 
 This feature requires the matching **2.5.0 agent and display bundle**, including
-the reapplied Display patch. Test your notifications on the actual device before
+the reapplied Display patch; `speech` and `both` need the speaker of the
+**2.8.0 agent**. Test your notifications on the actual device before
 relying on an automation; a successful action is not proof of audible or visible
 delivery.
 
 ## Entity Reference
+
+<table>
+  <tr>
+    <td align="center" valign="top"><strong>Controls</strong><br><img src="images/readme/controls.png" alt="BTicino C300X Home Assistant controls" width="170"></td>
+    <td align="center" valign="top"><strong>Sensors / Events</strong><br><img src="images/readme/sensors.png" alt="BTicino C300X Home Assistant sensors" width="170"><br><img src="images/readme/events.png" alt="BTicino C300X Home Assistant device and doorbell events" width="170"></td>
+    <td align="center" valign="top"><strong>Configuration</strong><br><img src="images/readme/configuration.png" alt="BTicino C300X Home Assistant configuration entities" width="170"></td>
+    <td align="center" valign="top"><strong>Diagnostics</strong><br><img src="images/readme/diagnostic.png" alt="BTicino C300X Home Assistant diagnostic entities" width="170"></td>
+  </tr>
+</table>
 
 Entities are capability-gated. If the installed agent does not advertise a
 feature, the matching entity is not created.
@@ -793,6 +934,7 @@ feature, the matching entity is not created.
 | Platform | Entity | Purpose |
 | --- | --- | --- |
 | `camera` | Doorbell camera | On-demand/Ring Call/Home Call media entry point. |
+| `media_player` | Speaker | The device loudspeaker as a target for text-to-speech and sounds; a door call ends a sound at once. |
 | `event` | Doorbell ring event | Ring-only event entity. |
 | `event` | Device event | Canonical native-agent events such as doorbell, call, ringer, forwarding, stair light, activation, memo and message changes. |
 | `sensor` | Media readiness | Aggregated media setup state and actionable failures. |
@@ -808,7 +950,8 @@ feature, the matching entity is not created.
 | `switch` | Answering machine | Device answering-machine enabled state. |
 | `switch` | Save images | Automatic visitor images on or off (on by default). |
 | `switch` | Touch tone | The display's touch-sound setting. |
-| `select` | Audio codec | Device audio codec `speex` (stock) or `pcmu`; changes the device configuration explicitly. |
+| `select` | Camera resolution | High (688×480 from the factory) or low (400×288) camera stream, from the next stream on; high by default. The size, bit rate and frame rate of the high stream are set under Camera quality. Not offered on firmware 3.0.x, which is fixed to low; there Camera quality sets the low stream. |
+| `select` | Audio codec | Device audio codec `speex` or `pcmu` (firmware 1.7.19 and 2.0.2 come with `speex`, 3.0.6 with `pcmu`); changes the device configuration explicitly and restarts it once. `pcmu` is recommended: the browser plays it as it is, so the agent does not convert the sound, which gives clearer audio and leaves the device more room. The switch writes the same codec settings BTicino ships on firmware 3.0.6, which runs `pcmu` from the factory. |
 | `switch` | Home Assistant media user | Creates/repairs the local C300X media user when used. |
 | `switch` | SSH, noAuth, noAuth maintenance, mDNS discovery | Explicit maintenance controls. |
 | `switch` | Display patch, API firewall patch, IPv6 firewall patch | Explicit device-side patch controls. |

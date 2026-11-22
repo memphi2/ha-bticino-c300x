@@ -40,6 +40,19 @@ Most users only need:
   Snapshot**; defaults are 688x480,
   3 seconds, 14 days and date and time on. Images and their shared camera/card preview are
   stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
+- **Better camera picture:** the factory stream is modest (688x480, 800 kbit/s,
+  15 fps). **Configure > Camera quality** makes it sharper, smoother and
+  wider: up to the whole camera picture at 704x576, 3000 kbit/s and 24 fps. On firmware 3.0.x
+  it sets the low-resolution stream, the only one the device sends, which the
+  Door Entry app receives as well. The device reads these values only when it
+  starts, so saving a change restarts it once (about a minute). Removing the
+  agent puts the original values back. See
+  [Feature reference](feature-reference.md#setup-and-options).
+- **Clearer sound:** set the **Audio codec** select to **PCMU**. The browser
+  plays PCMU as it is, so the agent no longer converts the sound between
+  Speex and PCMU; that gives clearer audio and leaves the device more room.
+  Switching restarts the C300X once. It writes the same codec settings that
+  BTicino ships on firmware 3.0.6, which already runs PCMU from the factory.
 - Use the **C300X Doorbell Call Card** in **Doorstation + Home Call** mode for live view, Ring Call
   handling and audio-only Home Calls to the display.
 - **Browse saved images and videos** is on by default (`show_media_history: true`). Browse
@@ -72,7 +85,7 @@ Most users only need:
 | Area | What to use |
 | --- | --- |
 | Doorbell and Ring Call | C300X Doorbell Call Card, Forwarding select, Doorbell event, Doorbell state, Answer/Hang Up services. |
-| On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`. |
+| On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`; picture size, bit rate and frame rate under Camera quality. |
 | Visitor images | Device-wide Save images switch; size, capture delay, retention and date and time under Visitor Snapshot; archive in HA Media and last-image previews. |
 | Media history | Enabled by default in the doorstation card; previous/next browses HA snapshots and indexed capture videos inline. Independent visibility switch; no recording or device-call action from browsing. |
 | Talkback | Secure browser frontend with microphone permission; HTTPS or Home Assistant Cloud is expected. |
@@ -80,8 +93,9 @@ Most users only need:
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |
 | Messages and memos | Video-message, text-memo and voice-memo sensors plus playback/write/delete services. |
 | Display pages | Five built-in pages (Status, Energy, Agenda, Leave home and Situations) plus up to seven custom pages, all with configurable positions; weather, entity controls and a separate Alarmo subpage with an optional quick action. |
-| Page navigation | Previous/next arrows (default) or a favourites bar along the bottom edge of the display: one button per page for up to four pages, otherwise three pages and More. Set in the display settings. |
-| Notifications | Standard Notify action with info, warning and error notices and bounded wake/sound on safe screens; protected screens and calls suppress effects. Not a life-safety alarm. |
+| Page navigation | A favourites bar along the bottom edge of the display (default for new setups): one button per page for up to four pages, otherwise three pages and More; or previous/next arrows. Set in the display settings. |
+| Notifications | Standard Notify action with info, warning and error notices and bounded wake/sound on safe screens; protected screens and calls suppress effects. Each notice can be shown, spoken or both. Not a life-safety alarm. |
+| Speaker | Media player for the device loudspeaker: Text-to-Speech, short sounds and announcements; a door call always takes priority. |
 | Maintenance | Agent update/remove, SSH/noAuth, firewall, mDNS, GUI reload and reboot controls. |
 
 See [Feature reference](feature-reference.md) for the full entity and service

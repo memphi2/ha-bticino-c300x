@@ -168,8 +168,10 @@ class _OptionsAreas:
         entry.update_listeners = getattr(entry, "update_listeners", [])
         self.listener_tasks = []
 
-        def update_entry(entry, *, options):
-            if entry.options == options:
+        def update_entry(entry, *, options=None, data=None):
+            if data is not None:
+                entry.data = dict(data)
+            if options is None or entry.options == options:
                 return False
             entry.options = dict(options)
             for listener in entry.update_listeners:
@@ -199,8 +201,10 @@ class _OptionsAreas:
         result = {"type": "finished", "data": dict(self._entry.options)}
         if next_step_id is None:
             return result
-        menu = (await self._flow().async_step_init())["menu_options"]
-        if next_step_id not in menu:
+        # The whole pages form stands for the page list, which opens it page by page.
+        listed = {"dashboard_pages": "dashboard_page_list"}.get(next_step_id, next_step_id)
+        menu = (await self._flow().async_step_display())["menu_options"]
+        if listed not in menu:
             return result
         return await getattr(self._flow(), f"async_step_{next_step_id}")(None)
 
@@ -989,7 +993,8 @@ def test_weather_card_stays_on_the_status_page_until_placed():
     pages = {page["title"]: page for page in payload["data"]["pages"]}
     assert list(pages) == ["C300X", ""]
     assert "weather" in pages["C300X"]
-    assert _kinds(pages["C300X"]) == ["weather", "navigation"]
+    # The favourites bar is the default, so the status page has no page buttons.
+    assert _kinds(pages["C300X"]) == ["weather"]
     assert _kinds(pages[""]) == ["light.one", "light.two"]
 
 

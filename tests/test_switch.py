@@ -37,7 +37,6 @@ def test_config_switches_are_disabled_by_default() -> None:
     config_switch_classes = (
         C300XHomeAssistantMediaUserSetupSwitch,
         C300XMaintenanceSshSwitch,
-        C300XGuiFunctionPatchSwitch,
         C300XFirewallPatchSwitch,
         C300XIpv6FirewallPatchSwitch,
         C300XNativeMqttBridgeSwitch,
@@ -49,6 +48,12 @@ def test_config_switches_are_disabled_by_default() -> None:
 
     for switch_class in config_switch_classes:
         assert switch_class(_FakeEntry()).entity_registry_enabled_default is False
+
+
+
+def test_display_patch_switch_is_shown_by_default() -> None:
+    # It is the way to apply or restore the Display patch by hand.
+    assert C300XGuiFunctionPatchSwitch(_FakeEntry()).entity_registry_enabled_default is True
 
 
 def test_snapshot_switch_changes_manager_without_device_io(monkeypatch) -> None:
@@ -791,6 +796,13 @@ def test_gui_function_patch_switch_applies_and_restores_patch() -> None:
         )
     )
     entity = C300XGuiFunctionPatchSwitch(entry)  # type: ignore[arg-type]
+    saved: list[dict[str, Any]] = []
+
+    def update_entry(updated: Any, *, options: dict[str, Any]) -> None:
+        saved.append(options)
+        updated.options = options
+
+    entity.hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update_entry))
 
     asyncio.run(entity.async_turn_on())
     asyncio.run(entity.async_turn_off())
@@ -798,6 +810,11 @@ def test_gui_function_patch_switch_applies_and_restores_patch() -> None:
     assert entry.runtime_data.api.qml_patch_actions == ["apply", "restore"]
     assert entry.runtime_data.qml_patch_status["state"] == "original"
     assert entity.is_on is False
+    # The Display setting follows the switch, so saving the settings keeps it.
+    assert [options["device_ui_enabled"] for options in saved] == [True, False]
+    # A setting that already matches is not saved again.
+    asyncio.run(entity.async_turn_off())
+    assert len(saved) == 2
 
 
 def test_gui_function_patch_switch_marks_unavailable_when_refresh_fails() -> None:
@@ -1617,3 +1634,17 @@ def test_media_user_setup_needs_the_display_label_only_where_there_is_a_display_
     }
 
     assert entity.is_on is is_on
+
+
+def test_an_agent_without_the_display_patch_gets_no_display_patch_switch() -> None:
+    def switches(maintenance: dict[str, Any]) -> list[Any]:
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={"maintenance": maintenance}))
+        entities: list[Any] = []
+        asyncio.run(async_setup_entry(None, entry, entities.extend))  # type: ignore[arg-type]
+        return [entity for entity in entities if isinstance(entity, C300XGuiFunctionPatchSwitch)]
+
+    # Firmware 3.0.x with its Qt 5 display says so; the switch would stay unavailable.
+    assert switches({"supported": True, "qml_patch": False}) == []
+    assert len(switches({"supported": True, "qml_patch": True})) == 1
+    # An agent that has not answered yet keeps the switch.
+    assert len(switches({})) == 1

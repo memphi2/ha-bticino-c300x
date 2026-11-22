@@ -62,6 +62,7 @@ int main(void)
     config.answering_machine_messages_enabled = 0;
     config.memos_enabled = 0;
     config.system_metrics_enabled = 0;
+    context.announcements_supported = 1;
     assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
     fputs(body, stdout);
     return 0;

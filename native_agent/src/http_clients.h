@@ -16,13 +16,16 @@ struct c300x_http_client {
     long long deadline;
     size_t used;
     char *buffer;
+    int ready;
 };
 
 struct c300x_http_clients {
     struct c300x_http_client slots[C300X_HTTP_MAX_CLIENTS];
 };
 
-typedef void (*c300x_http_ready_fn)(int fd, int kind, char *buffer, void *context);
+/* Zero defers a complete request in its existing slot; no FD/buffer ownership
+ * transfers. The caller must have active work that will wake and retry it. */
+typedef int (*c300x_http_ready_fn)(int fd, int kind, char *buffer, void *context);
 void c300x_http_clients_init(struct c300x_http_clients *clients);
 int c300x_http_clients_add(struct c300x_http_clients *clients, int fd, int kind, long long now);
 int c300x_http_clients_prepare(struct c300x_http_clients *clients, struct pollfd *fds, long long now);

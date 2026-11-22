@@ -1,5 +1,114 @@
 # Changelog
 
+## v2.8.0 - 2026-11-22
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+Camera:
+
+- New **Camera resolution** setting (configuration entity): high or low
+  resolution for the camera stream, applied from the next stream. High stays
+  the default. Firmware 3.0.6 sends only the low resolution, so with the
+  agent update the setting is not offered there.
+- **Better camera picture:** new **Camera quality** area in the settings. The
+  stream can be sharper, smoother and show more: picture size (the whole
+  camera picture at 704x576 instead of the factory 688x480 cut-out, still
+  filling the device display), bit rate up
+  to 3000 kbit/s and up to 24 frames per second instead of the factory
+  800 kbit/s and 15 for the high-resolution camera stream. On firmware 3.0.6
+  size, bit rate and frame rate of the low-resolution stream, the only one it
+  sends, which the Door Entry app gets as well.
+  Like the audio codec, saving a change restarts the device once, which then
+  uses the new values.
+  Needs the agent update.
+
+Speaker:
+
+- **The C300X speaks.** New media player **Speaker** for the device's own
+  loudspeaker. Use it with `tts.speak` and any text-to-speech engine, for
+  example Piper for speech that stays local, or play sounds from the media
+  browser. It has a volume and a stop. A door call ends a sound at once, and
+  no sound starts while a call is under way or for a minute after a ring.
+  Tested on firmware 1.7.19. Needs the agent update.
+- **Spoken notifications.** The Notify action has a new `mode`: `display`
+  (as before), `speech` (the message is only spoken) or `both` (shown on the
+  display and spoken instead of the tone). The engine and language are
+  chosen under **Configure > Speech**, for example the local Piper; a
+  notification can also name its own `tts_engine` and `language`. Like the
+  Notify action itself, this needs **Home Assistant pages on the display**.
+
+Audio:
+
+- The **Audio codec** select can switch to Speex also on firmware 3.0.6, which
+  comes with PCMU; it failed there before. Not yet tested on a 3.0.6 device.
+  Removing the agent puts back the codec the device came with. The option is now called **Speex**, without
+  "stock". Needs the agent update.
+
+Display:
+
+- The favourites bar is the default page navigation for new setups. Entries
+  saved with 2.7.0 keep the arrows they stored; older entries that were not
+  saved since switch to the bar. Change it under **Page navigation** in the
+  display settings.
+- Taps on the display pages are reliable. The display library counted a
+  finger that moved four pixels as a swipe, so buttons inside a page often
+  needed several taps. The Display patch now raises that threshold to 16
+  pixels on firmware 1.7.x and 2.0.2 (with a backup; the Display restore
+  brings the original back), and a page that fits on the screen no longer
+  scrolls. Needs the agent update; its Repair applies it to a display that
+  is already patched.
+- The energy tabs, the Leave home buttons, tiles that open details, the
+  detail tabs and the on/off switch show that they are pressed.
+
+Doorstation card:
+
+- Saved images and videos look alike while browsing. The time of a video
+  is written where an image carries its own, in the lower right corner and
+  in the same form; the label in the corner and the time have no plate
+  any more. The video controls are one row in a bar above the time, and the
+  arrows stay at one height.
+- The picture takes the shape of the camera stream, so the 704x576 size
+  of **Camera quality** is shown whole and without bars. The browser
+  remembers the shape per camera, so the card does not jump when the next
+  stream starts.
+
+Settings:
+
+- The settings menu has one **Display** entry. It opens a menu with the
+  Display patch, the pages, the tiles and Alarmo.
+- **Display pages** is a list of the pages. A page opens a short form with
+  its own fields instead of one form with all pages. A new position moves
+  the pages in between by one, and an entity that another page shows moves
+  to the opened page with its tile settings.
+- The setup texts say access key and maintenance key throughout, as the
+  fields do.
+- **No SSH login to type in.** Installing the agent, at setup and in the
+  agent Repair, logs in with the C300X factory root login. User and password
+  are asked for only when the device refuses it.
+
+Fixed:
+
+- Submitting the Display settings with **Home Assistant pages on the
+  display** turned on installs the pages on the C300X once the integration
+  has reloaded, and with it turned off restores the original display; the
+  reconfigure and a new setup do the same. Other settings saved leave the
+  display alone. Before, the option only unlocked the settings, and the
+  pages came only from the **Display patch** switch, which was disabled by
+  default. When the C300X cannot be reached then, the next start tries
+  again. The switch now saves
+  the option too, so a later save keeps what it did. If the pages are
+  missing after the update, open **Configure > Display > Display and
+  Display patch** and submit it once.
+- The **Display patch** switch is enabled by default in new setups. Where it
+  was set up disabled before, enable it once on the device page. A device
+  without the Display patch (firmware 3.0.6) gets no switch.
+- The card no longer shows the last image twice. Its saved copy came again
+  as the first step into the saved pictures and videos; browsing now starts
+  behind the image the card already shows.
+- The camera card no longer stays on a call the device has lost. After an
+  agent restart during a live view or a call, the card kept offering
+  **Hang up** without effect until Home Assistant was restarted.
+
 ## v2.7.0 - 2026-11-20
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

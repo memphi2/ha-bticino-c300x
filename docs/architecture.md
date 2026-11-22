@@ -17,7 +17,9 @@ Path: `custom_components/bticino_c300x/`
 Responsibilities:
 
 - Config flow and options flow. The options flow is a settings menu: each area
-  saves when it is submitted and returns to the menu; Done closes it.
+  saves when it is submitted and returns to its menu; Done closes it. The
+  display areas are in a Display submenu, and the display pages are a list
+  that opens one page per form.
 - Capability-gated entities/services.
 - Authenticated API calls to the device agent.
 - Event webhook registration and event-state handling.
@@ -83,14 +85,61 @@ Responsibilities:
 - Explicit maintenance/update actions for device-agent, display, firewall, MQTT
   migration and media-user setup.
 
-QML status/patch scripts and GUI reload run as a single bounded child-process
-job in `command_job.c`. The main poll loop continues serving events and requests;
-it never waits synchronously for these scripts. Status and standalone GUI reload
-jobs have a 10-second deadline; QML writes allow 30 seconds for a failed start,
-file rollback and restart of the previous GUI. Output is bounded and there are
-no extra wakeups while idle. Concurrent maintenance writes
-are rejected as busy. A disconnected client does not restart or duplicate its
-job. Other legacy maintenance operations are not yet asynchronous.
+HTTP authentication policy lives in `http_auth.c`; API admission remains in
+`http.c`, before the extracted route dispatchers. `http_maintenance.c` owns
+the QML/GUI routes and one child-process job, client socket and completion
+continuation. It exposes a write-accounting callback, not the agent runtime
+structure. `http_device_user.c` owns device-user responses and synchronous label
+writes; only its read-only status phase uses that same job slot.
+`http_service_commands.c` owns SSH probe/start/stop and SSH-before-reboot/removal
+continuations. `http_audio_codec.c` owns codec routes and reuses the reboot
+continuation while preserving its separate 200/status-body response contract.
+
+QML status/patch scripts, GUI reload and the read-only device-user status script
+run through `command_job.c`. The main poll loop never waits synchronously for these
+scripts. Each status and standalone GUI reload script retains its
+10-second deadline; QML writes retain 30 seconds for a failed start, file
+rollback and restart of the previous GUI. Maintenance jobs have no queue and
+no thread of their own. While an asynchronous job owns the slot, maintenance writes
+and competing QML/device-user reads are rejected as busy after authorization. A disconnected client retains its
+slot until completion; it does not cancel, restart or duplicate device work.
+Shutdown kills the active process group and releases the socket/context.
+Label apply/restore instead use `command_transaction.c` synchronously, through
+commit/rollback, remount cleanup and child reap. They have no execution deadline
+or forced cancellation; graceful shutdown waits for the write to return. This
+also removes the old synchronous capture's unsafe ten-second kill timeout.
+A hung label script blocks HTTP and graceful shutdown indefinitely. The change
+does not certify existing QML-write job cancellation as transaction-safe.
+SSH status GETs instead wait in existing bounded input slots, without gaining a
+new busy status. Service commands have a deadline (60 seconds for SSH start
+and stop, 15 for SSH status) and discard output; no new worker, queue or idle
+polling is introduced.
+
+QML/GUI output retains its 4096-byte buffer and overflow failure. Device-user
+captures retain their legacy bounded-prefix behavior: 4096 bytes for status,
+8192 for label apply/restore, including the terminator. A single request-scoped
+context is allocated only while needed. The existing eight reads of at most
+1024 bytes per job tick bound noisy-child work. Idle maintenance has no timer.
+HTTP request/output/file-transfer and callback queue limits are unchanged.
+
+Native MQTT broker output uses a fixed 3077-byte pending buffer owned by its
+existing poll state. Complete frames are admitted in order; saturated new
+events are dropped best-effort. CONNECT/SUBSCRIBE output, CONNACK receive and
+PINGREQ progress without synchronous output waits. No worker or idle timer is
+added. DNS/TCP establishment and MQTT-to-device command forwarding remain
+synchronous; see [MQTT output ownership](native-mqtt-output.md).
+
+This is not a fully asynchronous device-I/O architecture.
+Device-user routing hash/read/write, label write scripts, remount and fsync
+operations still execute synchronously.
+Codec mutation is still synchronous despite the route extraction. Firewall,
+update and legacy MQTT waits need further scoped work. OpenWebNet exchanges and
+media operations run on a worker thread that exists only while one runs
+(`request_worker.c`), in the order the requests arrived. No asynchronous
+filesystem transaction has been introduced. See the [HTTP maintenance boundary](native-http-maintenance.md)
+for compatibility details and focused validation, and the
+[blocking-path inventory](native-http-blocking-inventory.md) for remaining
+call paths and safe alternative designs.
 
 QML write transactions retain their previous active files until the GUI process
 start check succeeds. A failed start restores those files before attempting to
@@ -188,7 +237,7 @@ explicit user actions:
 - Home Assistant media-user setup or repair,
 - forwarding, ringer, answering-machine and memo/message commands,
 - Display patch and GUI reload,
-- firewall, MQTT, audio codec, SSH and reboot maintenance,
+- firewall, MQTT, audio codec, camera quality, SSH and reboot maintenance,
 - the display's local HA feedback preference,
 - configured device activation synchronization.
 

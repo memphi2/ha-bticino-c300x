@@ -67,8 +67,10 @@ Apply the core GUI hook when Repairs requests it, then reload the device GUI.
 This hook is separate from the optional Home Assistant display pages. It is
 needed for media state tracking and synchronized ringer mute/unmute.
 
-The SSH credentials used during installation are one-time setup inputs. They
-are not stored in the Home Assistant config entry, diagnostics or logs.
+The installer logs in with the C300X factory root login. It asks for an SSH
+user and password only when the device refuses that login. Typed credentials
+are one-time setup inputs. They are not stored in the Home Assistant config
+entry, diagnostics or logs.
 
 ## 4. Choose the Standard Feature Set
 
@@ -178,9 +180,13 @@ Details: [Blueprints](blueprints.md)
 These pages run on the C300X itself in its blue interface; they are not the
 Lovelace card or an embedded HA dashboard.
 
-1. Update the bundled agent, then enable and apply **Display patch** under
-   **Configure > Display and Display patch**. Applying it restarts the device GUI.
-2. Open **Display pages**. Choose an optional weather entity, name your pages,
+1. Update the bundled agent, then turn on **Home Assistant pages on the display**
+   under **Configure > Display > Display and Display patch** and save. After the
+   integration has reloaded, the Display patch is applied, which restarts the
+   device GUI; saving with the option off restores the original display. The
+   **Display patch** switch on the device page does the same and saves the
+   option with it.
+2. Open **Display > Display pages** and pick a page from the list. Choose an optional weather entity, name your pages,
    set their order and select the entities for each. Five built-in pages
    (Status, Energy, Agenda, Leave home and Situations) and up to seven custom
    pages are available. Set all
@@ -195,9 +201,10 @@ Lovelace card or an embedded HA dashboard.
    the top ten configured devices by current W without history queries.
    Distribution has been removed: enable Consumers explicitly after upgrading;
    the old selection is removed without enabling another view.
-   The sections are listed in the order of the display and their titles show
-   the page number. A page the display does not show (switched off, or without
-   entities) has no number and follows the shown pages; free sections, titled
+   The list follows the order of the display and shows each page's number. A
+   page the display does not show (switched off, or without entities) has no
+   number and follows the shown pages; **Add a page** adds a custom one. In the
+   setup the pages are sections of one form instead, and free sections, titled
    **Page +**, come last. Optional **Agenda** and **Leave home** sections select calendars and departure
    checks explicitly; they are disabled until you enable them. Agenda shows up
    to five events in seven days, using a background HA cache. Leave home actions
@@ -225,6 +232,9 @@ wake and sound for all three severities: `info`, `warning` and `error`. Set
 safe Home/HA screens, never queued until the next wake, and are supplementary,
 not fire-alarm functionality. A protected screen or call suppresses the effects
 and leaves the notice in HA; a missing GUI connection reports a delivery error.
+With `mode: speech` or `mode: both` the message is spoken over the device
+loudspeaker instead of the tone; see
+[Speaker and text-to-speech](feature-reference.md#speaker-and-text-to-speech).
 
 Details: [Display controls](feature-reference.md#display-device-controls),
 [pages and tiles](feature-reference.md#display-settings) and
@@ -240,6 +250,10 @@ For later updates, follow [Updates](advanced-maintenance.md#updates).
 
 Use [Feature reference](feature-reference.md) to decide what to enable next:
 
+- a better camera picture under **Configure > Camera quality** (sharper,
+  smoother, the whole camera picture; the device restarts once),
+- clearer sound with the **Audio codec** select on **PCMU** (the device
+  restarts once; firmware 3.0.6 runs PCMU already),
 - additional C300X activation buttons,
 - ringer mute and volume controls,
 - video-message and memo workflows,

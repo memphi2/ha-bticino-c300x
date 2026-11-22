@@ -4,16 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from .capabilities import entry_gui_function_patch_active
 from .config_audio import audio_gain_db_or_default
+from .config_flow_camera_quality import camera_quality_offered
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
 from .config_flow_dashboard import (
     DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
-)
-from .config_flow_dashboard import (
-    dashboard_entity_display_has_fields,
-    dashboard_input_defaults,
 )
 from .config_flow_dashboard import (
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
@@ -23,6 +21,7 @@ from .config_flow_dashboard import (
 )
 from .config_flow_forms import actions_json as _actions_json
 from .config_flow_forms import optional_suggested as _optional_suggested
+from .config_flow_speech import speech_offered
 from .config_schemas import (
     reconfigure_connection_schema as _reconfigure_connection_schema,
 )
@@ -289,8 +288,11 @@ def current_feature_options(
                 CREATE_HOMEASSISTANT_USER_DEFAULT,
             )
         ),
+        # An entry from before the setting has it as its device is.
         CONF_DEVICE_UI_ENABLED: bool(
-            _config_default(config_entry, CONF_DEVICE_UI_ENABLED, False)
+            _config_default(
+                config_entry, CONF_DEVICE_UI_ENABLED, entry_gui_function_patch_active(config_entry)
+            )
         ),
         CONF_ACTIONS: _config_default(config_entry, CONF_ACTIONS, {}),
         CONF_DASHBOARD_PREVENT_RETURN: bool(
@@ -465,20 +467,20 @@ def _config_default(
 def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     """Return the settings areas the options menu offers.
 
-    They follow the setup: connection, video and audio, activations, Alarmo,
-    the display and its patch, then its pages and tiles. Pages and tiles need
-    the Display patch, which the display area switches on. The tiles need
-    something to show as well: an entity on a page or the Alarmo quick entity.
+    They follow the setup: connection, video and audio, activations, then
+    the display. Everything about the display (its patch, pages, tiles and
+    Alarmo) is in the Display submenu of config_flow_display_menu.
     """
 
     saved = current_feature_options(config_entry)
     menu = ["connection", "features"]
     if saved[CONF_VIDEO_ENABLED]:
-        # Visitor images exist only with video.
+        # Visitor images and the stream quality exist only with video.
         menu.append("visitor_snapshot")
-    menu += ["device_activations", "dashboard_alarm", "dashboard"]
-    if saved[CONF_DEVICE_UI_ENABLED]:
-        menu.append("dashboard_pages")
-        if dashboard_entity_display_has_fields(dashboard_input_defaults({}, saved)):
-            menu.append("dashboard_entity_display")
+        if camera_quality_offered(config_entry):
+            menu.append("camera_quality")
+    menu.append("device_activations")
+    if speech_offered(config_entry):
+        menu.append("speech")
+    menu.append("display")
     return menu

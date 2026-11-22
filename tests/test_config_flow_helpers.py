@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+from unittest.mock import AsyncMock
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -15,6 +16,12 @@ import voluptuous_serialize
 from homeassistant.helpers import aiohttp_client
 from homeassistant.data_entry_flow import AbortFlow
 
+from custom_components.bticino_c300x.config_flow_qml import (  # noqa: E402
+    async_qml_patch_description_placeholders as _async_qml_patch_description_placeholders,
+)
+from custom_components.bticino_c300x.config_flow_qml import (  # noqa: E402
+    qml_patch_status_label as _qml_patch_status_label,
+)
 from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     BticinoC300XOptionsFlow,
     BticinoC300XConfigFlow,
@@ -23,7 +30,6 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _actions_json,
     _agent_auth_input,
     _agent_auth_schema,
-    _async_qml_patch_description_placeholders,
     _async_probe_agent,
     _bootstrap_install_schema,
     _clear_reconfigured_option_overrides,
@@ -36,7 +42,6 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _initial_connection_input,
     _options_connection_schema,
     _options_features_schema,
-    _qml_patch_status_label,
     _reconfigure_connection_schema,
     _reconfigure_connection_schema_from_current,
     _reconfigure_features_schema,
@@ -75,6 +80,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
+    CONF_DISPLAY_SETTING_PENDING,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
@@ -1306,13 +1312,23 @@ def test_agent_missing_without_connection_returns_user_form() -> None:
     assert result["step_id"] == "user"
 
 
-def test_agent_missing_choose_install_returns_bootstrap_form() -> None:
+def test_agent_missing_choose_install_shows_the_login_form_when_the_install_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
     flow._setup_connection = {
         CONF_NAME: "Door",
         CONF_AGENT_HOST: "c300x.local",
         CONF_AGENT_PORT: 8091,
     }
+    flow._async_abort_if_manual_setup_duplicate = AsyncMock()  # type: ignore[method-assign]
+    monkeypatch.setattr(config_flow_module, "async_ensure_installer_dependencies", AsyncMock())
+    monkeypatch.setattr(
+        config_flow_module,
+        "async_install_device_agent",
+        AsyncMock(side_effect=config_flow_module.C300XDeviceInstallError("device_install_failed")),
+    )
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
 
     result = asyncio.run(
@@ -1320,6 +1336,7 @@ def test_agent_missing_choose_install_returns_bootstrap_form() -> None:
     )
 
     assert result["step_id"] == "bootstrap_install"
+    assert result["errors"] == {"base": "device_install_failed"}
 
 
 def test_bootstrap_install_reports_install_error(
@@ -2442,7 +2459,11 @@ def test_qml_patch_status_flow_forms_pass_description_placeholders() -> None:
 def _options_flow(entry):
     """Return an options flow that saves into the given entry."""
 
-    def update_entry(target, *, options):
+    def update_entry(target, *, options=None, data=None):
+        if data is not None:
+            target.data = dict(data)
+        if options is None:
+            return False
         changed = target.options != options
         target.options = dict(options)
         return changed
@@ -2450,7 +2471,9 @@ def _options_flow(entry):
     entry.update_listeners = [object()]
     flow = BticinoC300XOptionsFlow(entry)
     flow.hass = SimpleNamespace(  # type: ignore[assignment]
-        config_entries=SimpleNamespace(async_update_entry=update_entry),
+        config_entries=SimpleNamespace(
+            async_update_entry=update_entry, async_schedule_reload=lambda _entry_id: None
+        ),
     )
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
     flow.async_create_entry = lambda **kwargs: {  # type: ignore[method-assign]
@@ -2475,10 +2498,15 @@ def _save_options_area(entry, result) -> None:
 
 
 def _options_menu_of(entry) -> list[str]:
+    """Return the areas of the settings menu, the Display submenu unfolded."""
+
     menu = asyncio.run(BticinoC300XOptionsFlow(entry).async_step_init())
     assert (menu["type"], menu["step_id"]) == ("menu", "init")
-    assert menu["menu_options"][-1] == "done"
-    return list(menu["menu_options"][:-1])
+    assert menu["menu_options"][-2:] == ["display", "done"]
+    display = asyncio.run(BticinoC300XOptionsFlow(entry).async_step_display())
+    assert (display["type"], display["step_id"]) == ("menu", "display")
+    assert display["menu_options"][-1] == "init"
+    return [*menu["menu_options"][:-2], *display["menu_options"][:-1]]
 
 
 def test_options_flow_returns_to_the_menu_after_saving_and_done_closes_it() -> None:
@@ -2584,10 +2612,11 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
         },
         options={},
         runtime_data=None,
+        entry_id="entry-areas",
     )
     # Without the Display patch there are no pages or tiles to set up.
     assert _options_menu_of(entry) == [
-        "connection", "features", "device_activations", "dashboard_alarm", "dashboard",
+        "connection", "features", "device_activations", "dashboard", "dashboard_alarm",
     ]
 
     _flow, result = _options_area(entry, "connection", {
@@ -2640,7 +2669,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     # The patch is on: pages can be set up, and there are no tiles yet.
     assert _options_menu_of(entry) == [
         "connection", "features", "visitor_snapshot", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages",
+        "dashboard", "dashboard_page_list", "dashboard_alarm",
     ]
 
     # Video is on now, so the visitor image has an area of its own. It starts
@@ -2689,7 +2718,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _save_options_area(entry, result)
     assert _options_menu_of(entry) == [
         "connection", "features", "visitor_snapshot", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm",
     ]
     # The areas saved since then left the visitor image settings alone.
     assert {key: entry.options[key] for key in snapshot_settings} == snapshot_settings
@@ -2933,6 +2962,8 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert result["data_updates"][CONF_AGENT_PORT] == 8092
     assert result["data_updates"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.20:8123"
     assert result["data_updates"][CONF_CREATE_HOMEASSISTANT_USER] is True
+    # The start after the reload applies the Display setting.
+    assert result["data_updates"][CONF_DISPLAY_SETTING_PENDING] is True
     assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "02"
     assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "03"
     assert result["data_updates"][CONF_DEVICE_ACTIVATIONS] == [
@@ -3096,18 +3127,25 @@ def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
     menu = _options_menu_of(entry)
     assert menu == [
         "connection", "features", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm",
     ]
     for step_id in menu:
-        _flow, form = _options_area(entry, step_id)
+        flow, form = _options_area(entry, step_id)
         assert form["step_id"] == step_id
         assert not form.get("errors")
+        if step_id != "dashboard_page_list":
+            continue
+        # The page list is a menu; each of its entries opens the pages form.
+        for page in form["menu_options"][:-1]:
+            page_form = asyncio.run(getattr(flow, f"async_step_{page}")())
+            assert page_form["step_id"] == "dashboard_pages"
+            assert not page_form.get("errors")
 
     # Tiles need something to show: without an entity the menu leaves them out.
     entry.data[CONF_DASHBOARD_ENTITIES] = []
     assert _options_menu_of(entry) == [
         "connection", "features", "device_activations",
-        "dashboard_alarm", "dashboard", "dashboard_pages",
+        "dashboard", "dashboard_page_list", "dashboard_alarm",
     ]
 
 

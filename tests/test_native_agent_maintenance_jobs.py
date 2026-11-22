@@ -65,7 +65,12 @@ class Lab:
 
 
 @pytest.fixture
-def lab(binary, tmp_path):
+def maintenance_options():
+    return {}
+
+
+@pytest.fixture
+def lab(binary, tmp_path, maintenance_options):
     port, ui_port, own = free_tcp_ports(3)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
@@ -73,7 +78,8 @@ def lab(binary, tmp_path):
         "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
         "maintenance": {"enabled": True, "adminToken": "maintenance-token",
                         "qmlPatch": {"enabled": True, "script": str(tmp_path / "job.sh")},
-                        "guiReload": {"enabled": True, "script": str(tmp_path / "job.sh")}},
+                        "guiReload": {"enabled": True, "script": str(tmp_path / "job.sh")},
+                        **maintenance_options},
         "activations": {"enabled": False, "autoDiscover": False},
         "events": {"udp": {"enabled": False}},
         "answeringMachine": {"messages": {"enabled": False}},
@@ -83,7 +89,8 @@ def lab(binary, tmp_path):
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config))
-    env = {**os.environ, "C300X_QML_DYNAMIC_HOME_PAGE": "0"}
+    env = {**os.environ, "C300X_QML_DYNAMIC_HOME_PAGE": "0",
+           "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1", "UBSAN_OPTIONS": "halt_on_error=1"}
     with (tmp_path / "agent.log").open("w") as log:
         process = subprocess.Popen([str(binary), "--config", str(path)], cwd=tmp_path,
                                    stdout=log, stderr=log, env=env)
@@ -100,6 +107,7 @@ def lab(binary, tmp_path):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=3)
+            assert process.returncode == 0, (tmp_path / "agent.log").read_text()
 
 
 def response(conn, status=200):
@@ -219,3 +227,31 @@ def test_confirmation_and_missing_script_do_not_start_jobs(lab):
     assert response(lab.request(), 502)["state"] == "script_missing"
     lab.script("printf ready\n")
     assert response(lab.request(GUI, {"confirm": "reload_gui"}))["action"] == "reload_gui"
+
+
+@pytest.mark.parametrize("suffix,confirmation,action", [
+    ("apply", "apply_qml_patch", "apply"),
+    ("apply-core", "apply_qml_core_patch", "core-apply"),
+    ("restore-core", "restore_qml_core_patch", "core-restore"),
+    ("restore", "restore_qml_patch", "restore"),
+])
+def test_extracted_qml_routes_preserve_actions_and_confirmation(lab, suffix, confirmation, action):
+    lab.script('printf \'{"action":"%s","changed_files":0,"dynamic":"%s"}\' '
+               '"$1" "$C300X_QML_DYNAMIC_HOME_PAGE"\n')
+    path = QML + "/actions/" + suffix
+    assert response(lab.request(path, {"confirm": "wrong"}), 400)["error"] == "maintenance_confirmation_required"
+    assert not (lab.root / "started").exists()
+    body = response(lab.request(path, {"confirm": confirmation,
+                                      "dynamic_homepage": True, "dynamicHomepage": False}))
+    assert body["action"] == action
+    assert body["dynamic"] == "0"
+
+
+@pytest.mark.parametrize("path,payload", [
+    (QML + "/", None), (QML, {}), (QML + "/actions/apply", None),
+    (QML + "/actions/apply/extra", {"confirm": "apply_qml_patch"}), (GUI, None),
+])
+def test_extracted_routes_keep_exact_method_path_matching(lab, path, payload):
+    lab.script('printf "{}"\n')
+    assert response(lab.request(path, payload), 501)["error"] == "not_implemented"
+    assert not (lab.root / "started").exists()

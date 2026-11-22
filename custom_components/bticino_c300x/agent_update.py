@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from collections.abc import Awaitable, Callable, Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -18,6 +20,10 @@ COMPONENT_DIR = Path(__file__).resolve().parent
 BUNDLE_MANIFEST = COMPONENT_DIR / "device_agent" / "bundle.json"
 UPLOAD_CHUNK_SIZE = 2048
 MAINTENANCE_BUSY_WAIT_SECONDS = 12.0  # Native job deadline (10s) plus reap margin.
+# A user action also holds its entity platform while it waits; this covers a
+# status read that Home Assistant started itself, not a long device job.
+MAINTENANCE_BUSY_ACTION_WAIT_SECONDS = 3.0
+_BUSY_WAIT_ACTIVE: ContextVar[bool] = ContextVar("c300x_busy_wait_active", default=False)
 
 UPDATE_STATE_UP_TO_DATE = "up_to_date"
 UPDATE_STATE_UPDATE_AVAILABLE = "update_available"
@@ -268,6 +274,7 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
 
 async def async_retry_update_maintenance_busy(
     action: Callable[[], Awaitable[Any]],
+    wait_seconds: float = MAINTENANCE_BUSY_WAIT_SECONDS,
 ) -> Any:
     """Retry only explicit pre-execution busy rejection, never transport loss.
 
@@ -276,6 +283,21 @@ async def async_retry_update_maintenance_busy(
     status on its own, so any step of an update can meet such a job.
     """
 
+    if _BUSY_WAIT_ACTIVE.get():
+        # A caller further out waits already; one wait, not one inside another.
+        return await action()
+    token = _BUSY_WAIT_ACTIVE.set(True)
+    try:
+        return await _async_wait_out_busy(action, wait_seconds)
+    finally:
+        # Closed from another context: that one keeps its own flag.
+        with contextlib.suppress(ValueError):
+            _BUSY_WAIT_ACTIVE.reset(token)
+
+
+async def _async_wait_out_busy(
+    action: Callable[[], Awaitable[Any]], wait_seconds: float
+) -> Any:
     deadline: float | None = None
     while True:
         try:
@@ -288,13 +310,12 @@ async def async_retry_update_maintenance_busy(
             ):
                 raise
             if deadline is None:
-                deadline = monotonic() + MAINTENANCE_BUSY_WAIT_SECONDS
+                deadline = monotonic() + wait_seconds
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise
+            # The last try comes at the end of the wait, not a pause before it.
             await asyncio.sleep(min(1.0, remaining))
-            if monotonic() >= deadline:
-                raise
 
 
 async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) -> None:

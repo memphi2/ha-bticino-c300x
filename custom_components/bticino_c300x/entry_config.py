@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .const import SPEECH_OPTION_KEYS
+
 NON_BLANK_DATA_FALLBACK_KEYS = {
     "agent_host",
     "agent_token",
@@ -60,3 +62,13 @@ def normalized_update_options(data: dict[str, Any], options: dict[str, Any]) -> 
         ):
             updated.pop(key)
     return updated
+
+
+def speech_settings(entry: Any) -> tuple[str | None, str | None]:
+    """Return the engine and language chosen for speech; None where nothing is chosen."""
+
+    options = getattr(entry, "options", {})
+    values = [options.get(key) if isinstance(options, Mapping) else None for key in SPEECH_OPTION_KEYS]
+    engine, language = (value if isinstance(value, str) and value else None for value in values)
+    return engine, language
+

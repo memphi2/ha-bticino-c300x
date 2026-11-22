@@ -10,6 +10,8 @@ RELOAD_GUI="${C300X_QML_RELOAD_GUI:-1}"
 GUI_ROOT="${C300X_QML_GUI_ROOT:-/home/bticino}"
 GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
+PROC_DIR="${C300X_QML_PROC_DIR:-/proc}"
+AGENT_BIN="${C300X_QML_AGENT_BIN:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/c300x-agent-native}"
 DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml js/c300x_ringer.js EventManager.qml"
@@ -228,6 +230,72 @@ core_call_end_hooks_present() {
     ' "$GUI_DIR/EventManager.qml"
 }
 
+# The swipe threshold of the display library belongs to the Display patch and
+# follows it. The agent binary checks, backs up and replaces the file. What
+# happens next follows the state found, not what this run did, so a run that
+# was cut off is completed by the next one: a display that still runs the
+# replaced file is restarted, and a root file system left writable goes
+# read-only again. A display that does not start with the changed library
+# gets the stock one back.
+touch_display_stale() {
+    for touch_pid in $(pidof BtClass 2>/dev/null || true); do
+        if grep -q '/usr/lib/.*(deleted)' "$PROC_DIR/$touch_pid/maps" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+touch_root_read_only() {
+    if [ "$NO_REMOUNT" = "1" ] || ! grep -q '^[^ ]* / [^ ]* rw[, ]' "$PROC_DIR/mounts" 2>/dev/null; then
+        return 0
+    fi
+    for touch_try in 1 2 3 4 5; do
+        if remount_ro; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+touch_patch() {
+    TOUCH_STATE=
+    if [ ! -x "$AGENT_BIN" ] || [ "${GUI_RELOAD_FAILED:-0}" = "1" ]; then
+        return 0
+    fi
+    touch_result="$("$AGENT_BIN" --display-touch "$1" 2>/dev/null || true)"
+    touch_changed=0
+    case "$touch_result" in
+        *'"changed":true'*) touch_changed=1 ;;
+    esac
+    # A restore that does not answer "ok" has failed, a crash included.
+    case "$1:$touch_result" in
+        restore:*'"ok":true'*) ;;
+        restore:*) TOUCH_STATE=restore_failed ;;
+    esac
+    if [ "$touch_changed" = "1" ] || { [ "$RELOAD_GUI" = "1" ] && touch_display_stale; }; then
+        if ! reload_gui; then
+            if [ "$1" = "apply" ]; then
+                touch_result="$("$AGENT_BIN" --display-touch restore 2>/dev/null || true)"
+                if ! reload_gui; then
+                    GUI_RELOAD_FAILED=1
+                else
+                    case "$touch_result" in
+                        *'"ok":true'*) TOUCH_STATE=rolled_back ;;
+                        *) TOUCH_STATE=restore_failed ;;
+                    esac
+                fi
+            else
+                GUI_RELOAD_FAILED=1
+            fi
+        fi
+    fi
+    if ! touch_root_read_only; then
+        TOUCH_ROOT_WRITABLE=1
+    fi
+}
+
 reload_gui() {
     if [ "$RELOAD_GUI" != "1" ]; then
         return 0
@@ -359,7 +427,18 @@ json_write_status() {
     if [ "${GUI_RELOAD_FAILED:-0}" = "1" ]; then
         json_reload_failed
     else
-        json_status "$changed_count"
+        write_status="$(json_status "$changed_count")"
+        if [ "${TOUCH_STATE:-}" = "restore_failed" ]; then
+            write_status="$(printf '%s\n' "$write_status" \
+                | sed 's/^{"ok":true/{"ok":false,"error":"display_library_restore_failed"/')"
+        elif [ -n "${TOUCH_STATE:-}" ]; then
+            write_status="$(printf '%s\n' "$write_status" \
+                | sed "s/}\$/,\"display_library\":\"$TOUCH_STATE\"}/")"
+        fi
+        if [ "${TOUCH_ROOT_WRITABLE:-0}" = "1" ]; then
+            write_status="$(printf '%s\n' "$write_status" | sed 's/}$/,"root_writable":true}/')"
+        fi
+        printf '%s\n' "$write_status"
     fi
 }
 
@@ -1556,6 +1635,7 @@ case "$ACTION" in
         ;;
     apply)
         apply_patch_files
+        touch_patch apply
         json_write_status
         ;;
     core-apply)
@@ -1571,6 +1651,7 @@ case "$ACTION" in
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_patch_files
         fi
+        touch_patch restore
         json_write_status
         ;;
     core-restore)
@@ -1592,6 +1673,7 @@ case "$ACTION" in
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_all_patch_files
         fi
+        touch_patch restore
         json_write_status
         ;;
     reload)

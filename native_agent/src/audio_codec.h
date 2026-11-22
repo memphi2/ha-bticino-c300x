@@ -7,12 +7,14 @@
 
 /*
  * Native, in-binary switch of the on-demand/intercom audio codec between
- * speex (stock) and PCMU. It patches two device config files in lock-step —
+ * speex and PCMU. It patches two device config files in lock-step —
  * stack_open.xml (<enable_speex>) and linphone.conf ([sound] rtp_map/rtp_ptnum
  * + [audio_codec_*] enabled) — because they must agree or the device emits
- * speex bytes labelled as PCMU. Originals are backed up once (under the rw
- * cfg/extra partition) and restore copies them back; both files live on the
- * read-only rootfs so writes are wrapped in a rw remount. A codec change only
+ * speex bytes labelled as PCMU. Both directions rewrite the same lines. The
+ * originals are backed up once (under the rw cfg/extra partition); the removal
+ * reads the original codec from them and rewrites the codec lines to it.
+ * Both files live on the read-only rootfs, so writes are wrapped in a rw
+ * remount. A codec change only
  * takes effect after the device reboots.
  *
  * This lives in the agent binary (an already-deployed, allowlisted file) so it

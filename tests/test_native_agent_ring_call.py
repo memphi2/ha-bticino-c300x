@@ -219,7 +219,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     )
     setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static void send_sip_bye")
+        media_bridge.index("static void close_home_call_fds_locked")
     ]
     start_pos = media_bridge.index(
         "static bool start_media_session(media_bridge_t *bridge) {"
@@ -287,8 +287,8 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert '#include "time_util.h"' in media_bridge
     assert "static bool base64_encode(" not in media_bridge
     assert "static long long monotonic_ms" not in media_bridge
-    assert stop_body.index("send_sip_bye(") < stop_body.index("if (relay_started)")
-    assert stop_body.index("send_sip_bye(") < stop_body.index(
+    assert stop_body.index("c300x_media_sip_send_bye(") < stop_body.index("if (relay_started)")
+    assert stop_body.index("c300x_media_sip_send_bye(") < stop_body.index(
         "c300x_device_media_stop(g_bridge.config);"
     )
     assert "request_ring_answer_if_active" not in start_body
@@ -309,7 +309,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
         '                "a=sendonly\\r\\n"'
     )
     assert media_bridge.count(backchannel_sdp) == 3
-    assert "read_rtsp_request_or_interleaved(" in rtsp_body
+    assert "c300x_media_rtsp_read(" in rtsp_body
     assert "handle_rtsp_backchannel_frame(" in rtsp_body
     assert "slot->backchannel_enabled = true;" in rtsp_body
     assert (
@@ -642,12 +642,10 @@ def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
     media_bridge = _read_media_bridge()
     invite_body = media_bridge[
         media_bridge.index("static bool send_home_call_invite") :
-        media_bridge.index("static void send_home_call_cancel")
+        media_bridge.index("static void drain_home_call_stop_responses")
     ]
-    cancel_body = media_bridge[
-        media_bridge.index("static void send_home_call_cancel") :
-        media_bridge.index("static void *home_call_thread_func")
-    ]
+    dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
+    cancel_body = dialog[dialog.index("void c300x_media_sip_send_cancel") :]
     home_call_thread = media_bridge[
         media_bridge.index("static void *home_call_thread_func") :
         media_bridge.index("static void *rtp_relay_thread")
@@ -668,24 +666,25 @@ def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
     assert '"To: <sip:%s>\\r\\n"' in cancel_body
     assert '"From: <sip:%s>;tag=%s\\r\\n"' in cancel_body
     assert '"CSeq: 21 CANCEL\\r\\n"' in cancel_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT' not in cancel_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT' not in cancel_body
     assert "drain_home_call_stop_responses(fd, \"CANCEL\", true)" in ringing_loop
-    assert "send_home_call_cancel(" in ringing_loop
-    assert "send_sip_bye(" not in ringing_loop
-    assert "send_sip_bye(" in answered_loop
+    assert "c300x_media_sip_send_cancel(" in ringing_loop
+    assert "c300x_media_sip_send_bye(" not in ringing_loop
+    assert "c300x_media_sip_send_bye(" in answered_loop
     assert "drain_home_call_stop_responses(fd, \"BYE\", false)" in answered_loop
-    assert "send_home_call_cancel(" not in answered_loop
+    assert "c300x_media_sip_send_cancel(" not in answered_loop
 
 
 def test_native_agent_home_call_ack_and_bye_match_app_headers() -> None:
     media_bridge = _read_media_bridge()
-    ack_body = media_bridge[
-        media_bridge.index("static void send_sip_ack") :
-        media_bridge.index("static void send_sip_ok_response")
+    dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
+    ack_body = dialog[
+        dialog.index("void c300x_media_sip_send_ack") :
+        dialog.index("void c300x_media_sip_send_ok")
     ]
-    bye_body = media_bridge[
-        media_bridge.index("static void send_sip_bye") :
-        media_bridge.index("static void close_home_call_fds_locked")
+    bye_body = dialog[
+        dialog.index("void c300x_media_sip_send_bye") :
+        dialog.index("void c300x_media_sip_send_cancel")
     ]
     stop_drain_body = media_bridge[
         media_bridge.index("static void drain_home_call_stop_responses") :
@@ -693,16 +692,16 @@ def test_native_agent_home_call_ack_and_bye_match_app_headers() -> None:
     ]
 
     assert '"CSeq: %d ACK\\r\\n"' in ack_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in ack_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"' in ack_body
     assert ack_body.index('"CSeq: %d ACK\\r\\n"') < ack_body.index(
-        '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"'
+        '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"'
     )
 
     assert '"BYE %s SIP/2.0\\r\\n"' in bye_body
     assert '"CSeq: 22 BYE\\r\\n"' in bye_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in bye_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"' in bye_body
     assert bye_body.index('"CSeq: 22 BYE\\r\\n"') < bye_body.index(
-        '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"'
+        '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"'
     )
 
     assert 'strcmp(cseq_method, stop_method) == 0' in stop_drain_body
@@ -738,7 +737,7 @@ def test_native_agent_home_call_emits_authoritative_state_events() -> None:
         in media_bridge
     )
     assert "strncmp(message, \"BYE \", 4) == 0" in home_call_thread
-    assert "send_sip_ok_response(fd, message)" in home_call_thread
+    assert "c300x_media_sip_send_ok(fd, message)" in home_call_thread
     assert "typedef void (*c300x_video_event_callback)" in video_header
     assert "int event_read_fd;" in video
     assert "struct c300x_video_event pending_events" in video
@@ -930,12 +929,13 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "!home_call_active" in http
     assert "&& (bridge_media_active || call_active)" in http
     assert '"\\"window_available\\":%s,"' in http
-    activate_body = http[
-        http.index("static void handle_doorbell_video_activate") :
-        http.index("static void handle_doorbell_video_stop")
+    actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
+    activate_body = actions[
+        actions.index("void c300x_http_doorbell_video_activate") :
+        actions.index("void c300x_http_doorbell_video_stop")
     ]
     assert activate_body.index("status.ring_call_active || status.ring_media_active") < (
-        activate_body.index("c300x_video_activate(runtime->video, audio)")
+        activate_body.index("C300X_VIDEO_CONTROL_ACTIVATE, audio")
     )
     assert '\\"ring_active\\":true' in activate_body
     assert 'snprintf(status->media_owner, sizeof(status->media_owner), "%s", "ring")' in video
@@ -1079,13 +1079,15 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
         video.index("void c300x_video_doorbell_call_hangup") :
         video.index("int c300x_video_home_call_start")
     ]
-    answer_http_body = http[
-        http.index("static void handle_doorbell_call_answer") :
-        http.index("static void handle_doorbell_call_hangup")
+    actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
+    control = (ROOT / "native_agent" / "src" / "video_control.c").read_text(encoding="utf-8")
+    answer_http_body = actions[
+        actions.index("void c300x_http_doorbell_call_answer") :
+        actions.index("void c300x_http_doorbell_call_hangup")
     ]
-    hangup_http_body = http[
-        http.index("static void handle_doorbell_call_hangup") :
-        http.index("static void handle_doorbell_call_capture")
+    hangup_http_body = actions[
+        actions.index("void c300x_http_doorbell_call_hangup") :
+        actions.index("void c300x_http_home_call_start")
     ]
     router_body = http[
         http.index('"/api/v1/video/doorbell/actions/stop"') :
@@ -1106,9 +1108,11 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
     assert "stop_ring_call_if_active" not in hangup_bridge_body
     assert "c300x_media_ring_call_answer(video)" in answer_video_body
     assert "c300x_media_ring_call_hangup(video);" in hangup_video_body
-    assert "c300x_video_doorbell_call_answer(runtime->video)" in answer_http_body
+    assert "C300X_VIDEO_CONTROL_ANSWER" in answer_http_body
+    assert "c300x_video_doorbell_call_answer(job->video)" in control
     assert '\\"ring_call_not_active\\"' in answer_http_body
-    assert "c300x_video_doorbell_call_hangup(runtime->video);" in hangup_http_body
+    assert "C300X_VIDEO_CONTROL_HANGUP" in hangup_http_body
+    assert "c300x_video_doorbell_call_hangup(job->video);" in control
     for path in (
         "/api/v1/calls/doorbell/status",
         "/api/v1/calls/doorbell/actions/answer",

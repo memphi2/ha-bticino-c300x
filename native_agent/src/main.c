@@ -1,5 +1,7 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
+#include "camera_quality.h"
+#include "display_touch.h"
 #include "https_client.h"
 
 #include <signal.h>
@@ -11,7 +13,8 @@ static void print_usage(const char *program)
     fprintf(
         stderr,
         "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
-        " [--audio-codec status|apply|restore] [--restore-media-patches] [--version]\n",
+        " [--audio-codec status|apply|restore] [--display-touch status|apply|restore]"
+        " [--restore-media-patches] [--version]\n",
         program
     );
 }
@@ -139,6 +142,7 @@ int main(int argc, char **argv)
     int diagnose_startup = 0;
     int restore_media_patches = 0;
     const char *audio_codec_action = NULL;
+    const char *display_touch_action = NULL;
     struct c300x_config config;
     char error[256] = {0};
 
@@ -157,6 +161,13 @@ int main(int argc, char **argv)
                 return 2;
             }
             audio_codec_action = argv[++index];
+        } else if (strcmp(argv[index], "--display-touch") == 0) {
+            if (index + 1 >= argc) {
+                fprintf(stderr, "fatal: invalid_arguments: --display-touch requires an action\n");
+                print_usage(argv[0]);
+                return 2;
+            }
+            display_touch_action = argv[++index];
         } else if (strcmp(argv[index], "--restore-media-patches") == 0) {
             restore_media_patches = 1;
         } else if (strcmp(argv[index], "--check-config") == 0) {
@@ -178,11 +189,20 @@ int main(int argc, char **argv)
             fprintf(stderr, "Failed to restore media patches: %s\n", error);
             return 1;
         }
+        const char *quality_error = "";
+        if (!c300x_camera_quality_remove_patches(&quality_error)) {
+            fprintf(stderr, "Failed to restore the camera quality: %s\n", quality_error);
+            return 1;
+        }
         return 0;
     }
 
     if (audio_codec_action != NULL) {
         return run_audio_codec_cli(audio_codec_action);
+    }
+
+    if (display_touch_action != NULL) {
+        return c300x_display_touch_cli(display_touch_action);
     }
 
     if (!c300x_load_config(config_path, &config, error, sizeof(error))) {

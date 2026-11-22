@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 
 export async function checkSnapshotLayout(page, artifacts) {
+  // The picture frame takes the shape of the stream and the browser keeps it
+  // per camera: after one stream, preview, live and stopped share one size.
+  const shape = await page.evaluate(async () => {
+    const video = lab.card._videoEl, stream = lab.source.captureStream(10);
+    try {
+      video.srcObject = stream;
+      await video.play();
+      if (!video.videoWidth) await new Promise((done) => video.addEventListener("loadedmetadata", done, { once: true }));
+    } finally {
+      video.srcObject = null;
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    return lab.card.style.getPropertyValue("--c300x-picture-ratio");
+  });
+  assert.equal(shape, "1.3333");
   for (const width of [240, 320, 390, 1024]) {
     await page.setViewport({ width, height: 800 });
     for (const height of ["auto", "420px"]) {

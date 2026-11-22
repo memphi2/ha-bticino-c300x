@@ -80,8 +80,10 @@ restore_qml() {
             && printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
             return 0
         fi
+        # A display library without a valid backup cannot be restored; it does
+        # not keep the display files from being removed (see below).
         if ! status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" restore-all 2>/dev/null)" \
-            || ! printf '%s' "$status" | grep -F -q '"ok":true' \
+            || ! printf '%s' "$status" | grep -F -q -e '"ok":true' -e 'display_library_restore_failed' \
             || ! printf '%s' "$status" | grep -F -q '"state":"original"' \
             || ! printf '%s' "$status" | grep -F -q '"core_state":"original"' \
             || ! printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
@@ -186,6 +188,24 @@ restore_media_patches() {
     fi
 }
 
+# The Display restore puts the stock display library back; this covers a
+# display that was restored before, with the library still changed. It runs
+# last, before the reboot: the running display keeps the replaced file open,
+# so the root file system stays writable until then. Without a valid backup
+# the changed library stays, which only keeps the wider tap tolerance.
+# Without a valid stock backup the library stays as it is (wider tap
+# tolerance); any other failure keeps the backup for another removal.
+restore_display_library() {
+    touch_result="$("$AGENT_DIR/c300x-agent-native" --display-touch restore 2>/dev/null || true)"
+    case "$touch_result" in
+        *'"ok":true'*) return 0 ;;
+        *'"error":"touch_backup_invalid"'*)
+            printf 'Display library not restored; it keeps the wider tap tolerance\n' >&2
+            return 0 ;;
+    esac
+    return 1
+}
+
 schedule_reboot() {
     "$REBOOT" >/dev/null 2>&1 &
 }
@@ -198,6 +218,10 @@ if ! restore_file_or_remove_block "$IPTABLES6" "$IPTABLES6_BACKUP" "# c300x-nati
 fi
 if ! restore_file_or_remove_block "$IPTABLES" "$IPTABLES_BACKUP" "# c300x-native-agent firewall begin" "# c300x-native-agent firewall end"; then
     printf 'Failed to restore IPv4 firewall patch; keeping agent files and backups in place\n' >&2
+    exit 1
+fi
+if ! restore_display_library; then
+    printf 'Failed to restore the display library; keeping agent files and backups in place\n' >&2
     exit 1
 fi
 stop_agent

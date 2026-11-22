@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant import config_entries
@@ -48,6 +47,7 @@ from .config_flow_activations import (
 )
 from .config_flow_alarm import alarm_step as _alarm_step
 from .config_flow_alarm import alarm_values as _alarm_values
+from .config_flow_camera_quality import CameraQualityOptionsStep
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -77,6 +77,12 @@ from .config_flow_dashboard_pages import (
 )
 from .config_flow_dashboard_pages import (
     dashboard_pages_schema as _dashboard_pages_schema,
+)
+from .config_flow_display_menu import (
+    DisplayMenuSteps,
+    single_page_errors,
+    single_page_post,
+    single_page_schema,
 )
 from .config_flow_features import (
     current_connection_options as _current_connection_options,
@@ -136,7 +142,14 @@ from .config_flow_input import (
     _weather_entity_id,
 )
 from .config_flow_options_menu import OptionsMenuSteps
+from .config_flow_qml import (
+    QML_PATCH_STATUS_UNKNOWN as _QML_PATCH_STATUS_UNKNOWN,
+)
+from .config_flow_qml import (
+    async_qml_patch_description_placeholders as _async_qml_patch_description_placeholders,
+)
 from .config_flow_snapshot import SnapshotOptionsStep, SnapshotWizardSteps
+from .config_flow_speech import SpeechOptionsStep
 from .config_flow_tiles import TileForm as _TileForm
 from .config_flow_tiles import async_tile_entity_fields as _async_tile_entity_fields
 from .config_flow_tiles import async_tile_form as _async_tile_form
@@ -175,6 +188,7 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DISPLAY_SETTING_PENDING,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_ENERGY_PAGE,
     CONF_EVENT_WEBHOOK_ID,
@@ -201,8 +215,10 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .display_patch_sync import async_mark_display_setting
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
+from .factory_login import ssh_login
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -225,9 +241,6 @@ if TYPE_CHECKING:
 else:
     FlowResult = dict[str, Any]
 
-_QML_PATCH_STATUS_CACHE_TTL = timedelta(seconds=30)
-_QML_PATCH_STATUS_UNKNOWN = "unknown"
-_QML_PATCH_STATUS_UNAVAILABLE = "unavailable"
 _SETUP_VIDEO_ENABLED_DEFAULT = True
 _CREATE_HOMEASSISTANT_USER_DEFAULT = True
 _RECONFIGURED_OPTION_KEYS = frozenset(
@@ -291,6 +304,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         self._setup_alarm: dict[str, Any] = {}
         self._tile_form: _TileForm | None = None
         self._reconfigure_connection: dict[str, Any] = {}
+        self._factory_login_tried = False
         self._reconfigure_feature_data: dict[str, Any] = {}
         self._reconfigure_device_activations: list[dict[str, Any]] = []
         self._reconfigure_activation_edit_id: str | None = None
@@ -350,6 +364,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         if user_input is not None:
             if bool(user_input.get(CONF_BOOTSTRAP_INSTALL_AGENT, True)):
+                self._factory_login_tried = False
                 return await self.async_step_bootstrap_install()
             self._setup_agent_needs_token = False
             return await self.async_step_agent_auth()
@@ -370,16 +385,19 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             return await self.async_step_user()
 
         errors: dict[str, str] = {}
-        if user_input is not None:
+        # The factory login is tried first; the form asks only once it was refused.
+        if user_input is not None or not self._factory_login_tried:
+            self._factory_login_tried = True
             await self._async_abort_if_manual_setup_duplicate()
             api_token = secrets.token_urlsafe(32)
             maintenance_token = secrets.token_urlsafe(32)
+            ssh_username, ssh_password = ssh_login(
+                user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+            )
             request = C300XDeviceInstallRequest(
                 host=self._setup_connection[CONF_AGENT_HOST],
-                ssh_username=str(
-                    user_input.get(CONF_BOOTSTRAP_SSH_USERNAME, "")
-                ).strip(),
-                ssh_password=str(user_input.get(CONF_BOOTSTRAP_SSH_PASSWORD, "")),
+                ssh_username=ssh_username,
+                ssh_password=ssh_password,
                 agent_port=int(
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),
@@ -918,6 +936,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_EVENT_WEBHOOK_TOKEN: secrets.token_urlsafe(32),
+                # The first start applies the Display setting to the device.
+                CONF_DISPLAY_SETTING_PENDING: True,
             },
             options={
                 CONF_ACTIONS: feature_data[CONF_ACTIONS],
@@ -1369,7 +1389,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         self._abort_if_unique_id_mismatch()
 
         rotate = bool(self._reconfigure_connection.pop(CONF_ROTATE_SHARED_SECRET))
-        data_updates = {**self._reconfigure_connection, **feature_data}
+        # The start after the reload applies the Display setting.
+        data_updates = {**self._reconfigure_connection, **feature_data, CONF_DISPLAY_SETTING_PENDING: True}
         if rotate:
             data_updates[CONF_SHARED_SECRET] = secrets.token_urlsafe(32)
             data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
@@ -1387,7 +1408,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
 
 class BticinoC300XOptionsFlow(
-    SnapshotOptionsStep, OptionsMenuSteps, config_entries.OptionsFlow,
+    SnapshotOptionsStep, CameraQualityOptionsStep, SpeechOptionsStep, DisplayMenuSteps, OptionsMenuSteps,
+    config_entries.OptionsFlow,
 ):
     """Handle C300X options.
 
@@ -1412,6 +1434,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Show the settings areas."""
 
+        self._page_key = None
+        self._return_step = "init"
         return self.async_show_menu(
             step_id="init",
             menu_options=[*_options_menu(self._config_entry), "done"],
@@ -1610,7 +1634,18 @@ class BticinoC300XOptionsFlow(
                 _dashboard_form_input(user_input),
                 feature_defaults,
             )
-            return await self._async_save_options(feature_defaults)
+            entry = self._config_entry
+            saved = dict(entry.options)
+            marked = CONF_DISPLAY_SETTING_PENDING in entry.data
+            # Before the save: the start after its reload applies the setting.
+            async_mark_display_setting(self.hass, entry, pending=True)
+            result = await self._async_save_options(feature_defaults)
+            if result.get("errors"):
+                async_mark_display_setting(self.hass, entry, pending=marked)
+            elif dict(entry.options) == saved:
+                # Nothing was saved, so nothing reloads.
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            return result
 
         return await self._async_show_options_dashboard_form(
             user_input,
@@ -1640,9 +1675,10 @@ class BticinoC300XOptionsFlow(
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
-            dashboard_input, errors = _dashboard_pages_input(
-                self._dashboard_options, user_input
-            )
+            posted = user_input
+            if self._page_key is not None:
+                posted = single_page_post(self._dashboard_options, self._page_key, user_input)
+            dashboard_input, errors = _dashboard_pages_input(self._dashboard_options, posted)
             if errors:
                 return self._async_show_options_dashboard_pages_form(user_input, errors)
             self._dashboard_options = dashboard_input
@@ -1654,15 +1690,21 @@ class BticinoC300XOptionsFlow(
         user_input: dict[str, Any] | None,
         errors: dict[str, str],
     ) -> FlowResult:
-        """Show the pages of the C300X display dashboard options."""
+        """Show the pages form, or the one page opened from the page list."""
 
+        posted = user_input
         schema = _dashboard_pages_schema(self._dashboard_options, user_input)
+        if self._page_key is not None:
+            schema = single_page_schema(self._dashboard_options, self._page_key, user_input)
+            errors = single_page_errors(self._dashboard_options, self._page_key, errors)
+            if user_input is not None:
+                posted = single_page_post(self._dashboard_options, self._page_key, user_input)
         return self.async_show_form(
             step_id="dashboard_pages",
             data_schema=schema,
             errors=errors,
             description_placeholders=_dashboard_pages_placeholders(
-                self._dashboard_options, user_input
+                self._dashboard_options, posted
             ),
         )
 
@@ -1896,70 +1938,3 @@ def _config_default(
     """Return an option override when present, otherwise setup data."""
 
     return entry_config_value(config_entry, key, default)
-
-
-async def _async_qml_patch_description_placeholders(
-    config_entry: BticinoC300XConfigEntry,
-) -> dict[str, str]:
-    """Return placeholders for the device Display patch status."""
-
-    return {
-        "qml_patch_status": await _async_display_patch_status_text(
-            _qml_patch_status_label(await _async_qml_patch_status(config_entry))
-        )
-    }
-
-
-async def _async_qml_patch_status(
-    config_entry: BticinoC300XConfigEntry,
-) -> dict[str, Any]:
-    """Return cached Display patch status, refreshing it only when useful."""
-
-    runtime_data = getattr(config_entry, "runtime_data", None)
-    if runtime_data is None:
-        return {}
-
-    cached_status = getattr(runtime_data, "qml_patch_status", {})
-    if not isinstance(cached_status, dict):
-        cached_status = {}
-
-    updated_at = getattr(runtime_data, "qml_patch_status_updated_at", None)
-    now = datetime.now(UTC)
-    if (
-        cached_status
-        and isinstance(updated_at, datetime)
-        and now - updated_at < _QML_PATCH_STATUS_CACHE_TTL
-    ):
-        return cached_status
-
-    api = getattr(runtime_data, "api", None)
-    if api is None:
-        return cached_status
-
-    try:
-        status = await api.async_qml_patch_status()
-    except C300XAgentApiError:
-        return cached_status or {
-            "available": False,
-            "state": _QML_PATCH_STATUS_UNAVAILABLE,
-        }
-
-    runtime_data.qml_patch_status = status
-    runtime_data.qml_patch_status_updated_at = now
-    return cast(dict[str, Any], status)
-
-
-def _qml_patch_status_label(status: dict[str, Any]) -> str:
-    """Return a concise, user-visible Display patch status label."""
-
-    if not status:
-        return _QML_PATCH_STATUS_UNKNOWN
-    if status.get("available") is False:
-        return _QML_PATCH_STATUS_UNAVAILABLE
-    patched = status.get("patched")
-    if patched is True:
-        return "patched"
-    if patched is False:
-        return "original"
-    state = str(status.get("state") or "").strip()
-    return state or _QML_PATCH_STATUS_UNKNOWN

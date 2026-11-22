@@ -129,7 +129,8 @@ def test_native_mqtt_start_date_matches_legacy_datetime_payload() -> None:
     bridge = _read("native_agent/src/mqtt_bridge.c")
 
     assert 'strftime(payload, payload_len, "%Y-%m-%dT%H:%M:%S"' in bridge
-    assert "mqtt_format_start_date(now, payload, sizeof(payload))" in bridge
+    assert "mqtt_format_start_date(started, payload, sizeof(payload))" in bridge
+    assert "time_t started = mqtt->connect_started_at;" in bridge
 
 
 def test_native_mqtt_reconfiguration_clears_stale_retry_deadline() -> None:

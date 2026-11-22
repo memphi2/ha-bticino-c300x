@@ -63,6 +63,17 @@ Implementation reference:
 [`const.py`](../custom_components/bticino_c300x/const.py), and
 [`test_webrtc_ice_filter.py`](../tests/test_webrtc_ice_filter.py).
 
+## Picture Is Blurry, Cut Off or Jerky
+
+**Configure > Camera quality** shows the size, bit rate and frame rate the
+device runs with and the saved ones. A higher bit rate gives a sharper picture,
+the size 704x576 the whole camera picture instead of the factory 688x480
+cut-out, and up to 24 frames per second a smoother one. 25 is not offered:
+older firmware then turns its frame-rate control off and sends only about 8
+frames per second. Saving restarts the device once; the new values apply after
+that restart. When a weak network then shows stalls or grey blocks, lower the
+bit rate again.
+
 ## Device Reboots After PCMU On-demand Video
 
 Native agent **2.0.0** includes the correction for undersized PCMU silence packets
@@ -81,7 +92,7 @@ The fix is part of the packaged agent. Follow the
 updating only Home Assistant files does not apply the correction.
 
 If a PCMU stream still reboots the C300X, stop repeating the test, switch the
-**Audio codec** select back to **Speex (stock)** and reopen issue #55 with the
+**Audio codec** select back to **Speex** and reopen issue #55 with the
 versions, reproduction steps and sanitized diagnostics. Changing the device
 codec is an explicit maintenance operation that reboots the C300X.
 

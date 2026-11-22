@@ -365,23 +365,43 @@ def test_every_reason_the_flows_abort_with_has_a_message() -> None:
 
 
 def test_options_menu_names_and_explains_every_area() -> None:
-    """Each area of the options menu has a label and a line saying what it holds."""
+    """Each entry of the settings menu and of its Display submenu has a label and a line."""
 
-    areas = {
-        "dashboard_pages", "dashboard_alarm", "dashboard_entity_display", "dashboard",
-        "features", "visitor_snapshot", "device_activations", "connection",
+    menus = {
+        "init": {
+            "features", "visitor_snapshot", "camera_quality", "device_activations", "speech", "connection",
+            "display", "done",
+        },
+        "display": {
+            "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm", "init",
+        },
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         steps = _load_json(path)["options"]["step"]
-        menu = steps["init"]
-        assert menu["title"] and menu["description"], path.name
-        # "done" closes the dialog; it is a menu entry without a form.
-        assert set(menu["menu_options"]) == areas | {"done"}, path.name
-        assert set(menu["menu_option_descriptions"]) == areas | {"done"}, path.name
-        assert all(menu["menu_options"].values()), path.name
-        assert all(menu["menu_option_descriptions"].values()), path.name
-        # A menu entry leads to a step of the same name.
-        assert areas <= set(steps), path.name
+        for step_id, entries in menus.items():
+            menu = steps[step_id]
+            assert menu["title"] and menu["description"], path.name
+            assert set(menu["menu_options"]) == entries, path.name
+            assert set(menu["menu_option_descriptions"]) == entries, path.name
+            assert all(menu["menu_options"].values()), path.name
+            assert all(menu["menu_option_descriptions"].values()), path.name
+            # A menu entry leads to a step of the same name; "done" closes the dialog.
+            assert entries - {"done"} <= set(steps), path.name
+
+
+def test_the_page_list_names_every_page_like_its_form_section() -> None:
+    """A page has one name: in the list and as the title of its form."""
+
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        steps = _load_json(path)["options"]["step"]
+        page_list, sections = steps["dashboard_page_list"], steps["dashboard_pages"]["sections"]
+        assert page_list["title"] == steps["dashboard_pages"]["title"], path.name
+        assert page_list["description"], path.name
+        labels = dict(page_list["menu_options"])
+        assert labels.pop("page_new") and labels.pop("display"), path.name
+        assert labels == {key: section["name"] for key, section in sections.items()}, path.name
+        # The texts of the pages are short enough to be read above a form.
+        assert len(steps["dashboard_pages"]["description"]) < 320, path.name
 
 
 def test_tiles_form_labels_and_choices_are_translated_in_every_language() -> None:
@@ -486,6 +506,20 @@ def test_the_display_menu_entry_names_only_what_its_form_offers() -> None:
     removed = ("home page buttons", "Startseiten-Buttons", "boutons d'accueil", "pulsanti della pagina iniziale")
     for name in ("strings.json", "translations/en.json", "translations/de.json", "translations/fr.json", "translations/it.json"):
         options = json.loads((root / name).read_text(encoding="utf-8"))["options"]["step"]
-        text = options["init"]["menu_option_descriptions"]["dashboard"]
+        text = options["display"]["menu_option_descriptions"]["dashboard"]
         assert not any(word in text for word in removed), name
         assert options["dashboard"]["data"]["dashboard_navigation"].lower() in text.lower(), name
+
+
+def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_low() -> None:
+    # On older firmware the values belong to the high-resolution stream; with
+    # the Camera resolution select on Low, Home Assistant gets the other one.
+    base = Path(__file__).parents[1] / "custom_components" / "bticino_c300x"
+    for path in [base / "strings.json", *sorted((base / "translations").glob("*.json"))]:
+        texts = json.loads(path.read_text(encoding="utf-8"))
+        select = texts["entity"]["select"]["camera_resolution"]
+        description = texts["options"]["step"]["camera_quality"]["description"]
+
+        assert f"**{select['name']}**" in description, path.name
+        assert select["state"]["low"] in description, path.name
+

@@ -50,6 +50,9 @@ static void framing_test(const char *payload, int expected, int expected_size_er
         struct request parsed;
         assert(parse_request(buffer, &parsed));
         assert(strcmp(parsed.path, "/") == 0);
+        assert(strcmp(buffer, payload) == 0);
+        assert(parse_request(buffer, &parsed));
+        assert(strcmp(buffer, payload) == 0);
     }
     close(pair[0]);
     close(pair[1]);

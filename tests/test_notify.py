@@ -693,3 +693,164 @@ def test_real_config_entry_unload_callbacks(tmp_path, monkeypatch):
             entry.runtime_data.api.async_send_display_alert.assert_awaited()
             assert entry.runtime_data.api.async_send_display_alert.await_count == 3
     asyncio.run(run())
+
+
+@asynccontextmanager
+async def speech_context(
+    tmp_path, monkeypatch, *, announcements=True, speaker="media_player.front_door_speaker",
+    speaker_state="idle",
+):
+    """Notify with a speaker entity, a text-to-speech stand-in and a recording player."""
+
+    from custom_components.bticino_c300x import notify_speech
+    from tests.test_config_flow_speech import use_tts_stand_in
+
+    spoken = []
+
+    def generate(hass, message, engine=None, language=None):
+        if engine == "tts.missing":
+            raise HomeAssistantError("Invalid TTS provider selected")
+        return f"media-source://tts/{engine or 'default'}?message={message}&language={language}"
+
+    use_tts_stand_in(monkeypatch, generate)
+    monkeypatch.setattr(notify_speech.er, "async_get", lambda _hass: SimpleNamespace(
+        async_get_entity_id=lambda domain, platform, unique_id: speaker))
+    async with notify_context(tmp_path, monkeypatch) as (hass, entry):
+        entry.runtime_data.capabilities["announcements"] = {"supported": announcements}
+        if speaker is not None:
+            hass.states.async_set(speaker, speaker_state)
+
+        async def play(call):
+            spoken.append(dict(call.data))
+
+        hass.services.async_register("media_player", "play_media", play)
+        yield hass, entry, spoken
+
+
+def test_default_mode_shows_the_message_and_speaks_nothing(tmp_path, monkeypatch):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            await send(hass, entry)
+            assert entry.runtime_data.api.async_send_display_alert.await_count == 1
+            assert spoken == []
+    asyncio.run(run())
+
+
+def test_speech_mode_only_speaks_the_message(tmp_path, monkeypatch):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            await send(hass, entry, title="Not spoken",
+                       data={"mode": "speech", "tts_engine": "tts.piper", "language": "de"})
+            assert spoken == [{
+                "entity_id": "media_player.front_door_speaker",
+                # As the engine names the language.
+                "media_content_id": "media-source://tts/tts.piper?message=Test message&language=de_DE",
+                "media_content_type": "music", "announce": True,
+            }]
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert notification_payload(entry) == []
+    asyncio.run(run())
+
+
+def test_both_mode_shows_the_message_without_tone_and_speaks_it(tmp_path, monkeypatch):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            await send(hass, entry, data={"mode": "both"})
+            alert = entry.runtime_data.api.async_send_display_alert.call_args.args[0]
+            assert (alert["message"], alert["sound_duration"], alert["wake_duration"]) == ("Test message", 0, 30)
+            assert [item["media_content_id"] for item in spoken] == [
+                "media-source://tts/default?message=Test message&language=None"]
+            # The tone would hold the speaker the speech needs.
+            with pytest.raises(ServiceValidationError, match="leave out sound_duration"):
+                await send(hass, entry, data={"mode": "both", "sound_duration": 5})
+            assert entry.runtime_data.api.async_send_display_alert.await_count == 1
+            await send(hass, entry, data={"mode": "both", "sound_duration": 0})
+            assert entry.runtime_data.api.async_send_display_alert.call_args.args[0]["sound_duration"] == 0
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("options", [
+    {"announcements": False}, {"speaker": None}, {"speaker_state": "unavailable"},
+], ids=["old agent", "no speaker entity", "speaker unavailable"])
+@pytest.mark.parametrize("mode", ["speech", "both"])
+def test_nothing_is_shown_when_the_speaker_cannot_be_used(tmp_path, monkeypatch, options, mode):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch, **options) as (hass, entry, spoken):
+            with pytest.raises(ServiceValidationError, match="agent|speaker"):
+                await send(hass, entry, data={"mode": mode})
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert notification_payload(entry) == [] and spoken == []
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("mode", ["speech", "both"])
+def test_missing_text_to_speech_engine_is_named_and_nothing_is_shown(tmp_path, monkeypatch, mode):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            with pytest.raises(ServiceValidationError, match="text-to-speech engine"):
+                await send(hass, entry, data={"mode": mode, "tts_engine": "tts.missing"})
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert notification_payload(entry) == [] and spoken == []
+    asyncio.run(run())
+
+
+def test_both_mode_still_speaks_when_the_display_did_not_confirm(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiError
+
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            entry.runtime_data.api.async_send_display_alert.side_effect = C300XAgentApiError("lost")
+            with pytest.raises(HomeAssistantError, match="not confirmed"):
+                await send(hass, entry, data={"mode": "both"})
+            assert len(spoken) == 1
+    asyncio.run(run())
+
+
+def test_a_named_engine_does_not_take_the_language_saved_for_another(tmp_path, monkeypatch):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            entry.options = {**entry.options, "tts_engine": "tts.piper", "tts_language": "de_DE"}
+            await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.cloud"})
+            assert [item["media_content_id"] for item in spoken] == [
+                "media-source://tts/tts.cloud?message=Test message&language=None"]
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("mode", ["speech", "both"])
+def test_a_language_the_engine_cannot_speak_is_named_and_nothing_is_shown(tmp_path, monkeypatch, mode):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            with pytest.raises(ServiceValidationError, match="cannot speak the language 'fr'"):
+                await send(hass, entry, data={"mode": mode, "tts_engine": "tts.piper", "language": "fr"})
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert notification_payload(entry) == [] and spoken == []
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("bad", [
+    {"mode": "loud"}, {"mode": True}, {"mode": "speech", "tts_engine": ""},
+    {"mode": "speech", "language": 5}, {"mode": "speech", "volume": 50},
+])
+def test_invalid_speech_data_has_no_effect(tmp_path, monkeypatch, bad):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            with pytest.raises(ServiceValidationError, match="Invalid C300X display notification"):
+                await send(hass, entry, data=bad)
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert notification_payload(entry) == [] and spoken == []
+    asyncio.run(run())
+
+
+def test_spoken_notification_uses_the_engine_and_language_of_the_settings(tmp_path, monkeypatch):
+    async def run():
+        async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
+            entry.options = {**entry.options, "tts_engine": "tts.piper", "tts_language": "de"}
+            await send(hass, entry, data={"mode": "speech"})
+            # What the call names comes before the settings.
+            await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.cloud", "language": "en"})
+            assert [item["media_content_id"] for item in spoken] == [
+                "media-source://tts/tts.piper?message=Test message&language=de_DE",
+                "media-source://tts/tts.cloud?message=Test message&language=en-US",
+            ]
+    asyncio.run(run())
+

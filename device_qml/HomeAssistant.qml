@@ -516,7 +516,7 @@ Page {
             anchors.fill: parent
             Image {
                 anchors.fill: parent
-                source: "images/settings/act_btn.svg"
+                source: tileTap.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
                 fillMode: Image.Stretch
             }
             BeepingMouseArea {
@@ -586,7 +586,7 @@ Page {
         Item {
             property variant tileItem: parent ? parent.tileItem : ({})
             anchors.fill: parent
-            Image { anchors.fill: parent; source: "images/settings/act_btn.svg"; fillMode: Image.Stretch }
+            Image { anchors.fill: parent; source: tileTap.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
             UbuntuLightText {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                 anchors.margins: 12; height: 24
@@ -611,7 +611,7 @@ Page {
         Item {
             property variant tileItem: parent ? parent.tileItem : ({})
             anchors.fill: parent
-            Image { anchors.fill: parent; source: "images/settings/act_btn.svg"; fillMode: Image.Stretch }
+            Image { anchors.fill: parent; source: tileTap.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
             UbuntuLightText {
                 anchors.left: parent.left; anchors.leftMargin: 14
                 anchors.right: parent.right; anchors.rightMargin: 32
@@ -643,7 +643,7 @@ Page {
             anchors.fill: parent
             Image {
                 anchors.fill: parent
-                source: "images/settings/act_btn.svg"
+                source: tallTap.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
                 fillMode: Image.Stretch
             }
             BeepingMouseArea {
@@ -758,6 +758,7 @@ Page {
         contentWidth: width
         contentHeight: notificationColumn.height
         flickableDirection: Flickable.VerticalFlick
+        interactive: contentHeight > height
         Column {
             id: notificationColumn
             width: notificationDetails.width
@@ -932,9 +933,10 @@ Page {
             model: detailSections
             Item {
                 width: (detailTabs.width - 8) / 2; height: 48
-                Image { anchors.fill: parent; source: modelData === (detailSection || detailSections[0]) ? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
+                Image { anchors.fill: parent; source: sectionMouse.pressed ? "images/settings/list_btn_p.svg" : modelData === (detailSection || detailSections[0]) ? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
                 UbuntuLightText { anchors.fill: parent; anchors.margins: 6; text: uiText(modelData); font.pixelSize: 18; color: "white"; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 BeepingMouseArea {
+                    id: sectionMouse
                     anchors.fill: parent
                     enabled: !interactionActive
                     onClicked: { detailSection = modelData; details.contentY = 0 }
@@ -957,7 +959,7 @@ Page {
         contentWidth: width
         contentHeight: controlColumn.height
         flickableDirection: Flickable.VerticalFlick
-        interactive: !interactionActive
+        interactive: !interactionActive && contentHeight > height
         Column {
             id: controlColumn
             width: details.width
@@ -1129,6 +1131,7 @@ Page {
             height: parent.height - (notificationBanner.height > 0 ? notificationBanner.height + 9 : 0) - (badgeGrid.height > 0 ? badgeGrid.height + 9 : 0) - (pagerRow.height > 0 ? pagerRow.height + 9 : 0)
             contentWidth: width
             contentHeight: contentColumn.height
+            interactive: contentHeight > height
             clip: true
 
             Column {

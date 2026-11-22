@@ -399,12 +399,12 @@ def test_update_retries_only_busy_rejections(monkeypatch, failure) -> None:
         assert raised.value is error
         if failure in {"busy_always", "apply_busy"}:
             waited = prepare if failure == "busy_always" else apply
-            assert waited.await_count == 12
+            assert waited.await_count == 13  # twelve one-second pauses and a last try
             assert sum(sleeps) == agent_update.MAINTENANCE_BUSY_WAIT_SECONDS == 12
         else:
             assert prepare.await_count == 1
             assert sleeps == []
-        assert apply.await_count == (12 if failure == "apply_busy" else 0)
+        assert apply.await_count == (13 if failure == "apply_busy" else 0)
         assert upload.await_count == (1 if failure in {"apply_busy", "upload_busy"} else 0)
 
 

@@ -72,6 +72,10 @@ int parse_request(char *buffer, struct request *request)
     snprintf(request->headers, sizeof(request->headers), "%s", headers_start);
     snprintf(request->body, sizeof(request->body), "%s", header_end + 4);
     request->body_len = strlen(request->body);
+    /* Complete requests may be deferred in their original bounded input slot. */
+    *line_end = '\r';
+    *target_end = ' ';
+    *header_end = '\r';
     return 1;
 }
 

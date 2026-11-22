@@ -137,8 +137,8 @@ def _bootstrap_install_schema() -> vol.Schema:
 
     return vol.Schema(
         {
-            vol.Required(CONF_BOOTSTRAP_SSH_USERNAME): str,
-            vol.Required(CONF_BOOTSTRAP_SSH_PASSWORD): _password_selector(),
+            vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
+            vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): _password_selector(),
         }
     )
 

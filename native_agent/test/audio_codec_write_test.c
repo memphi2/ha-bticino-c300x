@@ -13,6 +13,7 @@ static int checked_rename(const char *, const char *);
 #define fdopen checked_fdopen
 #define fsync checked_sync
 #define rename checked_rename
+#include "../src/device_file.c"
 #include "../src/audio_codec.c"
 #undef fwrite
 #undef fdopen
@@ -53,12 +54,12 @@ int main(int argc, char **argv) {
     assert(argc == 2);
     assert(chdir(argv[1]) == 0);
     umask(0);
-    assert(overwrite_file("codec", "old", 3));
+    assert(c300x_device_file_write("codec", "old", 3));
     check_file("codec", "old", 0600);
     /* A stale predictable symlink must not redirect or prevent the write. */
     assert(symlink("codec", "codec.tmp") == 0);
     for (failure = 1; failure <= 4; failure++) {
-        assert(!overwrite_file("codec", "new", 3));
+        assert(!c300x_device_file_write("codec", "new", 3));
         assert(fcntl(last_fd, F_GETFD) == -1 && errno == EBADF);
         check_file("codec", "old", 0600);
         DIR *dir = opendir(".");
@@ -71,9 +72,9 @@ int main(int argc, char **argv) {
     }
     failure = 0;
     assert(chmod("codec", 0640) == 0);
-    assert(overwrite_file("codec", "new", 3));
+    assert(c300x_device_file_write("codec", "new", 3));
     check_file("codec", "new", 0640);
-    assert(copy_new("codec", "backup"));
+    assert(c300x_device_file_copy("codec", "backup"));
     check_file("backup", "new", 0640);
     /* Exercise actual apply/restore with synthetic config and remount disabled. */
     const char *stack = "<media>\n<enable_speex>1</enable_speex>\n"
@@ -85,8 +86,8 @@ int main(int argc, char **argv) {
     assert(setenv("C300X_AUDIO_LINPHONE_CONF", "linphone.conf", 1) == 0);
     assert(setenv("C300X_AUDIO_BACKUP_DIR", "original", 1) == 0);
     assert(setenv("C300X_AUDIO_NO_REMOUNT", "1", 1) == 0);
-    assert(overwrite_file("stack.xml", stack, strlen(stack)));
-    assert(overwrite_file("linphone.conf", linphone, strlen(linphone)));
+    assert(c300x_device_file_write("stack.xml", stack, strlen(stack)));
+    assert(c300x_device_file_write("linphone.conf", linphone, strlen(linphone)));
     struct c300x_audio_codec_status status;
     char error[128];
     assert(c300x_audio_codec_apply(&status, error, sizeof(error)));

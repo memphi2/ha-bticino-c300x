@@ -131,3 +131,12 @@ int c300x_json_int_field(const char *body, const char *field, int *out)
     *out = (int)value;
     return 1;
 }
+
+int c300x_json_int_field_checked(const char *body, const char *field, int *out)
+{
+    const char *ptr;
+    if (body == NULL || !c300x_json_find_member(body, body + strlen(body), field, &ptr)) {
+        return 0;
+    }
+    return c300x_json_int_field(body, field, out) ? 1 : -1;
+}

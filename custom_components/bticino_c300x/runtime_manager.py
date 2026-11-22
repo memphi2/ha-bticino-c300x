@@ -39,6 +39,7 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DISPLAY_SETTING_PENDING,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
@@ -55,6 +56,7 @@ from .const import (
     DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
     SIGNAL_CONNECTION_STATE_CHANGED,
+    SPEECH_OPTION_KEYS,
 )
 from .dashboard_images import image_tile_base_url
 from .data import (
@@ -72,6 +74,7 @@ from .device_user import (
     device_user_bootstrap_satisfied,
     homeassistant_account_label,
 )
+from .display_patch_sync import async_settle_display_setting, display_setting_pending
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
@@ -95,6 +98,7 @@ BASE_PLATFORMS = (
     "switch",
 )
 CAMERA_PLATFORM = "camera"
+SPEAKER_PLATFORM = "media_player"
 _LOGGER = logging.getLogger(__name__)
 _GUI_DEPENDENT_ENTITY_KEYS = (
     ("button", "delete_latest_video_message"),
@@ -289,6 +293,8 @@ class C300XRuntimeManager:
             await self.async_sync_platform_gate_state()
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
+        if display_setting_pending(self.entry):
+            await async_settle_display_setting(self.hass, self.entry)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""
@@ -477,10 +483,13 @@ def _entry_update_listener(
         data = dict(current.data)
         data.pop(CONF_AGENT_UPDATE_PAYLOAD_PENDING, None)
         data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
+        data.pop(CONF_DISPLAY_SETTING_PENDING, None)
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
-        return data, dict(current.options)
+        # The speech settings are read when a notification is spoken.
+        options = {key: value for key, value in current.options.items() if key not in SPEECH_OPTION_KEYS}
+        return data, options
 
     previous = settings(entry)
 
@@ -616,12 +625,16 @@ def _entry_platforms(
 ) -> tuple[str, ...]:
     """Return platforms enabled for this config entry."""
 
+    platforms: tuple[str, ...] = BASE_PLATFORMS
     if _entry_video_enabled(entry) and capability_is_supported(
         capabilities or {},
         "doorbell_video",
     ):
-        return (*BASE_PLATFORMS, CAMERA_PLATFORM)
-    return BASE_PLATFORMS
+        platforms = (*platforms, CAMERA_PLATFORM)
+    # The speaker needs sound tools on the device that an older agent does not use.
+    if capability_is_supported(capabilities or {}, "announcements"):
+        platforms = (*platforms, SPEAKER_PLATFORM)
+    return platforms
 
 
 def _offline_setup_data(err: Exception) -> dict[str, Any]:

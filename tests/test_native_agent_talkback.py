@@ -121,7 +121,9 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
         "dispatch_event_internal(runtime->config, runtime, event_type, data_json, ttl_seconds, 0, 0)"
         in http
     )
-    assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in http
+    # The media actions of API requests run beside the HTTP loop.
+    media_actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
+    assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in media_actions
     assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
     assert 'dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0)' in http
     assert "c300x_media_session_stop_in_progress(runtime->video)" in http
@@ -339,7 +341,7 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     )
     setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static void send_sip_bye")
+        media_bridge.index("static void close_home_call_fds_locked")
     ]
 
     assert 'FLEXISIP_USERS_FILE "/etc/flexisip/users/users.db.txt"' in device_user
@@ -356,7 +358,7 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert '"m=audio %d RTP/SAVP %s\\r\\n"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
     assert '"a=nortpproxy:yes\\r\\n"' in setup_body
-    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in setup_body
+    assert '"User-Agent: " C300X_MEDIA_SIP_USER_AGENT "\\r\\n"' in setup_body
     assert '"Contact: <sip:%s;transport=%s>' in setup_body
     assert "MEDIA_AUDIO_RTP_PORT 26986" in media_bridge
     assert "MEDIA_AUDIO_RTCP_PORT 26987" in media_bridge
@@ -400,7 +402,7 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     ]
     send_sip_setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static void send_sip_bye")
+        media_bridge.index("static void close_home_call_fds_locked")
     ]
 
     assert 'dlopen("libsrtp.so.1", RTLD_NOW | RTLD_LOCAL)' in media_bridge

@@ -32,7 +32,7 @@ def test_snapshot_route_takes_only_a_complete_size_the_display_can_deliver() -> 
 
     source = (NATIVE / "src/http.c").read_text()
     handler = source[source.index("static int snapshot_dimension("):]
-    handler = handler[:handler.index("static void handle_doorbell_video_activate(")]
+    handler = handler[:handler.index("\nstatic void handle_doorbell_call_get(")]
     assert 'snapshot_dimension(request->query, "width", C300X_SNAPSHOT_MAX_WIDTH, &width)' in handler
     assert 'snapshot_dimension(request->query, "height", C300X_SNAPSHOT_MAX_HEIGHT, &height)' in handler
     assert "(width == 0) != (height == 0)" in handler

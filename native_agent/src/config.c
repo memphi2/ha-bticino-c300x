@@ -1481,11 +1481,12 @@ int c300x_load_config(
             free(document);
             return 0;
         }
-    } else if (c300x_device_display_is_qt5()) {
+    }
+    if (c300x_device_display_is_qt5()) {
         /* Firmware 3.0.x: bt_av_media only fans out the low-res video branch
          * (multiudp_low_res); the high-res branch (#0) has no multiudpsink, so
-         * its stream never reaches the agent. Without a setting in the config
-         * the low-res stream is the default there, as in the installer. */
+         * its stream never reaches the agent. Low-res is fixed there, whatever
+         * the config says. */
         config->video_av_high_resolution = 0;
     }
     if (nested_member3(document, document_end, "video", "rtsp", "port", &value)) {
@@ -2384,6 +2385,32 @@ int c300x_save_display_feedback(struct c300x_config *live, int enabled,
         ok = c300x_save_config_if_changed(desired, error, error_len, changed);
     }
     if (ok) live->display_feedback_enabled = enabled;
+    free(desired);
+    return ok;
+}
+
+int c300x_save_camera_high_resolution(struct c300x_config *live, int enabled,
+                                       char *error, size_t error_len, int *changed)
+{
+    if (changed != NULL) *changed = 0;
+    if (enabled != 0 && enabled != 1) {
+        set_error(error, error_len, "highResolution must be a boolean");
+        return 0;
+    }
+    if (enabled && c300x_device_display_is_qt5()) {
+        set_error(error, error_len, "high resolution is not available on this firmware");
+        return 0;
+    }
+    if (live->video_av_high_resolution == enabled) return 1;
+    struct c300x_config *desired = calloc(1, sizeof(*desired));
+    if (desired == NULL) { set_error(error, error_len, "out_of_memory"); return 0; }
+    /* Preserve persisted changes awaiting restart rather than saving live state. */
+    int ok = c300x_load_config(live->config_path, desired, error, error_len);
+    if (ok) {
+        desired->video_av_high_resolution = enabled;
+        ok = c300x_save_config_if_changed(desired, error, error_len, changed);
+    }
+    if (ok) live->video_av_high_resolution = enabled;
     free(desired);
     return ok;
 }

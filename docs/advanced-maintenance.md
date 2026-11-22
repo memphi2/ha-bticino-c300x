@@ -95,7 +95,9 @@ existing token values.
 ## SSH and noAuth
 
 SSH credentials are used only for explicit install or recovery steps. They are
-not stored by the integration.
+not stored by the integration. The installer first logs in with the C300X
+factory root login, which is built in (encoded, not secret: it is the same on
+every device). It asks for a login only when the device refuses that one.
 
 Since 2.1.0 this path uses an on-demand AsyncSSH client instead of Paramiko.
 It needs no SSH tools or add-on on the Home Assistant host. The device still
@@ -297,7 +299,8 @@ removes startup files and the agent directory (including `config.json`), and on
 success also removes its managed device-file backup root before scheduling a
 device reboot. It starts SSH for recovery. On restoration failure it reports an
 error and retains agent files/backups; this is not a promise that every earlier
-step was rolled back. It is not a factory reset and does not erase HA media or
+step was rolled back. Only a display library without a valid stock backup does
+not stop it: the library keeps the wider tap tolerance. It is not a factory reset and does not erase HA media or
 HA backups. Review any remaining device users/settings separately; never assume
 all device credentials or unrelated firmware configuration were reset.
 

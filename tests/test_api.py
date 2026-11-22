@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from collections.abc import AsyncIterator, Callable
 
@@ -1408,6 +1409,90 @@ def test_maintenance_request_omits_token_when_unconfigured() -> None:
     }
 
 
+_BUSY = (409, '{"ok": false, "error": "maintenance_busy"}')
+
+
+def _maintenance_api(session: object) -> C300XAgentApi:
+    return C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080", "agent-token", maintenance_token="maintenance-token",
+    )
+
+
+def test_requests_refused_for_a_running_maintenance_job_are_repeated(monkeypatch) -> None:
+    from custom_components.bticino_c300x import agent_update
+
+    async def no_wait(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(agent_update.asyncio, "sleep", no_wait)
+    calls = {
+        "device_user": lambda api: api.async_device_user_status(),
+        "ensure_user": lambda api: api.async_ensure_homeassistant_user(account_label="Home"),
+        "ssh": lambda api: api.async_set_ssh_enabled(True),
+        "camera_resolution": lambda api: api.async_camera_resolution(high_resolution=False),
+        "camera_quality": lambda api: api.async_camera_quality(fps=25),
+        "qml_status": lambda api: api.async_qml_patch_status(),
+    }
+    for name, call in calls.items():
+        session = _QueuedSession([_BUSY, _BUSY, (200, '{"ok": true, "running": true}')])
+        assert isinstance(asyncio.run(call(_maintenance_api(session))), dict), name
+        assert len(session.requests) == 3, name
+        first, last = session.requests[0], session.requests[-1]
+        assert (first["args"], first["kwargs"]["json"]) == (last["args"], last["kwargs"]["json"]), name
+
+
+def _busy_clock(monkeypatch) -> list[float]:
+    """Time passes only in the pauses between two tries."""
+
+    from custom_components.bticino_c300x import agent_update
+
+    pauses: list[float] = []
+
+    async def pause(seconds: float) -> None:
+        pauses.append(seconds)
+
+    monkeypatch.setattr(agent_update.asyncio, "sleep", pause)
+    monkeypatch.setattr(agent_update, "monotonic", lambda: sum(pauses))
+    return pauses
+
+
+def test_a_busy_agent_is_given_up_on_after_the_wait(monkeypatch) -> None:
+    pauses = _busy_clock(monkeypatch)
+    session = _QueuedSession([_BUSY] * 40)
+    with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
+        asyncio.run(_maintenance_api(session).async_device_user_status())
+    # A read waits as long as a job may take, with a pause before every new try.
+    assert sum(pauses) == 12.0 and len(pauses) == 12 and len(session.requests) == 13
+
+    pauses.clear()
+    session = _QueuedSession([_BUSY] * 40)
+    with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
+        asyncio.run(_maintenance_api(session).async_set_ssh_enabled(True))
+    # An action holds its platform meanwhile and gives up sooner; the last try
+    # comes when the three seconds are over.
+    assert sum(pauses) == 3.0 and len(session.requests) == 4
+
+
+def test_a_caller_that_waits_itself_is_not_made_to_wait_twice(monkeypatch) -> None:
+    from custom_components.bticino_c300x import agent_update
+
+    pauses = _busy_clock(monkeypatch)
+    session = _QueuedSession([_BUSY] * 40)
+    api = _maintenance_api(session)
+    with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
+        asyncio.run(agent_update.async_retry_update_maintenance_busy(
+            lambda: api.async_set_ssh_enabled(True)))
+    assert sum(pauses) == 12.0 and len(session.requests) == 13
+
+
+def test_other_refusals_are_not_repeated() -> None:
+    session = _QueuedSession([(409, '{"ok": false, "error": "external_session_active"}'), (200, "{}")])
+    with pytest.raises(C300XAgentApiConnectionError):
+        asyncio.run(_maintenance_api(session).async_set_ssh_enabled(True))
+    assert len(session.requests) == 1
+
+
 def test_set_ssh_enabled_uses_switch_endpoint() -> None:
     session = _FakeSession('{"ok": true, "running": true}')
     api = C300XAgentApi(
@@ -1689,6 +1774,48 @@ def test_restore_audio_codec_can_defer_reboot() -> None:
         "confirm": "restore_audio_codec_patch",
         "reboot": False,
     }
+
+
+def test_camera_quality_reads_without_a_body_and_saves_only_the_given_values() -> None:
+    api, session = _audio_codec_api('{"ok": true, "supported": true, "bitrate_kbps": 800, "fps": 25}')
+
+    assert asyncio.run(api.async_camera_quality())["fps"] == 25
+    asyncio.run(api.async_camera_quality(fps=25))
+    asyncio.run(api.async_camera_quality(bitrate_kbps=3000, fps=20))
+    asyncio.run(api.async_camera_quality(size="720x576"))
+    url = "http://agent.local:8080/api/v1/maintenance/camera-quality"
+    assert [request["args"] for request in session.requests] == [
+        ("GET", url), ("POST", url), ("POST", url), ("POST", url)]
+    assert session.requests[3]["kwargs"]["json"] == {
+        "confirm": "apply_camera_quality", "size": "720x576", "reboot": True}
+    assert session.requests[0]["kwargs"].get("json") is None
+    assert session.requests[1]["kwargs"]["json"] == {
+        "confirm": "apply_camera_quality", "fps": 25, "reboot": True}
+    assert session.requests[2]["kwargs"]["json"] == {
+        "confirm": "apply_camera_quality", "bitrate_kbps": 3000, "fps": 20, "reboot": True}
+    for request in session.requests:
+        assert request["kwargs"]["headers"]["X-Bticino-C300X-Maintenance-Token"] == "maintenance-token"
+
+
+def test_announcement_goes_in_small_pieces_in_order_and_is_then_played() -> None:
+    api, session = _audio_codec_api('{"ok": true, "playing": true, "result": ""}')
+    sound = bytes(range(256)) * 40
+
+    asyncio.run(api.async_play_announcement(sound, 60))
+    assert asyncio.run(api.async_announcement_status())["playing"] is True
+    asyncio.run(api.async_stop_announcement())
+
+    root = "http://agent.local:8080/api/v1/announcements"
+    assert [request["args"] for request in session.requests] == [
+        ("POST", root + "/audio"), ("POST", root + "/audio"), ("POST", root + "/audio"),
+        ("POST", root + "/actions/play"), ("GET", root), ("POST", root + "/actions/stop")]
+    pieces = [request["kwargs"]["json"] for request in session.requests[:3]]
+    assert [piece["offset"] for piece in pieces] == [0, 4500, 9000]
+    assert b"".join(base64.b64decode(piece["data"]) for piece in pieces) == sound
+    # The agent reads request line, headers and body into 8192 bytes; the
+    # headers of this client take well under 1024 of them.
+    assert max(len(json.dumps(piece)) for piece in pieces) + 1024 < 8192
+    assert session.requests[3]["kwargs"]["json"] == {"volume": 60}
 
 
 def test_ipv6_firewall_methods_use_separate_maintenance_endpoint() -> None:
@@ -3809,3 +3936,21 @@ def test_a_device_without_sip_domain_is_reported_as_not_registered(body, unregis
     with pytest.raises(C300XAgentApiConnectionError) as raised:
         api._raise_for_agent_status(500, body, "/api/v1/maintenance/device-user/actions/ensure-homeassistant")
     assert isinstance(raised.value, C300XDeviceNotRegisteredError) is unregistered
+
+
+def test_writes_that_restart_the_device_wait_for_the_ssh_start_before_it() -> None:
+    # The agent starts SSH first and gives that up to 60 s; the write succeeded meanwhile.
+    api, session = _audio_codec_api('{"ok": true, "supported": true}')
+    asyncio.run(api.async_camera_quality())
+    asyncio.run(api.async_camera_quality(fps=20))
+    asyncio.run(api.async_apply_audio_codec())
+    asyncio.run(api.async_restore_audio_codec())
+    timeouts = [request["kwargs"]["timeout"] for request in session.requests]
+    assert timeouts[0] < 60 and timeouts[1:] == [75.0, 75.0, 75.0]
+
+
+def test_reboot_and_removal_wait_for_the_ssh_start_before_them() -> None:
+    api, session = _audio_codec_api('{"ok": true, "scheduled": true}')
+    asyncio.run(api.async_reboot())
+    asyncio.run(api.async_remove_agent())
+    assert [request["kwargs"]["timeout"] for request in session.requests] == [75.0, 75.0]

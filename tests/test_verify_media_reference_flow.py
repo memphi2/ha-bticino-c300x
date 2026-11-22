@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -150,12 +152,34 @@ def test_rtsp_response_pairing_ignores_other_connections_and_cseq():
     assert module._first_rtsp_response_after(missing_cseq, module._rtsp_play_packets(missing_cseq)[0]) is None
 
 
-def test_code_reference_checks_cover_all_media_modes() -> None:
+@pytest.mark.parametrize("mode", ["all", "ring_call", "on_demand", "home_call"])
+def test_code_reference_checks_cover_all_media_modes(mode: str) -> None:
     module = _script_module()
 
-    failed = [check for check in module.collect_code_checks("all") if not check.ok]
+    failed = [check for check in module.collect_code_checks(mode) if not check.ok]
 
     assert failed == []
+
+
+@pytest.mark.parametrize("inside_setup", [True, False])
+def test_on_demand_code_checks_preserve_setup_boundary(inside_setup: bool) -> None:
+    module = _script_module()
+    media_bridge = (ROOT / "native_agent/src/media_bridge.c").read_text()
+    boundary = "static void close_home_call_fds_locked"
+    forbidden = '"a=rtpmap:8 PCMA/8000\\r\\n"'
+    assert media_bridge.count(boundary) == 1
+    replacement = (
+        f"{forbidden}\n{boundary}" if inside_setup else f"{boundary}\n{forbidden}"
+    )
+    media_bridge = media_bridge.replace(boundary, replacement, 1)
+
+    failed = [
+        check.name
+        for check in module._collect_on_demand_code_checks(media_bridge, ROOT)
+        if not check.ok
+    ]
+
+    assert failed == (["code.on_demand.no_static_pcma_rtpmap"] if inside_setup else [])
 
 
 def test_fixture_gate_checks_cover_all_media_modes() -> None:

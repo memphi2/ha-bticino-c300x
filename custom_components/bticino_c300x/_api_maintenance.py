@@ -5,7 +5,7 @@ from __future__ import annotations
 from base64 import b64encode
 from typing import Any
 
-from ._api_core import _SETUP_TIMEOUT, _C300XApiCore
+from ._api_core import _RESTART_WRITE_TIMEOUT, _SETUP_TIMEOUT, _C300XApiCore
 from ._api_normalize import (
     _ok_response,
     normalize_agent_diagnostics,
@@ -439,6 +439,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/reboot",
             json_data={"confirm": "reboot"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, _RESTART_WRITE_TIMEOUT),
         )
         return _ok_response(data)
 
@@ -450,6 +451,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/agent/actions/remove",
             json_data={"confirm": "remove_agent"},
             extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, _RESTART_WRITE_TIMEOUT),
         )
         return _ok_response(data)
 

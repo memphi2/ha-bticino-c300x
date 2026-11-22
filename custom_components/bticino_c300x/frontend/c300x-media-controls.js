@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=8cfee17e2e7b2905";
-import { mediaDate, mediaLocalize } from "./c300x-media-translations.js?v=8cfee17e2e7b2905";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=8cfee17e2e7b2905";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=4d924b5589efb0fd";
+import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=4d924b5589efb0fd";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=4d924b5589efb0fd";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -46,12 +46,6 @@ export class C300XMediaControls extends HTMLElement {
       this.video = this.shadowRoot.querySelector("video");
       this.volumeFixed = volumeFixed();
       this.img = this.shadowRoot.querySelector("img");
-      // The arrows are centred on the picture above the toolbar, whose height
-      // depends on the controls shown and the card width.
-      if (typeof ResizeObserver === "function") {
-        new ResizeObserver(() => this.style.setProperty("--c300x-toolbar-height", `${this.nodes.toolbar.offsetHeight}px`))
-          .observe(this.nodes.toolbar);
-      }
       const on = (name, event, callback) => this.nodes[name].addEventListener(event, callback);
       // A disabled arrow lets clicks through to the picture; a quick second
       // tap on an arrow that just became disabled must not open the window.
@@ -91,10 +85,10 @@ export class C300XMediaControls extends HTMLElement {
 
   configure({ hass, entryId, enabled = true, busy = false, live = false, hasAudio = false,
     volume = 1, muted = false, label = "", fullscreenAvailable = false, fullscreen = false,
-    expandAvailable = false, expanded = false, still = false, scaledVolume = false } = {}) {
+    expandAvailable = false, expanded = false, still = false, stillAt = null, scaledVolume = false } = {}) {
     const next = { hass, entryId, enabled, busy, live, hasAudio, volume: boundedVolume(volume),
       muted: !!muted, label: typeof label === "string" ? label : "", fullscreenAvailable, fullscreen,
-      expandAvailable: !!expandAvailable, expanded: !!expanded, still: !!still,
+      expandAvailable: !!expandAvailable, expanded: !!expanded, still: !!still, stillAt,
       scaledVolume: !!scaledVolume };
     this.config = next;
     // Always refresh transport/auth, but batch its synchronous invalidations.
@@ -104,7 +98,7 @@ export class C300XMediaControls extends HTMLElement {
     finally { this.configuring = false; }
     if (!this.nodes) return;
     const signature = JSON.stringify([enabled, busy, live, hasAudio, next.volume,
-      next.muted, next.label, fullscreenAvailable, fullscreen, next.expandAvailable, next.expanded, next.still, next.scaledVolume, this.history.active,
+      next.muted, next.label, fullscreenAvailable, fullscreen, next.expandAvailable, next.expanded, next.still, next.stillAt, next.scaledVolume, this.history.active,
       hass?.language || hass?.locale?.language || "en"]);
     const changed = this.historyChanged || wasActive !== this.history.active
       || signature !== this.configureSignature;
@@ -195,8 +189,7 @@ export class C300XMediaControls extends HTMLElement {
     const available = c.enabled && h.active && !c.busy;
     n.previous.hidden = !available;
     n.next.hidden = !available;
-    const index = h.items.findIndex((item) => item.id === h.selected?.id);
-    n.previous.disabled = !!h.listPromise || (!h.dirty && index === h.items.length - 1);
+    n.previous.disabled = !!h.listPromise || (!h.dirty && h.neighbour(1) >= h.items.length);
     n.next.disabled = !this.browsing || !!h.listPromise;
     n.expand.hidden = !c.expandAvailable || c.expanded;
     n.close.hidden = !c.expanded;
@@ -217,12 +210,14 @@ export class C300XMediaControls extends HTMLElement {
     n.status.hidden = !n.status.textContent;
     n.info.hidden = !n.mode.textContent && !n.status.textContent;
     n.stamp.hidden = !this.isVideo;
+    if (this.isVideo) n.toolbar.setAttribute("data-dated", "");
+    else n.toolbar.removeAttribute("data-dated");
     if (h.selected) {
-      const date = mediaDate(c.hass, h.selected.at), label = `${this.label(h.selected.kind)}: ${date}`;
+      const date = mediaStamp(c.hass, h.selected.at), label = `${this.label(h.selected.kind)}: ${date}`;
       this.img.alt = label;
       this.video.setAttribute("aria-label", label);
       if (this.isVideo) {
-        n.stamp.textContent = date;
+        n.stamp.textContent = mediaStamp(c.hass, h.selected.at);
         n.stamp.dateTime = new Date(h.selected.at * 1000).toISOString();
       }
     }

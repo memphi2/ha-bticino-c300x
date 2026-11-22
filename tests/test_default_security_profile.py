@@ -135,16 +135,17 @@ def test_video_default_is_webrtc_on_demand_with_persistent_rtsp_listener() -> No
 
 def test_gui_and_firewall_writes_are_maintenance_only() -> None:
     http_text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    setup_body = http_text.rsplit("static void handle_setup_page", maxsplit=1)[1].split(
-        "static void handle_auth_config_get",
-        maxsplit=1,
-    )[0]
+    setup_body = (ROOT / "native_agent" / "src" / "http_setup_page.c").read_text(encoding="utf-8")
+    assert "void c300x_http_setup_page(int client_fd)" in setup_body
 
     assert "apply_qml_patch" not in setup_body
     assert "apply_firewall" not in setup_body
     assert "apply_ipv6_firewall" not in setup_body
     assert "confirm_matches(request, confirmation)" in http_text
-    assert '"apply_qml_patch"' in http_text
+    # The Display patch routes and their confirmations live with the maintenance jobs.
+    maintenance_text = (ROOT / "native_agent" / "src" / "http_maintenance.c").read_text(encoding="utf-8")
+    assert '"apply_qml_patch"' in maintenance_text
+    assert "confirm_matches(request, confirmation)" in maintenance_text
     assert '"apply_firewall"' in http_text
     assert '"apply_ipv6_firewall"' in http_text
 

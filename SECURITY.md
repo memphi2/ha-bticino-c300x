@@ -121,9 +121,12 @@ Older releases keep their original dependency and limitations.
 - **Host identity:** rooted devices can regenerate SSH host keys, so this
   one-shot installer does not enforce persistent host-key pinning. Use it only
   for a device you control on an isolated/trusted network.
-- **Credentials:** only the supplied password is used, in process memory.
-  No local key discovery, SSH agent, user SSH config, proxy or interactive
-  terminal is used. Credentials are not stored by the integration.
+- **Credentials:** the installer first tries the C300X factory root login,
+  which is the same on every device and therefore no secret. It is built in
+  encoded only so that it is not plain text in the code. A typed password is
+  used only when the device refuses that login, in process memory. No local
+  key discovery, SSH agent, user SSH config, proxy or interactive terminal is
+  used. Credentials are not stored by the integration.
 - **Exposure:** temporary first installation or explicit SSH recovery.
   Normal operation and supported agent self-updates use the authenticated agent
   API and existing maintenance credentials, not SSH. Startup never silently

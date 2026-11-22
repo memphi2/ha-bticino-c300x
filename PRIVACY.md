@@ -102,6 +102,12 @@ reuse of previous results. Agent downloads are limited to 32 MiB; converted
 videos are limited to 64 MiB and 1920x1080, with a 30-second conversion budget.
 One media preparation runs at a time, with at most four distinct pending jobs.
 
+Speech and other sounds for the device's speaker are made in Home Assistant.
+The text of a spoken notification goes to the text-to-speech engine selected
+in Home Assistant: a cloud engine sends it to its provider, a local engine
+keeps it in your network. The converted sound is sent to the device as a
+temporary file that is removed when the sound has ended.
+
 ## What Is Not Included
 
 The repository intentionally excludes vendor firmware images, extracted

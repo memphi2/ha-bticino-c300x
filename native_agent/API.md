@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.7.0`
+- Current agent version: `2.8.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -21,7 +21,8 @@ file set (`1` when the field is missing). A bundle's `update_file_set_version`
 declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
 set `3` adds `C300XEnergy.qml`, and set `4` is the retired 2.4.1 energy-view set.
 Set `5` adds the 2.5 display navigation, optional-page, Consumers and alert
-components. The matching native agent and complete display bundle are required;
+components. Set `6` adds the shared checks/optional-page views and Situations.
+The matching native agent and complete display bundle are required;
 updating the HA integration alone does not install these GUI components.
 When the installed self-updater cannot install the target file set, Home
 Assistant first installs and verifies the new executable, then completes the
@@ -116,9 +117,27 @@ Common status codes:
 | `429 Too Many Requests` | Snapshot requested less than two seconds after the previous one. |
 | `500 Internal Server Error` | Agent-side operation failed. |
 | `501 Not Implemented` | Unknown endpoint. |
-| `502 Bad Gateway` | Home Assistant callback/display bridge is unavailable. |
-| `503 Service Unavailable` | Resource busy or inactive (transfer slots, system metrics, snapshot source, ringer GUI, display command). |
+| `502 Bad Gateway` | Home Assistant callback/display bridge is unavailable, or an OpenWebNet command failed or was not sent (`openwebnet_busy`, `client_gone`). |
+| `503 Service Unavailable` | Resource busy or inactive (transfer slots, system metrics, snapshot source, ringer GUI, display command), or a media action was not run (`media_busy`, `client_gone`). |
 | `504 Gateway Timeout` | The GUI did not acknowledge a ringer command within five seconds. |
+
+Requests that send OpenWebNet commands and the media actions (activate, stop,
+answer, hangup, home call start and stop) run one at a time each, in the order
+they arrived; the others wait for their turn with the connection open. Three
+requests may wait in all. One more is answered `openwebnet_busy` (502) or
+`media_busy` (503): nothing was sent or changed, and the request can be
+repeated. A request that had to wait and whose caller has closed the
+connection meanwhile, also only its sending side, is not run and answered
+`client_gone`; of the media actions this applies to the three that start
+something, a stop still runs unless a new request needed its place. A
+maintenance POST that replaces the agent configuration (auth, MQTT, legacy
+MQTT, MQTT migration) is no such waiting request and takes none of the three
+places. Once it is admitted it is held while a bus command or a media
+operation of another request is running or not yet answered, which can be
+several in a row, and is applied afterwards. A write whose caller has closed
+the connection, also only its sending side, is never applied and answered
+502 `client_gone`, held or not. A request that waited for a worker while
+such a write changed the API token is answered 401 without having run.
 
 Request bodies are parsed from JSON. Unknown fields should be ignored unless the
 handler explicitly validates the whole object.
@@ -173,6 +192,10 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/smartphone-forwarding` | API | Changes forwarding mode. |
 | `GET` | `/api/v1/ringer` | API | Reads ringer mute and volume state. |
 | `POST` | `/api/v1/ringer` | API | Changes ringer mute state or volume. |
+| `GET` | `/api/v1/announcements` | API | Reads whether a sound is playing and how the last one ended. |
+| `POST` | `/api/v1/announcements/audio` | API | Writes one piece of the sound file to play. |
+| `POST` | `/api/v1/announcements/actions/play` | API | Plays the sound file over the device speaker. |
+| `POST` | `/api/v1/announcements/actions/stop` | API | Ends the sound that is playing. |
 | `GET`, `POST` | `/api/v1/display/touch-tone` | API | Reads GUI-confirmed touch tone; POST `{"enabled":true}` waits up to five seconds for GUI acknowledgement. Requires the Display patch. |
 | `GET` | `/api/v1/answering-machine` | API | Reads answering-machine state. |
 | `POST` | `/api/v1/answering-machine` | API | Changes answering-machine enabled state. |
@@ -231,9 +254,13 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore-core` | maintenance | Restores core media QML hook. |
 | `POST` | `/api/v1/maintenance/qml-patch/actions/apply` | maintenance | Applies full display QML patch. |
 | `POST` | `/api/v1/maintenance/qml-patch/actions/restore` | maintenance | Restores full display QML patch. |
+| `GET` | `/api/v1/maintenance/camera-resolution` | maintenance | Reads the camera resolution. |
+| `POST` | `/api/v1/maintenance/camera-resolution` | maintenance | Saves the camera resolution for the next stream. |
+| `GET` | `/api/v1/maintenance/camera-quality` | maintenance | Reads size, bit rate and frame rate of the camera stream Home Assistant receives (the low one on firmware 3.0.x). |
+| `POST` | `/api/v1/maintenance/camera-quality` | maintenance | Saves them and restarts the device after confirmation. |
 | `GET` | `/api/v1/maintenance/audio-codec` | maintenance | Reads the device audio codec (speex/PCMU) state. |
 | `POST` | `/api/v1/maintenance/audio-codec/actions/apply` | maintenance | Switches the device to PCMU and reboots after confirmation. |
-| `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Restores the stock speex codec and reboots after confirmation. |
+| `POST` | `/api/v1/maintenance/audio-codec/actions/restore` | maintenance | Switches the device to speex and reboots after confirmation. |
 
 ## Health, Capabilities, State
 
@@ -655,6 +682,74 @@ the same UI value in tens, so the agent maps raw code `20` to API/UI volume
 `2`, raw code `10` to API/UI volume `1`, and raw code `0` to API/UI volume
 `0`.
 
+### Announcements
+
+The agent plays a sound file over the device speaker, for example speech that
+Home Assistant made. Capability `announcements.supported` is true where the
+device has the sound tools this needs (`aplay`, `amixer`, the audio chip tool
+and its configuration for playing) and the agent has joined the multicast
+group of the door entry events, without which a sound could not give way to a
+door call.
+
+`GET /api/v1/announcements` returns
+
+```json
+{"ok": true, "supported": true, "playing": false, "started": false,
+ "busy": false, "result": "played", "duration_ms": 0, "max_bytes": 2097152}
+```
+
+`result` tells how the last sound ended: `played`, `stopped`, `preempted` (a
+door call took the speaker), `device_busy` (the device was using its speaker;
+nothing was switched), `sound_path_failed`, `play_failed` or `failed`. It is
+empty before the first sound and while one plays, and set as soon as the
+sound has ended. `started` turns true while a sound plays once the device let
+the agent have its speaker and the speaker is switched on; a device that uses
+it ends the sound as `device_busy` before that. `busy` stays true after the sound until the speaker is
+switched off again; no new piece or sound is taken while it is true.
+
+`POST /api/v1/announcements/audio` with `{"offset": 0, "data": "base64"}`
+writes one piece of the file. Pieces come in order; offset 0 starts a new
+file. The file is a WAV with 8000 Hz, 16 bit PCM, one or two channels, the
+only format the device's sound card takes, and at most `max_bytes` long
+(about two minutes). It lives in `/tmp`, must be a file of the agent with a
+single name, and is removed when the sound ends and when the agent starts or
+ends. A play that is refused keeps it.
+
+`POST /api/v1/announcements/actions/play` with `{"volume": 1..100}` checks the
+file and starts playing; the reply carries `duration_ms`. The volume follows
+the device's own table for playing and ringing. The agent switches the device
+to its state for local playing, loads the audio chip's configuration for it
+(to RAM only), unmutes the speaker and plays. Afterwards it mutes the speaker,
+switches the amplifier off and sets the gain back. While the device's software
+has set a state of its own or plays itself, the speaker is its: switching off
+waits until the device is idle again, at most ten minutes.
+
+`POST /api/v1/announcements/actions/stop` ends the sound at once.
+
+A door call has priority: a call being set up or answered (`*8*1#…`,
+`*8*2#…`) ends the sound at once and frees the sound device. Locks, lights,
+video commands and the end of a call do not. The speaker is then left to the
+device for three seconds before it is switched off as above. A ring
+(`*8*1#1#…`) leaves the speaker to the device for a minute, also in the pauses
+in which the device is idle; every further frame of its call (`*8*…` other
+than locks and lights, for example the answering machine, answering and the
+end) starts the minute again, also for a switching off that already waits. No
+frame ends it early, and an agent that is restarted within it keeps it. During it, and while the switching off
+after a door frame waits, no new piece or sound is taken: the answer is
+`409 announcement_device_busy`. After a stop the speaker is switched off one
+second later. A switching off still due when the agent ends runs on after it.
+An agent that starts and has the API port ends the player or switching off of
+one that was killed or restarted (or finds its sound file left without a
+player), takes over the gain to set back, and then acts as after a door
+frame: a minute without new sounds, then switching off. A touch tone or
+another sound of the device during an announcement can cut it short.
+
+Errors: `409 announcement_busy` while `busy` is true, `409
+announcement_device_busy` after a door frame as above, `409
+announcement_unsupported`, `400 announcement_invalid_audio`, `400
+announcement_invalid_volume`, `500 announcement_write_failed`, `500
+announcement_start_failed`.
+
 ### `POST /api/v1/ringer`
 
 Authentication: normal API token.
@@ -1055,17 +1150,49 @@ Validation examples:
 
 ## Maintenance Actions
 
-QML status/patch and GUI reload keep their HTTP connection open until the script
-finishes without blocking the event loop. Status and standalone GUI reload have
-a 10-second script deadline; QML writes allow 30 seconds for rollback and a
-restart of the previous GUI if the initial start check fails. Only one
-such job runs at a time. While it is active, additional script jobs and
-maintenance POST requests return `409` with `error: maintenance_busy` after
-authentication. Retrying must wait for the current job to finish. A client
-disconnect does not cancel or repeat an already accepted operation. Script
-timeouts, failed execution and oversized output use the existing `502` response.
-The legacy `/api/v1/device-user` read also returns busy during a job because
-it invokes the same QML script; media-user setup/status is otherwise synchronous.
+Execution is hybrid; **not every operation is off the HTTP loop yet** (see
+`docs/native-http-blocking-inventory.md`). QML status/patch, GUI reload, the read-only device-user
+status script, SSH probe/start/stop and SSH-before-reboot/removal share one
+asynchronous job slot. Connections stay open until the existing response
+boundary; no new job ID, queue or early-success response is introduced.
+
+While that slot is occupied, authorized maintenance POSTs and competing QML or
+device-user status reads return `409` with `error: maintenance_busy`. An enabled,
+authorized SSH GET instead waits in an existing bounded input slot, without a
+new busy status or execution deadline. The 500ms receive deadline applies to
+incomplete input, not a complete deferred SSH request. Unauthorized and disabled
+SSH requests are not deferred. Retrying a busy request must wait for completion.
+
+QML status and standalone GUI reload retain a 10-second script deadline; QML
+writes retain 30 seconds for a failed start, rollback and restart of the previous
+GUI. Their failed execution, timeout and overflowing 4096-byte output retain
+the existing `502` responses. Device-user status alone also has a 10-second
+deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
+with unavailable/unknown label status. SSH start and stop have a 60-second
+deadline and SSH status a 15-second one; at the deadline the process group is
+killed with `SIGKILL`; an action then fails like a failed command and a
+status reads as not running, so a hanging script no longer holds maintenance. They discard output.
+
+Device-user native routing/user mutations and label apply/restore are
+**synchronous**. Label writes use an 8192-byte bounded-prefix capture, without
+an execution deadline, `SIGKILL` cancellation or `pthread_cancel`. Graceful agent
+shutdown waits for the script to finish commit/rollback and remount cleanup.
+This deliberately replaces the old unsafe ten-second label-write kill timeout.
+A hung script can block HTTP dispatch and graceful shutdown indefinitely; a
+client timeout or disconnect does not abort or replay a physical write. Forced
+process termination and power loss are not covered by this guarantee.
+
+Only after the write phase finishes does device-user start its asynchronous
+read-only status phase. Ensure still requires successful label-script exit and
+JSON `ok:true`; restore retains its exit-status-only interpretation. Native
+codec file mutation also remains synchronous; only its reboot tail uses jobs.
+Shutdown cancels an active asynchronous job without invoking its completion
+or advancing another phase, but cannot reach that cleanup during a synchronous
+label transaction. Existing QML-write job cancellation is unchanged, not newly
+certified as transaction-safe by the label-write fix.
+
+See [HTTP maintenance ownership](../docs/native-http-maintenance.md) and the
+[remaining blocking-path inventory](../docs/native-http-blocking-inventory.md).
 
 All endpoints in this section require maintenance authorization. Mutating
 endpoints require exact confirmation tokens so accidental browser/script calls
@@ -1336,6 +1463,82 @@ compare target files byte-for-byte, back up original device files under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`, remount the root
 filesystem writable only for final copy/write work, then remount read-only.
 
+### Camera Resolution
+
+`GET /api/v1/maintenance/camera-resolution` returns
+`{"ok": true, "high_resolution": true}`. `POST` with
+`{"high_resolution": false}` saves `video.av.highResolution` and returns the
+same body; it applies from the next stream that starts. Capabilities advertise
+it as `maintenance.camera_resolution`. On firmware 3.0.x the agent fixes the low
+resolution, does not advertise the setting, and answers a request for high
+resolution with `409` and `error: "high_resolution_unsupported"`.
+
+### Camera Quality
+
+`GET /api/v1/maintenance/camera-quality` returns size, bit rate and frame rate
+of the camera stream Home Assistant receives. That is the high-resolution
+stream (`"stream": "high"`), and on firmware 3.0.x (Qt 5 display), which sends
+only the low-resolution stream, that one (`"stream": "low"`):
+
+```json
+{"ok": true, "supported": true, "stream": "high", "bitrate_kbps": 800, "fps": 15,
+ "size": "688x480", "running_bitrate_kbps": 800, "running_fps": 15,
+ "running_size": "688x480", "bitrate_min": 300, "bitrate_max": 3000,
+ "fps_min": 5, "fps_max": 24, "sizes": ["688x480", "720x576"],
+ "restart_required": false, "changed": false, "remount_ro_failed": false,
+ "rebooting": false}
+```
+
+`bitrate_kbps`, `fps` and `size` are the saved values, `running_*` the ones
+the device started with (`0` and `""` when the agent cannot tell), and
+`restart_required` is `true` while the two differ. When the file could not be
+read at the agent's start, the agent takes the values the file has before its
+first change as the running ones. `sizes` lists the sizes a
+request may choose. The high stream takes 300–3000 kbit/s and 5–24 fps: at
+25 fps the device drops its frame rate control and sends about 8 frames per
+second. The low stream takes 100–2000 kbit/s (the device lowers the bit rate
+at run time and raises it again only up to 2000) and 5–25 fps, in the sizes
+352x288, 400x288 (from the factory), 640x480, 704x576 and 720x576; the sizes
+other than 400x288 are not tested on a 3.0.x device yet.
+
+`POST` with `{"confirm": "apply_camera_quality", "size": "720x576",
+"bitrate_kbps": 3000, "fps": 24}` saves new values and returns the same body;
+each value may be left out and then stays as it is. Like the audio codec
+switch, the agent then restarts the device when the saved values differ from
+the running ones, unless the request sends `"reboot": false` or reboot
+maintenance is disabled; `rebooting` says whether it does. A bit rate or frame
+rate outside the limits is answered `400` with
+`error: "camera_quality_out_of_range"`, a size not in `sizes` with
+`camera_quality_invalid_size`, a value that is not a whole number with
+`camera_quality_invalid_bitrate` or `camera_quality_invalid_fps`, and a
+request with no value with `camera_quality_value_required`. A value the file
+already has may stay even when it is outside the limits.
+
+The device keeps the values in the `[Answering Machine]` section of
+`/home/bticino/cfg/bt_answering_machine` and reads that file only when it
+starts: `BitrateRtpH`, `FpsRtpH`, `Width` and `Height` for the high stream,
+`BitrateRtpL`, `FpsRtpL`, `WidthLow` and `HeightLow` for the low one. For the
+high stream the device crops the camera picture when `Width` is more than
+1.5 times `Height` (800x480 from the factory gives 688x480) and sends the
+whole 720x576 picture otherwise, so the size `720x576` is written as
+`Width=720`, `Height=480`; the same values also set the camera picture on the
+device display and answering-machine recordings. The low stream is scaled to
+`WidthLow` x `HeightLow`.
+
+The agent changes the file only when each of the four values is there exactly
+once, replaces those numbers and nothing else, keeps one backup of the
+original file under `/home/bticino/cfg/extra/c300x-device-file-backups/original`,
+writes a complete new file in one step, makes the root filesystem writable
+only for the write, and reads the result back. Removing the agent puts the
+original values back; a file without the values is left alone. After a
+firmware update the file holds the factory values again, which are the same on
+every firmware, so there is nothing to put back.
+
+Capabilities advertise the setting as `maintenance.camera_quality` whenever
+video is enabled. A `POST` is answered `409` with
+`error: "camera_quality_unsupported"` when the file does not hold the values,
+and `GET` then reports `"supported": false`.
+
 ### Audio Codec
 
 `GET /api/v1/maintenance/audio-codec` reads the codec state.
@@ -1343,8 +1546,14 @@ filesystem writable only for final copy/write work, then remount read-only.
 `POST /api/v1/maintenance/audio-codec/actions/apply` with
 `{"confirm": "apply_audio_codec_patch"}` switches to PCMU;
 `POST /api/v1/maintenance/audio-codec/actions/restore` with
-`{"confirm": "restore_audio_codec_patch"}` restores speex. The codec takes
-effect after a reboot. When one is needed, the agent starts SSH and reboots the
+`{"confirm": "restore_audio_codec_patch"}` switches to speex. Both rewrite the
+same lines of `stack_open.xml` and `linphone.conf` in opposite directions, so
+speex is available also on firmware 3.0.6, which comes with PCMU (not yet
+tested on a 3.0.6 device). The first switch keeps a backup of the original
+files; removing the agent reads the original codec from them and rewrites the
+codec lines back to it, leaving the rest of both files as they are. When the
+second file cannot be written, the first gets its content from before the
+switch back. The codec takes effect after a reboot. When one is needed, the agent starts SSH and reboots the
 device, unless the request sends `"reboot": false` or reboot maintenance is
 disabled. A failed write returns `500` with `error: "audio_codec_apply_failed"`
 or `"audio_codec_restore_failed"`.
@@ -1426,7 +1635,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.7.0` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `2.8.0` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
 config and is `unknown` when that value is empty, which is what the installer
 writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,

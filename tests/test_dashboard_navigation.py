@@ -35,21 +35,23 @@ def _navigation_field(schema):
     return next(key for key in schema.schema if str(key) == CONF_DASHBOARD_NAVIGATION)
 
 
-@pytest.mark.parametrize("value", [None, "", "pager", "TABS", "bar", 1, True, ["tabs"]])
-def test_anything_but_the_bar_is_the_arrows(value) -> None:
-    assert dashboard_navigation(value) == "pager"
-    assert dashboard_navigation("tabs") == "tabs"
-    assert configured_dashboard_navigation(FakeEntry(options={CONF_DASHBOARD_NAVIGATION: value})) == "pager"
+@pytest.mark.parametrize("value", [None, "", "tabs", "PAGER", "arrows", 1, True, ["pager"]])
+def test_the_favourites_bar_is_the_default_and_only_a_chosen_pager_keeps_the_arrows(value) -> None:
+    assert dashboard_navigation(value) == "tabs"
+    assert dashboard_navigation("pager") == "pager"
+    assert configured_dashboard_navigation(FakeEntry(options={CONF_DASHBOARD_NAVIGATION: value})) == "tabs"
+    assert configured_dashboard_navigation(FakeEntry(options={})) == "tabs"
 
 
-def test_the_display_form_offers_the_choice_and_defaults_to_arrows() -> None:
+def test_the_display_form_offers_the_choice_and_defaults_to_the_favourites_bar() -> None:
     schema = dashboard_schema()
     field = _navigation_field(schema)
-    assert field.default() == "pager"
+    assert field.default() == "tabs"
     assert schema.schema[field].config["options"] == ["pager", "tabs"]
     assert schema.schema[field].config["translation_key"] == CONF_DASHBOARD_NAVIGATION
     assert _navigation_field(dashboard_schema(default_dashboard_navigation="tabs")).default() == "tabs"
-    assert _navigation_field(dashboard_schema(default_dashboard_navigation="nonsense")).default() == "pager"
+    assert _navigation_field(dashboard_schema(default_dashboard_navigation="pager")).default() == "pager"
+    assert _navigation_field(dashboard_schema(default_dashboard_navigation="nonsense")).default() == "tabs"
 
 
 def test_the_pages_form_keeps_the_saved_choice() -> None:
@@ -66,21 +68,22 @@ def test_the_choice_survives_an_options_save_and_reopen() -> None:
         options={}, runtime_data=None, update_listeners=[],
     )
     areas = _OptionsAreas(entry)
-    result = run(areas._flow().async_step_dashboard({
-        CONF_DEVICE_UI_ENABLED: True, CONF_DASHBOARD_NAVIGATION: "tabs",
-    }))
-    assert result["type"] == "menu"
-    assert entry.options[CONF_DASHBOARD_NAVIGATION] == "tabs"
-    result = run(areas._flow().async_step_dashboard())
-    assert _navigation_field(result["data_schema"]).default() == "tabs"
-    # Saving another area of the options keeps the choice.
-    result = run(areas._flow().async_step_dashboard_pages({"page_1": {"enabled": True}}))
-    assert result["type"] == "menu"
-    assert entry.options[CONF_DASHBOARD_NAVIGATION] == "tabs"
+    # The favourites bar is the default; choosing the arrows is a change.
     result = run(areas._flow().async_step_dashboard({
         CONF_DEVICE_UI_ENABLED: True, CONF_DASHBOARD_NAVIGATION: "pager",
     }))
+    assert result["type"] == "menu"
     assert entry.options[CONF_DASHBOARD_NAVIGATION] == "pager"
+    result = run(areas._flow().async_step_dashboard())
+    assert _navigation_field(result["data_schema"]).default() == "pager"
+    # Saving another area of the options keeps the choice.
+    result = run(areas._flow().async_step_dashboard_pages({"page_1": {"enabled": True}}))
+    assert result["type"] == "menu"
+    assert entry.options[CONF_DASHBOARD_NAVIGATION] == "pager"
+    result = run(areas._flow().async_step_dashboard({
+        CONF_DEVICE_UI_ENABLED: True, CONF_DASHBOARD_NAVIGATION: "tabs",
+    }))
+    assert entry.options[CONF_DASHBOARD_NAVIGATION] == "tabs"
 
 
 @pytest.mark.parametrize("navigation", [None, "pager", "tabs"])
@@ -100,7 +103,8 @@ def test_the_display_is_told_and_the_bar_replaces_the_page_list(monkeypatch, nav
     result = run(dashboard.async_dashboard_payload(hass, entry))
     main = next(page for page in result["data"]["pages"] if page["title"] == "C300X")
     kinds = [item["kind"] for item in main["items"]]
-    if navigation == "tabs":
+    if navigation != "pager":
+        # The favourites bar is the default.
         assert result["navigation"] == "tabs"
         assert kinds == ["entity"]
     else:

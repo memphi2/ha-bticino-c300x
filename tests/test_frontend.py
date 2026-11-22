@@ -57,6 +57,7 @@ FRONTEND_MODULE_SOURCES = (
     FRONTEND_DIR / "c300x-media-controls-template.js",
     FRONTEND_DIR / "c300x-media-history.js",
     FRONTEND_DIR / "c300x-media-translations.js",
+    FRONTEND_DIR / "c300x-picture-frame.js",
     CARD_RINGBACK_SOURCE,
     CARD_RING_PREVIEW_STATE_SOURCE,
     CARD_STATE_SOURCE,

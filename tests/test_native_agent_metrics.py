@@ -106,26 +106,26 @@ def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> Non
 
 
 def test_native_agent_maintenance_requires_token_even_in_no_auth_mode() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
     maintenance_body = text.rsplit(
-        "static int maintenance_authorized",
+        "int maintenance_authorized",
         maxsplit=1,
-    )[1].split("static int maintenance_auth_available", maxsplit=1)[0]
+    )[1].split("int maintenance_auth_available", maxsplit=1)[0]
 
     assert "if (config->api_no_auth)" not in maintenance_body
     assert "config->api_no_auth && config->maintenance_no_auth_allowed" in maintenance_body
     assert "has_valid_maintenance_token(config, request)" in maintenance_body
     token_body = text.split("static int has_valid_maintenance_token", maxsplit=1)[1].split(
-        "static int maintenance_authorized", maxsplit=1,
+        "int maintenance_authorized", maxsplit=1,
     )[0]
     assert "config->maintenance_admin_token[0] == '\\0'" in token_body
     assert "constant_time_equal(" in token_body
 
 
 def test_native_agent_device_user_status_does_not_expose_sip_identity() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    text = (ROOT / "native_agent" / "src" / "http_device_user.c").read_text(encoding="utf-8")
     body = text.split("static void device_user_status_body", maxsplit=1)[1].split(
-        "static void handle_device_user_get",
+        "static void send_status",
         maxsplit=1,
     )[0]
 
@@ -144,9 +144,9 @@ def test_native_agent_device_user_status_does_not_expose_sip_identity() -> None:
 
 
 def test_native_agent_device_user_status_reports_read_availability() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    text = (ROOT / "native_agent" / "src" / "http_device_user.c").read_text(encoding="utf-8")
     body = text.split("static void device_user_status_body", maxsplit=1)[1].split(
-        "static void handle_device_user_get",
+        "static void send_status",
         maxsplit=1,
     )[0]
     read_status = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
@@ -725,7 +725,7 @@ def test_native_agent_runtime_diagnostics_are_memory_only_until_requested() -> N
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     diagnostics_body = text.rsplit("static void handle_diagnostics_get", maxsplit=1)[
         1
-    ].split("static void handle_setup_page", maxsplit=1)[0]
+    ].split("static void handle_auth_config_get", maxsplit=1)[0]
     run_body = text.rsplit("int c300x_run", maxsplit=1)[1]
 
     assert "char last_wake_reason[64];" in text

@@ -101,6 +101,12 @@ function installFakeDom() {
   }
 
   globalThis.HTMLElement = class {
+    style = {
+      properties: new Map(),
+      setProperty(name, value) { this.properties.set(name, value); },
+      removeProperty(name) { this.properties.delete(name); },
+    };
+
     attachShadow() {
       this.shadowRoot = new FakeShadowRoot();
       return this.shadowRoot;
@@ -381,7 +387,8 @@ test("snapshot preview has an accessible timestamp without an overlay and hides 
     card._snapshots.showPreview("blob:archive", capturedAt);
     assert.equal(card._snapshotEl.hidden, false);
     assert.equal(card._snapshotLabelEl, undefined);
-    assert.ok(card._snapshotEl.attributes.get("aria-label").endsWith(new Date(capturedAt * 1000).toLocaleString("en")));
+    // The spoken time is written like the one in the image, in the Home Assistant time zone.
+    assert.match(card._snapshotEl.attributes.get("aria-label"), /: \d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
     assert.match(card._snapshotEl.attributes.get("aria-label"), /Archived image \(not live\)/);
     assert.equal(updates.at(-1).entryId, "entry-1");
     assert.equal(updates.at(-1).attributes, attrs);
@@ -2195,4 +2202,29 @@ test("a card moved in one DOM call keeps its call", async () => {
   await Promise.resolve();
   assert.equal(closed, 0);
   assert.equal(card._disposed, false);
+});
+
+test("the picture frame has the shape the browser keeps for the camera the card finds", async () => {
+  const registry = installFakeDom();
+  const items = new Map([
+    ["c300x-picture-ratio:camera.bticino_c300x_doorbell_camera", "1.2222"],
+  ]);
+  globalThis.localStorage = {
+    getItem: (key) => (items.has(key) ? items.get(key) : null),
+    setItem: (key, value) => items.set(key, String(value)),
+  };
+  try {
+    await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?frame");
+    const card = new (registry.get("c300x-doorbell-call-card"))();
+    // Configured with the integration only: the camera is found once Home Assistant is known.
+    card.setConfig({ entry_id: "entry-1" });
+    assert.equal(card.style.properties.has("--c300x-picture-ratio"), false);
+    card.hass = fakeHass();
+    assert.equal(card.style.properties.get("--c300x-picture-ratio"), "1.2222");
+    // Another camera in the editor: the old one's shape does not stay.
+    card.setConfig({ entity: "camera.other" });
+    assert.equal(card.style.properties.has("--c300x-picture-ratio"), false);
+  } finally {
+    delete globalThis.localStorage;
+  }
 });

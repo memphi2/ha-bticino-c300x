@@ -1,9 +1,9 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-20. Integration and native agent `2.7.0`, the successor
-of `2.5.1`, with credential recovery, an HA-only media history and new display
-pages and picture tiles. Version `2.6.0` was withdrawn. This report covers the
-release source tree.
+Source review: 2026-11-21. Integration and native agent `2.8.0`, the successor
+of `2.7.0`, with speech and sounds on the device's speaker, spoken
+notifications and camera quality settings. This report covers the release
+source tree.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.
@@ -33,9 +33,12 @@ Paramiko has been removed from project imports and validation pins. AsyncSSH is
 an external dependency under its own license, not bundled or relicensed by this
 project. Normal agent operation and supported self-updates do not use SSH.
 
-PyAV and the Home Assistant media stack provide media processing. The native
-agent uses system libraries supplied by its runtime, including optional device
-libraries loaded at runtime. These dependencies are not copied into the source
+PyAV and the Home Assistant media stack provide media processing; sounds for
+the device's speaker are converted by the `ffmpeg` program of the Home
+Assistant installation, and speech is made by the text-to-speech engine the
+user selects there. The native agent uses system libraries supplied by its
+runtime, including optional device libraries loaded at runtime, and runs the
+device's own sound programs and audio chip configuration in place. These dependencies are not copied into the source
 repository and are not relicensed by the repository's Apache-2.0 declaration.
 
 The development requirement files contain direct version pins, not complete
@@ -69,17 +72,20 @@ from backup retention.
 Agenda reads only explicitly selected HA calendars into bounded HA RAM caches.
 Leave home exposes explicitly selected contacts, lights and actions. Notify
 messages are retained in the existing HA notice store; the device keeps the
-active alert in RAM, with no queue for a disconnected display. Wake and sound
-are supplementary notifications, not certified life-safety alarm functions.
+active alert in RAM, with no queue for a disconnected display. Wake, sound
+and speech are supplementary notifications, not certified life-safety alarm
+functions. The text of a spoken notification goes to the selected
+text-to-speech engine, which may be a cloud service.
 The retired Distribution source is removed on update; the package-only inert
 bootstrap file preserves compatibility with the previous updater and is not
 part of the new active GUI.
 
 The English display examples are edited from maintainer-provided photographs,
 with AI-assisted perspective correction, color matching and localization.
-`display-energy-en.webp` instead comes from a read-only screen capture on the
-maintainer's C300X on 2026-11-15, before its 2.4.1 update. Its layout and values
-were retained, with English labels and colors matched to the other examples.
+Eight examples are read-only framebuffer captures from the maintainer's C300X
+on 2026-11-20, with the texts replaced by the display's English texts.
+Appointments and consumer names are example text; the two camera pictures are
+AI-generated views supplied by the maintainer.
 These are illustrative documentation assets, not extracted firmware files or
 pixel-exact runtime captures.
 

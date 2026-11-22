@@ -93,6 +93,77 @@ test("subscription is scoped and lazy; all images and videos navigate older/newe
   assert.ok(s.requests.every(({ path }) => /^\/api\/bticino_c300x\/media-history\/entry(?:\/[a-f0-9]{64})?$/.test(path)));
 });
 
+test("the image the card shows as its still is not shown again as the first saved file", async (t) => {
+  const still = item("a", "image", 40), video = item("b", "video", 30), older = item("c", "image", 20);
+  const s = harness(t, [still, video, older]);
+  s.configure({ stillAt: 40 });
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, video.id);
+  // The way back ends at the still, not at its saved copy.
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, older.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected.id, video.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected, null);
+
+  const only = harness(t, [still]);
+  only.configure({ stillAt: 40 });
+  await only.history.step(1);
+  assert.equal(only.history.selected, null);
+
+  const other = harness(t, [still, video]);
+  other.configure({ stillAt: 12 });
+  await other.history.step(1);
+  assert.equal(other.history.selected.id, still.id);
+});
+
+test("the still is left out also when a video is newer than it", async (t) => {
+  const video = item("a", "video", 50), still = item("b", "image", 40), older = item("c", "image", 20);
+  const s = harness(t, [video, still, older]);
+  s.configure({ stillAt: 40 });
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, video.id);
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, older.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected.id, video.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected, null);
+});
+
+test("a selected file that becomes the still keeps its neighbours", async (t) => {
+  const video = item("a", "video", 60), image = item("b", "image", 50), older = item("c", "image", 40);
+  const s = harness(t, [video, image, older]);
+  await s.history.step(1);
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, image.id);
+  s.configure({ stillAt: 50 });
+  assert.equal(s.history.neighbour(1), 2);
+  await s.history.step(-1);
+  assert.equal(s.history.selected.id, video.id);
+  // From the video, the still is stepped over.
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, older.id);
+  assert.equal(s.history.neighbour(1), 3);
+});
+
+test("an image that becomes the still while browsing is left out on the way back", async (t) => {
+  const still = item("a", "image", 40), video = item("b", "video", 30);
+  const s = harness(t, [still, video]);
+  s.configure({ stillAt: 40 });
+  await s.history.step(1);
+  assert.equal(s.history.selected.id, video.id);
+  const newer = item("d", "image", 50);
+  s.history.items = [newer, still, video];
+  s.configure({ stillAt: 50 });
+  await s.history.step(-1);
+  // The image that was the still is an ordinary saved file now.
+  assert.equal(s.history.selected.id, still.id);
+  await s.history.step(-1);
+  assert.equal(s.history.selected, null);
+});
+
 test("metadata insertion preserves playing file identity and removal/revision change closes it", async (t) => {
   const s = harness(t, [item("a", "video")]);
   await s.history.step(1);

@@ -179,17 +179,27 @@ device HomePage for unread memo/video-message badges, transforms the
 device MemoPage for external-delete refresh, adds the HA feedback and touch-tone controls to Settings > General, installs
 the project-owned Alarmo, Home Assistant and energy pages, and installs the
 local QML JavaScript bridge.
-Original display files are backed up under
+On Qt 4 devices (firmware 1.7.x and 2.0.2) the Display patch also raises the
+swipe threshold of the display library from 4 to 16 pixels, so a tap with a
+slightly moving finger stays a tap instead of becoming a swipe. The helper
+calls the agent binary for it (`--display-touch apply` or `restore`): the
+library is recognised by its SHA-256, changed once in one place, written
+through a temporary file and restored by the Display restore. A library of
+another build is left alone, and a display that does not start with the
+changed library gets the original back at once.
+Original display files and the original display library are backed up under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`; generated agent
 files are not backed up on the device.
 
 The remove-agent maintenance action is explicit and token protected. It first
 restores all display changes (Display patch, core hook and media-user label),
-then the IPv6 and IPv4 firewall scripts, stops the agent, restores the stock
-audio codec, removes the native-agent init files, agent directory and
+then the IPv6 and IPv4 firewall scripts and the display library, stops the agent, restores the original
+audio codec and camera quality values, removes the native-agent init files, agent directory and
 agent-owned backups, and schedules a reboot.
 SSH is started before and after the cleanup and is deliberately not removed. If
-a restore step fails, the script stops before deleting the backups.
+a restore step fails, the script stops before deleting the backups. The one
+exception is a display library without a valid stock backup: it keeps the wider
+tap tolerance and the removal goes on.
 
 System metrics are sampled by the agent every 30 seconds by default, not polled
 by Home Assistant. HTTP and push use the same completed sample. CPU changes at
@@ -313,8 +323,11 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   `/usr/lib/libQt5Core.so.5`, skip the Display patch and the media-user label,
   and the Home Assistant pages are not shown on the device.
 - Its `bt_av_media` sends only the low-resolution video stream on to other
-  receivers. Without a setting of its own the camera uses that stream there
-  (`video.av.highResolution: false`).
+  receivers. The camera is fixed to that stream there
+  (`video.av.highResolution: false`), and the Camera resolution entity is not
+  offered. Camera quality sets that low stream there (`BitrateRtpL`,
+  `FpsRtpL`, `WidthLow`, `HeightLow`); its sizes other than the factory
+  400x288 are not yet tested on a 3.0.6 device.
 - `bt_answering_machine` is another build with its own routing table.
 - As on the other versions, Ring Call and video need a device registered once
   through the Door Entry app: that creates the SIP user, domain and keystore

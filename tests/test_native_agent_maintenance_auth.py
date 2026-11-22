@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,20 +14,21 @@ def test_every_agent_initiated_reboot_starts_ssh_first() -> None:
     """
 
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    offsets = [match.start() for match in re.finditer(r'"/sbin/reboot"', text)]
-
-    assert offsets, "no reboot call found in http.c"
-    for offset in offsets:
-        window = text[max(0, offset - 600) : offset]
-        assert '"/etc/init.d/dropbear", "start"' in window, (
-            "an agent-initiated reboot must start SSH first so the device stays "
-            f"reachable; the reboot call at offset {offset} does not"
-        )
+    assert '"/sbin/reboot"' not in text
+    codec = (ROOT / "native_agent/src/http_audio_codec.c").read_text()
+    assert "c300x_http_service_reboot(owner, fd, config, schedule" in codec
+    service = (ROOT / "native_agent/src/http_service_commands.c").read_text()
+    begin = service.split("static int begin_shutdown", 1)[1].split("static int finish_service", 1)[0]
+    assert "maintenance_ssh_start_enabled" in begin
+    assert begin.index('start_command(owner, C300X_SSH_INIT_SCRIPT, "start")') < begin.index(
+        "schedule_action(fd, state)"
+    )
+    assert service.count("begin_shutdown(owner, fd, state)") == 2
 
 
 def test_config_admin_does_not_bypass_maintenance_gate_with_no_auth() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    body = text.rsplit("static int config_admin_authorized", maxsplit=1)[1].split(
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
+    body = text.rsplit("int config_admin_authorized", maxsplit=1)[1].split(
         "\n}\n",
         maxsplit=1,
     )[0]
@@ -40,8 +40,8 @@ def test_config_admin_does_not_bypass_maintenance_gate_with_no_auth() -> None:
 
 
 def test_maintenance_can_explicitly_allow_no_auth_bootstrap() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    body = text.rsplit("static int maintenance_authorized", maxsplit=1)[1].split(
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
+    body = text.rsplit("int maintenance_authorized", maxsplit=1)[1].split(
         "\n}\n",
         maxsplit=1,
     )[0]
@@ -50,9 +50,9 @@ def test_maintenance_can_explicitly_allow_no_auth_bootstrap() -> None:
 
 
 def test_empty_api_token_never_accepts_empty_bearer_header() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
     body = text.rsplit("static int has_valid_bearer", maxsplit=1)[1].split(
-        "static int api_request_authorized",
+        "int api_request_authorized",
         maxsplit=1,
     )[0]
 
@@ -61,10 +61,11 @@ def test_empty_api_token_never_accepts_empty_bearer_header() -> None:
 
 
 def test_auth_config_read_remains_available_in_no_auth_bootstrap() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    read_body = text.rsplit("static int auth_config_read_authorized", maxsplit=1)[
+    text = (ROOT / "native_agent" / "src" / "http_auth.c").read_text(encoding="utf-8")
+    read_body = text.rsplit("int auth_config_read_authorized", maxsplit=1)[
         1
     ].split("\n}\n", maxsplit=1)[0]
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     route_body = text.split(
         'if (strcmp(request->path, "/api/v1/maintenance/auth") == 0) {',
         maxsplit=1,
@@ -78,10 +79,8 @@ def test_auth_config_read_remains_available_in_no_auth_bootstrap() -> None:
 
 def test_setup_page_marks_save_as_bootstrap_completion() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    page_body = text.rsplit("static void handle_setup_page", maxsplit=1)[1].split(
-        "static void handle_auth_config_get",
-        maxsplit=1,
-    )[0]
+    page_body = (ROOT / "native_agent" / "src" / "http_setup_page.c").read_text(encoding="utf-8")
+    assert "c300x_http_setup_page(client_fd);" in text
 
     assert "setupComplete:true" in page_body
     assert "API token for requests" in page_body
@@ -99,7 +98,7 @@ def test_setup_page_is_only_served_during_no_auth_bootstrap() -> None:
     )[1].split('if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/health") == 0)', maxsplit=1)[0]
 
     assert "if (config->api_no_auth)" in route_body
-    assert 'handle_setup_page(client_fd);' in route_body
+    assert 'c300x_http_setup_page(client_fd);' in route_body
     assert "setup_disabled" in route_body
 
 
@@ -161,21 +160,18 @@ def test_setup_completion_closes_no_auth_when_api_token_exists() -> None:
 
 
 def test_remove_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    body = text.rsplit("static void handle_remove_agent", maxsplit=1)[1].split(
-        "static void handle_restart_agent",
-        maxsplit=1,
-    )[0]
+    text = (ROOT / "native_agent/src/http_service_commands.c").read_text()
     route_body = text.split(
         '"/api/v1/maintenance/agent/actions/remove"',
         maxsplit=1,
-    )[1].split("handle_gui_reload", maxsplit=1)[0]
+    )[1]
 
-    assert "maintenance_authorized(config, request)" in body
-    assert 'confirm_matches(request, "remove_agent")' in body
-    assert 'run_detached_command("/etc/init.d/dropbear", "start", 0)' in body
-    assert "run_detached_command(config->maintenance_agent_remove_script, \"remove\", 500)" in body
-    assert "handle_remove_agent(client_fd, config, request)" in route_body
+    assert 'confirmation = "remove_agent";' in route_body
+    assert "maintenance_authorized(config, request)" in route_body
+    assert "confirm_matches(request, confirmation)" in route_body
+    assert "begin_shutdown(owner, fd, state)" in route_body
+    assert 'start_command(owner, C300X_SSH_INIT_SCRIPT, "start")' in text
+    assert 'state->schedule(config->maintenance_agent_remove_script, "remove", 500)' in text
 
 
 def test_restart_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:

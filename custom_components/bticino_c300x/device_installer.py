@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
+from .factory_login import LOGIN_REFUSED
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -607,6 +608,9 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
         except (OSError, asyncssh.Error) as err:
             self._runner.close()
             self._closed = True
+            # Nothing was changed on the device: another login can be asked for.
+            if isinstance(err, getattr(asyncssh, "PermissionDenied", ())):
+                raise C300XDeviceInstallError(LOGIN_REFUSED) from err
             raise C300XDeviceInstallError("device_install_failed") from err
 
     async def _connect(self, request: C300XDeviceInstallRequest) -> Any:
@@ -878,14 +882,13 @@ def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
 def _apply_qt5_low_res_video_default(
     client: _DeviceSshClient, config_bytes: bytes
 ) -> bytes:
-    """Default the camera to the low-res stream on Qt5 firmware (3.0.x+).
+    """Fix the camera to the low-res stream on Qt5 firmware (3.0.x+).
 
     bt_av_media only fans out the low-res video branch (``multiudp_low_res``);
     the high-res branch has no ``multiudpsink``, so its stream never reaches the
     agent and clients get an undecodable picture. Qt4 firmware (1.7.x/2.0.x)
-    keeps the high-res default. An explicit ``highResolution`` already in the
-    device config (e.g. a user override the merge preserved) is left untouched,
-    so this only sets the default for a fresh install.
+    keeps its setting, high-res by default. The agent also enforces low-res
+    there; the config states it so it matches what the device does.
     """
 
     if not _device_display_is_qt5(client):
@@ -904,11 +907,11 @@ def _apply_qt5_low_res_video_default(
     if not isinstance(av, dict):
         av = {}
         video["av"] = av
-    if "highResolution" in av:
+    if av.get("highResolution") is False:
         return config_bytes
     av["highResolution"] = False
     _LOGGER.info(
-        "C300X: Qt5 firmware detected; defaulting camera to low-res "
+        "C300X: Qt5 firmware detected; camera fixed to low-res "
         "(video.av.highResolution=false)"
     )
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")

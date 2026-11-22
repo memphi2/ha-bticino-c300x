@@ -24,12 +24,12 @@ DASHBOARD_NAVIGATIONS = (DASHBOARD_NAVIGATION_PAGER, DASHBOARD_NAVIGATION_TABS)
 def dashboard_navigation(value: Any) -> str:
     """Return how the display changes pages.
 
-    The favourites bar shows the first pages as buttons along the bottom
-    edge. Anything else, such as an entry saved before the bar existed, is
-    the previous and next arrows.
+    The favourites bar, which shows the first pages as buttons along the
+    bottom edge, is the default. Only an explicit choice of the previous and
+    next arrows keeps them.
     """
 
-    return DASHBOARD_NAVIGATION_TABS if value == DASHBOARD_NAVIGATION_TABS else DASHBOARD_NAVIGATION_PAGER
+    return DASHBOARD_NAVIGATION_PAGER if value == DASHBOARD_NAVIGATION_PAGER else DASHBOARD_NAVIGATION_TABS
 
 
 def page_position(value: Any, default: int) -> int:

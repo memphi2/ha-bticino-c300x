@@ -1,0 +1,112 @@
+"""Apply the Display setting to the device when the settings are applied.
+
+The setting says that it installs the Home Assistant pages on the C300X and
+that turning it off restores the original display. Where the setting is
+applied - a new entry, the reconfigure, the Display settings submitted -
+the entry data gets a mark; the start that follows does it with the agent it
+then talks to. The mark stays until the device followed, so a later start
+tries again. Other settings saved, and a start without the mark, change
+nothing on the device: an entry from before the setting stored it with its
+first save of any area, not always as its device has it.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+from .agent_update import async_retry_update_maintenance_busy
+from .api import C300XAgentApiError
+from .capabilities import entry_device_ui_configured, maintenance_action_is_advertised
+from .const import CONF_DISPLAY_SETTING_PENDING, SIGNAL_QML_PATCH_CHANGED
+from .entry_types import BticinoC300XConfigEntry
+from .error_text import compact_error_text
+from .qml_patch import (
+    async_apply_qml_patch_and_confirm,
+    async_refresh_qml_patch_status,
+    async_restore_qml_patch_and_confirm,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _differs(status: dict[str, Any], wanted: bool) -> bool | None:
+    """Whether the device differs from the setting; None when it does not say."""
+
+    patched = status.get("patched")
+    if isinstance(patched, bool):
+        return patched is not wanted
+    # Only some of the files are there: neither the pages nor the original.
+    return True if status.get("state") == "partial" else None
+
+
+async def async_apply_display_setting(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry
+) -> bool | None:
+    """Apply or restore the Display patch as the Display setting says.
+
+    True: applied or restored. False: nothing to do, also for an entry without
+    the setting or an agent that has no Display patch. None: the device could
+    not be asked or did not follow, so it is still to do.
+    """
+
+    wanted = entry_device_ui_configured(entry)
+    runtime_data: Any = getattr(entry, "runtime_data", None)
+    if wanted is None:
+        return False
+    capabilities = getattr(runtime_data, "capabilities", None)
+    if not capabilities:
+        return None
+    if not maintenance_action_is_advertised(capabilities, "qml_patch" if wanted else "qml_restore"):
+        return False
+    run = async_apply_qml_patch_and_confirm if wanted else async_restore_qml_patch_and_confirm
+    try:
+        differs = _differs(await async_refresh_qml_patch_status(entry, wait_busy=True), wanted)
+        if not differs:
+            return None if differs is None else False
+        status = await async_retry_update_maintenance_busy(
+            lambda: run(
+                entry, lambda: async_dispatcher_send(hass, SIGNAL_QML_PATCH_CHANGED, entry.entry_id)
+            )
+        )
+    except C300XAgentApiError as err:
+        _LOGGER.warning(
+            "C300X Display patch was not %s for the Display setting: %s",
+            "applied" if wanted else "restored",
+            compact_error_text(err),
+        )
+        return None
+    if status.get("patched") is not wanted:
+        _LOGGER.warning("C300X Display patch did not reach the state of the Display setting")
+        return None
+    return True
+
+
+def display_setting_pending(entry: BticinoC300XConfigEntry) -> bool:
+    """Whether this start applies the Display setting to the device."""
+
+    return CONF_DISPLAY_SETTING_PENDING in entry.data
+
+
+def async_mark_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEntry, *, pending: bool) -> None:
+    """Mark the Display setting as to be applied at the next start, or done."""
+
+    if (CONF_DISPLAY_SETTING_PENDING in entry.data) is pending:
+        return
+    data = dict(entry.data)
+    if pending:
+        data[CONF_DISPLAY_SETTING_PENDING] = True
+    else:
+        del data[CONF_DISPLAY_SETTING_PENDING]
+    hass.config_entries.async_update_entry(entry, data=data)
+
+
+async def async_settle_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
+    """Apply the Display setting and keep it marked until the device followed."""
+
+    if await async_apply_display_setting(hass, entry) is not None:
+        async_mark_display_setting(hass, entry, pending=False)
+

@@ -1,6 +1,5 @@
 #include "command_job.h"
 #include "time_util.h"
-#include "http_util.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -24,18 +23,17 @@ void c300x_command_job_init(struct c300x_command_job *job)
     job->output_fd = -1;
 }
 
-int c300x_command_job_start(struct c300x_command_job *job, const char *program,
-    const char *argument, int dynamic_homepage, int timeout_ms)
+static int start_job(struct c300x_command_job *job, const char *program,
+    char *const argv[], int dynamic_homepage, int timeout_ms, int wait_only)
 {
     int pipes[2];
     posix_spawn_file_actions_t actions;
     posix_spawnattr_t attr;
     size_t count = 0, used = 0;
     char **env;
-    char *argv[] = {(char *)program, (char *)argument, NULL};
     int error;
 
-    if (job->pid > 0 || timeout_ms <= 0 || pipe(pipes) != 0) {
+    if (job->pid > 0 || (!wait_only && timeout_ms <= 0) || pipe(pipes) != 0) {
         return 0;
     }
     if (fcntl(pipes[0], F_SETFD, FD_CLOEXEC) < 0
@@ -65,11 +63,21 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
     if (posix_spawnattr_init(&attr) != 0) {
         goto fail_actions;
     }
-    error = posix_spawn_file_actions_adddup2(&actions, pipes[1], STDOUT_FILENO);
+    error = wait_only
+        ? posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
+        : posix_spawn_file_actions_adddup2(&actions, pipes[1], STDOUT_FILENO);
     error |= posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
     error |= posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     /* Closing a descriptor that is not open is not an error for spawn. */
-    for (int fd = STDERR_FILENO + 1; fd < C300X_COMMAND_INHERITED_FD_LIMIT; fd++) {
+    /* Preserve the old service launcher close range, including higher FDs. */
+    long fd_limit = wait_only ? sysconf(_SC_OPEN_MAX) : C300X_COMMAND_INHERITED_FD_LIMIT;
+    if (fd_limit < 0) {
+        fd_limit = 1024;
+    }
+    if (fd_limit > 4096) {
+        fd_limit = 4096;
+    }
+    for (int fd = STDERR_FILENO + 1; fd < fd_limit; fd++) {
         error |= posix_spawn_file_actions_addclose(&actions, fd);
     }
     error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
@@ -87,7 +95,7 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
     }
     close(pipes[1]);
     job->output_fd = pipes[0];
-    job->deadline_ms = c300x_monotonic_ms() + timeout_ms;
+    job->deadline_ms = timeout_ms > 0 ? c300x_monotonic_ms() + timeout_ms : 0;
     return 1;
 
 fail_actions:
@@ -100,12 +108,47 @@ fail_pipe:
     return 0;
 }
 
+int c300x_command_job_start(struct c300x_command_job *job, const char *program,
+    const char *argument, int dynamic_homepage, int timeout_ms)
+{
+    char *argv[] = {(char *)program, (char *)argument, NULL};
+    return start_job(job, program, argv, dynamic_homepage, timeout_ms, 0);
+}
+
+int c300x_command_job_start_wait(struct c300x_command_job *job, const char *program,
+    char *const argv[], int timeout_ms)
+{
+    return start_job(job, program, argv, 0, timeout_ms, 1);
+}
+
+int c300x_command_job_start_output(struct c300x_command_job *job, const char *program,
+    char *const argv[], int timeout_ms)
+{
+    return start_job(job, program, argv, 0, timeout_ms, 0);
+}
+
+int c300x_command_job_start_capture(struct c300x_command_job *job, const char *program,
+    const char *argument, char *out, size_t out_len, int timeout_ms)
+{
+    if (out == NULL || out_len == 0
+        || !c300x_command_job_start(job, program, argument, 0, timeout_ms)) {
+        return 0;
+    }
+    out[0] = '\0';
+    job->capture_output = out;
+    job->capture_size = out_len;
+    return 1;
+}
+
 int c300x_command_job_prepare(const struct c300x_command_job *job, struct pollfd *fd)
 {
     long long remaining;
     *fd = (struct pollfd){.fd = job->output_fd, .events = POLLIN};
     if (job->pid <= 0) {
         return -1;
+    }
+    if (job->deadline_ms == 0) {
+        return 50;
     }
     /* Reap only while a job exists, including after stdout has closed. */
     remaining = job->deadline_ms - c300x_monotonic_ms();
@@ -135,12 +178,14 @@ void c300x_command_job_tick(struct c300x_command_job *job)
         char chunk[1024];
         ssize_t size = read(job->output_fd, chunk, sizeof(chunk));
         if (size > 0) {
-            size_t capacity = sizeof(job->output) - job->used - 1;
+            char *output = job->capture_output != NULL ? job->capture_output : job->output;
+            size_t size_limit = job->capture_output != NULL ? job->capture_size : sizeof(job->output);
+            size_t capacity = size_limit - job->used - 1;
             size_t copied = (size_t)size < capacity ? (size_t)size : capacity;
-            memcpy(job->output + job->used, chunk, copied);
+            memcpy(output + job->used, chunk, copied);
             job->used += copied;
-            job->output[job->used] = '\0';
-            if (copied != (size_t)size) {
+            output[job->used] = '\0';
+            if (copied != (size_t)size && job->capture_output == NULL) {
                 job->failed = 1;
             }
         } else if (size == 0 || (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
@@ -149,7 +194,8 @@ void c300x_command_job_tick(struct c300x_command_job *job)
             break;
         }
     }
-    if (!job->complete && (job->failed || c300x_monotonic_ms() >= job->deadline_ms)) {
+    if (!job->complete && (job->failed
+        || (job->deadline_ms > 0 && c300x_monotonic_ms() >= job->deadline_ms))) {
         job->failed = 1;
         job->complete = 1;
         if (reaped == 0 || (reaped < 0 && wait_error != ECHILD)) {
@@ -159,6 +205,7 @@ void c300x_command_job_tick(struct c300x_command_job *job)
     }
     if (reaped == job->pid || (reaped < 0 && wait_error == ECHILD)) {
         job->failed |= reaped < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0;
+        job->exit_status = reaped > 0 && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
         job->pid = 0;
         job->complete = 1;
         close_output(job);
@@ -173,125 +220,3 @@ void c300x_command_job_close(struct c300x_command_job *job)
     }
     close_output(job);
 }
-
-int c300x_command_capture(
-    const char *program,
-    const char *argument,
-    char *out,
-    size_t out_len,
-    int timeout_ms,
-    int *exit_code
-)
-{
-    const int interval_ms = 50;
-    int pipe_fd[2];
-    int status = 0;
-    int waited_ms = 0;
-    int child_done = 0;
-    size_t used = 0;
-    pid_t pid;
-
-    if (out_len > 0) {
-        out[0] = '\0';
-    }
-    if (exit_code != NULL) {
-        *exit_code = -1;
-    }
-    if (program == NULL || program[0] == '\0' || access(program, X_OK) != 0) {
-        return 0;
-    }
-    if (pipe(pipe_fd) != 0) {
-        return 0;
-    }
-    pid = fork();
-    if (pid < 0) {
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return 0;
-    }
-    if (pid == 0) {
-        int null_fd;
-        close(pipe_fd[0]);
-        (void)dup2(pipe_fd[1], STDOUT_FILENO);
-        null_fd = open("/dev/null", O_WRONLY);
-        if (null_fd >= 0) {
-            (void)dup2(null_fd, STDERR_FILENO);
-            close(null_fd);
-        }
-        close(pipe_fd[1]);
-        for (int fd = STDERR_FILENO + 1; fd < C300X_COMMAND_INHERITED_FD_LIMIT; fd++) {
-            close(fd);
-        }
-        execl(program, program, argument, (char *)NULL);
-        _exit(127);
-    }
-    close(pipe_fd[1]);
-    set_fd_nonblocking(pipe_fd[0]);
-
-    while (!child_done) {
-        for (;;) {
-            char discard[256];
-            size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-            ssize_t read_size = read(
-                pipe_fd[0],
-                capacity > 0 ? out + used : discard,
-                capacity > 0 ? capacity : sizeof(discard)
-            );
-            if (read_size > 0) {
-                if (capacity > 0) {
-                    used += (size_t)read_size;
-                }
-                continue;
-            }
-            if (read_size < 0 && errno == EINTR) {
-                continue;
-            }
-            break;
-        }
-        if (waitpid(pid, &status, WNOHANG) == pid) {
-            child_done = 1;
-            break;
-        }
-        if (timeout_ms != C300X_COMMAND_NO_DEADLINE && waited_ms >= timeout_ms) {
-            (void)kill(pid, SIGKILL);
-            (void)waitpid(pid, &status, 0);
-            close(pipe_fd[0]);
-            if (out_len > 0) {
-                out[used < out_len ? used : out_len - 1] = '\0';
-            }
-            return 0;
-        }
-        (void)poll(NULL, 0, interval_ms);
-        if (timeout_ms != C300X_COMMAND_NO_DEADLINE) {
-            waited_ms += interval_ms;
-        }
-    }
-    for (;;) {
-        char discard[256];
-        size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-        ssize_t read_size = read(
-            pipe_fd[0],
-            capacity > 0 ? out + used : discard,
-            capacity > 0 ? capacity : sizeof(discard)
-        );
-        if (read_size > 0) {
-            if (capacity > 0) {
-                used += (size_t)read_size;
-            }
-            continue;
-        }
-        if (read_size < 0 && errno == EINTR) {
-            continue;
-        }
-        break;
-    }
-    close(pipe_fd[0]);
-    if (out_len > 0) {
-        out[used < out_len ? used : out_len - 1] = '\0';
-    }
-    if (exit_code != NULL && WIFEXITED(status)) {
-        *exit_code = WEXITSTATUS(status);
-    }
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-

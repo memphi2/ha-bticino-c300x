@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=8cfee17e2e7b2905";
+} from "./c300x-translations.js?v=4d924b5589efb0fd";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,25 +15,27 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=8cfee17e2e7b2905";
+} from "./c300x-entity-resolver.js?v=4d924b5589efb0fd";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=8cfee17e2e7b2905";
-import { C300XCardActions } from "./c300x-card-actions.js?v=8cfee17e2e7b2905";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=8cfee17e2e7b2905";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=8cfee17e2e7b2905";
+} from "./c300x-card-editor.js?v=4d924b5589efb0fd";
+import { C300XCardActions } from "./c300x-card-actions.js?v=4d924b5589efb0fd";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=4d924b5589efb0fd";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=4d924b5589efb0fd";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=8cfee17e2e7b2905";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=8cfee17e2e7b2905";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=8cfee17e2e7b2905";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=8cfee17e2e7b2905";
-import { C300XCardMedia } from "./c300x-card-media.js?v=8cfee17e2e7b2905";
+} from "./c300x-state-model.js?v=4d924b5589efb0fd";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=4d924b5589efb0fd";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=4d924b5589efb0fd";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=4d924b5589efb0fd";
+import { C300XCardMedia } from "./c300x-card-media.js?v=4d924b5589efb0fd";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=4d924b5589efb0fd";
+import { mediaStamp } from "./c300x-media-translations.js?v=4d924b5589efb0fd";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -136,6 +138,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       getVolume: () => this._config?.ringback_volume,
     });
     this._ensureRendered();
+    this._pictureFrame?.sync();
     this._snapshots = new C300XStreamSnapshots({
       getHass: () => this._hass,
       showPreview: (url, capturedAt) => {
@@ -232,6 +235,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._ensureLocationChangeListener();
     this._maybeRefreshCardGain();
     this._ensureRendered();
+    this._pictureFrame?.sync();
     this._cardMedia?.configure();
     this._scheduleUpdate();
   }
@@ -342,6 +346,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._toggleMicMuted();
     });
     this._cardMedia = new C300XCardMedia(this);
+    this._pictureFrame = c300xFollowPictureSize(this, this._videoEl, () => this._resolvedCameraEntityId());
     this._updateState();
   }
 
@@ -554,7 +559,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (this._snapshotEl) {
       this._snapshotEl.hidden = !showSnapshot;
       const timestamp = this._snapshotUrl
-        ? new Date(this._snapshotCapturedAt * 1000).toLocaleString(this._hass?.language) : "";
+        ? mediaStamp(this._hass, this._snapshotCapturedAt) : "";
       this._snapshotEl.setAttribute("aria-label", timestamp ? `${this._label("last_image")}: ${timestamp}` : "");
     }
     if (showSnapshot || this._cardMedia?.browsing) this._emptyEl.style.display = "none";

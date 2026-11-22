@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.8.1 - Unreleased
+## v2.8.1 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
 

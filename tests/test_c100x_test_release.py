@@ -15,6 +15,7 @@ from test_agent_update import FakeHass, FakeUpdateApi
 from test_native_agent_update_legacy_bootstrap import _compile_updater
 
 from custom_components.bticino_c300x import agent_update, device_installer
+from custom_components.bticino_c300x.factory_login import factory_ssh_login
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -170,3 +171,7 @@ def test_complete_archive_contains_current_card_and_device_assets(monkeypatch, t
         assert manifest["c100x_only"] is True
         for item in manifest["files"]:
             assert zipped.read(item["path"])
+        defaults = [factory_ssh_login(model)[1].encode().lower() for model in ("C100X", "C300X")]
+        matches = [name for name in zipped.namelist() if not name.endswith("/")
+                   and any(value in zipped.read(name).lower() for value in defaults)]
+        assert not matches, f"Plaintext factory credential in archive paths: {matches}"

@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import shutil
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -105,3 +106,21 @@ def test_c100x_default_matches_original_158_shadow_offline():
                             text=True, check=True, timeout=5)
     matches = hmac.compare_digest(result.stdout.strip(), stored)
     assert matches
+
+
+def test_factory_passwords_are_not_plaintext_in_checkout():
+    root = Path(__file__).resolve().parents[1]
+    names = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root, text=True,
+    ).split("\0")
+    defaults = [factory_ssh_login(model)[1].encode().lower() for model in ("C100X", "C300X")]
+    # Report paths only, never decoded credentials or file contents on failure.
+    matches = []
+    for name in names:
+        path = root / name
+        if name and path.is_file():
+            content = path.read_bytes().lower()
+            if any(value in content for value in defaults):
+                matches.append(name)
+    assert not matches, f"Plaintext factory credential in tracked source paths: {matches}"

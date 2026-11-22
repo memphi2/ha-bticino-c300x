@@ -288,6 +288,9 @@ can use actual activation artifacts and target-bundle capability metadata
 without model detection; SSH/manual installation would need separate coverage.
 Until such a guard is implemented and tested, do not describe downgrade safety
 as complete. The manual full-removal prerequisite remains mandatory.
+This confirmed guard gap must be addressed separately before beta activation.
+The final beta candidate build, ABI check, build-lock regeneration and bundle
+staging are deferred; the current source review is not an activation approval.
 
 ## Focused Reproduction
 

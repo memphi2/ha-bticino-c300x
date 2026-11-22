@@ -20,18 +20,18 @@ C100XPage {
     }
     function aboutToHide() { generation++; alarmAvailable = false; dashboardAvailable = false }
     Column {
-        x: 24; y: 70; width: parent.width - 48; spacing: 16
+        x: 24; y: 70; width: parent.width - 48; spacing: 12
         Repeater {
-            model: ["HomeAssistant.qml", "Alarm.qml", "C100XSettings.qml"]
+            model: ["HomeAssistant.qml", "Alarm.qml", "C100XSettings.qml", "C100XMemos.qml"]
             Rectangle {
-                width: parent.width; height: 90
+                width: parent.width; height: 76
                 color: index === 1 ? "#123a69" : "#244a59"
                 enabled: index === 0 ? menu.dashboardAvailable : index === 1 ? menu.alarmAvailable : true
                 opacity: enabled ? 1 : 0.45
                 C100XText {
                     anchors.fill: parent; anchors.margins: 16
                     verticalAlignment: Text.AlignVCenter
-                    text: index === 0 ? "Home Assistant" : index === 1 ? "Alarmo" : Labels.label(c100xHost.language, "settings")
+                    text: index === 0 ? "Home Assistant" : index === 1 ? "Alarmo" : Labels.label(c100xHost.language, index === 2 ? "settings" : "memos")
                     color: "white"; font.pixelSize: 26; elide: Text.ElideRight
                 }
                 C100XAction { anchors.fill: parent; onClicked: menu.openPage(modelData) }

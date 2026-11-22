@@ -4,47 +4,18 @@ import json
 from pathlib import Path
 import sys
 
-from PyQt5.QtCore import QIODevice, Qt, QTimer, QUrl
+from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QGuiApplication
-from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PyQt5.QtNetwork import QNetworkAccessManager
 from PyQt5.QtQml import QQmlComponent, QQmlEngine, QQmlExpression, QQmlNetworkAccessManagerFactory
 from PyQt5.QtQuick import QQuickView
 from PyQt5.QtTest import QTest
+from c100x_memory_reply import MemoryReply
 
 pending = []
 requests = []
 ack_ok = False
 replies = []
-
-
-class MemoryReply(QNetworkReply):
-    def __init__(self, manager, operation, request, payload):
-        super().__init__(manager)
-        self.data = json.dumps(payload).encode()
-        self.setOperation(operation)
-        self.setRequest(request)
-        self.setUrl(request.url())
-        self.setAttribute(QNetworkRequest.HttpStatusCodeAttribute, 200)
-        self.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
-        self.open(QIODevice.ReadOnly | QIODevice.Unbuffered)
-        QTimer.singleShot(0, self.complete)
-
-    def complete(self):
-        if self.isFinished():
-            return
-        self.setFinished(True)
-        self.readyRead.emit()
-        self.finished.emit()
-
-    def abort(self):
-        self.setFinished(True)
-
-    def bytesAvailable(self):
-        return len(self.data) + super().bytesAvailable()
-
-    def readData(self, size):
-        chunk, self.data = self.data[:size], self.data[size:]
-        return chunk
 
 
 class OfflineNetwork(QNetworkAccessManager):

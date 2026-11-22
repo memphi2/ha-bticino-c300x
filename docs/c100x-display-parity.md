@@ -22,7 +22,7 @@ contract. No device/HA access is authorized by this offline work.
 | `C300XAlerts.qml` | Notify display, bounded wake/sound, acknowledge | Call/protected-page preemption, no deferred effects |
 | `C300XRingerControl.qml` | Confirmed mute/unmute through stock AudioState | Core hook independent of dashboard visibility |
 | Patched General settings | Vendor beep setting plus HA feedback preference | Keep stock InstallerPage beep control; additional settings keyed |
-| Patched MemoPage and `c300x_memos.js` | Existing additional memo/message UI where backend supports it | C100X has no stock MemoPage; needs a separate verified adapter, never a fake vendor page |
+| Patched MemoPage and `c300x_memos.js` | Separate text-memo list/detail, bounded refresh and scroll implemented offline | C100X has no stock MemoPage; text display is read-only. Recording, playback, edit/delete/read-state mutation remain unverified and are not exposed |
 
 Shared JS retains the existing HA snapshot, allowlisted command, confirmation,
 timeout and sleeping-event-request contracts. No display refresh polling is
@@ -124,10 +124,22 @@ rejected: the stock queued beep lacks a verified call-safe cancellation contract
 This proves neither device wake behavior nor enabled Notify delivery.
 
 This build is not yet an installed or advertised display adapter. Supervised
-restart/readiness/automatic rollback and memo integration remain incomplete.
+restart/readiness/automatic rollback remain incomplete.
 Notify's silent/wake UI is implemented offline; production activation and sound
 remain unavailable. The script reports `runtime_verified: false`;
 successful disk installation alone must not enable a capability.
+
+`C100XMemos.qml` now provides a separate read-only text list/detail page through
+the existing loopback `/ui/memos` endpoint. It bounds responses/entries, cancels
+on call/hide, times out after eight seconds and performs no polling or writes.
+The original answering-machine binary names `memos_text`, `message.txt`,
+`msg_info.ini`, `Message Information`, `Read`, `Date`, `UnixTime` and `MediaType`;
+original `libbtobjects.so` exports AnsweringMachine getMemos/addTextMemo and
+voice-record/play methods. These establish static storage/API evidence, not
+successful C100X recording/playback or write acknowledgement. Consequently no
+voice controls or store mutations are exposed. Host tests cover all 64 text
+entries, long plain-text detail scrolling, refresh/error/cancellation, reserved
+keys and a rendered screenshot; original Qt compiles the component.
 
 The bridge now holds a generation-bound sleeping connection to the native
 C100X-only loopback presence endpoint. It reports the vendor guard, cancels on
@@ -144,7 +156,7 @@ flags must stay false until the matching hook, command acknowledgement,
 state readback, transactional installation and rollback are implemented and
 tested together. Host Qt5 5.15 tests are useful but are not firmware Qt5 5.10.1
 or hardware proof. Separately, `tests/test_c100x_firmware_compile.py` compiles
-all 27 generated QML files using original ARM Qt 5.10.1 under QEMU (four tests,
+all 28 generated QML files using original ARM Qt 5.10.1 under QEMU (four tests,
 including invalid syntax/import/property controls). This is compile-only:
 no instances, binding evaluation, vendor/platform plugins or GUI startup.
 Vendor imports, restart supervision, wake/sound and memo

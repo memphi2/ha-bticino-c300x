@@ -47,7 +47,7 @@ Never replace its framebuffer, input configuration or watchdog with guesses.
 
 ## Acceptance Boundaries
 
-Implemented locally: separate QtQuick 2.7 conversion of all 13 page/display
+Implemented locally: separate QtQuick 2.7 conversion of 14 page/display
 modules, C100X-owned frame/text/switch/skin components, physical-key focus,
 scroll reveal, numeric edit/confirm/cancel and history-bucket selection. The
 shared HA JS and original Qt4 pages are unchanged. Focused host Qt5 tests load
@@ -112,9 +112,21 @@ false-success response abort removal without reboot. Already-stock 1.5.8 can
 be removed without a payload. Retired generation directories remain on disk
 because a running GUI may still reference them; removal does not signal it.
 
+The Notify overlay now has a separate Qt5/key adapter using the unchanged shared
+expiry/acknowledgement controller. Original `libbtobjects.so` exports the
+ScreenState simulateClick/disableState/stateChangedInt API; runtime shape checks
+guard access. Up/Down scroll, Return/Back acknowledge, and C/H/1-8 propagate to
+EventManager. Focus returns after dismissal, but never overrides call focus.
+Host Qt5 tests cover wake ownership/expiry, user interaction, call preemption,
+failed acknowledgement/retry, real intercepted XHR and a nonblank screenshot.
+All requests stay in a memory-only transport. Sound-bearing commands are
+rejected: the stock queued beep lacks a verified call-safe cancellation contract.
+This proves neither device wake behavior nor enabled Notify delivery.
+
 This build is not yet an installed or advertised display adapter. Supervised
-restart/readiness/automatic rollback, Notify and memo integration remain
-incomplete. The script reports `runtime_verified: false`;
+restart/readiness/automatic rollback and memo integration remain incomplete.
+Notify's silent/wake UI is implemented offline; production activation and sound
+remain unavailable. The script reports `runtime_verified: false`;
 successful disk installation alone must not enable a capability.
 
 The bridge now holds a generation-bound sleeping connection to the native
@@ -125,14 +137,14 @@ and checks the exact generation requested by an observer. A live blocked GUI
 is distinguished from an idle one. This introduces no periodic disk writes.
 Presence explicitly reports `installation_verified: false`: it is one input
 to a future supervised transaction, not permission to restart or advertise
-display capabilities. Both previous reviewed hook recipes remain recoverable.
+display capabilities. All three previous reviewed hook recipes remain recoverable.
 
 This matrix is a target, not a declaration that every row works. Capability
 flags must stay false until the matching hook, command acknowledgement,
 state readback, transactional installation and rollback are implemented and
 tested together. Host Qt5 5.15 tests are useful but are not firmware Qt5 5.10.1
 or hardware proof. Separately, `tests/test_c100x_firmware_compile.py` compiles
-all 25 generated QML files using original ARM Qt 5.10.1 under QEMU (four tests,
+all 27 generated QML files using original ARM Qt 5.10.1 under QEMU (four tests,
 including invalid syntax/import/property controls). This is compile-only:
 no instances, binding evaluation, vendor/platform plugins or GUI startup.
 Vendor imports, restart supervision, wake/sound and memo

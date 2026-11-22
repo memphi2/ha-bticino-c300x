@@ -53,6 +53,14 @@ class Host(QObject):
 
 class VendorEnums(QObject):
     @pyqtProperty(int, constant=True)
+    def Normal(self):
+        return 1
+
+    @pyqtProperty(int, constant=True)
+    def ScreenOff(self):
+        return 0
+
+    @pyqtProperty(int, constant=True)
     def RingtoneMute(self):
         return 17
 
@@ -70,6 +78,7 @@ engine.rootContext().setContextProperty("c100xHost", host)
 enums = VendorEnums()
 engine.rootContext().setContextProperty("AudioState", enums)
 engine.rootContext().setContextProperty("Commissioning", enums)
+engine.rootContext().setContextProperty("ScreenState", enums)
 errors = []
 engine.warnings.connect(lambda warnings: errors.extend(error.toString() for error in warnings
     if "Implicitly defined onFoo properties in Connections are deprecated" not in error.toString()))

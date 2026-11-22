@@ -78,7 +78,7 @@ def rehash_source(source):
 
 
 @pytest.mark.parametrize("action", ["apply", "restore"])
-@pytest.mark.parametrize("recipe", ["original", "chrome"])
+@pytest.mark.parametrize("recipe", ["original", "chrome", "presence"])
 def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree, action, recipe):
     source = tree[0] / "source"
     hook = source / "hooks/main.inc"
@@ -87,13 +87,22 @@ def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree,
         legacy = (ROOT / "tests/fixtures/c100x_main_hook_v1.inc").read_bytes()
         expected = "e69c0dc115759e4b1593fd324e8619ff516d66f5aa3fcc6e459417cc9bbdcd5b"
     else:
-        legacy = current.replace(b'            item.generation = "@RELEASE@".substring(7)\n', b"")
-        expected = "3c2b1bfcae4cea8fa4a901f3cc9133d64250931ae346423137cbda72851529ad"
+        legacy = current.replace(b'            item.normalState = ScreenState.Normal\n'
+                                 b'            item.offState = ScreenState.ScreenOff\n'
+                                 b'            item.focusWindow = window\n', b"")
+        start = legacy.index(b"    Loader {\n        id: c100xAlerts\n")
+        end = legacy.index(b"    Component {\n", start)
+        legacy = legacy[:start] + legacy[end:]
+        if recipe == "chrome":
+            legacy = legacy.replace(b'            item.generation = "@RELEASE@".substring(7)\n', b"")
+            expected = "3c2b1bfcae4cea8fa4a901f3cc9133d64250931ae346423137cbda72851529ad"
+        else:
+            expected = "ec6b59e4f2f3224daca7151ce09719a0675c02f5df4a135631363ca2c8738851"
     assert hashlib.sha256(legacy).hexdigest() == expected
     hook.write_bytes(legacy)
     rehash_source(source)
     run(tree, "apply")
-    assert b"item.generation" not in (tree[1] / "main.qml").read_bytes()
+    assert b"c100xAlerts" not in (tree[1] / "main.qml").read_bytes()
     hook.write_bytes(current)
     rehash_source(source)
     run(tree, action)

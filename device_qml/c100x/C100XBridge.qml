@@ -9,6 +9,9 @@ Item {
     property var events: null
     property int muteState: -1
     property int commissionedState: -1
+    property int normalState: -1
+    property int offState: -1
+    property var focusWindow: null
     property bool running: false
     property bool stopped: false
     property var ringer: null

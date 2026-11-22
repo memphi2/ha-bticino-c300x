@@ -15,7 +15,7 @@ Item {
             function disableState(state) { isRingtoneMute = false }
         }
     }
-    QtObject {
+    Item {
         id: eventManager
         property bool callInProgress: false
         property bool callActive: false

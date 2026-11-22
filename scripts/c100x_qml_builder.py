@@ -12,7 +12,7 @@ import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = (
-    "Alarm.qml", "HomeAssistant.qml", "C300XAgenda.qml", "C300XChecks.qml",
+    "Alarm.qml", "HomeAssistant.qml", "C300XAgenda.qml", "C300XAlerts.qml", "C300XChecks.qml",
     "C300XDetailControl.qml", "C300XEnergy.qml", "C300XEnergyConsumers.qml",
     "C300XEnergyReadout.qml", "C300XEnergySums.qml", "C300XLeaveHome.qml",
     "C300XOptionalPages.qml", "C300XPageNavigation.qml", "C300XSituations.qml",
@@ -25,7 +25,53 @@ TYPES = {
 }
 
 
+def adapt_alerts(source: str) -> str:
+    """Keep the shared expiry/ack controller; replace only verified vendor IO."""
+    for anchor in (
+        "    property bool blocked: true", "    function soundReady() {",
+        "    function waitForCommand() {", "valid = !!Alerts.validate(command, new Date().getTime())",
+        "if (stopped || Alerts.runtimeFor(root)) return", "Component.onCompleted: initialize()",
+        "target: global.screenState", "global.screenState.disableState(ScreenState.Normal)",
+    ):
+        if source.count(anchor) != 1:
+            raise ValueError("Shared alert contract changed; review the C100X adaptation")
+    source = source.replace("import QtQuick 1.1", "import QtQuick 2.7")
+    source = source.replace("import BtObjects 2.0\n", "").replace("import BtClass 1.0\n", "")
+    source = source.replace("property variant", "property var").replace("trsl.language", "c100xHost.language")
+    source = source.replace("    property bool blocked: true", """    property bool completed: false
+    readonly property var vendorScreen: c100xHost && c100xHost.vendor ? c100xHost.vendor.screenState || null : null
+    readonly property bool screenReady: !!vendorScreen && c100xHost.normalState >= 0 && c100xHost.offState >= 0
+        && typeof vendorScreen.state === "number" && typeof vendorScreen.screensaverInterval === "number"
+        && typeof vendorScreen.simulateClick === "function" && typeof vendorScreen.disableState === "function"
+        && typeof vendorScreen.stateChangedInt === "function"
+    readonly property bool blocked: !screenReady || !c100xHost.running || c100xHost.blocked
+    onScreenReadyChanged: { if (screenReady) initialize(); else preempt() }
+    C100XAlertKeys { anchors.fill: parent; controller: root; scroll: messageScroll }""")
+    start = source.index("    function soundReady() {")
+    end = source.index("    function waitForCommand() {", start)
+    source = source[:start] + """    // The stock queued beep has no verified call-safe cancellation contract.
+    function soundReady() { return false }
+    function shortBeep(stillCurrent) { return false }
+
+""" + source[end:]
+    source = source.replace("valid = !!Alerts.validate(command, new Date().getTime())",
+                            "valid = !!Alerts.validate(command, new Date().getTime()) && command.sound_duration === 0")
+    source = source.replace("if (stopped || Alerts.runtimeFor(root)) return",
+                            "if (!completed || !screenReady || stopped || Alerts.runtimeFor(root)) return")
+    source = source.replace("global.screenState", "root.vendorScreen")
+    source = source.replace("target: root.vendorScreen", "target: root.screenReady ? root.vendorScreen : null")
+    source = source.replace("ScreenState.Normal", "c100xHost.normalState").replace("ScreenState.ScreenOff", "c100xHost.offState")
+    source = source.replace("Component.onCompleted: initialize()", "Component.onCompleted: { completed = true; initialize() }")
+    source = source.replace("id: messageScroll", 'id: messageScroll\n            objectName: "alertMessageScroll"')
+    source = source.replace("id: acknowledgeButton", 'id: acknowledgeButton\n            objectName: "alertAcknowledge"')
+    if "global." in source or "ScreenState." in source or "AudioState." in source or "BtClass" in source:
+        raise ValueError("Unadapted C100X alert vendor dependency")
+    return source
+
+
 def adapt_page(name: str, source: str) -> str:
+    if name == "C300XAlerts.qml":
+        return adapt_alerts(source)
     source = source.replace("import QtQuick 1.1", "import QtQuick 2.7")
     for module in ("Components 1.0", "Components.Styles 1.0", "BtObjects 2.0"):
         source = source.replace(f"import {module}\n", "")

@@ -26,9 +26,20 @@
             item.events = eventManager
             item.muteState = AudioState.RingtoneMute
             item.commissionedState = Commissioning.Commissioned
+            item.normalState = ScreenState.Normal
+            item.offState = ScreenState.ScreenOff
+            item.focusWindow = window
             item.generation = "@RELEASE@".substring(7)
             item.running = true
         }
+    }
+    Loader {
+        id: c100xAlerts
+        anchors.fill: parent
+        z: 100
+        active: !!c100xHost && c100xHost.running
+        source: "@RELEASE@/C300XAlerts.qml"
+        Keys.forwardTo: [eventManager]
     }
     Component {
         id: c100xPage

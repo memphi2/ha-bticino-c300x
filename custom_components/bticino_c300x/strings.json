@@ -767,16 +767,16 @@
       },
       "camera_quality": {
         "title": "Camera quality",
-        "description": "Size, bit rate and frame rate of the high camera stream; on firmware 3.0.x of the low stream, also received by the Door Entry app. On older firmware with **Camera resolution** set to Low, Home Assistant receives the low stream, which these settings do not change. Saving a change requires a normal device reboot, not just an agent restart; allow about a minute.\n\n960x576 is opt-in. Applying or restoring it verifies an original backup on the device, never distributed; original permissions and ownership are preserved. The geometry patch includes only project-authored patch logic and checks, no vendor code or firmware files.\n\nThe device currently runs with: {running}",
+        "description": "These settings affect the High stream under **Camera resolution**, or Low on firmware 3.0.x. Saving changes automatically reboots the device; allow about a minute.\n\nCurrently running: {running}",
         "data": {
           "size": "Picture size",
           "bitrate_kbps": "Bit rate",
           "fps": "Frame rate"
         },
         "data_description": {
-          "size": "High: original 688x480 factory cut-out or 704x576 with all 576 lines; 704x576 does not match the LCD's 5:3 proportions. Optional 960x576 requires an exact verified C300X firmware 1.7.19 or 2.0.2 media executable, each with its own original/patched full SHA-256 pair. Live video is device-tested on 1.7.19; 2.0.2 is checked offline only. It scales the 704x576 crop before the existing encoder to match the 800x480 LCD, without adding native camera detail. 960x576 answering-machine recordings are unverified. Low on firmware 3.0.x is unchanged: factory 400x288; other sizes remain untested on such a device.",
-          "bitrate_kbps": "From the factory 800 kbit/s, at most 3000. The low stream on firmware 3.0.x: 180 from the factory, 100-2000. More gives a sharper picture and uses more network.",
-          "fps": "From the factory 15 frames per second; the high stream takes at most 24, since at 25 the device sends only about 8. The low stream on firmware 3.0.x: 10 from the factory, at most 25."
+          "size": "Sizes depend on firmware and the installed device agent. Optional 960x576 matches the display's proportions when offered.",
+          "bitrate_kbps": "Higher values improve picture quality but increase network traffic.",
+          "fps": "Higher values give smoother motion; the selector shows the supported limits."
         }
       },
       "speech": {

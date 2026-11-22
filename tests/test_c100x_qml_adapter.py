@@ -86,6 +86,38 @@ def test_pages_load_in_isolated_qt5(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.parametrize("damage", ["none", "missing", "syntax"])
+def test_readiness_compiles_every_additional_page_and_rejects_broken_input(tmp_path, damage):
+    if importlib.util.find_spec("PyQt5") is None:
+        pytest.skip("Optional host PyQt5 absent")
+    source = tmp_path / "c100x"
+    builder.build(source)
+    ready = (source / "C100XReady.qml").read_text()
+    for page in set(builder.PAGES) - {"C300XAlerts.qml"}:
+        assert f'"{page}"' in ready
+    # Memos is a separate entry, not merely a dependency of the HA dashboard.
+    page = source / "C100XMemos.qml"
+    if damage == "missing":
+        page.unlink()
+    elif damage == "syntax":
+        page.write_text("import QtQuick 2.7\nItem { invalid syntax }\n")
+    code = '''import sys
+from PyQt5.QtCore import QUrl
+from PyQt5.QtGui import QGuiApplication
+from PyQt5.QtQml import QQmlComponent, QQmlEngine
+app = QGuiApplication([])
+engine = QQmlEngine()
+component = QQmlComponent(engine, QUrl.fromLocalFile(sys.argv[1]))
+item = component.create()
+assert item is not None, component.errors()
+assert item.property("ready") == (sys.argv[2] == "none")
+'''
+    result = subprocess.run([sys.executable, "-c", code, str(source / "C100XReady.qml"), damage],
+                            env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_page_layouts_and_hardware_key_focus_in_qt5(tmp_path):
     if importlib.util.find_spec("PyQt5") is None:
         pytest.skip("Optional host PyQt5 absent")

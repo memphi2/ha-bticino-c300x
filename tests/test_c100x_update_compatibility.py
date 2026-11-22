@@ -55,6 +55,7 @@ def test_ssh_guard_before_first_write_and_successful_retry(tmp_path, monkeypatch
     binary.write_bytes(b"synthetic never executed")
     remote_dir = "/synthetic-agent"
     manifest = {
+        "c100x_only": True,
         "c100x_compatible": variant not in {"unmarked", "missing"},
         "files": [{"path": "device_agent/armhf/c300x-agent-native",
                    "sha256": sha256(binary.read_bytes()).hexdigest()}],

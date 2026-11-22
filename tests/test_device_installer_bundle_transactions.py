@@ -13,6 +13,9 @@ from custom_components.bticino_c300x.agent_update import compare_agent_bundle
 
 @pytest.fixture
 def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Keep shared Qt4 transaction/failure coverage; C100X package admission is
+    # exercised without this double in test_c100x_ssh_admission.py.
+    monkeypatch.setattr(installer, "_verify_c100x_bundle_sync", lambda *_: None)
     component = tmp_path / "component"
     manifest = {
         "agent_version": "same-version", "api_version": "1",
@@ -22,7 +25,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     for name in (
         "armhf/c300x-agent-native", "init/c300x-native-agent",
         "scripts/qml_patch.sh", "scripts/remove_agent.sh", "scripts/bootstrap_firewall.sh",
-        *(f"qml/{name}" for name in installer.DISPLAY_FILES), "bundle.json",
+        *(f"qml/{name}" for name in installer.DISPLAY_FILES), "qml/c100x_bundle.sh", "bundle.json",
     ):
         path = component / "device_agent" / name
         path.parent.mkdir(parents=True, exist_ok=True)

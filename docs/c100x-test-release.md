@@ -39,7 +39,7 @@ GUI activation/readiness/recovery on the device remains unproven. See the
 | --- | --- |
 | Local artifact name | Builder defaults to `ha-bticino-c100x-issue51-local.zip` and refuses the normal C300X asset name in this branch. |
 | Device bundle | `c100x_compatible: true` and `c100x_only: true` participate in the bundle hash. Neither is a hardware-support or signature assertion. |
-| HA update / SSH repair | This branch rejects the C100X-only package for C300X, including firmware 3.0.6, before upload/write. API updates also reject unknown model identity. |
+| HA update / SSH repair | This branch rejects the C100X-only package for C300X, including firmware 3.0.6, before upload/write. SSH installation requires a manifest, strict C100X declarations and matching agent hash; missing, invalid or relabelled metadata cannot relax the code-level C100X restriction. API updates also reject unknown model identity. |
 | Native updater | The new updater rejects C100X-only bundles on a non-C100X device and rejects unmarked incompatible bundles on C100X. Older updaters cannot enforce a field they never implemented: use the reviewed HA preflight, never a raw old updater upload. |
 | Legacy shell installer | Blocked in this checkout: its generic upload path has no C100X model preflight. Do not remove the policy file to enable it. |
 | Public publication | `publish_release.py` refuses this checkout while `c100x-test-policy.json` exists. There is no bypass flag. The existing workflow additionally requires canonical-main validation evidence; this branch is not a working alternate release channel. |
@@ -181,6 +181,10 @@ The preparation ran focused groups, not a full suite:
   bootstrap and C100X-only test-package isolation. The rebuilt manifest is
   6,532 bytes with 29 entries, below the old 8,192-byte reader limit. Old updaters
   still lack the new model guard; these delivery tests do not remove that limit.
+- The SSH admission follow-up passed 199 focused installer/package tests and six
+  display-kind helper tests. Real staged metadata is tested with missing,
+  truncated, invalid and relabelled manifests; rejected targets perform no device
+  writes or service start/stop. Missing packaged metadata aborts before SSH.
 
 The ARM rebuild passes the 24,576-byte stack limit (maximum 24,200 bytes) and
 ABI checks against original 1.7.19, 2.0.2, 3.0.6 and C100X 1.5.8 sysroots.

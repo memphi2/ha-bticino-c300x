@@ -277,6 +277,8 @@ def test_bootstrap_install_uses_python_ssh_client(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
+    # Exercise shared Qt4 installation mechanics, not C100X branch admission.
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: None)
     remote_dir = "/home/bticino/cfg/extra/custom-agent"
 
     class FakeSshClient:
@@ -446,6 +448,8 @@ def test_bootstrap_install_fails_when_startup_link_is_missing(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
+    # Admission has its own real-stager tests; inject failure after that boundary.
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: None)
     remote_dir = "/home/bticino/cfg/extra/custom-agent"
 
     class FakeSshClient:
@@ -684,14 +688,12 @@ def test_base_ssh_client_methods_are_abstract() -> None:
         raise AssertionError("abstract SSH client method did not raise")
 
 
-def test_first_and_optional_existing_helpers(tmp_path: Path) -> None:
+def test_required_existing_helper(tmp_path: Path) -> None:
     missing = tmp_path / "missing"
     present = tmp_path / "present"
     present.write_text("payload", encoding="utf-8")
 
     assert device_installer._first_existing(missing, present) == present
-    assert device_installer._optional_existing(missing, present) == present
-    assert device_installer._optional_existing(missing) is None
     try:
         device_installer._first_existing(missing)
     except C300XDeviceInstallError as err:
@@ -1256,6 +1258,8 @@ def test_merge_existing_device_config_keeps_device_owned_sections() -> None:
 def test_install_reads_remote_config_and_writes_merged_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Isolate configuration preservation from the C100X package admission test.
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: None)
     old = json.dumps({"mqtt": {"enabled": True, "host": "broker.lan"}})
 
     class FakeSshClient:

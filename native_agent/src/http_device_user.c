@@ -1,6 +1,7 @@
 #include "http_device_user.h"
 #include "c300x_agent.h"
 #include "command_transaction.h"
+#include "device_detect.h"
 #include "device_routing.h"
 #include "device_user.h"
 #include "http_util.h"
@@ -158,7 +159,7 @@ static int start_status(struct c300x_http_maintenance *owner, int fd,
     (void)c300x_device_user_read_status(&state->status);
     memset(&state->routing, 0, sizeof(state->routing));
     (void)c300x_device_routing_read_status(&state->routing);
-    if (!c300x_device_display_is_qt5()
+    if (c300x_device_display_files_patchable()
         && access(state->config->maintenance_qml_patch_script, X_OK) == 0
         && c300x_command_job_start_capture(&owner->job,
             state->config->maintenance_qml_patch_script, "status", state->output, 4096, 10000)) {
@@ -202,9 +203,9 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
         send_error(fd, "device_user_update_failed", error);
         return 0;
     }
-    /* The label is written into the display's QML files. A Qt 5 display has
-     * none on disk: user and routing are set up, only the label is not shown. */
-    if (!c300x_device_display_is_qt5()) {
+    /* The label is written into the display's QML files. Without files the
+     * patch can edit, user and routing are set up, only the label is not shown. */
+    if (c300x_device_display_files_patchable()) {
         const char *body;
         int ok = 0;
         if (!c300x_command_transaction_capture(state->config->maintenance_qml_patch_script,

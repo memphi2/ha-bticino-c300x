@@ -2,6 +2,7 @@
 #include "activation_discovery.h"
 #include "agent_update.h"
 #include "c300x_agent.h"
+#include "device_detect.h"
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "http_maintenance.h"
@@ -2770,7 +2771,7 @@ static void handle_camera_resolution(
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_high_resolution\"}\n");
             return;
         }
-        if (enabled && c300x_device_display_is_qt5()) {
+        if (enabled && c300x_device_camera_resolution_fixed()) {
             send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"high_resolution_unsupported\"}\n");
             return;
         }
@@ -5325,12 +5326,14 @@ static void api_capabilities(
     }
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
+        .device_model = c300x_device_model_name(c300x_device_model()),
+        .display_kind = c300x_display_kind_name(c300x_device_display_kind()),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
-        .camera_resolution_fixed = c300x_device_display_is_qt5(),
+        .camera_resolution_fixed = c300x_device_camera_resolution_fixed(),
         .announcements_supported = runtime != NULL && c300x_announce_supported(&runtime->announce),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),

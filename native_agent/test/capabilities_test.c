@@ -9,6 +9,8 @@ int main(void)
     struct c300x_config config = {0};
     struct c300x_capabilities_context context = {
         .device_id = "synthetic-id",
+        .device_model = "C100X",
+        .display_kind = "qt5_ondisk",
         .device_firmware = "1.7.19\"test",
         .bundle_hash = "",
         .activations_count = 3,

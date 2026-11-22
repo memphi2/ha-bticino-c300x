@@ -5,6 +5,7 @@
 #endif
 
 #include "c300x_agent.h"
+#include "device_detect.h"
 #include "json_util.h"
 #include "string_util.h"
 
@@ -771,19 +772,6 @@ int c300x_config_listen_valid(const struct c300x_config *config, char *error, si
     return 1;
 }
 
-/* Firmware 3.0.x has a Qt 5 display with its QML built into the program; the
- * earlier ones have Qt 4 and QML files the Display patch edits. The Qt 5
- * library is the mark, not a missing QML folder: a folder can be missing on
- * an older device for other reasons. */
-#ifndef C300X_QT5_DISPLAY_MARKER
-#define C300X_QT5_DISPLAY_MARKER "/usr/lib/libQt5Core.so.5"
-#endif
-
-int c300x_device_display_is_qt5(void)
-{
-    return access(C300X_QT5_DISPLAY_MARKER, F_OK) == 0;
-}
-
 int c300x_load_config(
     const char *config_path,
     struct c300x_config *config,
@@ -1482,7 +1470,7 @@ int c300x_load_config(
             return 0;
         }
     }
-    if (c300x_device_display_is_qt5()) {
+    if (c300x_device_camera_resolution_fixed()) {
         /* Firmware 3.0.x: bt_av_media only fans out the low-res video branch
          * (multiudp_low_res); the high-res branch (#0) has no multiudpsink, so
          * its stream never reaches the agent. Low-res is fixed there, whatever
@@ -1664,9 +1652,9 @@ int c300x_load_config(
         set_error(error, error_len, "maintenance.adminToken must be set when maintenance actions are enabled");
         return 0;
     }
-    if (c300x_device_display_is_qt5()) {
-        /* A Qt 5 display has no QML files: there is no Display patch to offer,
-         * so its maintenance actions are not advertised either. */
+    if (!c300x_device_display_files_patchable()) {
+        /* No display files the Display patch can edit: there is no patch to
+         * offer, so its maintenance actions are not advertised either. */
         config->maintenance_qml_patch_enabled = 0;
     }
     if (config->maintenance_qml_patch_enabled && config->maintenance_qml_patch_script[0] == '\0') {
@@ -2397,7 +2385,7 @@ int c300x_save_camera_high_resolution(struct c300x_config *live, int enabled,
         set_error(error, error_len, "highResolution must be a boolean");
         return 0;
     }
-    if (enabled && c300x_device_display_is_qt5()) {
+    if (enabled && c300x_device_camera_resolution_fixed()) {
         set_error(error, error_len, "high resolution is not available on this firmware");
         return 0;
     }

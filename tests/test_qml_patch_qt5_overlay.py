@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -276,3 +278,29 @@ def test_the_display_errors_are_kept_in_a_bounded_log(device: Device, tmp_path: 
     log = (tmp_path / "display-qt5.log").read_bytes()
     assert log.startswith(error.encode() + b"\n")
     assert len(log) == 65536
+
+
+def test_the_daemons_signals_still_reach_the_display_started_with_the_overlay(device: Device, tmp_path: Path) -> None:
+    device.ok("apply")
+    starts = tmp_path / "starts"
+    program = tmp_path / "bin/gui/BtClass"
+    program.parent.mkdir(parents=True, exist_ok=True)
+    program.write_text(
+        f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{starts}"\n'
+        f"trap 'echo usr1 >> \"{starts}\"; exit 0' USR1\n"
+        "i=0\nwhile [ $i -lt 100 ]; do sleep 0.1; i=$((i + 1)); done\nexit 0\n"
+    )
+    program.chmod(0o755)
+    text = device.wrapper.read_text()
+    device.wrapper.write_text(text.replace(
+        'trap "killall BtClass; exit 0" SIGTERM\n',
+        'trap "killall BtClass; exit 0" SIGTERM\ntrap "killall -USR1 BtClass; wait" USR1\n', 1))
+    wrapper = subprocess.Popen(["sh", str(device.wrapper)], cwd=tmp_path)
+    deadline = time.monotonic() + 10
+    while not starts.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    time.sleep(0.3)
+    wrapper.send_signal(signal.SIGUSR1)
+    assert wrapper.wait(timeout=10) == 0
+    assert starts.read_text().splitlines() == [str(device.lib), "usr1"]
+    assert device.ok("status")["qt5_overlay"] == "active"

@@ -6,11 +6,12 @@
 
 Fixed:
 
-- On-demand video no longer ends by itself one to three seconds after it
-  started. The agent closed a viewer's connection when it took the video a
-  little late, for example over WiFi; it now skips that piece of video. A
-  viewer that takes no video for 5 seconds is still disconnected. Needs the
-  agent update.
+- Short pauses in receiving on-demand video, for example over WiFi, no longer
+  immediately close the connection when the next packet has not started.
+  The agent skips that packet and lets the viewer recover. Media writes stay
+  bounded for other viewers. An unfinished partial packet or five seconds
+  without sending a complete media packet still closes the connection.
+  Needs the agent update.
 
 ## v2.8.1 - 2026-11-22
 

@@ -452,14 +452,10 @@ int c300x_device_routing_read_status(
         set_status_error(status, "routing_target_read_failed");
         return 0;
     }
-    if (variant_matching(data, len, 1) != NULL) {
+    if (variant_matching(data, len, 1) != NULL
+        && backup_is_stock(backup_path, target_path)) {
         status->patched = 1;
         c300x_copy_string(status->state, sizeof(status->state), "patched");
-        free(data);
-        return 1;
-    }
-    if (variant_matching(data, len, 0) != NULL) {
-        c300x_copy_string(status->state, sizeof(status->state), "stock");
         free(data);
         return 1;
     }
@@ -480,6 +476,7 @@ int c300x_device_routing_apply(
     char target_tmp_path[C300X_MAX_PATH_LEN];
     unsigned char *data = NULL;
     size_t len = 0;
+    char sha256[65];
     const struct routing_variant *variant;
     mode_t original_mode;
     uid_t original_uid;
@@ -514,22 +511,15 @@ int c300x_device_routing_apply(
         set_error(error, error_len, "routing_target_stat_failed");
         return 0;
     }
-    if (
-        (!status->backup_present || !backup_is_stock(backup_path, target_path))
-        && !c300x_patch_copy_file_exact(target_path, backup_path, original_mode)
-    ) {
-        set_error(error, error_len, "routing_backup_failed");
-        return 0;
-    }
     if (!c300x_patch_read_file(target_path, &data, &len)) {
         set_error(error, error_len, "routing_target_read_failed");
         return 0;
     }
-    variant = variant_for_stock_sha(status->file_sha256);
-    if (variant == NULL) {
-        variant = variant_matching(data, len, 0);
-    }
-    if (variant == NULL) {
+    /* Authenticate the bytes actually being patched before touching recovery
+     * material. Range signatures alone also match foreign/modified builds. */
+    if (!routing_regular_file(target_path, len)
+        || !c300x_sha256_bytes_hex(data, len, sha256, sizeof(sha256))
+        || (variant = variant_for_stock_sha(sha256)) == NULL) {
         free(data);
         set_error(error, error_len, "unsupported_routing_target_hash");
         return 0;
@@ -555,6 +545,13 @@ int c300x_device_routing_apply(
             set_error(error, error_len, patch->name);
             return 0;
         }
+    }
+    if ((!status->backup_present || !backup_is_stock(backup_path, target_path))
+        && (!c300x_patch_copy_file_exact(target_path, backup_path, original_mode)
+            || !backup_is_stock(backup_path, target_path))) {
+        free(data);
+        set_error(error, error_len, "routing_backup_failed");
+        return 0;
     }
     if (!c300x_patch_remount_root("rw")) {
         free(data);

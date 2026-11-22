@@ -75,7 +75,7 @@
         },
         "data_description": {
           "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "Default 480, the height of the device video stream and of the display. Range 64-480.",
+          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -188,7 +188,7 @@
         },
         "data_description": {
           "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "Default 480, the height of the device video stream and of the display. Range 64-480.",
+          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -696,7 +696,7 @@
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
-      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480.",
+      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480. The picture is read from the 800×480 display.",
       "invalid_auth": "The C300X rejected the access key. Enter the current key.",
       "wrong_device": "This address belongs to a different C300X. The existing device was not changed.",
       "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
@@ -759,7 +759,7 @@
         },
         "data_description": {
           "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "Default 480, the height of the device video stream and of the display. Range 64-480.",
+          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -1136,7 +1136,7 @@
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading.",
       "required": "This field is required.",
-      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480.",
+      "invalid_snapshot_option": "Enter whole numbers: 1-300 seconds, 1-365 days, width 64-800 and height 64-480. The picture is read from the 800×480 display.",
       "invalid_auth": "The C300X rejected the access key. Enter the current key.",
       "wrong_device": "This address belongs to a different C300X. The existing device was not changed.",
       "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",

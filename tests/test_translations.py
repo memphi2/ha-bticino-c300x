@@ -45,6 +45,23 @@ def test_the_activations_form_says_that_further_locks_and_lights_are_added_there
             assert all(part in first for part in hint), (path.name, step)
 
 
+def test_the_snapshot_size_says_why_480_is_the_limit_and_what_keeps_a_576_picture_in_shape() -> None:
+    """A user tried 576 for a 704x576 camera picture; the form says the display sets the limit."""
+
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for area, step in (
+            ("config", "user_visitor_snapshot"), ("config", "reconfigure_visitor_snapshot"),
+            ("options", "visitor_snapshot"),
+        ):
+            help_texts = data[area]["step"][step]["data_description"]
+            height = help_texts["snapshot_height"]
+            assert "800×480" in height and "704×576" in height and "587×480" in height, (path.name, step)
+            assert "800×480" in help_texts["snapshot_width"]
+        for area in ("config", "options"):
+            assert "800×480" in data[area]["error"]["invalid_snapshot_option"], path.name
+
+
 def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> None:
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)

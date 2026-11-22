@@ -38,6 +38,13 @@ RESERVED_DEVICE_PATCH_PATHS = (
 sys.path.insert(0, str(ROOT / "scripts"))
 
 
+@pytest.fixture(autouse=True)
+def local_metadata_environment(monkeypatch):
+    # These synthetic metadata tests model local builds, even when pytest runs in CI.
+    for name in ("CI", "GITHUB_ACTIONS", "C300X_VALIDATION_EVIDENCE", "C300X_VALIDATION_EVIDENCE_SHA256"):
+        monkeypatch.delenv(name, raising=False)
+
+
 def _load_release_builder():
     spec = importlib.util.spec_from_file_location("build_hacs_release", SCRIPT)
     assert spec is not None
@@ -112,7 +119,9 @@ def test_release_metadata_records_resolved_current_ha(monkeypatch):
     monkeypatch.setenv("C300X_VALIDATED_CURRENT_HA_VERSION", "2026.12.2")
     evidence = writer._lts_evidence(tag="v2.2.0", native_agent_reused_from=None)
     assert evidence["current_homeassistant"] == "2026.12.2"
-    assert evidence["validated_homeassistant"] == ["2026.10.0", "2026.12.2"]
+    assert evidence["validated_homeassistant"] == []
+    assert evidence["validation_status"] == "local-unverified"
+    assert evidence["validated_jobs"] == []
 
 
 @pytest.mark.parametrize("version", ["", "2026.11.0b1", "2026.9.4", "latest"])
@@ -459,17 +468,15 @@ def test_release_requires_browser_checks_at_the_verified_commit() -> None:
     release = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
     browser = yaml.safe_load((ROOT / ".github/workflows/browser.yml").read_text())
     jobs = release["jobs"]
-    assert "browser" in jobs["publish"]["needs"]
-    gate = jobs["browser"]
-    assert gate["uses"] == "./.github/workflows/browser.yml"
-    assert gate["needs"] == "main-validation"
-    assert gate["with"]["ref"] == "${{ needs.main-validation.outputs.commit }}"
-    assert "if" not in gate
-    assert not gate.get("continue-on-error", False)
+    assert jobs["publish"]["needs"] == ["main-validation"]
+    assert set(jobs) == {"main-validation", "publish"}
     main = jobs["main-validation"]
     assert main["outputs"]["commit"] == "${{ steps.verified-main.outputs.commit }}"
     verify = next(step for step in main["steps"] if step.get("id") == "verified-main")
-    assert 'echo "commit=$tag_sha" >> "$GITHUB_OUTPUT"' in verify["run"]
+    assert 'python scripts/verify_main_validation.py --tag "$RELEASE_TAG"' in verify["run"]
+    assert "if" not in main and "if" not in verify
+    assert not main.get("continue-on-error", False)
+    assert not verify.get("continue-on-error", False)
     # PyYAML's YAML 1.1 loader reads the workflow key "on" as True.
     assert browser[True]["workflow_call"]["inputs"]["ref"]["required"] is True
     browser_job = browser["jobs"]["browser"]
@@ -590,9 +597,11 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
     assert metadata["lts_evidence"] == {
         "release": tag,
+        "validation_status": "local-unverified",
+        "validation_evidence": None,
         "min_homeassistant": "2026.10.0",
         "current_homeassistant": "2026.11.1",
-        "validated_homeassistant": ["2026.10.0", "2026.11.1"],
+        "validated_homeassistant": [],
         "python": "3.14",
         "firmware_target": "1.7.x, 2.0.2 or 3.0.6 (experimental)",
         "native_agent_rebuilt": True,
@@ -603,7 +612,7 @@ def test_release_assets_are_reproducible_for_same_zip(
             "fingerprint": None,
             "files": {},
         },
-        "validated_jobs": ["min-ha", "current-ha", "hacs", "hassfest"],
+        "validated_jobs": [],
     }
 
     checksum_lines = (first / "SHA256SUMS").read_text(encoding="utf-8").splitlines()

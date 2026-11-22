@@ -174,8 +174,8 @@ def test_unsupported_platform_fails_before_download(monkeypatch):
     assert setup_turbojpeg.main() == 1
 
 
-@pytest.mark.parametrize("workflow", ["validate.yml", "release.yml"])
-def test_both_workflows_keep_matrix_and_verify_turbojpeg_before_gate(workflow):
+@pytest.mark.parametrize("workflow", ["validate.yml"])
+def test_canonical_validation_keeps_matrix_and_verifies_turbojpeg_before_gate(workflow):
     document = yaml.safe_load((setup_turbojpeg.ROOT / ".github/workflows" / workflow).read_text())
     job = document["jobs"]["validate"]
     assert {leg["name"] for leg in job["strategy"]["matrix"]["include"]} == {"min-ha", "current-ha"}

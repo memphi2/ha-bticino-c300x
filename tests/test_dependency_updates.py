@@ -156,7 +156,7 @@ def test_current_target_cannot_be_frozen(policy_repo: Path) -> None:
     assert check_dependency_updates(policy_repo)
 
 
-@pytest.mark.parametrize("name", ["validate.yml", "release.yml"])
+@pytest.mark.parametrize("name", ["validate.yml"])
 def test_ci_must_install_the_monitored_manifest(policy_repo: Path, name: str) -> None:
     def mutate(workflow):
         steps = workflow["jobs"]["validate"]["steps"]
@@ -172,7 +172,7 @@ def test_ci_must_install_the_monitored_manifest(policy_repo: Path, name: str) ->
     )
 
 
-@pytest.mark.parametrize("name", ["validate.yml", "release.yml"])
+@pytest.mark.parametrize("name", ["validate.yml"])
 def test_ci_must_pair_each_target_with_its_tool_set(
     policy_repo: Path, name: str
 ) -> None:
@@ -194,6 +194,48 @@ def test_pip_compile_pair_cannot_return(policy_repo: Path) -> None:
     assert any(
         "pip-compile" in failure for failure in check_dependency_updates(policy_repo)
     )
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda jobs: jobs["publish"].update(needs=[]),
+    lambda jobs: jobs["publish"].update({"if": "always()"}),
+    lambda jobs: jobs["publish"].update({"continue-on-error": True}),
+    lambda jobs: jobs["main-validation"].update({"if": "false"}),
+    lambda jobs: jobs["main-validation"].update({"continue-on-error": True}),
+    lambda jobs: jobs["main-validation"]["outputs"].update({"evidence-digest": "unverified"}),
+    lambda jobs: jobs["main-validation"]["steps"][0]["with"].update(ref="${{ github.ref_name }}"),
+    lambda jobs: jobs["publish"]["steps"][0]["with"].update(ref="${{ github.ref_name }}"),
+    lambda jobs: next(step for step in jobs["main-validation"]["steps"] if step.get("id") == "verified-main").update(run="echo success"),
+    lambda jobs: next(step for step in jobs["main-validation"]["steps"] if step.get("id") == "verified-main").update(run="python scripts/verify_main_validation.py || true"),
+    lambda jobs: next(step for step in jobs["publish"]["steps"] if step.get("name") == "Generate release metadata").update(env={}),
+])
+def test_release_must_consume_required_canonical_evidence(policy_repo, mutation):
+    _rewrite_yaml(policy_repo / ".github/workflows/release.yml", lambda workflow: mutation(workflow["jobs"]))
+    assert check_dependency_updates(policy_repo)
+
+
+@pytest.mark.parametrize("name", ["Verify canonical validation evidence", "Recheck canonical evidence before publication"])
+@pytest.mark.parametrize("change", ["remove", "skip", "ignore-failure", "command", "digest", "order"])
+def test_release_rechecks_cannot_be_bypassed(policy_repo, name, change):
+    def mutate(workflow):
+        steps = workflow["jobs"]["publish"]["steps"]
+        step = next(step for step in steps if step.get("name") == name)
+        if change == "remove":
+            steps.remove(step)
+        elif change == "skip":
+            step["if"] = "false"
+        elif change == "ignore-failure":
+            step["continue-on-error"] = True
+        elif change == "command":
+            step["run"] += "\ntrue"
+        elif change == "digest":
+            step["env"]["EVIDENCE_DIGEST"] = "unverified"
+        else:
+            steps.remove(step)
+            steps.append(step)
+
+    _rewrite_yaml(policy_repo / ".github/workflows/release.yml", mutate)
+    assert check_dependency_updates(policy_repo)
 
 
 @pytest.mark.parametrize(

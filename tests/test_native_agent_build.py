@@ -170,5 +170,5 @@ def test_the_checked_runtime_functions_are_the_ones_the_agent_loads():
 
 def test_the_abi_check_covers_the_newer_firmware_when_it_is_there():
     makefile = (ROOT / "native_agent/Makefile").read_text(encoding="utf-8")
-    assert "C300X_ABI_SYSROOTS ?= $(wildcard ../../c300x-fwpatch/work/rootfs-3.0.6)" in makefile
+    assert "C300X_ABI_SYSROOTS ?= $(wildcard ../../c300x-fwpatch/work/rootfs-3.0.6 ../../c300x-fwpatch/work/rootfs-c100x-1.5.8)" in makefile
     assert "$(foreach root,$(C300X_DEVICE_SYSROOT) $(C300X_ABI_SYSROOTS),--sysroot $(root))" in makefile

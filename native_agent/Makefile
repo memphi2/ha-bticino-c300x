@@ -7,8 +7,9 @@ CURL_INCLUDE_DIR ?= $(shell pkg-config --variable=includedir libcurl 2>/dev/null
 CURL_CPPFLAGS := $(if $(CURL_INCLUDE_DIR),-idirafter $(CURL_INCLUDE_DIR))
 AUTO_C300X_DEVICE_SYSROOT := $(firstword $(wildcard ../../c300x-fwpatch/work/rootfs-1.7.19))
 C300X_DEVICE_SYSROOT ?= $(AUTO_C300X_DEVICE_SYSROOT)
-# Newer firmware the same binary must run on. It is built against the oldest.
-C300X_ABI_SYSROOTS ?= $(wildcard ../../c300x-fwpatch/work/rootfs-3.0.6)
+# Newer firmware the same binary must run on, the C100X included. It is built
+# against the oldest.
+C300X_ABI_SYSROOTS ?= $(wildcard ../../c300x-fwpatch/work/rootfs-3.0.6 ../../c300x-fwpatch/work/rootfs-c100x-1.5.8)
 AGENT_VERSION ?= $(shell tr -d '[:space:]' < VERSION)
 BUILD_DIR := build
 HOST_BUILD_DIR := $(BUILD_DIR)/host

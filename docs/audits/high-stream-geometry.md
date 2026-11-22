@@ -44,6 +44,25 @@ raw H.264 output does not provide usable timing metadata: FFprobe reports
 There is also no encoded pixel-aspect-ratio field in that capture. No optical,
 letterboxing, concurrent-branch or teardown conclusion follows from it.
 
+### Visible Picture Check
+
+A subsequent isolated device test used an existing camera preview cached in
+HA, not a newly activated camera stream. The host prepared a 704x576 JPEG;
+twelve copies travelled over SSH stdin into `jpegdec`, the IPU transform and
+the original VPU encoder. The H.264 output travelled back over stdout. No
+image was saved on the device and no manufacturer service was restarted.
+
+All twelve output frames decoded without error at 960x576. Visual inspection
+shows the supplied camera scene rather than a blank buffer. Noise is already
+present in the source preview. Boot ID, original media PID and executable hash
+were unchanged, and the media bridge remained idle afterward.
+
+This proves visible picture processing at the candidate output size. It is a
+still-picture laboratory test involving JPEG decoding, not the requested
+production media path and not a proposal to transcode camera video. The source
+preview had already been resized by HA, so this test cannot establish optical
+aspect ratio, source detail, live camera negotiation or frame-rate performance.
+
 ## Actual Application Trial
 
 A temporary RAM-only wrapper and a hash-pinned preload library were prepared
@@ -72,6 +91,7 @@ After recovery, direct checks confirmed:
 - No experimental library in the media process mappings.
 - Unchanged `bt_answering_machine` and `stack_open.xml` hashes.
 - A read-only root filesystem and an idle media bridge.
+- A subsequent 180-second observation with unchanged boot ID and media PID.
 
 ## Remaining Gate
 

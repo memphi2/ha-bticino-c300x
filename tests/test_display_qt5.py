@@ -247,6 +247,18 @@ def test_pack_writes_a_file_qt_finds_every_page_in(cli: Path, tmp_path: Path) ->
     assert not list(tmp_path.glob("*.tmp"))
 
 
+def test_pack_is_content_deterministic_without_clock_timestamps(cli: Path, tmp_path: Path) -> None:
+    _write_tree(tmp_path / "gui", {"MainApp.qml": b"Item {}\n"})
+    first, second = tmp_path / "first.rcc", tmp_path / "second.rcc"
+    for out in (first, second):
+        assert _run(cli, "pack", tmp_path / "gui", out, "MainApp.qml")[0] == 0
+    assert first.read_bytes() == second.read_bytes()
+    body = first.read_bytes()
+    _, _, tree, _, names = struct.unpack(">4sIIII", body[:20])
+    for offset in range(tree, names, 22):
+        assert body[offset + 14:offset + 22] == bytes(8)
+
+
 @pytest.mark.parametrize(
     "case",
     ["missing", "symlink", "directory", "duplicate", "file_and_folder", "escape"],

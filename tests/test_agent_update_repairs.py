@@ -2753,7 +2753,7 @@ def test_restore_external_patch_state_reloads_gui_after_runtime_update_when_ui_a
         )
     )
 
-    assert api.calls == ["reload_gui"]
+    assert api.calls == ["qml_status", "reload_gui"]
 
 
 def test_restore_external_patch_state_skips_gui_reload_after_runtime_update_when_ui_inactive() -> None:
@@ -2773,7 +2773,26 @@ def test_restore_external_patch_state_skips_gui_reload_after_runtime_update_when
         )
     )
 
-    assert api.calls == []
+    assert api.calls == ["qml_status"]
+
+
+@pytest.mark.parametrize("full_patch", [False, True])
+def test_restore_external_patch_state_reconciles_qt5_runtime_even_without_optional_pages(full_patch) -> None:
+    api = FakePatchApi()
+    api.qml_status["qt5_overlay"] = "active"
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    state = _ExternalPatchState(
+        qml_patch_required=full_patch, firewall_patched=False,
+        firewall_status_known=True, ipv6_firewall_patched=False,
+    )
+    asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(runtime_changed=True),
+    ))
+    assert api.calls == [
+        "qml_status", "apply_qml_core",
+        *(["apply_qml", "qml_status"] if full_patch else []),
+        "reload_gui", "qml_status",
+    ]
 
 
 def test_restore_external_patch_state_reenables_ipv6_endpoint_before_apply() -> None:
@@ -2984,7 +3003,7 @@ def test_ssh_install_log_text_names_the_kind_of_the_cause_but_not_its_text() -> 
         {"firewall_patch_changed": True, "ipv6_firewall_patch_changed": True},
         ["apply_firewall", "set_ipv6_firewall_enabled:True", "apply_ipv6_firewall"],
     ),
-    ({"runtime_changed": True}, ["reload_gui"]),
+    ({"runtime_changed": True}, ["qml_status", "reload_gui"]),
 ])
 def test_patch_restore_after_update_waits_while_the_agent_is_busy(
     monkeypatch, changes, expected

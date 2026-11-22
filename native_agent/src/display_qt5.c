@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "device_patch_io.h"
@@ -64,7 +63,6 @@ struct qt5_node {
     uint32_t data_offset;
     unsigned char *data;
     size_t data_len;
-    uint64_t mtime_ms;
 };
 
 static uint32_t be16(const unsigned char *p)
@@ -629,7 +627,7 @@ static int pack_order(struct qt5_node *nodes, int count, int *order)
 }
 
 /* Opened without following a link; the old device glibc has no stat calls. */
-static const char *pack_read(struct qt5_node *node, const char *root, uint64_t mtime_ms)
+static const char *pack_read(struct qt5_node *node, const char *root)
 {
     char path[QT5_MAX_PATH_LEN * 2];
     unsigned char *data;
@@ -665,7 +663,6 @@ static const char *pack_read(struct qt5_node *node, const char *root, uint64_t m
     }
     node->data = data;
     node->data_len = len;
-    node->mtime_ms = mtime_ms;
     return NULL;
 }
 
@@ -716,8 +713,8 @@ static const char *pack_write(struct qt5_node *nodes, int count, const int *orde
             put16(entry + 8, 1);
             put32(entry + 10, node->data_offset);
         }
-        put32(entry + 14, (uint32_t)(node->mtime_ms >> 32));
-        put32(entry + 18, (uint32_t)node->mtime_ms);
+        /* Zero timestamps make identical content comparable during repair.
+         * The display wrapper disables the QML disk cache for this overlay. */
         if (slot > 0) {
             p = file + QT5_HEADER_LEN + tree_len + node->name_offset;
             put16(p, (uint32_t)strlen(node->name));
@@ -770,7 +767,7 @@ static int pack(int argc, char **argv)
     }
     for (int i = 1; i < count && error == NULL; i++) {
         if (!nodes[i].dir) {
-            error = pack_read(&nodes[i], argv[0], (uint64_t)time(NULL) * 1000u);
+            error = pack_read(&nodes[i], argv[0]);
             files++;
         }
     }

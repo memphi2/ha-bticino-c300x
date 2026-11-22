@@ -1303,8 +1303,13 @@ qt5_prepare() {
 qt5_overlay_state() {
     if [ -e "$QT5_RCC.failed" ]; then
         printf 'failed\n'
-    elif [ -f "$QT5_RCC" ] || grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null; then
+    elif [ -s "$QT5_RCC" ] && [ -s "$QT5_OVERLAY_LIB" ] && [ -x "$GUI_WRAPPER" ] \
+        && [ -s "$QT5_WRAPPER_BACKUP" ] && grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null; then
         printf 'active\n'
+    elif [ -e "$QT5_RCC" ] || [ -e "$QT5_OVERLAY_LIB" ] \
+        || { [ ! -f "$GUI_WRAPPER" ] && [ -f "$QT5_WRAPPER_BACKUP" ]; } \
+        || grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null; then
+        printf 'incomplete\n'
     else
         printf 'off\n'
     fi
@@ -1332,11 +1337,11 @@ qt5_wrapper_text() {
         }
         { print }
         END { if (!done) exit 1 }
-    ' "$QT5_WRAPPER_BACKUP"
+    ' "${1:-$QT5_WRAPPER_BACKUP}"
 }
 
 qt5_wrapper_install() {
-    if ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
+    if [ -f "$GUI_WRAPPER" ] && ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
         mkdir -p "$(dirname "$QT5_WRAPPER_BACKUP")"
         cp -p "$GUI_WRAPPER" "$QT5_WRAPPER_BACKUP.tmp"
         mv -f "$QT5_WRAPPER_BACKUP.tmp" "$QT5_WRAPPER_BACKUP"
@@ -1348,6 +1353,7 @@ qt5_wrapper_install() {
     fi
     if cmp -s "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"; then
         rm -f "$GUI_WRAPPER.c300x.tmp"
+        [ -x "$GUI_WRAPPER" ] || chmod 755 "$GUI_WRAPPER"
         return 0
     fi
     chmod 755 "$GUI_WRAPPER.c300x.tmp"
@@ -1355,7 +1361,7 @@ qt5_wrapper_install() {
 }
 
 qt5_wrapper_restore() {
-    if ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null; then
+    if [ -f "$GUI_WRAPPER" ] && ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
         return 0
     fi
     if [ ! -f "$QT5_WRAPPER_BACKUP" ]; then
@@ -1381,14 +1387,18 @@ qt5_transaction_save() {
     mkdir "$WRITE_TRANSACTION/.qt5"
     for qt5_artifact in rcc wrapper library original failed; do
         qt5_artifact_path "$qt5_artifact"
-        if [ -L "$qt5_target" ] || { [ -e "$qt5_target" ] && [ ! -f "$qt5_target" ]; }; then
-            printf 'Unsupported display activation file: %s\n' "$qt5_target" >&2
-            return 1
-        fi
+        qt5_require_regular
         if [ -f "$qt5_target" ]; then
             cp -p "$qt5_target" "$WRITE_TRANSACTION/.qt5/$qt5_artifact"
         fi
     done
+}
+
+qt5_require_regular() {
+    if [ -L "$qt5_target" ] || { [ -e "$qt5_target" ] && [ ! -f "$qt5_target" ]; }; then
+        printf 'Unsupported display activation file: %s\n' "$qt5_target" >&2
+        return 1
+    fi
 }
 
 qt5_restore_artifact() {
@@ -1420,11 +1430,8 @@ qt5_transaction_restore() {
 }
 
 # Every file that differs from the firmware's, back in Qt 5 form, into the
-# resource file; with none left the start script is the vendor one again.
-qt5_publish() {
-    if [ "$QT5_DISPLAY" != "1" ]; then
-        return 0
-    fi
+# resource file. The deterministic candidate also repairs activation-only drift.
+qt5_pack_resources() {
     qt5_stage="$QT5_ROOT/rcc-stage.$$"
     rm -rf "$qt5_stage"
     mkdir -p "$qt5_stage"
@@ -1444,17 +1451,11 @@ qt5_publish() {
         qt5_files="$qt5_files $rel"
     done
     rm -f "$qt5_stage/.original"
-    QT5_PUBLISHED=1
-    : > "$QT5_RCC.failed"
     if [ -z "$qt5_files" ]; then
         rm -rf "$qt5_stage"
-        rm -f "$QT5_RCC"
-        qt5_wrapper_restore
-        rm -f "$QT5_OVERLAY_LIB"
-        rm -f "$QT5_RCC.failed"
         return
     fi
-    qt5_result="$("$AGENT_BIN" --display-qt5 pack "$qt5_stage" "$QT5_RCC" $qt5_files 2>/dev/null || true)"
+    qt5_result="$("$AGENT_BIN" --display-qt5 pack "$qt5_stage" "$1" $qt5_files 2>/dev/null || true)"
     rm -rf "$qt5_stage"
     case "$qt5_result" in
         *'"ok":true'*) ;;
@@ -1463,7 +1464,10 @@ qt5_publish() {
             return 1
             ;;
     esac
-    qt5_result="$("$AGENT_BIN" --display-qt5 overlay "$QT5_OVERLAY_LIB" 2>/dev/null || true)"
+}
+
+qt5_write_overlay() {
+    qt5_result="$("$AGENT_BIN" --display-qt5 overlay "$1" 2>/dev/null || true)"
     case "$qt5_result" in
         *'"ok":true'*) ;;
         *)
@@ -1471,6 +1475,53 @@ qt5_publish() {
             return 1
             ;;
     esac
+}
+
+qt5_check_activation() {
+    QT5_ACTIVATION_CHANGED=0
+    trap cleanup_staging EXIT
+    mkdir -p "$STAGING_DIR"
+    for qt5_artifact in rcc wrapper library original failed; do
+        qt5_artifact_path "$qt5_artifact"
+        qt5_require_regular
+    done
+    qt5_pack_resources "$STAGING_DIR/.qt5-rcc"
+    if [ -z "$qt5_files" ]; then
+        if [ "$(qt5_overlay_state)" != "off" ]; then
+            QT5_ACTIVATION_CHANGED=1
+        fi
+        return
+    fi
+    qt5_write_overlay "$STAGING_DIR/.qt5-library"
+    qt5_wrapper_source="$QT5_WRAPPER_BACKUP"
+    if [ -f "$GUI_WRAPPER" ] && ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
+        qt5_wrapper_source="$GUI_WRAPPER"
+    fi
+    if ! qt5_wrapper_text "$qt5_wrapper_source" > "$STAGING_DIR/.qt5-wrapper"; then
+        printf 'No usable original display start script\n' >&2
+        return 1
+    fi
+    if ! cmp -s "$STAGING_DIR/.qt5-rcc" "$QT5_RCC" \
+        || ! cmp -s "$STAGING_DIR/.qt5-library" "$QT5_OVERLAY_LIB" \
+        || ! cmp -s "$STAGING_DIR/.qt5-wrapper" "$GUI_WRAPPER" \
+        || [ ! -x "$GUI_WRAPPER" ]; then
+        QT5_ACTIVATION_CHANGED=1
+    fi
+}
+
+qt5_publish() {
+    [ "$QT5_DISPLAY" = "1" ] || return 0
+    QT5_PUBLISHED=1
+    : > "$QT5_RCC.failed"
+    qt5_pack_resources "$QT5_RCC"
+    if [ -z "$qt5_files" ]; then
+        rm -f "$QT5_RCC"
+        qt5_wrapper_restore
+        rm -f "$QT5_OVERLAY_LIB"
+        rm -f "$QT5_RCC.failed"
+        return
+    fi
+    qt5_write_overlay "$QT5_OVERLAY_LIB"
     qt5_wrapper_install
     if [ -f "$WRITE_TRANSACTION/.qt5/failed" ]; then
         cp -p "$WRITE_TRANSACTION/.qt5/failed" "$QT5_RCC.failed"
@@ -1609,6 +1660,11 @@ apply_generated_patch_if_changed() {
     shift
     if [ "$changed_count" -gt 0 ]; then
         run_write_action "$@"
+    elif [ "$QT5_DISPLAY" = "1" ]; then
+        qt5_check_activation
+        if [ "$QT5_ACTIVATION_CHANGED" = "1" ]; then
+            run_write_action "$@"
+        fi
     fi
 }
 
@@ -1946,24 +2002,21 @@ case "$ACTION" in
         ;;
     restore)
         changed_count="$(restore_changed_count)"
-        if [ "$changed_count" -gt 0 ]; then
-            run_write_action restore_patch_files
-        fi
+        apply_generated_patch_if_changed "$changed_count" restore_patch_files
+        cleanup_staging
         touch_patch restore
         json_write_status
         ;;
     core-restore)
         changed_count="$(restore_core_changed_count)"
-        if [ "$changed_count" -gt 0 ]; then
-            run_write_action restore_core_patch_files
-        fi
+        apply_generated_patch_if_changed "$changed_count" restore_core_patch_files
+        cleanup_staging
         json_write_status
         ;;
     media-user-label-restore)
         changed_count="$(restore_media_user_label_changed_count)"
-        if [ "$changed_count" -gt 0 ]; then
-            run_write_action restore_media_user_label_files
-        fi
+        apply_generated_patch_if_changed "$changed_count" restore_media_user_label_files
+        cleanup_staging
         json_write_status
         ;;
     restore-all)

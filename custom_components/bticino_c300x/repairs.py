@@ -1056,8 +1056,7 @@ async def _async_restore_external_patch_state(
     """Re-apply active external patches only when their patch source changed.
 
     ``setup_data`` is the setup payload of the agent just installed. When it
-    says the agent offers no Display patch, as on the Qt 5 display of firmware
-    3.0.x, the display steps are skipped.
+    says the agent offers no Display patch, the display steps are skipped.
     """
 
     api = entry.runtime_data.api
@@ -1077,8 +1076,15 @@ async def _async_restore_external_patch_state(
                 patch_state.qml_patch_required or entry.data.get(CONF_AGENT_UPDATE_QML_PENDING) is True
             ),
         )
-    elif changed.runtime_changed and patch_state.qml_patch_required:
-        await busy_retry(api.async_reload_gui)
+    elif changed.runtime_changed:
+        status = await busy_retry(api.async_qml_patch_status)
+        if status.get("qt5_overlay") is not None:
+            # The preload library is embedded in the runtime, not the QML group.
+            await async_restore_qml_patches_after_update(
+                entry, apply_full_patch=patch_state.qml_patch_required,
+            )
+        elif patch_state.qml_patch_required:
+            await busy_retry(api.async_reload_gui)
 
 
 def _ssh_install_schema(ask_login: bool) -> vol.Schema:

@@ -177,7 +177,7 @@ def test_a_left_over_overlay_reads_as_partial_and_restore_all_removes_it(device:
     device.wrapper.write_text(WRAPPER.replace("\n./bin", "\n# c300x-qrc-overlay\n./bin"))
     device.wrapper_backup.write_text(WRAPPER)
     status = device.ok("status")
-    assert (status["state"], status["qt5_overlay"]) == ("partial", "active")
+    assert (status["state"], status["qt5_overlay"]) == ("partial", "incomplete")
     assert device.ok("restore-all")["qt5_overlay"] == "off"
     assert device.wrapper.read_text() == WRAPPER
 

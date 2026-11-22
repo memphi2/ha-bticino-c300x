@@ -19,6 +19,8 @@ Display:
   startup wrapper, preload library and quarantine state for rollback. Failed
   overlays remain disabled through updates and partial restores; retrying
   requires an explicit full removal and apply after investigating the error.
+  Apply repairs missing or outdated activation files even when the pages did
+  not change, and runtime-only updates refresh the display preload too.
   Offline fault injection does not establish device or watchdog safety.
 
 ## v2.8.2 - 2026-11-22

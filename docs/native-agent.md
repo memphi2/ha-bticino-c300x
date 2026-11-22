@@ -341,7 +341,13 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   original wrapper backup and quarantine marker as one rollback unit. A
   failed rollback retains its recovery copies and leaves the overlay blocked.
   Updates and partial restores never clear quarantine; full removal followed
-  by an explicit apply is required to retry. Not yet tested on a 3.0.6 device;
+  by an explicit apply is required to retry. Apply also compares the RCC,
+  embedded preload and generated wrapper when QML is unchanged, repairing
+  missing or stale activation files. RCC timestamps are zero and disk caching
+  is disabled, so unchanged resources compare byte-for-byte without a restart.
+  Runtime-only updates reconcile the preload even with optional pages disabled.
+  `qt5_overlay: incomplete` means activation files are missing or incomplete.
+  Not yet tested on a 3.0.6 device;
   process presence is not proof of QML readiness or watchdog safety.
 - Its `bt_av_media` sends only the low-resolution video stream on to other
   receivers. The camera is fixed to that stream there

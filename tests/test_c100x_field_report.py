@@ -45,3 +45,24 @@ def test_reported_ringer_values_and_companion_route_preservation(tmp_path):
         str(ROOT / "native_agent/src/string_util.c"), "-o", str(binary),
     ], check=True, capture_output=True, text=True, timeout=30)
     subprocess.run([str(binary)], check=True, capture_output=True, text=True, timeout=5)
+
+
+def test_original_vendor_provisioning_exists_independently_of_companion():
+    original("c100x-1.5.8")
+    firmware = FIRMWARE_ROOT / "rootfs-c100x-1.5.8"
+    assert (firmware / "etc/flexisip").readlink() == Path("/home/bticino/cfg/extra/90/flexisip")
+    config = (firmware / "home/bticino/cfg/flexisip.conf").read_text()
+    assert "datasource=/etc/flexisip/users/users.db.txt" in config
+    assert "static-records-file=/etc/flexisip/users/route.conf" in config
+    cloud = (firmware / "home/bticino/bin/bt_eliot").read_bytes()
+    for marker in (b"sipAccounts", b"START ask sip users", b"Sip user result: %s (%d)", b"/var/tmp/user_list.txt"):
+        assert b"\0" + marker + b"\0" in cloud
+    # Static handoff markers document the vendor path, not a particular
+    # reported account's author or a successful live provisioning session.
+    for version, identity in (("c100x-1.5.8", b"c100x"), ("1.7.19", b"c300x")):
+        original(version)
+        binary = (FIRMWARE_ROOT / ("rootfs-" + version) / "home/bticino/bin/bt_answering_machine").read_bytes()
+        for marker in (identity, b"SipUsers", b"Refresh sip user list", b"/var/tmp/user_list.txt",
+                       b"/etc/flexisip/users/users.db.txt", b"/etc/flexisip/users/accounts.txt",
+                       b"/etc/flexisip/users/route_int.conf", b"/etc/flexisip/users/route_ext.conf"):
+            assert b"\0" + marker + b"\0" in binary

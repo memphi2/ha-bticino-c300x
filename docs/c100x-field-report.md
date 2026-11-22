@@ -8,9 +8,16 @@ developer. Nothing from this branch was installed on that device.
 ## Evidence And Limits
 
 - The reported device is C100X Door Entry 1.5.8, ARMv7, with Companion already
-  running. Companion changed the SIP users and route files. `c100x` and
-  `companion` were reportedly added by Companion; their presence must not be
-  treated as evidence of untouched vendor provisioning.
+  running. Official app/cloud deployment provisions vendor SIP accounts, as
+  clarified by the maintainer and supported by the original firmware below.
+  The comment explicitly attributes both `c100x` and `companion` to Companion,
+  but that attribution is not independently established and must not be adopted
+  as the origin of the vendor accounts. Account presence alone proves no author.
+- The posted active route contains a `companion` destination alongside two app
+  destinations. The contributor reports changes to `route.conf`, `route_int.conf`
+  and `users.db.txt`; no before/after files were supplied. Distinguish that
+  reported modification history from the directly visible additional target.
+  Preserve all existing provisioned accounts and routes, regardless of origin.
 - All three reported whole-file SHA256 values match the locally extracted
   original 1.5.8 `bt_answering_machine`, `bt_av_media` and `libc-2.27.so`.
   This supports those specific binary identities, not whole-device integrity.
@@ -38,6 +45,23 @@ developer. Nothing from this branch was installed on that device.
   credentials, route regeneration, registration and media lifecycle coexistence
   remain unproven. Do not overwrite/remove their state or suggest a concurrent
   experimental install yet.
+
+## Original Provisioning Path
+
+The extracted 1.5.8 image links `/etc/flexisip` to the persistent
+`/home/bticino/cfg/extra/90/flexisip` tree. Its vendor `flexisip.conf` uses
+`users/users.db.txt` for authentication and `users/route.conf` for static routes.
+The original `bt_eliot` contains `sipAccounts`, `START ask sip users`,
+`Sip user result: %s (%d)` and `/var/tmp/user_list.txt`. The original
+`bt_answering_machine` contains that same handoff path, `SipUsers`,
+`Refresh sip user list`, `users.db.txt`, `accounts.txt`, internal/external route
+paths and the `c100x` identity. C300X 1.7.19's answering-machine binary has the
+same user-list/file markers and its `c300x` identity.
+
+These are static vendor provisioning artifacts, not a live cloud trace or proof
+of who created a particular row on the reported device. They rule out treating
+vendor SIP provisioning as something that inherently requires Companion. An
+empty extracted persistent tree is not evidence that app deployment lacks users.
 
 ## Local Follow-Up
 

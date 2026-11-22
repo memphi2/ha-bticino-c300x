@@ -1513,7 +1513,12 @@ qt5_publish() {
     [ "$QT5_DISPLAY" = "1" ] || return 0
     QT5_PUBLISHED=1
     : > "$QT5_RCC.failed"
-    qt5_pack_resources "$QT5_RCC"
+    qt5_files=
+    # Full removal must also work when the disposable vendor cache or packer
+    # is damaged. The stock resources remain embedded in the vendor program.
+    if [ "$ACTION" != "restore-all" ]; then
+        qt5_pack_resources "$QT5_RCC"
+    fi
     if [ -z "$qt5_files" ]; then
         rm -f "$QT5_RCC"
         qt5_wrapper_restore

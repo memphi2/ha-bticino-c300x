@@ -185,6 +185,19 @@ focused groups, not a full validation result.
 
 ## Focused Reproduction
 
+### Follow-up Recovery Finding
+
+**P2, baseline `b3192d0f`, `native_agent/scripts/qml_patch.sh:1516`:** full
+removal unnecessarily repacked resources and relied on the disposable
+`display-qt5/vendor` cache to distinguish stock from modified QML. Removing
+that cache, one cached file, or altering one cached file left a new overlay
+after `restore-all`; a failed packer prevented recovery altogether. Sixteen
+regression cases failed before correction, including eight using original
+3.0.6 resources and wrapper. Full removal now bypasses packing after restoring
+the QML files, restores the stock wrapper and removes RCC/preload/quarantine.
+Partial restore and the activation rollback remain unchanged. Regression:
+`tests/test_qml_patch_qt5_recovery.py`, including rollback after reload failure.
+
 Set `PYTHON` to the existing project virtualenv, `FW306` and `FW1719` to
 private read-only extracted roots, and `AUDIT` to a new directory under
 `/var/tmp`. Do not commit extracted firmware or the resulting manifests.

@@ -209,7 +209,8 @@ def test_remove_agent_script_restores_before_deleting_agent_files() -> None:
     assert text.index("restore_file_or_remove_block \"$IPTABLES\"") < text.index(
         'rm -rf "$AGENT_DIR" "$BACKUP_ROOT"'
     )
-    sequence = text.split("start_ssh\nrestore_qml", maxsplit=1)[1]
+    sequence = text.split("\nstart_ssh\n", maxsplit=1)[1]
+    assert sequence.index("if ! stop_agent; then") < sequence.index("\nrestore_qml\n")
     assert sequence.index("restore_file_or_remove_block \"$IPTABLES6\"") < sequence.index(
         "remove_startup"
     )

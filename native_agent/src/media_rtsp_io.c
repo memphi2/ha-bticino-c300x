@@ -14,11 +14,10 @@
 #include <sys/uio.h>
 #include <time.h>
 
-/* A frame gets this long to start, then is dropped; a started frame must
- * finish, or the stream is broken. A connection that takes no whole frame
- * for the stall limit is closed. */
-#define RTSP_FRAME_START_MS 250
-#define RTSP_FRAME_FINISH_MS 2000
+/* Media forwarding visits clients sequentially: locking and all writes share
+ * one short budget. Drop an unstarted frame; close if its prefix went out.
+ * A connection that takes no whole frame for the stall limit is closed. */
+#define RTSP_FRAME_WRITE_MS 250
 #define RTSP_RESPONSE_MS 2000
 #define RTSP_STALL_LIMIT_MS 5000
 
@@ -136,11 +135,12 @@ static ssize_t writer_send(struct c300x_rtsp_writer *writer, int fd,
 {
     int frame = kind == RTSP_FRAME;
     long long now = c300x_monotonic_ms();
-    /* A stalled connection gets no wait, so it cannot slow other clients. */
+    /* A stalled connection gets no initial wait. Even partial recovery writes
+     * remain bounded by the shared media budget for the other clients. */
     int wait_ms = !frame ? RTSP_RESPONSE_MS
-        : (writer != NULL && atomic_load(&writer->stalled_since) ? 0 : RTSP_FRAME_START_MS);
+        : (writer != NULL && atomic_load(&writer->stalled_since) ? 0 : RTSP_FRAME_WRITE_MS);
     long long start_deadline = now + wait_ms;
-    long long finish_deadline = now + (frame ? RTSP_FRAME_FINISH_MS : RTSP_RESPONSE_MS);
+    long long finish_deadline = now + (frame ? RTSP_FRAME_WRITE_MS : RTSP_RESPONSE_MS);
     if (!writer_lock(writer, start_deadline)) {
         if (frame && writer != NULL) return frame_dropped(writer, fd, c300x_monotonic_ms());
         shutdown(fd, SHUT_RDWR);

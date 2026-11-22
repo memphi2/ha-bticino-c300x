@@ -62,7 +62,7 @@ def test_rtsp_writer(media_binaries, case):
 
 
 @pytest.mark.parametrize("case", [
-    "interrupt", "response_interrupt", "partial_interrupt", "short_writes",
+    "interrupt", "response_interrupt", "partial_interrupt", "short_writes", "partial_stall_fanout",
 ])
 def test_rtsp_write_deadlines(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_rtsp_deadline"), case],

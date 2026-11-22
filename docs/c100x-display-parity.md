@@ -90,6 +90,12 @@ writes, interrupted main-file switches, corrupt adapter files, symlinks and
 remount failure. Hook-fragment Qt5 tests exercise actual Loader initialization,
 vendor-stack back navigation and menu availability. These are host tests with
 explicit vendor mocks, not proof of the complete firmware GUI process.
+The hook probe also executes the original arrival and pop-return animation
+branches. The full-screen adapter suppresses the vendor header and page dots
+only while its page is active, then restores their previous visibility. Normal
+vendor pages and EventManager remain unchanged. Both hook compositions compile
+with original Qt 5.10.1; the prior hook recipe remains accepted for verified
+upgrade and restoration.
 
 This build is not yet an installed or advertised display adapter. Agent bundle
 delivery, supervised restart/readiness/automatic rollback, Notify and memo

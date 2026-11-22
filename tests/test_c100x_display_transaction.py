@@ -67,10 +67,34 @@ def advance_source(tree):
     source = tree[0] / "source"
     page = source / "C100XBridge.qml"
     page.write_text(page.read_text() + "\n// Next adapter generation\n")
+    rehash_source(source)
+
+
+def rehash_source(source):
     (source / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(source).as_posix()}\n"
         for path in sorted(source.rglob("*")) if path.is_file() and path.name != "SHA256SUMS"
     ))
+
+
+@pytest.mark.parametrize("action", ["apply", "restore"])
+def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree, action):
+    source = tree[0] / "source"
+    hook = source / "hooks/main.inc"
+    current = hook.read_bytes()
+    legacy = (ROOT / "tests/fixtures/c100x_main_hook_v1.inc").read_bytes()
+    assert hashlib.sha256(legacy).hexdigest() == "e69c0dc115759e4b1593fd324e8619ff516d66f5aa3fcc6e459417cc9bbdcd5b"
+    hook.write_bytes(legacy)
+    rehash_source(source)
+    run(tree, "apply")
+    assert b"c100xFullScreen" not in (tree[1] / "main.qml").read_bytes()
+    hook.write_bytes(current)
+    rehash_source(source)
+    run(tree, action)
+    if action == "apply":
+        assert b"c100xFullScreen" in (tree[1] / "main.qml").read_bytes()
+        run(tree, "restore")
+    assert_original(tree)
 
 
 @pytest.mark.parametrize("action", ["apply", "restore"])

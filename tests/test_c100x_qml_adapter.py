@@ -80,7 +80,8 @@ def test_pages_load_in_isolated_qt5(tmp_path):
     result = subprocess.run([
         sys.executable, str(ROOT / "tests/fixtures/c100x_qml_probe.py"), str(source),
         *builder.PAGES,
-    ], env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
+    ], env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software",
+            "C100X_STOCK_MAIN": str(FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino/bin/gui/skins/default/main.qml")},
        capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
 

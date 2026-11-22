@@ -1,6 +1,7 @@
 """Qt5 host rendering probe. Vendor objects are not simulated as hardware proof."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -160,6 +161,15 @@ for fixture in ("c100x_numeric_probe.qml", "c100x_bridge_probe.qml", "c100x_hook
     document = Path(__file__).with_name(fixture).read_bytes()
     document = document.replace(b"@MAIN_HOOK@", (source / "hooks/main.inc").read_bytes().replace(b"@RELEASE@", b"."))
     document = document.replace(b"@MENU_HOOK@", (source / "hooks/menu.inc").read_bytes())
+    if fixture == "c100x_hook_probe.qml":
+        stock_lines = Path(os.environ["C100X_STOCK_MAIN"]).read_text().splitlines()
+        for token, anchor in (
+            (b"@VENDOR_ARRIVAL@", "                        if (!mainStackView.currentItem.hasOwnProperty('menuVisible') ||"),
+            (b"@VENDOR_POP_ARRIVAL@", "                        if(!vctModel.vct.callInProgress)"),
+        ):
+            start = stock_lines.index(anchor)
+            end = stock_lines.index("                    }", start)
+            document = document.replace(token, "\n".join(stock_lines[start:end]).encode())
     component.setData(document,
                       QUrl.fromLocalFile(str(source / fixture)))
     item = component.create()

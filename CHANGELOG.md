@@ -12,6 +12,11 @@ Fixed:
   bounded for other viewers. An unfinished partial packet or five seconds
   without sending a complete media packet still closes the connection.
   Needs the agent update.
+- Device information distinguishes C300X and C100X and reports the display
+  type. The agent self-test uses the device's firmware database when no
+  firmware is configured. The installer recognises Qt 5 displays and skips
+  the unsupported Display patch; C100X cameras stay on their low-resolution
+  stream. This does not enable C100X display pages or claim full C100X support.
 
 ## v2.8.1 - 2026-11-22
 

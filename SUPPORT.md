@@ -43,3 +43,5 @@ A native-agent rebuild is required when any of these paths change:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/c100x_bundle_builder.py`
+- `scripts/c100x_qml_builder.py`

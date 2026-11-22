@@ -97,9 +97,18 @@ vendor pages and EventManager remain unchanged. Both hook compositions compile
 with original Qt 5.10.1; the prior hook recipe remains accepted for verified
 upgrade and restoration.
 
-This build is not yet an installed or advertised display adapter. Agent bundle
-delivery, supervised restart/readiness/automatic rollback, Notify and memo
-integration remain incomplete. The script reports `runtime_verified: false`;
+The bundle now carries the adapter as one hashed `qml/c100x_bundle.sh` entry,
+with fixed text members extracted into a private temporary directory. File-set
+7 installs that entry; actual file-set-6 updater tests verify the two-pass
+bootstrap and reject missing/corrupt completion payloads. The measured manifest
+is 6,509 bytes (29 entries), below the unchanged old 8,192-byte reader limit;
+staging rejects oversized manifests and stale adapter output directories.
+Restore does not extract current QML sources. Source delivery does not modify
+the vendor GUI, start a loader or change display capabilities.
+
+This build is not yet an installed or advertised display adapter. Supervised
+restart/readiness/automatic rollback, Notify and memo integration remain
+incomplete. The script reports `runtime_verified: false`;
 successful disk installation alone must not enable a capability.
 
 This matrix is a target, not a declaration that every row works. Capability

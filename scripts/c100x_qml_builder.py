@@ -66,6 +66,8 @@ def adapt_page(name: str, source: str) -> str:
 
 
 def build(destination: Path, source: Path = ROOT / "device_qml") -> None:
+    if destination.is_symlink() or (destination.exists() and (not destination.is_dir() or any(destination.iterdir()))):
+        raise ValueError("C100X output must be a fresh empty directory")
     destination.mkdir(parents=True, exist_ok=True)
     for name in PAGES:
         (destination / name).write_text(adapt_page(name, (source / name).read_text()))

@@ -351,6 +351,10 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
     ]
     if bundle_manifest is not None:
         payloads.append(_PayloadFile(bundle_manifest, f"{remote_dir}/bundle.json", "600"))
+        # Generated payload has no raw-source fallback. A staged package must be
+        # complete before SSH writes start; it does not activate C100X display.
+        c100x_payload = _first_existing(COMPONENT_DIR / "device_agent/qml/c100x_bundle.sh")
+        payloads.append(_PayloadFile(c100x_payload, f"{remote_dir}/qml/c100x_bundle.sh", "700"))
     payloads.extend(
         _PayloadFile(source, f"{remote_dir}/{relative_path}")
         for relative_path, source in qml_sources.items()

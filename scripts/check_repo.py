@@ -53,6 +53,8 @@ NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
     "custom_components/bticino_c300x/device_agent/init",
     "scripts/stage_device_agent_bundle.py",
     "scripts/device_file_strip.py",
+    "scripts/c100x_bundle_builder.py",
+    "scripts/c100x_qml_builder.py",
 )
 # Bundle inputs that never reach the agent binary. Their content is carried by
 # the bundle hash (stage_device_agent_bundle.py feeds qml_patch_hash into it),

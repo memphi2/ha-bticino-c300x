@@ -16,6 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from c100x_bundle_builder import MEMBER as C100X_MEMBER, build as build_c100x_bundle
 from device_file_strip import (
     DEVICE_SOURCE_FILES,
     DeviceFileStripError,
@@ -28,7 +29,8 @@ COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
 AGENT_BINARY = ROOT / "native_agent" / "build" / "armhf" / "c300x-agent-native"
 AGENT_VERSION_FILE = ROOT / "native_agent" / "VERSION"
 AGENT_API_VERSION = "1"
-AGENT_UPDATE_FILE_SET_VERSION = 6
+AGENT_UPDATE_FILE_SET_VERSION = 7
+LEGACY_MANIFEST_BUFFER_BYTES = 8192
 C100X_COMPATIBLE = True
 ARMHF_STRIP = "arm-linux-gnueabihf-strip"
 FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v2-api-rtsp-talkback"
@@ -152,6 +154,12 @@ def stage_bundle(
     runtime_files.append(
         _copy_agent_binary(binary, component_dir / "device_agent/armhf/c300x-agent-native")
     )
+    try:
+        c100x_payload = build_c100x_bundle(component_dir / C100X_MEMBER, root=ROOT)
+    except (OSError, ValueError) as err:
+        raise BundleStageError(f"Cannot stage C100X payload: {err}") from err
+    qml_files.append(c100x_payload)
+    script_files.append(c100x_payload)
     _set_file_modes(qml_files, 0o644)
     _set_file_modes(script_files, 0o700)
     _set_file_modes(runtime_files, 0o700)
@@ -187,28 +195,29 @@ def stage_bundle(
         group_hashes=group_hashes,
     )
     manifest_path = component_dir / "device_agent/bundle.json"
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "version": native_version,
-                "agent_version": native_version,
-                "integration_version": version,
-                "api_version": AGENT_API_VERSION,
-                "update_file_set_version": AGENT_UPDATE_FILE_SET_VERSION,
-                "architecture": "armhf",
-                "c100x_compatible": C100X_COMPATIBLE,
-                "bundle_hash": bundle_hash,
-                "agent": "device_agent/armhf/c300x-agent-native",
-                "qml": "device_agent/qml",
-                "files": file_entries,
-                **group_hashes,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    manifest_text = json.dumps(
+        {
+            "version": native_version,
+            "agent_version": native_version,
+            "integration_version": version,
+            "api_version": AGENT_API_VERSION,
+            "update_file_set_version": AGENT_UPDATE_FILE_SET_VERSION,
+            "architecture": "armhf",
+            "c100x_compatible": C100X_COMPATIBLE,
+            "bundle_hash": bundle_hash,
+            "agent": "device_agent/armhf/c300x-agent-native",
+            "qml": "device_agent/qml",
+            "files": file_entries,
+            **group_hashes,
+        },
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
+    # Old agents must read the entire new manifest before installing the updater.
+    # Keep room for their terminating NUL; a file-set bump cannot fix truncation.
+    if len(manifest_text.encode("utf-8")) >= LEGACY_MANIFEST_BUFFER_BYTES:
+        raise BundleStageError("Bundle manifest exceeds legacy updater buffer")
+    manifest_path.write_text(manifest_text, encoding="utf-8")
     manifest_path.chmod(0o600)
 
 

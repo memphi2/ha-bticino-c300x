@@ -34,7 +34,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
             "firmware": '1.7.19"test',
         }
         assert document["agent"]["self_update_supported"] is maintenance
-        assert document["agent"]["self_update_file_set_version"] == 6
+        assert document["agent"]["self_update_file_set_version"] == 7
         assert caps["https_callbacks"] is maintenance
         assert set(caps["maintenance"].values()) == {maintenance}
         assert caps["doorbell_video"] == {

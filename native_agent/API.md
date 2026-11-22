@@ -292,7 +292,10 @@ Important top-level fields:
 - `agent.version`
 - `agent.implementation`
 - `device.id`
-- `device.model`
+- `device.model`: `C300X` or `C100X`, detected on the device from the display
+  program (`BtClass100` on the C100X), not taken from the agent config
+- `device.display_kind`: `qt4_ondisk` (C300X 1.7.x/2.0.x), `qt5_rcc` (C300X
+  3.0.x, display files built into the program) or `qt5_ondisk` (C100X)
 - `device.firmware`
 - `capabilities`
 
@@ -1636,7 +1639,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 ## Compatibility
 
 Agent `2.8.2` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
+`1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family` reflects `device.firmware` of the agent
 config and is `unknown` when that value is empty, which is what the installer
 writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
 experimentally. The release notes list the agent changes of each version.

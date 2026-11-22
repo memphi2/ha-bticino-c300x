@@ -43,6 +43,9 @@ static const char *firmware_family(const struct c300x_config *config)
     if (config == NULL || config->device_firmware[0] == '\0') {
         return "unknown";
     }
+    if (strncmp(config->device_firmware, "1.5.", 4) == 0) {
+        return "1.5.x";
+    }
     if (strncmp(config->device_firmware, "1.7.", 4) == 0) {
         return "1.7.x";
     }

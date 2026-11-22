@@ -104,6 +104,13 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
         assert status["checks"]["device_routing"]["reason"] == "device_routing_missing"
     for path, original in originals.items():
         assert (path.read_bytes(), path.stat().st_mtime_ns) == original
+    if case == "no_device_user":
+        families = {"1.5.8": "1.5.x", "1.7.19": "1.7.x", "2.0.2": "2.0.x", "3.0.6": "3.0.x", "4.0.0": "unknown"}
+        for firmware, family in families.items():
+            answer = subprocess.run(
+                [str(binary), str(firewall), "1", firmware], check=True, capture_output=True, text=True,
+            )
+            assert json.loads(answer.stdout)["self_test"]["firmware_family"] == family, firmware
 
 
 def test_native_account_line_is_added_to_a_file_without_a_final_newline(tmp_path: Path) -> None:

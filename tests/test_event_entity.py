@@ -158,6 +158,16 @@ def test_device_info_uses_typed_setup_firmware_as_software_version() -> None:
     assert entity.device_info["sw_version"] == "1.7.19"
 
 
+def test_device_info_names_the_model_the_agent_detected() -> None:
+    c100x = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": "C100X"}))
+    c300x = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": "C300X"}))
+    offline = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": None}))
+
+    assert C300XEntity(c100x, "test").device_info["model"] == "Classe 100X"  # type: ignore[arg-type]
+    assert C300XEntity(c300x, "test").device_info["model"] == "Classe 300X"  # type: ignore[arg-type]
+    assert C300XEntity(offline, "test").device_info["model"] == "Classe 300X"  # type: ignore[arg-type]
+
+
 def test_device_info_omits_empty_firmware_version() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(agent_info={"firmware": ""}),

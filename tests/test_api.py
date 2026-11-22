@@ -203,7 +203,7 @@ def test_validate_setup_uses_native_agent_version() -> None:
         '{"api_version": "1", '
         '"agent": {"implementation": "native-c", "version": "0.2.0"}, '
         '"device": {"id": "c300x-aabbcc001122", '
-        '"model": "C300X", "firmware": "1.7.19"}, '
+        '"model": "C100X", "display_kind": "qt5_ondisk", "firmware": "1.5.8"}, '
         '"capabilities": {"doorbell_events": true}}'
     )
     api = C300XAgentApi(
@@ -219,7 +219,7 @@ def test_validate_setup_uses_native_agent_version() -> None:
     assert setup["implementation"] == "native-c"
     assert setup["api_version"] == "1"
     assert setup["device_id"] == "c300x-aabbcc001122"
-    assert setup["model"] == "C300X"
+    assert (setup["model"], setup["display_kind"]) == ("C100X", "qt5_ondisk")
     assert setup["capabilities"] == {"doorbell_events": True}
     assert session.requests[0]["kwargs"]["timeout"] == 2.0
 

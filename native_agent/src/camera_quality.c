@@ -2,6 +2,7 @@
 
 #include "c300x_agent.h"
 #include "camera_files.h"
+#include "device_detect.h"
 #include "device_file.h"
 
 #include <stdio.h>
@@ -29,10 +30,10 @@ static const char *crop_path(void)
     return env_or("C300X_CAMERA_CROP_FILE", "/home/bticino/cfg/stack_open.xml");
 }
 
-/* Firmware 3.0.x, the one with the Qt 5 display, sends only the low stream. */
+/* Firmware 3.0.x sends only the low stream. */
 static int low_stream(void)
 {
-    return c300x_device_display_is_qt5();
+    return c300x_device_camera_resolution_fixed();
 }
 
 static int read_values(const char *path, const char *cut_path, struct c300x_camera_values *values)

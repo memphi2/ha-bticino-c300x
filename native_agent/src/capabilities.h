@@ -5,6 +5,8 @@
 
 struct c300x_capabilities_context {
     const char *device_id;
+    const char *device_model;
+    const char *display_kind;
     const char *device_firmware;
     const char *bundle_hash;
     int maintenance_supported;

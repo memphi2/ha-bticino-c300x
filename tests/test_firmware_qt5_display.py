@@ -1,4 +1,4 @@
-"""Firmware 3.0.x: a Qt 5 display, recognised by its library, not by a missing folder."""
+"""Device detection: model and display kind, and the Qt 5 firmwares that follow from them."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ NATIVE = ROOT / "native_agent"
 def config_probe(tmp_path_factory):
     folder = tmp_path_factory.mktemp("qt5")
     marker = folder / "libQt5Core.so.5"
+    c100x = folder / "BtClass100"
     binary = folder / "probe"
     curl = os.environ.get("CURL_INCLUDE_DIR", "")
     sources = [str(path) for path in sorted((NATIVE / "src").glob("*.c")) if path.name != "main.c"]
@@ -28,6 +29,7 @@ def config_probe(tmp_path_factory):
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             *([f"-idirafter{curl}"] if curl else []),
             f"-DC300X_QT5_DISPLAY_MARKER={json.dumps(str(marker))}",
+            f"-DC300X_C100X_DISPLAY_MARKER={json.dumps(str(c100x))}",
             str(NATIVE / "test/qt5_display_test.c"), *sources,
             "-o", str(binary), "-pthread", "-ldl",
         ],
@@ -35,12 +37,15 @@ def config_probe(tmp_path_factory):
     )
 
     def run(
-        *, qt5: bool, high_resolution: bool | None, display_patch: bool = False,
-        save: bool | None = None,
+        *, qt5: bool, high_resolution: bool | None = None, display_patch: bool = False,
+        save: bool | None = None, c100x_display: bool = False,
     ) -> dict:
         marker.unlink(missing_ok=True)
+        c100x.unlink(missing_ok=True)
         if qt5:
             marker.write_bytes(b"")
+        if c100x_display:
+            c100x.write_bytes(b"")
         config = json.loads((NATIVE / "config.example.json").read_text(encoding="utf-8"))
         config["video"]["av"].pop("highResolution", None)
         if high_resolution is not None:
@@ -80,10 +85,26 @@ def test_the_camera_resolution_is_saved_and_refused_high_on_a_qt5_display(config
     assert config_probe(qt5=True, high_resolution=None, save=False)["saved"] == 1
 
 
+@pytest.mark.parametrize(("qt5", "c100x_display", "model", "kind"), [
+    (False, False, "C300X", "qt4_ondisk"),
+    (True, False, "C300X", "qt5_rcc"),
+    (True, True, "C100X", "qt5_ondisk"),
+], ids=["c300x-1.7-2.0", "c300x-3.0", "c100x-1.5"])
+def test_the_agent_names_the_model_and_display_of_each_firmware(config_probe, qt5, c100x_display, model, kind):
+    answer = config_probe(qt5=qt5, c100x_display=c100x_display, display_patch=True)
+    assert (answer["model"], answer["display_kind"]) == (model, kind)
+    # Only the Qt 4 display gets the Display patch so far; a C100X keeps the
+    # fixed low resolution of the Qt 5 firmwares until a device shows otherwise.
+    assert answer["files_patchable"] == answer["display_patch"] == int(not qt5)
+    assert answer["resolution_fixed"] == int(qt5)
+    assert answer["high_resolution"] == int(not qt5)
+
+
 def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     capabilities = (NATIVE / "src/capabilities.c").read_text(encoding="utf-8")
-    assert ".camera_resolution_fixed = c300x_device_display_is_qt5()," in http
+    assert ".camera_resolution_fixed = c300x_device_camera_resolution_fixed()," in http
+    assert ".display_kind = c300x_display_kind_name(c300x_device_display_kind())," in http
     assert '\\"camera_resolution\\":%s,\\"camera_quality\\":%s}' in capabilities
     assert "config->video_enabled && !context->camera_resolution_fixed" in capabilities
 
@@ -99,8 +120,9 @@ def test_the_agent_skips_the_display_label_only_on_a_qt5_display():
     # tests/test_native_device_user_routes.py runs both routes on a Qt 5 display.
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     routes = (NATIVE / "src/http_device_user.c").read_text(encoding="utf-8")
-    assert routes.count("c300x_device_display_is_qt5()") == 2
-    assert "skins/default" not in http + routes
+    assert routes.count("c300x_device_display_files_patchable()") == 2
+    detect = (NATIVE / "src/device_detect.c").read_text(encoding="utf-8")
+    assert "skins/default" not in http + routes + detect
     assert "skins/default" not in (NATIVE / "src/config.c").read_text(encoding="utf-8")
 
 

@@ -21,6 +21,7 @@ int c300x_capabilities_json(
     char recorder_path[C300X_MAX_PATH_JSON_LEN];
     char device_id_json[128];
     char device_model[128];
+    char display_kind[64];
     char device_firmware[384];
     char stair_address[128];
     char lock_id[128];
@@ -34,7 +35,8 @@ int c300x_capabilities_json(
     c300x_json_escape_string(config->video_rtsp_video_path, video_path, sizeof(video_path));
     c300x_json_escape_string(config->video_rtsp_path, audio_path, sizeof(audio_path));
     c300x_json_escape_string(config->video_rtsp_recorder_path, recorder_path, sizeof(recorder_path));
-    c300x_json_escape_string(config->device_model, device_model, sizeof(device_model));
+    c300x_json_escape_string(context->device_model, device_model, sizeof(device_model));
+    c300x_json_escape_string(context->display_kind, display_kind, sizeof(display_kind));
     c300x_json_escape_string(context->device_firmware, device_firmware, sizeof(device_firmware));
     c300x_json_escape_string(config->stair_light_default_address, stair_address, sizeof(stair_address));
     c300x_json_escape_string(config->lock_id, lock_id, sizeof(lock_id));
@@ -46,7 +48,7 @@ int c300x_capabilities_json(
         "{"
         "\"api_version\":\"1\","
         "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":6},"
-        "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"firmware\":\"%s\"},"
+        "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"display_kind\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
         "\"https_callbacks\":%s,"
@@ -81,6 +83,7 @@ int c300x_capabilities_json(
         maintenance_supported ? "true" : "false",
         device_id_json,
         device_model,
+        display_kind,
         device_firmware,
         context->https_callbacks ? "true" : "false",
         context->https_callbacks_enabled ? "true" : "false",

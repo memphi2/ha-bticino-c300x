@@ -195,6 +195,11 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
     char error[C300X_DEVICE_USER_ERROR_LEN] = "";
     char account_label[C300X_DEVICE_USER_LABEL_LEN] = "";
     c300x_json_string_field(request->body, "account_label", account_label, sizeof(account_label));
+    /* Reject unknown active-route ownership before patching vendor files. */
+    if (!c300x_device_user_read_status(&state->status) || !state->status.supported) {
+        send_error(fd, "device_user_update_failed", state->status.error);
+        return 0;
+    }
     if (!c300x_device_routing_apply(&state->routing, error, sizeof(error))) {
         send_error(fd, "device_routing_failed", error);
         return 0;

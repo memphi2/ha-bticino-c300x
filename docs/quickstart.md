@@ -201,9 +201,10 @@ Lovelace card or an embedded HA dashboard.
    the top ten configured devices by current W without history queries.
    Distribution has been removed: enable Consumers explicitly after upgrading;
    the old selection is removed without enabling another view.
-   The sections are listed in the order of the display and their titles show
-   the page number. A page the display does not show (switched off, or without
-   entities) has no number and follows the shown pages; free sections, titled
+   The list follows the order of the display and shows each page's number. A
+   page the display does not show (switched off, or without entities) has no
+   number and follows the shown pages; **Add a page** adds a custom one. In the
+   setup the pages are sections of one form instead, and free sections, titled
    **Page +**, come last. Optional **Agenda** and **Leave home** sections select calendars and departure
    checks explicitly; they are disabled until you enable them. Agenda shows up
    to five events in seven days, using a background HA cache. Leave home actions

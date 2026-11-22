@@ -52,6 +52,7 @@ one-time SSH installation remains a separate explicit step.
 | Visitor Snapshot | Image width and height (688x480), delay (3 s), retention (14 days), date and time in the image (on). Offered only with video on. | No. |
 | Camera quality | Picture size (688x480 from the factory, or the whole picture at 704x576 without the black side edges), bit rate (300–3000 kbit/s, 800 from the factory) and frame rate (5–24 fps, 15 from the factory; at 25 the device sends only about 8) of the high-resolution camera stream; on firmware 3.0.x of the low-resolution stream, the only one it sends, which the Door Entry app gets as well (sizes 352x288 to 720x576, 400x288 from the factory; 100–2000 kbit/s, 180 from the factory; 5–25 fps, 10 from the factory; sizes other than 400x288 not yet tested on a 3.0.x device). The size also applies to the camera picture on the device display and to answering-machine recordings. The form shows the values saved on the device and the ones it runs with. Offered with video on. | Yes: saving a change writes all values in one step and restarts the device once, like the audio codec switch. The values stay on the device, not in Home Assistant. |
 | Activations: locks, lights, stair light | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
+| Speech | Text-to-speech engine and language for spoken notifications. Offered where the agent can play sound and **Home Assistant pages on the display** is on. | No. Read when a notification is spoken; saving reloads nothing. |
 | Alarm (Alarmo) | Alarmo alarm panel and quick action of the Alarm page. | No. Stored in Home Assistant; the display asks for it. |
 | Display and Display patch | Optional Display patch, home page buttons, behaviour after an action and action allowlist. | Yes, only when the Display patch is applied/restored. |
 | Display pages and tiles | Weather, entities per page, size, name and secondary line of each tile. | No. Stored in Home Assistant; the display asks for them. |
@@ -141,7 +142,7 @@ The image comes from the device display, not from the video stream. The
 display is 800×480 and shows the camera picture stretched to its own width; the
 device encodes the stream itself as 688×480 from the factory. The default
 therefore gives the image the size and shape of that stream; **Camera quality**
-can switch the stream to the whole 720×576 camera picture. The agent delivers the image in exactly
+can switch the stream to the whole 704×576 camera picture. The agent delivers the image in exactly
 the configured size (width 64–800, height 64–480) and Home Assistant does not
 rescale it. Setting 800×480 returns the display pixel for pixel. A size above
 the display's is not offered, because it would add no detail.
@@ -192,7 +193,8 @@ blocks repeated taps; unavailable data is not displayed as a ready alarm.
 
 The Alarmo alarm panel and the **Quick action**, the optional quick action or
 status entity, are set in the **Alarm (Alarmo)** step right after the
-activations, in the setup, the reconfigure and the settings menu. They are kept
+activations in the setup and the reconfigure, and under **Configure > Display >
+Alarm (Alarmo)** in the settings. They are kept
 with the Display patch off, since the alarm commands do not need it. Leave it empty to hide this area. To retain a stair-light
 shortcut, select the integration's stair-light button explicitly. No stair-light
 action is inserted automatically. The picker offers buttons, switches, lights,
@@ -463,6 +465,11 @@ The Display patch backs up the original General settings page before changing
 it, keeps the original tone control and restores the page on removal. Unknown
 page layouts or a missing backup of an already patched page abort the operation
 instead of replacing the original with a guessed version.
+
+On firmware 1.7.x and 2.0.2 the Display patch also raises the swipe threshold of
+the display library from 4 to 16 pixels, so a tap that moves a little is no
+longer taken for a swipe. The original library is backed up first; restoring
+the Display patch and removing the agent put it back.
 
 Everything about the display is under **Configure > Display**. Switch the
 Display patch on under **Display and Display patch**; the Display menu then

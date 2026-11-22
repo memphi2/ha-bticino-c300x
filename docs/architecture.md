@@ -99,8 +99,8 @@ QML status/patch scripts, GUI reload and the read-only device-user status script
 run through `command_job.c`. The main poll loop never waits synchronously for these
 scripts. Each status and standalone GUI reload script retains its
 10-second deadline; QML writes retain 30 seconds for a failed start, file
-rollback and restart of the previous GUI. There is no maintenance queue or
-additional thread. While an asynchronous job owns the slot, maintenance writes
+rollback and restart of the previous GUI. Maintenance jobs have no queue and
+no thread of their own. While an asynchronous job owns the slot, maintenance writes
 and competing QML/device-user reads are rejected as busy after authorization. A disconnected client retains its
 slot until completion; it does not cancel, restart or duplicate device work.
 Shutdown kills the active process group and releases the socket/context.
@@ -129,13 +129,14 @@ PINGREQ progress without synchronous output waits. No worker or idle timer is
 added. DNS/TCP establishment and MQTT-to-device command forwarding remain
 synchronous; see [MQTT output ownership](native-mqtt-output.md).
 
-2.7 is not complete: this is not a fully asynchronous device-I/O architecture.
+This is not a fully asynchronous device-I/O architecture.
 Device-user routing hash/read/write, label write scripts, remount and fsync
 operations still execute synchronously.
 Codec mutation is still synchronous despite the route extraction. Firewall,
-update, legacy MQTT, OpenWebNet and media lifecycle waits need further scoped
-work. No generic worker thread or asynchronous filesystem transaction has been
-introduced. See the [HTTP maintenance boundary](native-http-maintenance.md)
+update and legacy MQTT waits need further scoped work. OpenWebNet exchanges and
+media operations run on a worker thread that exists only while one runs
+(`request_worker.c`), in the order the requests arrived. No asynchronous
+filesystem transaction has been introduced. See the [HTTP maintenance boundary](native-http-maintenance.md)
 for compatibility details and focused validation, and the
 [blocking-path inventory](native-http-blocking-inventory.md) for remaining
 call paths and safe alternative designs.

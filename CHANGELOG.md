@@ -8,7 +8,8 @@ Camera:
 
 - New **Camera resolution** setting (configuration entity): high or low
   resolution for the camera stream, applied from the next stream. High stays
-  the default.
+  the default. Firmware 3.0.6 sends only the low resolution, so with the
+  agent update the setting is not offered there.
 - **Better camera picture:** new **Camera quality** area in the settings. The
   stream can be sharper, smoother and show more: picture size (the whole
   camera picture at 704x576 instead of the factory 688x480 cut-out, still
@@ -20,8 +21,6 @@ Camera:
   Like the audio codec, saving a change restarts the device once, which then
   uses the new values.
   Needs the agent update.
-- Firmware 3.0.6 is fixed to the low resolution, the only stream that firmware
-  sends on; the setting is not offered there. Needs the agent update.
 
 Speaker:
 
@@ -29,7 +28,7 @@ Speaker:
   loudspeaker. Use it with `tts.speak` and any text-to-speech engine, for
   example Piper for speech that stays local, or play sounds from the media
   browser. It has a volume and a stop. A door call ends a sound at once, and
-  no sound starts while a call is under way.
+  no sound starts while a call is under way or for a minute after a ring.
   Tested on firmware 1.7.19. Needs the agent update.
 - **Spoken notifications.** The Notify action has a new `mode`: `display`
   (as before), `speech` (the message is only spoken) or `both` (shown on the
@@ -47,9 +46,10 @@ Audio:
 
 Display:
 
-- The favourites bar is the default page navigation. An entry that never
-  chose keeps the bar after the update; to keep the previous and next arrows,
-  choose **Arrows** under **Page navigation** in the display settings.
+- The favourites bar is the default page navigation for new setups. Entries
+  saved with 2.7.0 keep the arrows they stored; older entries that were not
+  saved since switch to the bar. Change it under **Page navigation** in the
+  display settings.
 - Taps on the display pages are reliable. The display library counted a
   finger that moved four pixels as a swipe, so buttons inside a page often
   needed several taps. The Display patch now raises that threshold to 16
@@ -88,17 +88,20 @@ Settings:
 
 Fixed:
 
-- Saving the settings with **Home Assistant pages on the display** turned
-  on installs the pages on the C300X once the integration has reloaded, and
-  saving it turned off restores the original display; a new setup does it
-  at its first start. Before, the option only unlocked the settings, and the
-  pages came only from the hidden **Display patch** switch. When the C300X
-  cannot be reached then, the next start tries again. The switch now saves
+- Submitting the Display settings with **Home Assistant pages on the
+  display** turned on installs the pages on the C300X once the integration
+  has reloaded, and with it turned off restores the original display; the
+  reconfigure and a new setup do the same. Other settings saved leave the
+  display alone. Before, the option only unlocked the settings, and the
+  pages came only from the **Display patch** switch, which was disabled by
+  default. When the C300X cannot be reached then, the next start tries
+  again. The switch now saves
   the option too, so a later save keeps what it did. If the pages are
   missing after the update, open **Configure > Display > Display and
   Display patch** and submit it once.
-- The **Display patch** switch is shown by default in new setups. Where it
-  was set up hidden before, enable it once on the device page.
+- The **Display patch** switch is enabled by default in new setups. Where it
+  was set up disabled before, enable it once on the device page. A device
+  without the Display patch (firmware 3.0.6) gets no switch.
 - The card no longer shows the last image twice. Its saved copy came again
   as the first step into the saved pictures and videos; browsing now starts
   behind the image the card already shows.

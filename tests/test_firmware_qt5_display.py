@@ -93,11 +93,17 @@ def test_the_camera_resolution_is_saved_and_refused_high_on_a_qt5_display(config
 def test_the_agent_names_the_model_and_display_of_each_firmware(config_probe, qt5, c100x_display, model, kind):
     answer = config_probe(qt5=qt5, c100x_display=c100x_display, display_patch=True)
     assert (answer["model"], answer["display_kind"]) == (model, kind)
-    # Only the Qt 4 display gets the Display patch so far; a C100X keeps the
-    # fixed low resolution of the Qt 5 firmwares until a device shows otherwise.
+    # Only the Qt 4 display gets the Display patch so far; the Qt 5 firmwares
+    # send only the low stream.
     assert answer["files_patchable"] == answer["display_patch"] == int(not qt5)
     assert answer["resolution_fixed"] == int(qt5)
     assert answer["high_resolution"] == int(not qt5)
+
+
+def test_a_c100x_keeps_the_low_stream_whatever_its_libraries(config_probe):
+    # Its bt_av_media builds no high-resolution branch on the C100X board.
+    answer = config_probe(qt5=False, c100x_display=True, high_resolution=True)
+    assert (answer["model"], answer["resolution_fixed"], answer["high_resolution"]) == ("C100X", 1, 0)
 
 
 def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():

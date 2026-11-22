@@ -1471,10 +1471,10 @@ int c300x_load_config(
         }
     }
     if (c300x_device_camera_resolution_fixed()) {
-        /* Firmware 3.0.x: bt_av_media only fans out the low-res video branch
-         * (multiudp_low_res); the high-res branch (#0) has no multiudpsink, so
-         * its stream never reaches the agent. Low-res is fixed there, whatever
-         * the config says. */
+        /* C300X 3.0.x and the C100X: bt_av_media only fans out the low-res
+         * video branch (multiudp_low_res); the high-res branch (#0) has no
+         * multiudpsink there, so its stream never reaches the agent. Low-res
+         * is fixed, whatever the config says. */
         config->video_av_high_resolution = 0;
     }
     if (nested_member3(document, document_end, "video", "rtsp", "port", &value)) {

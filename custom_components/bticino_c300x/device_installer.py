@@ -881,9 +881,11 @@ def _device_display_kind(client: _DeviceSshClient) -> str:
         f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo qt5 || echo qt4; "
         f"test -e {_quote(_C100X_DISPLAY_MARKER)} && echo c100x || echo c300x"
     ).split()
+    if "c100x" in words:
+        return "qt5_ondisk"
     if "qt5" not in words:
         return _QT4_ONDISK
-    return "qt5_ondisk" if "c100x" in words else "qt5_rcc"
+    return "qt5_rcc"
 
 
 def _apply_qt5_low_res_video_default(

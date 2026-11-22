@@ -89,15 +89,17 @@ def test_the_camera_resolution_is_saved_and_refused_high_on_a_qt5_display(config
     (False, False, "C300X", "qt4_ondisk"),
     (True, False, "C300X", "qt5_rcc"),
     (True, True, "C100X", "qt5_ondisk"),
-], ids=["c300x-1.7-2.0", "c300x-3.0", "c100x-1.5"])
+    (False, True, "C100X", "qt5_ondisk"),
+], ids=["c300x-1.7-2.0", "c300x-3.0", "c100x-1.5", "c100x-no-library-marker"])
 def test_the_agent_names_the_model_and_display_of_each_firmware(config_probe, qt5, c100x_display, model, kind):
     answer = config_probe(qt5=qt5, c100x_display=c100x_display, display_patch=True)
     assert (answer["model"], answer["display_kind"]) == (model, kind)
     # Only the Qt 4 display gets the Display patch so far; the Qt 5 firmwares
     # send only the low stream.
-    assert answer["files_patchable"] == answer["display_patch"] == int(not qt5)
-    assert answer["resolution_fixed"] == int(qt5)
-    assert answer["high_resolution"] == int(not qt5)
+    qt4 = kind == "qt4_ondisk"
+    assert answer["files_patchable"] == answer["display_patch"] == int(qt4)
+    assert answer["resolution_fixed"] == int(not qt4)
+    assert answer["high_resolution"] == int(qt4)
 
 
 def test_a_c100x_keeps_the_low_stream_whatever_its_libraries(config_probe):
@@ -166,12 +168,13 @@ def test_an_unreadable_display_answer_counts_as_the_qt4_display():
     assert installer._device_display_kind(_Mute(qt5=True)) == "qt4_ondisk"
 
 
-def test_a_c100x_gets_no_display_patch_and_the_low_stream_for_now():
-    c100x = _Device(qt5=True, c100x=True)
+@pytest.mark.parametrize("qt5", [False, True])
+def test_a_c100x_gets_no_display_patch_and_the_low_stream_for_now(qt5):
+    c100x = _Device(qt5=qt5, c100x=True)
     installer._apply_qml_patch_sync(c100x, "/data/agent", "apply")
     assert not any("qml_patch.sh" in command for command in c100x.commands)
     unset = json.dumps({"video": {"av": {}}}).encode()
-    low = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True, c100x=True), unset))
+    low = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=qt5, c100x=True), unset))
     assert low["video"]["av"]["highResolution"] is False
 
 

@@ -56,7 +56,8 @@ def _open(entry: SimpleNamespace, user_input: dict[str, Any] | None = None) -> d
 
 
 def test_the_area_is_offered_only_with_video_where_the_agent_offers_it() -> None:
-    assert "camera_quality" in _options_menu_of(_entry(_QualityApi()))
+    menu = _options_menu_of(_entry(_QualityApi()))
+    assert menu.index("camera_quality") < menu.index("visitor_snapshot")
     assert "camera_quality" not in _options_menu_of(_entry(_QualityApi(), offered=False))
     assert "camera_quality" not in _options_menu_of(_entry(_QualityApi(), video=False))
 

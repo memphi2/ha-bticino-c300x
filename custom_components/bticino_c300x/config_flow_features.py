@@ -477,9 +477,9 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     menu = ["connection", "features"]
     if saved[CONF_VIDEO_ENABLED]:
         # Visitor images and the stream quality exist only with video.
-        menu.append("visitor_snapshot")
         if camera_quality_offered(config_entry):
             menu.append("camera_quality")
+        menu.append("visitor_snapshot")
     menu.append("device_activations")
     if speech_offered(config_entry):
         menu.append("speech")

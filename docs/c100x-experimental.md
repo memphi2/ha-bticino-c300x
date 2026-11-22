@@ -37,8 +37,8 @@ does not establish runtime or hardware support.
 | Routing / media user | Implemented; hardware unproven | C100X-specific `bt_answering_machine` table matches all nine stock patch ranges. Patch apply on a temporary firmware copy passed; registration, ring answering and vendor-app coexistence still require a device. |
 | HA entities and callbacks | Capability-gated; hardware unproven | Door, stair light, ring/call events and supported maintenance controls retain their existing paths. Physical outputs, event timing and callback reachability are not proven. |
 | Ringer volume | Retained; hardware unproven | Independent from mute; the vendor volume command still needs physical-level and persistence checks. |
-| Ringer mute | **Unavailable** | Requires a supported GUI hook. Advertised false; HA creates no mute switch. The native API rejects mute before device I/O. Volume/events are not disabled with it. |
-| Device dashboard / display notify | **Unavailable** | Stock GUI is Qt5 `BtClass100`. No C100X patch or GUI restart is implemented. Setup/options omit display configuration; saved display preferences/layouts are retained but ineffective. Notify registration, patch apply and bridge setup are suppressed, including after an offline restart once support is known. Alarmo configuration remains available separately. |
+| Ringer mute / key tone | **Unavailable to HA; offline bridge implemented** | The separate Qt5 bridge uses stock AudioState/beep properties with readback and call/commissioning guards. It is not yet delivered or activated through the supported installer. Mute remains advertised false and rejected before device I/O; volume/events retain their paths. |
+| Device dashboard / display notify | **Unavailable to HA; offline adapter and disk transaction implemented** | All additional pages remain the target, tracked in [Display Parity](c100x-display-parity.md). Separate Qt5 pages, Loader hooks, key navigation, settings and verified on-disk install/restore exist and have focused offline tests. Bundle delivery, supervised restart/readiness/automatic rollback and Notify/memo integration are not complete. Setup/options, patch apply and bridge setup therefore remain suppressed. Saved display configuration is retained but ineffective; Alarmo configuration remains independently available. |
 | Camera / snapshot / RTSP | Implemented; hardware unproven | C100X is fixed to the low-resolution branch; no resolution selector. Stock settings describe 640x480, 12 fps and 800 kbps. Decoding, quality changes, snapshots, ring capture and multi-client behavior need device tests; these values are not a quality guarantee. |
 | Listen / talkback | Implemented; hardware unproven | Stock configuration uses Speex/8000. SIP negotiation, SRTP/RTP, both directions, stop/teardown and codecs beyond the stock setting need a device. |
 | Announcements / TTS | **Unavailable on inspected stock firmware** | Existing prerequisite checks disable this: `/bin/zl38005_ioctl-v2` and `/home/bticino/microsemi/MEMO_AM_PLAY.cr` are absent. Other Microsemi scripts are not interchangeable proof. No C100X substitute was implemented. |
@@ -94,11 +94,18 @@ These steps require separate explicit authorization and have **not** been run:
 
 1. Confirm SSH credentials and backup/recovery access. Record firmware/model,
    vendor app operation, SIP provisioning and original changed-file hashes.
-2. Install the verified local package. Check startup, API/maintenance auth,
-   discovery identity, HA entity set, reboot persistence and inactive saved
-   display settings. Confirm no `BtClass100` patch/restart occurs.
-3. Verify door/stair outputs, ring/call events, volume and vendor-app
-   coexistence. Confirm mute, display and stock announcements remain absent.
+2. Before any display trial, finish the bundle/update and supervised readiness/
+   rollback paths and their offline checks. Install only that reviewed local
+   package; check startup, API/maintenance auth, discovery and HA entities.
+   A package whose display gate remains false must not patch/restart the GUI
+   or expose display controls. Do not force the gate through metadata changes.
+3. For an explicitly enabled display trial, verify original backups, safe
+   activation, failed-start rollback and reboot persistence. Exercise every
+   enabled/ordered page at 800x480 with Up/Down/Return/back, including scrolling,
+   entity controls, Energy subpages, Alarmo/PIN, notifications and settings.
+   Verify mute/key-tone readback and call/commissioning preemption. Check door,
+   stair, ring/call, volume and vendor-app coexistence before/after every phase.
+   TTS and unverified memo operations must remain unavailable.
 4. Exercise live camera, snapshots, ring answer/end, listen and talkback in
    each direction. Verify teardown releases media and preserves vendor calls.
    Test memo features separately; report unsupported behavior rather than
@@ -124,3 +131,19 @@ The fixtures create temporary directories; native tests redirect install/init
 paths there and intercept system service operations. They do not access a
 device. The full validation gate is coordinated separately and is not a
 substitute for the acceptance plan above.
+
+Additional focused C100X checks:
+
+```sh
+"$PY" -m pytest -q tests/test_c100x_display_transaction.py
+PYTHONPATH=/tmp/c100x-qt5-runtime "$PY" -m pytest -q tests/test_c100x_qml_adapter.py
+"$PY" -m pytest -q tests/test_c100x_firmware_compile.py
+```
+
+The host Qt5 package path above is an optional isolated local test environment,
+not a device dependency. Its visual probe covers 80 component scenarios and
+key propagation. The independent firmware probe compiles all 25 currently
+generated QML files against the original ARM Qt **5.10.1** under QEMU, with
+negative syntax/import/property controls. It creates no QML instances or GUI,
+loads no platform/vendor plugins and proves neither binding evaluation nor
+hardware operation. Rerun it whenever generated QML changes.

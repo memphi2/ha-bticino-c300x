@@ -78,6 +78,13 @@ intact. Retired adapter directories and backups are deliberately retained: a
 still-running old GUI may reference them. The wrapper/event manager are not
 modified and the script does not signal processes or reboot.
 
+Each prepared generation archives its manifest and reviewed hook recipe before
+the GUI entry changes. Fixed recipe hashes and regenerated whole-file comparisons
+authenticate the installed generation independently of the current package.
+Upgrade A-to-B and restoration with missing/corrupt package input are tested;
+failed upgrades retain A. Recovery also works when the installed payload is
+missing, but never accepts arbitrary target edits or tampered recipe archives.
+
 Focused tests execute this script on original firmware copies, including failed
 writes, interrupted main-file switches, corrupt adapter files, symlinks and
 remount failure. Hook-fragment Qt5 tests exercise actual Loader initialization,
@@ -93,5 +100,9 @@ This matrix is a target, not a declaration that every row works. Capability
 flags must stay false until the matching hook, command acknowledgement,
 state readback, transactional installation and rollback are implemented and
 tested together. Host Qt5 5.15 tests are useful but are not firmware Qt5 5.10.1
-or hardware proof. Vendor imports, restart supervision, wake/sound and memo
+or hardware proof. Separately, `tests/test_c100x_firmware_compile.py` compiles
+all 25 generated QML files using original ARM Qt 5.10.1 under QEMU (four tests,
+including invalid syntax/import/property controls). This is compile-only:
+no instances, binding evaluation, vendor/platform plugins or GUI startup.
+Vendor imports, restart supervision, wake/sound and memo
 runtime behavior require explicit evidence; missing evidence stays documented.

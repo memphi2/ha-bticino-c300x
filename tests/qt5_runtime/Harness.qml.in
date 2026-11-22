@@ -43,6 +43,13 @@ Item {
         }
         return null
     }
+    function pictureReady(node, part) {
+        if (node.status !== undefined && node.sourceSize !== undefined && String(node.source).indexOf(part) >= 0)
+            return node.status === Image.Ready && node.visible
+        for (var i = 0; i < node.children.length; i++)
+            if (pictureReady(node.children[i], part)) return true
+        return false
+    }
     function onScreen(item) {
         var corner = item.mapToItem(harness, 0, 0)
         return item.visible && corner.x >= 0 && corner.y >= 0 && corner.x + item.width <= harness.width && corner.y + item.height <= harness.height

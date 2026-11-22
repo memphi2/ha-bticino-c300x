@@ -23,10 +23,12 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import threading
 import time
+import zlib
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -95,10 +97,21 @@ def _agent_data() -> dict[str, object]:
         CONF_WEATHER_ENTITY_ID: "weather.home",
         CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
     })
-    return {
-        "status": run(dashboard.async_status(hass, entry)),
-        "dashboard": run(dashboard.async_dashboard_payload(hass, entry)),
-    }
+    payload = run(dashboard.async_dashboard_payload(hass, entry))
+    payload["data"]["pages"][1]["items"].append({
+        "kind": "image", "source": f"http://127.0.0.1:{AGENT_PORT}/ui/test-picture.png",
+        "caption": "Haustür", "width": 220, "height": 120,
+    })
+    return {"status": run(dashboard.async_status(hass, entry)), "dashboard": payload}
+
+
+def _png(width: int, height: int) -> bytes:
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+
+    rows = b"".join(b"\0" + bytes((40, 120, 200)) * width for _ in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
 
 
 @pytest.fixture(scope="module")
@@ -121,7 +134,14 @@ def agent() -> Iterator[list[str]]:
         def do_GET(self) -> None:
             url = urlsplit(self.path)
             requests.append(self.path)
-            if url.path == "/homeassistant":
+            if url.path == "/ui/test-picture.png":
+                picture = _png(220, 120)
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(picture)))
+                self.end_headers()
+                self.wfile.write(picture)
+            elif url.path == "/homeassistant":
                 self._reply(data["dashboard"] if not url.query else {"ok": True})
             elif url.path in ("/ui/state", "/ui/alarm/status"):
                 self._reply(data["status"])
@@ -223,15 +243,16 @@ def test_the_dashboard_shows_its_tiles_and_a_detail(skin: Path, agent: list[str]
     steps = """
         if (n === 1) { console.log("CHECK pages " + page.pageCount); shot("ha-start") }
         if (n === 2) { harness.navigation(page).selected(1) }
-        if (n === 3) { console.log("CHECK page " + page.currentPageIndex); shot("ha-tiles") }
+        if (n === 3) { console.log("CHECK page " + page.currentPageIndex + " picture " + harness.pictureReady(page, "test-picture")); shot("ha-tiles") }
         if (n === 4) { page.openDetails(page.dashboardPages[1].items[0]) }
         if (n === 5) { shot("ha-detail") }
         return n < 6
 """
     checks, warnings = _split(_page(skin, "HomeAssistant.qml", "run-ha-steps", steps))
-    assert checks == ["loaded true", "pages 2", "page 1"]
+    assert checks == ["loaded true", "pages 2", "page 1 picture true"]
     assert warnings == []
     assert "/homeassistant" in agent
+    assert "/ui/test-picture.png" in agent
 
 
 def test_the_alarm_page_reads_the_state_and_offers_the_modes(skin: Path, agent: list[str]) -> None:

@@ -24,8 +24,8 @@ from .api import (
 from .capabilities import (
     auth_config_supported,
     entry_device_ui_configured,
-    ringer_mute_supported,
     entry_maintenance_action_is_advertised,
+    ringer_mute_supported,
 )
 from .const import (
     CONF_AGENT_TOKEN,

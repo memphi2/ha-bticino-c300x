@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .const import CONF_DEVICE_UI_ENABLED
+from .display_support import entry_display_supported
 from .event_types import (
     ACTIVATION_EVENTS,
     ALWAYS_REGISTERED_EVENTS,
@@ -208,7 +209,7 @@ def entry_gui_function_patch_active(entry: Any) -> bool:
 
     runtime_data = getattr(entry, "runtime_data", None)
     status = getattr(runtime_data, "qml_patch_status", {})
-    return qml_patch_status_is_active(status)
+    return entry_display_supported(entry) and qml_patch_status_is_active(status)
 
 
 def entry_device_ui_configured(entry: Any) -> bool | None:
@@ -229,12 +230,14 @@ def entry_device_ui_configured(entry: Any) -> bool | None:
 def entry_device_ui_enabled(entry: Any) -> bool:
     """Return the effective HA setting for C300X device UI integration."""
 
-    return bool(entry_device_ui_configured(entry))
+    return entry_display_supported(entry) and bool(entry_device_ui_configured(entry))
 
 
 def entry_device_ui_enabled_or_patch_active(entry: Any) -> bool:
     """Return true when device UI is enabled or an older entry has an active patch."""
 
+    if not entry_display_supported(entry):
+        return False
     configured = entry_device_ui_configured(entry)
     if configured is not None:
         return configured

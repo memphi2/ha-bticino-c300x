@@ -667,7 +667,8 @@
       "cannot_connect": "Der Device-Agent ist nicht erreichbar. Pruefe die Adresse und ob der Agent laeuft.",
       "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu.",
       "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert.",
-      "reauth_successful": "Die Zugangsdaten wurden aktualisiert."
+      "reauth_successful": "Die Zugangsdaten wurden aktualisiert.",
+      "unsupported_display": "Dieses Geraet unterstuetzt keine Home-Assistant-Displayseiten oder Display-Benachrichtigungen. Gespeicherte Layouts bleiben unveraendert."
     },
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",
@@ -706,7 +707,8 @@
   },
   "options": {
     "abort": {
-      "unique_id_mismatch": "Dies ist ein anderes als das eingerichtete Gerät. Konfiguriere den passenden Eintrag oder füge das Gerät neu hinzu."
+      "unique_id_mismatch": "Dies ist ein anderes als das eingerichtete Gerät. Konfiguriere den passenden Eintrag oder füge das Gerät neu hinzu.",
+      "unsupported_display": "Dieses Geraet unterstuetzt keine Home-Assistant-Displayseiten oder Display-Benachrichtigungen. Gespeicherte Layouts bleiben unveraendert."
     },
     "step": {
       "connection": {
@@ -858,7 +860,8 @@
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
           "speech": "Sprachausgabe",
           "display": "Display",
-          "done": "Fertig"
+          "done": "Fertig",
+          "dashboard_alarm": "Alarmo"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
@@ -868,7 +871,8 @@
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "speech": "Sprachausgabe-Engine und Sprache für gesprochene Meldungen.",
           "display": "Display-Patch, Seiten, Kacheln und Alarmo.",
-          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
+          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert.",
+          "dashboard_alarm": "Alarmo-Integration, unabhaengig von der Display-Unterstuetzung."
         }
       },
       "display": {

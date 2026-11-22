@@ -667,7 +667,8 @@
       "cannot_connect": "The device agent could not be reached. Check the address and that the agent is running.",
       "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry.",
       "reauth_wrong_device": "The agent has a different identity. The saved entry was not changed.",
-      "reauth_successful": "The credentials were updated."
+      "reauth_successful": "The credentials were updated.",
+      "unsupported_display": "This device does not support Home Assistant display pages or display notifications. Saved layouts have not been changed."
     },
     "error": {
       "agent_bundle_missing": "The packaged ARMHF agent bundle is missing. Build/package the release bundle before using the installer.",
@@ -706,7 +707,8 @@
   },
   "options": {
     "abort": {
-      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry."
+      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry.",
+      "unsupported_display": "This device does not support Home Assistant display pages or display notifications. Saved layouts have not been changed."
     },
     "step": {
       "connection": {
@@ -858,7 +860,8 @@
           "device_activations": "Activations: locks, lights, stair light",
           "speech": "Speech",
           "display": "Display",
-          "done": "Done"
+          "done": "Done",
+          "dashboard_alarm": "Alarmo"
         },
         "menu_option_descriptions": {
           "connection": "Address, access key and maintenance key of the C300X, address of Home Assistant.",
@@ -868,7 +871,8 @@
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
           "speech": "Text-to-speech engine and language for spoken notifications.",
           "display": "Display patch, pages, tiles and Alarmo.",
-          "done": "Close the settings. Everything submitted is already saved."
+          "done": "Close the settings. Everything submitted is already saved.",
+          "dashboard_alarm": "Alarmo integration, independent of device display support."
         }
       },
       "display": {

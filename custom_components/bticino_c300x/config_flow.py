@@ -216,6 +216,11 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .display_patch_sync import async_mark_display_setting
+from .display_support import (
+    DISPLAY_SUPPORTED,
+    device_display_support,
+    entry_display_supported,
+)
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import ssh_login
@@ -293,6 +298,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         super().__init__()
         self._setup_connection: dict[str, Any] = {}
         self._setup_unique_id: str | None = None
+        self._setup_agent_info: dict[str, Any] = {}
         self._setup_agent_needs_token = False
         self._setup_bootstrapped = False
         self._setup_pending_features: dict[str, Any] | None = None
@@ -464,6 +470,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             self.hass,
             self._setup_connection,
             api_token=api_token,
+            setup_data_target=self._setup_agent_info,
         )
         if unique_id is None:
             return
@@ -746,6 +753,11 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         if not self._setup_feature_data:
             return await self.async_step_user_features()
+        if device_display_support(self._setup_agent_info) is False:
+            self._setup_dashboard_input = {
+                **_dashboard_input_defaults({CONF_DEVICE_UI_ENABLED: False}), **self._setup_alarm,
+            }
+            return await self._async_create_setup_entry_from_dashboard({})
         errors: dict[str, str] = {}
         if user_input is not None:
             self._setup_dashboard_input = {
@@ -767,6 +779,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     ) -> FlowResult:
         """Collect the pages of the initial C300X display dashboard."""
 
+        if device_display_support(self._setup_agent_info) is False:
+            return self.async_abort(reason="unsupported_display")
         if not self._setup_dashboard_input:
             return await self.async_step_user_dashboard()
         errors: dict[str, str] = {}
@@ -805,6 +819,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     ) -> FlowResult:
         """Collect per-entity display labels for the initial C300X dashboard."""
 
+        if device_display_support(self._setup_agent_info) is False:
+            return self.async_abort(reason="unsupported_display")
         if not self._setup_dashboard_input:
             return await self.async_step_user_dashboard()
         errors: dict[str, str] = {}
@@ -913,6 +929,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             self._note_setup_rejection(errors, self._setup_connection)
             return self._show_agent_auth(errors)
         self._setup_pending_features = None
+        display_supported = device_display_support(self._setup_agent_info)
+        if display_supported is False:
+            feature_data = {**feature_data, CONF_DEVICE_UI_ENABLED: False}
 
         if self._setup_unique_id is not None:
             self._async_abort_duplicate_setup_flows(self._setup_unique_id)
@@ -932,6 +951,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             data={
                 **self._setup_connection,
                 **feature_data,
+                **({DISPLAY_SUPPORTED: display_supported} if display_supported is not None else {}),
                 CONF_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),
@@ -1170,6 +1190,12 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         feature_defaults = _current_feature_options(entry)
         if not self._reconfigure_feature_data:
             return await self.async_step_reconfigure_features()
+        if not entry_display_supported(entry):
+            # Keep saved layouts intact; the capability gate makes them inert.
+            self._reconfigure_dashboard_input = {
+                **_dashboard_input_defaults({}, feature_defaults), **self._reconfigure_alarm,
+            }
+            return await self._async_finish_reconfigure_from_dashboard(feature_defaults, {})
         errors: dict[str, str] = {}
         if user_input is not None:
             self._reconfigure_dashboard_input = {
@@ -1206,6 +1232,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         """Reconfigure the pages of the C300X display dashboard."""
 
         entry = self._get_reconfigure_entry()
+        if not entry_display_supported(entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = _current_feature_options(entry)
         if not self._reconfigure_dashboard_input:
             return await self.async_step_reconfigure_dashboard()
@@ -1253,6 +1281,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         """Reconfigure per-entity C300X display dashboard labels."""
 
         entry = self._get_reconfigure_entry()
+        if not entry_display_supported(entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = _current_feature_options(entry)
         if not self._reconfigure_dashboard_input:
             return await self.async_step_reconfigure_dashboard()
@@ -1627,6 +1657,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Manage the Display patch and what the display shows besides pages."""
 
+        if not entry_display_supported(self._config_entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -1672,6 +1704,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Manage the pages of the C300X display dashboard."""
 
+        if not entry_display_supported(self._config_entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -1714,6 +1748,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Manage per-entity display labels for C300X dashboard options."""
 
+        if not entry_display_supported(self._config_entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -1851,6 +1887,7 @@ async def _async_agent_stable_unique_id(
     connection: dict[str, Any],
     *,
     api_token: str = "",
+    setup_data_target: dict[str, Any] | None = None,
 ) -> str | None:
     """Return the stable agent ID that mDNS advertises for this device."""
 
@@ -1862,6 +1899,9 @@ async def _async_agent_stable_unique_id(
         )
     except C300XAgentApiError:
         return None
+    if setup_data_target is not None:
+        setup_data_target.clear()
+        setup_data_target.update(setup_data)
     return _stable_unique_id_from_setup_data(setup_data)
 
 

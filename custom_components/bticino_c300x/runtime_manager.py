@@ -22,6 +22,7 @@ from .api import (
 from .capabilities import (
     capability_is_supported,
     entry_device_ui_configured,
+    entry_device_ui_enabled,
     entry_device_ui_enabled_or_patch_active,
     maintenance_action_is_advertised,
 )
@@ -38,7 +39,6 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
-    CONF_DEVICE_UI_ENABLED,
     CONF_DISPLAY_SETTING_PENDING,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -75,6 +75,7 @@ from .device_user import (
     homeassistant_account_label,
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
+from .display_support import entry_display_supported, remember_display_support
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
@@ -236,6 +237,7 @@ class C300XRuntimeManager:
                 capabilities,
                 doorbell_video_enabled=_entry_video_enabled(self.entry),
             )
+            remember_display_support(self.hass, self.entry, self.setup_data)
 
         if self.connection_state.available:
             self.agent_update_state = compare_agent_bundle(
@@ -969,6 +971,11 @@ async def _async_configure_display_bridge(
     runtime_data = entry.runtime_data
     resources = getattr(runtime_data, "resources", None)
 
+    if not entry_display_supported(entry):
+        if resources is not None:
+            resources.display_bridge_registration_pending = False
+        return
+
     def check_active() -> None:
         if (
             getattr(entry, "runtime_data", None) is not runtime_data
@@ -979,7 +986,7 @@ async def _async_configure_display_bridge(
     check_active()
     if resources is not None:
         resources.display_bridge_registration_pending = True
-    enabled = bool(_entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False))
+    enabled = entry_device_ui_enabled(entry)
     webhook_url = (
         await async_generate_agent_callback_url(
             hass,
@@ -1099,7 +1106,7 @@ def _async_track_display_bridge_updates(
     """Wake visible display pages for selected HA state changes, without polling."""
 
     alarm_entity_id = _entry_config_value(entry, CONF_ALARM_ENTITY_ID, "")
-    if not _entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False):
+    if not entry_device_ui_enabled(entry):
         return None
 
     from homeassistant.core import callback

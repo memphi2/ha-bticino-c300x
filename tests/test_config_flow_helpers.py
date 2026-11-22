@@ -1843,6 +1843,7 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
         connection: dict[str, object],
         *,
         api_token: str = "",
+        setup_data_target: dict[str, object] | None = None,
     ) -> str:
         calls.append(f"agent_id:{connection[CONF_AGENT_HOST]}:{api_token}")
         return "c300xaabbcc001122"

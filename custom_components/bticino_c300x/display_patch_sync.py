@@ -22,6 +22,7 @@ from .agent_update import async_retry_update_maintenance_busy
 from .api import C300XAgentApiError
 from .capabilities import entry_device_ui_configured, maintenance_action_is_advertised
 from .const import CONF_DISPLAY_SETTING_PENDING, SIGNAL_QML_PATCH_CHANGED
+from .display_support import entry_display_supported
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .qml_patch import (
@@ -54,6 +55,8 @@ async def async_apply_display_setting(
     """
 
     wanted = entry_device_ui_configured(entry)
+    if not entry_display_supported(entry):
+        return False
     runtime_data: Any = getattr(entry, "runtime_data", None)
     if wanted is None:
         return False

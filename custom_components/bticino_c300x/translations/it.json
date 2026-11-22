@@ -667,7 +667,8 @@
       "cannot_connect": "Impossibile raggiungere il device agent. Controlla l'indirizzo e che l'agent sia in esecuzione.",
       "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce.",
       "reauth_wrong_device": "L'agente ha un'identità diversa. La voce salvata non è stata modificata.",
-      "reauth_successful": "Le credenziali sono state aggiornate."
+      "reauth_successful": "Le credenziali sono state aggiornate.",
+      "unsupported_display": "Questo dispositivo non supporta le pagine Home Assistant o le notifiche sul display. I layout salvati non sono stati modificati."
     },
     "error": {
       "agent_bundle_missing": "Il bundle ARMHF dell'agent non e incluso. Compila/prepara il bundle di release prima di usare l'installer.",
@@ -706,7 +707,8 @@
   },
   "options": {
     "abort": {
-      "unique_id_mismatch": "Questo dispositivo è diverso da quello configurato. Riconfigura la sua voce o aggiungi un nuovo dispositivo."
+      "unique_id_mismatch": "Questo dispositivo è diverso da quello configurato. Riconfigura la sua voce o aggiungi un nuovo dispositivo.",
+      "unsupported_display": "Questo dispositivo non supporta le pagine Home Assistant o le notifiche sul display. I layout salvati non sono stati modificati."
     },
     "step": {
       "connection": {
@@ -858,7 +860,8 @@
           "device_activations": "Attivazioni: serrature, luci, luce scale",
           "speech": "Sintesi vocale",
           "display": "Display",
-          "done": "Fatto"
+          "done": "Fatto",
+          "dashboard_alarm": "Alarmo"
         },
         "menu_option_descriptions": {
           "connection": "Indirizzo, chiave di accesso e chiave di manutenzione del C300X, indirizzo di Home Assistant.",
@@ -868,7 +871,8 @@
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
           "speech": "Motore di sintesi vocale e lingua delle notifiche parlate.",
           "display": "Patch display, pagine, riquadri e Alarmo.",
-          "done": "Chiudi le impostazioni. Tutto ciò che è stato inviato è già salvato."
+          "done": "Chiudi le impostazioni. Tutto ciò che è stato inviato è già salvato.",
+          "dashboard_alarm": "Integrazione Alarmo, indipendente dal supporto del display."
         }
       },
       "display": {

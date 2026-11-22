@@ -76,6 +76,7 @@ from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import normalize_dashboard_pages
 from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
 from .dashboard_page_order import dashboard_navigation
+from .display_support import entry_display_supported
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
@@ -482,5 +483,5 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     menu.append("device_activations")
     if speech_offered(config_entry):
         menu.append("speech")
-    menu.append("display")
+    menu.append("display" if entry_display_supported(config_entry) else "dashboard_alarm")
     return menu

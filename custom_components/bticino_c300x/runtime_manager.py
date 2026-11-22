@@ -74,11 +74,7 @@ from .device_user import (
     device_user_bootstrap_satisfied,
     homeassistant_account_label,
 )
-from .display_patch_sync import (
-    async_settle_display_setting,
-    display_setting_pending,
-    note_display_setting_saved,
-)
+from .display_patch_sync import async_settle_display_setting, display_setting_pending
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
@@ -504,9 +500,6 @@ def _entry_update_listener(
             return
         was_dynamic_homepage = _dynamic_homepage_setting(previous)
         previous = current
-        # The start after this reload brings the Display patch in line with
-        # the Display setting, with the agent the entry then talks to.
-        note_display_setting_saved(updated.entry_id)
         # Before the reload: the re-apply needs the runtime data that the
         # reload replaces.
         await _async_reapply_display_patch_for_home_page(

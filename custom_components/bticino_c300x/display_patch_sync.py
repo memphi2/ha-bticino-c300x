@@ -1,12 +1,13 @@
 """Apply the Display setting to the device when the settings are applied.
 
 The setting says that it installs the Home Assistant pages on the C300X and
-that turning it off restores the original display. Saving settings notes
-that as still to do (the Display settings submitted as they are too, with a
-reload), and a new entry has it marked in its data; the start that follows
-does it with the agent it then talks to. Until the device followed, the mark
-stays in the entry data, so a later start tries again. A start without a
-note or mark changes nothing on the device.
+that turning it off restores the original display. Where the setting is
+applied - a new entry, the reconfigure, the Display settings submitted -
+the entry data gets a mark; the start that follows does it with the agent it
+then talks to. The mark stays until the device followed, so a later start
+tries again. Other settings saved, and a start without the mark, change
+nothing on the device: an entry from before the setting stored it with its
+first save of any area, not always as its device has it.
 """
 
 from __future__ import annotations
@@ -30,9 +31,6 @@ from .qml_patch import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# Entries whose settings were saved since their last start.
-_SAVED: set[str] = set()
 
 
 def _differs(status: dict[str, Any], wanted: bool) -> bool | None:
@@ -87,19 +85,15 @@ async def async_apply_display_setting(
     return True
 
 
-def note_display_setting_saved(entry_id: str) -> None:
-    """The next start of the entry applies its Display setting to the device."""
-
-    _SAVED.add(entry_id)
-
-
 def display_setting_pending(entry: BticinoC300XConfigEntry) -> bool:
     """Whether this start applies the Display setting to the device."""
 
-    return entry.entry_id in _SAVED or CONF_DISPLAY_SETTING_PENDING in entry.data
+    return CONF_DISPLAY_SETTING_PENDING in entry.data
 
 
-def _mark(hass: HomeAssistant, entry: BticinoC300XConfigEntry, *, pending: bool) -> None:
+def async_mark_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEntry, *, pending: bool) -> None:
+    """Mark the Display setting as to be applied at the next start, or done."""
+
     if (CONF_DISPLAY_SETTING_PENDING in entry.data) is pending:
         return
     data = dict(entry.data)
@@ -113,7 +107,6 @@ def _mark(hass: HomeAssistant, entry: BticinoC300XConfigEntry, *, pending: bool)
 async def async_settle_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     """Apply the Display setting and keep it marked until the device followed."""
 
-    _SAVED.discard(entry.entry_id)
-    done = await async_apply_display_setting(hass, entry) is not None
-    _mark(hass, entry, pending=not done)
+    if await async_apply_display_setting(hass, entry) is not None:
+        async_mark_display_setting(hass, entry, pending=False)
 

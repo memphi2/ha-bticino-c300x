@@ -18,11 +18,6 @@ from custom_components.bticino_c300x.const import (
 _ADVERTISED = {"maintenance": {"supported": True, "qml_patch": True, "qml_restore": True}}
 
 
-@pytest.fixture(autouse=True)
-def _no_saved_entries(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(display_patch_sync, "_SAVED", set(), raising=False)
-
-
 def _entry(setting: bool | None, capabilities: dict[str, Any] | None = None, data: dict | None = None) -> Any:
     options = {} if setting is None else {CONF_DEVICE_UI_ENABLED: setting}
     return SimpleNamespace(
@@ -143,35 +138,52 @@ def test_a_new_entry_applies_its_display_setting_at_the_first_start(monkeypatch)
     assert seen == [entry]
 
 
-def test_a_saved_setting_is_applied_at_the_start_after_the_reload(monkeypatch):
-    entry = _entry(False)
+def test_the_mark_stays_until_the_device_followed(monkeypatch):
+    entry = _entry(True, data={CONF_DISPLAY_SETTING_PENDING: True})
     seen = _start(monkeypatch, entry, [None, True])
     updates: list[dict[str, Any]] = []
     sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
-
-    async def reload(_hass: Any, _entry: Any) -> None:
-        return None
-
-    async def home_page(*_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    monkeypatch.setattr(runtime_manager, "_async_update_listener", reload)
-    monkeypatch.setattr(runtime_manager, "_async_reapply_display_patch_for_home_page", home_page)
-    listener = runtime_manager._entry_update_listener(entry)
-    # The listener only notes it: the start after the reload uses the agent the entry then has.
-    entry.options = {CONF_DEVICE_UI_ENABLED: True}
-    asyncio.run(listener(None, entry))
-    assert seen == []
-    # The device does not follow: the entry keeps it marked, so a later start tries again.
     asyncio.run(sync(_manager(entry, updates)))
     assert entry.data == {CONF_DISPLAY_SETTING_PENDING: True}
     asyncio.run(sync(_manager(entry, updates)))
     assert entry.data == {}
-    asyncio.run(sync(_manager(entry, updates)))
     assert seen == [entry, entry]
 
 
-def test_the_display_settings_submitted_as_they_are_reach_the_device_with_a_reload():
+def test_a_start_cut_off_during_the_apply_keeps_the_mark(monkeypatch):
+    entry = _entry(True, data={CONF_DISPLAY_SETTING_PENDING: True})
+    _start(monkeypatch, entry, [])
+
+    async def cut_off(_hass: Any, _entry: Any) -> bool | None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(display_patch_sync, "async_apply_display_setting", cut_off)
+    sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(sync(_manager(entry, [])))
+    assert entry.data == {CONF_DISPLAY_SETTING_PENDING: True}
+
+
+def test_other_settings_saved_leave_the_device_alone(monkeypatch):
+    # An entry from before the setting stored it with the first save of any
+    # area, not always as its device has it.
+    entry = _entry(False)
+    seen = _start(monkeypatch, entry, [True])
+
+    async def nothing(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(runtime_manager, "_async_update_listener", nothing)
+    monkeypatch.setattr(runtime_manager, "_async_reapply_display_patch_for_home_page", nothing)
+    listener = runtime_manager._entry_update_listener(entry)
+    entry.options = {CONF_DEVICE_UI_ENABLED: False, "video_enabled": True}
+    asyncio.run(listener(None, entry))
+    asyncio.run(runtime_manager.C300XRuntimeManager.async_sync_device_state(_manager(entry, [])))
+    assert seen == []
+    assert entry.data == {}
+
+
+def test_the_display_settings_submitted_reach_the_device_at_the_start_after_the_reload():
     from test_display_settings import _OptionsAreas
     from test_executor import run
 
@@ -180,12 +192,14 @@ def test_the_display_settings_submitted_as_they_are_reach_the_device_with_a_relo
         options={}, runtime_data=None, update_listeners=[],
     )
     areas = _OptionsAreas(entry)
-    # A change is saved; its listener notes it and reloads.
+    # A change is saved and marked; its listener reloads.
     result = run(areas._flow().async_step_dashboard({CONF_DEVICE_UI_ENABLED: True}))
     assert result["type"] == "menu"
     assert entry.options[CONF_DEVICE_UI_ENABLED] is True
+    assert display_patch_sync.display_setting_pending(entry)
     reloads = areas.hass.config_entries.async_schedule_reload.call_count
-    # The same again saves nothing: it is noted and reloaded here.
+    # The same again saves nothing: it is marked and reloaded here.
+    del entry.data[CONF_DISPLAY_SETTING_PENDING]
     result = run(areas._flow().async_step_dashboard({CONF_DEVICE_UI_ENABLED: True}))
     assert result["type"] == "menu"
     assert display_patch_sync.display_setting_pending(entry)

@@ -80,6 +80,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
+    CONF_DISPLAY_SETTING_PENDING,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
@@ -2458,7 +2459,11 @@ def test_qml_patch_status_flow_forms_pass_description_placeholders() -> None:
 def _options_flow(entry):
     """Return an options flow that saves into the given entry."""
 
-    def update_entry(target, *, options):
+    def update_entry(target, *, options=None, data=None):
+        if data is not None:
+            target.data = dict(data)
+        if options is None:
+            return False
         changed = target.options != options
         target.options = dict(options)
         return changed
@@ -2957,6 +2962,8 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert result["data_updates"][CONF_AGENT_PORT] == 8092
     assert result["data_updates"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.20:8123"
     assert result["data_updates"][CONF_CREATE_HOMEASSISTANT_USER] is True
+    # The start after the reload applies the Display setting.
+    assert result["data_updates"][CONF_DISPLAY_SETTING_PENDING] is True
     assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "02"
     assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "03"
     assert result["data_updates"][CONF_DEVICE_ACTIVATIONS] == [

@@ -168,8 +168,10 @@ class _OptionsAreas:
         entry.update_listeners = getattr(entry, "update_listeners", [])
         self.listener_tasks = []
 
-        def update_entry(entry, *, options):
-            if entry.options == options:
+        def update_entry(entry, *, options=None, data=None):
+            if data is not None:
+                entry.data = dict(data)
+            if options is None or entry.options == options:
                 return False
             entry.options = dict(options)
             for listener in entry.update_listeners:

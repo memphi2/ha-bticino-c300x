@@ -215,7 +215,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
-from .display_patch_sync import note_display_setting_saved
+from .display_patch_sync import async_mark_display_setting
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import ssh_login
@@ -1389,7 +1389,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         self._abort_if_unique_id_mismatch()
 
         rotate = bool(self._reconfigure_connection.pop(CONF_ROTATE_SHARED_SECRET))
-        data_updates = {**self._reconfigure_connection, **feature_data}
+        # The start after the reload applies the Display setting.
+        data_updates = {**self._reconfigure_connection, **feature_data, CONF_DISPLAY_SETTING_PENDING: True}
         if rotate:
             data_updates[CONF_SHARED_SECRET] = secrets.token_urlsafe(32)
             data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
@@ -1633,13 +1634,17 @@ class BticinoC300XOptionsFlow(
                 _dashboard_form_input(user_input),
                 feature_defaults,
             )
-            saved = dict(self._config_entry.options)
+            entry = self._config_entry
+            saved = dict(entry.options)
+            marked = CONF_DISPLAY_SETTING_PENDING in entry.data
+            # Before the save: the start after its reload applies the setting.
+            async_mark_display_setting(self.hass, entry, pending=True)
             result = await self._async_save_options(feature_defaults)
-            if not result.get("errors") and dict(self._config_entry.options) == saved:
-                # Nothing was saved, so nothing reloads: the start of this reload
-                # brings a device that differs in line.
-                note_display_setting_saved(self._config_entry.entry_id)
-                self.hass.config_entries.async_schedule_reload(self._config_entry.entry_id)
+            if result.get("errors"):
+                async_mark_display_setting(self.hass, entry, pending=marked)
+            elif dict(entry.options) == saved:
+                # Nothing was saved, so nothing reloads.
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
             return result
 
         return await self._async_show_options_dashboard_form(

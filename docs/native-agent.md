@@ -191,9 +191,12 @@ Original display files and the original display library are backed up under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`; generated agent
 files are not backed up on the device.
 
-The remove-agent maintenance action is explicit and token protected. It first
+The remove-agent maintenance action is explicit and token protected. Before any
+restoration it stops the agent with TERM and checks for exit for up to ten
+seconds. An unverifiable or still-running agent aborts removal without restoring
+or deleting device files; there is no forced SIGKILL fallback. It then
 restores all display changes (Display patch, core hook and media-user label),
-then the IPv6 and IPv4 firewall scripts and the display library, stops the agent, restores the original
+the IPv6 and IPv4 firewall scripts and the display library, restores the original
 audio codec and camera quality values, removes the native-agent init files, agent directory and
 agent-owned backups, and schedules a reboot.
 SSH is started before and after the cleanup and is deliberately not removed. If
@@ -210,6 +213,87 @@ baseline; a failed delivery leaves the latest state pending for the next sample.
 Snapshot instance/sequence metadata prevents older responses overwriting newer
 values in Home Assistant. Missing updates expire the sensor after the heartbeat
 plus two sample intervals; reconnect refreshes are one-shot and shared.
+
+## Optional 960x576 High Video
+
+**Configure > Camera quality** offers an opt-in **960x576** high-stream mode
+only for exact verified C300X firmware **1.7.19** and **2.0.2** media executables.
+The original **688x480** and **704x576** choices keep their original behavior.
+This is not a general firmware-version switch: the complete executable must
+match the full SHA-256 of a known stock image or its exact supported patched
+image. Each firmware has a separate stock/patched hash pair; GNU build IDs
+are not normalized or ignored. Unknown binaries are not patched. Firmware
+3.0.x/Qt5 and its low-stream path are unchanged.
+
+Only project-authored patch logic and checks are distributed for this option.
+No firmware binary, vendor file or copied vendor implementation is included
+in the geometry patch. The agent modifies the executable already present on
+the device and keeps its verified original backup on that device, never
+distributed. The backup preserves original permissions and ownership
+(0755 and UID/GID 1000:1000 for the verified originals), like the other
+patch backups; this is not a mode-0600 or restricted-access guarantee.
+Neither that backup nor the patched executable is a distributable package asset.
+
+The original camera input is **720x576**. Configuration keeps the **704x576**
+crop, removing eight columns on each side and retaining all **576 lines**.
+The patch changes two high-stream geometry instructions so this picture is
+scaled to **960x576 before the existing encoder**. It adds no transcoding
+stage and does not create native 960-pixel camera detail. The LCD remains
+**800x480 (5:3)**. HA snapshots read that display framebuffer, with an
+800x480 default; explicit existing sizes, including 688x480, remain unchanged.
+
+Before replacement, the agent prepares and verifies the original executable
+backup under the managed device backup root, at
+`original/home/bticino/bin/<original-media-executable>`, where the final component
+is the device's original filename. Application and restoration validate the
+complete binary identity, not only the two edited instructions. Only a verified
+stock executable can create the original backup. A patched executable requires
+that backup to exist and pass validation; missing or invalid backups block
+restore. No original instruction table is distributed and no original
+executable is reconstructed. Keep this original backup on the device while the patch is installed.
+Choosing a legacy high-stream size restores the
+verified original executable and writes the selected legacy configuration.
+Invalid recovery data is an error, not permission to guess an original file.
+Device-agent removal must finish the verified restoration before deleting its
+managed backups.
+
+If removal cannot remount the root filesystem read-only after restoration,
+it restores the original startup entries and retains the agent and backups.
+The agent has already been stopped and is not restarted on this failure path;
+earlier successful restoration steps are not undone. The verified
+`media_reboot_required` result explains a still-running patched executable,
+but never permits ignoring a read-only remount failure.
+No automatic reboot is requested on that failure path. Once the message
+confirms startup restoration, perform a full device reboot and retry removal;
+the replaced media executable may still be mapped by the running process.
+If startup rollback itself fails, follow the reported recovery location and
+restore the entries before rebooting. Successful removal deletes the agent
+and backups before requesting the usual asynchronous reboot; a reboot request
+is not confirmation that the device has restarted.
+
+The startup recovery copy is retained until final deletion succeeds. If that
+deletion fails, startup is restored only when the complete remaining agent
+tree matches its pre-deletion hashes, permissions, ownership and link targets.
+If files were partially deleted or identity cannot be verified, startup remains
+disabled. Keep the reported recovery directory and remaining device backups;
+repair the agent installation before restoring its startup entries, and do not
+reboot until recovery is complete. No automatic reboot is requested on a
+deletion failure. The temporary recovery directory contains startup entries
+and an identity manifest, not a backup of deleted agent files.
+
+Both applying and restoring require a **normal device reboot**. An agent-only
+or GUI-only restart does not restart the vendor media pipeline with the new
+executable and settings. Saved/installed state must not be confused with the
+currently running media process; compare a newly opened stream after reboot.
+Schedule the change when no call or recording is active.
+
+The 960x576 live picture has been confirmed on the 1.7.19 test device. Firmware
+2.0.2 has been checked offline only, not on hardware. This is
+not proof of the resolution of **built-in answering-machine recordings**;
+960x576 recording there remains unverified. See
+[Camera quality](feature-reference.md#camera-quality) for the user-facing
+geometry and [Visitor images](feature-reference.md#visitor-images) for the
+separate snapshot settings.
 
 ## Agent updates
 
@@ -322,7 +406,7 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   no files for the Display patch. The agent and the installer recognise it by
   `/usr/lib/libQt5Core.so.5`, skip the Display patch and the media-user label,
   and the Home Assistant pages are not shown on the device.
-- Its `bt_av_media` sends only the low-resolution video stream on to other
+- Its vendor media process sends only the low-resolution video stream on to other
   receivers. The camera is fixed to that stream there
   (`video.av.highResolution: false`), and the Camera resolution entity is not
   offered. Camera quality sets that low stream there (`BitrateRtpL`,
@@ -333,8 +417,9 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   through the Door Entry app: that creates the SIP user, domain and keystore
   of Flexisip.
 
-The routing target is the one file that differs between the supported
-versions. `device_routing.c` holds one patch table per known stock build and
+The routing target differs between the supported versions;
+the optional high-video patch also has its own exact executable identity and
+must not be inferred from general agent compatibility. `device_routing.c` holds one patch table per known stock build and
 selects it by the file's SHA-256, or by the stock bytes of all its patch
 ranges; a file of neither build is refused. A backup is restored only when it
 is the stock file of the build the device runs, so the backup an earlier

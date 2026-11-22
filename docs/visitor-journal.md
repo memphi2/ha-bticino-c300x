@@ -41,7 +41,10 @@ The existing device-wide **Save images** switch must be on for automatic
 snapshots. It is on by default and applies to doorbell rings and video streams
 started through HA, not just rings. Under **Configure > Visitor Snapshot**,
 choose the image size, capture delay, retention and date/time stamp. Defaults
-are **688x480**, **3 seconds**, **14 days** and the stamp on. A call or stream
+are **800x480**, **3 seconds**, **14 days** and the stamp on. The image uses the
+native display framebuffer, not the encoded stream resolution. Previously
+saved image sizes remain unchanged; select 800x480 to use native proportions
+for future captures. A call or stream
 that ends before the configured delay may not produce an image.
 
 Capture runs server-side without an open card. The agent reads the existing

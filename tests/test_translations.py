@@ -45,8 +45,8 @@ def test_the_activations_form_says_that_further_locks_and_lights_are_added_there
             assert all(part in first for part in hint), (path.name, step)
 
 
-def test_the_snapshot_size_says_why_480_is_the_limit_and_what_keeps_a_576_picture_in_shape() -> None:
-    """A user tried 576 for a 704x576 camera picture; the form says the display sets the limit."""
+def test_snapshot_size_help_distinguishes_native_framebuffer_from_high_stream() -> None:
+    """The display sets the limit and proportions, even for the 960x576 stream."""
 
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)
@@ -56,8 +56,10 @@ def test_the_snapshot_size_says_why_480_is_the_limit_and_what_keeps_a_576_pictur
         ):
             help_texts = data[area]["step"][step]["data_description"]
             height = help_texts["snapshot_height"]
-            assert "800×480" in height and "704×576" in height and "587×480" in height, (path.name, step)
-            assert "800×480" in help_texts["snapshot_width"]
+            assert all(size in height for size in ("800×480", "960×576", "400×240", "5:3")), (path.name, step)
+            width = help_texts["snapshot_width"]
+            assert "800×480" in width
+            assert "688" not in width and "587×480" not in height
         for area in ("config", "options"):
             assert "800×480" in data[area]["error"]["invalid_snapshot_option"], path.name
 
@@ -598,4 +600,15 @@ def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_lo
 
         assert f"**{select['name']}**" in description, path.name
         assert select["state"]["low"] in description, path.name
+
+
+def test_camera_quality_help_scopes_optional_geometry_and_preserves_runtime_placeholder() -> None:
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        step = _load_json(path)["options"]["step"]["camera_quality"]
+        assert re.findall(r"\{([^{}]+)\}", step["description"]) == ["running"], path.name
+        assert "960x576" in step["description"], path.name
+        size = step["data_description"]["size"]
+        for boundary in ("688x480", "704x576", "960x576", "800x480", "5:3",
+                         "C300X", "1.7.19", "2.0.2", "SHA-256", "3.0.x", "400x288"):
+            assert boundary in size, (path.name, boundary)
 

@@ -11,6 +11,9 @@ BIN=${C100X_GUI_BIN:-/home/bticino/bin/gui/BtClass100}
 WRAPPER=${C100X_GUI_WRAPPER:-/home/bticino/bin/BtClass100_qws}
 TRANSFORM=${C100X_HOOKS_AWK:-$AGENT/c100x_hooks.awk}
 IDENTITY=${C100X_IDENTITY_SCRIPT:-$AGENT/c100x_display_identity.sh}
+TRIAL=${C100X_TRIAL_SCRIPT:-$AGENT/c100x_display_trial.sh}
+PREPARE=0
+if [ "$ACTION" = prepare ]; then ACTION=apply; PREPARE=1; fi
 MAIN_SHA=ff1740e9742951f5cda2225d605eae06141f43ee26d900ca21d7fdf14960e6fb
 MENU_SHA=ba3edae9b9e670dad86894f93747f510f07c2389f498697e5d20dd95b4cb8e80
 WORK=
@@ -75,7 +78,7 @@ cleanup() {
     result=$?
     trap - EXIT HUP INT TERM
     if [ "$result" != 0 ] && [ "$DIRTY" = 1 ]; then
-        if rollback_previous; then sync; else printf '%s\n' 'c100x_display: rollback failed; backups retained' >&2; fi
+        if remount_rw && rollback_previous; then sync; else printf '%s\n' 'c100x_display: rollback failed; backups retained' >&2; fi
     fi
     if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi
     if [ -n "$WORK" ]; then rm -rf "$WORK"; fi
@@ -84,7 +87,7 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
-case "$ACTION" in status|apply|restore|recover) ;; *) fail 'unsupported action' ;; esac
+case "$ACTION" in status|apply|restore|recover|confirm) ;; *) fail 'unsupported action' ;; esac
 for path in "$GUI" "$BACKUP" "$BIN" "$WRAPPER" "$IDENTITY"; do
     safe_path "$path" || fail 'unsafe path'
 done
@@ -93,7 +96,10 @@ identity "$WRAPPER" ad6d23db69795afb712751b3d92afbca3356d524b40bdb441de096b3d12c
 identity "$GUI/EventManager.qml" 3ca4b5e8c27c8c8b283d533106091072e25632bb090d414ee4c1d93f3a06b181 || fail 'unsupported event manager'
 regular "$IDENTITY" || fail 'identity helper unavailable'
 . "$IDENTITY"
-if [ "$ACTION" != apply ] && originals "$GUI"; then
+safe_path "$TRIAL" && regular "$TRIAL" || fail 'trial helper unavailable'
+. "$TRIAL"
+if trial_exists && [ "$ACTION" = apply ]; then fail 'pending trial requires confirmation or recovery'; fi
+if [ "$ACTION" != apply ] && [ "$ACTION" != confirm ] && ! trial_exists && originals "$GUI"; then
     printf '%s\n' '{"ok":true,"state":"stock","runtime_verified":false}'
     exit 0
 fi
@@ -148,6 +154,30 @@ cp -p "$GUI/main.qml" "$GUI/MainPage.qml" "$WORK/before/"
 verify_current || fail 'target changed before transaction'
 cmp -s "$GUI/main.qml" "$WORK/before/main.qml" && cmp -s "$GUI/MainPage.qml" "$WORK/before/MainPage.qml" || fail 'target changed during snapshot'
 STAGE=$(mktemp -d "$GUI/.c100x-stage.XXXXXX") || fail 'private GUI stage unavailable'
+if [ "$ACTION" = confirm ]; then
+    verify_trial || fail 'invalid pending trial'
+    if confirm_trial; then
+        remount_rw && archive_trial || fail 'trial confirmation archive failed; recovery retained'
+        remount_ro || fail 'trial confirmed; read-only remount failed'
+        printf '%s\n' '{"ok":true,"runtime_verified":true,"backups_retained":true}'
+        exit 0
+    fi
+    remount_rw || fail 'rollback remount failed'
+    DIRTY=1
+    rollback_trial || fail 'readiness failed and rollback failed; recovery retained'
+    DIRTY=0
+    remount_ro || fail 'rollback read-only remount failed'
+    fail 'readiness failed; prior files restored; GUI runtime requires recovery'
+fi
+if [ "$ACTION" = recover ] && trial_exists; then
+    DIRTY=1
+    rollback_trial || fail 'pending trial recovery failed'
+    sync
+    remount_ro || fail 'recovery read-only remount failed'
+    DIRTY=0
+    printf '%s\n' '{"ok":true,"runtime_verified":false,"trial_rolled_back":true,"backups_retained":true}'
+    exit 0
+fi
 if [ "$ACTION" = apply ]; then
     if [ ! -d "$GUI/$RELEASE" ]; then
         mkdir "$STAGE/payload"
@@ -162,6 +192,7 @@ if [ "$ACTION" = apply ]; then
         mv "$STAGE/payload" "$GUI/$RELEASE"
         sync
     fi
+    if [ "$PREPARE" = 1 ]; then prepare_trial || fail 'activation snapshot failed'; fi
     DIRTY=1
     replace "$WORK/new/MainPage.qml" "$GUI/MainPage.qml" || fail 'menu replacement failed'
     replace "$WORK/new/main.qml" "$GUI/main.qml" || fail 'main replacement failed'
@@ -170,6 +201,10 @@ else
     DIRTY=1
     restore_originals || fail 'original restoration failed'
     originals "$GUI" || fail 'restore verification failed'
+    if trial_exists; then
+        DIRTY=0
+        archive_trial || fail 'trial archive failed; originals restored'
+    fi
 fi
 sync
 remount_ro || fail 'root read-only remount failed'

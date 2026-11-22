@@ -12,13 +12,13 @@ import tempfile
 from c100x_qml_builder import ROOT, build as build_qml
 
 MEMBER = "device_agent/qml/c100x_bundle.sh"
-SCRIPTS = ("c100x_display.sh", "c100x_display_identity.sh", "c100x_hooks.awk")
+SCRIPTS = ("c100x_display.sh", "c100x_display_identity.sh", "c100x_display_trial.sh", "c100x_display_probe.sh", "c100x_hooks.awk")
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
 HEADER = '''#!/bin/sh
 set -eu
 umask 077
 ACTION=${1:-status}
-case "$ACTION" in apply|status|restore|recover) ;; *) exit 1 ;; esac
+case "$ACTION" in apply|prepare|confirm|status|restore|recover) ;; *) exit 1 ;; esac
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/c100x-payload.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 trap 'exit 1' HUP INT TERM
@@ -28,6 +28,8 @@ FOOTER = '''
 export C100X_SOURCE_DIR="$WORK/source"
 export C100X_IDENTITY_SCRIPT="$WORK/c100x_display_identity.sh"
 export C100X_HOOKS_AWK="$WORK/c100x_hooks.awk"
+export C100X_TRIAL_SCRIPT="$WORK/c100x_display_trial.sh"
+export C100X_PROBE_SCRIPT="$WORK/c100x_display_probe.sh"
 sh "$WORK/c100x_display.sh" "$ACTION"
 '''
 
@@ -56,7 +58,7 @@ def build(destination: Path, *, root: Path = ROOT) -> Path:
         for name in SCRIPTS:
             content.extend(_member(name, (root / "native_agent/scripts" / name).read_bytes()))
         # Recovery needs only the reviewed recipes and backups, not QML sources.
-        content.extend(b'if [ "$ACTION" = apply ]; then\n')
+        content.extend(b'if [ "$ACTION" = apply ] || [ "$ACTION" = prepare ]; then\n')
         for path in sorted(source.rglob("*")):
             if path.is_file():
                 content.extend(_member("source/" + path.relative_to(source).as_posix(), path.read_bytes()))

@@ -29,9 +29,17 @@
             item.normalState = ScreenState.Normal
             item.offState = ScreenState.ScreenOff
             item.focusWindow = window
+            item.displayReady = Qt.binding(function() {
+                return c100xReady.status === Loader.Ready && c100xReady.item.ready
+                    && c100xAlerts.status === Loader.Ready && c100xAlerts.item.screenReady
+            })
             item.generation = "@RELEASE@".substring(7)
             item.running = true
         }
+    }
+    Loader {
+        id: c100xReady
+        source: "@RELEASE@/C100XReady.qml"
     }
     Loader {
         id: c100xAlerts

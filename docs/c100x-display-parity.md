@@ -123,10 +123,11 @@ All requests stay in a memory-only transport. Sound-bearing commands are
 rejected: the stock queued beep lacks a verified call-safe cancellation contract.
 This proves neither device wake behavior nor enabled Notify delivery.
 
-This build is not yet an installed or advertised display adapter. Supervised
-restart/readiness/automatic rollback remain incomplete.
+This build is not yet an installed or advertised display adapter. The disk
+trial/readiness/recovery transaction below is implemented; supervised GUI
+restart and integration into the production activation route remain incomplete.
 Notify's silent/wake UI is implemented offline; production activation and sound
-remain unavailable. The script reports `runtime_verified: false`;
+remain unavailable. Disk apply/restore report `runtime_verified: false`;
 successful disk installation alone must not enable a capability.
 
 `C100XMemos.qml` now provides a separate read-only text list/detail page through
@@ -147,16 +148,51 @@ guard/generation changes and disconnect, and renews once per minute. The native
 side expires stale sockets, rejects duplicates/cross-origin/non-loopback input,
 and checks the exact generation requested by an observer. A live blocked GUI
 is distinguished from an idle one. This introduces no periodic disk writes.
-Presence explicitly reports `installation_verified: false`: it is one input
-to a future supervised transaction, not permission to restart or advertise
-display capabilities. All three previous reviewed hook recipes remain recoverable.
+An open socket is not readiness: a fresh random challenge must pass through the
+GUI event loop and return on a new request within two seconds. Readiness also
+requires the concrete alert Loader/screen contract and runtime compilation of
+the additional page components. This does not prove every page's bindings or
+hardware behavior. Presence reports `installation_verified: false`; the disk
+transaction, not a TCP connection or marker, verifies installation identity.
+All four previous reviewed hook recipes remain recoverable.
+
+### Persistent Trial and Recovery
+
+`prepare` stores the authenticated pre-trial QML files and modes before switching
+the entry point. `confirm` verifies the candidate, requires a fresh native
+challenge round trip, rechecks its hashes and then archives the trial. A live
+blocked GUI may confirm readiness; it never grants permission to restart it.
+Failure restores the exact prior generation, not necessarily factory stock.
+`recover` handles interrupted switches without current package sources. Agent
+service startup performs pending recovery before starting the agent and aborts
+if recovery cannot be verified. Backups and archived trials are retained.
+Late remount failures cannot reinstate a rejected candidate.
+
+These paths are exercised against original firmware copies with the actual
+host native HTTP server and response parser, including hung connections,
+tampered journals, missing/corrupt payloads and service-start failures. No GUI
+process is signalled. Disk rollback cannot unload QML already resident in a
+running vendor process: failure therefore reports that runtime recovery remains
+required rather than claiming a successfully restored GUI.
+
+### Remaining Firmware Contracts
+
+| Area | Exact evidence and remaining gap |
+| --- | --- |
+| GUI restart | Stock `bin/BtClass100_qws` ends with one `./bin/gui/BtClass100 &` and `wait`, with no restart loop. `cfg/stack_open.xml` names this wrapper with `working_mode=0` and `gui_check_conf=0`. The stock `bt_daemon-apps.sh` offers whole-stack start/stop, not an isolated GUI restart. A call-safe restart/respawn contract and recovery from a nonresponsive GUI have not been established; neither killing the GUI nor restarting the whole stack is an acceptable substitute. |
+| Notify sound | In the exact stock `bin/gui/BtClass100`, the `startBeep` signal activation at `0x36af4` uses signal index 15. The worker at `0x1aeb0` calls `hal_beep_on(int)` and starts a timer; timer setup at `0x1ad8c` selects 170 ms, and `0x1aeac` calls `hal_beep_off()`. This is evidence of a short beep, not a cancellable Notify sound contract. There is no verified QML acknowledgement/cancel path for a queued beep when a call preempts it. `global.beepEnabled` is the stock key-tone preference, not proof of sound cancellation. Sound commands remain rejected. |
+| Memo writes/voice | `lib/BtObjects/libbtobjects.so` exports `AnsweringMachine::getMemos()` (`0xd2a4c`), `addTextMemo` (`0xd4f40`), `saveTextMemo` (`0xd49a8`), `updateTextMemo` (`0xd4ff4`), `recordVocalMemo` (`0xd2d64`), `playVocalMemo` (`0xd2dcc`), `stopVocalMemo` (`0xd2d98`), `saveVocalMemo` (`0xd2e00`) and `discardVocalMemo` (`0xd2e94`). No stock `MemoPage.qml` supplies the corresponding UI/object/acknowledgement lifecycle. Read-only text uses the verified store contract; write acknowledgement, voice ownership and call-preempting cancellation remain unverified and are not exposed. |
+
+The four field-report tool/service/hash questions are cleared, not blockers.
+These remaining contracts concern activation and side effects, not source
+firmware recognition or official-app provisioning.
 
 This matrix is a target, not a declaration that every row works. Capability
 flags must stay false until the matching hook, command acknowledgement,
 state readback, transactional installation and rollback are implemented and
 tested together. Host Qt5 5.15 tests are useful but are not firmware Qt5 5.10.1
 or hardware proof. Separately, `tests/test_c100x_firmware_compile.py` compiles
-all 28 generated QML files using original ARM Qt 5.10.1 under QEMU (four tests,
+all 29 generated QML files using original ARM Qt 5.10.1 under QEMU (four tests,
 including invalid syntax/import/property controls). This is compile-only:
 no instances, binding evaluation, vendor/platform plugins or GUI startup.
 Vendor imports, restart supervision, wake/sound and memo

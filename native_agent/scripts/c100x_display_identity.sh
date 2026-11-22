@@ -1,6 +1,7 @@
 # Sourced by c100x_display.sh. Only these reviewed hook recipes may identify a
 # modified stock file; an editable manifest alone never authorizes QML changes.
-MAIN_HOOK_SHA=7e4fbabb252eb1a404af4a5d48ed7bbc896bf7d6b2986962b8e994d91cb11a67
+MAIN_HOOK_SHA=7c26f5c928906ef34c11dd357a7ea76c81de414b7f6ac0b7c2d8f509a65bc136
+ALERTS_MAIN_HOOK_SHA=7e4fbabb252eb1a404af4a5d48ed7bbc896bf7d6b2986962b8e994d91cb11a67
 PRESENCE_MAIN_HOOK_SHA=ec6b59e4f2f3224daca7151ce09719a0675c02f5df4a135631363ca2c8738851
 CHROME_MAIN_HOOK_SHA=3c2b1bfcae4cea8fa4a901f3cc9133d64250931ae346423137cbda72851529ad
 LEGACY_MAIN_HOOK_SHA=e69c0dc115759e4b1593fd324e8619ff516d66f5aa3fcc6e459417cc9bbdcd5b
@@ -15,7 +16,7 @@ valid_release() {
 known_main_hook() {
     regular "$1" || return 1
     VERIFIED_MAIN_SHA=$(hash "$1")
-    case "$VERIFIED_MAIN_SHA" in "$MAIN_HOOK_SHA"|"$PRESENCE_MAIN_HOOK_SHA"|"$CHROME_MAIN_HOOK_SHA"|"$LEGACY_MAIN_HOOK_SHA") return 0 ;; *) return 1 ;; esac
+    case "$VERIFIED_MAIN_SHA" in "$MAIN_HOOK_SHA"|"$ALERTS_MAIN_HOOK_SHA"|"$PRESENCE_MAIN_HOOK_SHA"|"$CHROME_MAIN_HOOK_SHA"|"$LEGACY_MAIN_HOOK_SHA") return 0 ;; *) return 1 ;; esac
 }
 valid_recipe() {
     safe_path "$1" && known_main_hook "$1/main.inc" \

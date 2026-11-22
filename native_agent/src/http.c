@@ -9436,7 +9436,8 @@ static int handle_ui_request(
     const struct request *request
 )
 {
-    if (!strcmp(request->path, "/ui/c100x/presence/next") || !strcmp(request->path, "/ui/c100x/presence/status"))
+    if (!strcmp(request->path, "/ui/c100x/presence/next") || !strcmp(request->path, "/ui/c100x/presence/status")
+        || !strcmp(request->path, "/ui/c100x/presence/probe"))
         return c100x_gui_presence_route(&runtime->c100x_presence, client_fd, request, client_is_loopback(client_fd));
     if (strcmp(request->path, "/ui/preferences") == 0) {
         handle_ui_preferences(client_fd, config, request);

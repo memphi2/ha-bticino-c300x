@@ -13,6 +13,7 @@ Item {
     property int offState: -1
     property var focusWindow: null
     property bool running: false
+    property bool displayReady: false
     property bool stopped: false
     property var ringer: null
     property var presence: null
@@ -68,6 +69,7 @@ Item {
     onVendorReadyChanged: sync()
     onGenerationChanged: sync()
     onRunningChanged: sync()
+    onDisplayReadyChanged: sync()
     onTouchToneEnabledChanged: if (!applyingTouchTone && !stopped && running && !blocked) toneReport.restart()
     Timer { id: ringerRetry; interval: 30000; onTriggered: if (bridge.ringer) bridge.ringer.start() }
     Timer { id: presenceTimer; interval: 1000; onTriggered: if (bridge.presence) bridge.presence.start() }

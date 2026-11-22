@@ -1,4 +1,5 @@
 #include "../../native_agent/src/c100x_gui_presence.h"
+#include "../../native_agent/src/c100x_gui_response.h"
 #include "../../native_agent/src/device_detect.h"
 #include <assert.h>
 #include <stdio.h>
@@ -53,7 +54,29 @@ int main(void)
     assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1 && status == 409);
     strcpy(request.path, "/ui/c100x/presence/status");
     assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1);
-    assert(strstr(response, "\"gui_ready\":true,\"idle\":true") && strstr(response, "\"installation_verified\":false"));
+    assert(strstr(response, "\"gui_ready\":false,\"idle\":false,\"present\":true") && strstr(response, "\"installation_verified\":false"));
+    /* A live TCP socket can belong to a hung GUI: require a fresh round trip. */
+    strcpy(request.path, "/ui/c100x/presence/probe");
+    assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1 && status == 200);
+    assert(state.fd == -1 && !state.proved && strlen(state.probe) == 32);
+    close(pair[1]);
+    char challenge[33], generation[65];
+    strcpy(challenge, state.probe);
+    snprintf(generation, sizeof(generation), "%064d", 0);
+    snprintf(request.query, sizeof(request.query), "generation=%s&blocked=0&probe=%s", generation, challenge);
+    strcpy(request.path, "/ui/c100x/presence/status");
+    assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1);
+    assert(strstr(response, "\"gui_ready\":false"));
+    strcpy(request.path, "/ui/c100x/presence/next");
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    assert(c100x_gui_presence_route(&state, pair[0], &request, 1) == 0 && state.proved);
+    strcpy(request.path, "/ui/c100x/presence/status");
+    assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1);
+    assert(c100x_gui_readiness_validate(response, generation, challenge));
+    assert(!c100x_gui_readiness_validate(response, generation, "bad"));
+    now += 2000;
+    assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1);
+    assert(!c100x_gui_readiness_validate(response, generation, challenge));
     request.query[11] = 'a';
     assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1);
     assert(strstr(response, "\"gui_ready\":false"));
@@ -68,7 +91,7 @@ int main(void)
         assert(c100x_gui_presence_route(&state, pair[0], &request, 1) == 0);
         strcpy(request.path, "/ui/c100x/presence/status");
         assert(c100x_gui_presence_route(&state, 99, &request, 1) == 1);
-        assert(strstr(response, "\"gui_ready\":true,\"idle\":false"));
+        assert(strstr(response, "\"gui_ready\":false,\"idle\":false,\"present\":true"));
         c100x_gui_presence_prepare(&state, &pollfd);
         if (expired) now += 60000;
         else assert(write(pair[1], "unexpected", 10) == 10);

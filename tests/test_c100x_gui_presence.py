@@ -18,7 +18,7 @@ def test_native_presence_policy_and_socket_lifetime(tmp_path, sanitize):
         "-Wl,--wrap=c300x_http_send_json", "-Wl,--wrap=close_agent_socket", *flags,
         str(ROOT / "tests/fixtures/c100x_presence.c"),
         *(str(ROOT / "native_agent/src" / name) for name in
-          ("c100x_gui_presence.c", "http_auth.c", "http_util.c", "string_util.c")),
+          ("c100x_gui_presence.c", "c100x_gui_response.c", "http_auth.c", "http_util.c", "string_util.c", "json_util.c", "json_parse.c")),
         "-o", str(binary),
     ], check=True, capture_output=True, text=True, timeout=30)
     subprocess.run([str(binary)], check=True, capture_output=True, text=True, timeout=10)

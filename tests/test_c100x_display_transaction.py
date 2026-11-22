@@ -42,6 +42,8 @@ def tree(tmp_path):
            "C100X_BACKUP_DIR": str(tmp_path / "backup"), "C100X_GUI_BIN": str(tmp_path / "binary"),
            "C100X_GUI_WRAPPER": str(tmp_path / "wrapper"), "C100X_NO_REMOUNT": "1",
            "C100X_IDENTITY_SCRIPT": str(ROOT / "native_agent/scripts/c100x_display_identity.sh"),
+           "C100X_TRIAL_SCRIPT": str(ROOT / "native_agent/scripts/c100x_display_trial.sh"),
+           "C100X_PROBE_SCRIPT": str(ROOT / "native_agent/scripts/c100x_display_probe.sh"),
            "C100X_HOOKS_AWK": str(ROOT / "native_agent/scripts/c100x_hooks.awk"), "TMPDIR": str(tmp_path)}
     return tmp_path, gui, stock, env
 
@@ -78,16 +80,20 @@ def rehash_source(source):
 
 
 @pytest.mark.parametrize("action", ["apply", "restore"])
-@pytest.mark.parametrize("recipe", ["original", "chrome", "presence"])
+@pytest.mark.parametrize("recipe", ["original", "chrome", "presence", "alerts"])
 def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree, action, recipe):
     source = tree[0] / "source"
     hook = source / "hooks/main.inc"
     current = hook.read_bytes()
+    previous = (ROOT / "tests/fixtures/c100x_main_hook_alerts.inc").read_bytes()
     if recipe == "original":
         legacy = (ROOT / "tests/fixtures/c100x_main_hook_v1.inc").read_bytes()
         expected = "e69c0dc115759e4b1593fd324e8619ff516d66f5aa3fcc6e459417cc9bbdcd5b"
+    elif recipe == "alerts":
+        legacy = previous
+        expected = "7e4fbabb252eb1a404af4a5d48ed7bbc896bf7d6b2986962b8e994d91cb11a67"
     else:
-        legacy = current.replace(b'            item.normalState = ScreenState.Normal\n'
+        legacy = previous.replace(b'            item.normalState = ScreenState.Normal\n'
                                  b'            item.offState = ScreenState.ScreenOff\n'
                                  b'            item.focusWindow = window\n', b"")
         start = legacy.index(b"    Loader {\n        id: c100xAlerts\n")
@@ -102,7 +108,7 @@ def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree,
     hook.write_bytes(legacy)
     rehash_source(source)
     run(tree, "apply")
-    assert b"c100xAlerts" not in (tree[1] / "main.qml").read_bytes()
+    assert b"item.displayReady" not in (tree[1] / "main.qml").read_bytes()
     hook.write_bytes(current)
     rehash_source(source)
     run(tree, action)

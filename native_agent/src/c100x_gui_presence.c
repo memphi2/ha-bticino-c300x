@@ -62,10 +62,27 @@ static int valid_generation(const char *value)
     return strlen(value) == 64 && strspn(value, "0123456789abcdef") == 64;
 }
 
+static int random_probe(char out[33])
+{
+    unsigned char bytes[16];
+    FILE *file = fopen("/dev/urandom", "rb");
+    if (!file) return 0;
+    size_t count = fread(bytes, 1, sizeof(bytes), file);
+    fclose(file);
+    if (count != sizeof(bytes)) return 0;
+    for (size_t i = 0; i < sizeof(bytes); i++) snprintf(out + i * 2, 3, "%02x", bytes[i]);
+    return 1;
+}
+
+static int valid_probe(const char *value)
+{
+    return strlen(value) == 32 && strspn(value, "0123456789abcdef") == 32;
+}
+
 int c100x_gui_presence_route(struct c100x_gui_presence *state, int fd,
     const struct request *request, int loopback)
 {
-    char header[32], generation[128], blocked[8], body[256];
+    char header[32], generation[128], probe[64], blocked[8], body[384];
     if (c300x_device_model() != C300X_DEVICE_MODEL_C100X)
         return error(fd, 404, "c100x_required");
     if (!loopback || header_value(request, "origin", header, sizeof(header))
@@ -74,12 +91,31 @@ int c100x_gui_presence_route(struct c100x_gui_presence *state, int fd,
     if (strcmp(request->method, "GET")) return error(fd, 405, "method_not_allowed");
     query_param_value(request->query, "generation", generation, sizeof(generation));
     if (!valid_generation(generation)) return error(fd, 400, "invalid_generation");
-    if (!connected(state)) c100x_gui_presence_close(state);
+    if (state->fd >= 0 && !connected(state)) c100x_gui_presence_close(state);
+    query_param_value(request->query, "probe", probe, sizeof(probe));
+    if (probe[0] && !valid_probe(probe)) return error(fd, 400, "invalid_probe");
+    if (!strcmp(request->path, "/ui/c100x/presence/probe")) {
+        char challenge[33];
+        if (state->fd < 0 || strcmp(state->generation, generation)) return error(fd, 409, "gui_unavailable");
+        if (!random_probe(challenge)) return error(fd, 503, "entropy_unavailable");
+        snprintf(body, sizeof(body), "{\"ok\":true,\"probe\":\"%s\"}\n", challenge);
+        c300x_http_send_json(state->fd, 200, "OK", body);
+        c100x_gui_presence_close(state);
+        memcpy(state->generation, generation, 65);
+        memcpy(state->probe, challenge, 33);
+        state->probe_deadline_ms = c300x_monotonic_ms() + 2000;
+        c300x_http_send_json(fd, 200, "OK", body);
+        return 1;
+    }
     if (!strcmp(request->path, "/ui/c100x/presence/status")) {
-        int ready = state->fd >= 0 && !strcmp(state->generation, generation);
+        int present = state->fd >= 0 && !strcmp(state->generation, generation);
+        int ready = present && state->proved && valid_probe(probe) && !strcmp(probe, state->probe)
+            && c300x_monotonic_ms() < state->probe_deadline_ms;
         snprintf(body, sizeof(body),
-            "{\"ok\":true,\"gui_ready\":%s,\"idle\":%s,\"installation_verified\":false}\n",
-            ready ? "true" : "false", ready && !state->blocked ? "true" : "false");
+            "{\"ok\":true,\"gui_ready\":%s,\"idle\":%s,\"present\":%s,"
+            "\"generation\":\"%s\",\"probe\":\"%s\",\"installation_verified\":false}\n",
+            ready ? "true" : "false", ready && !state->blocked ? "true" : "false",
+            present ? "true" : "false", generation, probe);
         c300x_http_send_json(fd, 200, "OK", body);
         return 1;
     }
@@ -87,6 +123,8 @@ int c100x_gui_presence_route(struct c100x_gui_presence *state, int fd,
     query_param_value(request->query, "blocked", blocked, sizeof(blocked));
     if (strcmp(blocked, "0") && strcmp(blocked, "1")) return error(fd, 400, "invalid_guard");
     if (state->fd >= 0) return error(fd, 409, "gui_already_connected");
+    state->proved = valid_probe(probe) && !strcmp(state->probe, probe)
+        && !strcmp(state->generation, generation) && c300x_monotonic_ms() < state->probe_deadline_ms;
     memcpy(state->generation, generation, 65);
     state->blocked = blocked[0] == '1';
     state->deadline_ms = c300x_monotonic_ms() + 60000;

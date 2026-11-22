@@ -43,7 +43,7 @@ observations do not validate installation or runtime of this branch's agent.
 | HA entities and callbacks | Capability-gated; hardware unproven | Door, stair light, ring/call events and supported maintenance controls retain their existing paths. Physical outputs, event timing and callback reachability are not proven. |
 | Ringer volume | Retained; hardware unproven | Independent from mute; the vendor volume command still needs physical-level and persistence checks. |
 | Ringer mute / key tone | **Unavailable to HA; offline bridge implemented** | The separate Qt5 bridge uses stock AudioState/beep properties with readback and call/commissioning guards. The bundle carries its source but does not activate it through the supported installer. Mute remains advertised false and rejected before device I/O; volume/events retain their paths. |
-| Device dashboard / display notify | **Unavailable to HA; offline adapter and disk transaction implemented** | All additional pages remain the target, tracked in [Display Parity](c100x-display-parity.md). Separate Qt5 pages, Loader hooks, key navigation, settings and verified on-disk install/restore have focused offline tests. Compact file-set-7 delivery, a guarded silent/wake Notify overlay and read-only text-memo page are implemented. Supervised restart/readiness/automatic rollback and activation remain incomplete; Notify sound is unsupported. Setup/options, patch apply and bridge setup therefore remain suppressed. Saved display configuration is retained but ineffective; Alarmo configuration remains independently available. |
+| Device dashboard / display notify | **Unavailable to HA; offline adapter and verified disk trial implemented** | All additional pages remain the target, tracked in [Display Parity](c100x-display-parity.md). Separate Qt5 pages, Loader hooks, key navigation, settings, compact file-set-7 delivery, silent/wake Notify and read-only text memos have focused offline tests. Persistent trials now require a fresh GUI challenge response and automatically restore prior files on failed confirmation; agent startup recovers pending trials. Supervised GUI restart/runtime rollback and production activation remain incomplete. Notify sound and memo mutations lack the specific contracts documented in the parity matrix. Setup/options, patch apply and bridge setup remain suppressed. Saved display configuration is retained but ineffective; Alarmo configuration remains independently available. |
 | Camera / snapshot / RTSP | Implemented; hardware unproven | C100X is fixed to the low-resolution branch; no resolution selector. Stock settings describe 640x480, 12 fps and 800 kbps. Decoding, quality changes, snapshots, ring capture and multi-client behavior need device tests; these values are not a quality guarantee. |
 | Listen / talkback | Implemented; hardware unproven | Stock configuration uses Speex/8000. SIP negotiation, SRTP/RTP, both directions, stop/teardown and codecs beyond the stock setting need a device. |
 | Announcements / TTS | **Unavailable on inspected stock firmware** | Existing prerequisite checks disable this: `/bin/zl38005_ioctl-v2` and `/home/bticino/microsemi/MEMO_AM_PLAY.cr` are absent. Other Microsemi scripts are not interchangeable proof. No C100X substitute was implemented. |
@@ -99,7 +99,7 @@ These steps require separate explicit authorization and have **not** been run:
 
 1. Confirm SSH credentials and backup/recovery access. Record firmware/model,
    vendor app operation, SIP provisioning and original changed-file hashes.
-2. Before any display trial, finish supervised readiness/rollback and verify
+2. Before any device display trial, finish supervised GUI restart/runtime recovery and verify
    the complete rebuilt bundle/update path offline. Install only that reviewed local
    package; check startup, API/maintenance auth, discovery and HA entities.
    A package whose display gate remains false must not patch/restart the GUI
@@ -141,6 +141,9 @@ Additional focused C100X checks:
 
 ```sh
 "$PY" -m pytest -q tests/test_c100x_display_transaction.py
+"$PY" -m pytest -q tests/test_c100x_gui_presence.py
+CURL_INCLUDE_DIR=/home/olli/.cache/c300x-https/headers/usr/include/x86_64-linux-gnu \
+  "$PY" -m pytest -q tests/test_c100x_activation.py
 PYTHONPATH=/tmp/c100x-qt5-runtime "$PY" -m pytest -q tests/test_c100x_qml_adapter.py
 "$PY" -m pytest -q tests/test_c100x_firmware_compile.py
 PYTHONPATH=/tmp/c100x-qt5-runtime "$PY" -m pytest -q tests/test_c100x_alerts.py
@@ -149,7 +152,7 @@ PYTHONPATH=/tmp/c100x-qt5-runtime "$PY" -m pytest -q tests/test_c100x_memos.py
 
 The host Qt5 package path above is an optional isolated local test environment,
 not a device dependency. Its visual probe covers 80 component scenarios and
-key propagation. The independent firmware probe compiles all 25 currently
+key propagation. The independent firmware probe compiles all 29 currently
 generated QML files against the original ARM Qt **5.10.1** under QEMU, with
 negative syntax/import/property controls. It creates no QML instances or GUI,
 loads no platform/vendor plugins and proves neither binding evaluation nor

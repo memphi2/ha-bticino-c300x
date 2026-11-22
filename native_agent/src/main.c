@@ -4,6 +4,7 @@
 #include "display_touch.h"
 #include "device_routing.h"
 #include "https_client.h"
+#include "c100x_gui_response.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -15,8 +16,9 @@ static void print_usage(const char *program)
         stderr,
         "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
         " [--audio-codec status|apply|restore] [--display-touch status|apply|restore]"
-        " [--restore-media-patches] [--version]\n",
-        program
+        " [--restore-media-patches] [--version]\n"
+        "       %s --c100x-gui-response MODE GENERATION PROBE < response.json\n",
+        program, program
     );
 }
 
@@ -138,6 +140,10 @@ static void print_startup_diagnosis(const struct c300x_config *config)
 
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && !strcmp(argv[1], "--c100x-gui-response")) {
+        if (argc != 5) return 2;
+        return c100x_gui_response_cli(argv[2], argv[3], argv[4]);
+    }
     const char *config_path = "config.json";
     int check_config = 0;
     int diagnose_startup = 0;

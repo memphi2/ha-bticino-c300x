@@ -10,6 +10,9 @@ struct c100x_gui_presence {
     int fd;
     int blocked;
     char generation[65];
+    char probe[33];
+    int proved;
+    long long probe_deadline_ms;
     long long deadline_ms;
 };
 

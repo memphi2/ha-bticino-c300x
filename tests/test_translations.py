@@ -21,6 +21,30 @@ def test_localized_translation_files_match_english_keys() -> None:
         assert _leaf_paths(localized) == _leaf_paths(english)
 
 
+ACTIVATIONS_HINT = {
+    "strings": ("Further door locks and lights", "are added here"),
+    "en": ("Further door locks and lights", "are added here"),
+    "de": ("Weitere Türschlösser und Lichter", "legst du hier an"),
+    "fr": ("Les serrures et lumières supplémentaires", "s'ajoutent ici"),
+    "it": ("Serrature e luci aggiuntive", "si aggiungono qui"),
+}
+
+
+def test_the_activations_form_says_that_further_locks_and_lights_are_added_there() -> None:
+    """Users looked elsewhere for a second door or a light; the form says it is the place."""
+
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        hint = ACTIVATIONS_HINT[path.stem]
+        for area, step in (
+            ("config", "user_device_activations"), ("config", "reconfigure_device_activations"),
+            ("options", "device_activations"),
+        ):
+            description = data[area]["step"][step]["description"]
+            first = description.split("\n\n", 1)[0]
+            assert all(part in first for part in hint), (path.name, step)
+
+
 def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> None:
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)

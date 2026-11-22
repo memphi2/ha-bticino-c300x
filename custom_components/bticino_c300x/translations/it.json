@@ -83,7 +83,7 @@
       },
       "user_device_activations": {
         "title": "Attivazioni dispositivo aggiuntive",
-        "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni è diversa.",
+        "description": "Serrature e luci aggiuntive dell'impianto si aggiungono qui, un'attivazione ciascuna, ad esempio per una seconda porta.\n\nAttivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni è diversa.",
         "data": {
           "device_activation_mode": "Indirizzo della luce scale",
           "device_activation_stair_light_p": "Luce scale P",
@@ -196,7 +196,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Attivazioni dispositivo aggiuntive",
-        "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni è diversa.",
+        "description": "Serrature e luci aggiuntive dell'impianto si aggiungono qui, un'attivazione ciascuna, ad esempio per una seconda porta.\n\nAttivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni è diversa.",
         "data": {
           "device_activation_mode": "Indirizzo della luce scale",
           "device_activation_stair_light_p": "Luce scale P",
@@ -793,7 +793,7 @@
       },
       "device_activations": {
         "title": "Attivazioni: serrature, luci, luce scale",
-        "description": "Attivazioni aggiuntive: {device_activation_count}\n\n{device_activation_items}\n\nScegli cosa fare e invia. Le modifiche vengono prima raccolte qui; con **Termina e salva** vengono salvate e il dispositivo viene aggiornato, e solo se le sue attivazioni sono diverse.",
+        "description": "Serrature e luci aggiuntive dell'impianto si aggiungono qui, un'attivazione ciascuna, ad esempio per una seconda porta.\n\nAttivazioni aggiuntive: {device_activation_count}\n\n{device_activation_items}\n\nScegli cosa fare e invia. Le modifiche vengono prima raccolte qui; con **Termina e salva** vengono salvate e il dispositivo viene aggiornato, e solo se le sue attivazioni sono diverse.",
         "data": {
           "device_activation_mode": "Indirizzo della luce scale",
           "device_activation_stair_light_p": "Luce scale P",

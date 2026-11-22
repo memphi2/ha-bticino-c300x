@@ -77,19 +77,20 @@ export function c300xCardViewModel({
   ringPreviewActive,
 }) {
   if (homeCallMode) {
-    const callActive = c300xIsHomeCallActive(cameraEntity);
+    const callActive = active || c300xIsHomeCallActive(cameraEntity);
     const connected = c300xIsHomeCallConnected(cameraEntity);
     const ringing = c300xIsHomeCallRinging(cameraEntity);
     const action = callActive || startingCall ? "hang_up" : "call_home";
+    const actionDisabled = action !== "hang_up" && !c300xMediaEntityAvailable(cameraEntity);
     return {
       action,
       actionLabelKey: action,
       actionIcon: callActive || startingCall ? "mdi:phone-hangup" : "mdi:phone",
-      actionDisabled: false,
+      actionDisabled,
       actionActive: callActive || startingCall,
       actionDialing: callActive && !connected,
       actionAnswerable: false,
-      actionBlocked: false,
+      actionBlocked: actionDisabled,
       actionRecording: connected,
       secondaryKey: c300xHomeCallStatusKey(cameraEntity),
       showMedia: false,
@@ -99,7 +100,8 @@ export function c300xCardViewModel({
     };
   }
 
-  const action = c300xDoorstationAction({
+  const action = !c300xMediaEntityAvailable(cameraEntity) && !active && !doorbellAnswered
+    ? "unavailable" : c300xDoorstationAction({
     cameraEntity,
     active,
     doorbellAnswered,
@@ -127,6 +129,10 @@ export function c300xCardViewModel({
     ringbackActive: false,
     shouldAutoPreview: action === "answer" && c300xShouldAutoPreviewRing(cameraEntity),
   };
+}
+
+export function c300xMediaEntityAvailable(entity) {
+  return !!entity && entity.state !== "unavailable" && entity.state !== "unknown";
 }
 
 export function c300xDoorstationActionIcon(action, disabled) {

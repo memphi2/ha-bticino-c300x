@@ -1248,7 +1248,7 @@
             "name": "Dernier son",
             "state": {
               "played": "Joué",
-              "preempted": "Interrompu par un appel de porte",
+              "preempted": "Interrompu par un appel ou l'affichage caméra",
               "stopped": "Arrêté",
               "device_busy": "Haut-parleur occupé",
               "sound_path_failed": "Le haut-parleur n'a pas pu être activé",

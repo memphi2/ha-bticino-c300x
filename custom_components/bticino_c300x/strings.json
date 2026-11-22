@@ -1248,7 +1248,7 @@
             "name": "Last sound",
             "state": {
               "played": "Played",
-              "preempted": "Cut off by a door call",
+              "preempted": "Interrupted by a call or camera view",
               "stopped": "Stopped",
               "device_busy": "Speaker in use",
               "sound_path_failed": "Speaker could not be switched on",

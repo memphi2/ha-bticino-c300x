@@ -70,6 +70,15 @@ SPEAKER_RESULTS = {
 }
 
 
+SPEAKER_PREEMPTED = {
+    "strings": "Interrupted by a call or camera view",
+    "en": "Interrupted by a call or camera view",
+    "de": "Von einem Ruf oder der Kameraansicht unterbrochen",
+    "fr": "Interrompu par un appel ou l'affichage caméra",
+    "it": "Interrotto da una chiamata o dalla vista telecamera",
+}
+
+
 def test_the_speaker_shows_its_state_and_last_result_in_words_with_a_state_icon() -> None:
     from custom_components.bticino_c300x.media_player import _RESULT_ERRORS
 
@@ -80,6 +89,9 @@ def test_the_speaker_shows_its_state_and_last_result_in_words_with_a_state_icon(
         last_result = speaker["state_attributes"]["last_result"]
         assert last_result["name"]
         assert set(last_result["state"]) == SPEAKER_RESULTS, path.name
+        # A door call, an intercom call and the camera view all take the speaker
+        # (native_agent/src/announce_frames.c).
+        assert last_result["state"]["preempted"] == SPEAKER_PREEMPTED[path.stem], path.name
         assert all(last_result["state"].values())
     icons = _load_json(INTEGRATION / "icons.json")["entity"]["media_player"]["speaker"]
     assert icons == {"default": "mdi:bullhorn-outline", "state": {"playing": "mdi:bullhorn"}}

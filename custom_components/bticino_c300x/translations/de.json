@@ -1248,7 +1248,7 @@
             "name": "Letzter Ton",
             "state": {
               "played": "Abgespielt",
-              "preempted": "Von einem Türruf unterbrochen",
+              "preempted": "Von einem Ruf oder der Kameraansicht unterbrochen",
               "stopped": "Gestoppt",
               "device_busy": "Lautsprecher belegt",
               "sound_path_failed": "Lautsprecher ließ sich nicht einschalten",

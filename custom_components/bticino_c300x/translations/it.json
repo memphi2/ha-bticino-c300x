@@ -1248,7 +1248,7 @@
             "name": "Ultimo suono",
             "state": {
               "played": "Riprodotto",
-              "preempted": "Interrotto da una chiamata alla porta",
+              "preempted": "Interrotto da una chiamata o dalla vista telecamera",
               "stopped": "Fermato",
               "device_busy": "Altoparlante occupato",
               "sound_path_failed": "Impossibile attivare l'altoparlante",

@@ -167,24 +167,89 @@ static void framing_test(void)
 
 static void timeout_test(void)
 {
-    for (int response_write = 0; response_write < 2; response_write++) {
-        int pair[2];
-        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
-        struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
-        assert(writer);
-        pthread_mutex_lock(&writer->mutex);
-        long long start = c300x_monotonic_ms();
-        struct operation operation = {writer, pair[0], response_write, true};
-        write_operation(&operation);
-        long long elapsed = c300x_monotonic_ms() - start;
-        int budget = response_write ? 2000 : 250;
-        assert(elapsed >= budget && elapsed < budget + 750);
-        unsigned char byte;
-        assert(recv(pair[1], &byte, 1, MSG_DONTWAIT) == 0);
-        pthread_mutex_unlock(&writer->mutex);
-        c300x_rtsp_writer_release(writer);
-        close(pair[0]); close(pair[1]);
-    }
+    int pair[2];
+    unsigned char byte;
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
+    assert(writer);
+    pthread_mutex_lock(&writer->mutex);
+    /* A frame that cannot start is dropped; the connection stays open. */
+    long long start = c300x_monotonic_ms();
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 0, video_frame + 4, 16) == 0);
+    long long elapsed = c300x_monotonic_ms() - start;
+    assert(elapsed >= 250 && elapsed < 1000);
+    assert(recv(pair[1], &byte, 1, MSG_DONTWAIT) < 0 && errno == EAGAIN);
+    /* While it stays stalled, frames are dropped without a wait. */
+    start = c300x_monotonic_ms();
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 0, video_frame + 4, 16) == 0);
+    assert(c300x_monotonic_ms() - start < 100);
+    /* A response that cannot be written closes the connection. */
+    start = c300x_monotonic_ms();
+    struct operation response_write = {writer, pair[0], 1, true};
+    write_operation(&response_write);
+    elapsed = c300x_monotonic_ms() - start;
+    assert(elapsed >= 2000 && elapsed < 2750);
+    assert(recv(pair[1], &byte, 1, MSG_DONTWAIT) == 0);
+    pthread_mutex_unlock(&writer->mutex);
+    c300x_rtsp_writer_release(writer);
+    close(pair[0]); close(pair[1]);
+}
+
+static void fill(int fd)
+{
+    int small = 4096;
+    unsigned char padding[4096] = {0};
+    assert(setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &small, sizeof(small)) == 0);
+    while (send(fd, padding, sizeof(padding), MSG_DONTWAIT | MSG_NOSIGNAL) > 0) {}
+}
+
+static size_t drain(int fd)
+{
+    unsigned char buffer[4096];
+    size_t total = 0;
+    ssize_t n;
+    while ((n = recv(fd, buffer, sizeof(buffer), MSG_DONTWAIT)) > 0) total += (size_t)n;
+    return total;
+}
+
+static void slow_reader_test(void)
+{
+    /* A client that reads late, as over WiFi, loses frames, not its session. */
+    int pair[2];
+    unsigned char received[20];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    fill(pair[0]);
+    struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
+    assert(writer);
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 0, video_frame + 4, 16) == 0);
+    assert(atomic_load(&writer->stalled_since) != 0);
+    assert(drain(pair[1]) > 0);
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 0, video_frame + 4, 16) == 20);
+    assert(atomic_load(&writer->stalled_since) == 0);
+    assert(recv(pair[1], received, sizeof(received), MSG_WAITALL) == 20);
+    assert(memcmp(received, video_frame, 20) == 0);
+    c300x_rtsp_writer_release(writer);
+    close(pair[0]); close(pair[1]);
+}
+
+static void stall_limit_test(void)
+{
+    /* A client that has taken no frame for the stall limit is closed. */
+    int pair[2];
+    unsigned char byte;
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    fill(pair[0]);
+    struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
+    assert(writer);
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 0, video_frame + 4, 16) == 0);
+    atomic_store(&writer->stalled_since, c300x_monotonic_ms() - RTSP_STALL_LIMIT_MS + 1000);
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 0, video_frame + 4, 16) == 0);
+    atomic_store(&writer->stalled_since, c300x_monotonic_ms() - RTSP_STALL_LIMIT_MS);
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 0, video_frame + 4, 16) < 0);
+    (void)drain(pair[1]);
+    assert(recv(pair[1], &byte, 1, MSG_DONTWAIT) == 0);
+    c300x_rtsp_writer_release(writer);
+    close(pair[0]); close(pair[1]);
 }
 
 static void partial_failure_test(void)
@@ -216,6 +281,8 @@ int main(int argc, char **argv)
     else if (strcmp(argv[1], "framing") == 0) framing_test();
     else if (strcmp(argv[1], "timeouts") == 0) timeout_test();
     else if (strcmp(argv[1], "partial_failure") == 0) partial_failure_test();
+    else if (strcmp(argv[1], "slow_reader") == 0) slow_reader_test();
+    else if (strcmp(argv[1], "stall_limit") == 0) stall_limit_test();
     else assert(!"unknown case");
     return 0;
 }

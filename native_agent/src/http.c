@@ -41,6 +41,7 @@
 #include "system_metrics.h"
 #include "system_metrics_monitor.h"
 #include "self_test.h"
+#include "signal_wakeup.h"
 #include "time_util.h"
 #include "ui_homeassistant.h"
 #include "ui_events.h"
@@ -124,6 +125,7 @@ static void handle_shutdown_signal(int signo)
 {
     (void)signo;
     shutdown_requested = 1;
+    c300x_signal_wakeup_notify();
 }
 
 struct subscription {
@@ -7550,6 +7552,32 @@ static int firewall_backup_available(const char *backup_path)
     return path_exists(backup_path);
 }
 
+static size_t length_without_final_newlines(const char *text)
+{
+    size_t len = strlen(text);
+    while (len > 0 && text[len - 1] == '\n') {
+        len--;
+    }
+    return len;
+}
+
+/* The block goes in with or without a blank line before it, so cutting it out
+ * cannot tell the vendor's trailing blank lines from ours. A backup that
+ * differs only in those is the original file, byte for byte. */
+static void firewall_use_matching_backup(const char *backup_path, char *desired, size_t desired_len)
+{
+    char *backup = calloc(1, desired_len);
+    int backup_exists = 0;
+    size_t len = length_without_final_newlines(desired);
+
+    if (backup != NULL && desired[0] != '\0' && firewall_backup_available(backup_path)
+        && firewall_read_file(backup_path, backup, desired_len, &backup_exists) && backup_exists
+        && length_without_final_newlines(backup) == len && memcmp(backup, desired, len) == 0) {
+        c300x_copy_string(desired, desired_len, backup);
+    }
+    free(backup);
+}
+
 static int firewall_block_bounds_for(
     const char *content,
     const char *begin_marker,
@@ -8167,6 +8195,7 @@ static int firewall_restore(
         free(workspace);
         return 0;
     }
+    firewall_use_matching_backup(config->maintenance_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
     if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_firewall_backup_path)) {
         int backup_exists = 0;
         if (!firewall_read_file(
@@ -8392,6 +8421,7 @@ static int ipv6_firewall_restore(
         free(workspace);
         return 0;
     }
+    firewall_use_matching_backup(config->maintenance_ipv6_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
     if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         int backup_exists = 0;
         if (!firewall_read_file(
@@ -9050,7 +9080,7 @@ static void handle_api_request(
         || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_audio_codec_route(&runtime->maintenance, client_fd, config,
             runtime->audio_codec_running_state, request, run_detached_command)
-        || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config, request,
+        || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config, runtime->video, request,
             run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
             run_detached_command)
@@ -9759,7 +9789,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     int udp_joined = 0;
@@ -9771,6 +9801,11 @@ int c300x_run(struct c300x_config *config)
     int result = 1;
 
     shutdown_requested = 0;
+    int shutdown_fd = c300x_signal_wakeup_init();
+    if (shutdown_fd < 0) {
+        fprintf(stderr, "fatal: cannot create shutdown wake pipe: %s\n", strerror(errno));
+        return 2;
+    }
     (void)signal(SIGTERM, handle_shutdown_signal);
     (void)signal(SIGINT, handle_shutdown_signal);
 
@@ -9898,6 +9933,7 @@ int c300x_run(struct c300x_config *config)
         int file_poll_index;
         int callback_poll_index;
         int display_poll_index;
+        int shutdown_poll_index;
         time_t now = time(NULL);
         int network_online = runtime_network_online(runtime, now);
 
@@ -9906,6 +9942,8 @@ int c300x_run(struct c300x_config *config)
             poll_fds[index].events = POLLIN;
             poll_fds[index].revents = 0;
         }
+        shutdown_poll_index = (int)poll_count;
+        poll_fds[poll_count++] = (struct pollfd){.fd = shutdown_fd, .events = POLLIN};
         http_poll_index = (int)poll_count;
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
@@ -10043,6 +10081,13 @@ int c300x_run(struct c300x_config *config)
         runtime->last_poll_timeout_ms = poll_timeout_ms;
         runtime->last_poll_count = (int)poll_count;
         int poll_result = poll(poll_fds, poll_count, poll_timeout_ms);
+        if (shutdown_requested) {
+            result = 0;
+            break;
+        }
+        if (poll_result > 0 && poll_fds[shutdown_poll_index].revents) {
+            c300x_signal_wakeup_drain();
+        }
         if (poll_result < 0) {
             if (errno == EINTR) {
                 if (shutdown_requested) {

@@ -164,14 +164,15 @@ class _RaisingSession:
         raise self._exception
 
 
-def test_snapshot_endpoint_is_authenticated_bounded_and_read_only() -> None:
+@pytest.mark.parametrize("size", [(800, 480), (688, 480), (400, 240), (400, 288)])
+def test_snapshot_endpoint_is_authenticated_bounded_and_read_only(size) -> None:
     session = _FakeSession(response_body=b"BM-frame", content_type="image/bmp")
     api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
-    assert asyncio.run(api.async_doorbell_snapshot(688, 480)) == (b"BM-frame", "image/bmp")
+    assert asyncio.run(api.async_doorbell_snapshot(*size)) == (b"BM-frame", "image/bmp")
     # The agent is asked for the exact image size; nothing rescales it later.
     assert session.requests[0]["args"] == (
         "GET",
-        "http://agent.local:8080/api/v1/video/doorbell/snapshot?width=688&height=480",
+        f"http://agent.local:8080/api/v1/video/doorbell/snapshot?width={size[0]}&height={size[1]}",
     )
     assert len(session.requests) == 1
 

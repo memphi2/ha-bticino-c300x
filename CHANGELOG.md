@@ -1,5 +1,48 @@
 # Changelog
 
+## v2.8.2 - 2026-11-22
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
+
+Camera:
+
+- Optional **960x576** High video on the verified C300X 1.7.19 and 2.0.2 media builds.
+  The existing hardware scales the full-height picture before encoding, matching
+  the display's 5:3 proportions without an extra encoding pass. Selecting it in
+  **Camera quality** backs up and patches the device program, adjusts the crop
+  and requires a device restart. Legacy sizes remain available; other firmware
+  builds and the low stream are unchanged. Needs the agent update.
+  Live-tested on 1.7.19; 2.0.2 has been checked offline against its original firmware.
+- Visitor snapshots default to the display's native **800x480** pixels.
+  Existing explicit sizes are kept. Set 800x480 to match the new High video's
+  proportions; snapshots do not acquire extra detail from its larger raster.
+- The card uses the matching 5:3 picture frame before live metadata arrives,
+  while preserving measured dimensions for legacy streams and archived media.
+
+Fixed:
+
+- Agent shutdown wakes the idle network loop reliably, including signals
+  received by a worker thread. This avoids delayed restarts during updates.
+  Needs the agent update.
+
+- Short pauses in receiving on-demand video, for example over WiFi, no longer
+  immediately close the connection when the next packet has not started.
+  The agent skips that packet and lets the viewer recover. Media writes stay
+  bounded for other viewers. An unfinished partial packet or five seconds
+  without sending a complete media packet still closes the connection.
+  Needs the agent update.
+- Turning the firewall patch off gives back the device's firewall script
+  exactly as it was. Before, it lost its trailing blank line. Needs the agent
+  update.
+- Restoring call routing verifies the complete original backup and its match
+  to the installed firmware, including interrupted patches. Invalid or foreign
+  backups are rejected; the restored file is staged and verified before use.
+  Needs the agent update.
+
+Settings:
+
+- **Camera quality** appears before **Visitor snapshot** in the options menu.
+
 ## v2.8.1 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)

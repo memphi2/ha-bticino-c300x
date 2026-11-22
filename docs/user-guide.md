@@ -37,17 +37,25 @@ Most users only need:
 - **Save images** enables automatic visitor images independently of an open
   dashboard, on doorbell rings and HA video streams. Size, delay, retention and
   the date and time in the image are configured under **Configure > Visitor
-  Snapshot**; defaults are 688x480,
+  Snapshot**; defaults are 800x480 (native display size),
   3 seconds, 14 days and date and time on. Images and their shared camera/card preview are
-  stored in HA, not on the C300X. See [Visitor images](feature-reference.md#visitor-images).
-- **Better camera picture:** the factory stream is modest (688x480, 800 kbit/s,
-  15 fps). **Configure > Camera quality** makes it sharper, smoother and
-  wider: up to the whole camera picture at 704x576, 3000 kbit/s and 24 fps. On firmware 3.0.x
-  it sets the low-resolution stream, the only one the device sends, which the
-  Door Entry app receives as well. The device reads these values only when it
-  starts, so saving a change restarts it once (about a minute). Removing the
-  agent puts the original values back. See
-  [Feature reference](feature-reference.md#setup-and-options).
+  stored in HA, not on the C300X. Explicit saved sizes, including 688x480,
+  remain unchanged; choose 800x480 for future images with native display
+  proportions. See [Visitor images](feature-reference.md#visitor-images).
+- **Camera picture:** **Configure > Camera quality** retains the original
+  688x480 factory cut-out and 704x576 full-height choices, plus high-stream
+  bit rate up to 3000 kbit/s and frame rate up to 24 fps. The optional
+  **960x576** high stream retains all 576 lines and matches the **800x480
+  LCD's 5:3** proportions. It is limited to the exact verified C300X firmware
+  **1.7.19 or 2.0.2** media executables, each with its own full-file hash checks.
+  Live video is device-tested on 1.7.19; 2.0.2 is checked offline only.
+  Its 704x576 configured crop is scaled before
+  the existing encoder: no added transcoding and no native 960-pixel camera
+  detail. Applying it or returning to an original choice verifies the backup
+  and uses a normal device reboot, not just an agent restart. On other
+  firmware the existing choices remain unchanged; firmware 3.0.x/Qt5 still
+  uses the low stream. Built-in answering-machine recording at 960x576 is
+  not verified. See [Camera quality](feature-reference.md#camera-quality).
 - **Clearer sound:** set the **Audio codec** select to **PCMU**. The browser
   plays PCMU as it is, so the agent no longer converts the sound between
   Speex and PCMU; that gives clearer audio and leaves the device more room.

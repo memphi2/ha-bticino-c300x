@@ -65,14 +65,54 @@ Implementation reference:
 
 ## Picture Is Blurry, Cut Off or Jerky
 
-**Configure > Camera quality** shows the size, bit rate and frame rate the
-device runs with and the saved ones. A higher bit rate gives a sharper picture,
-the size 704x576 the whole camera picture instead of the factory 688x480
-cut-out, and up to 24 frames per second a smoother one. 25 is not offered:
-older firmware then turns its frame-rate control off and sends only about 8
-frames per second. Saving restarts the device once; the new values apply after
-that restart. When a weak network then shows stalls or grey blocks, lower the
-bit rate again.
+**Configure > Camera quality** distinguishes the saved settings from the ones
+the device runs with. The original **688x480** factory cut-out and **704x576**
+full-height choice remain available. Optional **960x576** preserves the
+configured **704x576** crop's 576 lines and scales it before the existing
+encoder to match the **800x480 LCD's 5:3** proportions. This is not additional
+transcoding or native 960-pixel camera detail.
+
+The option requires an exact verified C300X firmware **1.7.19 or 2.0.2** media
+executable, checked against the matching full-file original/patched hash pair.
+Live video is device-tested on 1.7.19; 2.0.2 is checked offline only.
+Its absence on other firmware or an unrecognized binary is intentional;
+do not force it through manually edited settings. Firmware 3.0.x/Qt5 and its
+low stream are unchanged. Applying the patch requires a verified original
+backup. Returning to 688x480 or 704x576 restores the original binary and the
+selected legacy configuration. Both directions use a **normal device reboot**;
+restarting only HA, the agent or the GUI is not sufficient. If restoration
+reports invalid or missing backup data, retain the recovery files and resolve
+the error before retrying. See [Camera quality](feature-reference.md#camera-quality).
+
+If agent removal reports a failed read-only remount but confirms that the
+original startup entries were restored, the agent and backups are retained.
+The agent may already be stopped; retained files do not mean it is still running.
+Perform a full device reboot, then retry removal. A startup rollback error
+instead requires restoring the reported recovery files before rebooting;
+do not delete those files or force removal past the error.
+
+Removal first requires verified agent termination. If that fails, it does not
+start restoring or deleting files. A later partial-deletion error is different
+from a read-only remount failure: retain the reported recovery directory and
+remaining backups, repair the agent installation, then restore its startup
+entries before rebooting. The recovery directory does not contain copies of
+deleted agent files; an incomplete installation is not automatically re-enabled.
+
+For snapshot shape, use **Configure > Visitor Snapshot**. Its default is
+**800x480**, read from the native display framebuffer; a 960x576 stream does not
+make snapshots 960x576. Existing explicit settings such as 688x480 are preserved.
+Choose 800x480, or 400x240 for a smaller 5:3 image, for future captures. Already
+saved images are not resized. The card fits images without cropping; a custom
+image with different proportions can have bars. A cached old live-stream ratio
+is replaced when a new live stream reports its dimensions.
+
+A higher bit rate can reduce compression artifacts, and up to **24 fps** can
+make high video smoother. 25 is not offered for high video: older firmware then
+turns its frame-rate control off and sends only about 8 fps. After saving, wait
+for the normal device reboot before comparing a new stream. If a weak network
+shows stalls or grey blocks, lower the bit rate again. The live result does
+not establish the resolution of built-in answering-machine recordings;
+**960x576 recording there remains unverified**.
 
 ## Device Reboots After PCMU On-demand Video
 

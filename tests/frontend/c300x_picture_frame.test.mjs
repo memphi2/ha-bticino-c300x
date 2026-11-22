@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "../../custom_components/bticino_c300x/frontend/c300x-card-template.js";
 
 import {
   c300xFollowPictureSize,
@@ -41,7 +42,7 @@ function browserStorage() {
   return items;
 }
 
-test("the frame keeps the factory shape until a stream tells its size", () => {
+test("the frame defaults to matching high stream and native snapshot geometry", () => {
   browserStorage();
   const first = card();
   c300xFollowPictureSize(first.host, first.video, () => "camera.door");
@@ -49,6 +50,24 @@ test("the frame keeps the factory shape until a stream tells its size", () => {
 
   first.plays(0, 0);
   assert.equal(first.properties.has(PROPERTY), false);
+  assert.equal(c300xPictureRatio(960, 576), c300xPictureRatio(800, 480));
+  assert.equal(C300X_DOORBELL_CARD_TEMPLATE.match(/var\(--c300x-picture-ratio, 800 \/ 480\)/g)?.length, 2);
+});
+
+test("confirmed high geometry replaces a cached legacy stream only when measured", () => {
+  const items = browserStorage();
+  items.set("c300x-picture-ratio:camera.door", "1.25");
+  const first = card();
+  const frame = c300xFollowPictureSize(first.host, first.video, () => "camera.door");
+  assert.equal(first.properties.get(PROPERTY), "1.25");
+  first.plays(960, 576, "resize");
+  assert.equal(first.properties.get(PROPERTY), "1.6667");
+  first.plays(0, 0);
+  frame.sync();
+  assert.equal(first.properties.get(PROPERTY), "1.6667");
+  const reopened = card();
+  c300xFollowPictureSize(reopened.host, reopened.video, () => "camera.door");
+  assert.equal(reopened.properties.get(PROPERTY), "1.6667");
 });
 
 test("the frame takes the shape of the whole camera picture when the stream has it", () => {

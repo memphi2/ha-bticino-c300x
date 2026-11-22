@@ -2,6 +2,8 @@
 // playing stream knows its size, which depends on the camera settings of the
 // device, so the browser remembers it per camera: the card then has the right
 // shape before the next stream starts and does not jump when it does.
+// The CSS fallback matches 960x576 live / 800x480 native snapshots. Legacy
+// streams still own their measured ratio; custom/archive images never change it.
 const PROPERTY = "--c300x-picture-ratio";
 const storageKey = (entityId) => `c300x-picture-ratio:${entityId}`;
 

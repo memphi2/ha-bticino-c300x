@@ -18,7 +18,7 @@ runtime = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(runtime)
 
 
-@pytest.mark.parametrize("workflow", ["validate.yml", "release.yml"])
+@pytest.mark.parametrize("workflow", ["validate.yml"])
 def test_container_gate_uses_same_resolved_ha_version_and_cannot_skip(workflow):
     config = yaml.safe_load((ROOT / ".github/workflows" / workflow).read_text())
     job = config["jobs"]["validate"]

@@ -26,8 +26,10 @@ int c300x_rtsp_read_timeout(int teardown_seconds, int session_seconds, long long
 ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer,
                             int fd, const void *first, size_t first_len,
                             const void *second, size_t second_len);
-/* Send one interleaved frame within the media write budget; shut down on
- * failure. Caller retains ownership of fd and writer throughout the call. */
+/* Send one interleaved frame: its length, 0 when it was dropped because the
+ * client takes nothing (the stream stays whole), -1 when the connection was
+ * shut down: a started frame did not finish, or the client took no frame for
+ * the stall limit. Caller retains ownership of fd and writer throughout. */
 ssize_t c300x_rtsp_send_interleaved(struct c300x_rtsp_writer *writer,
                                    int fd, int channel,
                                    const void *packet, size_t packet_len);

@@ -17,6 +17,8 @@
 /* The whole text of a file, in memory the caller frees; NULL when it cannot
  * be read or holds a NUL. */
 char *c300x_camera_file_text(const char *path);
+const char *c300x_camera_settings_path(void);
+const char *c300x_camera_crop_path(void);
 /* The values of the settings file and, for the high stream, the cut. */
 int c300x_camera_files_read(int low, const char *settings_path, const char *crop_path,
     struct c300x_camera_values *values);

@@ -17,6 +17,59 @@ changelog and release notes. The tagged commit must be the validated `main` HEAD
 with release checks, browser checks and verified provenance/SBOM attestations.
 Development branches are not a shortcut around the release gate.
 
+### Canonical CI Evidence
+
+Release tags do not repeat the full HA matrix, HACS, Hassfest or browser suite.
+PRs and pushes to `main` (and `beta`) still run all of them. Release requires
+successful **main push** runs of the canonical `validate.yml`, `browser.yml` and
+`codeql.yml` workflows for the exact released commit. Tag, checkout, release
+workflow source and current remote `main` must agree. A successful PR, beta,
+scheduled or manually dispatched run is not release evidence.
+The gate checks out the immutable release run SHA; publication checks out the
+commit emitted by that gate, never a newly resolved tag. Manual release retries
+must run from the release tag with the same run and workflow source SHA.
+
+`scripts/verify_main_validation.py` checks workflow IDs/paths and repository
+IDs, then every required job and step in the latest run's exact attempt.
+Dependabot policy, HACS, Hassfest, both HA legs, browser and all four CodeQL
+languages must succeed. Skipped, missing, failed, cancelled, duplicate or
+unexpected jobs fail closed. Partial reruns cannot combine jobs from different
+attempts; use **Re-run all jobs**. An older success cannot override a newer
+failure. Evidence must be no more than seven days old, including when retried.
+
+After each main-push HA leg has passed the full validation and official
+container runtime checks, `scripts/validation_evidence.py` records the actual
+installed HA version and verifies it matches the resolved target. It uploads
+`ha-validation-<target>-<run_attempt>` with seven-day retention. Its small JSON
+binds repository, source SHA, workflow ref/SHA/content digest, run ID and attempt.
+The minimum must equal the declared project minimum; current HA is the actual
+rolling version tested, not the local project baseline or a new PyPI query.
+
+The release verifier downloads by artifact ID from that run, checks GitHub's
+SHA256 archive digest, size, expiry, run/repository binding and payload identity.
+It does not execute or extract artifact files. Missing, foreign, stale,
+conflicting or malformed evidence fails publication. GitHub Actions' read API,
+the reviewed workflows at the released main commit, and immutable uploaded
+artifact bytes are the trust boundary, not artifact names or self-reported
+success. Workflow definitions and jobs are reviewed source; this gate does not
+replace branch protection, code review or security policy.
+
+The main gate emits a digest of the verified aggregate. The publish job fetches
+and verifies evidence again against that digest before building, and rechecks
+it immediately before publication. Concurrent reruns or movement of main/tag
+fail these checks. `build-metadata.json` embeds the exact versions, job IDs,
+workflow/run/attempt bindings and artifact IDs/digests. No fifth public asset
+is added. CI metadata generation requires digest-pinned evidence; local metadata
+without evidence is explicitly `local-unverified` and claims no validated jobs
+or HA versions (the configured version baselines remain informational).
+
+Release content/tag checks, the reviewed native build lock, packaging, SBOM,
+provenance and SBOM attestations, and remote downloaded-asset verification remain
+mandatory. No merge/admin bypass or device/HA activation is part of this gate.
+Artifact and attempt bindings use the documented
+[GitHub Actions artifact API](https://docs.github.com/en/rest/actions/artifacts)
+and [workflow jobs API](https://docs.github.com/en/rest/actions/workflow-jobs).
+
 New releases are drafts until their four downloaded assets match the validated
 local artifacts.
 Reruns verify existing assets, notes and channel without overwriting them;
@@ -41,14 +94,14 @@ direct stable successor to 2.1.3; 2.2.0 is withdrawn and is not an upgrade step.
 ## Isolated Integration Tests
 
 The HA matrix tests the fixed minimum from `project-versions.json` and the
-latest non-yanked stable release from PyPI on every run. Preview releases are
+latest non-yanked stable release from PyPI on every Validate run. Preview releases are
 excluded. The resolver pins that exact version before installing tools, so a
 dependency conflict fails the job instead of silently testing an older HA.
-The resolved version is logged and passed from release validation into build
+The resolved version is logged and passed from canonical main evidence into build
 metadata. `current_homeassistant` in the version file is the local validation
 baseline, not a cap on the rolling CI target. Raising the minimum remains manual.
 
-Both Validate and Release also run `scripts/check_ha_container_runtime.py` in
+Validate also runs `scripts/check_ha_container_runtime.py` in
 the official HA container for each resolved version. These required checks use
 the image's own ffmpeg/ffprobe and HA event entities, not the Ubuntu host tools.
 They verify JPEG extraction from H.264 clips with unknown, limited and full color
@@ -92,8 +145,8 @@ System libraries and Python dependency pins are unchanged. The loader export
 applies only to the development shell and its children; start a fresh Python
 process after exporting it. Do not apply it to a running HA installation.
 
-Both Validate and Release use this setup in **both minimum/current HA matrix
-legs**. `--github-env` verifies the loaded cache path in a fresh subprocess before
+Validate uses this setup in **both minimum/current HA matrix legs**; Release
+requires that exact main-run evidence. `--github-env` verifies the loaded cache path in a fresh subprocess before
 exporting it for later steps. `check_validate.py` also checks the default loader,
 TurboJPEG 3 API, actual mapped library, JPEG encode/decode pixels and HA camera
 singleton before other gates. Missing/incompatible libraries fail the gate;
@@ -168,6 +221,32 @@ images; no vendor assets are bundled or uploaded.
 Qt Quick 1.1 imports and two vendor components are adapted for the local Qt 6
 renderer. This verifies layout, not Qt 4 firmware or device performance.
 PySide6 is a development-only tool, not an integration dependency.
+
+### Offline Qt 4 Runtime
+
+For the original Qt 4.8.7 engine, use a private, extracted C300X 1.7.19
+firmware root filesystem, `arm-linux-gnueabihf-gcc` and `qemu-arm`:
+
+```bash
+python scripts/setup_qt4_runtime.py --sysroot /private/rootfs-1.7.19
+python -m pytest tests/test_energy_consumers_layout.py::test_consumers_qt4_runtime_labels tests/test_qt4_runtime_setup.py
+```
+
+Setup builds and verifies the ARM probe in `$XDG_CACHE_HOME/c300x-dev/qt4-runtime`
+(default `~/.cache/c300x-dev/qt4-runtime`). Pytest discovers it automatically.
+Changed probe sources or damaged cache files fail explicitly: rerun setup.
+The existing `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and
+`C300X_QT4_IMPORTS` overrides remain supported when all four are set.
+
+The probe checks the actual Qt version and executes the unchanged consumer
+JavaScript through a non-rendering QML test component, including 214 numeric
+formatting checks. It uses a narrow Qt 4.8.7 ABI adapter because firmware
+development headers are unavailable. It does not render the display, load
+vendor plugins, prove device startup safety or replace hardware testing.
+Only trusted test QML should be passed to it. Firmware libraries stay in the
+private sysroot; setup neither copies them into the repository nor contacts,
+writes to or restarts a device. CI without that private runtime still skips
+the optional firmware-specific tests.
 
 ## Display Bundle Upgrade Tests
 

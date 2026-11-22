@@ -14,9 +14,20 @@
 #include <sys/uio.h>
 #include <time.h>
 
+/* Media forwarding visits clients sequentially: locking and all writes share
+ * one short budget. Drop an unstarted frame; close if its prefix went out.
+ * A connection that takes no whole frame for the stall limit is closed. */
+#define RTSP_FRAME_WRITE_MS 250
+#define RTSP_RESPONSE_MS 2000
+#define RTSP_STALL_LIMIT_MS 5000
+
+enum rtsp_message { RTSP_RESPONSE = 0, RTSP_FRAME = 1 };
+
 struct c300x_rtsp_writer {
     pthread_mutex_t mutex;
     atomic_uint references;
+    /* Monotonic ms of the first dropped frame since the last sent one, 0 while frames go out. */
+    atomic_llong stalled_since;
 };
 
 struct c300x_rtsp_writer *c300x_rtsp_writer_create(void)
@@ -28,6 +39,7 @@ struct c300x_rtsp_writer *c300x_rtsp_writer_create(void)
         return NULL;
     }
     atomic_init(&writer->references, 1);
+    atomic_init(&writer->stalled_since, 0);
     return writer;
 }
 
@@ -48,10 +60,11 @@ void c300x_rtsp_writer_release(struct c300x_rtsp_writer *writer)
 static int writer_lock(struct c300x_rtsp_writer *writer, long long deadline)
 {
     if (writer == NULL) { errno = EINVAL; return 0; }
-    while (c300x_monotonic_ms() < deadline) {
+    for (;;) {
         int error = pthread_mutex_trylock(&writer->mutex);
         if (error == 0) return 1;
         if (error != EBUSY) { errno = error; return 0; }
+        if (c300x_monotonic_ms() >= deadline) break;
         /* Avoid realtime timed-mutex deadlines on devices whose wall clock
          * can change. Lock contention consumes the same budget as the write. */
         struct timespec pause = {.tv_nsec = 1000000};
@@ -61,20 +74,35 @@ static int writer_lock(struct c300x_rtsp_writer *writer, long long deadline)
     return 0;
 }
 
+/* The whole pair, 0 when not a byte went out by start_deadline, -1 when the
+ * stream broke: an error, or a started pair unfinished by finish_deadline. */
 static ssize_t send_pair_until(int fd, const void *first, size_t first_len,
-                              const void *second, size_t second_len, long long deadline)
+                              const void *second, size_t second_len,
+                              long long start_deadline, long long finish_deadline)
 {
     struct iovec iov[2];
     struct iovec *pending = iov;
     size_t count = 0, sent = 0;
+    int attempted = 0;
     if (first_len) iov[count++] = (struct iovec){.iov_base = (void *)first, .iov_len = first_len};
     if (second_len) iov[count++] = (struct iovec){.iov_base = (void *)second, .iov_len = second_len};
     while (count > 0) {
+        /* A stalled client still gets one nonblocking recovery attempt.
+         * Every retry, including EINTR and short writes, shares the deadline. */
+        long long deadline = sent ? finish_deadline : start_deadline;
+        if (attempted && c300x_monotonic_ms() >= deadline) {
+            errno = ETIMEDOUT;
+            return sent ? -1 : 0;
+        }
+        attempted = 1;
         struct msghdr message = {.msg_iov = pending, .msg_iovlen = count};
-        if (!c300x_rtsp_wait_writable(fd, deadline)) return -1;
         ssize_t n = sendmsg(fd, &message, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-        if (n <= 0) return n;
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            if (c300x_rtsp_wait_writable(fd, sent ? finish_deadline : start_deadline)) continue;
+            return sent ? -1 : 0;
+        }
+        if (n <= 0) return -1;
         sent += (size_t)n;
         size_t advanced = (size_t)n;
         while (count > 0 && advanced >= pending[0].iov_len) {
@@ -90,19 +118,46 @@ static ssize_t send_pair_until(int fd, const void *first, size_t first_len,
     return sent == first_len + second_len ? (ssize_t)sent : -1;
 }
 
+/* A dropped frame leaves the stream whole. Only a connection that has taken
+ * no frame for the stall limit is closed. */
+static ssize_t frame_dropped(struct c300x_rtsp_writer *writer, int fd, long long now)
+{
+    long long since = 0;
+    if (atomic_compare_exchange_strong(&writer->stalled_since, &since, now > 0 ? now : 1)) return 0;
+    if (now - since < RTSP_STALL_LIMIT_MS) return 0;
+    shutdown(fd, SHUT_RDWR);
+    return -1;
+}
+
 static ssize_t writer_send(struct c300x_rtsp_writer *writer, int fd,
                            const void *first, size_t first_len,
-                           const void *second, size_t second_len, int timeout_ms)
+                           const void *second, size_t second_len, enum rtsp_message kind)
 {
-    long long deadline = c300x_monotonic_ms() + timeout_ms;
-    if (!writer_lock(writer, deadline)) {
+    int frame = kind == RTSP_FRAME;
+    long long now = c300x_monotonic_ms();
+    /* A stalled connection gets no initial wait. Even partial recovery writes
+     * remain bounded by the shared media budget for the other clients. */
+    int wait_ms = !frame ? RTSP_RESPONSE_MS
+        : (writer != NULL && atomic_load(&writer->stalled_since) ? 0 : RTSP_FRAME_WRITE_MS);
+    long long start_deadline = now + wait_ms;
+    long long finish_deadline = now + (frame ? RTSP_FRAME_WRITE_MS : RTSP_RESPONSE_MS);
+    if (!writer_lock(writer, start_deadline)) {
+        if (frame && writer != NULL) return frame_dropped(writer, fd, c300x_monotonic_ms());
         shutdown(fd, SHUT_RDWR);
         return -1;
     }
-    ssize_t result = send_pair_until(fd, first, first_len, second, second_len, deadline);
-    /* A partially written frame/response must never be followed by another
-     * message on this stream. Shutdown is safe on the retained socket. */
-    if (result < 0 || (size_t)result != first_len + second_len) shutdown(fd, SHUT_RDWR);
+    ssize_t result = send_pair_until(fd, first, first_len, second, second_len,
+                                     start_deadline, finish_deadline);
+    if (frame && result == 0) {
+        result = frame_dropped(writer, fd, c300x_monotonic_ms());
+    } else if (result < 0 || (size_t)result != first_len + second_len) {
+        /* A partially written frame/response must never be followed by another
+         * message on this stream. Shutdown is safe on the retained socket. */
+        shutdown(fd, SHUT_RDWR);
+        result = -1;
+    } else if (frame) {
+        atomic_store(&writer->stalled_since, 0);
+    }
     pthread_mutex_unlock(&writer->mutex);
     return result;
 }
@@ -111,7 +166,7 @@ ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer, int fd,
                             const void *first, size_t first_len,
                             const void *second, size_t second_len)
 {
-    return writer_send(writer, fd, first, first_len, second, second_len, 250);
+    return writer_send(writer, fd, first, first_len, second, second_len, RTSP_FRAME);
 }
 
 ssize_t c300x_rtsp_send_interleaved(struct c300x_rtsp_writer *writer,
@@ -123,11 +178,9 @@ ssize_t c300x_rtsp_send_interleaved(struct c300x_rtsp_writer *writer,
     frame_header[1] = (unsigned char)channel;
     frame_header[2] = (unsigned char)((packet_len >> 8) & 0xff);
     frame_header[3] = (unsigned char)(packet_len & 0xff);
-    ssize_t result = c300x_rtsp_send_pair(
+    return c300x_rtsp_send_pair(
         writer, fd, frame_header, sizeof(frame_header), packet, packet_len
     );
-    if (result <= 0) shutdown(fd, SHUT_RDWR);
-    return result;
 }
 
 void c300x_rtsp_send_targets(const rtsp_send_target_t *targets, size_t count,
@@ -253,6 +306,6 @@ void send_rtsp_response(
         body ? body : ""
     );
     if (n > 0 && n < (int)sizeof(response)) {
-        (void)writer_send(writer, fd, response, (size_t)n, NULL, 0, 2000);
+        (void)writer_send(writer, fd, response, (size_t)n, NULL, 0, RTSP_RESPONSE);
     }
 }

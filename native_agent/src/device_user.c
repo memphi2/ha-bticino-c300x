@@ -1122,6 +1122,41 @@ static int remove_route_target(
     return 1;
 }
 
+enum active_route_mode {
+    ACTIVE_ROUTE_UNKNOWN,
+    ACTIVE_ROUTE_MISSING,
+    ACTIVE_ROUTE_INTERNAL,
+    ACTIVE_ROUTE_EXTERNAL
+};
+
+/* Only the vendor's two link modes have defined update semantics. A regular
+ * route.conf may belong to Companion; even identical contents do not transfer
+ * ownership to this agent. Never replace it or infer a forwarding mode. */
+static enum active_route_mode active_route_mode(void)
+{
+    char link[C300X_MAX_PATH_LEN];
+    C300X_DEVICE_USER_STAT_STRUCT st;
+    if (device_user_lstat_path(FLEXISIP_ROUTE_ACTIVE_FILE, &st) != 0) {
+        return errno == ENOENT ? ACTIVE_ROUTE_MISSING : ACTIVE_ROUTE_UNKNOWN;
+    }
+    if (!S_ISLNK(st.st_mode)) {
+        return ACTIVE_ROUTE_UNKNOWN;
+    }
+    ssize_t len = readlink(FLEXISIP_ROUTE_ACTIVE_FILE, link, sizeof(link) - 1);
+    if (len < 0 || (size_t)len >= sizeof(link) - 1) {
+        return ACTIVE_ROUTE_UNKNOWN;
+    }
+    link[len] = '\0';
+    const char *relative = strncmp(link, "./", 2) == 0 ? link + 2 : link;
+    if (strcmp(link, FLEXISIP_ROUTE_INT_FILE) == 0 || strcmp(relative, "route_int.conf") == 0) {
+        return ACTIVE_ROUTE_INTERNAL;
+    }
+    if (strcmp(link, FLEXISIP_ROUTE_EXT_FILE) == 0 || strcmp(relative, "route_ext.conf") == 0) {
+        return ACTIVE_ROUTE_EXTERNAL;
+    }
+    return ACTIVE_ROUTE_UNKNOWN;
+}
+
 static int read_status_from_buffers(
     const struct file_buffer *users,
     const struct file_buffer *accounts,
@@ -1134,10 +1169,14 @@ static int read_status_from_buffers(
 {
     char device_domain[128];
     char ha_aor[256];
+    enum active_route_mode active_mode = active_route_mode();
 
     memset(status, 0, sizeof(*status));
     status->status_available = 1;
-    status->supported = 1;
+    status->supported = active_mode != ACTIVE_ROUTE_UNKNOWN;
+    if (!status->supported) {
+        c300x_copy_string(status->error, sizeof(status->error), "unsupported_active_route");
+    }
     status->route_conf_is_symlink = route_conf_symlink;
     status->writable_files_present = users->exists && route_int->exists && route_ext->exists;
     parse_users_file(
@@ -1166,13 +1205,16 @@ static int read_status_from_buffers(
     status->route_conf_homeassistant_present = route_has_homeassistant(route_conf->data);
     status->media_identity_available = status->domain_present
         && status->homeassistant_user_present;
-    status->routes_consistent = status->homeassistant_user_present
+    status->routes_consistent = status->supported && (status->homeassistant_user_present
         ? (
             status->accounts_homeassistant_present
             && status->route_int_homeassistant_present
             && !status->route_ext_homeassistant_present
+            && route_conf->exists
+            && ((active_mode == ACTIVE_ROUTE_INTERNAL && status->route_conf_homeassistant_present)
+                || (active_mode == ACTIVE_ROUTE_EXTERNAL && !status->route_conf_homeassistant_present))
         )
-        : 1;
+        : 1);
     return 1;
 }
 
@@ -1328,6 +1370,10 @@ int c300x_device_user_ensure_homeassistant(
     memset(&route_int, 0, sizeof(route_int));
     memset(&route_ext, 0, sizeof(route_ext));
     memset(&route_conf, 0, sizeof(route_conf));
+    if (active_route_mode() == ACTIVE_ROUTE_UNKNOWN) {
+        set_error(error, error_len, "unsupported_active_route");
+        goto cleanup;
+    }
     if (
         !read_file_buffer(FLEXISIP_USERS_FILE, &users, error, error_len)
         || !read_file_buffer(FLEXISIP_ACCOUNTS_FILE, &accounts, error, error_len)

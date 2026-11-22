@@ -331,7 +331,7 @@ class C300XSpeaker(C300XEntity, MediaPlayerEntity, RestoreEntity):
         except Exception:
             _LOGGER.exception("Playing the C300X announcement failed")
             result = "failed"
-        if result in _NOT_OVER:
+        if result is None or result in _NOT_OVER:
             result = "unknown"
         self._finish(result)
         error = _RESULT_ERRORS.get(result)

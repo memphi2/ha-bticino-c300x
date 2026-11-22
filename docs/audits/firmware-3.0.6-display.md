@@ -330,7 +330,7 @@ limited to the explicitly requested first 60 seconds and existing signal policy.
 
 ### Local Candidate Build
 
-The deferred build blocker is resolved for source commit `244e988c`, without
+The deferred native build blocker is resolved for source commit `244e988c`, without
 changing version `2.9.0b1`. This includes the stable shutdown-race port
 (`20456010`, from `17c5aee3`) and pinned release-evidence checks from `c5a1e988`,
 adapted without changing the beta release identity. The agent's shutdown signal
@@ -353,8 +353,11 @@ verified exact source content and executable identity with both `--agent-binary`
 and `--build-lock`; `native_build_lock.py --check-inputs` passed. The bundle
 declares `qt5_recovery_version: 1` and retains file-set version 6.
 The local ZIP SHA-256 is
-`bf428ffd6c4bb9093644400ebcaa9213673780abc7a0b4d129a9eddc8e241e34`;
+`dffa30135763b05cc910cf4db9a5feb2d9d25d6cff13e0f406913f308413a696`;
 the regenerated checksums and SPDX document also passed their package checks.
+This ZIP also contains the HA-only camera-quality menu-order port `6bac29ff`
+(13 focused tests passed), repackaged without another native rebuild or changes
+to the beta release notes, version or reviewed native executable.
 
 This resolves the stale binary/build-lock/package gap, not the device checks.
 No full gate was run; the earlier interrupted full validation is not a pass.

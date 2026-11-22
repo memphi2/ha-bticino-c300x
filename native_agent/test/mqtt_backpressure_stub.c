@@ -5,12 +5,54 @@
 #include <fcntl.h>
 #include <netinet/tcp.h>
 #include <poll.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 int __real_connect(int, const struct sockaddr *, socklen_t);
 ssize_t __real_send(int, const void *, size_t, int);
+int __real_poll(struct pollfd *, nfds_t, int);
+int __real___poll_chk(struct pollfd *, nfds_t, int, size_t);
+
+static void *shutdown_from_worker(void *unused)
+{
+    (void)unused;
+    (void)raise(SIGTERM);
+    return NULL;
+}
+
+/* Inject after the loop tested its stop flag, before entering the kernel. */
+static void inject_shutdown(int timeout)
+{
+    if (timeout < 0 || timeout > 1000) {
+        if (unlink("shutdown-before-poll") == 0) {
+            fprintf(stderr, "shutdown injected on main thread before poll\n");
+            (void)raise(SIGTERM);
+        } else if (unlink("shutdown-worker-before-poll") == 0) {
+            pthread_t worker;
+            if (pthread_create(&worker, NULL, shutdown_from_worker, NULL) == 0) {
+                (void)pthread_join(worker, NULL);
+                fprintf(stderr, "shutdown injected on worker thread before poll\n");
+            }
+        }
+    }
+}
+
+int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout)
+{
+    inject_shutdown(timeout);
+    return __real_poll(fds, count, timeout);
+}
+
+/* Ubuntu's fortified headers route the main loop through this entry point. */
+int __wrap___poll_chk(struct pollfd *fds, nfds_t count, int timeout, size_t bytes)
+{
+    inject_shutdown(timeout);
+    return __real___poll_chk(fds, count, timeout, bytes);
+}
 
 static int is_broker(const struct sockaddr *address, socklen_t size)
 {

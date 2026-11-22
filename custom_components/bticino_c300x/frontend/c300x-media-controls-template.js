@@ -14,8 +14,8 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .stamp, .info { color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 3px #000; }
     /* The time of a video sits where an image carries its own: lower right, same size. */
     /* Without container units the time keeps a fixed size. */
-    .stamp, .toolbar { --c300x-stamp-size: 12px; }
-    @supports (width: 1cqw) { .stamp, .toolbar { --c300x-stamp-size: max(10px, 2.5cqw); } }
+    .stamp, .toolbar, .nav { --c300x-stamp-size: 12px; }
+    @supports (width: 1cqw) { .stamp, .toolbar, .nav { --c300x-stamp-size: max(10px, 2.5cqw); } }
     .stamp { position: absolute; right: calc(var(--c300x-stamp-size) / 3);
       bottom: calc(var(--c300x-stamp-size) / 3); max-width: calc(100% - 16px); margin: 0;
       font-size: var(--c300x-stamp-size); line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -50,7 +50,8 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .expand:hover { background: none; }
     .nav, .close, .fullscreen { background: rgb(0 0 0 / .5); transition: opacity 140ms ease; }
     .nav:hover, .close:hover, .fullscreen:hover { background: rgb(0 0 0 / .75); }
-    .nav { top: calc(50% - 20px); }
+    /* The arrows sit in the middle above the room of the bar, the same for images and videos. */
+    .nav { --c300x-bar: calc(var(--c300x-stamp-size) * 1.5 + 48px); top: calc((100% - var(--c300x-bar)) / 2 - 20px); }
     .nav:disabled { opacity: 0; pointer-events: none; }
     .previous { left: 8px; }
     .next, .close { right: 8px; }
@@ -59,7 +60,7 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     /* A narrow card gives the row to the seek bar: first the volume slider goes, then the times. */
     @container (max-width: 340px) { .timeline:not([hidden]) ~ .buttons .volume { display: none; } }
     @container (max-width: 280px) { .elapsed { display: none; } .volume { width: 40px; flex-basis: 40px; } button { width: 32px; height: 32px; flex-basis: 32px; }
-      .nav { top: calc(50% - 16px); } .fullscreen { right: 48px; } }
+      .nav { top: calc((100% - var(--c300x-bar)) / 2 - 16px); } .fullscreen { right: 48px; } }
   </style>
   <div class="archive" hidden>
     <img hidden alt="">

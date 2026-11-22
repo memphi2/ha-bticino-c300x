@@ -6,6 +6,10 @@
 
 Fixed:
 
+- Agent shutdown wakes the idle network loop reliably, including signals
+  received by a worker thread. This avoids delayed restarts during updates.
+  Needs the agent update.
+
 - Short pauses in receiving on-demand video, for example over WiFi, no longer
   immediately close the connection when the next packet has not started.
   The agent skips that packet and lets the viewer recover. Media writes stay
@@ -15,6 +19,14 @@ Fixed:
 - Turning the firewall patch off gives back the device's firewall script
   exactly as it was. Before, it lost its trailing blank line. Needs the agent
   update.
+- Restoring call routing verifies the complete original backup and its match
+  to the installed firmware, including interrupted patches. Invalid or foreign
+  backups are rejected; the restored file is staged and verified before use.
+  Needs the agent update.
+
+Settings:
+
+- **Camera quality** appears before **Visitor snapshot** in the options menu.
 
 ## v2.8.1 - 2026-11-22
 

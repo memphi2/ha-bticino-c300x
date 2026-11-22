@@ -423,6 +423,17 @@ abort_write_action() {
 }
 
 run_write_action() {
+    if [ "$QT5_DISPLAY" = "1" ]; then
+        for qt5_artifact in rcc wrapper library original failed; do
+            qt5_artifact_path "$qt5_artifact"
+            qt5_require_regular
+        done
+        if ! qt5_original_wrapper_valid "$GUI_WRAPPER" \
+            && ! qt5_original_wrapper_valid "$QT5_WRAPPER_BACKUP"; then
+            printf 'Unsupported display start script or original backup; activation unchanged\n' >&2
+            return 1
+        fi
+    fi
     WRITE_TRANSACTION=
     WRITE_TRANSACTION_READY=0
     WRITE_TRANSACTION_COMMITTED=0
@@ -1341,6 +1352,7 @@ qt5_wrapper_text() {
 }
 
 qt5_original_wrapper_valid() {
+    [ -x "$1" ] || return 1
     qt5_wrapper_result="$("$AGENT_BIN" --display-qt5 wrapper-check "$1" 2>/dev/null)" || return 1
     case "$qt5_wrapper_result" in
         *'"ok":true'*) return 0 ;;

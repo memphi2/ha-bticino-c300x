@@ -89,6 +89,7 @@ class Device:
         self.wrapper_backup = tmp_path / "backups/bin/BtClass_qws"
         self.wrapper.parent.mkdir(parents=True)
         self.wrapper.write_text(WRAPPER)
+        self.wrapper.chmod(0o755)
         self.rcc.parent.mkdir(parents=True)
 
     def run(self, action: str, **env: str) -> subprocess.CompletedProcess[str]:

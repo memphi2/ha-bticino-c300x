@@ -52,7 +52,7 @@ def test_reload_failure_restores_every_activation_artifact(device, monkeypatch, 
         artifacts(device)["failed"].write_bytes(b"quarantined\n")
     for path in artifacts(device).values():
         if path.exists():
-            path.chmod(0o640)
+            path.chmod(0o751 if path == device.wrapper_backup else 0o640)
     before = snapshot(device)
     # Only the readiness boundary is injected. Transaction/publication run unchanged.
     source = overlay.SCRIPT.read_text()

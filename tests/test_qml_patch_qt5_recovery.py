@@ -67,7 +67,8 @@ def test_cache_independent_restore_still_rolls_back_on_reload_failure(device, mo
     assert snapshot(device) == before
 
 
-@pytest.mark.parametrize("fault", ["missing", "empty", "no-launch", "syntax", "patched", "same-size"])
+@pytest.mark.parametrize("fault", ["missing", "empty", "no-launch", "syntax", "patched", "same-size",
+                                  "mode-0644", "mode-0600"])
 def test_unusable_original_wrapper_cannot_discard_recovery(device, fault):
     if fault == "missing":
         device.wrapper_backup.unlink()
@@ -80,14 +81,20 @@ def test_unusable_original_wrapper_cannot_discard_recovery(device, fault):
             stream.write("\nif then\n")
     elif fault == "patched":
         device.wrapper_backup.write_bytes(device.wrapper.read_bytes())
+    elif fault.startswith("mode-"):
+        device.wrapper_backup.chmod(int(fault[5:], 8))
     else:
         # Still executable shell with its launch marker, but not the original.
         device.wrapper_backup.write_bytes(device.wrapper_backup.read_bytes().replace(b"eglfs", b"other", 1))
     artifacts(device)["failed"].write_bytes(b"retain failure\n")
     before = snapshot(device)
+    identities = {name: (path.stat().st_ino, path.stat().st_mtime_ns)
+                  for name, path in artifacts(device).items() if path.exists()}
     result = device.run("restore-all")
     assert result.returncode != 0, result.stdout
     assert snapshot(device) == before
+    assert {name: (path.stat().st_ino, path.stat().st_mtime_ns)
+            for name, path in artifacts(device).items() if path.exists()} == identities
 
 
 @pytest.mark.parametrize("fault", ["copy", "rename", "remount-rw", "remount-ro"])
@@ -121,7 +128,7 @@ def test_successful_but_corrupt_wrapper_copy_rolls_back(device, command):
     before = snapshot(device)
     argument = "$3" if command == "cp" else "$2"
     env = command_failure(device, command, f'[ "{argument}" = "{device.wrapper}.c300x.tmp" ]',
-                          effect='printf corrupted > "$3"; exit 0')
+                          effect='printf corrupted > "$3"; chmod 755 "$3"; exit 0')
     result = device.run("restore-all", **env)
     assert result.returncode != 0, result.stdout
     assert snapshot(device) == before

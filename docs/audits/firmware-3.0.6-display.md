@@ -240,6 +240,16 @@ The synthetic wrapper has a compile-time test-only entry, absent from production
 No model detection or basename whitelist is involved. Unknown custom wrappers
 are intentionally refused, even if syntactically valid.
 
+The original also needs an executable mode before activation writes begin.
+Correct original bytes with modes `0644` or `0600` are rejected; fault tests
+assert retained bytes, modes, inode identities and mtimes. This preflight does
+not require an arbitrary host owner. Actual device ownership and mount behavior
+remain separate checks. Recovery revalidates the copied and installed original.
+The execute-mode recovery/transaction group passed 90 tests; the final
+preflight group passed 34 selected nonregular-file, invalid-original and
+copy/rename/remount cases after moving validation before writes. These overlap
+the earlier groups and are not a full gate.
+
 Failure injection includes missing/invalid backups, failed copy/rename,
 successful-but-corrupt copy/rename and rw/ro remount failures. Failed recovery
 restores prior activation artifacts and keeps backups. A final ro-remount

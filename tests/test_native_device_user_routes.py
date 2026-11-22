@@ -36,7 +36,7 @@ def route_binary(request, tmp_path_factory):
     for operation in ("ensure", "restore")
     for case in ("unauthorized", "unconfirmed")
 ] + [("ensure", case) for case in ("routing-failure", "user-failure", "invalid", "false")]
-  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5")])
+  + [("restore", "restore-failure")])
 def test_route_state_machine(route_binary, tmp_path, operation, case):
     script = tmp_path / "job.sh"
     body = ('case "$1" in\n'
@@ -46,9 +46,6 @@ def test_route_state_machine(route_binary, tmp_path, operation, case):
             'esac\n')
     if case in ("timeout", "shutdown"):
         body = "exec sleep 30\n"
-    elif case == "qt5":
-        # A Qt 5 display has no display files: the label script is never asked.
-        body = f"touch {tmp_path / 'ran'}\nexit 1\n"
     elif case == "failure":
         body = "exit 1\n"
     elif case == "invalid":
@@ -65,4 +62,3 @@ def test_route_state_machine(route_binary, tmp_path, operation, case):
                             env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
                                  "UBSAN_OPTIONS": "halt_on_error=1"})
     assert result.returncode == 0, result.stderr
-    assert not (tmp_path / "ran").exists()

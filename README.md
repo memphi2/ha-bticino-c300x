@@ -77,8 +77,8 @@ off by default and requires HA 2026.11+ Labs and the integration option.
 
 - Home Assistant `2026.10.0` or newer.
 - BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`. Firmware `3.0.6` is
-  supported experimentally: without the Home Assistant pages on the display and
-  with the low-resolution camera stream.
+  supported experimentally, with the low-resolution camera stream; the Home
+  Assistant pages on its display are in a beta, not yet tested on a device.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
 

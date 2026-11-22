@@ -88,20 +88,15 @@ def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
     assert "config->video_enabled && !context->camera_resolution_fixed" in capabilities
 
 
-def test_the_agent_offers_no_display_patch_on_a_qt5_display(config_probe):
-    # The installer enables the Display patch; a Qt 5 display has nothing to patch,
-    # so the agent neither offers it nor its repairs.
+def test_the_agent_offers_the_display_patch_on_both_displays(config_probe):
+    # On a Qt 5 display the patch script works through the preloaded resource file.
     assert config_probe(qt5=False, high_resolution=None, display_patch=True)["display_patch"] == 1
-    assert config_probe(qt5=True, high_resolution=None, display_patch=True)["display_patch"] == 0
+    assert config_probe(qt5=True, high_resolution=None, display_patch=True)["display_patch"] == 1
 
 
-def test_the_agent_skips_the_display_label_only_on_a_qt5_display():
-    # tests/test_native_device_user_routes.py runs both routes on a Qt 5 display.
-    http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
+def test_the_agent_asks_the_patch_script_for_the_label_on_both_displays():
     routes = (NATIVE / "src/http_device_user.c").read_text(encoding="utf-8")
-    assert routes.count("c300x_device_display_is_qt5()") == 2
-    assert "skins/default" not in http + routes
-    assert "skins/default" not in (NATIVE / "src/config.c").read_text(encoding="utf-8")
+    assert "c300x_device_display_is_qt5()" not in routes
 
 
 class _Device:
@@ -123,15 +118,11 @@ def test_the_installer_recognises_the_qt5_display_by_its_library():
     assert installer._device_display_is_qt5(_Device(qt5=False)) is False
 
 
-def test_the_display_patch_is_skipped_on_a_qt5_display_and_runs_on_a_qt4_one():
-    qt5 = _Device(qt5=True)
-    installer._apply_qml_patch_sync(qt5, "/data/agent", "apply")
-    assert not any("qml_patch.sh" in command for command in qt5.commands)
-
-    # On a Qt 4 device the patch runs.
-    qt4 = _Device(qt5=False)
-    installer._apply_qml_patch_sync(qt4, "/data/agent", "apply")
-    assert any("qml_patch.sh" in command for command in qt4.commands)
+def test_the_display_patch_runs_on_both_displays():
+    for qt5 in (True, False):
+        device = _Device(qt5=qt5)
+        installer._apply_qml_patch_sync(device, "/data/agent", "apply")
+        assert any("qml_patch.sh" in command for command in device.commands)
 
 
 def test_the_installer_fixes_the_low_resolution_only_on_a_qt5_display():

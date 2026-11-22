@@ -247,6 +247,7 @@ lock for the current source. The lock covers these native and bundle inputs:
 
 - `native_agent/src`
 - `native_agent/scripts`
+- `native_agent/qt5`
 - `native_agent/VERSION`
 - `native_agent/Makefile`
 - `native_agent/config.example.json`
@@ -318,10 +319,21 @@ Firmware `3.0.6` fails this check and is supported experimentally:
 - Its C library is glibc 2.35, and `libcurl` and `libsrtp` are other builds.
   The same binary runs there: `armhf-abi-check` checks it against the `3.0.6`
   root file system as well (see above).
-- Its display is Qt 5 with the QML built into the vendor program, so there are
-  no files for the Display patch. The agent and the installer recognise it by
-  `/usr/lib/libQt5Core.so.5`, skip the Display patch and the media-user label,
-  and the Home Assistant pages are not shown on the device.
+- Its display is Qt 5 with the QML built into the vendor program `BtClass` as
+  Qt resources. `qml_patch.sh` recognises it by `/usr/lib/libQt5Core.so.5` and
+  then works on a copy in `display-qt5/` under the agent folder: the agent
+  reads the six display files the patch changes out of `BtClass`
+  (`--display-qt5 extract`, only for the known 3.0.6 build), the patch runs on
+  them as on Qt 4, and every changed file is packed, back in Qt 5 form, into
+  `display-qt5.rcc` (`--display-qt5 pack`). The start script `BtClass_qws`
+  gets `c300x-qrc-overlay.so` preloaded (`native_agent/qt5/qrc_overlay.c`,
+  carried in the agent and written by `--display-qt5 overlay`); it registers
+  `display-qt5.rcc` before `BtClass` registers its own resources, and Qt takes
+  a file found twice from the first one. A display that ends with an error
+  within a minute of such a start marks the overlay failed
+  (`display-qt5.rcc.failed`, status `qt5_overlay: failed`) and starts as
+  shipped. Restoring the patch puts the vendor start script back. Not yet
+  tested on a 3.0.6 device.
 - Its `bt_av_media` sends only the low-resolution video stream on to other
   receivers. The camera is fixed to that stream there
   (`video.av.highResolution: false`), and the Camera resolution entity is not

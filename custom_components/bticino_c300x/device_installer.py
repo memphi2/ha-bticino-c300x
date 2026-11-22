@@ -865,15 +865,13 @@ def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: s
 _LOGGER = logging.getLogger(__name__)
 
 # Firmware 3.0.x has a Qt 5 display with its QML built into the BtClass program
-# (qrc:/skins/default/...), so there are no files for the Display patch. The
-# earlier ones have Qt 4 and QML files on disk. The Qt 5 library is the mark,
-# not a missing QML folder: on an older device a missing folder is a fault the
-# Display patch has to report.
+# (qrc:/skins/default/...); the earlier ones have Qt 4 and QML files on disk.
+# The Qt 5 library is the mark, not a missing QML folder.
 _QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
 
 
 def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
-    """Return whether the device has the Qt 5 display, which cannot be patched."""
+    """Return whether the device has the Qt 5 display of firmware 3.0.x."""
 
     output = client.run(f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo yes || echo no")
     return output.strip().splitlines()[-1:] == ["yes"]
@@ -920,15 +918,6 @@ def _apply_qt5_low_res_video_default(
 def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
     """Require the patcher's reported outcome, not just a successful shell exit."""
 
-    if _device_display_is_qt5(client):
-        # Qt5 firmware (3.0.x+) has no on-disk QML to patch. Skip rather than
-        # abort the whole install: the on-device display pages and ringer-sync
-        # are unavailable, but camera, door, stair light, ring and calls work
-        # through the agent API and do not depend on the QML hook.
-        _LOGGER.warning(
-            "C300X: device has no on-disk QML (Qt5 GUI); skipping %s patch", action
-        )
-        return
     output = client.run(
         f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
         f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"

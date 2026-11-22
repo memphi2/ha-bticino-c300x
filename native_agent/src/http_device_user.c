@@ -158,8 +158,7 @@ static int start_status(struct c300x_http_maintenance *owner, int fd,
     (void)c300x_device_user_read_status(&state->status);
     memset(&state->routing, 0, sizeof(state->routing));
     (void)c300x_device_routing_read_status(&state->routing);
-    if (!c300x_device_display_is_qt5()
-        && access(state->config->maintenance_qml_patch_script, X_OK) == 0
+    if (access(state->config->maintenance_qml_patch_script, X_OK) == 0
         && c300x_command_job_start_capture(&owner->job,
             state->config->maintenance_qml_patch_script, "status", state->output, 4096, 10000)) {
         return 1;
@@ -202,9 +201,8 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
         send_error(fd, "device_user_update_failed", error);
         return 0;
     }
-    /* The label is written into the display's QML files. A Qt 5 display has
-     * none on disk: user and routing are set up, only the label is not shown. */
-    if (!c300x_device_display_is_qt5()) {
+    /* The label is written into the display files. */
+    {
         const char *body;
         int ok = 0;
         if (!c300x_command_transaction_capture(state->config->maintenance_qml_patch_script,

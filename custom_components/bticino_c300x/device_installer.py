@@ -864,19 +864,26 @@ def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: s
 
 _LOGGER = logging.getLogger(__name__)
 
-# Firmware 3.0.x has a Qt 5 display with its QML built into the BtClass program
-# (qrc:/skins/default/...), so there are no files for the Display patch. The
-# earlier ones have Qt 4 and QML files on disk. The Qt 5 library is the mark,
-# not a missing QML folder: on an older device a missing folder is a fault the
-# Display patch has to report.
+# The display kinds of the agent (native_agent/src/device_detect.c), read
+# before the agent runs: qt4_ondisk on C300X 1.7.x/2.0.x, qt5_rcc on C300X
+# 3.0.x with the QML built into BtClass, qt5_ondisk on the C100X (BtClass100).
+# The Qt 5 library is the mark, not a missing QML folder: on an older device a
+# missing folder is a fault the Display patch has to report.
 _QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
+_C100X_DISPLAY_MARKER = "/home/bticino/bin/gui/BtClass100"
+_QT4_ONDISK = "qt4_ondisk"
 
 
-def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
-    """Return whether the device has the Qt 5 display, which cannot be patched."""
+def _device_display_kind(client: _DeviceSshClient) -> str:
+    """Return the display kind; an unreadable answer counts as the Qt 4 display."""
 
-    output = client.run(f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo yes || echo no")
-    return output.strip().splitlines()[-1:] == ["yes"]
+    words = client.run(
+        f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo qt5 || echo qt4; "
+        f"test -e {_quote(_C100X_DISPLAY_MARKER)} && echo c100x || echo c300x"
+    ).split()
+    if "qt5" not in words:
+        return _QT4_ONDISK
+    return "qt5_ondisk" if "c100x" in words else "qt5_rcc"
 
 
 def _apply_qt5_low_res_video_default(
@@ -891,7 +898,9 @@ def _apply_qt5_low_res_video_default(
     there; the config states it so it matches what the device does.
     """
 
-    if not _device_display_is_qt5(client):
+    # The camera keeps its low stream on every Qt 5 firmware until a C100X
+    # shows otherwise, as in the agent.
+    if _device_display_kind(client) == _QT4_ONDISK:
         return config_bytes
     try:
         config = json.loads(config_bytes)
@@ -920,14 +929,13 @@ def _apply_qt5_low_res_video_default(
 def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
     """Require the patcher's reported outcome, not just a successful shell exit."""
 
-    if _device_display_is_qt5(client):
-        # Qt5 firmware (3.0.x+) has no on-disk QML to patch. Skip rather than
+    kind = _device_display_kind(client)
+    if kind != _QT4_ONDISK:
+        # Only the Qt 4 display files are patched so far. Skip rather than
         # abort the whole install: the on-device display pages and ringer-sync
         # are unavailable, but camera, door, stair light, ring and calls work
         # through the agent API and do not depend on the QML hook.
-        _LOGGER.warning(
-            "C300X: device has no on-disk QML (Qt5 GUI); skipping %s patch", action
-        )
+        _LOGGER.warning("C300X: %s display is not patched; skipping %s patch", kind, action)
         return
     output = client.run(
         f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "

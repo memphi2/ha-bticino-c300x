@@ -8,7 +8,7 @@ import subprocess
 import time
 
 import pytest
-from test_native_agent_maintenance_jobs import HEADERS, QML, ROOT, Lab, response
+from test_native_agent_maintenance_jobs import HEADERS, QML, ROOT, Lab, response, wait_until
 
 from native_agent.test.smoke import api_get, free_tcp_port, wait_for_health
 
@@ -22,7 +22,7 @@ def binary(request, tmp_path_factory):
     if request.param:
         flags += " -fsanitize=address,undefined -fno-omit-frame-pointer"
     link = ("-pthread -ldl " + str(ROOT / "native_agent/test/mqtt_backpressure_stub.c")
-            + " -Wl,--wrap=send -Wl,--wrap=connect")
+            + " -Wl,--wrap=send -Wl,--wrap=connect -Wl,--wrap=poll -Wl,--wrap=__poll_chk")
     result = subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", f"CFLAGS={flags}",
          f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=120,
@@ -188,3 +188,15 @@ def test_connack_timeout_and_shutdown_do_not_stall_http(mqtt_lab):
     assert response(lab.request("/api/v1/maintenance/mqtt"))["connected"] is False
     lab.process.terminate()
     assert lab.process.wait(timeout=2) == 0
+
+
+@pytest.mark.parametrize("marker", ["shutdown-before-poll", "shutdown-worker-before-poll"])
+def test_shutdown_signal_before_poll_wakes_the_idle_loop(mqtt_lab, marker):
+    lab, peer = mqtt_lab
+    ready(lab, peer)
+    (lab.root / marker).touch()
+    # One request wakes the old poll; the next poll receives the injected signal.
+    api_get(lab.port, "/api/v1/health")
+    wait_until(lambda: not (lab.root / marker).exists())
+    assert lab.process.wait(timeout=2) == 0
+    assert "shutdown injected" in (lab.root / "agent.log").read_text()

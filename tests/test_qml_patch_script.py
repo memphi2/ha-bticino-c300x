@@ -1525,6 +1525,7 @@ def _run_qml_patch(
     no_remount: bool = True,
     source_dir: Path = SOURCE_DIR,
     env_overrides: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> dict[str, object]:
     result = _run_qml_patch_raw(
         tmp_path,
@@ -1534,6 +1535,7 @@ def _run_qml_patch(
         no_remount=no_remount,
         source_dir=source_dir,
         env_overrides=env_overrides,
+        extra_args=extra_args,
     )
     result.check_returncode()
     return json.loads(result.stdout)
@@ -1548,6 +1550,7 @@ def _run_qml_patch_raw(
     no_remount: bool = True,
     source_dir: Path = SOURCE_DIR,
     env_overrides: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = {
         **os.environ,
@@ -1561,7 +1564,7 @@ def _run_qml_patch_raw(
     if env_overrides:
         env.update(env_overrides)
     return subprocess.run(
-        [str(SCRIPT), action],
+        [str(SCRIPT), action, *(extra_args or [])],
         check=False,
         capture_output=True,
         env=env,

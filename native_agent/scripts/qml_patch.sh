@@ -20,6 +20,7 @@ MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
 GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XChecks.qml C300XSituations.qml C300XOptionalPages.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
+QT5_VENDOR_FILES="EventManager.qml HomePage.qml MainApp.qml MemoPage.qml Components/Settings/GeneralsChoice.qml Components/Settings/CallBlockPopup.qml"
 OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
 json_status() {
@@ -1184,6 +1185,53 @@ remove_obsolete_gui_files() {
     done
 }
 
+# Firmware 3.0.x (Qt 5) writes the handlers in Connections as functions; the
+# patch reads the older form, which Qt 5 still runs.
+qt5_normalize() {
+    awk '
+        NR == 1 && $0 == "import QtQuick 2.7" { print "import QtQuick 1.1"; next }
+        {
+            line = $0
+            if (top > 0 && kind[top] == "c" && line ~ /^ *function on[A-Z][A-Za-z]* *\(/) {
+                indent = line; sub(/[^ ].*$/, "", indent)
+                name = line; sub(/^ *function /, "", name); sub(/[ (].*$/, "", name)
+                rest = line; sub(/^[^)]*\) */, "", rest)
+                line = indent name ":" (rest == "" ? "" : " " rest)
+                converted++
+            }
+            connections = $0 ~ /^ *Connections *\{/
+            for (i = 1; i <= length($0); i++) {
+                ch = substr($0, i, 1)
+                if (ch == "{") { top++; kind[top] = connections ? "c" : "o"; connections = 0 }
+                else if (ch == "}" && top > 0) top--
+            }
+            print line
+        }
+    '
+}
+
+qt5_import() {
+    import_dir="$1"
+    for rel in $QT5_VENDOR_FILES; do
+        if [ ! -s "$import_dir/$rel" ]; then
+            printf 'Missing Qt 5 display file: %s\n' "$rel" >&2
+            return 1
+        fi
+    done
+    for rel in $QT5_VENDOR_FILES; do
+        # A working copy is kept: it may carry the patch already.
+        [ -e "$GUI_DIR/$rel" ] && continue
+        mkdir -p "$(dirname "$GUI_DIR/$rel")"
+        qt5_normalize < "$import_dir/$rel" > "$GUI_DIR/$rel.tmp"
+        if ! head -n 1 "$GUI_DIR/$rel.tmp" | grep -qx 'import QtQuick 1.1'; then
+            rm -f "$GUI_DIR/$rel.tmp"
+            printf 'Unsupported Qt 5 display file: %s\n' "$rel" >&2
+            return 1
+        fi
+        mv "$GUI_DIR/$rel.tmp" "$GUI_DIR/$rel"
+    done
+}
+
 cleanup_staging() {
     rm -rf "$STAGING_DIR"
 }
@@ -1678,6 +1726,10 @@ case "$ACTION" in
         ;;
     reload)
         reload_gui
+        json_status
+        ;;
+    qt5-import)
+        qt5_import "${2:?}"
         json_status
         ;;
     *)

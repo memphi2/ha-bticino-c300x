@@ -297,6 +297,12 @@ ARMHF build.
 
 ## Supported firmware versions
 
+The `c100x_1.5.8` development branch additionally carries experimental C100X
+1.5.8 detection, routing and package compatibility gates. Its
+[separate matrix](c100x-experimental.md) distinguishes offline evidence from
+unproven hardware behavior; the C300X statements below do not imply the same
+display, audio or credential support on C100X.
+
 The agent is built and ABI-checked against the firmware `1.7.19` root file
 system. Firmware `2.0.2` is served by the same binary and the same display
 files, because everything they depend on is unchanged there:

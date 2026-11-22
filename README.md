@@ -82,6 +82,13 @@ off by default and requires HA 2026.11+ Labs and the integration option.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.
 
+This `c100x_1.5.8` development branch also contains **experimental, offline-only
+validated C100X firmware 1.5.8 support**. It is not a general C100X support claim
+or part of the separate stable release. Read the [C100X support matrix and
+credential prerequisites](docs/c100x-experimental.md) before using its local
+package. Device display pages, display notifications and ringer mute are not
+supported on C100X.
+
 If your device is still stock, root or SSH-enable it first with a separate
 workflow. This repository does not provide firmware images, firmware extraction
 output, APKs, exploits, rooting instructions or vendor files. If another

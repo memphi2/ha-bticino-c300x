@@ -1,5 +1,14 @@
 # Support Policy
 
+## C100X Development Branch
+
+Only the `c100x_1.5.8` branch contains the experimental C100X 1.5.8 work.
+Its offline checks are not device acceptance testing. See the
+[C100X support matrix](docs/c100x-experimental.md) for unavailable features,
+SSH credential prerequisites, update protection and the outstanding hardware
+tests. Do not install a C300X-only stable/beta package over this agent.
+No public C100X release channel is assigned by this branch.
+
 ## Supported Release Line
 
 - `2.8.x`: current stable (2.8.2)

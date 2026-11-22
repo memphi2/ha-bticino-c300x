@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_display_qt5 import _vendor_tables
+
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
 FLAGS = ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-pedantic"]
 
@@ -28,14 +30,12 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path, Path]:
     return library, program, helper
 
 
-def _rcc(path: Path, *, magic: bytes = b"qres", version: int = 3, size: int = 64,
-         tree: int = 24, names: int = 40, data: int = 56) -> Path:
-    body = bytearray(size)
-    body[0:20] = magic + struct.pack(">IIII", version, tree, data, names)
-    for offset, mark in ((tree, b"T"), (names, b"N"), (data, b"D")):
-        if offset < size:
-            body[offset:offset + 1] = mark
-    path.write_bytes(bytes(body))
+def _rcc(path: Path, *, magic: bytes = b"qres", version: int = 2, size: int | None = None,
+         tree: int = 20, names: int | None = None, data: int | None = None) -> Path:
+    nodes, strings, payload = _vendor_tables({"MainApp.qml": b"probe"}, flags=0)
+    body = magic + struct.pack(">IIII", version, tree, data if data is not None else 20 + len(nodes) + len(strings),
+                               names if names is not None else 20 + len(nodes)) + nodes + strings + payload
+    path.write_bytes(body if size is None else body[:size])
     return path
 
 
@@ -49,7 +49,7 @@ def _run(built: tuple[Path, Path, Path], rcc: Path | None, **env: str) -> dict[s
 
 def test_registers_the_three_tables_of_a_resource_file(built: tuple[Path, Path, Path], tmp_path: Path) -> None:
     assert _run(built, _rcc(tmp_path / "ok.rcc")) == {
-        "calls": 1, "version": 3, "marks": "TND", "preload_kept": False,
+        "calls": 1, "version": 2, "marks": [2, 5, 5], "preload_kept": False,
     }
 
 
@@ -70,6 +70,43 @@ def test_a_damaged_file_is_not_registered(
 ) -> None:
     result = _run(built, _rcc(tmp_path / "bad.rcc", **case))  # type: ignore[arg-type]
     assert result["calls"] == 0
+    assert rcc_failed(tmp_path / "bad.rcc").exists()
+
+
+def rcc_failed(path: Path) -> Path:
+    return path.with_name(path.name + ".failed")
+
+
+@pytest.mark.parametrize("offset,value,width", [
+    (20 + 4, 0, 2), (20 + 6, 0xffffffff, 4), (20 + 10, 0, 4),
+    (20 + 22, 0xffffffff, 4), (20 + 22 + 4, 3, 2),
+    (20 + 3 * 22 + 10, 0xffffffff, 4), (108, 0xffff, 2),
+    (110, 0xffffffff, 4),
+])
+def test_internal_tables_are_checked_before_calling_qt(
+    built: tuple[Path, Path, Path], tmp_path: Path, offset: int, value: int, width: int,
+) -> None:
+    path = _rcc(tmp_path / "internal.rcc")
+    blob = bytearray(path.read_bytes())
+    struct.pack_into(">I" if width == 4 else ">H", blob, offset, value)
+    path.write_bytes(blob)
+    assert _run(built, path)["calls"] == 0
+    assert rcc_failed(path).exists()
+
+
+def test_symlink_is_not_registered(built: tuple[Path, Path, Path], tmp_path: Path) -> None:
+    target = _rcc(tmp_path / "target.rcc")
+    link = tmp_path / "link.rcc"
+    link.symlink_to(target)
+    assert _run(built, link)["calls"] == 0
+
+
+def test_every_truncation_is_rejected(built: tuple[Path, Path, Path], tmp_path: Path) -> None:
+    path = _rcc(tmp_path / "truncated.rcc")
+    original = path.read_bytes()
+    for length in range(len(original)):
+        path.write_bytes(original[:length])
+        assert _run(built, path)["calls"] == 0, length
 
 
 def test_no_file_registers_nothing(built: tuple[Path, Path, Path]) -> None:

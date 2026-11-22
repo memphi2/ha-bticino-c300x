@@ -23,6 +23,8 @@ Display:
   not change, and runtime-only updates refresh the display preload too.
   Installation and settings no longer confirm a quarantined or incomplete
   overlay as active; unsuccessful display follow-up remains pending.
+  The preload validates complete resource tables before handing pointers to
+  Qt; damaged files are quarantined without registering them.
   Offline fault injection does not establish device or watchdog safety.
 
 ## v2.8.2 - 2026-11-22

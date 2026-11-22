@@ -23,9 +23,9 @@ unsigned char register_resource(
 
     calls++;
     version = given_version;
-    tree_mark = (char)tree[0];
-    names_mark = (char)names[0];
-    data_mark = (char)data[0];
+    tree_mark = (char)tree[5];
+    names_mark = (char)names[1];
+    data_mark = (char)data[3];
     return accept == NULL || accept[0] != '0';
 }
 
@@ -34,7 +34,7 @@ int main(void)
     const char *preload = getenv("LD_PRELOAD");
 
     printf(
-        "{\"calls\":%d,\"version\":%d,\"marks\":\"%c%c%c\",\"preload_kept\":%s}\n",
+        "{\"calls\":%d,\"version\":%d,\"marks\":[%d,%d,%d],\"preload_kept\":%s}\n",
         calls, version, tree_mark, names_mark, data_mark,
         preload != NULL && preload[0] != '\0' ? "true" : "false"
     );

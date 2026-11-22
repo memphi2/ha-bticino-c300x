@@ -127,22 +127,46 @@ def test_the_agent_skips_the_display_label_only_on_a_qt5_display():
 
 
 class _Device:
-    def __init__(self, *, qt5: bool) -> None:
+    def __init__(self, *, qt5: bool, c100x: bool = False) -> None:
         self.qt5 = qt5
+        self.c100x = c100x
         self.commands: list[str] = []
 
     def run(self, command: str) -> str:
         self.commands.append(command)
         if "libQt5Core" in command:
-            return "yes\n" if self.qt5 else "no\n"
+            return ("qt5" if self.qt5 else "qt4") + "\n" + ("c100x" if self.c100x else "c300x") + "\n"
         return json.dumps({"ok": True, "core_patched": True, "gui_running": True, "patched": True})
 
 
-def test_the_installer_recognises_the_qt5_display_by_its_library():
+def test_the_installer_names_the_display_like_the_agent():
     device = _Device(qt5=True)
-    assert installer._device_display_is_qt5(device) is True
-    assert device.commands == ["test -e /usr/lib/libQt5Core.so.5 && echo yes || echo no"]
-    assert installer._device_display_is_qt5(_Device(qt5=False)) is False
+    assert installer._device_display_kind(device) == "qt5_rcc"
+    assert device.commands == [
+        "test -e /usr/lib/libQt5Core.so.5 && echo qt5 || echo qt4; "
+        "test -e /home/bticino/bin/gui/BtClass100 && echo c100x || echo c300x"
+    ]
+    assert installer._device_display_kind(_Device(qt5=False)) == "qt4_ondisk"
+    assert installer._device_display_kind(_Device(qt5=True, c100x=True)) == "qt5_ondisk"
+
+
+class _Mute(_Device):
+    def run(self, command: str) -> str:
+        self.commands.append(command)
+        return ""
+
+
+def test_an_unreadable_display_answer_counts_as_the_qt4_display():
+    assert installer._device_display_kind(_Mute(qt5=True)) == "qt4_ondisk"
+
+
+def test_a_c100x_gets_no_display_patch_and_the_low_stream_for_now():
+    c100x = _Device(qt5=True, c100x=True)
+    installer._apply_qml_patch_sync(c100x, "/data/agent", "apply")
+    assert not any("qml_patch.sh" in command for command in c100x.commands)
+    unset = json.dumps({"video": {"av": {}}}).encode()
+    low = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True, c100x=True), unset))
+    assert low["video"]["av"]["highResolution"] is False
 
 
 def test_the_display_patch_is_skipped_on_a_qt5_display_and_runs_on_a_qt4_one():

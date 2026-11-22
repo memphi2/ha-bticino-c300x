@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=b25625fe1014dbad";
-import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=b25625fe1014dbad";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=b25625fe1014dbad";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=cb4714c7e6bde32f";
+import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=cb4714c7e6bde32f";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=cb4714c7e6bde32f";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {

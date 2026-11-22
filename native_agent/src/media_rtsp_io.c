@@ -84,9 +84,18 @@ static ssize_t send_pair_until(int fd, const void *first, size_t first_len,
     struct iovec iov[2];
     struct iovec *pending = iov;
     size_t count = 0, sent = 0;
+    int attempted = 0;
     if (first_len) iov[count++] = (struct iovec){.iov_base = (void *)first, .iov_len = first_len};
     if (second_len) iov[count++] = (struct iovec){.iov_base = (void *)second, .iov_len = second_len};
     while (count > 0) {
+        /* A stalled client still gets one nonblocking recovery attempt.
+         * Every retry, including EINTR and short writes, shares the deadline. */
+        long long deadline = sent ? finish_deadline : start_deadline;
+        if (attempted && c300x_monotonic_ms() >= deadline) {
+            errno = ETIMEDOUT;
+            return sent ? -1 : 0;
+        }
+        attempted = 1;
         struct msghdr message = {.msg_iov = pending, .msg_iovlen = count};
         ssize_t n = sendmsg(fd, &message, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (n < 0 && errno == EINTR) continue;

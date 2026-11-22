@@ -75,6 +75,7 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
+    DEFAULT_CREATE_HOMEASSISTANT_USER,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_NAME,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
@@ -98,7 +99,7 @@ from .device_activations import (
 from .schema_compat import vol
 from .validation_patterns import ENTITY_OBJECT_ID_RE
 
-_CREATE_HOMEASSISTANT_USER_DEFAULT = True
+_CREATE_HOMEASSISTANT_USER_DEFAULT = DEFAULT_CREATE_HOMEASSISTANT_USER
 
 
 def _setup_connection_schema(

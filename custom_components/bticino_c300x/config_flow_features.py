@@ -62,6 +62,7 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
+    DEFAULT_CREATE_HOMEASSISTANT_USER,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_N,
@@ -81,7 +82,7 @@ from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
 
-CREATE_HOMEASSISTANT_USER_DEFAULT = True
+CREATE_HOMEASSISTANT_USER_DEFAULT = DEFAULT_CREATE_HOMEASSISTANT_USER
 
 
 def webrtc_ice_policy_or_default(value: Any) -> str:
@@ -376,15 +377,9 @@ def feature_input_defaults(
         data.setdefault(key, defaults.get(key, default))
     data.setdefault(CONF_NATIVE_TWO_WAY_AUDIO, defaults.get(CONF_NATIVE_TWO_WAY_AUDIO, False))
     if CONF_CREATE_HOMEASSISTANT_USER not in data:
-        media_was_enabled = bool(defaults.get(CONF_VIDEO_ENABLED, False))
-        media_enabled = bool(data.get(CONF_VIDEO_ENABLED, media_was_enabled))
-        data[CONF_CREATE_HOMEASSISTANT_USER] = (
-            CREATE_HOMEASSISTANT_USER_DEFAULT
-            if media_enabled and not media_was_enabled
-            else defaults.get(
-                CONF_CREATE_HOMEASSISTANT_USER,
-                CREATE_HOMEASSISTANT_USER_DEFAULT,
-            )
+        data[CONF_CREATE_HOMEASSISTANT_USER] = defaults.get(
+            CONF_CREATE_HOMEASSISTANT_USER,
+            CREATE_HOMEASSISTANT_USER_DEFAULT,
         )
     data.setdefault(
         CONF_DEVICE_ACTIVATION_MODE,

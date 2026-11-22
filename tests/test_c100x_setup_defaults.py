@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from custom_components.bticino_c300x import config_flow
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
 from custom_components.bticino_c300x.const import (
     CONF_CREATE_HOMEASSISTANT_USER,
@@ -70,3 +71,37 @@ def test_error_form_keeps_media_user_opt_in(monkeypatch):
     }))
     assert form["errors"]
     assert form["data_schema"]({})[CONF_CREATE_HOMEASSISTANT_USER] is False
+
+
+@pytest.mark.parametrize("kind", ["options", "reconfigure"])
+@pytest.mark.parametrize("previous_consent", [None, False, True])
+def test_enabling_video_preserves_existing_consent(monkeypatch, kind, previous_consent):
+    data = {"agent_host": "c100x.invalid", CONF_VIDEO_ENABLED: False}
+    if previous_consent is not None:
+        data[CONF_CREATE_HOMEASSISTANT_USER] = previous_consent
+    entry = SimpleNamespace(data=data, options={})
+    monkeypatch.setattr(config_flow, "_async_qml_patch_description_placeholders", AsyncMock(return_value={}))
+    if kind == "options":
+        flow = config_flow.BticinoC300XOptionsFlow(entry)
+        monkeypatch.setattr(flow, "_async_store_options", AsyncMock())
+        step = flow.async_step_features
+    else:
+        flow = BticinoC300XConfigFlow()
+        monkeypatch.setattr(flow, "_get_reconfigure_entry", lambda: entry)
+        monkeypatch.setattr(flow, "async_step_reconfigure_visitor_snapshot", AsyncMock())
+        step = flow.async_step_reconfigure_features
+    monkeypatch.setattr(flow, "async_show_form", lambda **values: values)
+    form = asyncio.run(step())
+    values = form["data_schema"]({CONF_VIDEO_ENABLED: True})
+    assert CONF_CREATE_HOMEASSISTANT_USER not in values
+    asyncio.run(step(values))
+    saved = (flow._async_store_options.await_args.args[0] if kind == "options"
+             else flow._reconfigure_feature_data)
+    assert saved[CONF_CREATE_HOMEASSISTANT_USER] is (previous_consent is True)
+    api = AsyncMock()
+    api.async_device_user_status.return_value = {"homeassistant_user_present": False}
+    api.async_ensure_homeassistant_user.return_value = {"homeassistant_user_present": False}
+    entry.options = saved
+    entry.runtime_data = SimpleNamespace(api=api, capabilities={"device_user": {"supported": True}})
+    asyncio.run(_async_sync_device_user(SimpleNamespace(), entry))
+    assert api.async_ensure_homeassistant_user.await_count == int(previous_consent is True)

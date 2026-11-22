@@ -639,7 +639,7 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
-    assert features[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert features[CONF_CREATE_HOMEASSISTANT_USER] is False
     assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in features
@@ -655,7 +655,7 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_ALARM_ENTITY_ID not in result
     assert CONF_WEATHER_ENTITY_ID not in result
     assert result[CONF_VIDEO_ENABLED] is True
-    assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert result[CONF_CREATE_HOMEASSISTANT_USER] is False
     assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_VIDEO_PORT not in result
@@ -726,12 +726,12 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
     assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
-def test_initial_feature_input_defaults_video_enabled() -> None:
+def test_initial_feature_input_video_does_not_imply_sip_write_permission() -> None:
     data, errors = _feature_input({}, default_video_enabled=True)
 
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
-    assert data[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
     assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 

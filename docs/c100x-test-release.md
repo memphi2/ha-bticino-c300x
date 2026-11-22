@@ -351,6 +351,8 @@ Video and automatic media-user creation default to off in this test package.
 Submitting the initial form unchanged does not enable media or provision SIP
 users. Enabling video alone does not authorize automatic SIP-user creation;
 that requires a separate explicit choice during an agreed later media trial.
+Options and reconfiguration preserve a previously saved choice; switching video
+on does not silently turn a saved refusal or an absent permission into approval.
 
 1. Install the approved package on the isolated HA test instance; authorize only
    the agreed C100X host. Leave GUI/display installation disabled.

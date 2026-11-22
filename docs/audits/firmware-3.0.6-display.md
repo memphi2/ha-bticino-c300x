@@ -265,6 +265,29 @@ and 23 selected Qt5 HA activation/update-follow-up cases passed too. Build-lock
 regeneration and the final candidate build are coordinated separately; these
 tests do not certify that an older staged binary contains wrapper-check.
 
+### Open Downgrade Guard
+
+**P1, confirmed and not fixed in this follow-up:** the requirement to remove
+the complete Qt5 overlay before installing stable 2.8.2 is documentation, not
+an updater guard. `native_agent/src/agent_update.c:365` validates staged file
+integrity but does not require Qt5 recovery support while overlay artifacts
+remain. Two isolated current-updater probes (normal and ASan/UBSan) accepted a
+2.8.2 bundle staged from local source commit `40cb1aa4`, replaced the native
+payload and Qt5-aware `qml_patch.sh`, and retained the Qt5 artifact sentinels.
+Both reported 28 changed files. The staged executable was synthetic and never
+executed: this proves the file-installation path, not subsequent GUI/HA behavior
+or the bytes of a published release binary. The stable source script has no
+Qt5 overlay restoration implementation.
+
+The probe is retained outside the repository as
+`/var/tmp/c300x-beta-downgrade-probe.py`; its output markers are
+`BETA_ACCEPTED_STABLE=1`, `QT5_RESTORE_SCRIPT_REPLACED=1` and
+`QT5_ARTIFACTS_RETAINED=1`. No stable code was changed. A future beta-side guard
+can use actual activation artifacts and target-bundle capability metadata
+without model detection; SSH/manual installation would need separate coverage.
+Until such a guard is implemented and tested, do not describe downgrade safety
+as complete. The manual full-removal prerequisite remains mandatory.
+
 ## Focused Reproduction
 
 Set `PYTHON` to the existing project virtualenv, `FW306` and `FW1719` to

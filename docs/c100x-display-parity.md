@@ -61,8 +61,27 @@ requests and actual state readback. It cancels requests and unloads the page on
 call, active call, Soft-AP, commissioning or keyboard transition blocking.
 Offline Qt5 tests check PIN disposal, foreign loader-source rejection and settings;
 isolated protocol tests check expiry, replay, late replies and failed readback.
-This build is not yet an installed or advertised display adapter. Notify,
-transactional delivery/recovery and memo integration remain incomplete.
+The separate `c100x_display.sh` disk transaction now verifies the exact original
+GUI binary, wrapper, event manager and both edited QML sources. It stages a
+complete hash-manifested adapter directory, installs an inert menu hook first,
+and atomically replaces `main.qml` last. Restore reverses that order. Private
+staging, an exclusive read-only vendor-inode lock, persistence barriers and
+verified original backups protect failure/recovery paths. Unknown changes,
+symlinks, hardlinks and foreign firmware fail closed. Original file modes remain
+intact. Retired adapter directories and backups are deliberately retained: a
+still-running old GUI may reference them. The wrapper/event manager are not
+modified and the script does not signal processes or reboot.
+
+Focused tests execute this script on original firmware copies, including failed
+writes, interrupted main-file switches, corrupt adapter files, symlinks and
+remount failure. Hook-fragment Qt5 tests exercise actual Loader initialization,
+vendor-stack back navigation and menu availability. These are host tests with
+explicit vendor mocks, not proof of the complete firmware GUI process.
+
+This build is not yet an installed or advertised display adapter. Agent bundle
+delivery, supervised restart/readiness/automatic rollback, Notify and memo
+integration remain incomplete. The script reports `runtime_verified: false`;
+successful disk installation alone must not enable a capability.
 
 This matrix is a target, not a declaration that every row works. Capability
 flags must stay false until the matching hook, command acknowledgement,

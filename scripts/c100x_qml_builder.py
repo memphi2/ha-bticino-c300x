@@ -8,6 +8,7 @@ from pathlib import Path
 import argparse
 import re
 import shutil
+import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = (
@@ -68,6 +69,12 @@ def build(destination: Path, source: Path = ROOT / "device_qml") -> None:
         shutil.copyfile(path, destination / path.name)
     shutil.copytree(source / "js", destination / "js", dirs_exist_ok=True)
     shutil.copytree(source / "c100x" / "js", destination / "js", dirs_exist_ok=True)
+    shutil.copytree(source / "c100x" / "hooks", destination / "hooks", dirs_exist_ok=True)
+    files = sorted(path for path in destination.rglob("*") if path.is_file() and path.name != "SHA256SUMS")
+    (destination / "SHA256SUMS").write_text("".join(
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(destination).as_posix()}\n"
+        for path in files
+    ))
 
 
 if __name__ == "__main__":

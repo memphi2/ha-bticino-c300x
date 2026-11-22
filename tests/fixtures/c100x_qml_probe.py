@@ -50,12 +50,25 @@ class Host(QObject):
         return self.pref
 
 
+class VendorEnums(QObject):
+    @pyqtProperty(int, constant=True)
+    def RingtoneMute(self):
+        return 17
+
+    @pyqtProperty(int, constant=True)
+    def Commissioned(self):
+        return 3
+
+
 app = QGuiApplication([])
 engine = QQmlEngine()
 factory = OfflineFactory()
 engine.setNetworkAccessManagerFactory(factory)
 host = Host()
 engine.rootContext().setContextProperty("c100xHost", host)
+enums = VendorEnums()
+engine.rootContext().setContextProperty("AudioState", enums)
+engine.rootContext().setContextProperty("Commissioning", enums)
 errors = []
 engine.warnings.connect(lambda warnings: errors.extend(error.toString() for error in warnings
     if "Implicitly defined onFoo properties in Connections are deprecated" not in error.toString()))
@@ -142,9 +155,12 @@ else:
     evaluate(item, "exercise()")
     sip.delete(item)
 
-for fixture in ("c100x_numeric_probe.qml", "c100x_bridge_probe.qml"):
+for fixture in ("c100x_numeric_probe.qml", "c100x_bridge_probe.qml", "c100x_hook_probe.qml", "c100x_menu_hook_probe.qml"):
     component = QQmlComponent(engine)
-    component.setData(Path(__file__).with_name(fixture).read_bytes(),
+    document = Path(__file__).with_name(fixture).read_bytes()
+    document = document.replace(b"@MAIN_HOOK@", (source / "hooks/main.inc").read_bytes().replace(b"@RELEASE@", b"."))
+    document = document.replace(b"@MENU_HOOK@", (source / "hooks/menu.inc").read_bytes())
+    component.setData(document,
                       QUrl.fromLocalFile(str(source / fixture)))
     item = component.create()
     if item is None:

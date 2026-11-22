@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
+import { checkRingEndStart } from "./ring_end_start.mjs";
 
 export async function checkPendingMicrophone(page) {
   const cases = [
@@ -178,6 +179,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       ? request.continue() : request.abort());
     await page.goto(origin);
     await checkPendingMicrophone(page);
+    await checkRingEndStart(page);
     console.log("Pending microphone: 27 cancellations, 2 successor races and 2 available-camera controls passed");
   } finally {
     await browser?.close();

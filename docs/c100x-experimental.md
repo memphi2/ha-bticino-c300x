@@ -70,6 +70,21 @@ C100X agents without this guard do not acquire native-side protection until
 updated with this branch's guarded agent. Use only a reviewed branch package;
 do not change the manifest to force an incompatible update through.
 
+## Routing Recovery
+
+Routing restore requires a known whole-file stock SHA256 and a matching
+target firmware identity. Recovery of an interrupted patch is accepted only
+when replacing its known patch ranges reconstructs that same stock hash.
+Corrupt/foreign backups, symlinks, missing targets and damage outside those
+ranges fail closed; recovery files remain available for manual investigation.
+Restore stages and verifies the file privately before atomic replacement.
+
+C100X media-user restore skips unsupported GUI label operations. Uninstall
+also skips the C300X GUI/display-library paths and verifies routing restoration
+before deleting the agent or backups. A verified stock target needs no backup
+and no routing write. Failed restoration prevents deletion and reboot;
+hardware recovery and vendor operation after uninstall remain untested.
+
 ## Minimum Device Acceptance Plan
 
 These steps require separate explicit authorization and have **not** been run:

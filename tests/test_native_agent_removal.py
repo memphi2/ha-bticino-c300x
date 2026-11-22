@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -20,15 +21,20 @@ LINPHONE = (
     "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=0\n"
     "[audio_codec_1]\nmime=speex\nrate=8000\nenabled=1\n"
 )
+ROUTING_STOCK = b"isolated stock routing fixture\n"
 
 
 @pytest.fixture(scope="module")
 def removal_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     build = tmp_path_factory.mktemp("removal-build")
-    subprocess.run(
-        ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all"],
-        check=True, capture_output=True, text=True,
+    result = subprocess.run(
+        ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all",
+         "CFLAGS=-std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE "
+         "-D_POSIX_C_SOURCE=200809L -DC300X_DEVICE_PATCH_STOCK_SHA256="
+         f'\\"{hashlib.sha256(ROUTING_STOCK).hexdigest()}\\"'],
+        capture_output=True, text=True,
     )
+    assert result.returncode == 0, result.stdout + result.stderr
     return build / "host/c300x-agent-native"
 
 
@@ -39,6 +45,9 @@ def device(tmp_path: Path, removal_binary: Path) -> dict[str, str]:
     original = backups / "original"
     agent.mkdir()
     original.mkdir(parents=True)
+    routing = tmp_path / "vendor-bin"
+    routing.mkdir()
+    (routing / "bt_answering_machine").write_bytes(ROUTING_STOCK)
     shutil.copy2(removal_binary, agent / "c300x-agent-native")
     (agent / "c300x-agent-native.pid").write_text("123\n")
     env = dict(os.environ)
@@ -48,6 +57,8 @@ def device(tmp_path: Path, removal_binary: Path) -> dict[str, str]:
         "C300X_AUDIO_BACKUP_DIR": str(original),
         "C300X_AUDIO_NO_REMOUNT": "1",
         "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
+        "C300X_ROUTING_TARGET_DIR": str(routing),
+        "C300X_ROUTING_BACKUP_DIR": str(original / "home/bticino/bin"),
         "TEST_COMMAND_LOG": str(tmp_path / "commands.log"),
     })
     files = {

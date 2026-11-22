@@ -4,6 +4,7 @@ set -u
 AGENT_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
 BACKUP_ROOT="${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}"
 QML_PATCH="${C300X_QML_PATCH_SCRIPT:-$AGENT_DIR/qml_patch.sh}"
+C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
 INIT_SCRIPT="${C300X_INIT_SCRIPT:-/etc/init.d/c300x-native-agent}"
 INIT_LINK="${C300X_INIT_LINK:-/etc/rc5.d/S40c300x-native-agent}"
 IPTABLES="${C300X_IPTABLES:-/etc/network/if-pre-up.d/iptables}"
@@ -69,6 +70,7 @@ remount_root_ro() {
 }
 
 restore_qml() {
+    [ -e "$C100X_MARKER" ] && return 0
     if [ ! -x "$QML_PATCH" ]; then
         printf 'Cannot verify GUI restoration without executable patch script; keeping agent files and backups in place\n' >&2
         exit 1
@@ -182,6 +184,7 @@ stop_agent() {
 
 restore_media_patches() {
     if ! C300X_AUDIO_BACKUP_DIR="$BACKUP_ROOT/original" \
+        C300X_ROUTING_BACKUP_DIR="$BACKUP_ROOT/original/home/bticino/bin" \
         "$AGENT_DIR/c300x-agent-native" --restore-media-patches; then
         printf 'Failed to restore media patches; keeping agent files and backups in place\n' >&2
         exit 1
@@ -196,6 +199,7 @@ restore_media_patches() {
 # Without a valid stock backup the library stays as it is (wider tap
 # tolerance); any other failure keeps the backup for another removal.
 restore_display_library() {
+    [ -e "$C100X_MARKER" ] && return 0
     touch_result="$("$AGENT_DIR/c300x-agent-native" --display-touch restore 2>/dev/null || true)"
     case "$touch_result" in
         *'"ok":true'*) return 0 ;;

@@ -21,6 +21,22 @@ GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergy
 FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 QT5_VENDOR_FILES="EventManager.qml HomePage.qml MainApp.qml MemoPage.qml Components/Settings/GeneralsChoice.qml Components/Settings/CallBlockPopup.qml"
+# Firmware 3.0.x has a Qt 5 display whose files are resources inside BtClass.
+# The patch then works on a copy here; the changed files reach the display as
+# a resource file that c300x-qrc-overlay.so, preloaded by the start script,
+# registers ahead of the program's own.
+QT5_DISPLAY=0
+if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
+    QT5_DISPLAY=1
+    QT5_AGENT_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
+    QT5_BACKUP_ROOT="${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}"
+    QT5_ROOT="${C300X_QML_QT5_ROOT:-$QT5_AGENT_DIR/display-qt5}"
+    QT5_RCC="${C300X_QML_QT5_RCC:-$QT5_AGENT_DIR/display-qt5.rcc}"
+    QT5_OVERLAY_LIB="${C300X_QML_QT5_OVERLAY_LIB:-$QT5_AGENT_DIR/c300x-qrc-overlay.so}"
+    QT5_WRAPPER_BACKUP="${C300X_QML_QT5_WRAPPER_BACKUP:-$QT5_BACKUP_ROOT/original/bin/BtClass_qws}"
+    GUI_DIR="${C300X_QML_GUI_DIR:-$QT5_ROOT/skins/default}"
+    BACKUP_DIR="${C300X_QML_BACKUP_DIR:-$QT5_BACKUP_ROOT/original/qt5/skins/default}"
+fi
 OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
 json_status() {
@@ -68,10 +84,20 @@ json_status() {
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         gui_running=true
     fi
+    qt5_fields=
+    if [ "$QT5_DISPLAY" = "1" ]; then
+        qt5_overlay="$(qt5_overlay_state)"
+        # Left over from a run cut short: restore-all takes it away.
+        if [ "$qt5_overlay" != "off" ] && [ "$state$core_state$media_user_label_state" = "originaloriginaloriginal" ]; then
+            state=partial
+            patched=null
+        fi
+        qt5_fields=",\"qt5_overlay\":\"$qt5_overlay\""
+    fi
     if [ -n "$changed_files" ]; then
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"changed_files":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$changed_files"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"changed_files":%s%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$changed_files" "$qt5_fields"
     else
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$qt5_fields"
     fi
 }
 
@@ -262,6 +288,10 @@ touch_root_read_only() {
 
 touch_patch() {
     TOUCH_STATE=
+    # The swipe threshold patch is for the Qt 4 display library only.
+    if [ "$QT5_DISPLAY" = "1" ]; then
+        return 0
+    fi
     if [ ! -x "$AGENT_BIN" ] || [ "${GUI_RELOAD_FAILED:-0}" = "1" ]; then
         return 0
     fi
@@ -362,6 +392,13 @@ finish_write_action() {
                 rm -f "$GUI_DIR/$transaction_rel" || recovery_ok=0
             fi
         done
+        if [ "${QT5_PUBLISHED:-0}" = "1" ]; then
+            if [ -f "$WRITE_TRANSACTION/.display-qt5.rcc" ]; then
+                mv -f "$WRITE_TRANSACTION/.display-qt5.rcc" "$QT5_RCC" || recovery_ok=0
+            else
+                rm -f "$QT5_RCC" || recovery_ok=0
+            fi
+        fi
     fi
     if [ "$recovery_ok" = "1" ]; then
         if [ -n "${WRITE_TRANSACTION:-}" ]; then
@@ -394,9 +431,13 @@ run_write_action() {
     WRITE_TRANSACTION_COMMITTED=0
     WRITE_RELOAD_ATTEMPTED=0
     REMOVE_EMPTY_JS=0
+    QT5_PUBLISHED=0
     trap finish_write_action EXIT
     trap abort_write_action HUP INT TERM
     remount_rw
+    if [ "$QT5_DISPLAY" = "1" ]; then
+        mkdir -p "$GUI_DIR"
+    fi
     # Keep recovery on the GUI filesystem so rollback needs no further copies.
     transaction_dir="$GUI_DIR/.c300x-qml-transaction.$$"
     (umask 077; mkdir "$transaction_dir")
@@ -414,6 +455,7 @@ run_write_action() {
     done
     WRITE_TRANSACTION_READY=1
     "$@"
+    qt5_publish
     WRITE_RELOAD_ATTEMPTED=1
     if ! reload_gui; then
         GUI_RELOAD_FAILED=1
@@ -1232,6 +1274,146 @@ qt5_import() {
     done
 }
 
+# Read afresh on every change: a copy made for another firmware is dropped
+# together with its originals.
+qt5_prepare() {
+    if [ "$QT5_DISPLAY" != "1" ]; then
+        return 0
+    fi
+    rm -rf "$QT5_ROOT/vendor.new"
+    qt5_result="$("$AGENT_BIN" --display-qt5 extract "$QT5_ROOT/vendor.new" $QT5_VENDOR_FILES 2>/dev/null || true)"
+    case "$qt5_result" in
+        *'"ok":true'*) ;;
+        *)
+            rm -rf "$QT5_ROOT/vendor.new"
+            printf 'Cannot read the display files of this firmware: %s\n' "$qt5_result" >&2
+            return 1
+            ;;
+    esac
+    for rel in $QT5_VENDOR_FILES; do
+        if [ -d "$QT5_ROOT/vendor" ] && ! cmp -s "$QT5_ROOT/vendor/$rel" "$QT5_ROOT/vendor.new/$rel"; then
+            rm -rf "$QT5_ROOT/vendor" "$GUI_DIR" "$BACKUP_DIR"
+            break
+        fi
+    done
+    rm -rf "$QT5_ROOT/vendor"
+    mv "$QT5_ROOT/vendor.new" "$QT5_ROOT/vendor"
+    mkdir -p "$GUI_DIR"
+    qt5_import "$QT5_ROOT/vendor"
+}
+
+qt5_overlay_state() {
+    if [ -e "$QT5_RCC.failed" ]; then
+        printf 'failed\n'
+    elif [ -f "$QT5_RCC" ] || grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null; then
+        printf 'active\n'
+    else
+        printf 'off\n'
+    fi
+}
+
+# The vendor start script with the overlay ahead of the plain start. A display
+# that ends with an error within a minute of starting with the overlay marks it
+# failed and starts as shipped; the next change of the patch clears the mark.
+qt5_wrapper_text() {
+    awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" '
+        $0 == "./bin/gui/BtClass &" && !done {
+            print "# c300x-qrc-overlay: display pages of the Home Assistant integration"
+            print "if [ -f \047" lib "\047 ] && [ -f \047" rcc "\047 ] && [ ! -e \047" rcc ".failed\047 ]; then"
+            print "    c300x_start=$(date +%s)"
+            print "    LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 ./bin/gui/BtClass &"
+            print "    wait $!"
+            print "    c300x_rc=$?"
+            print "    case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac"
+            print "    [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc"
+            print "    : > \047" rcc ".failed\047"
+            print "fi"
+            done = 1
+        }
+        { print }
+        END { if (!done) exit 1 }
+    ' "$QT5_WRAPPER_BACKUP"
+}
+
+qt5_wrapper_install() {
+    if ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER"; then
+        mkdir -p "$(dirname "$QT5_WRAPPER_BACKUP")"
+        cp -p "$GUI_WRAPPER" "$QT5_WRAPPER_BACKUP.tmp"
+        mv -f "$QT5_WRAPPER_BACKUP.tmp" "$QT5_WRAPPER_BACKUP"
+    fi
+    if [ ! -f "$QT5_WRAPPER_BACKUP" ] || ! qt5_wrapper_text > "$GUI_WRAPPER.c300x.tmp"; then
+        rm -f "$GUI_WRAPPER.c300x.tmp"
+        printf 'Unsupported display start script: %s\n' "$GUI_WRAPPER" >&2
+        return 1
+    fi
+    if cmp -s "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"; then
+        rm -f "$GUI_WRAPPER.c300x.tmp"
+        return 0
+    fi
+    chmod 755 "$GUI_WRAPPER.c300x.tmp"
+    mv -f "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"
+}
+
+qt5_wrapper_restore() {
+    if ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null; then
+        return 0
+    fi
+    if [ ! -f "$QT5_WRAPPER_BACKUP" ]; then
+        printf 'No original of the display start script: %s\n' "$QT5_WRAPPER_BACKUP" >&2
+        return 1
+    fi
+    cp -p "$QT5_WRAPPER_BACKUP" "$GUI_WRAPPER.c300x.tmp"
+    mv -f "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"
+}
+
+# Every file that differs from the firmware's, back in Qt 5 form, into the
+# resource file; with none left the start script is the vendor one again.
+qt5_publish() {
+    if [ "$QT5_DISPLAY" != "1" ]; then
+        return 0
+    fi
+    qt5_stage="$QT5_ROOT/rcc-stage.$$"
+    rm -rf "$qt5_stage"
+    mkdir -p "$qt5_stage"
+    qt5_files=
+    for rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES; do
+        if [ ! -f "$GUI_DIR/$rel" ]; then
+            continue
+        fi
+        if [ -f "$QT5_ROOT/vendor/$rel" ]; then
+            qt5_normalize < "$QT5_ROOT/vendor/$rel" > "$qt5_stage/.original"
+            if cmp -s "$qt5_stage/.original" "$GUI_DIR/$rel"; then
+                continue
+            fi
+        fi
+        mkdir -p "$(dirname "$qt5_stage/$rel")"
+        sed 's/^import QtQuick 1\.1$/import QtQuick 2.7/' "$GUI_DIR/$rel" > "$qt5_stage/$rel"
+        qt5_files="$qt5_files $rel"
+    done
+    rm -f "$qt5_stage/.original"
+    if [ -f "$QT5_RCC" ]; then
+        cp -p "$QT5_RCC" "$WRITE_TRANSACTION/.display-qt5.rcc"
+    fi
+    QT5_PUBLISHED=1
+    if [ -z "$qt5_files" ]; then
+        rm -rf "$qt5_stage"
+        rm -f "$QT5_RCC" "$QT5_RCC.failed"
+        qt5_wrapper_restore
+        return
+    fi
+    qt5_result="$("$AGENT_BIN" --display-qt5 pack "$qt5_stage" "$QT5_RCC" $qt5_files 2>/dev/null || true)"
+    rm -rf "$qt5_stage"
+    case "$qt5_result" in
+        *'"ok":true'*) ;;
+        *)
+            printf 'Cannot write the display resource file: %s\n' "$qt5_result" >&2
+            return 1
+            ;;
+    esac
+    rm -f "$QT5_RCC.failed"
+    qt5_wrapper_install
+}
+
 cleanup_staging() {
     rm -rf "$STAGING_DIR"
 }
@@ -1682,15 +1864,18 @@ case "$ACTION" in
         json_status
         ;;
     apply)
+        qt5_prepare
         apply_patch_files
         touch_patch apply
         json_write_status
         ;;
     core-apply)
+        qt5_prepare
         apply_core_patch_files
         json_write_status
         ;;
     media-user-label-apply)
+        qt5_prepare
         apply_media_user_label_files
         json_write_status
         ;;
@@ -1718,7 +1903,7 @@ case "$ACTION" in
         ;;
     restore-all)
         changed_count="$(restore_all_changed_count)"
-        if [ "$changed_count" -gt 0 ]; then
+        if [ "$changed_count" -gt 0 ] || { [ "$QT5_DISPLAY" = "1" ] && [ "$(qt5_overlay_state)" != "off" ]; }; then
             run_write_action restore_all_patch_files
         fi
         touch_patch restore

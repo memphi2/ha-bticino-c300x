@@ -1560,6 +1560,7 @@ def _run_qml_patch_raw(
         "C300X_QML_NO_REMOUNT": "1" if no_remount else "0",
         "C300X_QML_RELOAD_GUI": "0",
         "C300X_QML_GUI_ROOT": str(tmp_path),
+        "C300X_QML_QT5_MARKER": str(tmp_path / "no-qt5-display"),
     }
     if env_overrides:
         env.update(env_overrides)

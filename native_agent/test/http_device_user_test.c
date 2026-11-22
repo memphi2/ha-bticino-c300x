@@ -210,7 +210,7 @@ int main(int argc, char **argv)
         assert(strstr(response_body, "\"status_available\":true") != NULL);
         assert(strstr(response_body, "\"account_label\":\"A \\\"quoted\\\" label\"") != NULL);
     } else if (strcmp(test_case, "success") == 0 || strcmp(test_case, "overflow") == 0
-        || (strcmp(test_case, "qt5") == 0 && strcmp(operation, "ensure") == 0)
+        || strcmp(test_case, "qt5") == 0
         || (strcmp(test_case, "missing") == 0 && strcmp(operation, "restore") == 0)) {
         assert(response_status == 200 && writes == 1 && reads == 1);
         assert(strcmp(write_reason, strcmp(operation, "restore") == 0

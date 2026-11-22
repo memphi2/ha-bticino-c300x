@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
 
@@ -36,7 +37,7 @@ def route_binary(request, tmp_path_factory):
     for operation in ("ensure", "restore")
     for case in ("unauthorized", "unconfirmed")
 ] + [("ensure", case) for case in ("routing-failure", "user-failure", "invalid", "false")]
-  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5")])
+  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5"), ("restore", "qt5")])
 def test_route_state_machine(route_binary, tmp_path, operation, case):
     script = tmp_path / "job.sh"
     body = ('case "$1" in\n'
@@ -66,3 +67,32 @@ def test_route_state_machine(route_binary, tmp_path, operation, case):
                                  "UBSAN_OPTIONS": "halt_on_error=1"})
     assert result.returncode == 0, result.stderr
     assert not (tmp_path / "ran").exists()
+
+
+def test_c100x_restore_with_real_detector_and_rejecting_stock_script(tmp_path):
+    original("c100x-1.5.8")  # Skip only when the read-only firmware input is absent.
+    rootfs = FIRMWARE_ROOT / "rootfs-c100x-1.5.8"
+    binary = tmp_path / "route"
+    result = subprocess.run([
+        "cc", "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+        "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
+        str(NATIVE / "test/http_device_user_stock_test.c"),
+        *[str(NATIVE / "src" / name) for name in (
+            "http_device_user.c", "http_maintenance.c", "http_auth.c", "command_job.c",
+            "command_transaction.c", "string_util.c", "json_util.c", "json_parse.c", "file_io.c",
+            "sha256.c")],
+        "-o", str(binary),
+    ], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    env = {**os.environ,
+           "C300X_QML_C100X_MARKER": str(rootfs / "home/bticino/bin/gui/BtClass100"),
+           "C300X_QML_QT5_MARKER": str(rootfs / "usr/lib/libQt5Core.so.5"),
+           "C300X_QML_GUI_DIR": str(tmp_path / "no-gui")}
+    script = NATIVE / "scripts/qml_patch.sh"
+    rejected = subprocess.run([str(script), "media-user-label-restore"], env=env,
+                              capture_output=True, text=True, timeout=10)
+    assert rejected.returncode == 3 and "unsupported_display" in rejected.stdout
+    # The handler must still return 200 and invoke routing restore exactly once.
+    result = subprocess.run([str(binary), "qt5", str(script), "restore"], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr

@@ -264,7 +264,8 @@ int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int clien
         pending = start_status(owner, client_fd, state);
     } else if (phase == USER_ENSURE) {
         pending = ensure_user(owner, client_fd, state, request);
-    } else if (access(config->maintenance_qml_patch_script, X_OK) != 0) {
+    } else if (!c300x_device_display_files_patchable()
+        || access(config->maintenance_qml_patch_script, X_OK) != 0) {
         pending = restore_routing(owner, client_fd, state);
     } else {
         /* Restore historically checks exit success, not the script's JSON. */

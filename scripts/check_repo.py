@@ -46,6 +46,7 @@ NATIVE_AGENT_VERSION_PATH = "native_agent/VERSION"
 NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
     "native_agent/src",
     "native_agent/scripts",
+    "native_agent/qt5",
     NATIVE_AGENT_VERSION_PATH,
     "native_agent/Makefile",
     "native_agent/config.example.json",

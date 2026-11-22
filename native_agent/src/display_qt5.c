@@ -39,6 +39,10 @@ static const struct qt5_layout qt5_layouts[] = {
 #endif
 };
 
+/* qt5/qrc_overlay_blob.S; weak, so a build without it reports it missing. */
+extern const unsigned char c300x_qrc_overlay_so[] __attribute__((weak));
+extern const unsigned char c300x_qrc_overlay_so_end[] __attribute__((weak));
+
 struct qt5_image {
     const unsigned char *bytes;
     size_t len;
@@ -625,14 +629,42 @@ static int pack(int argc, char **argv)
     return print_result(error == NULL, error, error == NULL ? files : 0);
 }
 
+/* Rewritten only when it differs: the running display keeps the old file. */
+static int overlay(int argc, char **argv)
+{
+    unsigned char *current = NULL;
+    size_t current_len = 0;
+    size_t len;
+    int same;
+
+    if (argc != 1) {
+        return print_result(0, "invalid_arguments", 0);
+    }
+    if (c300x_qrc_overlay_so == NULL || c300x_qrc_overlay_so_end == NULL
+        || (uintptr_t)c300x_qrc_overlay_so_end <= (uintptr_t)c300x_qrc_overlay_so) {
+        return print_result(0, "overlay_missing", 0);
+    }
+    len = (size_t)((uintptr_t)c300x_qrc_overlay_so_end - (uintptr_t)c300x_qrc_overlay_so);
+    same = c300x_patch_read_file(argv[0], &current, &current_len)
+        && current_len == len && memcmp(current, c300x_qrc_overlay_so, len) == 0;
+    free(current);
+    if (!same && !write_whole_file(argv[0], c300x_qrc_overlay_so, len)) {
+        return print_result(0, "write_failed", 0);
+    }
+    return print_result(1, NULL, 1);
+}
+
 int c300x_display_qt5_cli(int argc, char **argv)
 {
+    if (argc >= 1 && strcmp(argv[0], "overlay") == 0) {
+        return overlay(argc - 1, argv + 1);
+    }
     if (argc >= 1 && strcmp(argv[0], "extract") == 0) {
         return extract(argc - 1, argv + 1);
     }
     if (argc >= 1 && strcmp(argv[0], "pack") == 0) {
         return pack(argc - 1, argv + 1);
     }
-    fprintf(stderr, "fatal: invalid_arguments: --display-qt5 needs extract DIR REL... or pack ROOT OUT REL...\n");
+    fprintf(stderr, "fatal: invalid_arguments: --display-qt5 needs extract DIR REL..., pack ROOT OUT REL... or overlay PATH\n");
     return 2;
 }

@@ -15,7 +15,7 @@ static void print_usage(const char *program)
         stderr,
         "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
         " [--audio-codec status|apply|restore] [--display-touch status|apply|restore]"
-        " [--display-qt5 extract DIR REL...|pack ROOT OUT REL...]"
+        " [--display-qt5 extract DIR REL...|pack ROOT OUT REL...|overlay PATH]"
         " [--restore-media-patches] [--version]\n",
         program
     );

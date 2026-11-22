@@ -375,6 +375,7 @@ The reviewed build lock covers these native and bundle input paths:
 
 - `native_agent/src`
 - `native_agent/scripts`
+- `native_agent/qt5`
 - `native_agent/VERSION`
 - `native_agent/Makefile`
 - `native_agent/config.example.json`

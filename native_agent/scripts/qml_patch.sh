@@ -1399,6 +1399,7 @@ qt5_publish() {
         rm -rf "$qt5_stage"
         rm -f "$QT5_RCC" "$QT5_RCC.failed"
         qt5_wrapper_restore
+        rm -f "$QT5_OVERLAY_LIB"
         return
     fi
     qt5_result="$("$AGENT_BIN" --display-qt5 pack "$qt5_stage" "$QT5_RCC" $qt5_files 2>/dev/null || true)"
@@ -1411,6 +1412,14 @@ qt5_publish() {
             ;;
     esac
     rm -f "$QT5_RCC.failed"
+    qt5_result="$("$AGENT_BIN" --display-qt5 overlay "$QT5_OVERLAY_LIB" 2>/dev/null || true)"
+    case "$qt5_result" in
+        *'"ok":true'*) ;;
+        *)
+            printf 'Cannot write the display preload library: %s\n' "$qt5_result" >&2
+            return 1
+            ;;
+    esac
     qt5_wrapper_install
 }
 

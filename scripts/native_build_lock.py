@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = Path("native_agent/build-lock.json")
 BINARY_MEMBER = "device_agent/armhf/c300x-agent-native"
 INPUT_DIRS = (
-    "native_agent/src", "native_agent/scripts", "device_qml",
+    "native_agent/src", "native_agent/scripts", "native_agent/qt5", "device_qml",
     "custom_components/bticino_c300x/device_agent/init",
 )
 INPUT_FILES = (

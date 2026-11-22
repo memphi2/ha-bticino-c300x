@@ -5,7 +5,8 @@
  * program. "extract DIR REL..." writes the named files of a known BtClass into
  * DIR; "pack ROOT OUT REL..." writes the files ROOT/REL as a Qt resource file
  * under skins/default, which qrc_overlay.so registers ahead of the program's
- * own. Prints one JSON line; the Display patch script calls it. */
+ * own; "overlay PATH" writes that preload library, carried in the agent, to
+ * PATH. Prints one JSON line; the Display patch script calls it. */
 int c300x_display_qt5_cli(int argc, char **argv);
 
 #endif

@@ -10,7 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_display_qt5 import FLAGS, NATIVE, SOURCES, _program, _qt_find
+from tests.test_display_qt5 import (
+    FLAGS,
+    NATIVE,
+    SOURCES,
+    _program,
+    _qt_find,
+    overlay_blob,
+)
 from tests.test_qml_patch_qt5 import VENDOR_FILES, _qt5_form
 from tests.test_qml_patch_script import SCRIPT, SOURCE_DIR, _write_original_gui
 
@@ -48,7 +55,7 @@ def programs(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     cli = out / "display-qt5"
     subprocess.run(
         ["gcc", *FLAGS, f"-DC300X_DISPLAY_QT5_TEST_LAYOUT={','.join(layouts)}",
-         *(str(NATIVE / s) for s in SOURCES), "-o", str(cli), "-ldl"],
+         *(str(NATIVE / s) for s in SOURCES), str(overlay_blob(out)), "-o", str(cli), "-ldl"],
         check=True, capture_output=True, text=True,
     )
     agent = out / "c300x-agent-native"
@@ -126,6 +133,7 @@ def test_apply_packs_the_changed_files_in_qt5_form_and_preloads_them(device: Dev
     assert b"import QtQuick 1.1" not in device.rcc.read_bytes()
     # Not changed by this action: the program's own file stays in use.
     assert device.packed("Components/Settings/CallBlockPopup.qml") is None
+    assert device.lib.read_bytes() == (device.programs["agent"].parent / "c300x-qrc-overlay.so").read_bytes()
     wrapper = device.wrapper.read_text()
     assert f"LD_PRELOAD='{device.lib}' C300X_QRC_OVERLAY='{device.rcc}' QML_DISABLE_DISK_CACHE=1" in wrapper
     assert wrapper.endswith("fi\n./bin/gui/BtClass &\nwait\n")
@@ -147,6 +155,7 @@ def test_restore_all_gives_the_display_back_as_shipped(device: Device) -> None:
     assert (status["state"], status["core_state"], status["media_user_label_state"]) == ("original",) * 3
     assert status["qt5_overlay"] == "off"
     assert not device.rcc.exists()
+    assert not device.lib.exists()
     assert device.wrapper.read_text() == WRAPPER
 
 
@@ -231,7 +240,6 @@ def _start_display(device: Device, tmp_path: Path, exit_code: int) -> list[str]:
     program.parent.mkdir(parents=True, exist_ok=True)
     program.write_text(f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{log}"\nexit {exit_code}\n')
     program.chmod(0o755)
-    device.lib.write_text("")
     subprocess.run(["sh", str(device.wrapper)], cwd=tmp_path, check=False, timeout=30)
     return log.read_text().splitlines()
 

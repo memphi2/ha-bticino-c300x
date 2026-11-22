@@ -72,6 +72,17 @@ def _program(files: dict[str, bytes], *, flags: int = 1) -> tuple[bytes, tuple[i
     return body, offsets
 
 
+def overlay_blob(out: Path) -> Path:
+    """The host build of qrc_overlay.so as the object the agent carries it in."""
+
+    library, blob = out / "c300x-qrc-overlay.so", out / "qrc_overlay_blob.o"
+    subprocess.run(["gcc", *FLAGS, "-fPIC", "-shared", str(NATIVE / "qt5/qrc_overlay.c"), "-o", str(library), "-ldl"],
+                   check=True, capture_output=True, text=True)
+    subprocess.run(["gcc", f'-DQRC_OVERLAY_SO="{library}"', "-c", str(NATIVE / "qt5/qrc_overlay_blob.S"),
+                    "-o", str(blob)], check=True, capture_output=True, text=True)
+    return blob
+
+
 @pytest.fixture(scope="module")
 def vendor_program(tmp_path_factory: pytest.TempPathFactory) -> Path:
     path = tmp_path_factory.mktemp("btclass") / "BtClass"
@@ -83,10 +94,11 @@ def vendor_program(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def cli(tmp_path_factory: pytest.TempPathFactory, vendor_program: Path) -> Path:
     body, (tree, names, data) = _program(VENDOR)
     layout = f'{{"{hashlib.sha256(body).hexdigest()}", {tree}u, {names}u, {data}u}}'
-    binary = tmp_path_factory.mktemp("cli") / "display-qt5"
+    out = tmp_path_factory.mktemp("cli")
+    binary = out / "display-qt5"
     subprocess.run(
         ["gcc", *FLAGS, f"-DC300X_DISPLAY_QT5_TEST_LAYOUT={layout}", *(str(NATIVE / s) for s in SOURCES),
-         "-o", str(binary), "-ldl"],
+         str(overlay_blob(out)), "-o", str(binary), "-ldl"],
         check=True, capture_output=True, text=True,
     )
     return binary
@@ -252,6 +264,25 @@ def test_a_compression_qt_has_but_the_device_lacks_is_refused(tmp_path: Path) ->
     assert _run(binary, "extract", tmp_path / "out", "MainApp.qml", program=program) == (
         1, {"ok": False, "error": "display_resource_compression_unsupported"},
     )
+
+
+def test_overlay_writes_the_library_it_carries(cli: Path, tmp_path: Path) -> None:
+    target = tmp_path / "agent/c300x-qrc-overlay.so"
+    assert _run(cli, "overlay", target) == (0, {"ok": True, "files": 1})
+    library = (cli.parent / "c300x-qrc-overlay.so").read_bytes()
+    assert target.read_bytes() == library
+    assert target.stat().st_mode & 0o777 == 0o644
+    target.write_bytes(b"old")
+    assert _run(cli, "overlay", target)[0] == 0
+    assert target.read_bytes() == library
+
+
+def test_a_build_without_the_library_says_so(tmp_path: Path) -> None:
+    binary = tmp_path / "display-qt5"
+    subprocess.run(["gcc", *FLAGS, *(str(NATIVE / s) for s in SOURCES), "-o", str(binary), "-ldl"],
+                   check=True, capture_output=True, text=True)
+    assert _run(binary, "overlay", tmp_path / "lib.so") == (1, {"ok": False, "error": "overlay_missing"})
+    assert not (tmp_path / "lib.so").exists()
 
 
 def test_the_3_0_6_program_is_the_one_pinned() -> None:

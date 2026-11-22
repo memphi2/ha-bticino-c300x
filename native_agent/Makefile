@@ -2,6 +2,7 @@ CC ?= gcc
 PYTHON ?= python3
 ARMHF_CC ?= arm-linux-gnueabihf-gcc
 ARMHF_READELF ?= arm-linux-gnueabihf-readelf
+ARMHF_STRIP ?= arm-linux-gnueabihf-strip
 # Search curl headers after the target's standard headers when cross compiling.
 CURL_INCLUDE_DIR ?= $(shell pkg-config --variable=includedir libcurl 2>/dev/null)
 CURL_CPPFLAGS := $(if $(CURL_INCLUDE_DIR),-idirafter $(CURL_INCLUDE_DIR))
@@ -20,6 +21,9 @@ HEADERS := $(wildcard src/*.h)
 OBJECTS := $(patsubst src/%.c,$(HOST_BUILD_DIR)/%.o,$(SOURCES))
 ARMHF_OBJECTS := $(patsubst src/%.c,$(ARMHF_BUILD_DIR)/%.o,$(SOURCES))
 ARMHF_OBJECTS += $(ARMHF_BUILD_DIR)/arm_start.o
+# The preload library for the Qt 5 display, carried inside the agent.
+OBJECTS += $(HOST_BUILD_DIR)/qrc_overlay_blob.o
+ARMHF_OBJECTS += $(ARMHF_BUILD_DIR)/qrc_overlay_blob.o
 STACK_USAGE_LIMIT ?= 24576
 
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L -DC300X_NATIVE_AGENT_VERSION=\"$(AGENT_VERSION)\"
@@ -36,6 +40,7 @@ endif
 ARMHF_LDFLAGS ?= -pthread $(ARMHF_PTHREAD_LDFLAGS) -nostartfiles
 # Preloaded into the Qt 5 display program of firmware 3.0.x; see qt5/qrc_overlay.c.
 QT5_OVERLAY := $(ARMHF_BUILD_DIR)/c300x-qrc-overlay.so
+HOST_QT5_OVERLAY := $(HOST_BUILD_DIR)/c300x-qrc-overlay.so
 ifneq ($(C300X_DEVICE_SYSROOT),)
 QT5_OVERLAY_LDFLAGS := -Wl,-rpath-link,$(C300X_DEVICE_SYSROOT)/lib -L$(C300X_DEVICE_SYSROOT)/lib -l:libdl.so.2 -l:libc.so.6
 else
@@ -51,9 +56,20 @@ armhf: $(ARMHF_TARGET)
 armhf-qt5: $(QT5_OVERLAY)
 
 $(QT5_OVERLAY): qt5/qrc_overlay.c $(ARMHF_BUILD_DIR)/build-settings | $(ARMHF_BUILD_DIR)
-	$(ARMHF_CC) $(ARMHF_CFLAGS) -fPIC -shared $< -o $@ $(QT5_OVERLAY_LDFLAGS)
+	$(ARMHF_CC) $(ARMHF_CFLAGS) -fPIC -shared -Wl,-z,max-page-size=4096 $< -o $@ $(QT5_OVERLAY_LDFLAGS)
+	$(ARMHF_STRIP) --strip-unneeded $@
+
+$(HOST_QT5_OVERLAY): qt5/qrc_overlay.c $(HOST_BUILD_DIR)/build-settings | $(HOST_BUILD_DIR)
+	$(CC) $(CFLAGS) -fPIC -shared $< -o $@ -ldl
+
+$(ARMHF_BUILD_DIR)/qrc_overlay_blob.o: qt5/qrc_overlay_blob.S $(QT5_OVERLAY) | $(ARMHF_BUILD_DIR)
+	$(ARMHF_CC) -DQRC_OVERLAY_SO='"$(QT5_OVERLAY)"' -c $< -o $@
+
+$(HOST_BUILD_DIR)/qrc_overlay_blob.o: qt5/qrc_overlay_blob.S $(HOST_QT5_OVERLAY) | $(HOST_BUILD_DIR)
+	$(CC) -DQRC_OVERLAY_SO='"$(HOST_QT5_OVERLAY)"' -c $< -o $@
 
 armhf-abi-check: $(ARMHF_TARGET)
+	$(PYTHON) ../scripts/check_agent_abi.py $(QT5_OVERLAY) --readelf $(ARMHF_READELF) $(foreach root,$(C300X_DEVICE_SYSROOT) $(C300X_ABI_SYSROOTS),--sysroot $(root))
 	$(PYTHON) ../scripts/check_agent_abi.py $(ARMHF_TARGET) --readelf $(ARMHF_READELF) $(foreach root,$(C300X_DEVICE_SYSROOT) $(C300X_ABI_SYSROOTS),--sysroot $(root))
 
 armhf-stack-check:

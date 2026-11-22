@@ -4,8 +4,9 @@ import os
 from pathlib import Path
 
 import pytest
-from test_c100x_firmware_compile import firmware_case as firmware_case  # noqa: F401
+from test_c100x_firmware_compile import firmware_case as firmware_case
 from test_c100x_firmware_compile import firmware_probe as firmware_probe
+from test_c100x_firmware_compile import firmware_workspace as firmware_workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 

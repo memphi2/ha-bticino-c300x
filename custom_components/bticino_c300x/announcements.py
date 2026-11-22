@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 import wave
 from urllib.parse import urlsplit
 
@@ -20,6 +21,8 @@ _MAX_ERROR_LENGTH = 300
 # The speaker needs a moment after it is switched on, and the last syllable
 # must not be cut. The small speaker carries no bass; an even loudness keeps
 # quiet speech understandable.
+# A web address in a message, with what may carry a secret: user, query, fragment.
+_ADDRESS = re.compile(r"(https?://)(?:[^\s/@]*@)?([^\s?#]*)(?:[?#]\S*)?", re.IGNORECASE)
 # Mono first: a delay or filter on a stereo input acts on one channel only.
 _FILTER = (
     "aformat=channel_layouts=mono,highpass=f=200,loudnorm=I=-16:TP=-1.5,"
@@ -46,9 +49,10 @@ async def async_sound_for_device(url: str) -> bytes:
             capture_stdout=True,
         )
     except HomeAssistantError as err:
-        # The address can carry a signature or a password: only its path is told.
+        # The address can carry a signature or a password: only its path is told,
+        # also where ffmpeg names it in another form or names a redirect target.
         shown = f"{parts.scheme}://{parts.hostname or ''}{parts.path}"
-        message = str(err).replace(url, shown)
+        message = _ADDRESS.sub(r"\1\2", str(err).replace(url, shown))
         raise HomeAssistantError(message[:_MAX_ERROR_LENGTH]) from None
     if len(pcm) < 2:
         raise HomeAssistantError("C300X announcement media has no sound")

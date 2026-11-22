@@ -671,6 +671,26 @@ def test_a_failed_conversion_does_not_tell_the_signature_or_password(monkeypatch
     assert len(message) <= 300
 
 
+def test_a_failed_conversion_does_not_tell_a_secret_of_an_address_in_another_form(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://media.example/a.mp3?token=a%2Fb"
+
+    async def run(command: list[str], **_kwargs: Any) -> bytes:
+        # ffmpeg names the target of a redirect, and the address decoded.
+        raise HomeAssistantError(
+            "C300X announcement could not be converted: https://cdn.example/a.mp3?sig=secret: 403;"
+            " https://u:pw@media.example/a.mp3?token=a/b"
+        )
+
+    monkeypatch.setattr(announcements, "_async_run_ffmpeg_command", run)
+    with pytest.raises(HomeAssistantError) as raised:
+        asyncio.run(announcements.async_sound_for_device(url))
+    message = str(raised.value)
+    assert "https://cdn.example/a.mp3" in message and "403" in message
+    assert "secret" not in message and "token" not in message and "pw" not in message
+
+
 @pytest.mark.parametrize("media", ["/config/secrets.yaml", "file:///etc/passwd", "rtsp://camera/stream"])
 def test_only_web_addresses_are_converted(media: str, monkeypatch: pytest.MonkeyPatch) -> None:
     async def run(*_args: Any, **_kwargs: Any) -> bytes:

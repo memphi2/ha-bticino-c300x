@@ -57,7 +57,6 @@
 #define RTSP_TEARDOWN_CLOSE_WAIT_SECONDS 3
 #define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800
 #define RTSP_CLIENT_DRAIN_POLL_MS 50
-#define TALKBACK_TARGET_PORT 4000
 #define MEDIA_AUDIO_RTP_PORT 26986
 #define MEDIA_AUDIO_RTCP_PORT 26987
 #define MEDIA_VIDEO_RTP_PORT 28772
@@ -4777,30 +4776,53 @@ static void set_socket_receive_buffer(int fd, int size_bytes) {
     (void)setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size_bytes, sizeof(size_bytes));
 }
 
+/* UDP carries no credential. Borrow admission only from a live, played RTSP
+ * connection on the same host; optional RTSP credentials retain their policy.
+ * This is peer binding, not protection against source-IP spoofing on the LAN. */
+static bool udp_talkback_peer_allowed(media_bridge_t *bridge, const struct sockaddr_in *sender) {
+    bool allowed = false;
+    pthread_mutex_lock(&bridge->mutex);
+    if (!bridge->talkback_stop && !bridge->stop_in_progress) {
+        for (size_t i = 0; i < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; i++) {
+            const rtsp_client_slot_t *slot = &bridge->rtsp_clients[i];
+            struct sockaddr_storage peer;
+            socklen_t size = sizeof(peer);
+            unsigned char pending;
+            if (!slot->active || !slot->played || slot->parked || slot->fd < 0
+                || getpeername(slot->fd, (struct sockaddr *)&peer, &size) != 0) {
+                continue;
+            }
+            /* A disconnected/shutdown socket can retain its peer address
+             * until its RTSP worker unregisters the slot. Never consume data. */
+            ssize_t live = recv(slot->fd, &pending, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (live == 0 || (live < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+                continue;
+            }
+            if (peer.ss_family == AF_INET) {
+                allowed = ((const struct sockaddr_in *)&peer)->sin_addr.s_addr == sender->sin_addr.s_addr;
+            } else if (peer.ss_family == AF_INET6) {
+                const struct in6_addr *address = &((const struct sockaddr_in6 *)&peer)->sin6_addr;
+                allowed = IN6_IS_ADDR_V4MAPPED(address)
+                    && memcmp(&address->s6_addr[12], &sender->sin_addr, sizeof(sender->sin_addr)) == 0;
+            }
+            if (allowed) break;
+        }
+    }
+    pthread_mutex_unlock(&bridge->mutex);
+    return allowed;
+}
+
 static void *talkback_proxy_thread(void *arg) {
     media_bridge_t *bridge = arg;
     unsigned char packet[2048];
     int listen_fd = bind_udp_port(C300X_TALKBACK_RTP_PORT);
-    int target_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (listen_fd < 0 || target_fd < 0) {
-        if (listen_fd >= 0) {
-            close(listen_fd);
-        }
-        if (target_fd >= 0) {
-            close(target_fd);
-        }
+    if (listen_fd < 0) {
         pthread_mutex_lock(&bridge->mutex);
         bridge->talkback_started = false;
         bridge->talkback_fd = -1;
         pthread_mutex_unlock(&bridge->mutex);
         return NULL;
     }
-
-    struct sockaddr_in target;
-    memset(&target, 0, sizeof(target));
-    target.sin_family = AF_INET;
-    target.sin_port = htons((uint16_t)TALKBACK_TARGET_PORT);
-    (void)inet_pton(AF_INET, "127.0.0.1", &target.sin_addr);
 
     pthread_mutex_lock(&bridge->mutex);
     bridge->talkback_fd = listen_fd;
@@ -4823,20 +4845,21 @@ static void *talkback_proxy_thread(void *arg) {
             continue;
         }
 
-        ssize_t n = recv(listen_fd, packet, sizeof(packet), 0);
-        if (n > 0) {
-            if (
-                !forward_ring_talkback_packet(bridge, packet, n)
-                && !forward_home_call_talkback_packet(bridge, packet, n)
-                && !forward_ondemand_talkback_packet(bridge, packet, n)
-            ) {
-                (void)sendto(target_fd, packet, (size_t)n, 0, (struct sockaddr *)&target, sizeof(target));
-            }
+        struct sockaddr_in sender;
+        socklen_t sender_len = sizeof(sender);
+        ssize_t n = recvfrom(listen_fd, packet, sizeof(packet), 0,
+            (struct sockaddr *)&sender, &sender_len);
+        if (n > 0 && sender_len == sizeof(sender) && sender.sin_family == AF_INET
+            && udp_talkback_peer_allowed(bridge, &sender)
+            && !forward_ring_talkback_packet(bridge, packet, n)
+            && !forward_home_call_talkback_packet(bridge, packet, n)) {
+            /* No active protected session means discard, never raw localhost
+             * forwarding into another application's audio pipeline. */
+            (void)forward_ondemand_talkback_packet(bridge, packet, n);
         }
     }
 
     close(listen_fd);
-    close(target_fd);
     pthread_mutex_lock(&bridge->mutex);
     bridge->talkback_fd = -1;
     bridge->talkback_started = false;

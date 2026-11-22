@@ -149,5 +149,5 @@ def test_routing_hashes_come_from_the_patch_builder() -> None:
 
     hashes = checker.known_routing_hashes()
 
-    assert len(hashes) == 3
+    assert len(hashes) == 4
     assert all(len(value) == 64 and value in builder for value in hashes)

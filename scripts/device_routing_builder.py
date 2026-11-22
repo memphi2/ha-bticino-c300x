@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Create a local C300X bt_answering_machine compatibility patch copy.
 
-This tool is intentionally narrow: it only accepts the known 1.7.19 and 2.0.2
-stock bt_answering_machine routing targets and writes a patched copy to an explicit output path.
-It never modifies the input file in place and it verifies expected patch ranges by
+This tool is intentionally narrow: it only accepts the known C300X 1.7.19, 2.0.2
+and 3.0.6 and C100X 1.5.8 stock bt_answering_machine routing targets and writes
+a patched copy to an explicit output path. It never modifies the input file in place and it verifies expected patch ranges by
 hash instead of storing byte ranges in this repository.
 """
 
@@ -234,6 +234,86 @@ PATCHES_3_0_6: tuple[Patch, ...] = (
     ),
 )
 
+# Classe 100X 1.5.8: the same routing code as the C300X 1.7.19, built for that
+# device. Same patch sites, other offsets and call targets.
+STOCK_SHA256_C100X_1_5_8 = "cc53dd834361e8a76268b108ce2562b8447d597798dd2f136ce4707142485e12"
+
+PATCHES_C100X_1_5_8: tuple[Patch, ...] = (
+    Patch(
+        name="patch_range_0",
+        offset=0x27958,
+        range_len=12,
+        expected_range_sha256="ed451a5b137b7b59ebfd3f4bb8ff6598a18abce58603b72eed97f50b8d6391b8",
+        patched_range_sha256="59e44ff04f935f33e91e44d52771e6188e7a50c735c07b54f236087a818925d7",
+        writes=(Write(1, bytes.fromhex("0050")), Write(11, bytes.fromhex("8a")),),
+    ),
+    Patch(
+        name="patch_range_1",
+        offset=0xCCDC,
+        range_len=16,
+        expected_range_sha256="cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b",
+        patched_range_sha256="9bf52da965bdf744685e93b31353826af7bc74bc1fc3248d91f3b89f493444fe",
+        writes=(Write(1, bytes.fromhex("0050")), Write(4, bytes.fromhex("00")), Write(7, bytes.fromhex("93")), Write(11, bytes.fromhex("9a01")), Write(15, bytes.fromhex("e3")),),
+    ),
+    Patch(
+        name="patch_range_2",
+        offset=0x353C0,
+        range_len=4,
+        expected_range_sha256="85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547",
+        patched_range_sha256="71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d",
+        writes=(Write(0, bytes.fromhex("0000a0")),),
+    ),
+    Patch(
+        name="patch_range_3",
+        offset=0x353D4,
+        range_len=4,
+        expected_range_sha256="4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391",
+        patched_range_sha256="71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d",
+        writes=(Write(0, bytes.fromhex("0000a0e1")),),
+    ),
+    Patch(
+        name="patch_range_4",
+        offset=0x353E0,
+        range_len=16,
+        expected_range_sha256="a3c4925a787f8f0a30438bd324e0aa354bfddce3b559dff84bff2ac2997f8d1b",
+        patched_range_sha256="801b48661d2b117e9d4c1065f5b27b8e68938ac8efaf47e5a1db1211d495f592",
+        writes=(Write(0, bytes.fromhex("0000")), Write(4, bytes.fromhex("0000")), Write(8, bytes.fromhex("00")), Write(12, bytes.fromhex("0000a0e1")),),
+    ),
+    Patch(
+        name="patch_range_5",
+        offset=0x357B0,
+        range_len=4,
+        expected_range_sha256="86fee0a47ad59e05660f2942600617081e2566a6dfae1e91eb677916b4343f51",
+        patched_range_sha256="536d1d675a6befffe6b908d9f5dbee941995f64fa735e852375f65c4c1ac0fd9",
+        writes=(Write(0, bytes.fromhex("647a0000")),),
+    ),
+    Patch(
+        name="patch_range_6",
+        offset=0x27A80,
+        range_len=60,
+        expected_range_sha256="4a113f9e80b59325c236497a1f60eb4c25ecfc818d846bc838d30d7a9d153d48",
+        patched_range_sha256="0798984c1f9bff3d03759999f8b3f110b2752d77de089fa60a5659e60d8e1935",
+        writes=(Write(0, bytes.fromhex("010058e30500001a70219fe578119fe502208fe001108fe005")), Write(26, bytes.fromhex("a0e140c2ffeb5c219f")), Write(36, bytes.fromhex("5c319fe5029096e7036096e70000a0e10000")), Write(55, bytes.fromhex("e10000a0")),),
+    ),
+    Patch(
+        name="patch_range_7",
+        offset=0x27C00,
+        range_len=4,
+        expected_range_sha256="4b59487eb8ab373488f734840d731a784b012a9efcd74b32524d5b910fa625af",
+        patched_range_sha256="f41460fb396a434b65dcb784d93cb083e8fefcd641430ee4dd36e68a0e69add5",
+        writes=(Write(0, bytes.fromhex("a0530100")),),
+    ),
+    Patch(
+        name="patch_range_8",
+        offset=0x27C0C,
+        range_len=4,
+        expected_range_sha256="1522ff5a062ae5f276461e938415126b0cd09935ed9de2fee73d7f6294512bee",
+        patched_range_sha256="f70bee9ce146862e6e2c2bad32fdda100b0b2705a523971840050b55f9c26567",
+        writes=(Write(0, bytes.fromhex("143e0100")),),
+    ),
+)
+
+
 class PatchError(Exception):
     """Raised when the routing target cannot be patched safely."""
 
@@ -264,10 +344,13 @@ def patch_routing(source: Path, target: Path) -> str:
         patches = PATCHES_2_0_2
     elif digest == STOCK_SHA256_3_0_6:
         patches = PATCHES_3_0_6
+    elif digest == STOCK_SHA256_C100X_1_5_8:
+        patches = PATCHES_C100X_1_5_8
     else:
         raise PatchError(
-            f"Unsupported bt_answering_machine SHA-256: {digest}; "
-            f"expected {STOCK_SHA256}, {STOCK_SHA256_2_0_2} or {STOCK_SHA256_3_0_6}"
+            f"Unsupported bt_answering_machine SHA-256: {digest}; expected "
+            f"{STOCK_SHA256}, {STOCK_SHA256_2_0_2}, {STOCK_SHA256_3_0_6} "
+            f"or {STOCK_SHA256_C100X_1_5_8}"
         )
 
     for patch in patches:

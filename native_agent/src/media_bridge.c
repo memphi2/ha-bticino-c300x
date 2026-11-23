@@ -184,6 +184,7 @@ typedef struct {
     bool media_starting;
     bool stop_in_progress;
     unsigned long media_generation;
+    unsigned long picture_session;
     c300x_media_session_guard_t ondemand_guard;
     int listen_fd;
     int client_fd;
@@ -2418,6 +2419,7 @@ static void handle_ring_invite(
     bridge->ring_video_rtcp_fd = video_rtcp_fd;
     bridge->ring_target_audio_port = c300x_media_sip_parse_sdp_media_port(invite, "\r\nm=audio ", 7078);
     bridge->ring_target_video_port = c300x_media_sip_parse_sdp_media_port(invite, "\r\nm=video ", 9078);
+    bridge->picture_session++;
     bridge->ring_call_active = true;
     bridge->ring_media_active = false;
     bridge->ring_audio_active = false;
@@ -5012,6 +5014,7 @@ static bool start_media_session(media_bridge_t *bridge) {
     }
     bridge->media_active = true;
     bridge->media_starting = false;
+    bridge->picture_session++;
     bridge->relay_started = pthread_create(&bridge->relay_thread, NULL, rtp_relay_thread, bridge) == 0;
     bool started = bridge->relay_started;
     pthread_mutex_unlock(&bridge->mutex);
@@ -5395,6 +5398,7 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
     pthread_mutex_lock(&g_bridge.mutex);
     if (g_bridge.video == video) {
         status->bridge_running = g_bridge.running ? 1 : 0;
+        status->picture_session = g_bridge.picture_session;
         status->device_codec_known = g_bridge.running ? 1 : 0;
         status->device_codec_pcmu = g_bridge.device_codec_pcmu ? 1 : 0;
         status->bridge_media_active = (

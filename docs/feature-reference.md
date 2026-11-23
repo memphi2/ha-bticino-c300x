@@ -105,15 +105,13 @@ browser filters: existing recordings and snapshots are never recoloured.
   call. Opening the sliders does not answer the call.
 - **On-demand video:** start live video first. On a **C300X running firmware
   1.7.19**, the agent checks whether the video source exposes all three settings
-  and their ranges. The same sliders appear only with a live video track and
-  valid readback for that session. **The tested 960x576 live stream did not
-  qualify:** all three range queries failed, and the raw brightness was 218,
-  above the configured maximum of 180. No source write was tested. The
-  service reports percentages only after a usable readback. For example, an
-  idle brightness reading of `0` for a source configured for `30..180` does
-  not mean 0% brightness. Working Ring Call sliders do not establish on-demand
-  support on another model or firmware. Browser and host tests cover the sliders
-  and service response; no successful on-demand adjustment is hardware-confirmed.
+  during an active session. The stock capture driver does not report slider
+  ranges; the agent uses the firmware's ranges for that driver. The displayed
+  position is the nearest stock step, limited to the slider's endpoints. Opening
+  the panel does not change the source. Moving a slider writes just that control
+  and requires an exact raw readback before reporting success.
+  Live reads have been observed at 960x576; on-demand writes have not yet been
+  verified on hardware.
 
 To hide the sliders, turn off **Show picture controls for supported live video**
 in the card editor. Automations use the same action, `bticino_c300x.camera_picture`,

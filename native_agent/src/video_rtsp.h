@@ -15,6 +15,7 @@
 #define C300X_HOME_CALL_MAX_DURATION_SECONDS 3600
 
 struct c300x_video_status {
+    unsigned long picture_session;
     int enabled;
     int running;
     int call_active;

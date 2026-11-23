@@ -1688,17 +1688,25 @@ fresh read before another write.
 
 The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
 
-A GUI listener may advertise `picture=1` on this same sleeping connection.
-Both `camera_picture.supported` in capabilities and `bridge.picture_controls_supported`
-in doorbell video status reflect that handshake, including while idle or handling a
-command. An absent or legacy GUI does not advertise support. HA uses its existing
-video status reads to reflect GUI changes without reloading the integration.
-Authenticated `GET /api/v1/video/picture` requests all three stock call
-properties; POST accepts one `control` (brightness, contrast or saturation)
-and a percentage `value` (0 through 100 in steps of 10). The result reports
-the GUI object's values, not an independent hardware measurement. Outside
-a video call, or without an updated connected GUI, no value is applied.
-No additional idle poll, recording, config write or media restart is required.
+A connected GUI advertising `picture=1` provides the legacy ring-only path.
+An eligible C300X (firmware 1.7.19) can also report
+`bridge.picture_controls_scope: "ring_and_on_demand"` with
+`bridge.picture_controls_supported: true`. Model and firmware alone do not
+enable it: an authenticated status or capability request during owned media
+checks the capture source on the bounded media worker. The read result is
+cached for that media session; no source is opened while idle.
+`camera_picture.supported` reports whether either path is available.
+Missing or unknown scope does not extend GUI support beyond ring calls.
+
+Authenticated `GET /api/v1/video/picture` returns brightness, contrast and
+saturation; POST accepts one `control` with a percentage `value` (0 through
+100 in steps of 10). Direct success returns source readback; legacy success
+returns the GUI object's values. Neither measures the rendered picture.
+An active source that does not expose the required V4L2 control descriptors
+is unsupported, even if raw control reads return numbers.
+Direct operations check media ownership and session identity during execution.
+A failed direct write returns an error; it is not retried through the GUI.
+No extra idle poll, recording, configuration write or media restart is needed.
 It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight
 is allowed. One connection waits indefinitely without periodic device reads.
 An authorized API ringer request returns `{ok, id, muted, expires}` to that

@@ -170,3 +170,16 @@ def test_the_api_names_every_display_call_that_follows_the_ui_port():
     api = (ROOT / "native_agent/API.md").read_text()
     paragraph = api.split("Only these calls follow a changed port:", 1)[1].split("\n\n", 1)[0]
     assert set(re.findall(r"`(/ui/[a-z/-]+)`", paragraph)) == routes
+
+
+def test_the_api_lists_every_error_the_picture_route_answers_with():
+    sources = (ROOT / "native_agent/src/picture_control.c").read_text()
+    codes = set(re.findall(r'\\"error\\":\\"([a-z_]+)\\"', sources)) - {"method_not_allowed"}
+    ringer = (ROOT / "native_agent/src/ringer_control.c").read_text()
+    codes |= set(re.findall(r'"(picture_gui_[a-z]+)"', ringer))
+    assert {"media_busy", "picture_gui_timeout"} <= codes
+    api = (ROOT / "native_agent/API.md").read_text()
+    section = api.split("### `GET`, `POST /api/v1/video/picture`", 1)[1].split("\n### ", 1)[0]
+    for code in codes:
+        assert f"`{code}`" in section
+    assert "| `409` | `media_busy` |" in section

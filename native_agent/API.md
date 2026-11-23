@@ -1013,6 +1013,18 @@ Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.
 No extra idle poll, recording, configuration write or media restart is needed.
 
+Errors:
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_picture_control` | Invalid body, unknown `control`, or `value` is not 0 through 100 in steps of 10. |
+| `409` | `media_busy` | The media worker is busy with another job; nothing was changed. Unlike the media actions, this route answers `409`. |
+| `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media. |
+| `409` | `picture_not_applied` | The source or the GUI read back a different value than the one sent. |
+| `409` | `picture_gui_busy` | The GUI is still handling an earlier ringer or picture command. |
+| `503` | `picture_gui_unavailable` | No GUI listener for the legacy path. |
+| `504` | `picture_gui_timeout` | The GUI did not acknowledge within five seconds. |
+
 ### `GET /api/v1/calls/doorbell`
 
 Authentication: normal API token.

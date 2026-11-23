@@ -563,8 +563,9 @@ respects the firmware LED trigger and any unread native memos. An accepted
 event is not a hardware delivery receipt.
 
 Response status: `202 Accepted` on success. `400 invalid_unread` when the body
-carries `unread` on any other topic, `unread` is not a boolean, or the body is
-not a valid JSON object; nothing is woken then.
+carries `unread` and the topic is another one, the value is not a boolean, or
+the body is not a valid JSON object; nothing is woken then. A body without
+`unread` is not checked for it.
 
 ### `POST /api/v1/display/alert`
 

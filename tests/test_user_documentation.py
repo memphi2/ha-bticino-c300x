@@ -224,6 +224,16 @@ def test_the_api_lists_every_error_the_picture_route_answers_with():
 def test_the_api_names_the_unread_refusal_of_display_bridge_events():
     source = (ROOT / "native_agent/src/http.c").read_text()
     assert '\\"error\\":\\"invalid_unread\\"' in source
+    # Only a body that carries unread is validated; any other body is accepted.
+    event = _c_function((ROOT / "native_agent/src/memo_led.c").read_text(), "int c300x_memo_led_event(")
+    presence = event.index('c300x_json_find_member(body, body + strlen(body), "unread", &value)) return 1;')
+    assert presence < event.index("c300x_json_object_valid(body)")
     api = (ROOT / "native_agent/API.md").read_text()
     section = api.split("optional boolean `unread`", 1)[1].split("\n### ", 1)[0]
-    assert "`400 invalid_unread`" in section
+    refusal = " ".join(section.split("`400 invalid_unread`", 1)[1].split(";", 1)[0].split())
+    condition = "when the body carries `unread` and "
+    assert refusal.startswith(condition)
+    cases = refusal.removeprefix(condition)
+    for case in ("the topic is another one", "the value is not a boolean", "the body is not a valid JSON object"):
+        assert case in cases
+    assert "A body without `unread` is not checked for it." in " ".join(section.split())

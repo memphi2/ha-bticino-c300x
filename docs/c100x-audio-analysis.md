@@ -23,6 +23,7 @@ Relative paths below are inside `rootfs-c100x-1.5.8`.
 | File | SHA-256 |
 | --- | --- |
 | `home/bticino/bin/bt_av_media` | `5464f8636b9dfc4d0603034c1e7f117b02c86733c77e94bf7b7f4fc0b48a1bb2` |
+| `home/bticino/bin/bt_answering_machine` | `cc53dd834361e8a76268b108ce2562b8447d597798dd2f136ce4707142485e12` |
 | `home/bticino/lib/liblghal.so.0.0` | `f2f4ff4826f01ea84e60a3d98a4f779724f5fd315320d64d6bf1261b44a3947b` |
 | `usr/local/bin/Audio_State.sh` | `94f4f9d4f441b907575fc0c30dcf1ebd1259ad96975d0bba3a3e801b70ed85ff` |
 | `usr/local/bin/hbi_load_firmware` | `16919ca5796eaba777797ac8bb59240b716f5dac38b8b608af55e1038d05ac4a` |
@@ -88,7 +89,7 @@ Shark/Miura dispatch at `0x1d3b0`, supplies the following actual contract:
 | Local ringtone, enum 9 | Write `Audio_State=7`; call `Audio_State.sh EN_AUDIO_RINGING_LOC` |
 | Repeat local ringtone while state 7 | No mixer or command call |
 | Off, enum 0, from state 7 | Mute SOUT and ROUT, write state 0, call dispatcher with `EN_AUDIO_OFF` |
-| Legacy local-play request, enum 1 | Call dispatcher with `FAKE`; HAL still returns success |
+| Legacy local-play requests, enums 1 and 3 | Call dispatcher with `FAKE`; HAL still returns success |
 | Enum 5 / 7 | State 2 / 3; `EN_AUDIO_PASSTHR` / `EN_AUDIO_PASSTHR_INT` |
 | Enum 6 / 11 | State 6 / 1; `EN_AUDIO_RINGING` / `EN_AUDIO_BEEP` |
 | Enum 12 / 14 | State 4 / 5; `EN_AUDIO_IP` / `EN_AUDIO_IP_EU` |
@@ -159,6 +160,118 @@ for the documented carrier workaround. A cold DSP is therefore a real
 prerequisite issue, not merely an unusual error case. A bounded adapter
 must not silently introduce DSP firmware reloads, GPIO resets, infinite
 retries or deletion of someone else's semaphore.
+
+## Vendor-Coordinated Playback Investigation
+
+This bounded follow-up traces original memo, ringtone and GUI playback
+entrypoints, not only exported symbol names. Addresses in this section are
+ARM virtual addresses. In these two executables, subtract `0x10000` for the
+corresponding text/rodata file offset; the referenced shared-library addresses
+equal their text/rodata file offsets. Nearest exported labels in stripped
+disassembly are not function identities.
+
+### Request, Reply and Completion
+
+`stack_open.xml` configures media command/monitor ports 30007/31007, playback
+file `/var/tmp/records/audio.wav`, and fixed ringtone/message locations.
+In `bt_av_media`, socket setup calls `g_inet_address_new_loopback` at
+`0x36bec`. The receive callback at `0x36794` passes the shared media object
+and parsed message to the dispatcher at `0x32cec`; it does not pass a
+client-owned playback handle. Handler failure produces OPEN KO at
+`0x36808`, success OPEN OK at `0x368e8`. The normal-command success path
+also forwards the frame to the monitor socket (`0x32dd0`).
+
+These replies mean command acceptance, not completed playback or an acquired
+lease. Socket-close cleanup destroys the client source/socket, not an owned
+playback session. The inspected handlers operate on the singleton pipeline
+object. The stop routine sends typed completion frames using shared saved
+fields: `*7*59#%d#%d#%d*##` and `*7*36#%d#%d*##` (format strings at
+`0x37c5c` and `0x38928`). They do not supply owner-scoped cancellation.
+
+### Memo and Configured WAV
+
+The plugin's `AnsweringMachine::playVocalMemo()` at `0xd2dcc` sends memo
+action 5; stop at `0xd2d98` sends action 0. The device wrapper at `0x240880`
+formats command `87#<action>` into its device frame. The separate file-message
+wrapper at `0x23e360` emits `*7*35#<directory>#<id>**##`; its stop at
+`0x23ea98` emits `*7*36*##`. None takes an arbitrary uploaded WAV path or
+returns a lease to the plugin caller.
+
+There is real higher-level arbitration, which must not be overlooked:
+`bt_answering_machine`'s common memo/greeting handler at `0x2a2a4` checks
+state 0/12 and a pending timer (`0x2a328` onwards). Its action-5 branch at
+`0x2a45c` rejects another timer and existing request-list types 6/11.
+An accepted request sets the PlayMemo flag, sends volume dimension 31,
+then `*7*35#4#1*##` (`0x2a830`). It appends a type-7 bookkeeping record
+containing the returned command ID (`0x2a844` onwards). These are meaningful
+busy checks and request tracking, but do not establish atomic arbitration
+against every call or a client-owned stop token.
+
+The decisive downstream incompatibility is concrete:
+
+- Media command 35's directory-4 branch at `0x2e974` selects the configured
+  WAV, stops existing audio, and builds its WAV pipeline (`0x2e990`). Its
+  success path calls **HAL request 3** at `0x3284c`, then sets shared active
+  state, volume type 1, and playback.
+- Media command 51 at `0x2f4c8` similarly uses the configured local WAV;
+  its success branch calls **HAL request 3** at `0x31ccc`.
+- The exact original Shark HAL, executed under QEMU with command execution
+  intercepted, maps request 3 from idle to `Audio_State.sh FAKE` and returns
+  zero. The focused firmware regression now covers requests 1 and 3. No
+  dispatcher or DSP operation is executed by this test.
+
+Thus this memo route does not remove the unsupported-profile/semaphore
+hazard. An ACK and bookkeeping entry cannot make it a valid C100X DSP path.
+The memo stop action chooses global media stop 36 or 55 (`0x2a4bc` onwards),
+not a per-caller stop. Record action 1 also deletes record-directory contents
+(`0x2a570`); it is not an acceptable way to prepare agent TTS.
+
+### Ringtone and Global Stop
+
+Media command 58 starts at `0x2fb24`. If the shared active flag is already
+set, it stops existing audio (`0x2fbc8`) rather than refusing takeover.
+The local-source branch calls HAL request 9 (`0x32494`), selects volume
+type 2, and reaches the shared volume setter (`0x2fd5c`). It uses configured
+ringtone files, not an arbitrary-file queue. This confirms the local-ring
+state-overwrite hazard. The type-1 play-volume probe above must not be
+mistaken for a separate measurement of this type-2 volume branch.
+
+Command 55 at `0x2f9d8` disables audio routes and calls the common stop
+routine (`0x1d7c4`). That routine sets **both** shared audio pipelines to
+GStreamer NULL (`0x1d824` onwards), frees them and chooses HAL 15 or HAL 0
+according to shared state. There is no caller/token comparison. Command 36
+at `0x30194` also invokes common stop, then HAL 0 (`0x301c4`). Neither is
+safe cancellation for a separate announcement owner that may have lost
+priority to a call.
+
+### GUI Sound and Beep
+
+`SoundPlayer` uses a shared QProcess: start at `0x1dd47c`, play/replacement
+at `0x1dd7f8`, stop at `0x1dc4e8`. Its audio-state-change callback at
+`0x1dc5d4` stops playback. This is an in-process coordination hook, not an
+established external queue/lease API; enabling the gated GUI is not a fix.
+
+The original HAL's beep entrypoint at `0x1ea88` refuses states above 1,
+then requests profile 11 and changes controls. Beep-off at `0x1eaf0` checks
+for state 1 and requests off. These checks do not establish atomic ownership,
+and the same DSP dispatcher can perform unbounded initialization. A short
+tone is not evidence of a safe arbitrary-WAV or TTS mechanism.
+
+Independent Bohr review additionally reports that BEEP is closest to an
+output-only profile but still shares DAC2/AECRX and changes global DSP state;
+RINGING_LOC shares call resources and has nonzero microphone/send settings.
+Those profile-window results are reviewer evidence, not a runtime PCM test
+by this worktree. No independent PCM topology has been established from the
+available kernel/DT/runtime artifacts. Factory OMAP scripts do not close
+that gap.
+
+**Result:** no safe original playback queue was established among these
+traced entrypoints. This is not a proof that every firmware IPC endpoint is
+absent. It is a concrete rejection of memo/WAV, ringtone/global stop and
+GUI/beep as currently evidenced agent primitives. No alternative backend,
+vendor patch, persistent file replacement or physical activation is added.
+The follow-up firmware suite passed all 19 cases, including request 3;
+Python lint and diff-whitespace checks passed. No full gate was run.
 
 ## Priority and Recovery Requirements
 

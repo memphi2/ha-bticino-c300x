@@ -76,8 +76,9 @@ def test_standby_is_a_distinct_end_state_not_unconditional_off(hal_probe):
     ]
 
 
-def test_legacy_memo_play_is_not_a_c100x_profile(hal_probe):
-    assert hal_probe("state", 0, 1) == [
+@pytest.mark.parametrize("enable", [1, 3])
+def test_legacy_memo_play_is_not_a_c100x_profile(hal_probe, enable):
+    assert hal_probe("state", 0, enable) == [
         "command:/usr/local/bin/Audio_State.sh FAKE", "result:0",
     ]
 

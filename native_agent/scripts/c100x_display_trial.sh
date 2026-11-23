@@ -38,6 +38,27 @@ boot_phase() {
     TRIAL_PHASE=later
     if read_marker pending.trial-boot && [ "$MARKER" = "$CURRENT_BOOT" ]; then TRIAL_PHASE=trial; fi
 }
+# One read-only status line; every value is an enumeration or hex, never free text.
+status_json() {
+    boot_phase
+    case "$TRIAL_PHASE" in none) status_phase=$1 ;; prepare) status_phase=prepared ;; trial) status_phase=trial ;; *) status_phase=stale ;; esac
+    status_confirmed=false
+    status_reboot=false
+    status_result=
+    status_available=
+    if [ "$status_phase" = installed ] && read_marker confirmed-release && [ "$MARKER" = "$ACTIVE_RELEASE" ]; then
+        status_confirmed=true
+    fi
+    if current_boot && read_marker reboot-due-boot && [ "$MARKER" = "$CURRENT_BOOT" ]; then status_reboot=true; fi
+    if read_marker last-result; then
+        case "${MARKER%% *}" in confirmed|rolled_back|restored|interrupted) status_result=${MARKER%% *} ;; esac
+    fi
+    if valid_release "${C100X_PAYLOAD_RELEASE:-}"; then status_available=${C100X_PAYLOAD_RELEASE#.c100x-}; fi
+    status_generation=${3:-$ACTIVE_RELEASE}
+    printf '{"ok":true,"state":"%s","runtime_verified":false,"phase":"%s","trial_switched":%s,"confirmed":%s,"reboot_due":%s,"generation":"%s","available":"%s","last_result":"%s"}\n' \
+        "$1" "$status_phase" "$2" "$status_confirmed" "$status_reboot" "${status_generation#.c100x-}" \
+        "$status_available" "$status_result"
+}
 note_result() {
     write_marker last-result "$1 $2" || printf '%s\n' 'c100x_display: result not recorded' >&2
 }

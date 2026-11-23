@@ -26,6 +26,7 @@ trap 'exit 1' HUP INT TERM
 mkdir "$WORK/source" "$WORK/source/js" "$WORK/source/hooks"
 '''
 FOOTER = '''
+export C100X_PAYLOAD_RELEASE=.c100x-{release}
 export C100X_SOURCE_DIR="$WORK/source"
 export C100X_IDENTITY_SCRIPT="$WORK/c100x_display_identity.sh"
 export C100X_HOOKS_AWK="$WORK/c100x_hooks.awk"
@@ -64,7 +65,9 @@ def build(destination: Path, *, root: Path = ROOT) -> Path:
             if path.is_file():
                 content.extend(_member("source/" + path.relative_to(source).as_posix(), path.read_bytes()))
         content.extend(b"fi\n")
-        content.extend(FOOTER.encode())
+        # The generation this payload installs, so status can tell an older adapter.
+        release = sha256((source / "SHA256SUMS").read_bytes()).hexdigest()
+        content.extend(FOOTER.format(release=release).encode())
     if len(content) > MAX_PAYLOAD_BYTES:
         raise ValueError("C100X payload exceeds bounded delivery size")
     if destination.is_symlink():

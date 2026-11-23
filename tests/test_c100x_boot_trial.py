@@ -1,11 +1,13 @@
 """Boot-bound C100X display trials, on copies of the original firmware only."""
 
+import hashlib
+import json
 import shutil
 import subprocess
 
 import pytest
 from test_c100x_bundle_delivery import payload
-from test_c100x_display_transaction import BOOT_ID, SCRIPT, assert_original, fault_mv, run
+from test_c100x_display_transaction import BOOT_ID, SCRIPT, advance_source, assert_original, fault_mv, run
 from test_c100x_display_transaction import tree as tree
 from test_c100x_qml_adapter import ROOT
 
@@ -239,3 +241,61 @@ def test_original_firmware_shell_and_tools_run_the_boot_rule(tree, shell):
             assert marker(tree, "pending.trial-boot") == LATER_BOOT + "\n"
     assert_original(tree)
     assert marker(tree, "last-result").startswith("rolled_back .c100x-")
+
+
+def status(tree):
+    return json.loads(run(tree, "status").stdout)
+
+
+def generation(tree):
+    return hashlib.sha256((tree[0] / "source/SHA256SUMS").read_bytes()).hexdigest()
+
+
+def test_status_reports_phase_confirmation_and_generation_without_writing(tree):
+    stock = status(tree)
+    assert stock == {"ok": True, "state": "stock", "runtime_verified": False, "phase": "stock",
+                     "trial_switched": False, "confirmed": False, "reboot_due": False,
+                     "generation": "", "available": "", "last_result": ""}
+    run(tree, "prepare")
+    current = generation(tree)
+    assert status(tree) == {**stock, "state": "installed", "phase": "prepared", "trial_switched": True,
+                            "generation": current}
+    reboot(tree)
+    before = sorted(path.name for path in (tree[0] / "backup").iterdir())
+    assert status(tree)["phase"] == "stale"  # the start rule has not marked this boot
+    assert sorted(path.name for path in (tree[0] / "backup").iterdir()) == before
+    run(tree, "boot")
+    assert status(tree)["phase"] == "trial"
+    reboot(tree, "2b8e4f6a-0c1d-4e2f-a3b4-c5d6e7f80912")
+    run(tree, "boot")
+    rolled = status(tree)
+    assert (rolled["phase"], rolled["last_result"], rolled["generation"]) == ("stock", "rolled_back", "")
+
+
+def test_status_confirms_only_the_installed_generation(tree):
+    run(tree, "apply")
+    assert (status(tree)["phase"], status(tree)["confirmed"]) == ("installed", False)
+    (tree[0] / "backup/confirmed-release").write_text(".c100x-" + generation(tree) + "\n")
+    assert status(tree)["confirmed"] is True
+    advance_source(tree)
+    run(tree, "apply")
+    assert status(tree) | {"generation": None} == {
+        "ok": True, "state": "installed", "runtime_verified": False, "phase": "installed",
+        "trial_switched": False, "confirmed": False, "reboot_due": False, "generation": None,
+        "available": "", "last_result": ""}
+    assert status(tree)["generation"] == generation(tree)
+
+
+def test_status_reports_a_prepare_that_stopped_before_the_switch(tree):
+    fault_mv(tree, "kill_before")
+    run(tree, "prepare", False)
+    reported = status(tree)
+    assert (reported["phase"], reported["trial_switched"]) == ("prepared", False)
+    assert reported["generation"] == generation(tree)
+
+
+def test_payload_status_names_the_generation_it_would_install(tree):
+    script = payload.build(tree[0] / "payload.sh")
+    result = subprocess.run(["sh", str(script), "status"], env=tree[3], capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["available"] == generation(tree)

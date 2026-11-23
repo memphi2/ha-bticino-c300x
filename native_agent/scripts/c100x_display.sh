@@ -116,6 +116,7 @@ if [ "$ACTION" = boot-confirm ]; then
 fi
 if trial_exists && [ "$ACTION" = apply ]; then fail 'pending trial requires confirmation or recovery'; fi
 if [ "$ACTION" != apply ] && [ "$ACTION" != confirm ] && ! trial_exists && originals "$GUI"; then
+    if [ "$ACTION" = status ]; then ACTIVE_RELEASE=; status_json stock false; exit 0; fi
     printf '%s\n' '{"ok":true,"state":"stock","runtime_verified":false}'
     exit 0
 fi
@@ -158,11 +159,16 @@ if [ "$ACTION" = apply ]; then
 fi
 verify_current || fail 'unknown target identity'
 if [ "$ACTION" = status ]; then
+    state=partial
     if [ -n "$ACTIVE_RELEASE" ] && cmp -s "$GUI/MainPage.qml" "$WORK/check/MainPage.qml" && verify_tree "$GUI/$ACTIVE_RELEASE"; then
-        printf '%s\n' '{"ok":true,"state":"installed","runtime_verified":false}'
-    else
-        printf '%s\n' '{"ok":true,"state":"partial","runtime_verified":false}'
+        state=installed
     fi
+    switched=false
+    TRIAL_RELEASE=
+    # Switched: the GUI files are exactly the rendered trial, so its next start loads it.
+    if trial_exists && verify_trial && cmp -s "$GUI/main.qml" "$WORK/trial/main.qml" \
+        && cmp -s "$GUI/MainPage.qml" "$WORK/trial/MainPage.qml"; then switched=true; fi
+    status_json "$state" "$switched" "$TRIAL_RELEASE"
     exit 0
 fi
 mkdir "$WORK/before"

@@ -111,6 +111,14 @@ async def async_send_display_alert(
             "C300X display alerts require an update of the device agent and "
             "Display patch. Update both and reload the integration before sending."
         )
+    # The C100X display has no alert tone it could stop for a call.
+    c100x = runtime.capabilities.get("c100x_display")
+    silent = isinstance(c100x, dict) and c100x.get("alert_sound") is False
+    if silent and options.get("sound_duration"):
+        raise ServiceValidationError(
+            "Invalid C300X display notification: the C100X display plays no alert "
+            "tone; leave out sound_duration"
+        )
     try:
         show_notification(hass, entry, notice)
     except ValueError as err:
@@ -130,7 +138,7 @@ async def async_send_display_alert(
         "message": stored["message"],
         "wake_duration": options["wake_duration"],
         # Spoken text takes the place of the tone.
-        "sound_duration": 0 if options["mode"] == "both" else options.get("sound_duration", 30),
+        "sound_duration": 0 if options["mode"] == "both" or silent else options.get("sound_duration", 30),
         "expires_in": notice["expires_in"],
     }
     try:

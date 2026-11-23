@@ -888,3 +888,20 @@ def test_spoken_notification_uses_the_engine_and_language_of_the_settings(tmp_pa
             ]
     asyncio.run(run())
 
+
+
+def test_c100x_alerts_carry_no_tone(tmp_path, monkeypatch):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, entry):
+            alerts = entry.runtime_data.api.async_send_display_alert
+            await send(hass, entry)
+            assert alerts.call_args.args[0]["sound_duration"] == 30  # C300X default unchanged
+            entry.runtime_data.capabilities["c100x_display"] = {"supported": True, "alert_sound": False}
+            await send(hass, entry)
+            assert alerts.call_args.args[0]["sound_duration"] == 0
+            with pytest.raises(ServiceValidationError, match="plays no alert tone"):
+                await send(hass, entry, data={"sound_duration": 30})
+            assert alerts.await_count == 2
+            await send(hass, entry, data={"sound_duration": 0, "wake_duration": 10})
+            assert alerts.call_args.args[0]["sound_duration"] == 0
+    asyncio.run(run())

@@ -1,5 +1,6 @@
 export const C300X_TRANSLATIONS = {
   en: {
+    show_picture_controls: "Show picture controls during a ring call",
     show_media_history: "Browse saved images and videos",
     last_image: "Archived image (not live)",
     device_unresolved: "Camera device assignment unavailable",
@@ -45,6 +46,7 @@ export const C300X_TRANSLATIONS = {
     unknown: "Unknown",
   },
   de: {
+    show_picture_controls: "Bildregler bei Klingelrufen anzeigen",
     show_media_history: "Gespeicherte Bilder und Videos durchblättern",
     last_image: "Archivbild (nicht live)",
     device_unresolved: "Gerätezuordnung der Kamera nicht verfügbar",
@@ -90,6 +92,7 @@ export const C300X_TRANSLATIONS = {
     unknown: "Unbekannt",
   },
   fr: {
+    show_picture_controls: "Afficher les réglages pendant un appel",
     show_media_history: "Parcourir les images et vidéos enregistrées",
     last_image: "Image archivée (pas en direct)",
     device_unresolved: "Affectation de l'appareil de la caméra indisponible",
@@ -135,6 +138,7 @@ export const C300X_TRANSLATIONS = {
     unknown: "Inconnu",
   },
   it: {
+    show_picture_controls: "Mostra i controlli durante una chiamata",
     show_media_history: "Sfoglia immagini e video salvati",
     last_image: "Immagine archiviata (non in diretta)",
     device_unresolved: "Associazione del dispositivo della telecamera non disponibile",

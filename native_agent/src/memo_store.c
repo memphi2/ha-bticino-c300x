@@ -11,6 +11,8 @@
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
 #include <string.h>
 #ifdef __arm__
 #include <sys/syscall.h>
@@ -49,6 +51,125 @@ static void set_error(char *error, size_t error_len, const char *value)
         return;
     }
     c300x_copy_string(error, error_len, value);
+}
+
+static const char *trim_ascii(char *value)
+{
+    char *start = value;
+    char *end;
+    while (*start != '\0' && isspace((unsigned char)*start)) {
+        start++;
+    }
+    end = start + strlen(start);
+    while (end > start && isspace((unsigned char)end[-1])) {
+        end--;
+    }
+    *end = '\0';
+    return start;
+}
+
+void c300x_read_voicemail_info(
+    const char *info_path,
+    int *read,
+    char *date,
+    size_t date_len,
+    long long *unix_time
+)
+{
+    FILE *file;
+    char line[256];
+    int in_section = 0;
+
+    *read = -1;
+    if (date_len > 0) {
+        date[0] = '\0';
+    }
+    *unix_time = 0;
+
+    file = fopen(info_path, "r");
+    if (file == NULL) {
+        return;
+    }
+    while (fgets(line, sizeof(line), file) != NULL) {
+        char *value = line;
+        const char *trimmed;
+        char *equals;
+
+        trimmed = trim_ascii(value);
+        if (trimmed[0] == '\0' || trimmed[0] == ';' || trimmed[0] == '#') {
+            continue;
+        }
+        if (trimmed[0] == '[') {
+            in_section = strcmp(trimmed, "[Message Information]") == 0;
+            continue;
+        }
+        if (!in_section) {
+            continue;
+        }
+        equals = strchr((char *)trimmed, '=');
+        if (equals == NULL) {
+            continue;
+        }
+        *equals = '\0';
+        {
+            const char *key = trim_ascii((char *)trimmed);
+            const char *field = trim_ascii(equals + 1);
+            if (strcasecmp(key, "Read") == 0) {
+                if (strcmp(field, "0") == 0) {
+                    *read = 0;
+                } else if (strcmp(field, "1") == 0) {
+                    *read = 1;
+                }
+            } else if (strcasecmp(key, "Date") == 0) {
+                snprintf(date, date_len, "%s", field);
+            } else if (strcasecmp(key, "UnixTime") == 0) {
+                char *parse_end = NULL;
+                long long parsed = strtoll(field, &parse_end, 10);
+                if (parse_end != field && parsed > 0) {
+                    *unix_time = parsed;
+                }
+            }
+        }
+    }
+    fclose(file);
+}
+
+/* The API snapshot is bounded by memos_max. A release must check even
+ * older entries, and unknown metadata is never permission to turn off. */
+int c300x_native_memo_unread(const char *root)
+{
+    DIR *dir = opendir(root);
+    if (!dir) return -1;
+    int result = 0;
+    for (;;) {
+        errno = 0;
+        struct dirent *entry = readdir(dir);
+        if (!entry) {
+            if (errno) result = -1;
+            break;
+        }
+        if (entry->d_name[0] == '.') continue;
+        char path[C300X_MAX_PATH_LEN], dir_path[C300X_MAX_PATH_LEN], date[1];
+        C300X_MEMO_STAT_STRUCT st;
+        if (!c300x_join_path(dir_path, sizeof(dir_path), root, entry->d_name)
+            || memo_stat_path(dir_path, &st) < 0) {
+            result = -1;
+            continue;
+        }
+        if (!S_ISDIR(st.st_mode)) continue;
+        int n = snprintf(path, sizeof(path), "%s/%s/msg_info.ini", root, entry->d_name);
+        int read = -1;
+        long long timestamp;
+        if (n >= 0 && (size_t)n < sizeof(path))
+            c300x_read_voicemail_info(path, &read, date, sizeof(date), &timestamp);
+        if (read == 0) {
+            result = 1;
+            break;
+        }
+        if (read < 0) result = -1;
+    }
+    closedir(dir);
+    return result;
 }
 
 static int memo_path_exists(const char *path)

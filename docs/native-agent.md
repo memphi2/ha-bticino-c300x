@@ -98,7 +98,7 @@ Key sections:
 - `systemMetrics`: optional low-frequency push updates for load and temperature
 - `video`: optional local doorstation media support
 - `displayBridge`: optional dashboard proxy for QML; `feedbackEnabled` stores
-  the local **Settings > General > HA feedback** choice (default true).
+  the local **Settings > Home Assistant > HA feedback** choice (default true).
   Changing it requires no HA connection or GUI restart and writes configuration
   only when the value changes.
 
@@ -176,7 +176,7 @@ agent can only run the configured local UI helper with fixed `status`, `apply`,
 `restore`, `core-apply`, `core-restore`, `media-user-label-apply`,
 `media-user-label-restore` or `reload` arguments. The patch is a complete Display patch, not just two extra pages: it wires MainApp navigation, transforms the
 device HomePage for unread memo/video-message badges, transforms the
-device MemoPage for external-delete refresh, adds the HA feedback and touch-tone controls to Settings > General, installs
+device MemoPage for external-delete refresh, adds the Home Assistant settings tab and preserves the stock General touch-tone control, installs
 the project-owned Alarmo, Home Assistant and energy pages, and installs the
 local QML JavaScript bridge.
 On Qt 4 devices (firmware 1.7.x and 2.0.2) the Display patch also raises the

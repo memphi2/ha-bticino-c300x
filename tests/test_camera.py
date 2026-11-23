@@ -557,6 +557,7 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
         "external_media_active": True,
         "external_owner": "external_client",
         "last_video_block_reason": "external_session_active",
+        "picture_controls_supported": False,
             "talkback_supported": True,
             "doorstation_audio_gain_db": 0.0,
             "media_user": {

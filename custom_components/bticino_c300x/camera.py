@@ -288,6 +288,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             "external_owner": self._external_owner,
             "last_video_block_reason": self._last_video_block_reason,
             "talkback_supported": self._talkback_supported(),
+            "picture_controls_supported": supports_capability(self._entry, "camera_picture"),
             # The configured doorstation gain (from HA's own config-flow option,
             # not the agent) so the card can apply it client-side in PCMU mode
             # where the agent stays at passthrough.

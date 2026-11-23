@@ -270,7 +270,9 @@ SOURCE_INSTALLED_FILES = (
     "C300XDetailControl.qml",
     "C300XEnergyReadout.qml",
     "C300XEnergySums.qml",
+    "C300XSettings.qml",
     "js/c300x_energy.js",
+    "js/c300x_maintenance.js",
     "C300XRingerControl.qml",
     "js/c300x_ringer.js",
     "js/c300x_ha.js",
@@ -309,9 +311,21 @@ Item {
     }
 }
 """
+ORIGINAL_SETTINGS = """import QtQuick 1.1
+Page {
+    function handleScreenOff() {
+        spacing: 6
+    ExclusiveGroup {
+                configurationChoice
+            append({label: QT_TR_NOOP("Configuration"), tab: configurationChoice, checked: false})
+}
+"""
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "5db95b56810c7eda043c082c4e20ea2f306315ac4c2893fd8cd87b46e2acb279",
-    "Components/Settings/GeneralsChoice.qml": "42ac9c6be930fe258a46cb847ec69ce0160ccc75e2d98049c4441e1208b41c87",
+    "Settings.qml": "d1571baa609fda82b1cba5aab5549b7caa32fc72a27f9e5f0700643726aa9a6f",
+    "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
+    "C300XSettings.qml": "9e82260a150b2edf6785097a20ee892f36ee6ccb5ff864af46a8011a76362d09",
+    "js/c300x_maintenance.js": "1e7dcc1873b157818e01e05abe4ba1c5080c03f8c662bea11cee5b2499a35119",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
@@ -329,13 +343,13 @@ PATCH_OUTPUT_SHA256 = {
     "C300XSituations.qml": "63853c3376beb17514be5d47d4dadb0741dd3bca9ac9a2974cde0f82a24baeb4",
     "C300XOptionalPages.qml": "652645890db10c3797a9f11a165c1ff10faff1bc89164864921b9c3e94444a4d",
     "C300XPageNavigation.qml": "958aee89fe169d819c3abfd94cfecac0a2fb335845303282100f35b9f52ea638",
-    "C300XRingerControl.qml": "7e30781b7a43dcff6ab090d6dcc87c479b2284f073a98c314827ce23774310d9",
+    "C300XRingerControl.qml": "ec75a5b64938123a038a46a3bc3639319d1ff7b34bf8adf4fbfd3867c5757643",
     "js/c300x_alerts.js": "a06a136e24ba269ee49110d7586c5fb97deda137371e2f8a52a93696ec3ff3d1",
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
-    "js/c300x_ringer.js": "17c510ed56828affcd8eefc7a34068f2f34fe843b125f7c1167585252e5c3133",
+    "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
     "js/c300x_ha.js": "e7b3a48aa31bf6f858876626fa6563645008f1a49742a2209be47d0e8d9de7ef",
-    "js/c300x_i18n.js": "d1ed4561d23335c026a892b825a1ecade6163fd1f00a475b9fe8b7ba41a41ea3",
+    "js/c300x_i18n.js": "c61b2534a23d93aaa893b993e1a5322ceace10119b97850a7ffd08f52ca40c35",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }
 
@@ -667,7 +681,7 @@ def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
     assert status["state"] == "patched"
     assert set(PATCH_OUTPUT_SHA256) == set(SOURCE_INSTALLED_FILES) | {
         "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
-        "Components/Settings/GeneralsChoice.qml",
+        "Components/Settings/GeneralsChoice.qml", "Settings.qml",
     }
     assert {
         relative_path: _sha256(gui_dir / relative_path)
@@ -1570,6 +1584,7 @@ def _run_qml_patch_raw(
 
 
 def _write_original_gui(gui_dir: Path) -> None:
+    (gui_dir / "Settings.qml").write_text(ORIGINAL_SETTINGS)
     (gui_dir / "MainApp.qml").write_text(ORIGINAL_MAIN_APP)
     (gui_dir / "HomePage.qml").write_text(ORIGINAL_HOME_PAGE)
     (gui_dir / "MemoPage.qml").write_text(ORIGINAL_MEMO_PAGE)

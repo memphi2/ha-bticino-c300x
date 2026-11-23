@@ -913,13 +913,16 @@ def test_configure_display_bridge_skips_matching_registration(
     assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
 
-def test_display_configuration_notify_failure_is_nonfatal() -> None:
+def test_unsupported_display_configuration_event_is_nonfatal() -> None:
     class Api:
-        async def async_notify_display_bridge_event(self, topic):
+        async def async_notify_display_bridge_event(self, topic, *, unread):
             assert topic == "display_bridge.state"
-            raise api_errors.C300XAgentApiError("offline")
+            assert unread is False
+            raise api_errors.C300XAgentApiUnsupportedError("unsupported")
 
-    asyncio.run(runtime_manager._async_notify_display_configuration(Api()))
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace()
+    asyncio.run(runtime_manager._async_notify_display_configuration(entry, Api()))
 
 
 def test_configure_display_bridge_records_agent_failures(
@@ -1599,7 +1602,7 @@ def test_display_bridge_notify_skips_missing_runtime(explicit_none: bool) -> Non
     if explicit_none:
         entry.runtime_data = None
 
-    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(None, entry))
 
 
 def test_display_bridge_notify_preserves_revision_between_ui_waiters() -> None:
@@ -1619,10 +1622,10 @@ def test_display_bridge_notify_preserves_revision_between_ui_waiters() -> None:
 
     entry = _entry()
     entry.runtime_data = SimpleNamespace(api=FakeApi(0))
-    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(None, entry))
 
     entry.runtime_data.api = FakeApi(1)
-    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(None, entry))
 
     assert calls == ["event:alarm", "event:alarm"]
 
@@ -1700,6 +1703,7 @@ def test_display_bridge_notify_ignores_stale_runtime() -> None:
 
     asyncio.run(
         runtime_manager._async_notify_display_bridge_alarm_if_listening(
+            None,
             entry,
             old_runtime,  # type: ignore[arg-type]
         )
@@ -2000,7 +2004,8 @@ class _DisplayBridgeApi:
         self.configured: list[tuple[bool, str, str]] = []
         self.notifications: list[str] = []
 
-    async def async_notify_display_bridge_event(self, topic: str) -> None:
+    async def async_notify_display_bridge_event(self, topic: str, *, unread: bool) -> None:
+        assert unread is False
         self.notifications.append(topic)
 
     async def async_display_bridge_status(self) -> dict[str, Any]:

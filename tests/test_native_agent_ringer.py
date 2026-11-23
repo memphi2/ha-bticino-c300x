@@ -172,6 +172,33 @@ def test_no_gui_never_performs_half_a_write(lab: Lab) -> None:
     assert lab.device.frames == []
 
 
+def test_picture_controls_use_gui_readback_without_affecting_mute(lab: Lab) -> None:
+    path = "/api/v1/video/picture"
+    headers = {"Authorization": "Bearer " + TOKEN}
+
+    def listen(query: str = "") -> HTTPConnection:
+        conn = lab.request(lab.ui_port, GUI_PATH + "?picture=1" + query, headers={"X-C300X-GUI": "ringer-v1"})
+        api_get(lab.ui_port, "/ui/events/status", authorized=False)
+        return conn
+
+    response(lab.request(lab.api_port, path), 401)
+    response(lab.request(lab.api_port, path, headers=headers), 503)
+    gui = listen()
+    for name in ("read", "brightness", "contrast", "saturation"):
+        payload = None if name == "read" else {"control": name, "value": 60}
+        pending = lab.request(lab.api_port, path, headers=headers, payload=payload)
+        command = response(gui)
+        assert command["picture"] == name and "muted" not in command
+        gui = listen("&picture_id=" + command["id"] + "&brightness=60&contrast=60&saturation=60")
+        assert response(pending) == {"ok": True, "brightness": 60, "contrast": 60, "saturation": 60}
+    response(lab.request(lab.api_port, path, headers=headers, payload={"control": "brightness", "value": True}), 400)
+    pending = lab.request(lab.api_port, path, headers=headers, payload={"control": "contrast", "value": 40})
+    command = response(gui)
+    listen("&picture_id=" + command["id"] + "&brightness=60&contrast=60&saturation=60")
+    assert response(pending, 409)["error"] == "picture_not_applied"
+    assert lab.device.frames == []
+
+
 def test_idle_gui_does_not_poll_write_or_wake_the_agent(lab: Lab) -> None:
     lab.next()
     before = api_get(lab.api_port, "/api/v1/diagnostics")

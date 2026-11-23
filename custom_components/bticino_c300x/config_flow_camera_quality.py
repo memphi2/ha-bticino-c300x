@@ -22,7 +22,11 @@ from homeassistant.helpers.selector import (
 
 from .api import C300XAgentApiError
 from .capabilities import entry_maintenance_action_is_advertised
-from .config_snapshots import CONF_SNAPSHOT_HEIGHT, CONF_SNAPSHOT_WIDTH, SNAPSHOT_DEFAULTS
+from .config_snapshots import (
+    CONF_SNAPSHOT_HEIGHT,
+    CONF_SNAPSHOT_WIDTH,
+    SNAPSHOT_DEFAULTS,
+)
 from .schema_compat import vol
 
 BITRATE = "bitrate_kbps"

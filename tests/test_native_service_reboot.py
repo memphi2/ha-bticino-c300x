@@ -19,7 +19,7 @@ def reboot_binary(request, tmp_path_factory):
          '-DC300X_SSH_INIT_SCRIPT="./ssh.sh"', *flags,
          str(NATIVE / "test/http_service_reboot_test.c"),
          *[str(NATIVE / "src" / name) for name in (
-             "http_service_commands.c", "http_maintenance.c", "http_auth.c",
+             "http_service_commands.c", "gui_peer.c", "http_maintenance.c", "http_auth.c",
              "command_job.c", "string_util.c", "json_util.c", "json_parse.c")],
          "-o", str(binary)], capture_output=True, text=True, timeout=30,
     )

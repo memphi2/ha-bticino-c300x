@@ -6,7 +6,7 @@ Item {
     id: control
     property bool stopped: false
 
-    function waitForCommand(completed, muted) {
+    function waitForCommand(completed, muted, pictureReply) {
         if (stopped || Ringer.currentRequest())
             return
         var request = new XMLHttpRequest()
@@ -20,9 +20,15 @@ Item {
                     var command = JSON.parse(request.responseText)
                     if (command.ok === true && typeof command.id === "string" &&
                             /^[0-9a-f]{32}$/.test(command.id) &&
-                            typeof command.muted === "boolean" &&
                             typeof command.expires === "number" &&
                             new Date().getTime() < command.expires) {
+                        if (typeof command.picture === "string") {
+                            var page = typeof videocallPage !== "undefined" && videocallPage.item
+                            var source = page && page.callObj
+                            waitForCommand(null, false, Ringer.pictureReply(command, source))
+                            return
+                        }
+                        if (typeof command.muted !== "boolean") { reconnect.start(); return }
                         if (command.muted)
                             global.audioState.enableState(AudioState.RingtoneMute)
                         else
@@ -35,9 +41,10 @@ Item {
             }
             reconnect.start()
         }
-        var url = "http://127.0.0.1:8090/ui/ringer/next"
+        var url = "http://127.0.0.1:8090/ui/ringer/next?picture=1"
+        if (pictureReply) url += pictureReply
         if (completed)
-            url += "?completed=" + completed + "&muted=" + (muted ? "1" : "0")
+            url += "&completed=" + completed + "&muted=" + (muted ? "1" : "0")
         request.open("GET", url, true)
         request.setRequestHeader("X-C300X-GUI", "ringer-v1")
         request.send()

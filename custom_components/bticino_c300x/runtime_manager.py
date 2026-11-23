@@ -75,6 +75,7 @@ from .device_user import (
     homeassistant_account_label,
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
+from .display_unread import async_send_unread_event
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
@@ -285,6 +286,8 @@ class C300XRuntimeManager:
             await _async_track_display_updates(self.hass, self.entry)
         )
         if not self.connection_state.available:
+            if _entry_config_value(self.entry, CONF_DEVICE_UI_ENABLED, False):
+                self.entry.runtime_data.resources.display_bridge_registration_pending = True
             return
 
         api = self._api()
@@ -1012,7 +1015,7 @@ async def _async_configure_display_bridge(
                 if resources is not None:
                     resources.display_bridge_registration_pending = False
                 diagnostics.mark_success(datetime.now(UTC))
-                await _async_notify_display_configuration(api)
+                await _async_notify_display_configuration(entry, api)
                 return
         elif not configured:
             if resources is not None:
@@ -1029,7 +1032,7 @@ async def _async_configure_display_bridge(
             resources.display_bridge_registration_pending = False
         diagnostics.mark_success(datetime.now(UTC))
         if enabled:
-            await _async_notify_display_configuration(api)
+            await _async_notify_display_configuration(entry, api)
     except C300XAgentApiUnsupportedError:
         check_active()
         if resources is not None:
@@ -1053,12 +1056,14 @@ async def _async_configure_display_bridge(
             _LOGGER.warning("C300X display bridge registration failed: %s", error)
 
 
-async def _async_notify_display_configuration(api: C300XAgentApi) -> None:
+async def _async_notify_display_configuration(
+    entry: BticinoC300XConfigEntry, api: C300XAgentApi,
+) -> None:
     """Refresh visible pages once after setup/options reload, even with the same URL."""
     try:
-        await api.async_notify_display_bridge_event("display_bridge.state")
-    except C300XAgentApiError:
-        _LOGGER.debug("C300X display configuration notification failed", exc_info=True)
+        await async_send_unread_event(entry, entry.runtime_data, api, "display_bridge.state")
+    except C300XAgentApiUnsupportedError:
+        _LOGGER.debug("C300X display configuration events are unsupported")
 
 
 async def _async_track_display_updates(
@@ -1285,6 +1290,8 @@ def _async_schedule_display_bridge_notify(
         return
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not connection_state.available:
+        if notifications:
+            runtime_data.resources.display_bridge_registration_pending = True
         return
     runtime_data.display_bridge_notify_dirty = True
     if notifications:
@@ -1292,10 +1299,11 @@ def _async_schedule_display_bridge_notify(
     if getattr(runtime_data, "display_bridge_alarm_notify_pending", False):
         return
     runtime_data.display_bridge_alarm_notify_pending = True
-    hass.add_job(_async_notify_display_bridge_alarm_if_listening, entry, runtime_data)
+    hass.add_job(_async_notify_display_bridge_alarm_if_listening, hass, entry, runtime_data)
 
 
 async def _async_notify_display_bridge_alarm_if_listening(
+    hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
     runtime_data: BticinoC300XRuntimeData | None = None,
 ) -> None:
@@ -1315,13 +1323,26 @@ async def _async_notify_display_bridge_alarm_if_listening(
             runtime_data.display_bridge_notify_dirty = False
             topic = "notifications" if getattr(runtime_data, "display_bridge_notify_messages", False) else "alarm"
             runtime_data.display_bridge_notify_messages = False
-            await runtime_data.api.async_notify_display_bridge_event(topic)
+            try:
+                if topic == "notifications":
+                    await async_send_unread_event(entry, runtime_data, runtime_data.api, topic)
+                else:
+                    await runtime_data.api.async_notify_display_bridge_event(topic)
+            except C300XAgentApiUnsupportedError:
+                _LOGGER.debug("C300X display bridge events are unsupported")
+            except C300XAgentApiError:
+                _LOGGER.debug("C300X display bridge event failed", exc_info=True)
+                if (
+                    topic == "notifications"
+                    and getattr(entry, "runtime_data", None) is runtime_data
+                    and not runtime_data.resources.closed
+                ):
+                    from .events import async_notify_runtime_registration_failed
+
+                    runtime_data.resources.display_bridge_registration_pending = True
+                    async_notify_runtime_registration_failed(hass, entry)
             if not runtime_data.display_bridge_notify_dirty:
                 break
-    except C300XAgentApiUnsupportedError:
-        _LOGGER.debug("C300X device agent does not support display bridge events")
-    except C300XAgentApiError:
-        _LOGGER.debug("C300X display bridge alarm notification failed", exc_info=True)
     finally:
         if runtime_data is not None:
             runtime_data.display_bridge_alarm_notify_pending = False

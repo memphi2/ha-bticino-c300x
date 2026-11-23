@@ -40,7 +40,9 @@ def _async_set_notify_description(
             "expires_in is 1 to 604800 seconds (default 3600). "
             "notification_id replaces an existing notification with the same ID "
             "(1-64 lowercase letters, digits, underscores or hyphens). "
-            "mode is display (default), speech (the message is only spoken over the "
+            "mode is display (default), led (requires memo LED support; stores the "
+            "notice without waiting for the LED; omit wake, sound and TTS settings), "
+            "speech (the message is only spoken over the "
             "device speaker) or both (shown and spoken, without a tone; sound_duration "
             "must be 0 or left out). tts_engine names the text-to-speech entity, for "
             "example tts.piper; without it the engine chosen under Speech in the C300X "
@@ -87,7 +89,7 @@ class C300XNotificationService(BaseNotificationService):
         # Everything is checked before anything is shown or spoken.
         options = alert_options(kwargs.get("data"))
         mode = options["mode"]
-        speech = None if mode == "display" else prepare_speech(
+        speech = None if mode not in {"speech", "both"} else prepare_speech(
             self.hass, self.entry, message,
             engine=options.get("tts_engine"), language=options.get("language"),
         )

@@ -1,5 +1,6 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=a2bdcf6613188ecd";
-import "./c300x-media-controls.js?v=a2bdcf6613188ecd";
+import { c300xMediaState } from "./c300x-state-model.js?v=074d997cd553be86";
+import "./c300x-media-controls.js?v=074d997cd553be86";
+import "./c300x-picture-controls.js?v=074d997cd553be86";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -9,6 +10,7 @@ export class C300XCardMedia {
     this.fullscreenGeneration = 0;
     this.fullscreenPending = false;
     this.controls = card.shadowRoot.querySelector("c300x-media-controls");
+    this.picture = card.shadowRoot.querySelector("c300x-picture-controls");
     this.target = card.shadowRoot.querySelector("ha-card");
     this.frame = card.shadowRoot.querySelector("dialog");
     this.controls?.addEventListener("media-expand", () => this.setExpanded(true));
@@ -78,6 +80,10 @@ export class C300XCardMedia {
     const state = c300xMediaState(entity);
     const lifecycle = card._lifecycle;
     const live = !!card._webrtc?.remoteStream;
+    this.picture?.configure?.(card._hass, card._entryId(), !!card._entryId() &&
+      !card._isHomeCallMode() && entity?.attributes?.picture_controls_supported === true &&
+      card._config.show_picture_controls !== false &&
+      /^(ring_pending|ring_preview_active|ring_answering|ring_active)$/.test(state));
     const busy = live || !!card._webrtc?.running || !!card._transitionWebrtc
       || card._talkbackStarting || lifecycle.startingCall || lifecycle.answeringDoorbell
       || lifecycle.hangupInProgress || lifecycle.activeHomeCallSession

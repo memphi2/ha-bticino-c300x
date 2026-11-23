@@ -1,7 +1,7 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=a2bdcf6613188ecd";
+} from "./c300x-translations.js?v=074d997cd553be86";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
@@ -9,7 +9,7 @@ import {
   c300xEntryId,
   c300xFirstEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=a2bdcf6613188ecd";
+} from "./c300x-entity-resolver.js?v=074d997cd553be86";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 
@@ -79,6 +79,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
       show_door_unlock: this._config.show_door_unlock !== false,
       show_stair_light: this._config.show_stair_light !== false,
       show_media_history: this._config.show_media_history !== false,
+      show_picture_controls: this._config.show_picture_controls !== false,
     };
     form.schema = [
       {
@@ -121,6 +122,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
         name: "show_media_history",
         selector: { boolean: {} },
       },
+      { name: "show_picture_controls", selector: { boolean: {} } },
       ...(doorbellOnlyMode ? [] : [
         {
           name: "ringback_tone",
@@ -155,7 +157,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
         delete nextConfig[key];
       }
     }
-    for (const key of ["show_media_readiness", "show_door_unlock", "show_stair_light", "show_media_history"]) {
+    for (const key of ["show_media_readiness", "show_door_unlock", "show_stair_light", "show_media_history", "show_picture_controls"]) {
       if (nextConfig[key] !== false) {
         delete nextConfig[key];
       }

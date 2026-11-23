@@ -186,6 +186,11 @@ scp_cmd \
     "$QML_STAGE_DIR/js/c300x_memos.js" \
     "$REMOTE:$REMOTE_DIR/qml/js/"
 
+# Unpackaged development installs use the patch template and its source files.
+if [[ "$UPLOAD_AGENT" == "0" ]]; then
+    scp_cmd "$QML_STAGE_DIR/C300XSettings.qml" "$REMOTE:$REMOTE_DIR/qml/"
+    scp_cmd "$QML_STAGE_DIR/js/c300x_maintenance.js" "$REMOTE:$REMOTE_DIR/qml/js/"
+fi
 scp_cmd "$SCRIPT_SOURCE_DIR/qml_patch.sh" "$REMOTE:$REMOTE_DIR/qml_patch.sh"
 ssh_cmd "chmod 700 '$REMOTE_DIR/qml_patch.sh'"
 

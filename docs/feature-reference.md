@@ -96,6 +96,16 @@ agent have different effects on settings, media and backups.
 
 ### Camera Quality
 
+During a Ring Call, open the sliders icon on the doorbell card to adjust
+**brightness, contrast or colour saturation** in 10% steps. These are the
+station's original call controls, not browser filters. The updated agent and
+core GUI patch are required, and the station must have an active video call.
+Opening the controls reads the current values without answering the call.
+Moving a slider sends one change when released. Archived media is not altered.
+Disable **Show picture controls during a ring call** in the card editor to hide
+the controls. Automations can use `bticino_c300x.camera_picture`: omit both
+`control` and `value` to read, or supply both to change one value.
+
 Open **Configure > Camera quality** to choose the device's picture size, bit
 rate and frame rate. The original **688x480** factory cut-out and **704x576**
 full-height high-stream choices remain available with their original behavior.
@@ -478,13 +488,20 @@ the tiles are left out. Picture tiles are not offered for the Alarm page.
 
 ## Display Settings
 
-On the C300X itself, open **Settings → General**. The original **Tone buttons**
-switch controls touch sounds. Directly below it, **HA feedback** turns colored
-HA action confirmations and routine messages in the HA page's upper-right
+On Qt4 stations with the Display patch, **Settings → General → Tone buttons**
+still controls touch sounds. Open **Settings → Home Assistant**, just below
+**Configuration**, for **HA feedback**. It turns colored HA action confirmations
+and routine messages in the HA page's upper-right
 header, such as "Page loaded", on or off (on by default). Text at the affected
 control, errors, pending actions, connection warnings and actual alarm or entity
 states remain visible.
 This is a local device preference, not another HA integration option.
+
+This tab also shows a local SSH switch, **Reboot station**, and a separately
+spaced **Remove agent** action. Only maintenance operations enabled by the
+station agent are available. Reboot and removal require a second, explicit
+confirmation within ten seconds; leaving the tab or screen-off cancels it.
+These controls do not need Home Assistant to be online.
 
 With the Display patch active, the C300X device page in Home Assistant also
 offers **Touch tone** under **Configuration**. It controls the same original
@@ -509,15 +526,15 @@ call transitions remain separate events, even when their data is identical.
 Changing the feedback setting saves it in the agent configuration, so it survives
 GUI and agent restarts. Reading it and choosing the already saved value do not
 write files; there is no periodic preference polling. If the agent cannot read
-or save it, the switch is disabled with **Setting unavailable**; reopen General
+or save it, the switch is disabled with **Setting unavailable**; reopen the Home Assistant tab
 to read the actual setting before trying again.
 
 Only the optional Display patch that installs the additional HA/Alarmo pages
-changes General settings. Installing or updating the agent's core media/ringer
-hook alone leaves the page untouched. Turning the Display patch off restores
-General settings while keeping the core media/ringer hook.
+adds the Home Assistant tab. Installing or updating the agent's core media/ringer
+hook alone leaves the menu untouched. Turning the Display patch off restores
+the stock Settings menu while keeping the core media/ringer hook.
 
-The Display patch backs up the original General settings page before changing
+The Display patch backs up the original Settings menu before changing
 it, keeps the original tone control and restores the page on removal. Unknown
 page layouts or a missing backup of an already patched page abort the operation
 instead of replacing the original with a guessed version.
@@ -906,8 +923,19 @@ retrying setup.
 | `mode` | Display | Speaker |
 | --- | --- | --- |
 | `display` (default) | Notice, wake and tone | Nothing |
+| `led` | Unread notice and message LED only; no popup or wake | Nothing |
 | `speech` | Nothing | The message is spoken |
 | `both` | Notice and wake, no tone | The message is spoken |
+
+For a quiet reminder, set `data.mode: led` and omit wake, sound and TTS
+settings. Positive wake or sound durations, `tts_engine` and `language` are
+rejected in this mode. The notice uses the same ID replacement, priority,
+dismissal and expiry rules as other notices. HA rejects the call without
+storing the notice if the agent does not advertise memo LED support.
+A successful call means HA stored the notice. HA sends the unread state to
+the agent asynchronously; success does not confirm the physical LED changed.
+The unread state includes all HA notices, not just LED-mode notices. The HA
+notice list is transient and starts empty on integration reload.
 
 ```yaml
 action: notify.bticino_c300x
@@ -1170,6 +1198,11 @@ agent exposes RTSP sources for:
 
 These sources support interleaved RTP over RTSP/TCP. UDP transport is not
 supported; external clients must select TCP.
+
+If a viewer briefly stops reading, the agent can drop whole media packets
+for that viewer. If part of a packet has already been sent, the agent keeps
+only its unsent bytes and finishes it before sending more media or an RTSP
+reply. It does not buffer a backlog. A sustained stall still ends the session.
 
 Audio gain options:
 

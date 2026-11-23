@@ -386,6 +386,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           <div class="empty"></div>
           <img class="snapshot-preview" alt="" hidden>
           <c300x-media-controls></c300x-media-controls>
+          <c300x-picture-controls hidden></c300x-picture-controls>
         </div>
         <div class="body">
           <div class="row-actions">

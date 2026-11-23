@@ -69,8 +69,11 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   already present on the device and keeps a one-time original backup there.
 - The HA device's **Touch tone** configuration switch uses the original GUI
   setting with confirmed commands and push state, through one sleeping connection.
-- General settings retains the stock touch-tone switch and adds **HA feedback**
-  immediately below it. A GUI-owned preference object in the patched
+- General retains the stock touch-tone switch. **Settings > Home Assistant**,
+  below Configuration, contains **HA feedback**, SSH, reboot and agent removal.
+  Maintenance uses the station's local agent, without an HA connection; reboot
+  and removal each require confirmation within ten seconds. Leaving the tab or
+  turning off the screen cancels confirmation. A GUI-owned preference object in the patched
   `MainApp.qml` reads the local agent once; changes are saved only on user input.
   It uses a declarative request deadline, not a polling timer or dynamically
   created QML objects. Alarm states, error text and connection warnings remain
@@ -78,6 +81,9 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   the HA page's upper-right header are hidden; control-specific text is unchanged.
 
 ## Packaging
+
+The packaged patch script embeds the stripped settings panel and its transport
+helper. Updating an existing file-set 6 agent requires no additional upload paths.
 
 The 2.5.0 features require the matching native agent and complete display
 bundle, followed by reapplying the Display patch. Local strict simulations
@@ -105,7 +111,7 @@ locally for comparison.
 - Store device file backups under
   `/home/bticino/cfg/extra/c300x-device-file-backups/original/`, mirroring the
   original GUI path.
-- The General settings page participates in the same staged apply, transactional
+- The Settings menu and preserved General page participate in the same staged apply, transactional
   rollback and restore-all paths as the other original pages. Reapplying uses
   the preserved original; unsupported layouts and missing required backups fail
   before any active GUI file is changed.

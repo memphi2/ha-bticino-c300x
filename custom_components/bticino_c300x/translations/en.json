@@ -1727,6 +1727,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Adjust camera picture",
+      "description": "Read the original controls during a video call, or set one control and its value.",
+      "fields": {
+        "entry_id": {"name": "Integration entry"},
+        "control": {"name": "Control"},
+        "value": {"name": "Value"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "Capture C300X doorbell video",
       "description": "Record a short video on Home Assistant from an incoming ring call or an idle on-demand stream.",

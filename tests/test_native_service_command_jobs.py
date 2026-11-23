@@ -2,8 +2,9 @@
 
 import json
 import subprocess
+import sys
 import time
-from http.client import RemoteDisconnected
+from http.client import HTTPConnection, RemoteDisconnected
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ def binary(request, tmp_path_factory):
              '-DC300X_SSH_STATUS_COMMAND=\\\"./status-test.sh\\\" '
              '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\" '
              '-DC300X_SSH_COMMAND_TIMEOUT_MS=2000 -DC300X_SSH_STATUS_TIMEOUT_MS=2000')
+    flags += f' -DC300X_STOCK_GUI=\\"{Path(sys.executable).resolve()}\\"'
     if request.param:
         flags += " -fsanitize=address,undefined -fno-omit-frame-pointer"
     link = "-pthread -ldl " + str(ROOT / "native_agent/test/http_audio_codec_stub.c")
@@ -58,6 +60,52 @@ def scripts(lab, service="exit 0\n", status="exit 0\n"):
     script(lab, "status", status)
     script(lab, "reboot", "touch reboot-done\n")
     script(lab, "remove", "touch remove-done\n")
+
+
+def display_request(lab, action="", payload=None, **headers):
+    conn = HTTPConnection("127.0.0.1", lab.ui_port, timeout=5)
+    lab.connections.append(conn)
+    conn.request("GET" if payload is None else "POST", "/ui/maintenance" + action,
+                 body=None if payload is None else json.dumps(payload), headers=headers)
+    return conn
+
+
+def test_display_maintenance_offline(lab):
+    scripts(lab)
+    ui = {"X-C300X-UI": "settings-v1"}
+    for headers in ({}, {**ui, "Origin": "http://localhost"}):
+        assert response(display_request(lab, **headers), 403)["ok"] is False
+    assert response(display_request(lab, **ui)) == {
+        "ok": True, "ssh": True, "remove": True, "reboot": True,
+    }
+    for action in ("/remove", "/reboot"):
+        response(display_request(lab, action, {}, **ui), 400)
+    assert not list(lab.root.glob("*-pid"))
+    response(display_request(lab, "/reboot", {"confirm": "reboot"}, **ui), 202)
+    wait_until(lambda: (lab.root / "reboot-done").exists())
+    assert not (lab.root / "service-pid").exists()
+    assert response(display_request(lab, "/ssh", **ui))["running"]
+    assert response(display_request(lab, "/ssh", {"enabled": True}, **ui))["running"]
+    response(display_request(lab, "/remove", {"confirm": "remove_agent"}, **ui), 202)
+    wait_until(lambda: (lab.root / "remove-done").exists())
+
+
+def test_header_without_trusted_gui_process_is_not_enough(lab):
+    result = subprocess.run([
+        "curl", "--silent", "--show-error", "--max-time", "4", "--noproxy", "*",
+        "-H", "X-C300X-UI: settings-v1",
+        f"http://127.0.0.1:{lab.ui_port}/ui/maintenance",
+    ], check=True, capture_output=True)
+    assert json.loads(result.stdout)["error"] == "display_maintenance_denied"
+
+
+def test_display_ssh_only_confirms_observed_state(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    scripts(lab, status="exit 1\n")  # pidof: daemon absent.
+    assert response(display_request(lab, "/ssh", {"enabled": False}, **ui))["running"] is False
+    response(display_request(lab, "/ssh", {"enabled": True}, **ui), 502)
+    scripts(lab, status="exit 127\n")  # Broken probe: do not report SSH as off.
+    response(display_request(lab, "/ssh", **ui), 502)
 
 
 @pytest.mark.parametrize("path,payload,expected", [

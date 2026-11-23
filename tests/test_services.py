@@ -380,6 +380,7 @@ def test_all_registered_service_schemas_accept_documented_payload_shapes() -> No
         await async_setup_services(hass)  # type: ignore[arg-type]
 
         samples: dict[str, dict[str, Any]] = {
+            "camera_picture": {"control": "brightness", "value": 50},
             "show_display_notification": {"notification_id": "reminder", "title": "Title", "message": "Text"},
             "dismiss_display_notification": {"notification_id": "reminder"},
             SERVICE_RUN_ACTION: {"entry_id": "entry-id", "action_id": "door_open"},

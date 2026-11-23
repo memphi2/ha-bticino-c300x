@@ -12,6 +12,7 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
 )
 
+from .camera_picture import PICTURE_SCHEMA, camera_picture
 from .capabilities import (
     answering_machine_message_delete_supported,
     entry_device_ui_enabled,
@@ -235,6 +236,9 @@ class _C300XServiceHandlers:
             SERVICE_DELETE_LATEST_TEXT_MEMO: self.async_delete_latest_text_memo,
             SERVICE_DELETE_LATEST_VOICE_MEMO: self.async_delete_latest_voice_memo,
         }
+
+    async def async_camera_picture(self, call: ServiceCall) -> dict[str, Any]:
+        return await camera_picture(_entry_for_call(self._hass, call).runtime_data.api, call.data)
 
     async def async_show_display_notification(self, call: ServiceCall) -> None:
         entry = _entry_for_call(self._hass, call)
@@ -463,7 +467,7 @@ def _register_base_services(
             schema=schema,
             supports_response=(
                 SupportsResponse.OPTIONAL
-                if service_name in {SERVICE_CAPTURE_DOORBELL_CALL, SERVICE_RUN_RING_WYOMING_ANALYSIS}
+                if service_name in {SERVICE_CAPTURE_DOORBELL_CALL, SERVICE_RUN_RING_WYOMING_ANALYSIS, "camera_picture"}
                 else SupportsResponse.NONE
             ),
         )
@@ -477,6 +481,7 @@ def _base_service_specs(handlers: _C300XServiceHandlers) -> tuple[_ServiceSpec, 
         ("show_display_notification", handlers.async_show_display_notification, SHOW_SCHEMA),
         ("dismiss_display_notification", handlers.async_dismiss_display_notification, DISMISS_SCHEMA),
         *_doorbell_media_service_specs(handlers),
+        ("camera_picture", handlers.async_camera_picture, PICTURE_SCHEMA),
         *_ring_analysis_service_specs(handlers),
         *_maintenance_service_specs(handlers),
         *_message_service_specs(handlers),

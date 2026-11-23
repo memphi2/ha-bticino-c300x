@@ -5,6 +5,9 @@
 
 #include <stddef.h>
 
+void c300x_read_voicemail_info(const char *path, int *read, char *date, size_t size, long long *unix_time);
+int c300x_native_memo_unread(const char *root);
+
 int c300x_text_memo_create(
     const char *root,
     int max_memos,

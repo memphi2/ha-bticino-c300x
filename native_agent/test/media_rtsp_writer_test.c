@@ -272,6 +272,45 @@ static void partial_failure_test(void)
     close(pair[0]); close(pair[1]);
 }
 
+struct slow_read {
+    int fd;
+    size_t want;
+    unsigned char *received;
+};
+
+static void *read_after_pause(void *arg)
+{
+    struct slow_read *reader = arg;
+    assert(recv(reader->fd, reader->received, reader->want, MSG_WAITALL) == (ssize_t)reader->want);
+    return NULL;
+}
+
+static void real_partial_recovery(void)
+{
+    /* Real kernel backpressure, without replacing sendmsg or advancing a
+     * fake clock: a small socket cannot fit this one interleaved packet. */
+    int pair[2], small = 4096;
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    assert(setsockopt(pair[0], SOL_SOCKET, SO_SNDBUF, &small, sizeof(small)) == 0);
+    struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
+    assert(writer);
+    unsigned char payload[48000], got[4 + sizeof(payload) + sizeof(response) - 1];
+    for (size_t i = 0; i < sizeof(payload); i++) payload[i] = (unsigned char)(i * 7);
+    assert(c300x_rtsp_send_interleaved(writer, pair[0], 2, payload, sizeof(payload)) == 0);
+    assert(writer->tail_len > 0 && writer->tail_len < sizeof(payload));
+    memset(payload, 0, sizeof(payload));
+    struct slow_read reader = {pair[1], sizeof(got), got};
+    pthread_t thread;
+    assert(pthread_create(&thread, NULL, read_after_pause, &reader) == 0);
+    send_rtsp_response(writer, pair[0], 200, "7", NULL, NULL);
+    assert(pthread_join(thread, NULL) == 0);
+    assert(memcmp(got, (unsigned char[]){'$', 2, 0xbb, 0x80}, 4) == 0);
+    for (size_t i = 0; i < sizeof(payload); i++) assert(got[4 + i] == (unsigned char)(i * 7));
+    assert(memcmp(got + 4 + sizeof(payload), response, sizeof(response) - 1) == 0);
+    c300x_rtsp_writer_release(writer);
+    close(pair[0]); close(pair[1]);
+}
+
 int main(int argc, char **argv)
 {
     assert(argc == 2);
@@ -281,6 +320,7 @@ int main(int argc, char **argv)
     else if (strcmp(argv[1], "framing") == 0) framing_test();
     else if (strcmp(argv[1], "timeouts") == 0) timeout_test();
     else if (strcmp(argv[1], "partial_failure") == 0) partial_failure_test();
+    else if (strcmp(argv[1], "real_partial_recovery") == 0) real_partial_recovery();
     else if (strcmp(argv[1], "slow_reader") == 0) slow_reader_test();
     else if (strcmp(argv[1], "stall_limit") == 0) stall_limit_test();
     else assert(!"unknown case");

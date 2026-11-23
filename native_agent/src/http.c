@@ -30,6 +30,7 @@
 #include "local_action_events.h"
 #include "audio_codec.h"
 #include "memo_store.h"
+#include "memo_led.h"
 #include "media_bridge.h"
 #include "mdns.h"
 #include "mqtt_bridge.h"
@@ -198,6 +199,7 @@ struct agent_runtime {
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
     int display_bridge_registered;
+    struct c300x_memo_led memo_led;
     int display_bridge_disabled;
     char display_bridge_webhook_url[C300X_MAX_URL_LEN];
     char display_bridge_shared_secret[C300X_MAX_TOKEN_LEN];
@@ -1336,72 +1338,6 @@ static void iso_time_from_unix(long long unix_time, char *out, size_t out_len)
     strftime(out, out_len, "%Y-%m-%dT%H:%M:%SZ", &tm_value);
 }
 
-static void read_voicemail_info(
-    const char *info_path,
-    int *read,
-    char *date,
-    size_t date_len,
-    long long *unix_time
-)
-{
-    FILE *file;
-    char line[256];
-    int in_section = 0;
-
-    *read = -1;
-    if (date_len > 0) {
-        date[0] = '\0';
-    }
-    *unix_time = 0;
-
-    file = fopen(info_path, "r");
-    if (file == NULL) {
-        return;
-    }
-    while (fgets(line, sizeof(line), file) != NULL) {
-        char *value = line;
-        const char *trimmed;
-        char *equals;
-
-        trimmed = trim_ascii(value);
-        if (trimmed[0] == '\0' || trimmed[0] == ';' || trimmed[0] == '#') {
-            continue;
-        }
-        if (trimmed[0] == '[') {
-            in_section = strcmp(trimmed, "[Message Information]") == 0;
-            continue;
-        }
-        if (!in_section) {
-            continue;
-        }
-        equals = strchr((char *)trimmed, '=');
-        if (equals == NULL) {
-            continue;
-        }
-        *equals = '\0';
-        {
-            const char *key = trim_ascii((char *)trimmed);
-            const char *field = trim_ascii(equals + 1);
-            if (strcasecmp(key, "Read") == 0) {
-                if (strcmp(field, "0") == 0) {
-                    *read = 0;
-                } else if (strcmp(field, "1") == 0) {
-                    *read = 1;
-                }
-            } else if (strcasecmp(key, "Date") == 0) {
-                snprintf(date, date_len, "%s", field);
-            } else if (strcasecmp(key, "UnixTime") == 0) {
-                char *parse_end = NULL;
-                long long parsed = strtoll(field, &parse_end, 10);
-                if (parse_end != field && parsed > 0) {
-                    *unix_time = parsed;
-                }
-            }
-        }
-    }
-    fclose(file);
-}
-
 static void voicemail_insert_sorted(
     struct voicemail_snapshot *snapshot,
     const struct voicemail_message *message,
@@ -1498,7 +1434,7 @@ static void message_collection_read_snapshot(
         }
         c300x_copy_string(message.kind, sizeof(message.kind), kind);
         c300x_copy_string(message.dir_path, sizeof(message.dir_path), message_dir);
-        read_voicemail_info(
+        c300x_read_voicemail_info(
             info_path,
             &message.read,
             message.date,
@@ -1809,7 +1745,7 @@ static void voicemail_runtime_init(
         );
         free(snapshot);
     }
-    if (!voicemail->enabled || !voicemail->watch_enabled) {
+    if (!voicemail->watch_enabled) {
         return;
     }
 #ifdef IN_CLOEXEC
@@ -1831,7 +1767,7 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
     voicemail_runtime_init(
         &runtime->voicemail,
         config->answering_machine_messages_enabled,
-        config->answering_machine_messages_watch,
+        config->answering_machine_messages_enabled && config->answering_machine_messages_watch,
         config->answering_machine_messages_max,
         config->answering_machine_messages_root,
         ""
@@ -1840,10 +1776,13 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
 
 static void memos_init(struct agent_runtime *runtime, const struct c300x_config *config)
 {
+    int watch = (config->memos_enabled && config->memos_watch) || c300x_memo_led_present();
+    runtime->memo_led.text_root = config->memos_text_root;
+    runtime->memo_led.voice_root = config->memos_voice_root;
     voicemail_runtime_init(
         &runtime->text_memos,
         config->memos_enabled,
-        config->memos_watch,
+        watch,
         config->memos_max,
         config->memos_text_root,
         "text"
@@ -1851,7 +1790,7 @@ static void memos_init(struct agent_runtime *runtime, const struct c300x_config 
     voicemail_runtime_init(
         &runtime->voice_memos,
         config->memos_enabled,
-        config->memos_watch,
+        watch,
         config->memos_max,
         config->memos_voice_root,
         "voice"
@@ -2094,7 +2033,9 @@ static void handle_memos_inotify(
     if (structure_changed) {
         voicemail_refresh_watches(memos);
     }
-    memos_event_dispatch_if_changed(config, runtime);
+    c300x_memo_led_update(&runtime->memo_led, runtime->memo_led.claimed);
+    if (config->memos_enabled && config->memos_watch)
+        memos_event_dispatch_if_changed(config, runtime);
 }
 
 static void handle_voicemail_inotify(
@@ -2546,6 +2487,7 @@ static void handle_display_bridge_post(
             return;
         }
         runtime->display_bridge_registered = 0;
+        c300x_memo_led_update(&runtime->memo_led, 0);
         runtime->display_bridge_disabled = 1;
         runtime->display_bridge_webhook_url[0] = '\0';
         runtime->display_bridge_shared_secret[0] = '\0';
@@ -2616,6 +2558,10 @@ static void handle_display_bridge_event_post(
         return;
     }
 
+    if (!c300x_memo_led_event(&runtime->memo_led, topic, request->body)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_unread\"}\n");
+        return;
+    }
     mark_home_assistant_callback_seen(runtime, time(NULL));
     ui_event_notify(runtime, topic);
     c300x_json_string(topic, topic_json, sizeof(topic_json));
@@ -5247,6 +5193,7 @@ static void api_capabilities(
     }
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
+        .memo_led_present = c300x_memo_led_present(),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
         .maintenance_supported = maintenance_auth_available(config),
@@ -9107,6 +9054,10 @@ static void handle_api_request(
         c300x_touch_tone_handle_api(&runtime->touch_tone, client_fd, request);
         return;
     }
+    if (strcmp(request->path, "/api/v1/video/picture") == 0) {
+        picture_request(&runtime->ringer_control, client_fd, request);
+        return;
+    }
     if (strcmp(request->path, "/api/v1/display/alert") == 0) {
         c300x_display_alerts_handle_api(&runtime->display_alerts, client_fd, request);
         return;
@@ -9425,9 +9376,11 @@ static int handle_ui_request(
     int client_fd,
     struct c300x_config *config,
     struct agent_runtime *runtime,
-    const struct request *request
+    struct request *request
 )
 {
+    if (!strncmp(request->path, "/ui/maintenance", sizeof("/ui/maintenance") - 1))
+        return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, run_detached_command);
     if (strcmp(request->path, "/ui/preferences") == 0) {
         handle_ui_preferences(client_fd, config, request);
         return 1;
@@ -9714,9 +9667,10 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 1 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
+    int memo_led_fd = -1;
     int udp_joined = 0;
     struct c300x_mdns mdns;
     struct agent_runtime *runtime = NULL;
@@ -9763,6 +9717,7 @@ int c300x_run(struct c300x_config *config)
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
     memos_init(runtime, config);
+    if (c300x_memo_led_present()) memo_led_fd = c300x_memo_led_watch();
     runtime->callbacks = c300x_callback_queue_create();
     if (runtime->callbacks == NULL) {
         fprintf(stderr, "fatal: callback_queue_init_failed\n");
@@ -9869,6 +9824,8 @@ int c300x_run(struct c300x_config *config)
         }
         shutdown_poll_index = (int)poll_count;
         poll_fds[poll_count++] = (struct pollfd){.fd = shutdown_fd, .events = POLLIN};
+        int memo_led_index = (int)poll_count;
+        poll_fds[poll_count++] = (struct pollfd){.fd = memo_led_fd, .events = POLLIN};
         http_poll_index = (int)poll_count;
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
@@ -10031,6 +9988,10 @@ int c300x_run(struct c300x_config *config)
             runtime_set_wake_reason(runtime, "event");
         }
         /* Drain old descriptors before accept can reuse one of their numbers. */
+        if (poll_fds[memo_led_index].revents & POLLIN) {
+            drain_inotify_events(memo_led_fd);
+            c300x_memo_led_update(&runtime->memo_led, runtime->memo_led.claimed);
+        }
         c300x_http_outputs_handle(&poll_fds[output_poll_index]);
         c300x_http_maintenance_tick(&runtime->maintenance);
         c300x_announce_tick(&runtime->announce);
@@ -10150,6 +10111,8 @@ int c300x_run(struct c300x_config *config)
     }
 
 cleanup:
+    if (memo_led_fd >= 0) close(memo_led_fd);
+    if (runtime) c300x_memo_led_update(&runtime->memo_led, 0);
     if (shutdown_requested && result == 1) {
         result = 0;
     }

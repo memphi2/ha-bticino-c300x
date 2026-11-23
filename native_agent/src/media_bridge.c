@@ -5498,7 +5498,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
     char *request = calloc(1, RTSP_BUFFER_SIZE);
     unsigned char *read_buffer_data = malloc(RTSP_BUFFER_SIZE);
-    rtsp_read_buffer_t read_buffer = {read_buffer_data, RTSP_BUFFER_SIZE, 0, 0, 0};
+    rtsp_read_buffer_t read_buffer = {.data = read_buffer_data, .cap = RTSP_BUFFER_SIZE, .writer = writer};
     unsigned char interleaved[2048];
     char method[16];
     char uri[512];
@@ -5930,6 +5930,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         } else if (strcmp(method, "TEARDOWN") == 0) {
             char headers[128];
             bool unregistered;
+            c300x_rtsp_writer_end_media(writer);
             pthread_mutex_lock(&g_bridge.mutex);
             rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
                 &g_bridge,

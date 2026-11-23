@@ -235,6 +235,10 @@ wake and sound for all three severities: `info`, `warning` and `error`. Set
 safe Home/HA screens, never queued until the next wake, and are supplementary,
 not fire-alarm functionality. A protected screen or call suppresses the effects
 and leaves the notice in HA; a missing GUI connection reports a delivery error.
+For an unread notice without a popup, screen wake, tone or speech, set
+`mode: led` in the notification's nested `data` and omit effect settings.
+This requires an agent that reports memo LED support. Success confirms the
+notice was stored in HA, not that the device LED changed.
 With `mode: speech` or `mode: both` the message is spoken over the device
 loudspeaker instead of the tone; see
 [Speaker and text-to-speech](feature-reference.md#speaker-and-text-to-speech).

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from test_events import (
+    _active_scheduled_calls,
     _active_scheduled_delays,
     _drain_hass_tasks,
     _FakeApi,
@@ -23,6 +24,10 @@ from custom_components.bticino_c300x.data import (
     BticinoC300XRuntimeData,
     C300XConnectionState,
     C300XEventState,
+)
+from custom_components.bticino_c300x.display_notifications import (
+    SHOW_SCHEMA,
+    notifications_for_entry,
 )
 
 
@@ -94,6 +99,74 @@ def test_bridge_failure_retries_without_recreating_subscription(monkeypatch, fai
         finally:
             entry.runtime_data.resources.close()
         assert _active_scheduled_delays() == []
+
+    asyncio.run(run())
+
+
+def test_offline_notice_change_resyncs_with_an_existing_subscription(monkeypatch):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch)
+        try:
+            await worker._register()
+            runtime = entry.runtime_data
+            runtime.connection_state.available = False
+            runtime_manager._async_schedule_display_bridge_notify(hass, entry, notifications=True)
+            assert runtime.resources.display_bridge_registration_pending
+            api.async_notify_display_bridge_event.reset_mock()
+            await worker._register()
+            api.async_notify_display_bridge_event.assert_awaited_once_with(
+                "display_bridge.state", unread=False,
+            )
+            assert not runtime.resources.display_bridge_registration_pending
+            assert len(api.subscription_calls) == 1
+        finally:
+            entry.runtime_data.resources.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("failure", ["startup", "last_dismiss"])
+def test_lost_unread_snapshot_reconciles_without_steady_polling(monkeypatch, failure):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch, no_events=True)
+        runtime = entry.runtime_data
+        hass.loop = asyncio.get_running_loop()
+        def add_job(job, *args):
+            result = job(*args)
+            if asyncio.iscoroutine(result):
+                hass.async_create_task(result)
+
+        hass.add_job = add_job
+        worker.start()
+        try:
+            await _drain_hass_tasks(hass)
+            if failure == "last_dismiss":
+                store = notifications_for_entry(hass, entry)
+                store.show(SHOW_SCHEMA({"notification_id": "a", "title": "Door", "message": "Open"}))
+                await _drain_hass_tasks(hass)
+                api.async_notify_display_bridge_event.assert_awaited_with("notifications", unread=True)
+            assert not _active_scheduled_delays()
+            send = api.async_notify_display_bridge_event
+            send.reset_mock()
+            send.side_effect = C300XAgentApiConnectionError("lost response")
+            if failure == "startup":
+                await runtime_manager._async_configure_display_bridge(hass, entry, api)
+                send.assert_awaited_once_with("display_bridge.state", unread=False)
+            else:
+                store.dismiss("a")
+                await _drain_hass_tasks(hass)
+                send.assert_awaited_once_with("notifications", unread=False)
+            assert runtime.connection_state.available
+            assert runtime.resources.display_bridge_registration_pending
+            assert _active_scheduled_delays() == [events._SUBSCRIPTION_REFRESH_SECONDS]
+            send.side_effect = None
+            timer, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+            await timer.callback()
+            send.assert_awaited_with("display_bridge.state", unread=False)
+            assert send.await_count == 2
+            assert not runtime.resources.display_bridge_registration_pending
+            assert not _active_scheduled_delays()
+        finally:
+            runtime.resources.close()
 
     asyncio.run(run())
 

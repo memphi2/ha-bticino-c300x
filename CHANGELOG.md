@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.9.0 - 2026-11-23
+
+- Direct RTSP viewers on slow WiFi can recover when a short write accepts only
+  part of a video or audio packet. The agent finishes that packet before sending
+  anything else on the connection, without lengthening the wait for other viewers.
+- Notifications can use `mode: led` to light only the station's envelope LED.
+  No popup, screen wake, tone or speech is requested. Clearing a Home Assistant
+  notice does not clear the indicator for an unread station memo.
+- The station's **Settings > Home Assistant** groups HA feedback, SSH, reboot
+  and agent removal. These controls use the local agent, even if HA is offline.
+  The original touch-tone switch stays under **General**.
+- During a ring call, the card can adjust the station's own brightness, contrast
+  and colour saturation. The controls can be hidden in the card editor.
+- Camera quality offers a matching visitor snapshot size when changing stream
+  size, including when returning to the factory setting.
+- The updater reports a writable root filesystem before replacing files, and
+  distinguishes a failed read-only remount from other installation failures.
+  Capabilities and self-test now agree on the detected firmware family.
+
 ## v2.8.3 - 2026-11-23
 
 Fixed:

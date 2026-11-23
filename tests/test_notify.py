@@ -752,6 +752,40 @@ def test_speech_mode_only_speaks_the_message(tmp_path, monkeypatch):
     asyncio.run(run())
 
 
+def test_led_mode_stores_without_effects(tmp_path, monkeypatch):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, entry):
+            entry.runtime_data.capabilities = {"memo_led": True}
+            for conflict in ({"wake_duration": 1}, {"sound_duration": 1},
+                             {"tts_engine": "tts.piper"}, {"language": "de"}):
+                with pytest.raises(ServiceValidationError, match="mode led"):
+                    await send(hass, entry, data={"mode": "led", **conflict})
+            assert notification_payload(entry) == []
+            options = {"mode": "led", "notification_id": "door", "severity": "warning"}
+            await send(hass, entry, data=options)
+            first, = notification_payload(entry)
+            await send(hass, entry, data={**options, "wake_duration": 0, "sound_duration": 0})
+            replacement, = notification_payload(entry)
+            assert first["revision"] != replacement["revision"]
+            assert (replacement["id"], replacement["priority"]) == ("door", "important")
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("capabilities", [{}, {"memo_led": False}, {"memo_led": 1}])
+def test_led_requires_advertised_support_before_storage(tmp_path, monkeypatch, capabilities):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, entry):
+            entry.runtime_data.capabilities.update(capabilities)
+            with pytest.raises(ServiceValidationError, match="memo LED support"):
+                await send(hass, entry, data={"mode": "led"})
+            assert entry.runtime_data.display_notifications is None
+            entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            await send(hass, entry)
+            entry.runtime_data.api.async_send_display_alert.assert_awaited_once()
+    asyncio.run(run())
+
+
 def test_both_mode_shows_the_message_without_tone_and_speaks_it(tmp_path, monkeypatch):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):

@@ -1727,6 +1727,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Kamerabild einstellen",
+      "description": "Originalwerte während eines Videoanrufs lesen oder einen Regler mit seinem Wert setzen.",
+      "fields": {
+        "entry_id": {"name": "Integrationseintrag"},
+        "control": {"name": "Regler"},
+        "value": {"name": "Wert"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "C300X-Türvideo aufnehmen",
       "description": "Nimmt ein kurzes Video in Home Assistant auf: von einem eingehenden Klingelruf oder ohne Klingeln bei freiem Medienkanal.",

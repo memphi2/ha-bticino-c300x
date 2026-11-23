@@ -79,6 +79,79 @@ def test_low_priority_cannot_evict_high_priority():
         store.show(data())
 
 
+def test_unread_events_follow_store_without_listeners_or_read_feedback():
+    async def run():
+        events, jobs = [], []
+        api = SimpleNamespace(async_notify_display_bridge_event=AsyncMock(
+            side_effect=lambda topic, *, unread: events.append((topic, unread)),
+        ))
+        hass = SimpleNamespace(loop=Loop(), add_job=lambda *args: jobs.append(args))
+        entry = SimpleNamespace(
+            entry_id="front", data={}, options={"device_ui_enabled": True},
+            runtime_data=SimpleNamespace(api=api, resources=C300XRuntimeResources()),
+        )
+
+        async def deliver():
+            (job, *args), = jobs
+            jobs.clear()
+            await job(*args)
+            assert not jobs
+
+        await runtime_manager._async_notify_display_configuration(entry, api)
+        store = notifications_for_entry(hass, entry)
+        store.show(data("a"))
+        store.show(data("b", expires_in=3))
+        await deliver()
+        store.dismiss("a")
+        await deliver()
+        hass.loop.now += 3
+        assert not store.has_unread() and not jobs
+        store._expiry.fn()
+        await deliver()
+        store.show(data("c"))
+        await deliver()
+        store.dismiss("c")
+        await deliver()
+        assert events == [
+            ("display_bridge.state", False), ("notifications", True),
+            ("notifications", True), ("notifications", False),
+            ("notifications", True), ("notifications", False),
+        ]
+        store.close()
+
+    asyncio.run(run())
+
+
+def test_reload_snapshot_follows_inflight_notification():
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        events = []
+
+        async def post(topic, *, unread):
+            if topic == "notifications":
+                started.set()
+                await release.wait()
+            events.append((topic, unread))
+
+        api = SimpleNamespace(async_notify_display_bridge_event=post)
+        old = SimpleNamespace(api=api, display_bridge_notify_messages=True,
+                              display_notifications=SimpleNamespace(has_unread=lambda: True))
+        entry = SimpleNamespace(entry_id="front", runtime_data=old)
+        sending = asyncio.create_task(
+            runtime_manager._async_notify_display_bridge_alarm_if_listening(None, entry, old)
+        )
+        await asyncio.wait_for(started.wait(), 2)
+        entry.runtime_data = SimpleNamespace(api=api)
+        reloading = asyncio.create_task(runtime_manager._async_notify_display_configuration(entry, api))
+        await asyncio.sleep(0)
+        assert not events
+        release.set()
+        await asyncio.gather(sending, reloading)
+        assert events == [("notifications", True), ("display_bridge.state", False)]
+
+    asyncio.run(run())
+
+
 def test_unicode_payload_is_bounded_for_native_bridge():
     from custom_components.bticino_c300x.display_notifications import (
         MAX_NOTIFICATION_BYTES,

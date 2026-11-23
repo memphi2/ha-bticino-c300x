@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ from native_agent.test.smoke import (
     CallbackServer,
     api_get,
     api_post,
+    api_request,
     assert_no_callback_type,
     callback_url,
     free_tcp_ports,
@@ -136,6 +138,107 @@ def collection_lab(collection_binary, tmp_path, request):
 
 def collection_data(event, kind):
     return event["data"]["voicemail" if kind == "voicemail" else "memos"]
+
+
+@pytest.mark.parametrize("native_at_shutdown", [False, True])
+def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown):
+    api, ui = free_tcp_ports(2)
+    led = tmp_path / "led_memo"
+    text, voice = tmp_path / "text", tmp_path / "voice"
+    for directory in (led, text, voice):
+        directory.mkdir()
+    brightness, trigger = led / "brightness", led / "trigger"
+    brightness.write_text("0\n")
+    trigger.write_text("[none] timer\n")
+    (led / "max_brightness").write_text("255\n")
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({
+        "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
+        "api": {"token": TOKEN}, "displayBridge": {"enabled": True},
+        "events": {"udp": {"enabled": False}}, "mdns": {"enabled": False},
+        "video": {"enabled": False}, "mqtt": {"enabled": False},
+        "activations": {"autoDiscover": False},
+        "memos": {"enabled": False, "watch": False, "textRoot": str(text), "voiceRoot": str(voice)},
+    }))
+    path = "/api/v1/display-bridge/events"
+
+    def event(unread, topic="notifications", status=202):
+        return api_post(api, path, {"topic": topic, "unread": unread}, expected_status=status)
+
+    def expect(level):
+        deadline = time.monotonic() + 2
+        while brightness.read_text().strip() != str(level):
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+
+    proc = subprocess.Popen([str(collection_binary), "--config", str(config)],
+                            cwd=tmp_path, env={**os.environ, "C300X_LED_CLASS_ROOT": str(tmp_path)})
+    try:
+        wait_for_health(api)
+        assert api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"] is True
+        led.rename(tmp_path / "absent")
+        assert api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"] is False
+        (tmp_path / "absent").rename(led)
+        api_post(api, "/api/v1/display-bridge", {
+            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
+        })
+        api_request(api, "POST", path, {"topic": "notifications", "unread": True},
+                    authorized=False, expected_status=401)
+        event("true", status=400)
+        event(True, topic="alarm", status=400)
+        assert brightness.read_text() == "0\n"
+        event(True, topic="display_bridge.state")
+        expect(255)
+        stamp = brightness.stat().st_mtime_ns
+        event(True)
+        api_post(api, path, {"topic": "notifications"}, expected_status=202)
+        assert brightness.stat().st_mtime_ns == stamp
+
+        # Firmware writes its own off edge after the native memo change.
+        write_memo(text, "memo_1", kind="text", read=False, unix_time=1710000000)
+        brightness.write_text("0\n")
+        expect(255)
+        event(False)
+        expect(255)
+        shutil.rmtree(text / "memo_1")
+        brightness.write_text("0\n")
+        event(False)
+        expect(0)
+
+        # Without an HA claim the vendor updater owns both edges.
+        for value in ("255\n", "0\n"):
+            brightness.write_text(value)
+            event(False)
+            assert brightness.read_text() == value
+
+        trigger.write_text("none [timer]\n")
+        event(True)
+        assert brightness.read_text() == "0\n"
+        assert trigger.read_text() == "none [timer]\n"
+        trigger.write_text("[none] timer\n")
+        expect(255)
+        # Do not clear until the native watcher sees conclusive metadata.
+        item = voice / "memo_1"
+        item.mkdir()
+        event(False)
+        expect(255)
+        (item / "msg_info.ini").write_text("[Message Information]\nRead=1\n")
+        expect(0)
+        event(True)
+        api_post(api, "/api/v1/display-bridge", {"enabled": False})
+        expect(0)
+        api_post(api, "/api/v1/display-bridge", {
+            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
+        })
+        event(True)
+        if native_at_shutdown:
+            (item / "msg_info.ini").write_text("[Message Information]\nRead=0\n")
+        expect(255)
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+    assert proc.returncode == 0
+    expect(255 if native_at_shutdown else 0)
 
 
 @pytest.mark.parametrize("kind", ["voicemail", "text", "voice"])

@@ -169,6 +169,25 @@ unlock_door:
       selector:
         text:
 
+camera_picture:
+  name: Adjust camera picture
+  description: Read the three original picture controls during a video call. Supply a control and a value together to change one setting.
+  fields:
+    entry_id:
+      selector:
+        text:
+    control:
+      selector:
+        select:
+          options: [brightness, contrast, saturation]
+    value:
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 10
+          unit_of_measurement: "%"
+
 activate_doorbell_video:
   name: Activate C300X doorbell video
   description: Start or renew the C300X doorbell video session through the local device agent. Use this from automations to pre-warm the camera when the doorbell rings.

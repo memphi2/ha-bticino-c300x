@@ -1597,7 +1597,7 @@ or `"audio_codec_restore_failed"`.
 ## Loopback UI API
 
 The UI listener is intended for local QML pages. Routes accept only GET, except
-the guarded POST routes `/ui/preferences` and `/ui/touch-tone/state`. Routes forwarding
+the guarded POST routes for preferences, touch-tone reports and station maintenance. Routes forwarding
 requests to Home Assistant require an active display bridge.
 
 | Method | Path | Purpose |
@@ -1611,6 +1611,10 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
+| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
+| `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
+| `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
 | `GET` | `/ui/state` | Display bridge state. |
@@ -1622,6 +1626,12 @@ requests to Home Assistant require an active display bridge.
 Home Assistant proxy endpoints use the display bridge and shared secret
 configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
+
+Station maintenance works without HA. It requires the local maintenance and
+per-action permissions, no browser Origin, the `X-C300X-UI: settings-v1`
+header, and a loopback client socket owned by the stock GUI executable. The
+header alone is not authorization. A scheduled reboot or removal returns 202:
+it does not certify that the reboot or the restoration has already completed.
 
 `GET /ui/alerts/next` requires loopback and `X-C300X-GUI: alerts-v1`, with no
 `Origin` or request body. The optional exact query `protected=1` reports a
@@ -1659,6 +1669,14 @@ only updates the switch after confirmation; an ambiguous timeout requires a
 fresh read before another write.
 
 The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
+
+A GUI listener may advertise `picture=1` on this same sleeping connection.
+Authenticated `GET /api/v1/video/picture` requests all three stock call
+properties; POST accepts one `control` (brightness, contrast or saturation)
+and a percentage `value` (0 through 100 in steps of 10). The result reports
+the GUI object's values, not an independent hardware measurement. Outside
+a video call, or without an updated connected GUI, no value is applied.
+No additional idle poll, recording, config write or media restart is required.
 It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight
 is allowed. One connection waits indefinitely without periodic device reads.
 An authorized API ringer request returns `{ok, id, muted, expires}` to that

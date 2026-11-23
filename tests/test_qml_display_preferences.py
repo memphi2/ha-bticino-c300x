@@ -7,13 +7,15 @@ import subprocess
 import pytest
 from test_qml_patch_script import (
     ORIGINAL_GENERAL_SETTINGS,
+    ORIGINAL_SETTINGS,
     ROOT,
     _run_qml_patch,
     _run_qml_patch_raw,
     _write_original_gui,
 )
 
-SETTINGS = "Components/Settings/GeneralsChoice.qml"
+GENERAL = "Components/Settings/GeneralsChoice.qml"
+SETTINGS = "Settings.qml"
 
 
 def test_preferences_production_runtime():
@@ -124,11 +126,12 @@ def test_disabling_optional_display_restores_settings_but_keeps_media_hooks(tmp_
     gui.mkdir()
     _write_original_gui(gui)
     _run_qml_patch(tmp_path, gui, backup, "apply")
-    assert "c300xFeedbackSetting" in (gui / SETTINGS).read_text()
+    assert (gui / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert 'sourceUrl: "C300XSettings.qml"' in (gui / SETTINGS).read_text()
     result = _run_qml_patch(tmp_path, gui, backup, "restore")
     assert result["patched"] is False
     assert result["core_patched"] is True
-    assert (gui / SETTINGS).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert (gui / SETTINGS).read_text() == ORIGINAL_SETTINGS
 
 
 def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
@@ -144,12 +147,10 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
     assert (backup / SETTINGS).stat().st_mtime_ns == original_time
     assert stat.S_IMODE((backup / SETTINGS).stat().st_mode) == 0o640
     patched = settings.read_text()
-    assert patched.count("id: c300xFeedbackSetting") == 1
-    assert "anchors.top: beepButton.bottom" in patched
-    assert "anchors.topMargin: 8" in patched
-    assert "        spacing: 4" in patched
-    assert "checked: global.beepEnabled" in patched
-    assert "onTouched: global.beepEnabled = checked" in patched
+    assert patched.count("id: c300xSettings") == 1
+    assert "anchors.top: column.bottom" in patched
+    assert "property Item tab: c300xSettings" in patched
+    assert (gui / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
     assert "Qt.createQmlObject" not in (gui / "MainApp.qml").read_text()
     assert "property variant request:" not in (gui / "MainApp.qml").read_text()
     assert _run_qml_patch(tmp_path, gui, backup, "apply")["changed_files"] == 0
@@ -161,65 +162,28 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
 
 
 @pytest.mark.parametrize("broken", [
-    "onTouched: global.beepEnabled = checked", "id: beepButton", "anchors.topMargin: 32",
-    "anchors.topMargin: parent.height / 100 * 4", "spacing: 6", "id: space", "width: 50",
+    "spacing: 6", "    ExclusiveGroup {", "configurationChoice", 'QT_TR_NOOP("Configuration")',
 ])
 def test_unknown_settings_layout_aborts_before_touching_gui(tmp_path, broken):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
     _write_original_gui(gui)
-    (gui / SETTINGS).write_text(ORIGINAL_GENERAL_SETTINGS.replace(broken, "// changed vendor layout"))
+    (gui / SETTINGS).write_text(ORIGINAL_SETTINGS.replace(broken, "// changed vendor layout"))
     before = {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()}
     assert _run_qml_patch_raw(tmp_path, gui, backup, "apply").returncode != 0
     assert {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()} == before
 
 
-def test_settings_fit_original_800_by_480_screen(tmp_path):
+def test_legacy_feedback_row_is_removed_on_upgrade(tmp_path):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
     _write_original_gui(gui)
+    (backup / GENERAL).parent.mkdir(parents=True)
+    (backup / GENERAL).write_text(ORIGINAL_GENERAL_SETTINGS)
+    (gui / GENERAL).write_text(ORIGINAL_GENERAL_SETTINGS + "// c300xFeedbackSetting")
     _run_qml_patch(tmp_path, gui, backup, "apply")
-    source = (gui / SETTINGS).read_text()
-    assert "    anchors.topMargin: 8" in source
-    assert "        spacing: 4" in source
-    tone = source.split("id: beepButton", 1)[1].split("id: c300xFeedbackSetting", 1)[0]
-    feedback = source.split("id: c300xFeedbackSetting", 1)[1]
-    assert "anchors.topMargin: 8" in tone
-    assert "anchors.topMargin: 6" in feedback
-    assert "height: 44" in feedback
-    # Stock Settings.qml header/section and SVG button dimensions.
-    section_top = 78 + 480 * 0.05
-    button_column_height = 5 * 50 + 4 * 4
-    feedback_bottom = section_top + 8 + button_column_height + 8 + 34.239 + 6 + 44
-    assert feedback_bottom <= 480 - 10
-
-
-def test_settings_rows_share_the_button_column_edges(tmp_path):
-    gui, backup = tmp_path / "gui", tmp_path / "backup"
-    gui.mkdir()
-    _write_original_gui(gui)
-    _run_qml_patch(tmp_path, gui, backup, "apply")
-    source = (gui / SETTINGS).read_text()
-    tone = source.split("id: beepButton", 1)[1].split("id: c300xFeedbackSetting", 1)[0]
-    feedback = source.split("id: c300xFeedbackSetting", 1)[1]
-    # The vendor row is centred as a group; widening its spacer makes the row
-    # column-wide less the 8 px inset the buttons above use on both sides
-    # (12 px row spacing twice + 16 px inset = 40).
-    assert "width: 50" not in tone
-    assert (
-        "width: Math.max(0, buttonColumn.width - 40 - textBeep.width - selectorOnOff.width)"
-        in tone
-    )
-    assert "anchors.horizontalCenter: parent.horizontalCenter" in tone
-    # The added row is column-wide with the same inset: label left, switch right.
-    assert "width: buttonColumn.width" in feedback
-    label = feedback.split("UbuntuLightText {", 1)[1].split("}", 1)[0]
-    switch = feedback.split("id: c300xFeedbackSwitch", 1)[1].split("style:", 1)[0]
-    assert "anchors.left: parent.left" in label
-    assert "anchors.leftMargin: 8" in label
-    assert "horizontalAlignment: Text.AlignLeft" in label
-    assert "anchors.right: parent.right" in switch
-    assert "anchors.rightMargin: 8" in switch
+    assert (gui / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert (backup / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
 
 
 def test_missing_original_settings_backup_blocks_restore_and_rebackup(tmp_path):
@@ -232,7 +196,7 @@ def test_missing_original_settings_backup_blocks_restore_and_rebackup(tmp_path):
     for action in ("apply", "restore", "restore-all"):
         result = _run_qml_patch_raw(tmp_path, gui, backup, action)
         assert result.returncode != 0
-        assert "GeneralsChoice.qml" in result.stderr
+        assert "Settings.qml" in result.stderr
         assert (gui / SETTINGS).read_bytes() == before
         assert not (backup / SETTINGS).exists()
 
@@ -245,37 +209,26 @@ def test_older_feature_patch_without_settings_backup_remains_restorable(tmp_path
     (gui / SETTINGS).write_bytes((backup / SETTINGS).read_bytes())
     (backup / SETTINGS).unlink()
     _run_qml_patch(tmp_path, gui, backup, "restore-all")
-    assert (gui / SETTINGS).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert (gui / SETTINGS).read_text() == ORIGINAL_SETTINGS
 
 
-def test_settings_are_inert_when_older_restore_removes_ha_helpers(tmp_path):
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("node is not installed")
+def test_local_maintenance_transport():
+    subprocess.run(["node", str(ROOT / "tests/qml/maintenance.cjs")], check=True)
+
+
+@pytest.mark.parametrize("target", ["Settings.qml", "js/c300x_maintenance.js"])
+def test_settings_restore_rejects_untrusted_backup(tmp_path, target):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
     _write_original_gui(gui)
     _run_qml_patch(tmp_path, gui, backup, "apply")
-    source = (gui / SETTINGS).read_text()
-    assert not any("js/" in line for line in source.splitlines() if line.startswith("import "))
-    result = subprocess.run([node, "-e", """
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
-const source = fs.readFileSync(process.argv[1], 'utf8').split('id: c300xFeedbackSetting')[1];
-const ctx = vm.createContext({c300xFeedbackSetting: {visible: false}});
-function expression(name) {
-    return source.match(new RegExp('^ +'+ name + ': (.+)$', 'm'))[1];
-}
-assert.equal(vm.runInContext(expression('visible'), ctx), false);
-assert.equal(vm.runInContext(expression('text'), ctx), '');
-assert.equal(vm.runInContext(expression('enabled'), ctx), false);
-assert.equal(vm.runInContext(expression('checked'), ctx), true);
-ctx.c300xDisplayPreferences = {ready: true, busy: false, feedbackEnabled: false, label: 'HA feedback'};
-ctx.c300xFeedbackSetting.visible = vm.runInContext(expression('visible'), ctx);
-assert.equal(ctx.c300xFeedbackSetting.visible, true);
-assert.equal(vm.runInContext(expression('text'), ctx), 'HA feedback');
-assert.equal(vm.runInContext(expression('enabled'), ctx), true);
-assert.equal(vm.runInContext(expression('checked'), ctx), false);
-""", str(gui / SETTINGS)], capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stdout + result.stderr
+    victim = tmp_path / "external"
+    victim.write_bytes(b"unchanged")
+    link = backup / target
+    link.parent.mkdir(exist_ok=True)
+    link.unlink(missing_ok=True)
+    link.symlink_to(victim)
+    for action in ("apply", "restore", "restore-all"):
+        assert _run_qml_patch_raw(tmp_path, gui, backup, action).returncode != 0
+        assert victim.read_bytes() == b"unchanged"
+        assert "c300xSettings" in (gui / SETTINGS).read_text()

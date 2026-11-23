@@ -50,6 +50,7 @@ int main(void)
     assert(short_body[sizeof(short_body) - 1] == '\0');
     for (int maintenance = 0; maintenance <= 1; maintenance++) {
         context.maintenance_supported = maintenance;
+        context.memo_led_present = !maintenance;
         context.https_callbacks = maintenance;
         for (int pcmu = 0; pcmu <= 1; pcmu++) {
             context.device_codec_pcmu = pcmu;

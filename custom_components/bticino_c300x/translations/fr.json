@@ -1727,6 +1727,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Régler l’image",
+      "description": "Lire les réglages pendant un appel vidéo ou modifier une valeur.",
+      "fields": {
+        "entry_id": {"name": "Entrée"},
+        "control": {"name": "Réglage"},
+        "value": {"name": "Valeur"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "Enregistrer la vidéo C300X",
       "description": "Enregistre une courte vidéo dans Home Assistant depuis un appel entrant ou à la demande lorsque les médias sont libres.",

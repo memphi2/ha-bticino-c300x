@@ -2,11 +2,32 @@
 
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_picture_controls_with_firmware_qt4() -> None:
+    from scripts.setup_qt4_runtime import probe_command, runtime_paths
+
+    paths = runtime_paths()
+    if paths is None:
+        pytest.skip("Local firmware Qt 4 runtime not configured")
+    # The firmware sysroot redirects /tmp, making host-side imports there invisible.
+    with tempfile.TemporaryDirectory(dir="/var/tmp") as imports:
+        module = Path(imports) / "BtClass"
+        module.mkdir()
+        (module / "qmldir").write_text("module BtClass\nPlaceholder 1.0 Placeholder.qml\n")
+        (module / "Placeholder.qml").write_text("import QtQuick 1.1\nItem {}\n")
+        run = subprocess.run(
+            probe_command([*paths[:3], imports], ROOT / "tests/qml/picture_controls_qt4.qml"),
+            capture_output=True, text=True, timeout=15, check=True,
+        )
+    assert "QT4_COMPONENT_CREATED" in run.stdout
+    assert "QT4_PICTURE_CONTROLS_PASS" in run.stdout + run.stderr
 
 
 def test_qml_ringer_uses_stock_state_calls_and_rejects_expired_commands() -> None:
@@ -47,7 +68,7 @@ context.waitForCommand();
 context.waitForCommand();
 assert.equal(requests.length, 1); // One sleeping request, not duplicate polling.
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-assert.equal(requests[0].url, 'http://127.0.0.1:' + config.listen.uiPort + '/ui/ringer/next');
+assert.equal(requests[0].url, 'http://127.0.0.1:' + config.listen.uiPort + '/ui/ringer/next?picture=1');
 function command(muted, overrides = {}) {
     return Object.assign({ok: true, id: 'a'.repeat(32), muted, expires: Date.now() + 5000}, overrides);
 }

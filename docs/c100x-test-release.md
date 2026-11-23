@@ -31,7 +31,7 @@ operation. It is not a display, routing migration, camera or audio trial.
   migrate Companion/MQTT, activate streams, change codecs or operate a door.
 
 The issue #51 field report describes Companion installed and non-stock SIP
-routes. SIP users come from official app provisioning; Companion's presence
+routes. SIP users come from manufacturer app provisioning; Companion's presence
 does not establish that it created those users. Preserve accounts, credentials,
 routes and existing Companion configuration. The four reported tool/service/hash
 questions are cleared offline and are **not** outstanding prerequisites. Exact

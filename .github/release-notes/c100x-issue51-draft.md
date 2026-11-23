@@ -15,7 +15,7 @@ inside the ZIP. Publishing the `c100x_1.5.8` source branch is not a release or
 permission to use a source archive in place of the verified attachment.
 
 This first test covers C100X agent installation/startup, authenticated status,
-identity and discovery, while preserving the official app's provisioned accounts
+identity and discovery, while preserving the manufacturer app's provisioned accounts
 and existing Companion configuration. Routing/media changes and MQTT migration
 are not part of first-test acceptance.
 

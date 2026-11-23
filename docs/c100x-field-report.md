@@ -8,7 +8,7 @@ developer. Nothing from this branch was installed on that device.
 ## Evidence And Limits
 
 - The reported device is C100X Door Entry 1.5.8, ARMv7, with Companion already
-  running. Official app/cloud deployment provisions vendor SIP accounts, as
+  running. Manufacturer app/cloud deployment provisions vendor SIP accounts, as
   clarified by the maintainer and supported by the original firmware below.
   The comment explicitly attributes both `c100x` and `companion` to Companion,
   but that attribution is not independently established and must not be adopted

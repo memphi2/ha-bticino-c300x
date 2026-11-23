@@ -704,3 +704,17 @@ def test_camera_quality_english_translation_matches_base_strings() -> None:
     english = _load_json(TRANSLATIONS / "en.json")["options"]["step"]["camera_quality"]
     assert base == english
 
+
+
+def test_every_flow_error_message_belongs_to_an_error_the_flows_report() -> None:
+    """A message for an error no flow reports is dead text that drifts unnoticed."""
+
+    source = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
+    strings = json.loads((INTEGRATION / "strings.json").read_text(encoding="utf-8"))
+    unused = sorted(
+        f"{section}.error.{key}"
+        for section in ("config", "options")
+        for key in strings[section].get("error", {})
+        if f'"{key}"' not in source
+    )
+    assert unused == []

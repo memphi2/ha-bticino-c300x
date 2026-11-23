@@ -1113,7 +1113,6 @@
     },
     "error": {
       "invalid_action_map": "Le JSON de la liste autorisée d'actions est invalide.",
-      "invalid_actions": "Le JSON de la liste autorisée d'actions est invalide.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",

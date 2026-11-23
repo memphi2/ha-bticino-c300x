@@ -9,6 +9,7 @@ struct c300x_capabilities_context {
     const char *bundle_hash;
     int maintenance_supported;
     int memo_led_present;
+    int picture_supported;
     int activations_count;
     int device_codec_pcmu;
     int camera_resolution_fixed;

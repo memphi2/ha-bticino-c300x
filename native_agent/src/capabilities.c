@@ -49,7 +49,7 @@ int c300x_capabilities_json(
         "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
-        "\"camera_picture\":{\"supported\":true},"
+        "\"camera_picture\":{\"supported\":%s},"
         "\"https_callbacks\":%s,"
         "\"https_callbacks_configurable\":true,"
         "\"https_callbacks_enabled\":%s,"
@@ -84,6 +84,7 @@ int c300x_capabilities_json(
         device_id_json,
         device_model,
         device_firmware,
+        context->picture_supported ? "true" : "false",
         context->https_callbacks ? "true" : "false",
         context->https_callbacks_enabled ? "true" : "false",
         config->https_callbacks_enabled ? "true" : "false",

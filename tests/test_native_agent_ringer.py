@@ -199,6 +199,39 @@ def test_picture_controls_use_gui_readback_without_affecting_mute(lab: Lab) -> N
     assert lab.device.frames == []
 
 
+def test_picture_support_tracks_gui_protocol_not_call_state(lab: Lab) -> None:
+    def assert_support(expected: bool) -> None:
+        caps = api_get(lab.api_port, "/api/v1/capabilities")["capabilities"]
+        status = api_get(lab.api_port, "/api/v1/video/doorbell/status")
+        assert caps["camera_picture"]["supported"] is expected
+        assert status["bridge"]["picture_controls_supported"] is expected
+        assert status["window_available"] is False
+
+    assert_support(False)
+    gui = lab.request(lab.ui_port, GUI_PATH + "?picture=1", headers={"X-C300X-GUI": "ringer-v1"})
+    api_get(lab.ui_port, "/ui/events/status", authorized=False)
+    assert_support(True)
+    # Even with no call, a read goes to the patched GUI. Its negative call-state
+    # reply must not turn off the capability or require another capability probe.
+    path = "/api/v1/video/picture"
+    headers = {"Authorization": "Bearer " + TOKEN}
+    pending = lab.request(lab.api_port, path, headers=headers)
+    command = response(gui)
+    assert_support(True)
+    gui = lab.request(lab.ui_port, GUI_PATH + "?picture=1&picture_id=" + command["id"],
+                      headers={"X-C300X-GUI": "ringer-v1"})
+    assert response(pending, 409)["error"] == "picture_controls_unavailable"
+    assert_support(True)
+    gui.close()
+    deadline = time.monotonic() + 2
+    while api_get(lab.api_port, "/api/v1/diagnostics")["ringer_gui_ready"]:
+        assert time.monotonic() < deadline
+    assert_support(False)
+    lab.next()  # Old core GUI reconnects without picture=1.
+    assert_support(False)
+    assert response(lab.request(lab.api_port, path, headers=headers), 503)["error"] == "picture_gui_unavailable"
+
+
 def test_idle_gui_does_not_poll_write_or_wake_the_agent(lab: Lab) -> None:
     lab.next()
     before = api_get(lab.api_port, "/api/v1/diagnostics")

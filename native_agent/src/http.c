@@ -5194,6 +5194,7 @@ static void api_capabilities(
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
         .memo_led_present = c300x_memo_led_present(),
+        .picture_supported = runtime != NULL && c300x_gui_supports_picture(&runtime->ringer_control),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
         .maintenance_supported = maintenance_auth_available(config),
@@ -5526,6 +5527,7 @@ static void handle_doorbell_video_get(
         "\"audio_stream_path\":\"%s\","
         "\"recorder_stream_path\":\"%s\","
         "\"bridge\":{"
+        "\"picture_controls_supported\":%s,"
         "\"enabled\":%s,"
         "\"running\":%s,"
         "\"bridge_running\":%s,"
@@ -5593,6 +5595,7 @@ static void handle_doorbell_video_get(
         stream_path,
         audio_stream_path,
         recorder_stream_path,
+        runtime != NULL && c300x_gui_supports_picture(&runtime->ringer_control) ? "true" : "false",
         config->video_enabled ? "true" : "false",
         running ? "true" : "false",
         bridge_running ? "true" : "false",

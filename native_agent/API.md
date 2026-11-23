@@ -1671,6 +1671,10 @@ fresh read before another write.
 The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
 
 A GUI listener may advertise `picture=1` on this same sleeping connection.
+Both `camera_picture.supported` in capabilities and `bridge.picture_controls_supported`
+in doorbell video status reflect that handshake, including while idle or handling a
+command. An absent or legacy GUI does not advertise support. HA uses its existing
+video status reads to reflect GUI changes without reloading the integration.
 Authenticated `GET /api/v1/video/picture` requests all three stock call
 properties; POST accepts one `control` (brightness, contrast or saturation)
 and a percentage `value` (0 through 100 in steps of 10). The result reports

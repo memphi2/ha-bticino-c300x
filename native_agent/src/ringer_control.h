@@ -34,6 +34,7 @@ struct c300x_ringer_control {
 void c300x_gui_picture_request(struct c300x_ringer_control *control, int fd, struct picture_command command);
 
 void c300x_ringer_control_init(struct c300x_ringer_control *control);
+int c300x_gui_supports_picture(const struct c300x_ringer_control *control);
 /* Parse a GUI query after caller authorization; zero retains the connection. */
 int c300x_ringer_control_next(
     struct c300x_ringer_control *control, int fd, const char *query,

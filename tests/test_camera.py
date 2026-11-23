@@ -520,6 +520,17 @@ def test_doorbell_camera_exposes_native_webrtc_offer_handler() -> None:
     assert "async_on_webrtc_candidate" in C300XDoorbellCamera.__dict__
 
 
+def test_picture_support_follows_existing_video_status_without_reload() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    for bridge, expected in [
+        ({}, False), ({"picture_controls_supported": True}, True),
+        ({"picture_controls_supported": False}, False), ({"picture_controls_supported": 1}, False),
+    ]:
+        camera._apply_status({"window_available": False, "bridge": bridge})
+        assert camera.extra_state_attributes["picture_controls_supported"] is expected
+
+
 def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     entry = _FakeEntry()
     entry.runtime_data.device_user_status = {

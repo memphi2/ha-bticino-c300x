@@ -55,6 +55,12 @@ void c300x_ringer_control_init(struct c300x_ringer_control *control)
     control->client_fd = -1;
 }
 
+int c300x_gui_supports_picture(const struct c300x_ringer_control *control)
+{
+    /* A dispatched command temporarily owns the slot instead of the sleeping GUI. */
+    return control->picture_supported && (control->gui_fd >= 0 || control->client_fd >= 0);
+}
+
 int c300x_ringer_control_timeout_ms(const struct c300x_ringer_control *control)
 {
     long long remaining;

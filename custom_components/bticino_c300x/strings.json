@@ -884,7 +884,7 @@
           "init": "Back"
         },
         "menu_option_descriptions": {
-          "dashboard": "Home Assistant pages on the display on or off, page navigation, behaviour after an action and allowed actions.",
+          "dashboard": "Home Assistant pages on the display on or off, page navigation, the page on screen standby and allowed actions.",
           "dashboard_page_list": "Weather, and which entities appear on which page and in which order.",
           "dashboard_entity_display": "Size, name and secondary line of each tile.",
           "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",

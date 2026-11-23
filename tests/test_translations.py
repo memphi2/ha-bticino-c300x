@@ -609,11 +609,17 @@ def test_the_display_menu_entry_names_only_what_its_form_offers() -> None:
     """The start page buttons are no setting any more; the page navigation is."""
 
     root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
-    removed = ("home page buttons", "Startseiten-Buttons", "boutons d'accueil", "pulsanti della pagina iniziale")
+    removed = (
+        "home page buttons", "Startseiten-Buttons", "boutons d'accueil", "pulsanti della pagina iniziale",
+        # The stay-open option acts on the screen standby, not after an action.
+        "after an action", "nach einer Aktion", "après une action", "dopo un'azione",
+    )
+    standby = {"de": "Standby", "fr": "veille", "it": "standby"}
     for name in ("strings.json", "translations/en.json", "translations/de.json", "translations/fr.json", "translations/it.json"):
         options = json.loads((root / name).read_text(encoding="utf-8"))["options"]["step"]
         text = options["display"]["menu_option_descriptions"]["dashboard"]
         assert not any(word in text for word in removed), name
+        assert standby.get(Path(name).stem, "standby") in text, name
         assert options["dashboard"]["data"]["dashboard_navigation"].lower() in text.lower(), name
 
 

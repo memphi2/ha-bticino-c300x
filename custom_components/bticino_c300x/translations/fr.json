@@ -884,7 +884,7 @@
           "init": "Retour"
         },
         "menu_option_descriptions": {
-          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, page pendant la veille de l'écran et actions autorisées.",
           "dashboard_page_list": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
           "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",

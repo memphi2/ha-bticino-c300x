@@ -884,7 +884,7 @@
           "init": "Indietro"
         },
         "menu_option_descriptions": {
-          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, navigazione tra le pagine, comportamento dopo un'azione e azioni consentite.",
+          "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, navigazione tra le pagine, pagina durante lo standby dello schermo e azioni consentite.",
           "dashboard_page_list": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
           "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro.",
           "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",

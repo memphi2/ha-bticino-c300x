@@ -884,7 +884,7 @@
           "init": "Zurück"
         },
         "menu_option_descriptions": {
-          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Verhalten nach einer Aktion und erlaubte Aktionen.",
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Seite im Bildschirm-Standby und erlaubte Aktionen.",
           "dashboard_page_list": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",

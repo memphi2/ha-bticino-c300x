@@ -105,10 +105,16 @@ static int open_root(const char *root, int watch)
         snprintf(child_path, sizeof(child_path), "/proc/self/fd/%d/%s", fd, name);
         uint32_t mask = IN_MOVE_SELF | IN_DELETE_SELF | IN_ONLYDIR | IN_DONT_FOLLOW | IN_MASK_ADD;
         int wd = inotify_add_watch(watch, child_path, mask);
-        if (wd < 0 && watch_dir(watch, fd, 0))
+        int absent = 0;
+        if (wd < 0 && watch_dir(watch, fd, 0)) {
             wd = inotify_add_watch(watch, child_path, mask);
+            absent = wd < 0 && errno == ENOENT;
+        }
         int child = wd < 0 ? -1 : openat(fd, name, DIR_FLAGS);
         close(fd);
+        /* A store not created yet holds no memo; the watched parent reports
+         * its creation. */
+        if (absent) return -2;
         fd = child;
     }
     return fd;
@@ -118,6 +124,7 @@ static int scan_root(const char *root, int watch)
 {
     if (!*root) return -1;
     int fd = open_root(root, watch);
+    if (fd == -2) return 0;
     if (fd < 0) return -1;
     int reliable = watch_dir(watch, fd, 1);
     DIR *dir = fdopendir(fd);

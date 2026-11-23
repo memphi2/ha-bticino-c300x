@@ -56,3 +56,36 @@ def test_bounded_regular_metadata(scanner, tmp_path, fault):
     if fault == "valid":
         info.write_text(data.replace("Read=1", "Read=0"))
         assert result() == 1
+
+
+@pytest.mark.parametrize("missing", ["text", "voice", "both", "ancestor"])
+def test_a_memo_store_that_does_not_exist_holds_no_unread_memo(scanner, tmp_path, missing):
+    """A store the station has not created yet cannot hold an unread memo,
+    so the scan must say "none" and let the LED claim go, not "unknown"."""
+
+    store = tmp_path / "stores"
+    text, voice = store / "text", store / "voice"
+    if missing in ("text", "both"):
+        voice.mkdir(parents=True)
+    if missing in ("voice", "both"):
+        text.mkdir(parents=True)
+    if missing == "both":
+        voice.rmdir()
+    if missing == "ancestor":
+        text = tmp_path / "absent" / "deeper" / "text"
+        voice.mkdir(parents=True)
+
+    def result():
+        return int(subprocess.check_output([scanner, text, voice], timeout=4))
+
+    assert result() == 0
+    entry = (text if missing in ("text", "both", "ancestor") else voice) / "memo_1"
+    entry.mkdir(parents=True)
+    (entry / "msg_info.ini").write_text("[Message Information]\nRead=0\n")
+    assert result() == 1
+
+
+def test_an_unset_memo_store_stays_unknown(scanner, tmp_path):
+    voice = tmp_path / "voice"
+    voice.mkdir()
+    assert int(subprocess.check_output([scanner, "", voice], timeout=4)) == -1

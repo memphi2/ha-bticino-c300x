@@ -9,6 +9,7 @@ import subprocess
 import pytest
 from c100x_activation_lab import activation_binary as activation_binary
 from c100x_activation_lab import agent_lab, gui_peer
+from test_c100x_boot_trial import LATER_BOOT, reboot
 from test_c100x_bundle_delivery import payload
 from test_c100x_display_transaction import (
     advance_source,
@@ -120,12 +121,13 @@ def test_readonly_failure_after_trial_rollback_never_reinstalls_candidate(tree, 
     assert list((tree[0] / "backup").glob("trial-history.*/snapshot/main.qml"))
 
 
-@pytest.mark.parametrize("damage", [None, "missing_payload", "symlink_payload", "tampered_journal"])
-def test_service_start_recovers_pending_trial_before_starting_agent(tree, damage):
-    run(tree, "prepare")
+FURTHER_BOOT = "2b8e4f6a-0c1d-4e2f-a3b4-c5d6e7f80912"
+
+
+def service_start(tree, damage=None):
     root, _, _, env = tree
     agent = root / "agent"
-    agent.mkdir()
+    agent.mkdir(exist_ok=True)
     binary = agent / "c300x-agent-native"
     binary.write_text('#!/bin/sh\nexit 99\n')
     binary.chmod(0o700)
@@ -145,15 +147,54 @@ def test_service_start_recovers_pending_trial_before_starting_agent(tree, damage
     settings = root / "agent.env"
     settings.write_text("PATH=" + shlex.quote(env["PATH"]) + "\n")
     env.update(C300X_AGENT_DIR=str(agent), C300X_AGENT_ENV=str(settings), START_LOG=str(root / "start.log"))
+    (root / "start.log").unlink(missing_ok=True)
     result = subprocess.run(["sh", str(ROOT / "custom_components/bticino_c300x/device_agent/init/c300x-native-agent"),
                              "start"], env=env, capture_output=True, text=True, timeout=20)
-    assert (result.returncode == 0) == (damage is None), result.stdout + result.stderr
-    assert (root / "start.log").exists() == (damage is None)
+    started = (root / "start.log").exists()
+    assert (result.returncode == 0) == started, result.stdout + result.stderr
     assert binary.exists() and (root / "backup/main.qml").exists()
-    if damage is None:
-        assert_original(tree)
+    return started
+
+
+@pytest.mark.parametrize("sequence", ["same_boot", "trial_boot", "restart_in_trial_boot"])
+def test_service_start_keeps_the_trial_in_its_own_boots(tree, sequence):
+    run(tree, "prepare")
+    trial = {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    if sequence != "same_boot":
+        reboot(tree)
+    assert service_start(tree)
+    if sequence == "restart_in_trial_boot":
+        assert service_start(tree)
+    assert (tree[0] / "backup/pending").is_dir()
+    assert trial == {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    mark = tree[0] / "backup/pending.trial-boot"
+    assert mark.exists() == (sequence != "same_boot")
+
+
+@pytest.mark.parametrize("sequence", ["further_boot", "no_mark", "bad_boot_id"])
+def test_service_start_rolls_the_trial_back_after_its_trial_boot(tree, sequence):
+    run(tree, "prepare")
+    if sequence == "further_boot":
+        reboot(tree)
+        assert service_start(tree)
+        reboot(tree, FURTHER_BOOT)
+    elif sequence == "no_mark":
+        (tree[0] / "backup/pending.prepare-boot").unlink()
     else:
-        assert (root / "backup/pending").is_dir()
+        reboot(tree, "not-a-boot-id")
+    assert service_start(tree)
+    assert_original(tree)
+    assert not (tree[0] / "backup/pending").exists()
+
+
+@pytest.mark.parametrize("damage", ["missing_payload", "symlink_payload", "tampered_journal"])
+def test_service_start_fails_closed_when_the_boot_check_fails(tree, damage):
+    run(tree, "prepare")
+    # Only a rollback authenticates the journal; a trial boot keeps it untouched.
+    (tree[0] / "backup/pending.trial-boot").write_text(LATER_BOOT + "\n")
+    reboot(tree, FURTHER_BOOT)
+    assert not service_start(tree, damage)
+    assert (tree[0] / "backup/pending").is_dir()
 
 
 @pytest.mark.parametrize("mode", ["challenge", "ready", "idle"])

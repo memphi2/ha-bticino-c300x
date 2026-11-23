@@ -31,8 +31,8 @@ case "$1" in
         if [ -e "$C100X_BACKUP_DIR/pending" ] || [ -L "$C100X_BACKUP_DIR/pending" ]; then
             payload="$AGENT_DIR/qml/c100x_bundle.sh"
             if [ ! -f "$payload" ] || [ -L "$payload" ] || [ "$(stat -c %h "$payload")" != 1 ] \
-                || ! sh "$payload" recover; then
-                echo 'C100X pending display recovery failed; agent and backups retained' >&2
+                || ! sh "$payload" boot; then
+                echo 'C100X display boot check failed; agent and backups retained' >&2
                 exit 1
             fi
         fi

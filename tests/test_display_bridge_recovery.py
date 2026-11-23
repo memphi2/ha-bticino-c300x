@@ -400,13 +400,15 @@ def test_missing_bridge_advances_one_renewal_then_backs_off(monkeypatch):
             session = _FakeSession('{"error":"display_bridge_disabled"}', response_status=404)
             send = api.async_notify_display_bridge_event
             fail = C300XAgentApi(session, "http://agent", "token").async_notify_display_bridge_event
-            send.side_effect = fail
+            send.side_effect = C300XAgentApiConnectionError("request timed out")
             renewal, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
             await notify("alarm")
             assert not runtime.resources.display_bridge_registration_pending
             assert _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS) == [renewal]
 
-            await notify("notifications")
+            send.side_effect = fail
+            await notify("alarm")
+            assert runtime.resources.display_bridge_registration_pending
             first, = _active_scheduled_calls(0)
             await notify("notifications")
             assert _active_scheduled_calls(0) == [first]

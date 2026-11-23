@@ -1376,8 +1376,9 @@ async def _async_notify_display_bridge_alarm_if_listening(
                 _LOGGER.debug("C300X display bridge events are unsupported")
             except C300XAgentApiError as err:
                 _LOGGER.debug("C300X display bridge event failed", exc_info=True)
+                registration_lost = isinstance(err, C300XDisplayBridgeNotRegisteredError)
                 if (
-                    topic == "notifications"
+                    (registration_lost or topic == "notifications")
                     and is_current_runtime()
                     and not runtime_data.resources.closed
                 ):
@@ -1385,7 +1386,7 @@ async def _async_notify_display_bridge_alarm_if_listening(
 
                     runtime_data.resources.display_bridge_registration_pending = True
                     async_notify_runtime_registration_failed(
-                        hass, entry, prompt=isinstance(err, C300XDisplayBridgeNotRegisteredError),
+                        hass, entry, prompt=registration_lost,
                     )
             if not runtime_data.display_bridge_notify_dirty:
                 break

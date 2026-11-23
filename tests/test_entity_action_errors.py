@@ -45,8 +45,8 @@ def _entry() -> SimpleNamespace:
         options={},
         runtime_data=SimpleNamespace(
             api=_DownApi(),
-            agent_info={},
-            capabilities={},
+            agent_info={"model": "C300X"},
+            capabilities={"maintenance": {"supported": True, "audio_codec_apply": True}},
             connection_state=SimpleNamespace(available=True),
         ),
     )

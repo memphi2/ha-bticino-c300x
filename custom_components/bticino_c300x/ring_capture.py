@@ -185,8 +185,13 @@ async def _async_capture_to_output(
                 if talkback_task.done():
                     await talkback_task
                 else:
-                    with contextlib.suppress(TimeoutError):
+                    try:
                         await asyncio.wait_for(talkback_task, timeout=2.0)
+                    except TimeoutError as err:
+                        if announcement is not None:
+                            raise HomeAssistantError(
+                                "C300X announcement did not finish before capture ended"
+                            ) from err
             except Exception as err:  # noqa: BLE001 - see below
                 # The keepalive only holds the call's audio open for the
                 # recording, which is complete. An announcement is what the

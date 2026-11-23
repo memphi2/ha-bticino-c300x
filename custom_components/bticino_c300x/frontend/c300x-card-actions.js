@@ -53,8 +53,9 @@ export class C300XCardActions {
       if (card._lifecycle.activeHomeCallSession) {
         return;
       }
-      const action = card._doorstationView().action;
-      if (action === "external_call") {
+      const view = card._doorstationView();
+      const action = view.action;
+      if (view.actionDisabled || action === "external_call") {
         return;
       }
       if (action === "hang_up") {

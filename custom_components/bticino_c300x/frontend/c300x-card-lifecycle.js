@@ -1,7 +1,7 @@
 import {
   c300xRingLifecycleActive,
   c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=3ab7175980ca1c37";
+} from "./c300x-ring-preview-state.js?v=a2bdcf6613188ecd";
 
 const C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS = new Set([
   "agent_cpu_watchdog",
@@ -17,6 +17,7 @@ export class C300XCardLifecycleState {
     this.ringPreviewSuppressed = false;
     this.passiveAnsweredPreviewStarted = false;
     this.lastMediaState = "";
+    this.lastObservedMediaState = "";
     this.answeringDoorbell = false;
     this.hangupInProgress = false;
     this.ringPreviewActive = false;
@@ -43,6 +44,13 @@ export class C300XCardLifecycleState {
 
   commitMediaState(mediaState) {
     this.lastMediaState = mediaState;
+  }
+
+  observeRingEnd(mediaState, notificationAnswerStarting) {
+    const wasRing = c300xRingLifecycleActive(this.lastObservedMediaState);
+    if (mediaState) this.lastObservedMediaState = mediaState;
+    return wasRing && !!mediaState && !c300xRingLifecycleActive(mediaState)
+      && (this.answeringDoorbell || this.previewStarting || notificationAnswerStarting);
   }
 
   homeSessionActive(hasLocalMedia) {

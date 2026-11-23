@@ -600,7 +600,7 @@ def test_bundled_card_marks_external_doorstation_calls_not_controllable() -> Non
     assert 'action === "busy"' in state_source
     assert 'action === "unavailable"' in state_source
     assert "this._actionButtonEl.disabled = view.actionDisabled;" in source
-    assert 'if (action === "external_call") {' in actions_source
+    assert 'if (view.actionDisabled || action === "external_call") {' in actions_source
     assert 'stateMachineAction === "unavailable"' in state_source
     assert 'mediaState === "idle" || primaryAction === "start_stream"' in state_source
     assert "return false;" in state_source

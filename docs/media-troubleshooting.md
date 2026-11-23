@@ -152,6 +152,11 @@ Check:
 In **Smartphone** mode, use the phone route. In **Blocked** mode, Home Assistant
 can still receive a ring event but cannot answer the call.
 
+If diagnostics report `unsupported_active_route`, the active routing file is
+not one of the recognized manufacturer symlinks. Media-user setup leaves it
+untouched. Preserve any third-party configuration and report the redacted error;
+do not replace the route with a stock file or repeatedly run setup to force it.
+
 ## Preview Starts but Answer Fails
 
 Check:

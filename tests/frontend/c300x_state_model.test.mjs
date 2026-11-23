@@ -222,6 +222,19 @@ test("home call model maps ringing and active states", () => {
   assert.equal(view.showMedia, false);
 });
 
+test("missing or unavailable media disables starts without hiding hangup", () => {
+  for (const cameraEntity of [undefined, entity({ state: "unknown" }), entity({ state: "unavailable" })]) {
+    for (const homeCallMode of [false, true]) {
+      const view = c300xCardViewModel({ cameraEntity, homeCallMode, active: false });
+      assert.equal(view.actionDisabled, true);
+      assert.equal(view.actionBlocked, true);
+      const connected = c300xCardViewModel({ cameraEntity, homeCallMode, active: true, doorbellAnswered: true });
+      assert.equal(connected.action, "hang_up");
+      assert.equal(connected.actionDisabled, false);
+    }
+  }
+});
+
 test("ring preview suppression only resets at a new ring lifecycle", () => {
   assert.equal(c300xRingLifecycleActive("ring_pending"), true);
   assert.equal(c300xRingLifecycleActive("ring_hanging_up"), true);

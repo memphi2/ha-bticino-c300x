@@ -6,6 +6,9 @@ import { resolve, dirname, sep } from "node:path";
 import puppeteer from "puppeteer-core";
 import { checkSnapshotLayout } from "./snapshot_layout.mjs";
 import { checkMatchingPictureLayout } from "./matching_picture_layout.mjs";
+import { checkMediaAvailability } from "./media_availability.mjs";
+import { checkPendingMicrophone } from "./pending_microphone.mjs";
+import { checkRingEndStart } from "./ring_end_start.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontend = resolve(here, "../../custom_components/bticino_c300x/frontend");
@@ -48,6 +51,9 @@ try {
   await mkdir(artifacts, { recursive: true });
   await page.goto(origin);
   await page.waitForFunction(() => !!window.lab);
+  await checkMediaAvailability(page, artifacts);
+  await checkPendingMicrophone(page);
+  await checkRingEndStart(page);
   await checkMatchingPictureLayout(page, artifacts);
   await checkSnapshotLayout(page, artifacts);
   const assertFooterLayout = async (label) => {

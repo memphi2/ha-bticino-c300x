@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "../src/media_bridge.h"
@@ -129,6 +130,14 @@ bool c300x_media_talkback_running(const struct c300x_video *video)
 {
     (void)video;
     return false;
+}
+
+bool c300x_media_ring_talkback_peer_ready(const struct c300x_video *video, int client_fd)
+{
+    struct sockaddr_storage peer;
+    socklen_t size = sizeof(peer);
+    return video != NULL && getpeername(client_fd, (struct sockaddr *)&peer, &size) == 0
+        && access("talkback-ready", F_OK) == 0;
 }
 
 bool c300x_media_ring_call_active(const struct c300x_video *video)

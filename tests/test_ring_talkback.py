@@ -459,6 +459,71 @@ def test_async_wait_talkback_ready_times_out(monkeypatch: pytest.MonkeyPatch) ->
         )
 
 
+@pytest.mark.parametrize("not_ready", [False, None, 0, 1, "true"])
+def test_announcement_waits_for_transport_admission(monkeypatch, not_ready):
+    api = _FakeRingStatusApi([
+        {"answered": True, "audio_active": True, "talkback_ready": not_ready},
+        {"answered": True, "audio_active": True, "talkback_ready": True},
+    ])
+    monkeypatch.setattr(ring_talkback.asyncio, "sleep", _async_noop)
+    started = []
+
+    async def worker(*args, **kwargs):
+        started.append(api.calls)
+
+    monkeypatch.setattr(ring_talkback, "_async_run_talkback_worker", worker)
+    asyncio.run(ring_talkback.async_keep_talkback_alive_when_ready(
+        SimpleNamespace(runtime_data=SimpleNamespace(api=api)),
+        "192.0.2.10", Path("greeting.wav"), threading.Event(),
+    ))
+    assert started == [2]
+
+
+def test_cancel_before_play_never_starts_audio_worker(monkeypatch):
+    async def run():
+        checked = asyncio.Event()
+        waiting = asyncio.Event()
+
+        class Api:
+            async def async_doorbell_call_status(self):
+                checked.set()
+                await waiting.wait()
+                return {"answered": True, "audio_active": True, "talkback_ready": False}
+
+        async def forbidden_worker(*args, **kwargs):
+            pytest.fail("Audio must not start before transport admission")
+
+        monkeypatch.setattr(ring_talkback, "_async_run_talkback_worker", forbidden_worker)
+        task = asyncio.create_task(ring_talkback.async_keep_talkback_alive_when_ready(
+            SimpleNamespace(runtime_data=SimpleNamespace(api=Api())),
+            "192.0.2.10", Path("greeting.wav"), threading.Event(),
+        ))
+        await checked.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(run())
+
+
+def test_transport_readiness_timeout_never_starts_audio_worker(monkeypatch):
+    api = _FakeRingStatusApi([
+        {"answered": True, "audio_active": True, "talkback_ready": False},
+    ])
+    monkeypatch.setattr(ring_talkback, "_TALKBACK_READY_TIMEOUT_SECONDS", 0.01)
+
+    async def forbidden_worker(*args, **kwargs):
+        pytest.fail("A timed-out announcement must not send audio")
+
+    monkeypatch.setattr(ring_talkback, "_async_run_talkback_worker", forbidden_worker)
+    with pytest.raises(ring_talkback.HomeAssistantError, match="talkback was not ready"):
+        asyncio.run(ring_talkback.async_keep_talkback_alive_when_ready(
+            SimpleNamespace(runtime_data=SimpleNamespace(api=api)),
+            "192.0.2.10", Path("greeting.wav"), threading.Event(),
+        ))
+    assert api.calls == 1
+
+
 def test_keepalive_maps_worker_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -550,9 +615,27 @@ def test_stop_signal_interrupts_file_fifo_and_preroll(monkeypatch, samples, prer
     sock = Socket()
     monkeypatch.setattr(sys.modules["av"], "open", lambda *_: Input(True))
     monkeypatch.setattr(ring_talkback, "_open_talkback_socket", lambda _: (sock, ("fake", 0)))
-    ring_talkback._keep_talkback_alive_sync("fake", Path("fake.wav"), stop)
+    if preroll:
+        with pytest.raises(ring_talkback.HomeAssistantError, match="playback never started"):
+            ring_talkback._keep_talkback_alive_sync("fake", Path("fake.wav"), stop)
+    else:
+        ring_talkback._keep_talkback_alive_sync("fake", Path("fake.wav"), stop)
     assert len(sock.sent) == 1
     assert sock.closed
+
+
+def test_already_stopped_announcement_never_opens_socket(monkeypatch):
+    _install_fake_av(monkeypatch, with_audio=True)
+    stop = threading.Event()
+    stop.set()
+
+    def forbidden_socket(host):
+        pytest.fail("Stopped announcements must not open a socket")
+
+    monkeypatch.setattr(ring_talkback, "_open_talkback_socket", forbidden_socket)
+    with pytest.raises(ring_talkback.HomeAssistantError, match="playback never started"):
+        ring_talkback._keep_talkback_alive_sync("fake", Path("fake.wav"), stop)
+    ring_talkback._keep_talkback_alive_sync("fake", None, stop)
 
 
 @pytest.mark.parametrize("keep_alive", [False, True])

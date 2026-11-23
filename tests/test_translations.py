@@ -599,16 +599,46 @@ def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_lo
         description = texts["options"]["step"]["camera_quality"]["description"]
 
         assert f"**{select['name']}**" in description, path.name
+        assert select["state"]["high"] in description, path.name
         assert select["state"]["low"] in description, path.name
+        assert "3.0.x" in description, path.name
 
 
-def test_camera_quality_help_scopes_optional_geometry_and_preserves_runtime_placeholder() -> None:
+def test_camera_quality_help_is_brief_and_preserves_reboot_and_runtime_details() -> None:
+    reboot_hints = {
+        "strings": ("automatically reboots the device", "about a minute"),
+        "en": ("automatically reboots the device", "about a minute"),
+        "de": ("Gerät automatisch neu", "etwa eine Minute"),
+        "fr": ("redémarre automatiquement l'appareil", "environ une minute"),
+        "it": ("riavvia automaticamente il dispositivo", "circa un minuto"),
+    }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         step = _load_json(path)["options"]["step"]["camera_quality"]
         assert re.findall(r"\{([^{}]+)\}", step["description"]) == ["running"], path.name
-        assert "960x576" in step["description"], path.name
+        assert len(step["description"]) <= 300, path.name
+        assert all(hint in step["description"] for hint in reboot_hints[path.stem]), path.name
+        assert set(step["data_description"]) == {"size", "bitrate_kbps", "fps"}, path.name
+        for key, text in step["data_description"].items():
+            assert len(text) <= (170 if key == "size" else 120), (path.name, key)
+
+
+def test_camera_quality_size_help_explains_agent_dependent_optional_size() -> None:
+    size_hints = {
+        "strings": ("firmware", "installed device agent", "Optional", "proportions", "when offered"),
+        "en": ("firmware", "installed device agent", "Optional", "proportions", "when offered"),
+        "de": ("Firmware", "installiertem Geräte-Agent", "Optionales", "Proportionen", "wenn angeboten"),
+        "fr": ("firmware", "agent installé", "option", "proportions", "si proposée"),
+        "it": ("firmware", "agente installato", "opzione", "proporzioni", "se disponibile"),
+    }
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        step = _load_json(path)["options"]["step"]["camera_quality"]
         size = step["data_description"]["size"]
-        for boundary in ("688x480", "704x576", "960x576", "800x480", "5:3",
-                         "C300X", "1.7.19", "2.0.2", "SHA-256", "3.0.x", "400x288"):
-            assert boundary in size, (path.name, boundary)
+        assert "960x576" in size, path.name
+        assert all(hint in size for hint in size_hints[path.stem]), path.name
+
+
+def test_camera_quality_english_translation_matches_base_strings() -> None:
+    base = _load_json(INTEGRATION / "strings.json")["options"]["step"]["camera_quality"]
+    english = _load_json(TRANSLATIONS / "en.json")["options"]["step"]["camera_quality"]
+    assert base == english
 

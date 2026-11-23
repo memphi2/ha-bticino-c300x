@@ -299,3 +299,39 @@ def test_payload_status_names_the_generation_it_would_install(tree):
     result = subprocess.run(["sh", str(script), "status"], env=tree[3], capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["available"] == generation(tree)
+
+
+def test_restore_withdraws_the_confirmation_and_asks_for_a_reboot(tree):
+    run(tree, "apply")
+    (tree[0] / "backup/confirmed-release").write_text(".c100x-" + generation(tree) + "\n")
+    assert status(tree)["confirmed"] is True
+    run(tree, "restore")
+    assert_original(tree)
+    assert not (tree[0] / "backup/confirmed-release").exists()
+    restored = status(tree)
+    assert (restored["phase"], restored["confirmed"], restored["reboot_due"], restored["last_result"]) == (
+        "stock", False, True, "restored")
+    run(tree, "restore")  # already stock: nothing changes and no new reboot is asked for
+    reboot(tree)
+    assert status(tree)["reboot_due"] is False
+    run(tree, "restore")
+    assert status(tree)["reboot_due"] is False
+
+
+def test_interrupted_restore_never_leaves_a_confirmation(tree):
+    run(tree, "apply")
+    (tree[0] / "backup/confirmed-release").write_text(".c100x-" + generation(tree) + "\n")
+    fault_mv(tree, "kill_before")
+    run(tree, "restore", False)
+    reported = status(tree)
+    assert (reported["phase"], reported["confirmed"], reported["reboot_due"]) == ("installed", False, False)
+    run(tree, "restore")
+    assert status(tree)["reboot_due"] is True
+
+
+def test_restore_of_a_pending_trial_asks_for_a_reboot(tree):
+    run(tree, "prepare")
+    run(tree, "restore")
+    assert_original(tree)
+    assert status(tree)["reboot_due"] is True
+    assert not (tree[0] / "backup/pending.prepare-boot").exists()

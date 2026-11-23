@@ -233,6 +233,8 @@ if [ "$ACTION" = apply ]; then
     replace "$WORK/new/main.qml" "$GUI/main.qml" || fail 'main replacement failed'
     cmp -s "$WORK/new/main.qml" "$GUI/main.qml" && cmp -s "$WORK/new/MainPage.qml" "$GUI/MainPage.qml" || fail 'commit verification failed'
 else
+    # Withdraw the confirmation first: a half-done restore must never count as confirmed.
+    rm -f "$BACKUP/confirmed-release" || fail 'confirmation not withdrawn'
     DIRTY=1
     restore_originals || fail 'original restoration failed'
     originals "$GUI" || fail 'restore verification failed'
@@ -244,4 +246,11 @@ fi
 sync
 remount_ro || fail 'root read-only remount failed'
 DIRTY=0
+if [ "$ACTION" != apply ]; then
+    # The running display keeps the old pages until the station restarts.
+    note_result restored "$ACTIVE_RELEASE"
+    if ! current_boot || ! write_marker reboot-due-boot "$CURRENT_BOOT"; then
+        printf '%s\n' 'c100x_display: originals restored; reboot need not recorded' >&2
+    fi
+fi
 printf '%s\n' '{"ok":true,"runtime_verified":false,"backups_retained":true}'

@@ -183,3 +183,11 @@ def test_the_api_lists_every_error_the_picture_route_answers_with():
     for code in codes:
         assert f"`{code}`" in section
     assert "| `409` | `media_busy` |" in section
+
+
+def test_the_api_names_the_unread_refusal_of_display_bridge_events():
+    source = (ROOT / "native_agent/src/http.c").read_text()
+    assert '\\"error\\":\\"invalid_unread\\"' in source
+    api = (ROOT / "native_agent/API.md").read_text()
+    section = api.split("optional boolean `unread`", 1)[1].split("\n### ", 1)[0]
+    assert "`400 invalid_unread`" in section

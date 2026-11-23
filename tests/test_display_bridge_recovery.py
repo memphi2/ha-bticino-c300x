@@ -119,6 +119,51 @@ def test_patched_entry_registration_matches_led_notify(monkeypatch, setting):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("patched", [True, False])
+def test_legacy_display_waits_for_confirmed_status(monkeypatch, patched):
+    from custom_components.bticino_c300x import notify
+
+    async def run():
+        hass, entry, api, _ = setup(monkeypatch)
+        del entry.data["device_ui_enabled"]
+        runtime = entry.runtime_data
+        runtime.capabilities["maintenance"] = {"supported": True, "qml_status": True}
+        manager = runtime_manager.C300XRuntimeManager(hass, entry)
+        manager.connection_state = runtime.connection_state
+        runtime.connection_state.available = True
+        runtime.qml_patch_status = {"patched": None}
+        api.async_display_bridge_status.return_value = {"configured": True}
+        api.async_qml_patch_status = AsyncMock(side_effect=[
+            C300XAgentApiConnectionError("temporary"), {"patched": patched},
+        ])
+        listeners = AsyncMock(return_value=Mock())
+        setup_notify = AsyncMock()
+        monkeypatch.setattr(runtime_manager, "_async_track_display_updates", listeners)
+        monkeypatch.setattr(notify, "async_setup_notify", setup_notify)
+        try:
+            # A registration worker may run before startup has read the gate.
+            await manager._async_refresh_display_registration(api)
+            await manager._async_refresh_display_registration(api, startup=True)
+            assert runtime.resources.display_bridge_registration_pending
+            api.async_display_bridge_status.assert_not_called()
+            api.async_configure_display_bridge.assert_not_called()
+            listeners.assert_not_called()
+            setup_notify.assert_not_called()
+
+            await manager._async_refresh_display_registration(api)
+            assert not runtime.resources.display_bridge_registration_pending
+            assert api.async_configure_display_bridge.await_args.kwargs["enabled"] is patched
+            assert setup_notify.await_count == int(patched)
+            assert api.async_qml_patch_status.await_count == 2
+            await manager._async_refresh_display_registration(api)
+            assert listeners.await_count == int(patched)
+            assert setup_notify.await_count == int(patched)
+            assert api.async_qml_patch_status.await_count == 2
+        finally:
+            runtime.resources.close()
+    asyncio.run(run())
+
+
 def unload_lab(monkeypatch):
     hass, entry, api, _ = setup(monkeypatch)
     hass.data = {}

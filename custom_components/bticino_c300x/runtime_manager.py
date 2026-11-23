@@ -23,6 +23,7 @@ from .api_errors import C300XDisplayBridgeNotRegisteredError
 from .capabilities import (
     capability_is_supported,
     entry_device_ui_configured,
+    entry_device_ui_effective,
     entry_device_ui_enabled_or_patch_active,
     maintenance_action_is_advertised,
 )
@@ -130,6 +131,8 @@ class C300XRuntimeManager:
         )
         self.platforms: tuple[str, ...] = BASE_PLATFORMS
         self._platform_gate_state_loaded = False
+        self._legacy_display_deferred = False
+        self._display_setup_lock = asyncio.Lock()
         self._setup_runtime_data: BticinoC300XRuntimeData | None = None
 
     async def async_prepare(self) -> bool:
@@ -186,6 +189,13 @@ class C300XRuntimeManager:
         )
         await async_setup_snapshots(self.hass, self.entry)
         await self.async_sync_platform_gate_state()
+        if (
+            self.connection_state.available
+            and entry_device_ui_effective(self.entry) is None
+            and maintenance_action_is_advertised(self.capabilities, "qml_status")
+        ):
+            # Retry a transient legacy read before services, platforms and notify decide.
+            await self.async_sync_platform_gate_state()
         # Delete services depend on the patch status loaded by the gate read.
         await async_setup_services(self.hass)
         # After the gate state, never before: the cleanup asks whether the
@@ -266,7 +276,7 @@ class C300XRuntimeManager:
         )
 
         async def _async_refresh_runtime_registration() -> None:
-            await _async_configure_display_bridge(self.hass, self.entry, api)
+            await self._async_refresh_display_registration(api)
 
         self.on_runtime_registration_created = _async_refresh_runtime_registration
         if self.unregister_event_registration is None:
@@ -282,22 +292,48 @@ class C300XRuntimeManager:
     async def async_sync_device_state(self) -> None:
         """Synchronize startup-only runtime state with the device agent."""
 
-        self.entry.runtime_data.resources.unregister_display_bridge_updates = (
-            await _async_track_display_updates(self.hass, self.entry)
-        )
-        if not self.connection_state.available:
-            if entry_device_ui_enabled_or_patch_active(self.entry):
-                self.entry.runtime_data.resources.display_bridge_registration_pending = True
-            return
-
         api = self._api()
-        await _async_configure_display_bridge(self.hass, self.entry, api)
-        if not self._platform_gate_state_loaded:
-            await self.async_sync_platform_gate_state()
+        await self._async_refresh_display_registration(api, startup=True)
+        if not self.connection_state.available:
+            return
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
         if display_setting_pending(self.entry):
             await async_settle_display_setting(self.hass, self.entry)
+
+    async def _async_refresh_display_registration(
+        self, api: C300XAgentApi, *, startup: bool = False,
+    ) -> None:
+        async with self._display_setup_lock:
+            runtime = self.entry.runtime_data
+            if startup:
+                self._legacy_display_deferred = entry_device_ui_effective(self.entry) is None
+            if startup or self._legacy_display_deferred:
+                can_probe = maintenance_action_is_advertised(runtime.capabilities, "qml_status")
+                if not self._platform_gate_state_loaded or (self._legacy_display_deferred and can_probe):
+                    await self.async_sync_platform_gate_state()
+                enabled = entry_device_ui_effective(self.entry)
+                if enabled is None:
+                    if self.connection_state.available and can_probe:
+                        from .events import async_notify_runtime_registration_failed
+
+                        runtime.resources.display_bridge_registration_pending = True
+                        async_notify_runtime_registration_failed(self.hass, self.entry)
+                    return
+                if enabled and self._legacy_display_deferred:
+                    from .notify import async_setup_notify
+
+                    await async_setup_notify(self.hass, self.entry)
+                if enabled:
+                    runtime.resources.unregister_display_bridge_updates = (
+                        await _async_track_display_updates(self.hass, self.entry)
+                    )
+                self._legacy_display_deferred = False
+            if not self.connection_state.available:
+                if entry_device_ui_enabled_or_patch_active(self.entry):
+                    runtime.resources.display_bridge_registration_pending = True
+                return
+            await _async_configure_display_bridge(self.hass, self.entry, api)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""
@@ -980,9 +1016,12 @@ async def _async_configure_display_bridge(
             raise asyncio.CancelledError
 
     check_active()
+    enabled = entry_device_ui_effective(entry)
+    if enabled is None:
+        # Registration can run while the initial patch read is still pending.
+        return
     if resources is not None:
         resources.display_bridge_registration_pending = True
-    enabled = entry_device_ui_enabled_or_patch_active(entry)
     webhook_url = (
         await async_generate_agent_callback_url(
             hass,

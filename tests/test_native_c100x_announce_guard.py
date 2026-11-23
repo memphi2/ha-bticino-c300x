@@ -1,6 +1,8 @@
 """C100X must never enter the incompatible C300X speaker lifecycle."""
 
 import base64
+import os
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -59,3 +61,31 @@ def test_leftover_upload_never_runs_c300x_cleanup_on_c100x(lab: Lab) -> None:
     lab.process.terminate()
     lab.process.wait(timeout=5)
     assert lab.log() == []
+
+
+@pytest.mark.parametrize("worker_name", ["c300x-announce", "c300x-announce-off"])
+def test_unsupported_model_does_not_kill_legacy_worker_groups(lab: Lab, worker_name: str) -> None:
+    assert lab.process is not None
+    lab.process.terminate()
+    lab.process.wait(timeout=5)
+    # This resembles an older agent worker, but its descendants are unknown
+    # to the new backend. The unsupported model must not claim ownership.
+    remnant = subprocess.Popen(
+        ["/bin/sh", "-c", 'printf "ready\\n"; sleep 60 & wait', worker_name,
+         str(lab.dir / "announce.wav"), "0", "85"],
+        start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        assert remnant.stdout is not None
+        assert remnant.stdout.readline() == b"ready\n"
+        lab.restart()
+        assert lab.call()["supported"] is False
+        assert remnant.poll() is None
+        assert lab.log() == []
+        lab.process.terminate()
+        lab.process.wait(timeout=5)
+        assert remnant.poll() is None
+    finally:
+        if remnant.poll() is None:
+            os.killpg(remnant.pid, signal.SIGTERM)
+        remnant.communicate(timeout=5)

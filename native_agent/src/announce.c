@@ -38,7 +38,9 @@ void c300x_announce_take_over(struct c300x_announce *announce)
     int unplayed = access(c300x_announce_file(), F_OK) == 0;
 
     announce->serving = 1;
-    if (c300x_announce_end_leftover(&announce->gain) || unplayed) {
+    /* This backend never owned C100X playback or its worker descendants. */
+    if (c300x_device_model() == C300X_DEVICE_MODEL_C300X
+        && (c300x_announce_end_leftover(&announce->gain) || unplayed)) {
         /* As after a door frame: what the old agent knew about the device is gone. */
         announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
         announce->door_hold = 1;

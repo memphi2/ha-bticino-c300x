@@ -195,10 +195,25 @@ default, but it allowed incompatible playback to be exposed accidentally.
 
 The model guard now rejects C100X in capability reporting and the direct
 play entrypoint, and cancels the incompatible cleanup before spawning any
-worker. Leftover agent-owned workers are still ended and old uploads are
-discarded, never replayed. C300X behavior and GUI gating are unchanged.
+worker. C100X startup also skips legacy worker discovery/termination: an
+unsupported backend cannot establish safe ownership of those process groups
+and their descendants. Old uploads are discarded, never replayed. C300X
+worker recovery and GUI gating are unchanged.
 `tests/test_native_c100x_announce_guard.py` reproduces both baseline failures
 through the real host agent HTTP/startup lifecycle, using synthetic tools.
+
+Independent review found a further P2 containment gap in the first guard:
+takeover called `c300x_announce_end_leftover()` before its model check.
+Isolated synthetic playback and cleanup process groups both exited with
+SIGKILL (`-9`) while C100X reported `supported=false`, with no mixer writes.
+This proves an unwanted legacy-worker kill, **not a vendor-process kill**.
+The scanner recognizes UID, process-group leadership, argv marker and upload
+path; it does not verify descendant behavior. The model check now precedes
+that scanner. Both synthetic groups must survive startup and shutdown; only
+the test harness terminates its own groups afterwards.
+The two remnant tests failed before this correction and passed afterwards.
+The focused follow-up passed all four C100X guard cases and both selected
+C300X leftover-worker recovery cases (six tests); the module budget passed.
 
 ## Offline Reproduction
 

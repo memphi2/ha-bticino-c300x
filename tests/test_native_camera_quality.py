@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -27,6 +28,7 @@ SETTINGS = (
     "[Netatmo]\nWidth=432\nHeight=240\n"
 )
 CONFIRM = {"confirm": "apply_camera_quality"}
+ROUTING_STOCK = b"isolated stock routing fixture\n"
 # The device's stack_open.xml as far as the cut goes; the rest stays as it is.
 STACK = (
     "<?xml version=\"1.0\"?>\n<stack>\n<video>\n<crop>\n<left>16</left>\n<top>48</top>\n"
@@ -43,7 +45,8 @@ def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     # Restarts and the Qt 5 mark stay inside the test directory.
     flags = ("-std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L "
              '-DC300X_NATIVE_AGENT_VERSION=\\"test\\" -DC300X_REBOOT_PROGRAM=\\"./reboot-test.sh\\" '
-             '-DC300X_QT5_DISPLAY_MARKER=\\"./qt5-mark\\"')
+             '-DC300X_QT5_DISPLAY_MARKER=\\"./qt5-mark\\" '
+             f'-DC300X_DEVICE_PATCH_STOCK_SHA256=\\"{hashlib.sha256(ROUTING_STOCK).hexdigest()}\\"')
     subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", f"CFLAGS={flags}",
                     "-j2", "all"], check=True, capture_output=True, text=True)
     return build / "host/c300x-agent-native"
@@ -100,6 +103,9 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
     settings = tmp_path / "bt_answering_machine"
     settings.write_text(SETTINGS)
     settings.chmod(0o664)
+    routing = tmp_path / "vendor-bin"
+    routing.mkdir()
+    (routing / "bt_answering_machine").write_bytes(ROUTING_STOCK)
     stack = tmp_path / "stack_open.xml"
     stack.write_text(STACK)
     config = {
@@ -124,6 +130,9 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
     env = {**os.environ, "C300X_CAMERA_QUALITY_FILE": str(settings), "C300X_CAMERA_CROP_FILE": str(stack),
            "C300X_BOOT_ID_FILE": str(tmp_path / "boot_id"),
            "C300X_CAMERA_RUNNING_NOTE": str(tmp_path / "camera-running"),
+           "C300X_ROUTING_TARGET_DIR": str(routing),
+           "C300X_ROUTING_BACKUP_DIR": str(tmp_path / "routing-backups"),
+           "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
            "C300X_AUDIO_BACKUP_DIR": str(tmp_path / "backups"), "C300X_AUDIO_NO_REMOUNT": "1"}
     log = (tmp_path / "agent.log").open("w")
 
@@ -206,6 +215,27 @@ def test_a_write_needs_the_maintenance_token_and_the_confirmation(lab: Lab) -> N
              headers={"Authorization": "Bearer " + TOKEN})
     lab.call(status=403, headers={"Authorization": "Bearer " + TOKEN})
     assert lab.settings.read_text() == SETTINGS
+
+
+@pytest.mark.parametrize("damage", ["missing", "modified", "symlink"])
+def test_removal_refuses_unverified_routing_before_camera_restore(lab: Lab, damage: str) -> None:
+    lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 24})
+    settings = lab.settings.read_bytes()
+    backup = lab.backup.read_bytes()
+    routing = Path(lab.env["C300X_ROUTING_TARGET_DIR"]) / "bt_answering_machine"
+    routing.unlink()
+    if damage == "modified":
+        routing.write_bytes(b"unknown routing executable\n")
+    elif damage == "symlink":
+        original = routing.with_name("original")
+        original.write_bytes(ROUTING_STOCK)
+        routing.symlink_to(original)
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+                            capture_output=True, text=True, timeout=10, check=False)
+    assert result.returncode != 0
+    assert "Failed to restore device routing" in result.stderr
+    assert lab.settings.read_bytes() == settings
+    assert lab.backup.read_bytes() == backup
 
 
 @pytest.mark.parametrize("content", [

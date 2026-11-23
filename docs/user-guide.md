@@ -458,8 +458,6 @@ match a known original. If one is missing, restart Home Assistant once, or use
 
 | Blueprint | File | Purpose |
 | --- | --- | --- |
-| Blueprint | File | Purpose |
-| --- | --- | --- |
 | C300X Doorbell notification | `doorbell_notification.yaml` | Your own notification action on a ring; does not answer. |
 | C300X Ring Call Android phone alert | `doorbell_call_android.yaml` | Rings an Android phone with **Answer**, **Hang Up**, **Open**. |
 | C300X Ring Call iOS phone alert | `doorbell_call_ios.yaml` | Rings an iPhone (critical sound) with **Answer**, **Hang Up**, **Open**. |

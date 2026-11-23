@@ -60,7 +60,12 @@ The station used WLAN and root2 SSH; HA was Container 2026.11.2 with Python
   touching `/var/tmp/conf.xml` disrupted the bus for about 23 seconds. Keep
   both operations out of the agent-only test. The GUI followed bus mute but
   not unmute on the tested LCM channels; its state was
-  `global.audioState.isRingtoneMute`. Do not advertise a two-way mute control.
+  `global.audioState.isRingtoneMute`. Offline this is the stock parser: it
+  turns only a mute status into the GUI flag, and only the GUI's own
+  `disableState(RingtoneMute)` clears it. Two-way mute is therefore advertised
+  only on a confirmed display adapter, which writes both directions through
+  AudioState, and the agent pushes an outside unmute to the GUI. Both still
+  need the device test in the test-release guide.
   The reporter identified a ZL38067 DSP; that is not audio-path validation.
 - Discovery did not find this station; **manual setup by host succeeded**.
   There was no agent before SSH installation, the responder closes while HA

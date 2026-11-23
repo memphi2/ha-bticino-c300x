@@ -159,21 +159,51 @@ All four previous reviewed hook recipes remain recoverable.
 ### Persistent Trial and Recovery
 
 `prepare` stores the authenticated pre-trial QML files and modes before switching
-the entry point. `confirm` verifies the candidate, requires a fresh native
-challenge round trip, rechecks its hashes and then archives the trial. A live
-blocked GUI may confirm readiness; it never grants permission to restart it.
-Failure restores the exact prior generation, not necessarily factory stock.
-`recover` handles interrupted switches without current package sources. Agent
-service startup performs pending recovery before starting the agent and aborts
-if recovery cannot be verified. Backups and archived trials are retained.
-Late remount failures cannot reinstate a rejected candidate.
+the entry point. Failure restores the exact prior generation, not necessarily
+factory stock. Backups and archived trials are retained. Late remount failures
+cannot reinstate a rejected candidate.
 
-These paths are exercised against original firmware copies with the actual
-host native HTTP server and response parser, including hung connections,
-tampered journals, missing/corrupt payloads and service-start failures. No GUI
-process is signalled. Disk rollback cannot unload QML already resident in a
-running vendor process: failure therefore reports that runtime recovery remains
-required rather than claiming a successfully restored GUI.
+### Activation by Reboot
+
+`BtClass100` cannot be restarted (TERM rebooted the tested station), so the
+switched files only take effect with the next boot. Each step records the boot
+it ran in (`/proc/sys/kernel/random/boot_id`) in small markers next to the
+backups:
+
+| Boot | Agent service start (`payload boot`) | Agent |
+| --- | --- | --- |
+| The boot that prepared the trial | keeps it | asks for one reboot once the station is idle |
+| The first boot after it (trial boot) | records it as the trial boot, keeps it | waits for the trial display's lease, lets it settle for 15 s, then runs `boot-confirm` (up to three attempts, a minute apart) |
+| Any later boot with the trial still pending | rolls back to the prior generation | – |
+
+A trial is confirmed only in its trial boot. A power loss or crash in that boot
+before the confirmation rolls back at the next start; there is no second trial
+boot. A display without its lease after 10 minutes, or three failed checks,
+leave the trial pending and the agent asks for one more reboot, after which the
+start rule rolls back. `restore` withdraws the confirmation first and then asks
+for a reboot, because the running display keeps the restored files' pages until
+then.
+
+The agent reboots only when Maintenance and its reboot are enabled, it hears the
+door-entry frames, no call frame was seen for 120 s (an unanswered call counts
+for at most 10 minutes), no media session, announcement or maintenance job runs,
+the display is not in a call or another vendor state, and the station has been
+up for 2 minutes. It asks once per reason and once more after 10 minutes if the
+station is still up; otherwise it reports `reboot_blocked` and waits. There is no
+forced reboot and no night window.
+
+`GET /api/v1/maintenance/c100x-display` reports the phase, the confirmation, the
+last result and why a reboot waits; `POST …/actions/activate` and
+`…/actions/restore` start the transactions. The confirmed adapter unlocks the key
+beep, the display alerts (without a tone), the display bridge and the ringer
+mute, and Home Assistant switches its device-UI setting on. Turning that setting
+off restores the original display with its reboot.
+
+The paths are exercised against original firmware copies with the actual host
+native HTTP server and response parser, under the firmware `bash` and BusyBox
+`sh` in `qemu-arm`, including hung connections, tampered journals,
+missing/corrupt payloads and service-start failures. No GUI process is
+signalled.
 
 ### Remaining Firmware Contracts
 

@@ -50,8 +50,9 @@ firmware codec setting; it does not authorize media activation during this test.
   and uninstall recovery guards have temporary-copy regression tests.
 - Additional display pages, physical-key navigation, silent/wake Notify and
   read-only text memos exist as offline implementations. **They are not activated.**
-- Display pages, GUI restart, ringer mute and key tone remain unavailable through
-  the supported C100X installation. Explicit GUI-install requests must fail
+- GUI restart remains unavailable. Display pages, ringer mute and key tone stay
+  unavailable until the separate [display activation](#display-activation-by-reboot-device-test)
+  is confirmed in its trial boot. Explicit GUI-install requests must still fail
   before writing device files, not silently report a successful activation.
 - Notify sound, speech/TTS, voice memos and memo mutations are not part of this
   test. No alternative sound script or forced capability flag is supported.
@@ -325,8 +326,9 @@ C100X. Do not substitute a similarly named button from another entry.
 On the test dashboard select **Edit dashboard > Add card**. For the initial
 setup phase, confirm registration but do not enable media merely to obtain
 a camera entity. A missing/unavailable camera must leave media start buttons
-disabled and must not request the microphone. GUI restart, device ringer mute,
-key tone, Notify sound and TTS are not card features to enable in this test.
+disabled and must not request the microphone. GUI restart, Notify sound and TTS
+are not card features to enable in this test; device ringer mute and key tone only
+after the display activation below.
 
 For an optional rendering-only check, first verify that
 `camera.c100x_issue51_not_connected` does **not** exist in Developer Tools > States.
@@ -412,7 +414,8 @@ on does not silently turn a saved refusal or an absent permission into approval.
    off; do not invoke device actions or MQTT migration. If setup or a Repair demands
    a routing/user change, stop instead of accepting it to complete the wizard.
 3. Check authenticated setup/status, C100X/1.5.8 identity, discovery and available
-   capabilities. Display/mute/key-tone/GUI-restart capabilities must remain false.
+   capabilities. Display/mute/key-tone/GUI-restart capabilities must remain false
+   until the display activation phase.
    An exposed unsupported toggle is a failed acceptance check, not an invitation
    to try it. No-auth access must remain disabled.
 4. Compare GUI/routing/provisioned-account identities with
@@ -426,6 +429,47 @@ on does not silently turn a saved refusal or an absent permission into approval.
    (the boot link starts the agent early) show that it came up with that boot.
    A value close to the station's uptime means a later manual start, not
    reboot persistence; `uptime_seconds` far below it means it restarted since.
+
+## Display Activation by Reboot (device test)
+
+Only after the agent-only test above passed, and only with Maintenance and its
+reboot enabled. Every step reboots the station at most once, and only after it
+has been idle for two minutes; do not ring or call meanwhile unless a step says
+so.
+
+1. **Baseline.** Record `cat /proc/sys/kernel/random/boot_id`, the GUI hashes,
+   `ls -l /home/bticino/cfg/extra/c300x-device-file-backups/c100x-display` and `GET /api/v1/maintenance/c100x-display`: `phase` `stock`,
+   `confirmed` false, `activate` true.
+2. **Activation.** Press **Activate display pages** in HA. Expect `phase`
+   `prepared`, `reboot_blocked` `waiting_for_idle`, then one reboot about two
+   minutes later. After the boot: a new boot id, `pending.trial-boot` holding it,
+   the agent running, and within a minute `phase` `installed`, `confirmed` true,
+   `last_result` `confirmed`. HA reloads, the device-UI setting is on and the
+   additional pages open from the menu. A call during the wait must postpone the
+   reboot (`call_active`/`call_recent`) and never interrupt the call.
+3. **Power pull in the trial boot.** Repeat step 2 from a restored station, but
+   pull the power within 60 seconds after the trial boot started (before
+   `confirmed`). After power returns: the start rolls back, `phase` `stock`,
+   `last_result` `rolled_back`, original GUI hashes, the repair "C100X display
+   pages were rolled back" in HA, and no further reboot.
+4. **Restore.** With confirmed pages, press **Restore original display** (or
+   turn the device-UI setting off). Expect `confirmed` false at once,
+   `reboot_due`, one reboot once idle, and afterwards the original display with
+   the original hashes and `phase` `stock`.
+5. **Ringer mute, after step 2** (analysis steps 2, 4, 5):
+   - Stock path: on the device press Down to mute, then Up to unmute. Each time
+     check `[Answering Machine] RingEnable` in
+     `/home/bticino/cfg/extra/47/aswm_settings.ini`, `GET /api/v1/ringer`, the
+     tile icon and an actual ring.
+   - HA mute on/off three times; each time the icon, the ini value, GET, a ring
+     and the HA state must agree.
+   - Toggle on the device: the HA state follows. Reboot while muted: the icon is
+     muted after the boot.
+   - An HA command during an answering-machine message or a call is refused and
+     causes no later change.
+   - Unmute from outside the GUI (vendor app): the GUI icon follows within a few
+     seconds, and a following HA mute works.
+6. Afterwards the ini value, the GUI icon and HA agree.
 
 ## Recovery and Stop Conditions
 
@@ -578,9 +622,10 @@ See [experimental support](c100x-experimental.md) and the
 Before issue attachment delivery: complete the exact-source review, full local
 gate, browser tests and fresh complete-package/build-lock verification. This full
 gate is now explicitly authorized; earlier preparation used focused checks only.
-It does not create canonical-main release evidence. Before display trials: establish isolated call-safe GUI supervision,
-failed-start readiness and runtime rollback, then test them on authorized hardware.
-Those are real remaining gaps; this agent-only test does not complete page parity.
+It does not create canonical-main release evidence. Display trials now take effect
+by reboot: only the trial boot confirms readiness, and a failed or interrupted trial
+rolls back at the next start. This still needs the authorized hardware test above;
+this agent-only test does not complete page parity.
 
 The tester report should contain commit, artifact SHA256, agent/model/firmware,
 test steps and outcomes, observation duration, capability flags, recovery result,

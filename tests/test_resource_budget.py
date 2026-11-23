@@ -58,6 +58,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "request_queue.c": (1_500, 55),
         "video_control.c": (5_000, 165),
         "http_media_actions.c": (7_500, 210),
+        "http_ring_status.c": (4_000, 110),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name

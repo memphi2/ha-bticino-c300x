@@ -35,6 +35,7 @@ static void mdns_send_response(
 );
 static int mdns_build_response(
     const struct c300x_config *config,
+    const char *instance_id,
     unsigned char *buffer,
     size_t buffer_len,
     uint32_t ttl
@@ -92,6 +93,7 @@ void c300x_mdns_init(struct c300x_mdns *mdns)
     mdns->fd = -1;
     mdns->next_announce_at = 0;
     mdns->announced = 0;
+    mdns->instance_id[0] = '\0';
 }
 
 void c300x_mdns_close(struct c300x_mdns *mdns)
@@ -297,7 +299,7 @@ static void mdns_send_response(
 {
     unsigned char buffer[1024];
     struct sockaddr_in target;
-    int length = mdns_build_response(config, buffer, sizeof(buffer), ttl);
+    int length = mdns_build_response(config, mdns->instance_id, buffer, sizeof(buffer), ttl);
 
     if (mdns->fd < 0 || length <= 0) {
         return;
@@ -320,6 +322,7 @@ static void mdns_send_response(
 
 static int mdns_build_response(
     const struct c300x_config *config,
+    const char *instance_id,
     unsigned char *buffer,
     size_t buffer_len,
     uint32_t ttl
@@ -332,6 +335,7 @@ static int mdns_build_response(
     char txt_id[80];
     char txt_name[80];
     char txt_version[80];
+    char txt_instance[48];
     unsigned char rdata[512];
     struct in_addr address = mdns_local_ipv4();
     struct in6_addr ipv6_address;
@@ -340,6 +344,11 @@ static int mdns_build_response(
     size_t rdata_len = 0;
 
     c300x_mdns_device_id(device_id, sizeof(device_id));
+    /* A cached DNS-SD service needs a changed record to signal a restart. */
+    if (snprintf(txt_instance, sizeof(txt_instance), "instance=%s", instance_id)
+        >= (int)sizeof(txt_instance)) {
+        return 0;
+    }
     mdns_instance_name(config, device_id, instance_label, sizeof(instance_label));
     if (
         snprintf(
@@ -482,6 +491,7 @@ static int mdns_build_response(
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_id)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_name)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_version)
+        || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_instance)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, "model=C300X")
     ) {
         return 0;

@@ -9,6 +9,7 @@ struct c300x_mdns {
     int fd;
     time_t next_announce_at;
     int announced;
+    char instance_id[33];
 };
 
 void c300x_mdns_init(struct c300x_mdns *mdns);

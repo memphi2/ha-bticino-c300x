@@ -9740,6 +9740,7 @@ int c300x_run(struct c300x_config *config)
         result = 2;
         goto cleanup;
     }
+    snprintf(mdns.instance_id, sizeof(mdns.instance_id), "%s", runtime->metrics.last.instance_id);
     listeners[listener_count].fd = make_listener(config->listen_host, config->api_port);
     listeners[listener_count].kind = LISTENER_API;
     if (listeners[listener_count].fd < 0) {

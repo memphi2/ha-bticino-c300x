@@ -13,9 +13,11 @@
   The original touch-tone switch stays under **General**.
 - The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
   contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
-  controls require verified source values and ranges. They remained unavailable
-  on the tested C300X 1.7.19 live stream. Requires the updated agent; archived
-  media is unchanged.
+  controls require live source readback on C300X firmware 1.7.19. Live writes
+  have not been confirmed on hardware. Requires the updated agent; archived media
+  is unchanged.
+- Advertise a per-start instance in the existing mDNS record so Home Assistant
+  can recognize an agent restart while the service is still cached.
 - Camera quality offers a matching visitor snapshot size when changing stream
   size, including when returning to the factory setting.
 - The updater reports a writable root filesystem before replacing files, and

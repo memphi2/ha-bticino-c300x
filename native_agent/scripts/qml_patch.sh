@@ -708,7 +708,9 @@ patch_home_page() {
             print ""
             print "    function handleMessageNotificationEvent(event) {"
             if (dynamic_home_page == "1") {
-                print "        if (event && (event.missedRevisions || event.topic === \"notifications\" || event.topic === \"display_bridge.state\")) {"
+                print "        var registrationPossible = event && (event.missedRevisions || event.topic === \"display_bridge.state\")"
+                print "        if (registrationPossible || (event && event.topic === \"notifications\")) {"
+                print "            if (registrationPossible) page.buttonRetries = 0"
                 print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
                 print "            refreshDisplayBridgeButtons()"
                 print "        }"

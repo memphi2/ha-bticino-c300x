@@ -142,13 +142,15 @@ def test_home_buttons_qt4_retry_without_navigation(tmp_path):
     controls = re.search(r"    property bool alarmButtonVisible:.*?function refreshDisplayBridgeButtons\(\).*?^    }",
                          source, re.S | re.M).group()
     visibility = re.search(r"    onVisibleChanged: \{.*?^    }", source, re.S | re.M).group()
+    event_handler = re.search(r"    function handleMessageNotificationEvent\(event\).*?^    }",
+                              source, re.S | re.M).group()
     with tempfile.TemporaryDirectory(dir="/var/tmp") as folder:
         qml = Path(folder) / "HomeButtons.qml"
         (qml.parent / "mock.js").write_text("var requests = 0, reply = null\n"
                                             "function homeButtons(cb) { requests++; reply = cb }\n"
                                             "function invalidateSharedRead(path) {}\n")
         qml.write_text('import QtQuick 1.1\nimport "mock.js" as HAConfig\nItem { id: page\n'
-                       + controls + "\n" + visibility + """
+                       + controls + "\n" + visibility + "\n" + event_handler + """
     function respond(a, b, valid) { HAConfig.reply(a, b, valid) }
     function stopMessageNotificationWatch() {}
     function check(ok) { if (!ok) throw new Error("home recovery failed") }
@@ -171,6 +173,18 @@ def test_home_buttons_qt4_retry_without_navigation(tmp_path):
         }
         respond(false, false, false)
         check(!buttonRetryTimer.running)
+        // No timer remains: registration at minute five is the next input.
+        var beforeRegistration = HAConfig.requests
+        handleMessageNotificationEvent({topic: "display_bridge.state"})
+        check(HAConfig.requests === beforeRegistration + 1)
+        respond(false, false, false)
+        check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000)
+        buttonRetryTimer.triggered()
+        check(HAConfig.requests === beforeRegistration + 2)
+        respond(true, true, true)
+        check(haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running)
+        refreshDisplayBridgeButtons()
+        respond(false, false, true)
         visible = false
         visible = true
         refreshDisplayBridgeButtons()

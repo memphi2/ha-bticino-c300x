@@ -1413,9 +1413,16 @@ Errors:
 
 | Status | `error` | Meaning |
 | --- | --- | --- |
+| `400` | `maintenance_confirmation_required` | The body does not carry `"confirm": "update_agent"`. |
+| `400` | `invalid_update_metadata` | `bundle_hash` is missing or does not start with `sha256:`. |
+| `400` | `update_manifest_missing` | The staged `device_agent/bundle.json` is missing, unreadable or 8 KiB or larger. |
+| `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
+| `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
 | `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |
 | `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
 | `500` | `update_apply_failed` | Validation or installation failed. |
+| `500` | `out_of_memory` | The agent could not allocate the memory for the update. |
+| `500` | `invalid_agent_dir` | The staging path of the manifest cannot be built from the configured agent directory. |
 
 ### Config Normalize
 

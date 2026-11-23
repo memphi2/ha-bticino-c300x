@@ -149,15 +149,36 @@ def test_three_documentation_rules_are_closed_with_evidence_only():
     assert f"](../{ICE_LINK})" in audit
 
 
+def _c_function(source, signature):
+    """The text of the C function whose definition starts with ``signature``."""
+    start = re.search(re.escape(signature) + r"[^;{]*\)\s*\{", source).start()
+    return source[start:source.index("\n}\n", start)]
+
+
 def test_the_api_lists_every_error_the_agent_update_answers_with():
     source = (ROOT / "native_agent/src/agent_update.c").read_text()
     body = source.split("const char *agent_update_error_json", 1)[1].split("\n}\n", 1)[0]
     codes = re.findall(r'\\"error\\":\\"([a-z_]+)\\"', body)
     assert "update_root_already_writable" in codes
+    # The route handler refuses a request itself before the install starts.
+    http = (ROOT / "native_agent/src/http.c").read_text()
+    handler = _c_function(http, "static void handle_agent_update_apply(")
+    error = r'"\{\\"ok\\":false,\\"error\\":\\"([a-z_]+)\\"'
+    answers = re.findall(r'send_json\(client_fd, (\d+), "[^"]*", ' + error, handler)
+    # Every other send_json is the install result from agent_update_error_json.
+    assert len(answers) == handler.count("send_json(client_fd, ") - 1
+    for helper in re.findall(r"\b(send_[a-z_]+)\(client_fd\);", handler):
+        answers += re.findall(rf"static void {helper}\(int client_fd\) {{ send_json\(client_fd, (\d+), \"[^\"]*\", {error}", http)
+    assert {
+        "maintenance_unauthorized", "maintenance_confirmation_required", "invalid_update_metadata",
+        "update_manifest_missing", "update_bundle_hash_mismatch", "out_of_memory", "invalid_agent_dir",
+    } == {code for _, code in answers}
     api = (ROOT / "native_agent/API.md").read_text()
     section = api.split("`POST /api/v1/maintenance/update/apply`", 1)[1].split("\n### ", 1)[0]
     for code in codes:
         assert f"`{code}`" in section
+    for status, code in answers:
+        assert f"| `{status}` | `{code}` |" in section
 
 
 def test_the_api_names_every_display_call_that_follows_the_ui_port():
@@ -170,12 +191,6 @@ def test_the_api_names_every_display_call_that_follows_the_ui_port():
     api = (ROOT / "native_agent/API.md").read_text()
     paragraph = api.split("Only these calls follow a changed port:", 1)[1].split("\n\n", 1)[0]
     assert set(re.findall(r"`(/ui/[a-z/-]+)`", paragraph)) == routes
-
-
-def _c_function(source, signature):
-    """The text of the C function whose definition starts with ``signature``."""
-    start = source.index(signature)
-    return source[start:source.index("\n}\n", start)]
 
 
 def test_the_api_lists_every_error_the_picture_route_answers_with():

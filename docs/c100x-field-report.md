@@ -3,7 +3,29 @@
 Source: [issue #51, comment 7084550618](https://github.com/memphi2/ha-bticino-c300x/issues/51#issuecomment-7084550618),
 posted by `abeilprincipino` on 2026-11-22 at 19:37:32 UTC, read live.
 This is a contributor report, not a device test performed by this branch's
-developer. Nothing from this branch was installed on that device.
+developer. Nothing from this branch was installed during that first report.
+
+## First installation on a Companion station
+
+In the [subsequent test on November 23](https://github.com/memphi2/ha-bticino-c300x/issues/51#issuecomment-7102558640),
+the reporter installed the test package on C100X 1.5.8. Authentication, model
+detection and startup verification worked. Companion kept running; the checked
+GUI, media, routing and identity files kept their hashes. This does not establish
+compatibility with an unmodified station.
+
+- The station lacked the vendor IPv4 firewall hook. The reporter supplied a
+  placeholder for that test; **do not repeat this workaround**. Restoring a
+  stock firewall on a modified device could also cut off maintenance access.
+- The tested package enabled video and opened media ports at bootstrap. RTSP
+  listening is not evidence of successful video. The reporter did not start a
+  stream, and a second SIP session can conflict with Companion.
+- The active SIP route is a regular file on this installation. Do not convert
+  it to a symlink or replace it to pass the media-user check.
+- The reporter restored the recorded baseline **manually**. Neither reboot
+  survival nor the packaged removal script was tested on hardware.
+- The reporter observed that terminating the GUI rebooted this station and
+  touching the vendor configuration restarted the whole stack. Neither is a
+  safe GUI reload for this test package.
 
 ## Evidence And Limits
 

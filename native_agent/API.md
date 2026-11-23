@@ -177,7 +177,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/system/metrics` | API | None. |
 | `GET` | `/api/v1/device-user` | API | None. |
 | `GET` | `/api/v1/display-bridge` | API | None. |
-| `POST` | `/api/v1/display-bridge` | API | Updates runtime display bridge callback config. |
+| `POST` | `/api/v1/display-bridge` | API | Updates the display callback and removes it from disk when disabled. |
 | `POST` | `/api/v1/display-bridge/events` | API | Wakes local display listeners for one topic. |
 | `POST` | `/api/v1/display/alert` | API | One immediate delivery to a waiting GUI alert connection; no deferred queue. |
 | `GET` | `/api/v1/events/recent` | API | None. |
@@ -497,7 +497,12 @@ and non-secret fingerprints.
 
 Authentication: normal API token.
 
-Side effects: updates in-memory display bridge callback settings.
+Side effects: saves the callback in an owner-only file next to the agent
+configuration and updates the live bridge. Unchanged registration does not
+rewrite the file. Disabling removes it. After a restart, the restored bridge
+can forward display reads without waiting for an event subscription and
+sends one authenticated `agent_started` notice to the same HA webhook.
+Event subscriptions themselves remain in memory.
 
 Request fields:
 

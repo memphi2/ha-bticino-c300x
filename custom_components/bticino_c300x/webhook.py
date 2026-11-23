@@ -27,7 +27,7 @@ from .api import (
     normalize_memos,
     normalize_system_metrics,
 )
-from .capabilities import event_label
+from .capabilities import entry_device_ui_effective, event_label
 from .const import (
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -240,6 +240,23 @@ async def _display_bridge_status(context: _DisplayBridgeContext) -> dict[str, An
     return await async_status(context.hass, context.entry)
 
 
+async def _display_bridge_agent_started(context: _DisplayBridgeContext) -> dict[str, Any]:
+    instance_id = context.payload.get("instance_id")
+    if not isinstance(instance_id, str) or len(instance_id) != 32 or any(
+        char not in "0123456789abcdef" for char in instance_id
+    ):
+        raise ValueError("invalid_instance_id")
+    resources = getattr(getattr(context.entry, "runtime_data", None), "resources", None)
+    if resources is None or entry_device_ui_effective(context.entry) is not True:
+        return {"ok": True}
+    if resources.display_bridge_agent_instance != instance_id:
+        from .events import async_request_agent_event_registration
+
+        if async_request_agent_event_registration(context.hass, context.entry):
+            resources.display_bridge_agent_instance = instance_id
+    return {"ok": True}
+
+
 async def _display_bridge_dashboard(context: _DisplayBridgeContext) -> dict[str, Any]:
     dashboard = await async_dashboard_payload(context.hass, context.entry)
     revision = _dashboard_revision(dashboard)
@@ -305,6 +322,7 @@ async def _display_bridge_alarm_command(
 
 _DISPLAY_BRIDGE_HANDLERS: dict[str, _DisplayBridgeHandler] = {
     "status": _display_bridge_status,
+    "agent_started": _display_bridge_agent_started,
     "alarm_status": _display_bridge_status,
     "dashboard": _display_bridge_dashboard,
     "action": _display_bridge_action,

@@ -102,6 +102,7 @@ def auth_config(request):
 def lab(native_binary, tmp_path, auth_config):
     received, errors = [], []
     held, release = threading.Event(), threading.Event()
+    boot_held, boot_release, block_boot = threading.Event(), threading.Event(), threading.Event()
 
     async def execute(payload):
         async with aiohttp.ClientSession() as session:
@@ -127,7 +128,11 @@ def lab(native_binary, tmp_path, auth_config):
             status = 200
             try:
                 assert self.headers["X-Bticino-C300X-Secret"] == "synthetic-secret"
-                if payload.get("entity_id") == "door_unlock":
+                if payload.get("type") == "agent_started" and block_boot.is_set():
+                    boot_held.set()
+                    assert boot_release.wait(5)
+                    result = {"ok": True}
+                elif payload.get("entity_id") == "door_unlock":
                     result = asyncio.run(execute(payload))
                 elif payload.get("entity_id") == "switch.held":
                     held.set()
@@ -178,20 +183,24 @@ def lab(native_binary, tmp_path, auth_config):
         process = subprocess.Popen(
             [str(native_binary), "--config", str(config_path)], stdout=log, stderr=log
         )
+        registration = {
+            "enabled": True,
+            "webhook_url": f"http://127.0.0.1:{server.server_address[1]}/display",
+            "shared_secret": "synthetic-secret",
+        }
+
+        def restart():
+            nonlocal process
+            process.terminate()
+            process.wait(timeout=5)
+            process = subprocess.Popen(
+                [str(native_binary), "--config", str(config_path)], stdout=log, stderr=log
+            )
+            wait_for_health(api_port)
+
         try:
             wait_for_health(api_port)
-            assert (
-                request(
-                    api_port,
-                    "/api/v1/display-bridge",
-                    {
-                        "enabled": True,
-                        "webhook_url": f"http://127.0.0.1:{server.server_address[1]}/display",
-                        "shared_secret": "synthetic-secret",
-                    },
-                )[0]
-                == 200
-            )
+            assert request(api_port, "/api/v1/display-bridge", registration)[0] == 200
             yield SimpleNamespace(
                 api=api_port,
                 ui=ui_port,
@@ -200,9 +209,15 @@ def lab(native_binary, tmp_path, auth_config):
                 held=held,
                 release=release,
                 config_path=config_path,
+                registration=registration,
+                restart=restart,
+                block_boot=block_boot,
+                boot_held=boot_held,
+                boot_release=boot_release,
             )
         finally:
             release.set()
+            boot_release.set()
             process.terminate()
             try:
                 process.wait(timeout=5)
@@ -210,6 +225,28 @@ def lab(native_binary, tmp_path, auth_config):
                 process.kill()
                 process.wait()
     assert not errors
+
+
+def test_display_connection_survives_restart_and_honors_disable(lab):
+    saved = lab.config_path.with_suffix(".json.display-bridge")
+    assert saved.stat().st_mode & 0o777 == 0o600
+    assert "synthetic-secret" not in lab.config_path.read_text()
+    before = saved.stat()
+    assert request(lab.api, "/api/v1/display-bridge", lab.registration)[0] == 200
+    assert (saved.stat().st_ino, saved.stat().st_mtime_ns) == (before.st_ino, before.st_mtime_ns)
+    lab.block_boot.set()
+    lab.restart()
+    assert lab.boot_held.wait(2)
+    assert request(lab.api, "/api/v1/display-bridge")[1]["configured"] is True
+    assert request(lab.ui, "/ui/state")[0] == 200
+    lab.boot_release.set()
+    boots = [item for item in lab.received if item.get("type") == "agent_started"]
+    assert len(boots) == 1 and len(boots[0]["instance_id"]) == 32
+    assert request(lab.api, "/api/v1/display-bridge", {"enabled": False})[0] == 200
+    assert not saved.exists()
+    lab.restart()
+    assert request(lab.ui, "/ui/state")[0] == 404
+    assert [item for item in lab.received if item.get("type") == "agent_started"] == boots
 
 
 def test_display_door_action_completes_without_callback_deadlock(lab):

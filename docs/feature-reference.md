@@ -96,21 +96,29 @@ agent have different effects on settings, media and backups.
 
 ### Camera Quality
 
-During a Ring Call, open the sliders icon on the doorbell card to adjust
-**brightness, contrast or colour saturation** in 10% steps. These are the
-station's original call controls, not browser filters. The updated agent and
-core GUI patch are required, and the station must have an active video call.
-Opening the controls reads the current values without answering the call.
-Moving a slider sends one change when released. Archived media is not altered.
-On-demand video uses the same sliders and service **only if** the bridge explicitly
-advertises shared support and the card has an active on-demand video track.
-The existing ring-only GUI handshake does not establish on-demand support.
-Starting a stream does not enable the sliders on those agents. Reported values
-come from the GUI; they do not independently verify a change in camera output.
+Update the device agent to use the doorbell card's **picture controls**. Open
+the sliders icon to read brightness, contrast and colour saturation. Release
+a slider to change one setting in 10% steps. These are station settings, not
+browser filters: existing recordings and snapshots are never recoloured.
 
-Disable **Show picture controls for supported live video** in the card editor to hide
-the controls. Automations can use `bticino_c300x.camera_picture`: omit both
-`control` and `value` to read, or supply both to change one value.
+- **Ring Call:** the core GUI patch provides the stock controls during a video
+  call. Opening the sliders does not answer the call.
+- **On-demand video:** start live video first. On a **C300X running firmware
+  1.7.19**, the agent can adjust the video source directly. The same sliders
+  appear only when the card has a live video track and the agent has read all
+  three source settings within their expected ranges for that session. The
+  service reports percentages only after a usable readback. For example, an
+  idle brightness reading of `0` for a source configured for `30..180` does
+  not mean 0% brightness. Working Ring Call sliders do not establish on-demand
+  support on another model or firmware. Browser and host tests cover the sliders
+  and service response, not a visible change on physical hardware.
+
+To hide the sliders, turn off **Show picture controls for supported live video**
+in the card editor. Automations use the same action, `bticino_c300x.camera_picture`,
+in an already active session. Omit both `control` and `value` to read, or send
+both (for example, `control: contrast` and `value: 60`) to change one setting.
+On success the response contains `brightness`, `contrast` and `saturation`.
+Specify `entry_id` if more than one station is configured.
 
 Open **Configure > Camera quality** to choose the device's picture size, bit
 rate and frame rate. The original **688x480** factory cut-out and **704x576**

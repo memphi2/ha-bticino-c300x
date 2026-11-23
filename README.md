@@ -31,6 +31,9 @@ forwarding controls, messages and optional display pages.
 - **See and answer the door.** Local live video and talkback through the bundled
   card, doorbell events, and Ring Call answer/hang-up when forwarding is set to
   Home Assistant. Audio-only Home Call reaches the C300X display.
+  With the updated agent, the same [picture controls](docs/feature-reference.md#camera-quality)
+  adjust Ring Call video and supported on-demand video (C300X firmware 1.7.19).
+  They do not recolour archived media.
 - **Choose the camera picture.** **Camera quality** keeps the original
   688x480 and 704x576 high-stream choices, with up to 3000 kbit/s and 24 fps.
   Optional **960x576** matches the display's 5:3 proportions while retaining

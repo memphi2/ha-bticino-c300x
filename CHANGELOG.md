@@ -11,8 +11,10 @@
 - The station's **Settings > Home Assistant** groups HA feedback, SSH, reboot
   and agent removal. These controls use the local agent, even if HA is offline.
   The original touch-tone switch stays under **General**.
-- During a ring call, the card can adjust the station's own brightness, contrast
-  and colour saturation. The controls can be hidden in the card editor.
+- The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
+  contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
+  video on C300X firmware 1.7.19 uses the source controls after the agent reads
+  all three settings. Requires the updated agent; archived media is unchanged.
 - Camera quality offers a matching visitor snapshot size when changing stream
   size, including when returning to the factory setting.
 - The updater reports a writable root filesystem before replacing files, and

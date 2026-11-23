@@ -1,7 +1,7 @@
 export const C300X_MEDIA_TRANSLATIONS = {
   en: {
     picture: "Adjust camera picture", brightness: "Brightness", contrast: "Contrast", saturation: "Colour saturation",
-    picture_unavailable: "Picture controls unavailable for this session. Check the station connection and GUI patch.",
+    picture_unavailable: "The station could not confirm the live picture settings.",
     previous: "Older media", next: "Newer media", history: "Media history",
     play: "Play", pause: "Pause", mute: "Mute", unmute: "Unmute", volume: "Volume",
     fullscreen: "Full screen", exit_fullscreen: "Exit full screen", seek: "Playback position",
@@ -11,7 +11,7 @@ export const C300X_MEDIA_TRANSLATIONS = {
   },
   de: {
     picture: "Kamerabild einstellen", brightness: "Helligkeit", contrast: "Kontrast", saturation: "Farbsättigung",
-    picture_unavailable: "Bildregler für diese Sitzung nicht verfügbar. Prüfe die Verbindung zur Station und den GUI-Patch.",
+    picture_unavailable: "Die Station konnte die Einstellungen für das Livebild nicht bestätigen.",
     previous: "\u00c4ltere Medien", next: "Neuere Medien", history: "Medienverlauf",
     play: "Wiedergabe", pause: "Pause", mute: "Stummschalten", unmute: "Ton einschalten", volume: "Lautst\u00e4rke",
     fullscreen: "Vollbild", exit_fullscreen: "Vollbild beenden", seek: "Wiedergabeposition",
@@ -21,7 +21,7 @@ export const C300X_MEDIA_TRANSLATIONS = {
   },
   fr: {
     picture: "Régler l’image", brightness: "Luminosité", contrast: "Contraste", saturation: "Saturation",
-    picture_unavailable: "Réglages indisponibles pour cette session. Vérifiez la connexion à la platine et le correctif graphique.",
+    picture_unavailable: "La platine n’a pas pu confirmer les réglages de l’image en direct.",
     previous: "M\u00e9dias plus anciens", next: "M\u00e9dias plus r\u00e9cents", history: "Historique des m\u00e9dias",
     play: "Lire", pause: "Pause", mute: "Couper le son", unmute: "Activer le son", volume: "Volume",
     fullscreen: "Plein \u00e9cran", exit_fullscreen: "Quitter le plein \u00e9cran", seek: "Position de lecture",
@@ -31,7 +31,7 @@ export const C300X_MEDIA_TRANSLATIONS = {
   },
   it: {
     picture: "Regola immagine", brightness: "Luminosità", contrast: "Contrasto", saturation: "Saturazione",
-    picture_unavailable: "Controlli non disponibili per questa sessione. Verifica la connessione alla postazione e la patch grafica.",
+    picture_unavailable: "La postazione non ha potuto confermare le impostazioni dell’immagine in diretta.",
     previous: "Media precedenti", next: "Media successivi", history: "Cronologia media",
     play: "Riproduci", pause: "Pausa", mute: "Disattiva audio", unmute: "Attiva audio", volume: "Volume",
     fullscreen: "Schermo intero", exit_fullscreen: "Esci da schermo intero", seek: "Posizione di riproduzione",

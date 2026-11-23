@@ -997,8 +997,9 @@ Authentication: normal API token.
 Side effects: POST changes one picture control of the active video source.
 
 A connected GUI advertising `picture=1` provides the legacy ring-only path.
-An eligible C300X (firmware 1.7.19; 2.0.2 or 3.0.6 with an ADV7180 video
-decoder, HW rev 2/3, or a TVP5150, HW rev 1/4) can also report
+An eligible C300X (firmware 1.7.19; 2.0.2 with a bound ADV7180 video decoder,
+HW rev 2/3, or TVP5150, HW rev 1/4; 3.0.6 with its bound TVP5150, as the 3.0.6
+package requires HW rev 4) can also report
 `bridge.picture_controls_scope: "ring_and_on_demand"` with
 `bridge.picture_controls_supported: true`. Model and firmware alone do not
 enable it: an authenticated status or capability request during owned media

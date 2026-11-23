@@ -37,11 +37,12 @@ Camera and card:
 - The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
   contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
   sliders appear shortly after live video starts, once the station reads its
-  values back: on firmware 1.7.19 (tested on a station) and on 2.0.2 and 3.0.6
-  with either video decoder (checked offline only). A setting the station does
-  not confirm is put back, and the card says whether it was not applied, the
-  station is busy or the controls are unavailable. Changes last until the video
-  ends. Requires the updated agent; archived media is unchanged.
+  values back: on firmware 1.7.19 (tested on a station), on 2.0.2 with either
+  video decoder and on 3.0.6, which runs only on TVP5150 boards (both checked
+  offline only). A setting the station does not confirm is put back, and the
+  card says whether it was not applied, the station is busy or the controls are
+  unavailable. Changes last until the video ends. Requires the updated agent;
+  archived media is unchanged.
 - The doorbell card is as tall as its picture instead of stretching to the height
   of its dashboard place. A visitor snapshot keeps its own proportions, and the
   enlarged preview fits it so the buttons below stay on screen. Playback controls

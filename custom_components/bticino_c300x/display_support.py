@@ -5,16 +5,26 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .const import CONF_DEVICE_UI_ENABLED
+
 DISPLAY_SUPPORTED = "device_display_supported"
 
 
 def device_display_support(setup: Mapping[str, Any]) -> bool | None:
     """Return explicit support, leaving older/temporarily offline agents unknown."""
 
-    # Only the C100X: a C300X keeps its display options on every firmware.
-    if setup.get("model") == "C100X" or setup.get("display_kind") == "qt5_ondisk":
-        return False
     capabilities = setup.get("capabilities", {})
+    # Only the C100X: a C300X keeps its display options on every firmware.
+    if _c100x(setup):
+        # Its pages count once the agent confirmed them in their trial boot.
+        status = capabilities.get("c100x_display") if isinstance(capabilities, Mapping) else None
+        if not isinstance(status, Mapping):
+            return False
+        if status.get("status_known") is False:
+            return None
+        bridge = capabilities.get("display_bridge")
+        return (status.get("confirmed") is True and isinstance(bridge, Mapping)
+                and bridge.get("supported") is True)
     if not isinstance(capabilities, Mapping):
         return None
     bridge = capabilities.get("display_bridge")
@@ -28,6 +38,10 @@ def device_display_support(setup: Mapping[str, Any]) -> bool | None:
         if isinstance(value, bool):
             return value
     return None
+
+
+def _c100x(setup: Mapping[str, Any]) -> bool:
+    return setup.get("model") == "C100X" or setup.get("display_kind") == "qt5_ondisk"
 
 
 def entry_display_supported(entry: Any) -> bool:
@@ -48,5 +62,14 @@ def remember_display_support(hass: Any, entry: Any, setup: Mapping[str, Any]) ->
     """Persist only known facts; never erase layouts or change device settings."""
 
     supported = device_display_support(setup)
-    if supported is not None and entry.data.get(DISPLAY_SUPPORTED) is not supported:
-        hass.config_entries.async_update_entry(entry, data={**entry.data, DISPLAY_SUPPORTED: supported})
+    if supported is None or entry.data.get(DISPLAY_SUPPORTED) is supported:
+        return
+    data = {**entry.data, DISPLAY_SUPPORTED: supported}
+    if supported and _c100x(setup):
+        # The C100X pages were just confirmed on the device: the setting
+        # follows, so the pages, notifications and bridge start with them.
+        hass.config_entries.async_update_entry(
+            entry, data=data, options={**entry.options, CONF_DEVICE_UI_ENABLED: True},
+        )
+        return
+    hass.config_entries.async_update_entry(entry, data=data)

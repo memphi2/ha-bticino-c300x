@@ -157,3 +157,56 @@ def test_unknown_older_agent_keeps_existing_behavior():
     assert entry_display_supported(device)
     assert entry_device_ui_enabled(device)
     assert device_display_support({}) is None
+
+
+CONFIRMED = {
+    **CAPABILITIES, "display_bridge": {"supported": True}, "display_alerts": True,
+    "c100x_display": {"supported": True, "status_known": True, "phase": "installed", "confirmed": True},
+}
+
+
+@pytest.mark.parametrize("c100x_display,expected", [
+    ({"supported": True, "status_known": True, "phase": "installed", "confirmed": True}, True),
+    ({"supported": True, "status_known": True, "phase": "trial", "confirmed": False}, False),
+    ({"supported": True, "status_known": False, "phase": "unknown", "confirmed": False}, None),
+    (None, False),
+])
+def test_c100x_display_counts_once_its_adapter_is_confirmed(c100x_display, expected):
+    capabilities = {**CONFIRMED, "c100x_display": c100x_display}
+    if c100x_display is None:
+        del capabilities["c100x_display"]
+    assert device_display_support({**INFO, "capabilities": capabilities}) is expected
+    # The bridge must agree: a confirmed status without it is not enough.
+    capabilities["display_bridge"] = {"supported": False}
+    assert device_display_support({**INFO, "capabilities": capabilities}) is (None if expected is None else False)
+
+
+def test_first_confirmation_switches_the_device_ui_setting_on():
+    device = entry()
+    device.options = MappingProxyType({CONF_DEVICE_UI_ENABLED: False})
+    updates = []
+
+    def update(target, *, data, options=None):
+        updates.append((data, options))
+        target.data = data
+        if options is not None:
+            target.options = MappingProxyType(options)
+
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update))
+    remember_display_support(hass, device, INFO)
+    assert updates == [({DISPLAY_SUPPORTED: False}, None)]
+    confirmed = {**INFO, "capabilities": CONFIRMED}
+    device.runtime_data.agent_info = confirmed
+    device.runtime_data.capabilities = CONFIRMED
+    remember_display_support(hass, device, confirmed)
+    assert updates[-1] == ({DISPLAY_SUPPORTED: True}, {CONF_DEVICE_UI_ENABLED: True})
+    assert entry_device_ui_enabled(device)
+    # Only the change to confirmed does it; a later off stays off.
+    device.options = MappingProxyType({CONF_DEVICE_UI_ENABLED: False})
+    remember_display_support(hass, device, confirmed)
+    assert len(updates) == 2
+    assert not entry_device_ui_enabled(device)
+    # An unknown status keeps the remembered fact.
+    unknown = {**CONFIRMED, "c100x_display": {"supported": True, "status_known": False}}
+    remember_display_support(hass, device, {**INFO, "capabilities": unknown})
+    assert len(updates) == 2

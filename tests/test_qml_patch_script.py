@@ -326,7 +326,7 @@ PATCH_OUTPUT_SHA256 = {
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "54b4d3b2cadd0b8446b2ce9793559c12f42e65425bd69cd89a8a8c26784e6ba2",
+    "HomePage.qml": "7fa96807eee4315a898ead3e77c2afff083237aa483a96d16fb50a521d80fa63",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
@@ -352,6 +352,8 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_i18n.js": "c61b2534a23d93aaa893b993e1a5322ceace10119b97850a7ffd08f52ca40c35",
     "js/c300x_memos.js": "c64084cdc8d44b90150488082aed7338876f756220fac763490fdf0809bf5998",
 }
+
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "cc2b7f5fab26267dc2986c37c0ac551103b20ef10105052f062e092b1fa5a7a1"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -420,7 +422,9 @@ def test_qml_patch_apply_installs_complete_function_patch(tmp_path: Path) -> Non
     _assert_complete_gui_patch(gui_dir)
 
 
-def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> None:
+def test_qml_patch_apply_places_home_buttons_like_the_stock_buttons(tmp_path: Path) -> None:
+    """Flag 1: the stock layout, the same page a fresh device gets without it."""
+
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()
@@ -437,38 +441,185 @@ def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> No
     assert status["state"] == "patched"
     assert status["patched"] is True
     home_page = (gui_dir / "HomePage.qml").read_text()
+    assert _sha256(gui_dir / "HomePage.qml") == PATCH_OUTPUT_SHA256["HomePage.qml"]
     assert 'import "js/c300x_ha.js" as HAConfig' in home_page
     assert 'import "js/c300x_memos.js" as MemoSync' in home_page
     assert "function refreshDisplayBridgeButtons()" in home_page
     assert 'event.topic === "display_bridge.state"' in home_page
     assert "HAConfig.homeButtons" in home_page
     assert "id: buttonRetryTimer" in home_page
+    assert "id: displayBridgeButtonRow" not in home_page
     assert "id: homeAssistantButtonRow" not in home_page
+    assert "opacity: page." not in home_page
+    # Separate Flow items after Settings, bound straight to the availability
+    # properties so they appear as soon as the read answers, and counted
+    # like the stock buttons, so the Flow wraps them into its two rows.
+    assert (
+        "            BasicButton {\n                id: alarmButton\n"
+        "                objectName: \"alarmButton\"\n"
+        "                visible: page.alarmButtonVisible\n"
+    ) in home_page
+    assert (
+        "            BasicButton {\n                id: haButton\n"
+        "                objectName: \"haButton\"\n"
+        "                visible: page.haButtonVisible\n"
+    ) in home_page
+    assert "isVisible() { return visible }" not in home_page
+    assert (
+        "                    + (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2\n"
+        in home_page
+    )
+    order = [
+        home_page.index('objectName: "memoButton"'),
+        home_page.index('objectName: "settingsButton"'),
+        home_page.index('objectName: "alarmButton"'),
+        home_page.index('objectName: "haButton"'),
+    ]
+    assert order == sorted(order)
+
+
+def test_qml_patch_apply_can_keep_home_buttons_side_by_side(tmp_path: Path) -> None:
+    """Flag 0: the fixed pair, a Row whose hidden button keeps its space."""
+
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    status = _run_qml_patch(
+        tmp_path, gui_dir, backup_dir, "apply",
+        env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": "0"},
+    )
+
+    assert status["state"] == "patched"
+    home_page = (gui_dir / "HomePage.qml").read_text()
+    assert _sha256(gui_dir / "HomePage.qml") == SIDE_BY_SIDE_HOME_PAGE_SHA256
+    assert 'import "js/c300x_ha.js" as HAConfig' in home_page
+    assert "function refreshDisplayBridgeButtons()" in home_page
+    assert "id: buttonRetryTimer" in home_page
+    assert "id: displayBridgeButtonRow" in home_page
+    assert "id: homeAssistantButtonRow" not in home_page
+    assert "width: buttonPrototype.width * 2 + foobar.spacing" in home_page
+    assert "spacing: foobar.spacing" in home_page
     assert "opacity: page.alarmButtonVisible ? 1 : 0" in home_page
     assert "opacity: page.haButtonVisible ? 1 : 0" in home_page
     assert "enabled: page.alarmButtonVisible" in home_page
     assert "enabled: page.haButtonVisible" in home_page
+    assert "visible: page.alarmButtonVisible" not in home_page
+    assert "displayBridgeButtonCount" not in home_page
+    assert "visible: buttonHolder.buttonCount() === 5\n" in home_page
     assert home_page.index('objectName: "settingsButton"') < home_page.index(
-        'objectName: "alarmButton"'
+        "id: displayBridgeButtonRow"
     )
     assert home_page.index('objectName: "alarmButton"') < home_page.index(
         'objectName: "haButton"'
     )
-    (gui_dir / "HomePage.qml").write_text(home_page.replace("id: buttonRetryTimer", "id: oldTimer"))
-    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
 
-    # The older dynamic layout computed its button count instead of using a row.
-    legacy = home_page.replace("id: displayBridgeButtonRow", "id: legacyRow").replace(
-        "    id: page", "    id: page\n    function displayBridgeButtonCount() { return 0 }\n"
-        "    property int legacyCount: 0 + 2 + page.displayBridgeButtonCount()"
+
+@pytest.mark.parametrize(
+    ("first", "expected"),
+    [("0", "side_by_side"), ("1", "stock"), (None, "stock")],
+)
+def test_qml_patch_without_a_layout_flag_keeps_the_device_layout(
+    tmp_path: Path, first: str | None, expected: str
+) -> None:
+    """Installer and manual re-patches send no flag; they keep what is there."""
+
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    first_env = None if first is None else {"C300X_QML_DYNAMIC_HOME_PAGE": first}
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides=first_env)
+    before = (gui_dir / "HomePage.qml").read_text()
+
+    unset = {key: value for key, value in os.environ.items() if key != "C300X_QML_DYNAMIC_HOME_PAGE"}
+    result = subprocess.run(
+        [str(SCRIPT), "apply"], check=True, capture_output=True, text=True,
+        env={**unset, "C300X_QML_GUI_DIR": str(gui_dir), "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
+             "C300X_QML_BACKUP_DIR": str(backup_dir), "C300X_QML_NO_REMOUNT": "1",
+             "C300X_QML_RELOAD_GUI": "0", "C300X_QML_GUI_ROOT": str(tmp_path)},
+    )
+
+    assert json.loads(result.stdout)["changed_files"] == 0
+    home_page = (gui_dir / "HomePage.qml").read_text()
+    assert home_page == before
+    assert ("id: displayBridgeButtonRow" in home_page) is (expected == "side_by_side")
+    assert ("+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2" in home_page) is (
+        expected == "stock"
+    )
+
+
+def test_qml_patch_without_a_layout_flag_turns_the_retired_pair_side_by_side(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": "0"})
+    home_page = gui_dir / "HomePage.qml"
+    home_page.write_text(home_page.read_text().replace("id: displayBridgeButtonRow", "id: homeAssistantButtonRow"))
+
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": ""})
+
+    assert _sha256(home_page) == SIDE_BY_SIDE_HOME_PAGE_SHA256
+
+
+@pytest.mark.parametrize("dynamic", ["0", "1"], ids=["side_by_side", "stock"])
+def test_qml_patch_status_requires_home_button_recovery_in_both_layouts(
+    tmp_path: Path, dynamic: str
+) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    env = {"C300X_QML_DYNAMIC_HOME_PAGE": dynamic}
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides=env)["state"] == "patched"
+    home_page = (gui_dir / "HomePage.qml").read_text()
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "patched"
+    for broken in (
+        home_page.replace("id: buttonRetryTimer", "id: oldTimer"),
+        home_page.replace("if (registrationPossible) page.buttonRetries = 0", ""),
+        home_page.replace("id: displayBridgeButtonRow", "id: otherRow").replace(
+            "+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2", "+ 2"
+        ),
+    ):
+        (gui_dir / "HomePage.qml").write_text(broken)
+        assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
+    # The retired always-visible pair is no complete patch any more.
+    legacy = home_page.replace("id: displayBridgeButtonRow", "id: homeAssistantButtonRow").replace(
+        "id: buttonRetryTimer", "id: oldTimer"
     )
     (gui_dir / "HomePage.qml").write_text(legacy)
-    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "patched"
-    (gui_dir / "HomePage.qml").write_text(legacy.replace("id: buttonRetryTimer", "id: oldTimer"))
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
-    for layout in (home_page, legacy):
-        (gui_dir / "HomePage.qml").write_text(layout.replace("if (registrationPossible) page.buttonRetries = 0", ""))
-        assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
+    # Switching the layout regenerates the page alone from the original.
+    (gui_dir / "HomePage.qml").write_text(home_page)
+    other = {"C300X_QML_DYNAMIC_HOME_PAGE": "0" if dynamic == "1" else "1"}
+    switched = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides=other)
+    assert switched["state"] == "patched"
+    assert switched["changed_files"] == 1
+    assert (backup_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
+
+
+@pytest.mark.parametrize("dynamic", ["0", "1"], ids=["side_by_side", "stock"])
+def test_qml_patch_refuses_either_patched_layout_as_the_original(
+    tmp_path: Path, dynamic: str
+) -> None:
+    gui_dir = tmp_path / "gui"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    env = {"C300X_QML_DYNAMIC_HOME_PAGE": dynamic}
+    _run_qml_patch(tmp_path, gui_dir, tmp_path / "backups", "apply", env_overrides=env)
+    patched = (gui_dir / "HomePage.qml").read_text()
+    fresh_gui = tmp_path / "fresh"
+    fresh_gui.mkdir()
+    _write_original_gui(fresh_gui)
+    (fresh_gui / "HomePage.qml").write_text(patched)
+
+    result = _run_qml_patch_raw(tmp_path, fresh_gui, tmp_path / "fresh-backups", "apply")
+
+    assert result.returncode != 0
+    assert "already patched" in result.stderr
+    assert not (tmp_path / "fresh-backups" / "HomePage.qml").exists()
 
 
 def test_qml_media_user_label_apply_installs_call_forwarding_label(tmp_path: Path) -> None:
@@ -1306,7 +1457,10 @@ def test_home_page_message_watch_stops_on_hide(tmp_path: Path) -> None:
     ]
 
     assert "onVisibleChanged: {" in home_page
-    assert "if (visible) {\n            page.startMessageNotificationWatch()\n        } else {" in home_page
+    assert (
+        "if (visible) {\n            page.refreshDisplayBridgeButtons()\n"
+        "            page.startMessageNotificationWatch()\n        } else {"
+    ) in home_page
     assert "stopMessageNotificationWatch()" in home_page
     assert start_body.index("stopMessageNotificationWatch()") < start_body.index(
         "MemoSync.startEventWatch(handleMessageNotificationEvent)"
@@ -1673,23 +1827,24 @@ def _assert_complete_gui_patch(
 
     home_page = (gui_dir / "HomePage.qml").read_text()
     assert "originalHomeSetup()" in home_page
-    assert 'import "js/c300x_ha.js" as HAConfig' not in home_page
+    assert 'import "js/c300x_ha.js" as HAConfig' in home_page
     assert 'import "js/c300x_memos.js" as MemoSync' in home_page
-    assert "function refreshDisplayBridgeButtons()" not in home_page
+    assert "function refreshDisplayBridgeButtons()" in home_page
     assert "function startMessageNotificationWatch()" in home_page
     assert "function stopMessageNotificationWatch()" in home_page
     assert "MemoSync.syncHomeNotifications(page)" in home_page
     assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in home_page
     assert 'event.topic === "memos"' in home_page
     assert 'event.topic === "answering_machine.messages"' in home_page
-    assert "id: homeAssistantButtonRow" in home_page
-    assert "width: buttonPrototype.width * 2 + foobar.spacing" in home_page
-    assert "spacing: foobar.spacing" in home_page
+    # A fresh device without a layout setting gets the stock layout.
+    assert "id: homeAssistantButtonRow" not in home_page
+    assert "id: displayBridgeButtonRow" not in home_page
+    assert "visible: page.alarmButtonVisible" in home_page
+    assert "visible: page.haButtonVisible" in home_page
+    assert "+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2" in home_page
     assert "anchors.left: foobar.right" not in home_page
     assert "notificationsCount: page.unreadMessagesCount()" in home_page
     assert "notificationsCount: page.unreadMemosCount()" in home_page
-    assert "visible: page.alarmButtonVisible" not in home_page
-    assert "visible: page.haButtonVisible" not in home_page
     assert home_page.index('objectName: "settingsButton"') < home_page.index(
         'objectName: "alarmButton"'
     )

@@ -20,7 +20,7 @@ vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8").replace(/^\.pragma library\s*/, ""), sandbox);
 const owner = {
     stopped: false, running: true, blocked: false, muted: false, applied: 0, retries: 0,
-    setMuted(value) { this.applied++; this.muted = value; },
+    setMuted(value) { this.applied++; this.muted = value; return value; },
     reconnectRinger() { this.retries++; }
 };
 const runtime = sandbox.create(owner);
@@ -37,9 +37,17 @@ requests[1].reply(command("a"));
 assert.equal(owner.applied, 1, "replayed command applied twice");
 assert.equal(owner.retries, 1);
 runtime.start();
-owner.setMuted = function() { this.applied++; }; // Vendor ignores the requested state.
+owner.setMuted = function() { this.applied++; return true; }; // Vendor ignores the requested state.
 requests.at(-1).reply(command("b", false));
 assert.match(requests.at(-1).url, /completed=b{32}&muted=1$/, "ack invented a successful change");
+const stale = requests.at(-1);
+stale.reply(command("f", true));
+// The NOTIFY-bound property still says muted; the flag read back after the call does not.
+owner.setMuted = function() { this.applied++; return false; };
+assert.equal(owner.muted, true);
+requests.at(-1).reply(command("9", true));
+assert.match(requests.at(-1).url, /completed=9{32}&muted=0$/, "ack used the stale property");
+owner.applied -= 2;
 const pending = requests.at(-1);
 const late = pending.onreadystatechange;
 owner.blocked = true;

@@ -55,6 +55,14 @@ def test_ringer_protocol_cancels_preemption_and_reports_actual_state():
                     str(ROOT / "device_qml/c100x/js/c100x_ringer.js")], check=True, timeout=10)
 
 
+def test_mute_acks_the_flag_and_never_leaves_a_deferred_change():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the isolated mute regression")
+    subprocess.run([node, str(ROOT / "tests/fixtures/c100x_mute_probe.js"),
+                    str(ROOT / "device_qml/c100x/C100XBridge.qml")], check=True, timeout=10)
+
+
 def test_bridge_contract_matches_original_vendor_sources():
     from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
     original("c100x-1.5.8")

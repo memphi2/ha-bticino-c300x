@@ -15,6 +15,7 @@ Item {
             property int calls: 0
             function enableState(state) { if (state !== 17) throw new Error("wrong enum"); calls++; isRingtoneMute = true }
             function disableState(state) { if (state !== 17) throw new Error("wrong enum"); calls++; isRingtoneMute = false }
+            function isStateEnabled(state) { if (state !== 17) throw new Error("wrong enum"); return isRingtoneMute }
         }
     }
     QtObject {

@@ -27,6 +27,7 @@ Item {
     property var preferences: bridge
     readonly property bool vendorReady: !!vendor && !!events && muteState >= 0 && commissionedState >= 0
         && !!vendor.audioState && typeof vendor.audioState.isRingtoneMute === "boolean"
+        && typeof vendor.audioState.isStateEnabled === "function"
         && typeof vendor.beepEnabled === "boolean" && !!vendor.networkInfo
         && typeof vendor.networkInfo.isSoftAp === "boolean"
         && typeof events.callInProgress === "boolean" && typeof events.callActive === "boolean"
@@ -36,6 +37,7 @@ Item {
     readonly property bool alertsBlocked: blocked || !alertPageAllowed()
     readonly property bool touchToneEnabled: vendorReady && vendor.beepEnabled
     readonly property bool muted: vendorReady && vendor.audioState.isRingtoneMute
+    property int muteSignals: 0
     property bool applyingTouchTone: false
     property bool touchToneReportAgain: false
     property alias touchToneRetry: toneRetry
@@ -60,6 +62,11 @@ Item {
         onRegulationState: bridge.homeRegulationActive = state
     }
     onHomeItemChanged: homeRegulationActive = false
+    Connections {
+        target: bridge.vendorReady ? bridge.vendor.audioState : null
+        ignoreUnknownSignals: true
+        onIsRingtoneMuteChanged: bridge.muteSignals++
+    }
 
     function load() { Api.loadDisplayPreferences(bridge) }
     function setFeedbackEnabled(value) { Api.saveDisplayPreferences(bridge, value) }
@@ -68,9 +75,17 @@ Item {
         vendor.beepEnabled = value
     }
     function setMuted(value) {
-        if (!running || stopped || blocked || typeof value !== "boolean") return
-        if (value) vendor.audioState.enableState(muteState)
-        else vendor.audioState.disableState(muteState)
+        if (!running || stopped || blocked || typeof value !== "boolean") return null
+        var audio = vendor.audioState
+        if (audio.isStateEnabled(muteState) === value) return value
+        var seen = muteSignals
+        if (value) audio.enableState(muteState)
+        else audio.disableState(muteState)
+        if (muteSignals === seen && audio.isStateEnabled(muteState) === value) {
+            if (value) audio.disableState(muteState)
+            else audio.enableState(muteState)
+        }
+        return audio.isStateEnabled(muteState)
     }
     function reconnectRinger() { if (!stopped && running && !blocked) ringerRetry.restart() }
     function sync() {

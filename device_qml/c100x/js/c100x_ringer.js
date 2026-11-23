@@ -9,7 +9,7 @@ function create(owner) {
         pending = null
         if (request) { request.onreadystatechange = function() {}; request.abort() }
     }
-    function start(completed) {
+    function start(completed, muted) {
         if (pending || owner.stopped || !owner.running || owner.blocked) return
         var request = new XMLHttpRequest()
         pending = request
@@ -24,9 +24,7 @@ function create(owner) {
                     && data.id !== lastId && typeof data.muted === "boolean" && typeof data.expires === "number"
                     && isFinite(data.expires) && Date.now() < data.expires) {
                     lastId = data.id
-                    owner.setMuted(data.muted)
-                    // The next request reports the vendor property's actual value, not the requested value.
-                    start(data.id)
+                    start(data.id, owner.setMuted(data.muted))
                     return
                 }
             } catch (error) {}
@@ -34,7 +32,7 @@ function create(owner) {
         }
         try {
             var url = "http://127.0.0.1:8090/ui/ringer/next"
-            if (completed) url += "?completed=" + completed + "&muted=" + (owner.muted ? "1" : "0")
+            if (completed) url += "?completed=" + completed + "&muted=" + (muted === true ? "1" : "0")
             request.open("GET", url, true)
             request.setRequestHeader("X-C300X-GUI", "ringer-v1")
             request.send()

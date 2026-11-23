@@ -1729,7 +1729,7 @@
   "services": {
     "camera_picture": {
       "name": "Régler l’image",
-      "description": "Lit les trois réglages de l’image en direct. Pour en modifier un, indiquez le réglage et sa valeur (de 0 à 100 % par pas de 10). Nécessite l’agent à jour et un appel vidéo de la platine en cours ou une vidéo à la demande active (C300X avec firmware 1.7.19). Les médias enregistrés restent inchangés.",
+      "description": "Lit les trois réglages de l’image en direct. Pour en modifier un, indiquez le réglage et sa valeur (de 0 à 100 % par pas de 10). Nécessite l’agent à jour et un appel vidéo de la platine en cours ou une vidéo à la demande active dont les valeurs et les plages de réglage ont été vérifiées à la source. Les médias enregistrés restent inchangés.",
       "fields": {
         "entry_id": {"name": "Entrée"},
         "control": {"name": "Réglage"},

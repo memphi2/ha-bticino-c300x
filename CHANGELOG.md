@@ -13,8 +13,9 @@
   The original touch-tone switch stays under **General**.
 - The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
   contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
-  video on C300X firmware 1.7.19 uses the source controls after the agent reads
-  all three settings. Requires the updated agent; archived media is unchanged.
+  controls require verified source values and ranges. They remained unavailable
+  on the tested C300X 1.7.19 live stream. Requires the updated agent; archived
+  media is unchanged.
 - Camera quality offers a matching visitor snapshot size when changing stream
   size, including when returning to the factory setting.
 - The updater reports a writable root filesystem before replacing files, and

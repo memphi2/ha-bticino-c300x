@@ -1729,7 +1729,7 @@
   "services": {
     "camera_picture": {
       "name": "Adjust camera picture",
-      "description": "Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or supported on-demand video (C300X firmware 1.7.19). Saved media is unchanged.",
+      "description": "Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or on-demand video with verified source values and ranges. Saved media is unchanged.",
       "fields": {
         "entry_id": {"name": "Integration entry"},
         "control": {"name": "Control"},

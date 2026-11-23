@@ -58,7 +58,7 @@ def test_deprecation_gate_allows_documentation_and_negative_tests(
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     gate = importlib.import_module("check_ha_deprecations")
     assert gate._skip_path(Path(__file__))
-    assert gate._skip_path(ROOT / "docs" / "ha-2026.11-audit.md")
+    assert gate._skip_path(ROOT / "docs" / "dev" / "architecture.md")
     assert gate._forbidden_token_failures(
         COMPONENT / "config_flow.py", "self.async_update_reload_and_abort(entry)"
     )

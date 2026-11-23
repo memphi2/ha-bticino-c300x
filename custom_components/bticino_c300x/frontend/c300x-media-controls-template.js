@@ -11,7 +11,7 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .archive img, .archive video { display: block; width: 100%; height: 100%; object-fit: contain; }
     .stage { position: absolute; inset: 0; pointer-events: none; }
     /* Text on the picture has no plate: white with a dark outline, as the time written into an image. */
-    .stamp, .info { color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 3px #000; }
+    .stamp, .info, .elapsed { color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 3px #000; }
     /* The time of a video sits where an image carries its own: lower right, same size. */
     /* Without container units the time keeps a fixed size. */
     .stamp, .toolbar, .nav { --c300x-stamp-size: 12px; }
@@ -25,8 +25,7 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .status { opacity: .8; }
     /* One row in a bar of its own; with a video it leaves the line of the time free below it. */
     .toolbar { position: absolute; bottom: 8px; inset-inline: 8px; display: flex; align-items: center; gap: 2px;
-      padding: 0 6px; border-radius: 20px; pointer-events: auto; background: rgb(0 0 0 / .5);
-      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+      padding: 0 6px; pointer-events: auto; background: transparent; }
     .toolbar[data-dated] { bottom: calc(var(--c300x-stamp-size) * 1.5 + 8px); }
     .timeline { order: 1; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 4px; }
     .buttons { display: contents; }
@@ -37,19 +36,18 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     button { width: 40px; height: 40px; flex: 0 0 40px; display: inline-flex; align-items: center;
       justify-content: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
       color: #fff; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
-    button:hover { background: rgb(255 255 255 / .16); }
+    button:enabled:hover ha-icon { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #fff); }
     button:disabled { opacity: .4; cursor: default; }
     button:focus-visible, input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
     button[aria-pressed="true"] { color: var(--primary-color); }
-    ha-icon { --mdc-icon-size: 24px; pointer-events: none; }
+    ha-icon { --mdc-icon-size: 24px; pointer-events: none; filter: drop-shadow(0 1px 2px #000); }
     input[type="range"] { min-width: 0; height: 24px; margin: 0; accent-color: var(--primary-color); cursor: pointer; }
     .seek { flex: 1; width: 0; }
     .volume { width: 64px; flex: 0 1 64px; }
     .stage > button { position: absolute; }
     .expand { inset: 0; width: 100%; height: 100%; border-radius: 0; cursor: zoom-in; }
     .expand:hover { background: none; }
-    .nav, .close, .fullscreen { background: rgb(0 0 0 / .5); transition: opacity 140ms ease; }
-    .nav:hover, .close:hover, .fullscreen:hover { background: rgb(0 0 0 / .75); }
+    .nav, .close, .fullscreen { transition: opacity 140ms ease; }
     /* The arrows sit in the middle above the room of the bar, the same for images and videos. */
     .nav { --c300x-bar: calc(var(--c300x-stamp-size) * 1.5 + 48px); top: calc((100% - var(--c300x-bar)) / 2 - 20px); }
     .nav:disabled { opacity: 0; pointer-events: none; }

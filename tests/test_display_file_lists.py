@@ -11,12 +11,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def test_every_list_of_the_display_files_names_the_same_files() -> None:
-    from device_file_strip import DEVICE_SOURCE_FILES
+    from device_file_strip import DEVICE_SOURCE_FILES, EMBEDDED_SETTINGS
 
     from custom_components.bticino_c300x.device_installer import DISPLAY_FILES
 
     expected = set(DISPLAY_FILES)
     assert len(expected) == len(DISPLAY_FILES)
+    standalone = expected.copy()
+    expected.update(EMBEDDED_SETTINGS)
     assert set(DEVICE_SOURCE_FILES) == expected
 
     script = (ROOT / "native_agent/scripts/qml_patch.sh").read_text()
@@ -28,7 +30,7 @@ def test_every_list_of_the_display_files_names_the_same_files() -> None:
     assert set(generated.group(1).split()) | (set(core.group(1).split()) - {"EventManager.qml"}) == expected
 
     update_paths = (ROOT / "native_agent/src/agent_update_paths.h").read_text()
-    assert set(re.findall(r'"device_agent/qml/([^"]+)"', update_paths)) == expected | {"c100x_bundle.sh"}
+    assert set(re.findall(r'"device_agent/qml/([^"]+)"', update_paths)) == standalone | {"c100x_bundle.sh"}
 
     installer = (ROOT / "scripts/install_c300x_device.sh").read_text()
     assert set(re.findall(r'"\$QML_STAGE_DIR/([^"]+)"', installer)) == expected

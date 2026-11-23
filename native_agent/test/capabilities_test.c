@@ -53,6 +53,7 @@ int main(int argc, char **argv)
     assert(short_body[sizeof(short_body) - 1] == '\0');
     for (int maintenance = 0; maintenance <= 1; maintenance++) {
         context.maintenance_supported = maintenance;
+        context.memo_led_present = !maintenance;
         context.https_callbacks = maintenance;
         for (int pcmu = 0; pcmu <= 1; pcmu++) {
             context.device_codec_pcmu = pcmu;
@@ -68,7 +69,7 @@ int main(int argc, char **argv)
     context.announcements_supported = 1;
     assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
     fputs(body, stdout);
-    context.display_patchable = 1;
+    context.display_features = 1;
     assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
     fputs(body, stdout);
     return 0;

@@ -62,7 +62,6 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
-    DEFAULT_CREATE_HOMEASSISTANT_USER,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_N,
@@ -80,9 +79,10 @@ from .dashboard_page_order import dashboard_navigation
 from .display_support import entry_display_supported
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
+from .media_consent import entry_asks_media_consent
 from .schema_compat import vol
 
-CREATE_HOMEASSISTANT_USER_DEFAULT = DEFAULT_CREATE_HOMEASSISTANT_USER
+CREATE_HOMEASSISTANT_USER_DEFAULT = True
 RECONFIGURED_OPTION_KEYS = frozenset(
     {
         *SNAPSHOT_DEFAULTS,
@@ -195,7 +195,7 @@ def options_features_schema(
         _config_default(
             config_entry,
             CONF_CREATE_HOMEASSISTANT_USER,
-            CREATE_HOMEASSISTANT_USER_DEFAULT,
+            CREATE_HOMEASSISTANT_USER_DEFAULT and not entry_asks_media_consent(config_entry),
         )
         if create_homeassistant_user is None
         else create_homeassistant_user
@@ -342,7 +342,7 @@ def current_feature_options(
             _config_default(
                 config_entry,
                 CONF_CREATE_HOMEASSISTANT_USER,
-                CREATE_HOMEASSISTANT_USER_DEFAULT,
+                CREATE_HOMEASSISTANT_USER_DEFAULT and not entry_asks_media_consent(config_entry),
             )
         ),
         # An entry from before the setting has it as its device is.
@@ -422,6 +422,8 @@ def reconfigure_features_schema_from_current(
 def feature_input_defaults(
     user_input: dict[str, Any],
     defaults: dict[str, Any],
+    *,
+    ask_media_consent: bool = False,
 ) -> dict[str, Any]:
     """Return feature input with hidden display fields preserved when absent."""
 
@@ -432,9 +434,15 @@ def feature_input_defaults(
         data.setdefault(key, defaults.get(key, default))
     data.setdefault(CONF_NATIVE_TWO_WAY_AUDIO, defaults.get(CONF_NATIVE_TWO_WAY_AUDIO, False))
     if CONF_CREATE_HOMEASSISTANT_USER not in data:
-        data[CONF_CREATE_HOMEASSISTANT_USER] = defaults.get(
-            CONF_CREATE_HOMEASSISTANT_USER,
-            CREATE_HOMEASSISTANT_USER_DEFAULT,
+        media_was_enabled = bool(defaults.get(CONF_VIDEO_ENABLED, False))
+        media_enabled = bool(data.get(CONF_VIDEO_ENABLED, media_was_enabled))
+        data[CONF_CREATE_HOMEASSISTANT_USER] = (
+            CREATE_HOMEASSISTANT_USER_DEFAULT
+            if media_enabled and not media_was_enabled and not ask_media_consent
+            else defaults.get(
+                CONF_CREATE_HOMEASSISTANT_USER,
+                CREATE_HOMEASSISTANT_USER_DEFAULT,
+            )
         )
     data.setdefault(
         CONF_DEVICE_ACTIVATION_MODE,

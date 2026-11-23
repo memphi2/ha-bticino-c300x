@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -66,6 +67,14 @@ static int simulated_remount(const char *command)
     return 0;
 }
 
+static int simulated_statvfs(const char *path, struct statvfs *info)
+{
+    assert(strcmp(path, "/") == 0);
+    memset(info, 0, sizeof(*info));
+    info->f_flag = ST_RDONLY;
+    return 0;
+}
+
 #undef C300X_AGENT_INIT_SCRIPT
 #undef C300X_AGENT_INIT_LINK
 #define C300X_AGENT_INIT_SCRIPT test_init_script
@@ -73,9 +82,11 @@ static int simulated_remount(const char *command)
 #define copy_binary_file test_copy
 #define copy_binary_file_if_changed test_copy_if_changed
 #define system simulated_remount
+#define statvfs(path, info) simulated_statvfs(path, info)
 #define symlink test_symlink
 #define unlink test_unlink
 #include "../src/agent_update.c"
+#undef statvfs
 #undef symlink
 #undef unlink
 #undef system

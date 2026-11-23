@@ -1,19 +1,24 @@
 """Stock-settings patch and GUI preference regressions without a device."""
 
+import re
 import shutil
 import stat
 import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 from test_qml_patch_script import (
     ORIGINAL_GENERAL_SETTINGS,
+    ORIGINAL_SETTINGS,
     ROOT,
     _run_qml_patch,
     _run_qml_patch_raw,
     _write_original_gui,
 )
 
-SETTINGS = "Components/Settings/GeneralsChoice.qml"
+GENERAL = "Components/Settings/GeneralsChoice.qml"
+SETTINGS = "Settings.qml"
 
 
 def test_preferences_production_runtime():
@@ -27,7 +32,7 @@ def test_preferences_production_runtime():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("topic", ["display_bridge.state", "notifications"])
+@pytest.mark.parametrize("topic", ["display_bridge.state", "notifications", "missed"])
 def test_home_availability_event_refreshes_after_inflight_read(tmp_path, topic):
     node = shutil.which("node")
     if node is None:
@@ -60,9 +65,11 @@ for (const previous of [false, true]) {
     };
     const api = vm.createContext({XMLHttpRequest: Request});
     vm.runInContext(apiSource, api);
-    const page = {alarmButtonVisible: previous, haButtonVisible: previous};
+    const page = {visible: true, buttonReadGeneration: 0, buttonRetries: 0,
+                  alarmButtonVisible: previous, haButtonVisible: previous};
+    const buttonRetryTimer = {stop() {}, restart() { assert.fail('obsolete read scheduled retry'); }};
     let unreadRefreshes = 0;
-    const home = vm.createContext({page, HAConfig: api,
+    const home = vm.createContext({page, buttonRetryTimer, HAConfig: api,
         MemoSync: {syncHomeNotifications(owner) {
             assert.equal(owner, page);
             unreadRefreshes++;
@@ -79,7 +86,8 @@ for (const previous of [false, true]) {
     home.refreshDisplayBridgeButtons();
     home.refreshDisplayBridgeButtons();
     assert.equal(requests.length, 1);
-    home.handleMessageNotificationEvent({topic: process.argv[2]});
+    home.handleMessageNotificationEvent(process.argv[2] === 'missed'
+        ? {topic: 'media.closed', missedRevisions: true} : {topic: process.argv[2]});
     assert.equal(api.forwardQueue.length, 1, 'each availability event invalidates the pre-event read');
     home.handleMessageNotificationEvent({topic: 'notifications'});
     home.handleMessageNotificationEvent({topic: 'display_bridge.state'});
@@ -87,7 +95,11 @@ for (const previous of [false, true]) {
     home.handleMessageNotificationEvent({topic: 'answering_machine.messages'});
     assert.equal(unreadRefreshes, 2, 'memo and answering-machine refreshes are preserved');
     assert.equal(requests.length, 1, 'forwarded requests remain serialized');
-    requests[0].finish(previous);
+    // Both initial callers share the boot-time failure. Only the newer,
+    // queued post-registration snapshot may change buttons or schedule retries.
+    requests[0].readyState = 4;
+    requests[0].status = 404;
+    requests[0].onreadystatechange();
     assert.equal(requests.length, 2, 'the event must queue a fresh read after the old response');
     assert.ok(requests.every(request => request.url.endsWith('/ui/state')));
     requests[1].finish(!previous);
@@ -99,9 +111,106 @@ for (const previous of [false, true]) {
     assert.equal(unreadRefreshes, 2);
     assert.equal(api.forwardActive, null);
     assert.equal(api.forwardQueue.length, 0);
+    // Hide while a post-event refresh is queued. A HomePage-only read drops,
+    // but a shared caller from another page must still receive its answer.
+    home.refreshDisplayBridgeButtons();
+    home.handleMessageNotificationEvent({topic: 'notifications'});
+    let answered = false;
+    if (previous) api.getJsonShared('/ui/state', () => { answered = true; });
+    page.visible = false;
+    requests[2].finish(false);
+    assert.equal(requests.length, previous ? 4 : 3);
+    if (previous) { requests[3].finish(true); assert.ok(answered); }
 }
 """, str(gui), topic], capture_output=True, text=True, check=False, timeout=10)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_home_buttons_qt4_retry_without_navigation(tmp_path):
+    from scripts.setup_qt4_runtime import probe_command, runtime_paths
+
+    paths = runtime_paths()
+    if not paths:
+        pytest.skip("Local firmware Qt 4 runtime not configured")
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": "1"})
+    source = (gui / "HomePage.qml").read_text()
+    # Run the generated controls and lifecycle handler on firmware Qt without
+    # loading the hardware GUI. Only the forwarded HA request is substituted.
+    controls = re.search(r"    property bool alarmButtonVisible:.*?function refreshDisplayBridgeButtons\(\).*?^    }",
+                         source, re.S | re.M).group()
+    visibility = re.search(r"    onVisibleChanged: \{.*?^    }", source, re.S | re.M).group()
+    event_handler = re.search(r"    function handleMessageNotificationEvent\(event\).*?^    }",
+                              source, re.S | re.M).group()
+    with tempfile.TemporaryDirectory(dir="/var/tmp") as folder:
+        qml = Path(folder) / "HomeButtons.qml"
+        (qml.parent / "mock.js").write_text("var requests = 0, reply = null\n"
+                                            "function homeButtons(cb) { requests++; reply = cb }\n"
+                                            "function invalidateSharedRead(path) {}\n")
+        qml.write_text('import QtQuick 1.1\nimport "mock.js" as HAConfig\nItem { id: page\n'
+                       + controls + "\n" + visibility + "\n" + event_handler + """
+    function respond(a, b, valid) { HAConfig.reply(a, b, valid) }
+    property int starts: 0
+    function startMessageNotificationWatch() { starts++ }
+    function stopMessageNotificationWatch() {}
+    function check(ok) { if (!ok) throw new Error("home recovery failed") }
+    Component.onCompleted: {
+        // Stock TabView calls aboutToShow before setting visible=true.
+        // The first read and watch must start even with no clock loader.
+        visible = false
+        var beforeShow = HAConfig.requests
+        var beforeWatch = starts
+        refreshDisplayBridgeButtons()
+        check(HAConfig.requests === beforeShow)
+        visible = true
+        check(HAConfig.requests === beforeShow + 1 && starts === beforeWatch + 1)
+        respond(false, false, false)
+        check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000)
+        // No availability event arrives. Fire the same one-shot as the Qt clock.
+        buttonRetryTimer.triggered()
+        respond(true, true, true)
+        check(HAConfig.requests === beforeShow + 2 && haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running)
+        refreshDisplayBridgeButtons()
+        respond(false, false, true)
+        check(!haButtonVisible && !alarmButtonVisible && !buttonRetryTimer.running)
+        refreshDisplayBridgeButtons()
+        for (var i = 0; i < 6; i++) {
+            respond(false, false, false)
+            check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000 * Math.pow(2, i))
+            buttonRetryTimer.triggered()
+        }
+        respond(false, false, false)
+        check(!buttonRetryTimer.running)
+        // No timer remains: registration at minute five is the next input.
+        var beforeRegistration = HAConfig.requests
+        handleMessageNotificationEvent({topic: "display_bridge.state"})
+        check(HAConfig.requests === beforeRegistration + 1)
+        respond(false, false, false)
+        check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000)
+        buttonRetryTimer.triggered()
+        check(HAConfig.requests === beforeRegistration + 2)
+        respond(true, true, true)
+        check(haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running)
+        refreshDisplayBridgeButtons()
+        respond(false, false, true)
+        visible = false
+        visible = true
+        refreshDisplayBridgeButtons()
+        respond(false, false, false)
+        check(buttonRetryTimer.running)
+        visible = false
+        var count = HAConfig.requests
+        respond(true, true, true)
+        buttonRetryTimer.triggered()
+        check(!buttonRetryTimer.running && HAConfig.requests === count && !haButtonVisible)
+        console.log("QT4_HOME_BUTTON_RECOVERY_PASS")
+    }
+}
+""")
+        result = subprocess.run(probe_command(paths, qml), capture_output=True, text=True, timeout=15, check=True)
+    assert "QT4_HOME_BUTTON_RECOVERY_PASS" in result.stdout + result.stderr, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("action", ["status", "core-apply", "media-user-label-apply"])
@@ -124,11 +233,12 @@ def test_disabling_optional_display_restores_settings_but_keeps_media_hooks(tmp_
     gui.mkdir()
     _write_original_gui(gui)
     _run_qml_patch(tmp_path, gui, backup, "apply")
-    assert "c300xFeedbackSetting" in (gui / SETTINGS).read_text()
+    assert (gui / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert 'sourceUrl: "C300XSettings.qml"' in (gui / SETTINGS).read_text()
     result = _run_qml_patch(tmp_path, gui, backup, "restore")
     assert result["patched"] is False
     assert result["core_patched"] is True
-    assert (gui / SETTINGS).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert (gui / SETTINGS).read_text() == ORIGINAL_SETTINGS
 
 
 def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
@@ -144,12 +254,10 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
     assert (backup / SETTINGS).stat().st_mtime_ns == original_time
     assert stat.S_IMODE((backup / SETTINGS).stat().st_mode) == 0o640
     patched = settings.read_text()
-    assert patched.count("id: c300xFeedbackSetting") == 1
-    assert "anchors.top: beepButton.bottom" in patched
-    assert "anchors.topMargin: 8" in patched
-    assert "        spacing: 4" in patched
-    assert "checked: global.beepEnabled" in patched
-    assert "onTouched: global.beepEnabled = checked" in patched
+    assert patched.count("id: c300xSettings") == 1
+    assert "anchors.top: column.bottom" in patched
+    assert "property Item tab: c300xSettings" in patched
+    assert (gui / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
     assert "Qt.createQmlObject" not in (gui / "MainApp.qml").read_text()
     assert "property variant request:" not in (gui / "MainApp.qml").read_text()
     assert _run_qml_patch(tmp_path, gui, backup, "apply")["changed_files"] == 0
@@ -161,65 +269,28 @@ def test_settings_backup_restore_and_unchanged_reapply(tmp_path):
 
 
 @pytest.mark.parametrize("broken", [
-    "onTouched: global.beepEnabled = checked", "id: beepButton", "anchors.topMargin: 32",
-    "anchors.topMargin: parent.height / 100 * 4", "spacing: 6", "id: space", "width: 50",
+    "spacing: 6", "    ExclusiveGroup {", "configurationChoice", 'QT_TR_NOOP("Configuration")',
 ])
 def test_unknown_settings_layout_aborts_before_touching_gui(tmp_path, broken):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
     _write_original_gui(gui)
-    (gui / SETTINGS).write_text(ORIGINAL_GENERAL_SETTINGS.replace(broken, "// changed vendor layout"))
+    (gui / SETTINGS).write_text(ORIGINAL_SETTINGS.replace(broken, "// changed vendor layout"))
     before = {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()}
     assert _run_qml_patch_raw(tmp_path, gui, backup, "apply").returncode != 0
     assert {p.relative_to(gui): p.read_bytes() for p in gui.rglob("*") if p.is_file()} == before
 
 
-def test_settings_fit_original_800_by_480_screen(tmp_path):
+def test_legacy_feedback_row_is_removed_on_upgrade(tmp_path):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
     _write_original_gui(gui)
+    (backup / GENERAL).parent.mkdir(parents=True)
+    (backup / GENERAL).write_text(ORIGINAL_GENERAL_SETTINGS)
+    (gui / GENERAL).write_text(ORIGINAL_GENERAL_SETTINGS + "// c300xFeedbackSetting")
     _run_qml_patch(tmp_path, gui, backup, "apply")
-    source = (gui / SETTINGS).read_text()
-    assert "    anchors.topMargin: 8" in source
-    assert "        spacing: 4" in source
-    tone = source.split("id: beepButton", 1)[1].split("id: c300xFeedbackSetting", 1)[0]
-    feedback = source.split("id: c300xFeedbackSetting", 1)[1]
-    assert "anchors.topMargin: 8" in tone
-    assert "anchors.topMargin: 6" in feedback
-    assert "height: 44" in feedback
-    # Stock Settings.qml header/section and SVG button dimensions.
-    section_top = 78 + 480 * 0.05
-    button_column_height = 5 * 50 + 4 * 4
-    feedback_bottom = section_top + 8 + button_column_height + 8 + 34.239 + 6 + 44
-    assert feedback_bottom <= 480 - 10
-
-
-def test_settings_rows_share_the_button_column_edges(tmp_path):
-    gui, backup = tmp_path / "gui", tmp_path / "backup"
-    gui.mkdir()
-    _write_original_gui(gui)
-    _run_qml_patch(tmp_path, gui, backup, "apply")
-    source = (gui / SETTINGS).read_text()
-    tone = source.split("id: beepButton", 1)[1].split("id: c300xFeedbackSetting", 1)[0]
-    feedback = source.split("id: c300xFeedbackSetting", 1)[1]
-    # The vendor row is centred as a group; widening its spacer makes the row
-    # column-wide less the 8 px inset the buttons above use on both sides
-    # (12 px row spacing twice + 16 px inset = 40).
-    assert "width: 50" not in tone
-    assert (
-        "width: Math.max(0, buttonColumn.width - 40 - textBeep.width - selectorOnOff.width)"
-        in tone
-    )
-    assert "anchors.horizontalCenter: parent.horizontalCenter" in tone
-    # The added row is column-wide with the same inset: label left, switch right.
-    assert "width: buttonColumn.width" in feedback
-    label = feedback.split("UbuntuLightText {", 1)[1].split("}", 1)[0]
-    switch = feedback.split("id: c300xFeedbackSwitch", 1)[1].split("style:", 1)[0]
-    assert "anchors.left: parent.left" in label
-    assert "anchors.leftMargin: 8" in label
-    assert "horizontalAlignment: Text.AlignLeft" in label
-    assert "anchors.right: parent.right" in switch
-    assert "anchors.rightMargin: 8" in switch
+    assert (gui / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert (backup / GENERAL).read_text() == ORIGINAL_GENERAL_SETTINGS
 
 
 def test_missing_original_settings_backup_blocks_restore_and_rebackup(tmp_path):
@@ -232,7 +303,7 @@ def test_missing_original_settings_backup_blocks_restore_and_rebackup(tmp_path):
     for action in ("apply", "restore", "restore-all"):
         result = _run_qml_patch_raw(tmp_path, gui, backup, action)
         assert result.returncode != 0
-        assert "GeneralsChoice.qml" in result.stderr
+        assert "Settings.qml" in result.stderr
         assert (gui / SETTINGS).read_bytes() == before
         assert not (backup / SETTINGS).exists()
 
@@ -245,37 +316,60 @@ def test_older_feature_patch_without_settings_backup_remains_restorable(tmp_path
     (gui / SETTINGS).write_bytes((backup / SETTINGS).read_bytes())
     (backup / SETTINGS).unlink()
     _run_qml_patch(tmp_path, gui, backup, "restore-all")
-    assert (gui / SETTINGS).read_text() == ORIGINAL_GENERAL_SETTINGS
+    assert (gui / SETTINGS).read_text() == ORIGINAL_SETTINGS
 
 
-def test_settings_are_inert_when_older_restore_removes_ha_helpers(tmp_path):
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("node is not installed")
+def test_local_maintenance_transport():
+    subprocess.run(["node", str(ROOT / "tests/qml/maintenance.cjs")], check=True)
+
+
+def test_station_port_from_agent_or_direct_install(tmp_path):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    agent = tmp_path / "agent"
+    agent.write_text(
+        '#!/bin/sh\n[ "$3" != "--diagnose-startup" ] || echo \'    "ui_port": 18123,\'\n'
+    )
+    agent.chmod(0o700)
+    (tmp_path / "config.json").write_text("{}")
+    env = {"C300X_QML_AGENT_BIN": str(agent)}
+    for port in (18123, 65535):
+        if port == 65535:
+            env["C300X_QML_UI_PORT"] = str(port)
+        _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides=env)
+        assert f'property string uiBaseUrl: "http://127.0.0.1:{port}"' in (gui / "MainApp.qml").read_text()
+    previous = (gui / "MainApp.qml").read_bytes()
+    for port in ("0", "65536", "1/path"):
+        env["C300X_QML_UI_PORT"] = port
+        assert _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides=env).returncode != 0
+        assert (gui / "MainApp.qml").read_bytes() == previous
+
+
+def test_truncated_menu_backup_blocks_uninstall(tmp_path):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
     _write_original_gui(gui)
     _run_qml_patch(tmp_path, gui, backup, "apply")
-    source = (gui / SETTINGS).read_text()
-    assert not any("js/" in line for line in source.splitlines() if line.startswith("import "))
-    result = subprocess.run([node, "-e", """
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
-const source = fs.readFileSync(process.argv[1], 'utf8').split('id: c300xFeedbackSetting')[1];
-const ctx = vm.createContext({c300xFeedbackSetting: {visible: false}});
-function expression(name) {
-    return source.match(new RegExp('^ +'+ name + ': (.+)$', 'm'))[1];
-}
-assert.equal(vm.runInContext(expression('visible'), ctx), false);
-assert.equal(vm.runInContext(expression('text'), ctx), '');
-assert.equal(vm.runInContext(expression('enabled'), ctx), false);
-assert.equal(vm.runInContext(expression('checked'), ctx), true);
-ctx.c300xDisplayPreferences = {ready: true, busy: false, feedbackEnabled: false, label: 'HA feedback'};
-ctx.c300xFeedbackSetting.visible = vm.runInContext(expression('visible'), ctx);
-assert.equal(ctx.c300xFeedbackSetting.visible, true);
-assert.equal(vm.runInContext(expression('text'), ctx), 'HA feedback');
-assert.equal(vm.runInContext(expression('enabled'), ctx), true);
-assert.equal(vm.runInContext(expression('checked'), ctx), false);
-""", str(gui / SETTINGS)], capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stdout + result.stderr
+    (backup / SETTINGS).write_text("import QtQuick 1.1\n")
+    assert not _run_qml_patch(tmp_path, gui, backup, "status")["backup_available"]
+    assert _run_qml_patch_raw(tmp_path, gui, backup, "restore-all").returncode != 0
+    assert "c300xSettings" in (gui / SETTINGS).read_text()
+
+
+@pytest.mark.parametrize("target", ["Settings.qml", "js/c300x_maintenance.js"])
+def test_settings_restore_rejects_untrusted_backup(tmp_path, target):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "apply")
+    victim = tmp_path / "external"
+    victim.write_bytes(b"unchanged")
+    link = backup / target
+    link.parent.mkdir(exist_ok=True)
+    link.unlink(missing_ok=True)
+    link.symlink_to(victim)
+    for action in ("apply", "restore", "restore-all"):
+        assert _run_qml_patch_raw(tmp_path, gui, backup, action).returncode != 0
+        assert victim.read_bytes() == b"unchanged"
+        assert "c300xSettings" in (gui / SETTINGS).read_text()

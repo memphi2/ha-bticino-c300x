@@ -232,6 +232,13 @@ def test_active_display_bootstrap_completes_before_gui_reload(tmp_path, monkeypa
     assert api.reload_log.read_text().splitlines()[-1] == "new"
     assert "unsafe" not in api.reload_log.read_text()
     assert api.patch("status")["patched"] is True
+    from device_file_strip import EMBEDDED_SETTINGS, strip_device_source
+
+    for name in EMBEDDED_SETTINGS:
+        assert not (api.agent / "qml" / name).exists()
+        assert not (package / "device_agent/qml" / name).exists()
+        assert (api.gui / name).read_text() == strip_device_source((ROOT / "device_qml" / name).read_text())
+        assert (api.gui / name).stat().st_mode & 0o777 == 0o644
     for name in DISPLAY_FILES:
         assert (api.gui / name).read_bytes() == (package / "device_agent/qml" / name).read_bytes()
         assert (api.agent / "qml" / name).read_bytes() == (package / "device_agent/qml" / name).read_bytes()

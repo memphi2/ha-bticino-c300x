@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
         },
         "data_description": {
-          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
+          "snapshot_width": "Standard 800: Schnappschüsse lesen den 800×480-Display-Framebuffer, unabhängig von der Videostream-Größe. Der Agent skaliert das vollständige Bild auf die gewählten Maße; Home Assistant skaliert es nicht erneut. Bereich 64-800.",
+          "snapshot_height": "Standard 480. 800×480 erhält die Display-Pixel, z. B. 400×240 das Seitenverhältnis 5:3. Andere Proportionen verzerren das Bild. Auch bei einem 960×576-Stream stammt der Schnappschuss vom 800×480-Display. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
         },
         "data_description": {
-          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
+          "snapshot_width": "Standard 800: Schnappschüsse lesen den 800×480-Display-Framebuffer, unabhängig von der Videostream-Größe. Der Agent skaliert das vollständige Bild auf die gewählten Maße; Home Assistant skaliert es nicht erneut. Bereich 64-800.",
+          "snapshot_height": "Standard 480. 800×480 erhält die Display-Pixel, z. B. 400×240 das Seitenverhältnis 5:3. Andere Proportionen verzerren das Bild. Auch bei einem 960×576-Stream stammt der Schnappschuss vom 800×480-Display. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -762,8 +762,8 @@
           "snapshot_timestamp": "Datum und Uhrzeit ins Bild einblenden"
         },
         "data_description": {
-          "snapshot_width": "Das Gerät liest das Bild von seinem 800×480-Display und liefert es in genau dieser Größe; danach wird nichts mehr umgerechnet. Standard 688, die Breite des Geräte-Videostreams, den das Display nur auf 800 streckt. Bereich 64-800.",
-          "snapshot_height": "Höchstens 480: Das Bild wird vom 800×480-Display gelesen, 576 geht deshalb nicht. Standard 480. Für ein Kamerabild von 704×576 behält etwa 587×480 die Form. Bereich 64-480.",
+          "snapshot_width": "Standard 800: Schnappschüsse lesen den 800×480-Display-Framebuffer, unabhängig von der Videostream-Größe. Der Agent skaliert das vollständige Bild auf die gewählten Maße; Home Assistant skaliert es nicht erneut. Bereich 64-800.",
+          "snapshot_height": "Standard 480. 800×480 erhält die Display-Pixel, z. B. 400×240 das Seitenverhältnis 5:3. Andere Proportionen verzerren das Bild. Auch bei einem 960×576-Stream stammt der Schnappschuss vom 800×480-Display. Bereich 64-480.",
           "snapshot_delay_seconds": "Aufnahme nach dem Klingeln oder Start eines Videostreams; Standard 3 Sekunden. Keine geöffnete Karte erforderlich.",
           "snapshot_retention_days": "Standard 14 Tage. Abgelaufene Bilder werden auch bei deaktivierter Speicherung gelöscht. Grenze: 1.000 Bilder oder 128 MiB pro Gerät; älteste Bilder werden zuerst entfernt.",
           "snapshot_timestamp": "Datum und Uhrzeit der Aufnahme werden unten rechts in das gespeicherte Bild geschrieben. Standardmäßig eingeschaltet."
@@ -771,16 +771,18 @@
       },
       "camera_quality": {
         "title": "Kameraqualität",
-        "description": "Größe, Bitrate und Bildrate des hochauflösenden Kamerastreams; auf Firmware 3.0.x des niedrig aufgelösten, des einzigen, den diese Firmware sendet und den auch die Door-Entry-App bekommt. Steht auf älterer Firmware die **Kamera-Auflösung** auf Niedrig, empfängt Home Assistant den niedrig aufgelösten Stream, den diese Werte nicht ändern. Die C300X liest die Werte nur beim Start: Das Speichern einer Änderung startet das Gerät einmal neu, das dauert etwa eine Minute.\n\nDas Gerät läuft gerade mit: {running}",
+        "description": "Diese Einstellungen gelten für Hoch bei **Kamera-Auflösung**, auf Firmware 3.0.x für Niedrig. Änderungen starten das Gerät automatisch neu; das dauert etwa eine Minute.\n\nAktuell aktiv: {running}",
         "data": {
           "size": "Bildgröße",
           "bitrate_kbps": "Bitrate",
-          "fps": "Bildrate"
+          "fps": "Bildrate",
+          "use_recommended_snapshot_size": "Empfohlene Snapshot-Größe (800×480) übernehmen"
         },
         "data_description": {
-          "size": "Hoher Stream: 688x480 (ab Werk) ist ein Ausschnitt des Kamerabilds, 704x576 das ganze Bild ohne die schwarzen Seitenränder, weiterhin über das ganze Display; die Größe gilt auch für das Kamerabild auf dem Display der C300X und für Aufnahmen des Anrufbeantworters. Niedriger Stream auf Firmware 3.0.x: ab Werk 400x288; die anderen Größen sind auf einem solchen Gerät noch nicht getestet.",
-          "bitrate_kbps": "Ab Werk 800 kbit/s, höchstens 3000. Der niedrige Stream auf Firmware 3.0.x: ab Werk 180, 100-2000. Mehr ergibt ein schärferes Bild und braucht mehr Netzwerk.",
-          "fps": "Ab Werk 15 Bilder pro Sekunde; der hohe Stream nimmt höchstens 24, denn bei 25 sendet das Gerät nur etwa 8. Der niedrige Stream auf Firmware 3.0.x: ab Werk 10, höchstens 25."
+          "size": "Die Größen hängen von Firmware und installiertem Geräte-Agent ab. Optionales 960x576 passt zu den Display-Proportionen, wenn angeboten.",
+          "bitrate_kbps": "Höhere Werte verbessern die Bildqualität, erhöhen aber den Datenverkehr.",
+          "fps": "Höhere Werte sorgen für flüssigere Bewegungen; die Auswahl zeigt die unterstützten Grenzen.",
+          "use_recommended_snapshot_size": "Neue Snapshots im Seitenverhältnis des Displays speichern. Ohne Haken bleibt die bisherige Größe erhalten."
         }
       },
       "speech": {
@@ -1503,6 +1505,9 @@
         "error": {
           "ssh_install_failed": "Die SSH-Reparaturinstallation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
           "update_failed": "Das Device-Agent-Update ist fehlgeschlagen. Prüfe, ob Maintenance-Zugriff aktiv ist, und versuche es erneut.",
+          "update_root_already_writable": "Das Update wurde vor dem Anwenden abgelehnt, weil das Root-Dateisystem (/) bereits beschreibbar war. Falls du / zuvor manuell beschreibbar eingehängt hast, starte das Gerät normal neu und wiederhole dann diese Reparatur. Andernfalls kläre vor einem neuen Versuch, warum / beschreibbar ist.",
+          "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",
+          "update_apply_failed": "Der Agent meldet einen allgemeinen Updatefehler; Ursache und endgültiger Gerätezustand sind unbekannt. Falls du / zuvor manuell beschreibbar eingehängt hast, kann ein normaler Geräteneustart helfen. Prüfe vor einem neuen Versuch den Gerätezustand; der Fehler bestätigt keine erfolgreiche Wiederherstellung.",
           "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle.",
           "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
         },
@@ -1730,6 +1735,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Kamerabild einstellen",
+      "description": "Liest alle drei Bildwerte. Zum Ändern einen Regler und einen Wert (0 bis 100 % in Zehnerschritten) angeben. Erfordert den aktualisierten Geräteagenten und ein aktives Klingelvideo oder Livevideo auf Abruf mit bestätigten Quellwerten und Wertebereichen. Gespeicherte Medien bleiben unverändert.",
+      "fields": {
+        "entry_id": {"name": "Integrationseintrag"},
+        "control": {"name": "Regler"},
+        "value": {"name": "Wert"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "C300X-Türvideo aufnehmen",
       "description": "Nimmt ein kurzes Video in Home Assistant auf: von einem eingehenden Klingelruf oder ohne Klingeln bei freiem Medienkanal.",

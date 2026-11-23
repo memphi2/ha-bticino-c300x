@@ -12,11 +12,8 @@ from homeassistant.data_entry_flow import AbortFlow
 
 from . import config_flow_auth
 from .api import (
-    C300XAgentApi,
     C300XAgentApiAuthError,
     C300XAgentApiError,
-    C300XAgentApiUnsupportedError,
-    build_agent_base_url,
 )
 from .config_flow_activations import (
     ACTIVATION_STEP_DONE as _ACTIVATION_STEP_DONE,
@@ -44,6 +41,12 @@ from .config_flow_activations import (
 )
 from .config_flow_activations import (
     activation_settings_step as _activation_settings_step,
+)
+from .config_flow_agent import (
+    async_agent_ready_for_setup as _async_agent_ready_for_setup,
+)
+from .config_flow_agent import (
+    async_agent_setup_data as _async_agent_setup_data,
 )
 from .config_flow_alarm import alarm_step as _alarm_step
 from .config_flow_alarm import alarm_values as _alarm_values
@@ -202,7 +205,6 @@ from .const import (
     CONF_WEBHOOK_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
-    DEFAULT_CREATE_HOMEASSISTANT_USER,
     DEFAULT_NAME,
     DOMAIN,
 )
@@ -213,6 +215,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .discovery_move import async_follow_proven_move
 from .display_patch_sync import async_mark_display_setting
 from .display_support import (
     DISPLAY_SUPPORTED,
@@ -221,6 +224,7 @@ from .display_support import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import login_model, ssh_login, uses_factory_login
+from .media_consent import asks_media_consent, entry_asks_media_consent
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -244,9 +248,8 @@ if TYPE_CHECKING:
 else:
     FlowResult = dict[str, Any]
 
-# This C100X-only test package must not provision media on first setup by default.
-_SETUP_VIDEO_ENABLED_DEFAULT = False
-_CREATE_HOMEASSISTANT_USER_DEFAULT = DEFAULT_CREATE_HOMEASSISTANT_USER
+_SETUP_VIDEO_ENABLED_DEFAULT = True
+_CREATE_HOMEASSISTANT_USER_DEFAULT = True
 
 
 class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
@@ -491,7 +494,10 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             connection,
             discovery_matches_entry=discovery_matches_entry,
         )
-        # mDNS identity and addresses are untrusted. Never redirect stored credentials.
+        # mDNS is untrusted: a known station is followed to a new address only
+        # after it proves the saved identity there (discovery_move).
+        if await async_follow_proven_move(self, discovered_unique_id, connection):
+            return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured()
         existing_entry_abort = (
             await self._async_abort_if_zeroconf_targets_existing_manual_entry(
@@ -580,12 +586,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         if not self._setup_connection:
             return await self.async_step_user()
 
+        media = _SETUP_VIDEO_ENABLED_DEFAULT and not asks_media_consent(self._setup_agent_info)
         errors: dict[str, str] = {}
         if user_input is not None:
             feature_data, errors = _feature_input(
                 user_input,
-                default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
-                default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
+                default_video_enabled=media,
+                default_create_homeassistant_user=media,
             )
             if errors:
                 return self.async_show_form(
@@ -594,13 +601,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         bool(
                             user_input.get(
                                 CONF_VIDEO_ENABLED,
-                                _SETUP_VIDEO_ENABLED_DEFAULT,
+                                media,
                             )
                         ),
                         default_create_homeassistant_user=bool(
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
-                                _CREATE_HOMEASSISTANT_USER_DEFAULT,
+                                media,
                             )
                         ),
                         default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
@@ -620,8 +627,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         return self.async_show_form(
             step_id="user_features",
             data_schema=_setup_features_schema(
-                _SETUP_VIDEO_ENABLED_DEFAULT,
-                default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
+                media,
+                default_create_homeassistant_user=media,
             ),
             errors=errors,
         )
@@ -819,7 +826,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         feature_data, errors = _feature_input(
             {**self._setup_feature_data, **self._setup_dashboard_input},
-            default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
+            default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT
+            and not asks_media_consent(self._setup_agent_info),
         )
         if errors:
             return await self._async_show_user_dashboard_form(
@@ -1007,7 +1015,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         feature_defaults = _current_feature_options(entry)
         errors: dict[str, str] = {}
         if user_input is not None:
-            feature_input = _feature_input_defaults(user_input, feature_defaults)
+            feature_input = _feature_input_defaults(
+                user_input, feature_defaults, ask_media_consent=entry_asks_media_consent(entry)
+            )
             feature_data, errors = _feature_input(feature_input)
             if errors:
                 return self.async_show_form(
@@ -1509,7 +1519,10 @@ class BticinoC300XOptionsFlow(
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
-            feature_input = _feature_input_defaults(user_input, feature_defaults)
+            consent = entry_asks_media_consent(self._config_entry)
+            feature_input = _feature_input_defaults(
+                user_input, feature_defaults, ask_media_consent=consent
+            )
             feature_data, errors = _feature_input(feature_input)
             if errors:
                 return self.async_show_form(
@@ -1520,7 +1533,7 @@ class BticinoC300XOptionsFlow(
                         create_homeassistant_user=bool(
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
-                                _CREATE_HOMEASSISTANT_USER_DEFAULT,
+                                _CREATE_HOMEASSISTANT_USER_DEFAULT and not consent,
                             )
                         ),
                         webrtc_ice_policy=_webrtc_ice_policy_or_default(
@@ -1875,49 +1888,3 @@ async def _async_agent_stable_unique_id(
         setup_data_target.clear()
         setup_data_target.update(setup_data)
     return _stable_unique_id_from_setup_data(setup_data)
-
-
-async def _async_agent_setup_data(
-    hass: Any,
-    connection: dict[str, Any],
-    *,
-    api_token: str = "",
-) -> dict[str, Any]:
-    """Return setup data from the configured agent endpoint."""
-
-    from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-    base_url = build_agent_base_url(
-        str(connection.get(CONF_AGENT_HOST, "")),
-        int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-    )
-    api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
-    return cast(dict[str, Any], await api.async_validate_setup())
-
-
-async def _async_agent_ready_for_setup(
-    hass: Any,
-    connection: dict[str, Any],
-    *,
-    api_token: str = "",
-) -> dict[str, Any]:
-    """Validate the agent endpoints required for a usable config entry."""
-
-    from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-    base_url = build_agent_base_url(
-        str(connection.get(CONF_AGENT_HOST, "")),
-        int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-    )
-    api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
-    setup_data = cast(dict[str, Any], await api.async_validate_setup())
-    try:
-        await api.async_self_test()
-    except C300XAgentApiAuthError:
-        raise
-    except C300XAgentApiUnsupportedError:
-        pass
-    except C300XAgentApiError:
-        pass
-    await api.async_list_event_subscriptions()
-    return setup_data

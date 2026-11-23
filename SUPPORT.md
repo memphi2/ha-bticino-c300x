@@ -11,7 +11,8 @@ No public C100X release channel is assigned by this branch.
 
 ## Supported Release Line
 
-- `2.8.x`: current stable (2.8.2)
+- `2.9.x`: local test candidate (2.9.0)
+- `2.8.x`: current stable (2.8.3)
 - `2.7.x`: previous stable; upgrade to 2.8.x for maintenance fixes
 - `2.5.x`: no longer maintained; upgrade to 2.8.x
 - `2.6.0`: withdrawn because the energy page did not load on the display

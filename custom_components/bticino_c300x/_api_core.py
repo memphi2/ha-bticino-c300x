@@ -21,7 +21,9 @@ from .api_errors import (
     C300XAgentApiConnectionError,
     C300XAgentApiResponseError,
     C300XAgentApiUnsupportedError,
+    C300XAgentUpdateError,
     C300XDeviceNotRegisteredError,
+    C300XDisplayBridgeNotRegisteredError,
 )
 from .const import (
     HEADER_MAINTENANCE_TOKEN,
@@ -218,6 +220,12 @@ class _C300XApiCore:
                 or path.startswith("/api/v1/maintenance/")
             )
         if status == 404:
+            if (
+                path == "/api/v1/display-bridge/events"
+                and _agent_error_field(text, "error") == "display_bridge_disabled"
+            ):
+                # The route exists, but its runtime bridge registration is gone.
+                raise C300XDisplayBridgeNotRegisteredError(_http_error_text(status, text))
             raise C300XAgentApiUnsupportedError(
                 _http_error_text(
                     status,
@@ -226,6 +234,11 @@ class _C300XApiCore:
                 )
             )
         if status < 200 or status >= 300:
+            if path.startswith("/api/v1/maintenance/update/"):
+                raise C300XAgentUpdateError(
+                    _http_error_text(status, text), status=status,
+                    code=_agent_error_field(text, "error"),
+                )
             if _agent_error_field(text, "detail") == "device_domain_missing":
                 raise C300XDeviceNotRegisteredError(_http_error_text(status, text))
             raise C300XAgentApiConnectionError(_http_error_text(status, text))

@@ -309,7 +309,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         "activations",
         "media-view",
         "forward:binary_sensor,button,event,number,sensor,select,switch,camera",
-        "display",
+        # No explicit UI option or confirmed legacy patch: preserve the bridge.
         "user",
         "repair-sync",
     ]
@@ -317,14 +317,16 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
 
 
 @pytest.mark.parametrize("patched", [True, False])
+@pytest.mark.parametrize("legacy_transient", [True, False])
 def test_setup_registers_delete_services_from_loaded_patch_status(
     monkeypatch: pytest.MonkeyPatch,
     snapshot_runtime_boundary,
     patched: bool,
+    legacy_transient: bool,
 ) -> None:
     from custom_components.bticino_c300x import repair_issues, services
 
-    entry = _entry(options={CONF_DEVICE_UI_ENABLED: True})
+    entry = _entry(options={} if legacy_transient else {CONF_DEVICE_UI_ENABLED: True})
     entry.add_update_listener = lambda callback: lambda: None
     entry.async_on_unload = lambda callback: None
     registered: set[tuple[str, str]] = set()
@@ -336,11 +338,9 @@ def test_setup_registers_delete_services_from_loaded_patch_status(
             async_remove=lambda domain, name: registered.discard((domain, name)),
         ),
     )
-    api = SimpleNamespace(
-        async_qml_patch_status=AsyncMock(
-            return_value={"available": True, "patched": patched}
-        )
-    )
+    status = {"available": True, "patched": patched}
+    reads = [api_errors.C300XAgentApiConnectionError("temporary"), status] if legacy_transient else [status]
+    api = SimpleNamespace(async_qml_patch_status=AsyncMock(side_effect=reads))
     manager = runtime_manager.C300XRuntimeManager(hass, entry)
     manager.capabilities = {
         "maintenance": {"supported": True, "qml_status": True},
@@ -363,14 +363,22 @@ def test_setup_registers_delete_services_from_loaded_patch_status(
     monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", lambda *_: None)
     monkeypatch.setattr(services, "async_dispatcher_connect", lambda *_: lambda: None)
 
+    setup_services = services.async_setup_services
+
+    async def check_gate_then_setup(hass):
+        assert entry.runtime_data.qml_patch_status["patched"] is patched
+        await setup_services(hass)
+
+    monkeypatch.setattr(services, "async_setup_services", check_gate_then_setup)
     assert asyncio.run(manager._async_prepare_runtime()) is True
 
-    api.async_qml_patch_status.assert_awaited_once()
+    assert api.async_qml_patch_status.await_count == len(reads)
     assert entry.runtime_data.qml_patch_status["patched"] is patched
     for service in (
         "delete_latest_video_message", "delete_latest_text_memo", "delete_latest_voice_memo",
     ):
-        assert ((DOMAIN, service) in registered) is patched
+        # These destructive services additionally require explicit UI opt-in.
+        assert ((DOMAIN, service) in registered) is (patched and not legacy_transient)
 
 
 def test_setup_entry_rejects_missing_required_fields() -> None:
@@ -913,13 +921,16 @@ def test_configure_display_bridge_skips_matching_registration(
     assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
 
-def test_display_configuration_notify_failure_is_nonfatal() -> None:
+def test_unsupported_display_configuration_event_is_nonfatal() -> None:
     class Api:
-        async def async_notify_display_bridge_event(self, topic):
+        async def async_notify_display_bridge_event(self, topic, *, unread):
             assert topic == "display_bridge.state"
-            raise api_errors.C300XAgentApiError("offline")
+            assert unread is False
+            raise api_errors.C300XAgentApiUnsupportedError("unsupported")
 
-    asyncio.run(runtime_manager._async_notify_display_configuration(Api()))
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace()
+    asyncio.run(runtime_manager._async_notify_display_configuration(entry, Api()))
 
 
 def test_configure_display_bridge_records_agent_failures(
@@ -1599,7 +1610,7 @@ def test_display_bridge_notify_skips_missing_runtime(explicit_none: bool) -> Non
     if explicit_none:
         entry.runtime_data = None
 
-    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(None, entry))
 
 
 def test_display_bridge_notify_preserves_revision_between_ui_waiters() -> None:
@@ -1619,10 +1630,10 @@ def test_display_bridge_notify_preserves_revision_between_ui_waiters() -> None:
 
     entry = _entry()
     entry.runtime_data = SimpleNamespace(api=FakeApi(0))
-    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(None, entry))
 
     entry.runtime_data.api = FakeApi(1)
-    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(None, entry))
 
     assert calls == ["event:alarm", "event:alarm"]
 
@@ -1700,6 +1711,7 @@ def test_display_bridge_notify_ignores_stale_runtime() -> None:
 
     asyncio.run(
         runtime_manager._async_notify_display_bridge_alarm_if_listening(
+            None,
             entry,
             old_runtime,  # type: ignore[arg-type]
         )
@@ -2000,7 +2012,8 @@ class _DisplayBridgeApi:
         self.configured: list[tuple[bool, str, str]] = []
         self.notifications: list[str] = []
 
-    async def async_notify_display_bridge_event(self, topic: str) -> None:
+    async def async_notify_display_bridge_event(self, topic: str, *, unread: bool) -> None:
+        assert unread is False
         self.notifications.append(topic)
 
     async def async_display_bridge_status(self) -> dict[str, Any]:

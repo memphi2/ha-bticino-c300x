@@ -337,6 +337,7 @@ class BticinoC300XRuntimeData:
     display_bridge_alarm_notify_pending: bool = False
     display_bridge_notify_dirty: bool = False
     display_bridge_notify_messages: bool = False
+    display_unread_claim_possible: bool = False
     display_notifications: DisplayNotifications | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: AgentUpdateState | None = None

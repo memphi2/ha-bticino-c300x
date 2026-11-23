@@ -11,7 +11,8 @@ DISPLAY_SUPPORTED = "device_display_supported"
 def device_display_support(setup: Mapping[str, Any]) -> bool | None:
     """Return explicit support, leaving older/temporarily offline agents unknown."""
 
-    if setup.get("model") == "C100X" or setup.get("display_kind") in ("qt5_rcc", "qt5_ondisk"):
+    # Only the C100X: a C300X keeps its display options on every firmware.
+    if setup.get("model") == "C100X" or setup.get("display_kind") == "qt5_ondisk":
         return False
     capabilities = setup.get("capabilities", {})
     if not isinstance(capabilities, Mapping):

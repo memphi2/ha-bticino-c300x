@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
+
+from zeroconf import DNSIncoming, DNSText
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,6 +54,46 @@ def test_mdns_is_disabled_while_network_is_offline() -> None:
 
     assert "!config->mdns_enabled || home_assistant_connected || !network_online" in body
     assert body.index("!network_online") < body.index("mdns_open_socket")
+
+
+def test_mdns_restart_changes_only_service_txt(tmp_path: Path) -> None:
+    src = ROOT / "native_agent" / "src"
+    binary = tmp_path / "mdns-packet"
+    subprocess.run(
+        ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-I", str(src), "-x", "c", "-",
+         str(src / "string_util.c"), str(src / "device_detect.c"), "-o", str(binary)],
+        input="""
+#include "mdns.c"
+int main(int argc, char **argv)
+{
+    unsigned char packet[1024];
+    const struct c300x_config config = {.api_port = 8091};
+    if (argc != 2) return 1;
+    int length = mdns_build_response(&config, argv[1], packet, sizeof(packet), 120);
+    return length > 0 && fwrite(packet, 1, (size_t)length, stdout) == (size_t)length ? 0 : 1;
+}
+""",
+        text=True, check=True, capture_output=True, timeout=20,
+    )
+
+    def records(instance: str):
+        packet = subprocess.check_output([binary, instance], timeout=5)
+        incoming = DNSIncoming(packet)
+        assert incoming.valid
+        return incoming.answers()
+
+    first = records("1" * 32)
+    again = records("1" * 32)
+    second = records("2" * 32)
+    assert first == again
+    assert len(first) == len(second)
+    assert [record for record in first if not isinstance(record, DNSText)] == [
+        record for record in second if not isinstance(record, DNSText)
+    ]
+    before, = [record for record in first if isinstance(record, DNSText)]
+    after, = [record for record in second if isinstance(record, DNSText)]
+    assert before != after  # A non-identical cached TXT record yields Updated.
+    assert before.text.replace(b"instance=" + b"1" * 32, b"instance=" + b"2" * 32) == after.text
 
 
 def test_mdns_advertises_home_assistant_zeroconf_shape() -> None:
@@ -244,7 +287,13 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     dispatch_body = _function_body(text, "static int", "dispatch_event_internal")
 
     assert "runtime->home_assistant_connected_this_run" in body
+    # Outbound callbacks keep succeeding after the station's own address
+    # changes; only HA's authenticated requests prove that HA still reaches it.
     assert "runtime->home_assistant_last_seen_at" not in body
+    assert "runtime->home_assistant_request_ms" in body
+    assert "c300x_mdns_home_assistant_present_ms(" in body
+    assert "c300x_monotonic_ms()" in body
+    assert "min_timeout_ms(*poll_timeout_ms" in body
     assert "C300X_HOME_ASSISTANT_CONNECTED_SECONDS" not in text
     assert "runtime->subscription_count > 0" not in body
     assert "mark_home_assistant_callback_seen(runtime, time(NULL))" in subscription_body
@@ -253,6 +302,20 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     assert "if (subscription->last_ok)" in completed
     assert "mark_home_assistant_callback_seen(runtime, now)" in completed
     assert "mark_home_assistant_callback_seen" not in dispatch_body
+
+
+def test_only_authenticated_api_requests_refresh_home_assistant_presence() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    api_body = _function_body(text, "static void", "handle_api_request")
+    ui_body = _function_body(text, "static int", "handle_ui_request")
+    gate = api_body.index("if (!api_request_authorized(config, request)) {\n        send_auth_required")
+    stamp = api_body.index("runtime->home_assistant_request_ms = c300x_monotonic_ms();")
+
+    assert gate < stamp
+    assert api_body.count("home_assistant_request_ms") == 1
+    assert "home_assistant_request_ms" not in ui_body
+    loop_call = text[text.index("c300x_mdns_open_if_needed(\n            &mdns"):]
+    assert "agent_has_home_assistant_connection(runtime, &poll_timeout_ms)" in loop_call[:300]
 
 
 def test_subscription_snapshots_are_marked_as_non_live_events() -> None:

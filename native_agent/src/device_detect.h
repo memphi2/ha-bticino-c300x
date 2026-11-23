@@ -1,8 +1,6 @@
 #ifndef C300X_DEVICE_DETECT_H
 #define C300X_DEVICE_DETECT_H
 
-#include <stddef.h>
-
 enum c300x_device_model {
     C300X_DEVICE_MODEL_C300X = 0,
     C300X_DEVICE_MODEL_C100X,
@@ -35,13 +33,13 @@ const char *c300x_device_sip_user(void);
  * so far; the C100X files are on disk but not patched yet. */
 int c300x_device_display_files_patchable(void);
 
+/* The key beep, the display alerts, the display bridge and the ringer mute:
+ * offered on every C300X, as before; on the C100X only with display files the
+ * Display patch can edit, which it has not yet. */
+int c300x_device_display_features(void);
+
 /* The display program can be restarted: BtClass of the C300X, on every
  * firmware. The C100X's program is another one. */
 int c300x_device_display_restartable(void);
-
-/* The firmware version: the configured one, else <ver_webserver> of the
- * vendor web server's database, which the installer relies on. Empty when
- * neither is there. */
-void c300x_device_firmware(const char *configured, char *out, size_t out_len);
 
 #endif

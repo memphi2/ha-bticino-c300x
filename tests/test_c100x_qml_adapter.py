@@ -23,7 +23,8 @@ def test_parity_inventory_is_complete_and_sources_are_separate(tmp_path):
     source = ROOT / "device_qml"
     before = {path: path.read_bytes() for path in source.glob("*.qml")}
     builder.build(tmp_path)
-    excluded_core = {"C300XRingerControl.qml"}
+    # Hooks into C300X vendor files (EventManager, Settings tab), not pages.
+    excluded_core = {"C300XRingerControl.qml", "C300XSettings.qml"}
     assert set(builder.PAGES) | excluded_core == {path.name for path in before}
     for name in builder.PAGES:
         generated = (tmp_path / name).read_text()

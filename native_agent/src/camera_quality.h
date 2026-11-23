@@ -36,6 +36,8 @@ struct c300x_camera_quality {
     int restart_required; /* the file differs from what the device runs */
     int changed;          /* the last apply wrote the file */
     int remount_ro_failed;
+    int geometry_supported; /* exact verified media executable, High stream only */
+    int geometry_enabled;
 };
 
 /* Called once when the agent starts. */
@@ -65,5 +67,7 @@ void c300x_camera_quality_body(const struct c300x_camera_quality *quality, int r
     char *body, size_t body_len);
 /* Sends that answer; context is the quality. */
 void c300x_camera_quality_reply(int fd, int rebooting, void *context);
+int c300x_camera_quality_refuse(int fd, int status, const char *reason, const char *error);
+int c300x_camera_quality_error(int fd, const char *error);
 
 #endif

@@ -44,9 +44,8 @@ def login_model(agent_info: object) -> str:
     if not isinstance(agent_info, Mapping):
         return ""
     device = agent_info.get("device")
-    if not isinstance(device, Mapping):
-        return ""
-    model = str(device.get("model", "")).upper()
+    # Setup data carries the model at the top; a raw capabilities reply under "device".
+    model = str((device if isinstance(device, Mapping) else agent_info).get("model") or "").upper()
     return model if model in {"C100X", "C300X"} else ""
 
 

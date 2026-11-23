@@ -144,6 +144,13 @@ class _ApiDeviceMixin(_C300XApiCore):
         data = await self._request_json("GET", "/api/v1/system/metrics")
         return normalize_system_metrics(data)
 
+    async def async_camera_picture(self, control: str | None, value: int | None) -> Any:
+        return await self._request_json(
+            "GET" if control is None else "POST", "/api/v1/video/picture",
+            json_data=None if control is None else {"control": control, "value": value},
+            request_timeout=8.0,
+        )
+
     async def async_set_ringer_muted(self, muted: bool) -> dict[str, Any]:
         """Mute or unmute the device ringer."""
 

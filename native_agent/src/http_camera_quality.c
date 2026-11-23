@@ -1,5 +1,6 @@
 #include "http_camera_quality.h"
 #include "camera_quality.h"
+#include "camera_update_guard.h"
 #include "http_service_commands.h"
 #include "http_util.h"
 #include "json_util.h"
@@ -8,16 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int refuse(int fd, int status, const char *reason, const char *error)
-{
-    char body[160];
-    snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"camera_quality_%s\"}\n", error);
-    c300x_http_send_json(fd, status, reason, body);
-    return 1;
-}
-
 int c300x_http_camera_quality_route(struct c300x_http_maintenance *owner, int fd,
-    const struct c300x_config *config, const struct request *request,
+    const struct c300x_config *config, struct c300x_video *video, const struct request *request,
     c300x_schedule_command_fn schedule)
 {
     int post = strcmp(request->method, "POST") == 0;
@@ -35,11 +28,11 @@ int c300x_http_camera_quality_route(struct c300x_http_maintenance *owner, int fd
     }
     quality = calloc(1, sizeof(*quality));
     if (quality == NULL) {
-        return refuse(fd, 500, "Internal Server Error", "out_of_memory");
+        return c300x_camera_quality_refuse(fd, 500, "Internal Server Error", "out_of_memory");
     }
     if (!c300x_camera_quality_status(quality, config->video_enabled) && post) {
         free(quality);
-        return refuse(fd, 409, "Conflict", "unsupported");
+        return c300x_camera_quality_refuse(fd, 409, "Conflict", "unsupported");
     }
     if (!post) {
         c300x_camera_quality_reply(fd, 0, quality);
@@ -54,16 +47,18 @@ int c300x_http_camera_quality_route(struct c300x_http_maintenance *owner, int fd
         : has_bitrate == 0 && has_fps == 0 && has_size == 0 ? "value_required" : "";
     if (error == NULL || error[0] != '\0') {
         free(quality);
-        if (error != NULL) return refuse(fd, 400, "Bad Request", error);
+        if (error != NULL) return c300x_camera_quality_refuse(fd, 400, "Bad Request", error);
         c300x_http_send_json(fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
         return 1;
     }
-    /* A value not sent stays what the file has. */
+    if (c300x_camera_update_media_busy(video)) {
+        free(quality);
+        return c300x_camera_quality_refuse(fd, 409, "Conflict", "media_session_active");
+    }
     if (!c300x_camera_quality_apply(quality, has_bitrate ? bitrate : quality->saved.bitrate_kbps,
             has_fps ? fps : quality->saved.fps, has_size ? size : NULL, &error)) {
-        int refused = strcmp(error, "out_of_range") == 0 || strcmp(error, "invalid_size") == 0;
         free(quality);
-        return refuse(fd, refused ? 400 : 500, refused ? "Bad Request" : "Internal Server Error", error);
+        return c300x_camera_quality_error(fd, error);
     }
     if (quality->changed) owner->record_write(owner->write_context, "camera_quality", "apply");
     (void)c300x_json_bool_field(request->body, "reboot", &reboot);

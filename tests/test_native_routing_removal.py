@@ -36,9 +36,9 @@ def removal_binary(tmp_path_factory):
     return build / "host/c300x-agent-native"
 
 
-@pytest.mark.parametrize("firmware", FIRMWARES)
 @pytest.mark.parametrize("state", ["patched", "stock", "stock_stale_backup", "partial"])
-def test_removal_restores_verified_original(device, routing_binary, firmware, state):
+def test_c100x_removal_restores_verified_original(device, routing_binary, state):
+    firmware = "c100x-1.5.8"
     target, backup = _firmware_device(device, routing_binary, firmware)
     stock = original(firmware).read_bytes()
     if state in {"stock", "stock_stale_backup"}:
@@ -57,6 +57,18 @@ def test_removal_restores_verified_original(device, routing_binary, firmware, st
     assert target.stat().st_mode & 0o7777 == 0o751
     assert not list(target.parent.glob("*.restore.*"))
     assert not Path(device["GUI_CALL_LOG"]).exists()
+
+
+@pytest.mark.parametrize("firmware", [item for item in FIRMWARES if not item.startswith("c100x")])
+def test_c300x_removal_leaves_routing_as_before(device, routing_binary, firmware):
+    """A C300X removal does not touch the routing binary, as in 2.9.0."""
+    target, _backup = _firmware_device(device, routing_binary, firmware)
+    patched = target.read_bytes()
+    assert patched != original(firmware).read_bytes()
+    result = _remove(device)
+    _assert_removed(device, result)
+    assert "device routing" not in result.stderr
+    assert target.read_bytes() == patched
 
 
 def _firmware_device(env, routing_binary, firmware):
@@ -85,15 +97,15 @@ def _firmware_device(env, routing_binary, firmware):
 
 
 @pytest.mark.parametrize("fault", [
-    "corrupt_backup", "foreign_model", "foreign_firmware", "missing_backup",
+    "corrupt_backup", "foreign_model", "missing_backup",
     "unknown_target", "missing_target", "target_symlink", "backup_symlink", "remount",
 ])
 def test_failed_removal_keeps_native_agent_and_backups(device, routing_binary, fault):
-    firmware = "1.7.19" if fault == "foreign_firmware" else "c100x-1.5.8"
+    firmware = "c100x-1.5.8"
     target, backup = _firmware_device(device, routing_binary, firmware)
     if fault == "corrupt_backup":
         backup.write_bytes(b"\0" + backup.read_bytes()[1:])
-    elif fault in {"foreign_model", "foreign_firmware"}:
+    elif fault == "foreign_model":
         shutil.copy2(original("2.0.2"), backup)
     elif fault == "missing_backup":
         backup.unlink()

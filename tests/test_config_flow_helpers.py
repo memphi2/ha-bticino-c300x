@@ -52,6 +52,7 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _weather_entity_id,
 )
 from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
+from custom_components.bticino_c300x import config_flow_agent  # noqa: E402
 from custom_components.bticino_c300x import config_schemas  # noqa: E402
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
@@ -165,7 +166,7 @@ def test_probe_agent_requires_event_subscription_endpoint(
             calls.append("subscriptions")
             raise C300XAgentApiConnectionError("device agent returned HTTP 404")
 
-    monkeypatch.setattr(config_flow_module, "C300XAgentApi", FakeApi)
+    monkeypatch.setattr(config_flow_agent, "C300XAgentApi", FakeApi)
 
     result = asyncio.run(
         _async_probe_agent(
@@ -639,7 +640,7 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
-    assert features[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert features[CONF_CREATE_HOMEASSISTANT_USER] is True
     assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in features
@@ -655,7 +656,7 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_ALARM_ENTITY_ID not in result
     assert CONF_WEATHER_ENTITY_ID not in result
     assert result[CONF_VIDEO_ENABLED] is True
-    assert result[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
     assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_VIDEO_PORT not in result
@@ -726,12 +727,12 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
     assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
-def test_initial_feature_input_video_does_not_imply_sip_write_permission() -> None:
+def test_initial_feature_input_defaults_video_enabled() -> None:
     data, errors = _feature_input({}, default_video_enabled=True)
 
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
-    assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert data[CONF_CREATE_HOMEASSISTANT_USER] is True
     assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
@@ -1741,34 +1742,6 @@ def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
     ]
 
 
-def test_zeroconf_identity_cannot_redirect_an_existing_entry(monkeypatch):
-    flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
-    flow.context = {}
-
-    async def set_identity(*args, **kwargs):
-        pass
-
-    def abort_existing(**kwargs):
-        assert "updates" not in kwargs
-        raise RuntimeError("already configured")
-
-    flow.async_set_unique_id = set_identity
-    flow._abort_if_unique_id_configured = abort_existing
-    flow._async_current_entries = lambda: []
-
-    async def forbid_probe(*args, **kwargs):
-        pytest.fail("A rediscovered identity must not probe the announced endpoint")
-
-    monkeypatch.setattr(config_flow_module, "_async_probe_agent", forbid_probe)
-    with pytest.raises(RuntimeError, match="already configured"):
-        asyncio.run(flow.async_step_zeroconf(SimpleNamespace(
-            host="192.0.2.99", port=8091,
-            properties={"id": "c300x-aabbcc001122"},
-            name="BTicino C300X Agent._bticino-c300x-agent._tcp.local.",
-        )))
-
-
 def test_zeroconf_rediscovery_requests_runtime_event_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2679,7 +2652,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _flow, snapshot_form = _options_area(entry, "visitor_snapshot")
     assert snapshot_form["step_id"] == "visitor_snapshot"
     assert snapshot_form["data_schema"]({}) == {
-        "snapshot_width": 688,
+        "snapshot_width": 800,
         "snapshot_height": 480,
         "snapshot_delay_seconds": 3,
         "snapshot_retention_days": 14,

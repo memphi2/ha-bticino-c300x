@@ -1,5 +1,7 @@
 export const C300X_MEDIA_TRANSLATIONS = {
   en: {
+    picture: "Adjust camera picture", brightness: "Brightness", contrast: "Contrast", saturation: "Colour saturation",
+    picture_unavailable: "The station could not confirm the live picture settings.",
     previous: "Older media", next: "Newer media", history: "Media history",
     play: "Play", pause: "Pause", mute: "Mute", unmute: "Unmute", volume: "Volume",
     fullscreen: "Full screen", exit_fullscreen: "Exit full screen", seek: "Playback position",
@@ -8,6 +10,8 @@ export const C300X_MEDIA_TRANSLATIONS = {
     controls: "Media controls", expand: "Open large view", close: "Close",
   },
   de: {
+    picture: "Kamerabild einstellen", brightness: "Helligkeit", contrast: "Kontrast", saturation: "Farbsättigung",
+    picture_unavailable: "Die Station konnte die Einstellungen für das Livebild nicht bestätigen.",
     previous: "\u00c4ltere Medien", next: "Neuere Medien", history: "Medienverlauf",
     play: "Wiedergabe", pause: "Pause", mute: "Stummschalten", unmute: "Ton einschalten", volume: "Lautst\u00e4rke",
     fullscreen: "Vollbild", exit_fullscreen: "Vollbild beenden", seek: "Wiedergabeposition",
@@ -16,6 +20,8 @@ export const C300X_MEDIA_TRANSLATIONS = {
     controls: "Mediensteuerung", expand: "Gro\u00dfe Ansicht \u00f6ffnen", close: "Schlie\u00dfen",
   },
   fr: {
+    picture: "Régler l’image", brightness: "Luminosité", contrast: "Contraste", saturation: "Saturation",
+    picture_unavailable: "La platine n’a pas pu confirmer les réglages de l’image en direct.",
     previous: "M\u00e9dias plus anciens", next: "M\u00e9dias plus r\u00e9cents", history: "Historique des m\u00e9dias",
     play: "Lire", pause: "Pause", mute: "Couper le son", unmute: "Activer le son", volume: "Volume",
     fullscreen: "Plein \u00e9cran", exit_fullscreen: "Quitter le plein \u00e9cran", seek: "Position de lecture",
@@ -24,6 +30,8 @@ export const C300X_MEDIA_TRANSLATIONS = {
     controls: "Commandes multim\u00e9dias", expand: "Ouvrir la vue agrandie", close: "Fermer",
   },
   it: {
+    picture: "Regola immagine", brightness: "Luminosità", contrast: "Contrasto", saturation: "Saturazione",
+    picture_unavailable: "La postazione non ha potuto confermare le impostazioni dell’immagine in diretta.",
     previous: "Media precedenti", next: "Media successivi", history: "Cronologia media",
     play: "Riproduci", pause: "Pausa", mute: "Disattiva audio", unmute: "Attiva audio", volume: "Volume",
     fullscreen: "Schermo intero", exit_fullscreen: "Esci da schermo intero", seek: "Posizione di riproduzione",

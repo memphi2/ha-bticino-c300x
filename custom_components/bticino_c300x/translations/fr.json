@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
         },
         "data_description": {
-          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
+          "snapshot_width": "800 par défaut : les instantanés proviennent du framebuffer de l'écran 800×480, indépendamment de la taille du flux vidéo. L'agent redimensionne l'image entière aux dimensions choisies ; Home Assistant ne la redimensionne pas à nouveau. Plage 64-800.",
+          "snapshot_height": "480 par défaut. Utilisez 800×480 pour les pixels natifs de l'écran ou, par exemple, 400×240 pour conserver son rapport 5:3. D'autres proportions déforment l'image. Même un flux 960×576 est capturé depuis l'écran 800×480. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
         },
         "data_description": {
-          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
+          "snapshot_width": "800 par défaut : les instantanés proviennent du framebuffer de l'écran 800×480, indépendamment de la taille du flux vidéo. L'agent redimensionne l'image entière aux dimensions choisies ; Home Assistant ne la redimensionne pas à nouveau. Plage 64-800.",
+          "snapshot_height": "480 par défaut. Utilisez 800×480 pour les pixels natifs de l'écran ou, par exemple, 400×240 pour conserver son rapport 5:3. D'autres proportions déforment l'image. Même un flux 960×576 est capturé depuis l'écran 800×480. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -762,8 +762,8 @@
           "snapshot_timestamp": "Inscrire la date et l'heure dans l'image"
         },
         "data_description": {
-          "snapshot_width": "L'appareil lit l'image sur son écran 800×480 et la fournit exactement dans cette taille ; rien ne la redimensionne ensuite. 688 par défaut, la largeur du flux vidéo de l'appareil, que l'écran étire seulement à 800. Plage 64-800.",
-          "snapshot_height": "480 au maximum : l'image est lue sur l'écran 800×480, 576 n'est donc pas possible. 480 par défaut. Pour une image caméra de 704×576, environ 587×480 garde ses proportions. Plage 64-480.",
+          "snapshot_width": "800 par défaut : les instantanés proviennent du framebuffer de l'écran 800×480, indépendamment de la taille du flux vidéo. L'agent redimensionne l'image entière aux dimensions choisies ; Home Assistant ne la redimensionne pas à nouveau. Plage 64-800.",
+          "snapshot_height": "480 par défaut. Utilisez 800×480 pour les pixels natifs de l'écran ou, par exemple, 400×240 pour conserver son rapport 5:3. D'autres proportions déforment l'image. Même un flux 960×576 est capturé depuis l'écran 800×480. Plage 64-480.",
           "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 3 secondes par défaut. Aucune carte ouverte requise.",
           "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier.",
           "snapshot_timestamp": "La date et l'heure de la capture sont inscrites en bas à droite de l'image enregistrée. Activé par défaut."
@@ -771,16 +771,18 @@
       },
       "camera_quality": {
         "title": "Qualité de la caméra",
-        "description": "Taille, débit et fréquence d'images du flux caméra haute résolution ; sur le firmware 3.0.x, du flux basse résolution, le seul que ce firmware envoie et que reçoit aussi l'application Door Entry. Sur un firmware plus ancien avec **Résolution de la caméra** sur Basse, Home Assistant reçoit le flux basse résolution, que ces valeurs ne modifient pas. Le C300X ne les lit qu'au démarrage : enregistrer une modification redémarre l'appareil une fois, ce qui prend environ une minute.\n\nL'appareil fonctionne actuellement avec : {running}",
+        "description": "Ces réglages s'appliquent à **Résolution de la caméra** : Haute, ou Basse sur le firmware 3.0.x. Enregistrer les modifications redémarre automatiquement l'appareil ; prévoir environ une minute.\n\nValeurs actuelles : {running}",
         "data": {
           "size": "Taille de l'image",
           "bitrate_kbps": "Débit",
-          "fps": "Fréquence d'images"
+          "fps": "Fréquence d'images",
+          "use_recommended_snapshot_size": "Utiliser la taille de capture recommandée (800×480)"
         },
         "data_description": {
-          "size": "Flux haut : 688x480 (d'usine) est un recadrage de l'image de la caméra, 704x576 l'image entière sans les bords noirs latéraux, toujours sur tout l'écran ; la taille s'applique aussi à l'image de la caméra sur l'écran du C300X et aux enregistrements du répondeur. Flux bas du firmware 3.0.x : 400x288 d'usine ; les autres tailles ne sont pas encore testées sur un tel appareil.",
-          "bitrate_kbps": "800 kbit/s d'usine, au plus 3000. Le flux bas du firmware 3.0.x : 180 d'usine, 100-2000. Plus donne une image plus nette et utilise plus de réseau.",
-          "fps": "15 images par seconde d'usine ; le flux haut accepte au plus 24, car à 25 l'appareil n'en envoie qu'environ 8. Le flux bas du firmware 3.0.x : 10 d'usine, au plus 25."
+          "size": "Les tailles dépendent du firmware et de l'agent installé sur l'appareil. L'option 960x576 respecte les proportions de l'écran, si proposée.",
+          "bitrate_kbps": "Des valeurs plus élevées améliorent l'image mais augmentent le trafic réseau.",
+          "fps": "Des valeurs plus élevées rendent les mouvements plus fluides ; le sélecteur indique les limites prises en charge.",
+          "use_recommended_snapshot_size": "Utilise les proportions de l’écran pour les nouvelles captures. Sinon, la taille actuelle est conservée."
         }
       },
       "speech": {
@@ -1503,6 +1505,9 @@
         "error": {
           "ssh_install_failed": "La réparation par SSH a échoué. Vérifiez l'accès SSH et réessayez.",
           "update_failed": "La mise à jour de l'agent a échoué. Vérifiez que l'accès maintenance est actif et réessayez.",
+          "update_root_already_writable": "La mise à jour a été refusée avant application car le système de fichiers racine (/) était déjà accessible en écriture. Si vous avez auparavant remonté / manuellement en écriture, redémarrez normalement l'appareil, puis relancez cette réparation. Sinon, recherchez pourquoi / est accessible en écriture avant de réessayer.",
+          "update_root_readonly_failed": "La mise à jour n'a pas pu remettre le système de fichiers racine (/) en lecture seule. L'état final de l'appareil est incertain ; le retour à l'état précédent n'est pas confirmé. Conservez les fichiers de récupération et vérifiez l'agent et le système de fichiers avant toute autre mise à jour.",
+          "update_apply_failed": "L'agent a signalé un échec générique de mise à jour ; la cause et l'état final de l'appareil sont inconnus. Si vous avez auparavant remonté / manuellement en écriture, un redémarrage normal de l'appareil peut aider. Vérifiez son état avant de réessayer ; cette erreur ne confirme pas le retour à l'état précédent.",
           "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible.",
           "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
         },
@@ -1730,6 +1735,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Régler l’image",
+      "description": "Lit les trois réglages de l’image en direct. Pour en modifier un, indiquez le réglage et sa valeur (de 0 à 100 % par pas de 10). Nécessite l’agent à jour et un appel vidéo de la platine en cours ou une vidéo à la demande active dont les valeurs et les plages de réglage ont été vérifiées à la source. Les médias enregistrés restent inchangés.",
+      "fields": {
+        "entry_id": {"name": "Entrée"},
+        "control": {"name": "Réglage"},
+        "value": {"name": "Valeur"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "Enregistrer la vidéo C300X",
       "description": "Enregistre une courte vidéo dans Home Assistant depuis un appel entrant ou à la demande lorsque les médias sont libres.",

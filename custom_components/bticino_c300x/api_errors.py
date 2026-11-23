@@ -11,6 +11,31 @@ class C300XAgentApiConnectionError(C300XAgentApiError):
     """Raised when the device agent cannot be reached."""
 
 
+class C300XDisplayBridgeNotRegisteredError(C300XAgentApiConnectionError):
+    """The event route is reachable but has lost its runtime bridge registration."""
+
+
+class C300XAgentUpdateError(C300XAgentApiConnectionError):
+    """Structured failure from a maintenance/update endpoint, without retry advice."""
+
+    def __init__(self, message: str, *, status: int, code: str | None) -> None:
+        super().__init__(message)
+        self.status = status
+        self.code = code
+
+    @property
+    def repair_key(self) -> str:
+        """Translate only known status/code pairs; never infer from error text."""
+
+        if (self.status, self.code) in {
+            (409, "update_root_already_writable"),
+            (500, "update_root_readonly_failed"),
+            (500, "update_apply_failed"),
+        }:
+            return str(self.code)
+        return "update_failed"
+
+
 class C300XDeviceNotRegisteredError(C300XAgentApiConnectionError):
     """The C300X has no SIP domain: it was never added in the Door Entry app.
 

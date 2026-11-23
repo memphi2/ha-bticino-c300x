@@ -367,8 +367,13 @@ agent_tree_unchanged() {
 }
 
 restore_media_patches() {
+    # A C100X gets its stock routing back before its backup is deleted.
+    if [ -e "$C100X_MARKER" ] && ! C300X_ROUTING_BACKUP_DIR="$BACKUP_ROOT/original/home/bticino/bin" \
+        "$AGENT_DIR/c300x-agent-native" --restore-device-routing; then
+        printf 'Failed to restore media patches; keeping agent files and backups in place\n' >&2
+        exit 1
+    fi
     if ! media_result="$(C300X_AUDIO_BACKUP_DIR="$BACKUP_ROOT/original" \
-        C300X_ROUTING_BACKUP_DIR="$BACKUP_ROOT/original/home/bticino/bin" \
         "$AGENT_DIR/c300x-agent-native" --restore-media-patches)"; then
         printf 'Failed to restore media patches; keeping agent files and backups in place\n' >&2
         exit 1

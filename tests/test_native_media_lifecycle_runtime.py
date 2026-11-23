@@ -53,7 +53,7 @@ def test_ring_receiver_stop_ownership(media_binaries):
 
 
 @pytest.mark.parametrize("case", [
-    "response_after_rtp", "rtp_after_response", "audio_after_video", "framing", "timeouts", "partial_failure", "slow_reader", "stall_limit",
+    "response_after_rtp", "rtp_after_response", "audio_after_video", "framing", "timeouts", "partial_failure", "real_partial_recovery", "slow_reader", "stall_limit",
 ])
 def test_rtsp_writer(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_rtsp_writer"), case],
@@ -62,7 +62,9 @@ def test_rtsp_writer(media_binaries, case):
 
 
 @pytest.mark.parametrize("case", [
-    "interrupt", "response_interrupt", "partial_interrupt", "short_writes", "partial_stall_fanout",
+    "interrupt", "response_interrupt", "partial_interrupt", "short_writes",
+    "partial_stall_frame", "partial_stall_response", "partial_stall_stall_limit",
+    "partial_stall_epipe", "partial_stall_recover_fanout",
 ])
 def test_rtsp_write_deadlines(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_rtsp_deadline"), case],

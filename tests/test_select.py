@@ -316,7 +316,7 @@ def test_audio_codec_select_added_when_advertised() -> None:
         entity for entity in entities if isinstance(entity, C300XAudioCodecSelect)
     ]
     assert codec_entities
-    assert codec_entities[0]._attr_entity_registry_enabled_default is False
+    assert codec_entities[0].entity_registry_enabled_default is True
 
 
 def test_audio_codec_select_skipped_when_not_advertised() -> None:

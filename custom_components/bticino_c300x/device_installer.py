@@ -378,6 +378,10 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
         for name in DISPLAY_FILES
     }
 
+    if qml_patch == REPO_ROOT / "native_agent/scripts/qml_patch.sh":
+        for name in ("C300XSettings.qml", "js/c300x_maintenance.js"):
+            qml_sources[f"qml/{name}"] = _first_existing(REPO_ROOT / "device_qml" / name)
+
     payloads = [
         _PayloadFile(agent_binary, f"{remote_dir}/{REMOTE_AGENT_NAME}", "700"),
         _PayloadFile(qml_patch, f"{remote_dir}/qml_patch.sh", "700"),

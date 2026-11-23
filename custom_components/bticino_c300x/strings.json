@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Write date and time into the image"
         },
         "data_description": {
-          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
+          "snapshot_width": "Default 800: snapshots read the 800×480 display framebuffer, independently of the video stream size. The agent resizes the full frame to the chosen dimensions; Home Assistant does not resize it again. Range 64-800.",
+          "snapshot_height": "Default 480. Use 800×480 for native display pixels or, for example, 400×240 to preserve its 5:3 shape. Other proportions stretch the image. Even a 960×576 stream is captured from the 800×480 display. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Write date and time into the image"
         },
         "data_description": {
-          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
+          "snapshot_width": "Default 800: snapshots read the 800×480 display framebuffer, independently of the video stream size. The agent resizes the full frame to the chosen dimensions; Home Assistant does not resize it again. Range 64-800.",
+          "snapshot_height": "Default 480. Use 800×480 for native display pixels or, for example, 400×240 to preserve its 5:3 shape. Other proportions stretch the image. Even a 960×576 stream is captured from the 800×480 display. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -762,8 +762,8 @@
           "snapshot_timestamp": "Write date and time into the image"
         },
         "data_description": {
-          "snapshot_width": "The device reads the image from its 800×480 display and delivers it in exactly this size; nothing rescales it afterwards. Default 688, the width of the device video stream, which the display only stretches to 800. Range 64-800.",
-          "snapshot_height": "At most 480: the picture is read from the 800×480 display, so 576 is not possible. Default 480. For a 704×576 camera picture, about 587×480 keeps its shape. Range 64-480.",
+          "snapshot_width": "Default 800: snapshots read the 800×480 display framebuffer, independently of the video stream size. The agent resizes the full frame to the chosen dimensions; Home Assistant does not resize it again. Range 64-800.",
+          "snapshot_height": "Default 480. Use 800×480 for native display pixels or, for example, 400×240 to preserve its 5:3 shape. Other proportions stretch the image. Even a 960×576 stream is captured from the 800×480 display. Range 64-480.",
           "snapshot_delay_seconds": "Capture after ringing or the start of a video stream; default 3 seconds. No open card is required.",
           "snapshot_retention_days": "Default 14 days. Expired images are deleted even when saving is disabled. Limit: 1,000 images or 128 MiB per device; oldest images are removed first.",
           "snapshot_timestamp": "The capture date and time are drawn into the lower right corner of the saved image. Switched on by default."
@@ -771,16 +771,18 @@
       },
       "camera_quality": {
         "title": "Camera quality",
-        "description": "Size, bit rate and frame rate of the high-resolution camera stream; on firmware 3.0.x of the low-resolution one, the only stream that firmware sends, which the Door Entry app gets as well. On older firmware with **Camera resolution** set to Low, Home Assistant receives the low-resolution stream, which these values do not change. The C300X reads them only when it starts: saving a change restarts the device once, which takes about a minute.\n\nThe device currently runs with: {running}",
+        "description": "These settings affect the High stream under **Camera resolution**, or Low on firmware 3.0.x. Saving changes automatically reboots the device; allow about a minute.\n\nCurrently running: {running}",
         "data": {
           "size": "Picture size",
           "bitrate_kbps": "Bit rate",
-          "fps": "Frame rate"
+          "fps": "Frame rate",
+          "use_recommended_snapshot_size": "Use recommended snapshot size (800×480)"
         },
         "data_description": {
-          "size": "High stream: 688x480 (from the factory) is a cut-out of the camera picture, 704x576 the whole picture without the black side edges, still over the whole display; the size also applies to the camera picture on the C300X display and to answering-machine recordings. Low stream on firmware 3.0.x: 400x288 from the factory; the other sizes are not tested on such a device yet.",
-          "bitrate_kbps": "From the factory 800 kbit/s, at most 3000. The low stream on firmware 3.0.x: 180 from the factory, 100-2000. More gives a sharper picture and uses more network.",
-          "fps": "From the factory 15 frames per second; the high stream takes at most 24, since at 25 the device sends only about 8. The low stream on firmware 3.0.x: 10 from the factory, at most 25."
+          "size": "Sizes depend on firmware and the installed device agent. Optional 960x576 matches the display's proportions when offered.",
+          "bitrate_kbps": "Higher values improve picture quality but increase network traffic.",
+          "fps": "Higher values give smoother motion; the selector shows the supported limits.",
+          "use_recommended_snapshot_size": "Use the display proportions for future snapshots. Leave unchecked to keep your size."
         }
       },
       "speech": {
@@ -1503,6 +1505,9 @@
         "error": {
           "ssh_install_failed": "The SSH repair install failed. Check SSH access and retry.",
           "update_failed": "The device-agent update failed. Check that maintenance access is enabled and retry.",
+          "update_root_already_writable": "The update was refused before applying because the root filesystem (/) was already writable. If you previously remounted / writable manually, restart the device normally, then retry this Repair. Otherwise, investigate why / is writable before retrying.",
+          "update_root_readonly_failed": "The update could not return the root filesystem (/) to read-only. The final device state is uncertain; successful rollback is not confirmed. Keep recovery files and check the agent and filesystem state before any further update.",
+          "update_apply_failed": "The agent reported a generic update failure; the cause and final device state are unknown. If you previously remounted / writable manually, a normal device restart may help. Check the device state before retrying; this error does not confirm rollback.",
           "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle.",
           "ssh_login_refused": "The C300X refused the SSH login. Enter the SSH user and password of the device."
         },
@@ -1730,6 +1735,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Adjust camera picture",
+      "description": "Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or on-demand video with verified source values and ranges. Saved media is unchanged.",
+      "fields": {
+        "entry_id": {"name": "Integration entry"},
+        "control": {"name": "Control"},
+        "value": {"name": "Value"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "Capture C300X doorbell video",
       "description": "Record a short video on Home Assistant from an incoming ring call or an idle on-demand stream.",

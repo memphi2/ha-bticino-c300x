@@ -1,4 +1,8 @@
-"""C100X first setup needs explicit consent before enabling media or SIP writes."""
+"""C100X first setup needs explicit consent before enabling media or SIP writes.
+
+A C300X keeps the 2.9.0 defaults: media and the HA user are on at setup, and
+enabling media later turns the HA user on.
+"""
 
 import asyncio
 from types import SimpleNamespace
@@ -14,10 +18,14 @@ from custom_components.bticino_c300x.const import (
 )
 from custom_components.bticino_c300x.runtime_manager import _async_sync_device_user
 
+C100X_INFO = {"model": "C100X", "display_kind": "qt5_ondisk"}
+C300X_INFO = {"model": "C300X", "display_kind": "qt4_ondisk"}
 
-def setup_flow(monkeypatch):
+
+def setup_flow(monkeypatch, info=C100X_INFO):
     flow = BticinoC300XConfigFlow()
     flow._setup_connection = {"agent_host": "c100x.invalid"}
+    flow._setup_agent_info = dict(info)
     monkeypatch.setattr(flow, "async_show_form", lambda **values: values)
     monkeypatch.setattr(flow, "async_step_user_device_activations", AsyncMock())
     monkeypatch.setattr(flow, "async_step_user_visitor_snapshot", AsyncMock())
@@ -79,7 +87,7 @@ def test_enabling_video_preserves_existing_consent(monkeypatch, kind, previous_c
     data = {"agent_host": "c100x.invalid", CONF_VIDEO_ENABLED: False}
     if previous_consent is not None:
         data[CONF_CREATE_HOMEASSISTANT_USER] = previous_consent
-    entry = SimpleNamespace(data=data, options={})
+    entry = SimpleNamespace(data=data, options={}, runtime_data=SimpleNamespace(agent_info=C100X_INFO))
     monkeypatch.setattr(config_flow, "_async_qml_patch_description_placeholders", AsyncMock(return_value={}))
     if kind == "options":
         flow = config_flow.BticinoC300XOptionsFlow(entry)
@@ -105,3 +113,48 @@ def test_enabling_video_preserves_existing_consent(monkeypatch, kind, previous_c
     entry.runtime_data = SimpleNamespace(api=api, capabilities={"device_user": {"supported": True}})
     asyncio.run(_async_sync_device_user(SimpleNamespace(), entry))
     assert api.async_ensure_homeassistant_user.await_count == int(previous_consent is True)
+
+
+def test_c300x_setup_keeps_media_and_user_defaults(monkeypatch):
+    flow = setup_flow(monkeypatch, C300X_INFO)
+    form = asyncio.run(flow.async_step_user_features())
+    defaults = form["data_schema"]({})
+    assert defaults[CONF_VIDEO_ENABLED] is True
+    assert defaults[CONF_CREATE_HOMEASSISTANT_USER] is True
+    asyncio.run(flow.async_step_user_features({}))
+    assert flow._setup_feature_data[CONF_VIDEO_ENABLED] is True
+    assert flow._setup_feature_data[CONF_CREATE_HOMEASSISTANT_USER] is True
+    flow.async_step_user_visitor_snapshot.assert_awaited_once()
+
+
+@pytest.mark.parametrize("kind", ["options", "reconfigure"])
+def test_c300x_enabling_video_turns_the_user_on(monkeypatch, kind):
+    entry = SimpleNamespace(
+        data={"agent_host": "c300x.invalid", CONF_VIDEO_ENABLED: False, CONF_CREATE_HOMEASSISTANT_USER: False},
+        options={},
+        runtime_data=SimpleNamespace(agent_info=C300X_INFO),
+    )
+    monkeypatch.setattr(config_flow, "_async_qml_patch_description_placeholders", AsyncMock(return_value={}))
+    if kind == "options":
+        flow = config_flow.BticinoC300XOptionsFlow(entry)
+        monkeypatch.setattr(flow, "_async_store_options", AsyncMock())
+        step = flow.async_step_features
+    else:
+        flow = BticinoC300XConfigFlow()
+        monkeypatch.setattr(flow, "_get_reconfigure_entry", lambda: entry)
+        monkeypatch.setattr(flow, "async_step_reconfigure_visitor_snapshot", AsyncMock())
+        step = flow.async_step_reconfigure_features
+    monkeypatch.setattr(flow, "async_show_form", lambda **values: values)
+    asyncio.run(step({CONF_VIDEO_ENABLED: True}))
+    saved = (flow._async_store_options.await_args.args[0] if kind == "options"
+             else flow._reconfigure_feature_data)
+    assert saved[CONF_CREATE_HOMEASSISTANT_USER] is True
+
+
+def test_media_consent_follows_the_reported_model():
+    from custom_components.bticino_c300x.media_consent import asks_media_consent
+
+    assert asks_media_consent(C100X_INFO) is True
+    assert asks_media_consent({"device": {"model": "C100X"}}) is True
+    assert asks_media_consent(C300X_INFO) is False
+    assert asks_media_consent({}) is False

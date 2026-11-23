@@ -143,7 +143,7 @@ def test_three_documentation_rules_are_closed_with_evidence_only():
     for rule in ("docs-removal-instructions", "docs-installation-parameters", "docs-configuration-parameters"):
         assert rules[rule]["status"] == "done"
         assert rules[rule]["comment"]
-    audit = (DOCS / "quality-scale.md").read_text()
+    audit = (DOCS / "dev" / "quality-scale.md").read_text()
     assert "test_user_documentation.py" in audit
-    assert f"]({REMOVAL_LINK})" in audit
-    assert f"]({ICE_LINK})" in audit
+    assert f"](../{REMOVAL_LINK})" in audit
+    assert f"](../{ICE_LINK})" in audit

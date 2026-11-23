@@ -6,8 +6,11 @@ import { resolve, dirname, sep } from "node:path";
 import puppeteer from "puppeteer-core";
 import { checkSnapshotLayout } from "./snapshot_layout.mjs";
 import { checkC100xControls } from "./c100x_controls.mjs";
+import { checkMatchingPictureLayout } from "./matching_picture_layout.mjs";
+import { checkMediaAvailability } from "./media_availability.mjs";
 import { checkPendingMicrophone } from "./pending_microphone.mjs";
 import { checkRingEndStart } from "./ring_end_start.mjs";
+import { checkPictureControls } from "./picture_controls.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontend = resolve(here, "../../custom_components/bticino_c300x/frontend");
@@ -50,9 +53,12 @@ try {
   await mkdir(artifacts, { recursive: true });
   await page.goto(origin);
   await page.waitForFunction(() => !!window.lab);
+  await checkMediaAvailability(page, artifacts);
   await checkC100xControls(page, artifacts);
   await checkPendingMicrophone(page);
   await checkRingEndStart(page);
+  await checkPictureControls(page);
+  await checkMatchingPictureLayout(page, artifacts);
   await checkSnapshotLayout(page, artifacts);
   const assertFooterLayout = async (label) => {
     const failures = await page.evaluate(() => {
@@ -277,7 +283,7 @@ try {
   await page.waitForFunction(() => lab.peers.size === 0 && lab.listeners.size === 0);
   assert.equal(await page.evaluate(() => lab.oldTracks.every((track) => track.readyState === "ended")), true);
   assert.deepEqual(errors, []);
-  console.log("Browser smoke passed: 16 wrapped-text layouts, 8 button layouts, actions, RTC cycles, microphone, reconfigure and detach cleanup");
+  console.log("Browser smoke passed: matching 5:3 snapshot/live at 4 widths inline/expanded with rendered edge pixels, 16 wrapped-text layouts, 8 button layouts, actions, RTC cycles, microphone, reconfigure and detach cleanup");
 } finally {
   await browser?.close();
   await new Promise((done) => server.close(done));

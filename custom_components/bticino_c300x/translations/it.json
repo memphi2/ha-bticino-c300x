@@ -74,8 +74,8 @@
           "snapshot_timestamp": "Inserisci data e ora nell'immagine"
         },
         "data_description": {
-          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
-          "snapshot_height": "Al massimo 480: l'immagine viene letta dal display 800×480, quindi 576 non è possibile. Predefinito 480. Per un'immagine della telecamera di 704×576, circa 587×480 mantiene le proporzioni. Intervallo 64-480.",
+          "snapshot_width": "Predefinito 800: le istantanee provengono dal framebuffer del display 800×480, indipendentemente dalla dimensione del flusso video. L'agente ridimensiona l'intera immagine alle dimensioni scelte; Home Assistant non la ridimensiona nuovamente. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480. Usare 800×480 per i pixel nativi del display o, ad esempio, 400×240 per mantenere il rapporto 5:3. Altre proporzioni deformano l'immagine. Anche un flusso 960×576 viene acquisito dal display 800×480. Intervallo 64-480.",
           "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
           "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
           "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
@@ -187,8 +187,8 @@
           "snapshot_timestamp": "Inserisci data e ora nell'immagine"
         },
         "data_description": {
-          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
-          "snapshot_height": "Al massimo 480: l'immagine viene letta dal display 800×480, quindi 576 non è possibile. Predefinito 480. Per un'immagine della telecamera di 704×576, circa 587×480 mantiene le proporzioni. Intervallo 64-480.",
+          "snapshot_width": "Predefinito 800: le istantanee provengono dal framebuffer del display 800×480, indipendentemente dalla dimensione del flusso video. L'agente ridimensiona l'intera immagine alle dimensioni scelte; Home Assistant non la ridimensiona nuovamente. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480. Usare 800×480 per i pixel nativi del display o, ad esempio, 400×240 per mantenere il rapporto 5:3. Altre proporzioni deformano l'immagine. Anche un flusso 960×576 viene acquisito dal display 800×480. Intervallo 64-480.",
           "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
           "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
           "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
@@ -762,8 +762,8 @@
           "snapshot_timestamp": "Inserisci data e ora nell'immagine"
         },
         "data_description": {
-          "snapshot_width": "Il dispositivo legge l'immagine dal suo display 800×480 e la fornisce esattamente in questa dimensione; dopo non viene più ridimensionata. Predefinito 688, la larghezza del flusso video del dispositivo, che il display allarga soltanto a 800. Intervallo 64-800.",
-          "snapshot_height": "Al massimo 480: l'immagine viene letta dal display 800×480, quindi 576 non è possibile. Predefinito 480. Per un'immagine della telecamera di 704×576, circa 587×480 mantiene le proporzioni. Intervallo 64-480.",
+          "snapshot_width": "Predefinito 800: le istantanee provengono dal framebuffer del display 800×480, indipendentemente dalla dimensione del flusso video. L'agente ridimensiona l'intera immagine alle dimensioni scelte; Home Assistant non la ridimensiona nuovamente. Intervallo 64-800.",
+          "snapshot_height": "Predefinito 480. Usare 800×480 per i pixel nativi del display o, ad esempio, 400×240 per mantenere il rapporto 5:3. Altre proporzioni deformano l'immagine. Anche un flusso 960×576 viene acquisito dal display 800×480. Intervallo 64-480.",
           "snapshot_delay_seconds": "Acquisizione dopo una chiamata o l'avvio di un flusso video; predefinito 3 secondi. Non serve una scheda aperta.",
           "snapshot_retention_days": "14 giorni predefiniti. Le immagini scadute vengono eliminate anche con il salvataggio disattivato. Limite: 1.000 immagini o 128 MiB per dispositivo; vengono eliminate prima le più vecchie.",
           "snapshot_timestamp": "Data e ora dell'acquisizione vengono scritte in basso a destra nell'immagine salvata. Attivo per impostazione predefinita."
@@ -771,16 +771,18 @@
       },
       "camera_quality": {
         "title": "Qualità della telecamera",
-        "description": "Dimensione, bit rate e frequenza dei fotogrammi del flusso della telecamera ad alta risoluzione; sul firmware 3.0.x di quello a bassa risoluzione, l'unico che quel firmware invia e che riceve anche l'app Door Entry. Su un firmware precedente con **Risoluzione della telecamera** su Bassa, Home Assistant riceve il flusso a bassa risoluzione, che questi valori non modificano. Il C300X li legge solo all'avvio: salvare una modifica riavvia il dispositivo una volta, il che richiede circa un minuto.\n\nIl dispositivo funziona ora con: {running}",
+        "description": "Queste impostazioni si applicano a **Risoluzione della telecamera**: Alta, o Bassa sul firmware 3.0.x. Salvare le modifiche riavvia automaticamente il dispositivo; attendere circa un minuto.\n\nValori attuali: {running}",
         "data": {
           "size": "Dimensione dell'immagine",
           "bitrate_kbps": "Bit rate",
-          "fps": "Frequenza dei fotogrammi"
+          "fps": "Frequenza dei fotogrammi",
+          "use_recommended_snapshot_size": "Usa la dimensione consigliata per le istantanee (800×480)"
         },
         "data_description": {
-          "size": "Flusso alto: 688x480 (di fabbrica) è un ritaglio dell'immagine della telecamera, 704x576 l'immagine intera senza i bordi neri laterali, sempre su tutto il display; la dimensione vale anche per l'immagine sul display del C300X e per le registrazioni della segreteria. Flusso basso del firmware 3.0.x: 400x288 di fabbrica; le altre dimensioni non sono ancora testate su un tale dispositivo.",
-          "bitrate_kbps": "Di fabbrica 800 kbit/s, al massimo 3000. Il flusso basso del firmware 3.0.x: 180 di fabbrica, 100-2000. Di più dà un'immagine più nitida e usa più rete.",
-          "fps": "Di fabbrica 15 fotogrammi al secondo; il flusso alto accetta al massimo 24, perché a 25 il dispositivo ne invia solo circa 8. Il flusso basso del firmware 3.0.x: 10 di fabbrica, al massimo 25."
+          "size": "Le dimensioni dipendono dal firmware e dall'agente installato sul dispositivo. L'opzione 960x576 rispetta le proporzioni del display, se disponibile.",
+          "bitrate_kbps": "Valori più alti migliorano l'immagine ma aumentano il traffico di rete.",
+          "fps": "Valori più alti rendono i movimenti più fluidi; il selettore indica i limiti supportati.",
+          "use_recommended_snapshot_size": "Usa le proporzioni del display per le nuove istantanee. Altrimenti mantiene le dimensioni attuali."
         }
       },
       "speech": {
@@ -1503,6 +1505,9 @@
         "error": {
           "ssh_install_failed": "Installazione di riparazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
           "update_failed": "Aggiornamento del device agent non riuscito. Verifica che l'accesso di manutenzione sia attivo e riprova.",
+          "update_root_already_writable": "L'aggiornamento è stato rifiutato prima dell'applicazione perché il filesystem radice (/) era già scrivibile. Se in precedenza hai rimontato manualmente / in scrittura, riavvia normalmente il dispositivo, poi ripeti questa riparazione. Altrimenti verifica perché / è scrivibile prima di riprovare.",
+          "update_root_readonly_failed": "L'aggiornamento non è riuscito a riportare il filesystem radice (/) in sola lettura. Lo stato finale del dispositivo è incerto; il ripristino non è confermato. Conserva i file di recupero e verifica l'agente e il filesystem prima di un altro aggiornamento.",
+          "update_apply_failed": "L'agente ha segnalato un errore generico di aggiornamento; la causa e lo stato finale del dispositivo sono sconosciuti. Se in precedenza hai rimontato manualmente / in scrittura, un normale riavvio del dispositivo può aiutare. Verifica lo stato del dispositivo prima di riprovare; questo errore non conferma il ripristino.",
           "update_verify_failed": "L'aggiornamento è stato inviato, ma l'agent segnala ancora un bundle vecchio o incompatibile.",
           "ssh_login_refused": "Il C300X ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo."
         },
@@ -1730,6 +1735,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Regola immagine",
+      "description": "Legge le tre impostazioni dell’immagine in diretta. Per modificarne una, indica il controllo e il valore (da 0 a 100% a passi di 10). Richiede l’agente aggiornato e una videochiamata in corso dal posto esterno oppure un video su richiesta attivo con valori e intervalli verificati alla sorgente. I contenuti salvati restano invariati.",
+      "fields": {
+        "entry_id": {"name": "Voce"},
+        "control": {"name": "Controllo"},
+        "value": {"name": "Valore"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "Registra il video C300X",
       "description": "Registra un breve video in Home Assistant da una chiamata in arrivo o a richiesta quando le risorse multimediali sono libere.",

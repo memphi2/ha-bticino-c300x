@@ -7,6 +7,7 @@
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "http_maintenance.h"
+#include "http_identity.h"
 #include "http_device_user.h"
 #include "http_service_commands.h"
 #include "http_setup_page.h"
@@ -17,12 +18,14 @@
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
+#include "firmware_version.h"
 #include "http_util.h"
 #include "http_auth.h"
 #include "http_request.h"
 #include "http_response.h"
 #include "http_clients.h"
 #include "http_media_actions.h"
+#include "picture_worker.h"
 #include "openwebnet_async.h"
 #include "http_file_transfers.h"
 #include "http_callback.h"
@@ -31,6 +34,7 @@
 #include "local_action_events.h"
 #include "audio_codec.h"
 #include "memo_store.h"
+#include "memo_led.h"
 #include "media_bridge.h"
 #include "mdns.h"
 #include "mqtt_bridge.h"
@@ -43,6 +47,7 @@
 #include "system_metrics.h"
 #include "system_metrics_monitor.h"
 #include "self_test.h"
+#include "proc_probe.h"
 #include "signal_wakeup.h"
 #include "time_util.h"
 #include "ui_homeassistant.h"
@@ -198,7 +203,9 @@ struct agent_runtime {
     int display_client_fd;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
+    long long home_assistant_request_ms;
     int display_bridge_registered;
+    struct c300x_memo_led memo_led;
     int display_bridge_disabled;
     char display_bridge_webhook_url[C300X_MAX_URL_LEN];
     char display_bridge_shared_secret[C300X_MAX_TOKEN_LEN];
@@ -1337,72 +1344,6 @@ static void iso_time_from_unix(long long unix_time, char *out, size_t out_len)
     strftime(out, out_len, "%Y-%m-%dT%H:%M:%SZ", &tm_value);
 }
 
-static void read_voicemail_info(
-    const char *info_path,
-    int *read,
-    char *date,
-    size_t date_len,
-    long long *unix_time
-)
-{
-    FILE *file;
-    char line[256];
-    int in_section = 0;
-
-    *read = -1;
-    if (date_len > 0) {
-        date[0] = '\0';
-    }
-    *unix_time = 0;
-
-    file = fopen(info_path, "r");
-    if (file == NULL) {
-        return;
-    }
-    while (fgets(line, sizeof(line), file) != NULL) {
-        char *value = line;
-        const char *trimmed;
-        char *equals;
-
-        trimmed = trim_ascii(value);
-        if (trimmed[0] == '\0' || trimmed[0] == ';' || trimmed[0] == '#') {
-            continue;
-        }
-        if (trimmed[0] == '[') {
-            in_section = strcmp(trimmed, "[Message Information]") == 0;
-            continue;
-        }
-        if (!in_section) {
-            continue;
-        }
-        equals = strchr((char *)trimmed, '=');
-        if (equals == NULL) {
-            continue;
-        }
-        *equals = '\0';
-        {
-            const char *key = trim_ascii((char *)trimmed);
-            const char *field = trim_ascii(equals + 1);
-            if (strcasecmp(key, "Read") == 0) {
-                if (strcmp(field, "0") == 0) {
-                    *read = 0;
-                } else if (strcmp(field, "1") == 0) {
-                    *read = 1;
-                }
-            } else if (strcasecmp(key, "Date") == 0) {
-                snprintf(date, date_len, "%s", field);
-            } else if (strcasecmp(key, "UnixTime") == 0) {
-                char *parse_end = NULL;
-                long long parsed = strtoll(field, &parse_end, 10);
-                if (parse_end != field && parsed > 0) {
-                    *unix_time = parsed;
-                }
-            }
-        }
-    }
-    fclose(file);
-}
-
 static void voicemail_insert_sorted(
     struct voicemail_snapshot *snapshot,
     const struct voicemail_message *message,
@@ -1499,7 +1440,7 @@ static void message_collection_read_snapshot(
         }
         c300x_copy_string(message.kind, sizeof(message.kind), kind);
         c300x_copy_string(message.dir_path, sizeof(message.dir_path), message_dir);
-        read_voicemail_info(
+        c300x_read_voicemail_info(
             info_path,
             &message.read,
             message.date,
@@ -1810,7 +1751,7 @@ static void voicemail_runtime_init(
         );
         free(snapshot);
     }
-    if (!voicemail->enabled || !voicemail->watch_enabled) {
+    if (!voicemail->watch_enabled) {
         return;
     }
 #ifdef IN_CLOEXEC
@@ -1832,7 +1773,7 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
     voicemail_runtime_init(
         &runtime->voicemail,
         config->answering_machine_messages_enabled,
-        config->answering_machine_messages_watch,
+        config->answering_machine_messages_enabled && config->answering_machine_messages_watch,
         config->answering_machine_messages_max,
         config->answering_machine_messages_root,
         ""
@@ -1841,10 +1782,11 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
 
 static void memos_init(struct agent_runtime *runtime, const struct c300x_config *config)
 {
+    int watch = config->memos_enabled && config->memos_watch;
     voicemail_runtime_init(
         &runtime->text_memos,
         config->memos_enabled,
-        config->memos_watch,
+        watch,
         config->memos_max,
         config->memos_text_root,
         "text"
@@ -1852,7 +1794,7 @@ static void memos_init(struct agent_runtime *runtime, const struct c300x_config 
     voicemail_runtime_init(
         &runtime->voice_memos,
         config->memos_enabled,
-        config->memos_watch,
+        watch,
         config->memos_max,
         config->memos_voice_root,
         "voice"
@@ -2095,7 +2037,8 @@ static void handle_memos_inotify(
     if (structure_changed) {
         voicemail_refresh_watches(memos);
     }
-    memos_event_dispatch_if_changed(config, runtime);
+    if (config->memos_enabled && config->memos_watch)
+        memos_event_dispatch_if_changed(config, runtime);
 }
 
 static void handle_voicemail_inotify(
@@ -2542,6 +2485,7 @@ static void handle_display_bridge_post(
     }
     (void)c300x_json_bool_field(request->body, "enabled", &enabled);
     if (!enabled) {
+        c300x_memo_led_update(&runtime->memo_led, 0);
         if (!display_bridge_runtime_active(runtime) && !config->display_bridge_enabled && !runtime->display_bridge_disabled) {
             handle_display_bridge_status(client_fd, config, runtime);
             return;
@@ -2617,6 +2561,10 @@ static void handle_display_bridge_event_post(
         return;
     }
 
+    if (!c300x_memo_led_event(&runtime->memo_led, topic, request->body)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_unread\"}\n");
+        return;
+    }
     mark_home_assistant_callback_seen(runtime, time(NULL));
     ui_event_notify(runtime, topic);
     c300x_json_string(topic, topic_json, sizeof(topic_json));
@@ -3432,58 +3380,6 @@ static void firewall_remount_ro_if_needed(const char *path);
 static int run_detached_command(const char *program, const char *argument, int delay_ms);
 static void close_extra_fds_for_exec(void);
 
-static int process_cmdline_contains(const char *needle)
-{
-    DIR *directory;
-    struct dirent *entry;
-
-    directory = opendir("/proc");
-    if (directory == NULL) {
-        return 0;
-    }
-    while ((entry = readdir(directory)) != NULL) {
-        char path[512];
-        char buffer[512];
-        FILE *file;
-        size_t read_len;
-        int is_pid = 1;
-
-        for (const char *ptr = entry->d_name; *ptr != '\0'; ptr++) {
-            if (!isdigit((unsigned char)*ptr)) {
-                is_pid = 0;
-                break;
-            }
-        }
-        if (!is_pid) {
-            continue;
-        }
-        if (snprintf(path, sizeof(path), "/proc/%s/cmdline", entry->d_name) >= (int)sizeof(path)) {
-            continue;
-        }
-        file = fopen(path, "r");
-        if (file == NULL) {
-            continue;
-        }
-        read_len = fread(buffer, 1, sizeof(buffer) - 1, file);
-        fclose(file);
-        if (read_len == 0) {
-            continue;
-        }
-        buffer[read_len] = '\0';
-        for (size_t index = 0; index < read_len; index++) {
-            if (buffer[index] == '\0') {
-                buffer[index] = ' ';
-            }
-        }
-        if (strstr(buffer, needle) != NULL) {
-            closedir(directory);
-            return 1;
-        }
-    }
-    closedir(directory);
-    return 0;
-}
-
 static int legacy_mqtt_installed(void)
 {
     return path_exists(C300X_LEGACY_MQTT_SCRIPT)
@@ -3504,9 +3400,9 @@ static int legacy_mqtt_backup_available(void)
 
 static int legacy_mqtt_bridge_running(void)
 {
-    return process_cmdline_contains("TcpDump2Mqtt")
-        || process_cmdline_contains("StartMqttSend")
-        || process_cmdline_contains("StartMqttReceive");
+    return c300x_process_cmdline_contains("TcpDump2Mqtt")
+        || c300x_process_cmdline_contains("StartMqttSend")
+        || c300x_process_cmdline_contains("StartMqttReceive");
 }
 
 static int legacy_mqtt_running(void)
@@ -3514,28 +3410,14 @@ static int legacy_mqtt_running(void)
     return legacy_mqtt_bridge_running();
 }
 
-static int file_contains_literal(const char *path, const char *needle)
-{
-    char buffer[8192];
-    int truncated = 0;
-
-    if (path == NULL || needle == NULL || needle[0] == '\0') {
-        return 0;
-    }
-    if (!read_bounded_text_file(path, buffer, sizeof(buffer), &truncated)) {
-        return 0;
-    }
-    return strstr(buffer, needle) != NULL;
-}
-
 static int flexisip_restart_marker_present(void)
 {
-    return file_contains_literal(C300X_FLEXISIP_INIT_SCRIPT, C300X_FLEXISIP_RESTART_MARKER);
+    return c300x_file_contains_literal(C300X_FLEXISIP_INIT_SCRIPT, C300X_FLEXISIP_RESTART_MARKER);
 }
 
 static int flexisip_backup_marker_present(void)
 {
-    return file_contains_literal(C300X_FLEXISIP_INIT_BACKUP, C300X_FLEXISIP_RESTART_MARKER);
+    return c300x_file_contains_literal(C300X_FLEXISIP_INIT_BACKUP, C300X_FLEXISIP_RESTART_MARKER);
 }
 
 static const char *flexisip_reference_state(void)
@@ -5244,21 +5126,26 @@ static void api_capabilities(
         bundle_agent_version, sizeof(bundle_agent_version),
         bundle_api_version, sizeof(bundle_api_version)
     );
-    c300x_device_firmware(config->device_firmware, firmware_value, sizeof(firmware_value));
+    resolve_device_firmware(config, firmware_value, sizeof(firmware_value));
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_status(runtime->video, &video_status);
     }
+    enum picture_route picture = runtime ? picture_worker_request(&runtime->video_control,
+        runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
+    if (picture == PICTURE_DEFERRED) { free(body); return; }
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
         .device_model = c300x_device_model_name(c300x_device_model()),
         .display_kind = c300x_display_kind_name(c300x_device_display_kind()),
+        .memo_led_present = runtime != NULL && runtime->memo_led.claim_dir >= 0,
+        .picture_supported = picture == PICTURE_DIRECT || (runtime && c300x_gui_supports_picture(&runtime->ringer_control)),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
         .camera_resolution_fixed = c300x_device_camera_resolution_fixed(),
-        .display_patchable = c300x_device_display_files_patchable(),
+        .display_features = c300x_device_display_features(),
         .announcements_supported = runtime != NULL && c300x_announce_supported(&runtime->announce),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),
@@ -5423,7 +5310,7 @@ static void handle_doorbell_video_get(
 {
     enum { VIDEO_STATUS_BODY_LEN = 12288 };
     char *body = malloc(VIDEO_STATUS_BODY_LEN);
-    struct c300x_video_status video_status;
+    struct c300x_video_status video_status = {0};
     int running = 0;
     int call_active = 0;
     int clients = 0;
@@ -5562,6 +5449,9 @@ static void handle_doorbell_video_get(
             sizeof(last_error_quoted)
         );
     }
+    enum picture_route picture = runtime ? picture_worker_request(&runtime->video_control,
+        runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
+    if (picture == PICTURE_DEFERRED) { free(body); return; }
     window_available = (
         ring_call_active
         || ring_media_active
@@ -5585,6 +5475,8 @@ static void handle_doorbell_video_get(
         "\"audio_stream_path\":\"%s\","
         "\"recorder_stream_path\":\"%s\","
         "\"bridge\":{"
+        "\"picture_controls_supported\":%s,"
+        "\"picture_controls_scope\":%s,"
         "\"enabled\":%s,"
         "\"running\":%s,"
         "\"bridge_running\":%s,"
@@ -5652,6 +5544,9 @@ static void handle_doorbell_video_get(
         stream_path,
         audio_stream_path,
         recorder_stream_path,
+        picture == PICTURE_DIRECT || (runtime && c300x_gui_supports_picture(&runtime->ringer_control)) ? "true" : "false",
+        picture == PICTURE_DIRECT ? "\"ring_and_on_demand\"" :
+            (runtime && c300x_gui_supports_picture(&runtime->ringer_control) ? "\"ring\"" : "null"),
         config->video_enabled ? "true" : "false",
         running ? "true" : "false",
         bridge_running ? "true" : "false",
@@ -6494,7 +6389,7 @@ static int handle_ringer_post(
         }
     }
     has_volume = c300x_json_int_field(request_body, "volume", &volume);
-    if (has_muted && !c300x_device_display_files_patchable()) {
+    if (has_muted && !c300x_device_display_features()) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_mute_unsupported\"}\n");
         return 1;
     }
@@ -8881,7 +8776,8 @@ static void handle_agent_update_apply(
     }
     if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest,
             &summary, apply_agent_update_firewall_patches)) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_apply_failed\"}\n");
+        int status = agent_update_error_status(summary.error);
+        send_json(client_fd, status, status == 409 ? "Conflict" : "Internal Server Error", agent_update_error_json(summary.error));
         free(workspace);
         return;
     }
@@ -8982,6 +8878,9 @@ static void handle_api_request(
         send_json(client_fd, 200, "OK", "{\"ok\":true,\"agent\":\"native-c\",\"version\":\"" C300X_NATIVE_AGENT_VERSION "\"}\n");
         return;
     }
+    if (c300x_http_identity_route(client_fd, config, request)) {
+        return;
+    }
 
     if (strcmp(request->method, "POST") == 0
         && strncmp(request->path, "/api/v1/maintenance/", sizeof("/api/v1/maintenance/") - 1) == 0
@@ -9014,12 +8913,13 @@ static void handle_api_request(
         send_auth_required(client_fd);
         return;
     }
+    runtime->home_assistant_request_ms = c300x_monotonic_ms();
 
     if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_audio_codec_route(&runtime->maintenance, client_fd, config,
             runtime->audio_codec_running_state, request, run_detached_command)
-        || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config, request,
+        || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config, runtime->video, request,
             run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
             run_detached_command)
@@ -9119,6 +9019,10 @@ static void handle_api_request(
     }
     if (strcmp(request->path, "/api/v1/display/touch-tone") == 0) {
         c300x_touch_tone_handle_api(&runtime->touch_tone, client_fd, request);
+        return;
+    }
+    if (strcmp(request->path, "/api/v1/video/picture") == 0) {
+        picture_request(&runtime->ringer_control, &runtime->video_control, runtime->video, config, client_fd, request);
         return;
     }
     if (strcmp(request->path, "/api/v1/display/alert") == 0) {
@@ -9439,12 +9343,14 @@ static int handle_ui_request(
     int client_fd,
     struct c300x_config *config,
     struct agent_runtime *runtime,
-    const struct request *request
+    struct request *request
 )
 {
     if (!strcmp(request->path, "/ui/c100x/presence/next") || !strcmp(request->path, "/ui/c100x/presence/status")
         || !strcmp(request->path, "/ui/c100x/presence/probe"))
         return c100x_gui_presence_route(&runtime->c100x_presence, client_fd, request, client_is_loopback(client_fd));
+    if (!strncmp(request->path, "/ui/maintenance", sizeof("/ui/maintenance") - 1))
+        return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, run_detached_command);
     if (strcmp(request->path, "/ui/preferences") == 0) {
         handle_ui_preferences(client_fd, config, request);
         return 1;
@@ -9721,19 +9627,30 @@ cleanup:
 
 static int agent_has_home_assistant_connection(
     const struct agent_runtime *runtime,
-    time_t now
+    int *poll_timeout_ms
 )
 {
-    (void)now;
-    return runtime->home_assistant_connected_this_run;
+    long long left = c300x_mdns_home_assistant_present_ms(
+        runtime->home_assistant_connected_this_run,
+        runtime->home_assistant_request_ms,
+        c300x_monotonic_ms()
+    );
+
+    /* Wake up to announce again once HA has been quiet for too long. */
+    if (left > 0) {
+        *poll_timeout_ms = min_timeout_ms(*poll_timeout_ms, left < 3600000 ? (int)left : 3600000);
+    }
+    return left > 0;
 }
 
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C100X_GUI_PRESENCE_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C100X_GUI_PRESENCE_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
+    int memo_led_fd = -1;
+    int memo_led_owner = 0;
     int udp_joined = 0;
     struct c300x_mdns mdns;
     struct agent_runtime *runtime = NULL;
@@ -9776,6 +9693,7 @@ int c300x_run(struct c300x_config *config)
     c300x_announce_init(&runtime->announce);
     (void)c300x_openwebnet_async_init(&runtime->openwebnet, &runtime->request_queue);
     (void)c300x_video_control_init(&runtime->video_control, &runtime->request_queue);
+    runtime->video_control.shutdown = &shutdown_requested;
     runtime->display_client_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);
@@ -9792,6 +9710,7 @@ int c300x_run(struct c300x_config *config)
         result = 2;
         goto cleanup;
     }
+    snprintf(mdns.instance_id, sizeof(mdns.instance_id), "%s", runtime->metrics.last.instance_id);
     listeners[listener_count].fd = make_listener(config->listen_host, config->api_port);
     listeners[listener_count].kind = LISTENER_API;
     if (listeners[listener_count].fd < 0) {
@@ -9846,6 +9765,10 @@ int c300x_run(struct c300x_config *config)
         refresh_smartphone_forwarding_mode(config, runtime);
     }
 
+    /* A failed second start must not adopt or release the running agent's marker. */
+    c300x_memo_led_init(&runtime->memo_led, config->memos_text_root, config->memos_voice_root);
+    memo_led_owner = 1;
+    if (runtime->memo_led.claim_dir >= 0) memo_led_fd = c300x_memo_led_watch();
     fprintf(stderr, "c300x native agent %s listening api=%s:%u ui=%s\n",
         C300X_NATIVE_AGENT_VERSION,
         config->listen_host,
@@ -9888,6 +9811,10 @@ int c300x_run(struct c300x_config *config)
         }
         shutdown_poll_index = (int)poll_count;
         poll_fds[poll_count++] = (struct pollfd){.fd = shutdown_fd, .events = POLLIN};
+        int memo_led_index = (int)poll_count;
+        poll_fds[poll_count++] = (struct pollfd){.fd = memo_led_fd, .events = POLLIN};
+        int memo_scan_index = (int)poll_count;
+        poll_fds[poll_count++] = (struct pollfd){.fd = c300x_memo_led_pollfd(&runtime->memo_led), .events = POLLIN};
         http_poll_index = (int)poll_count;
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
@@ -9918,7 +9845,7 @@ int c300x_run(struct c300x_config *config)
         c300x_mdns_open_if_needed(
             &mdns,
             config,
-            agent_has_home_assistant_connection(runtime, now),
+            agent_has_home_assistant_connection(runtime, &poll_timeout_ms),
             network_online,
             now
         );
@@ -10053,6 +9980,11 @@ int c300x_run(struct c300x_config *config)
             runtime_set_wake_reason(runtime, "event");
         }
         /* Drain old descriptors before accept can reuse one of their numbers. */
+        if (poll_fds[memo_scan_index].revents) c300x_memo_led_ready(&runtime->memo_led);
+        if (poll_fds[memo_led_index].revents & POLLIN) {
+            drain_inotify_events(memo_led_fd);
+            c300x_memo_led_update(&runtime->memo_led, runtime->memo_led.claimed);
+        }
         c300x_http_outputs_handle(&poll_fds[output_poll_index]);
         c300x_http_maintenance_tick(&runtime->maintenance);
         c300x_announce_tick(&runtime->announce);
@@ -10173,6 +10105,8 @@ int c300x_run(struct c300x_config *config)
     }
 
 cleanup:
+    if (memo_led_fd >= 0) close(memo_led_fd);
+    if (memo_led_owner) c300x_memo_led_close(&runtime->memo_led);
     if (shutdown_requested && result == 1) {
         result = 0;
     }

@@ -54,6 +54,7 @@ int c300x_capabilities_json(
         "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"display_kind\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
+        "\"camera_picture\":{\"supported\":%s},"
         "\"https_callbacks\":%s,"
         "\"https_callbacks_configurable\":true,"
         "\"https_callbacks_enabled\":%s,"
@@ -78,6 +79,7 @@ int c300x_capabilities_json(
         "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s,\"audio_codec_status\":%s,\"audio_codec_apply\":%s,\"audio_codec_restore\":%s,\"camera_resolution\":%s,\"camera_quality\":%s},"
         "\"touch_tone\":{\"supported\":%s,\"requires_display_patch\":true},"
         "\"display_alerts\":%s,"
+        "\"memo_led\":%s,"
         "\"display_bridge\":{\"supported\":%s,\"configurable\":%s,\"configured\":%s}"
         "}"
         "}\n",
@@ -88,6 +90,7 @@ int c300x_capabilities_json(
         device_model,
         display_kind,
         device_firmware,
+        context->picture_supported ? "true" : "false",
         context->https_callbacks ? "true" : "false",
         context->https_callbacks_enabled ? "true" : "false",
         config->https_callbacks_enabled ? "true" : "false",
@@ -109,7 +112,7 @@ int c300x_capabilities_json(
         (config->activations_enabled && activations_count > 0) ? "true" : "false",
         activations_count,
         context->announcements_supported ? "true" : "false",
-        context->display_patchable ? "true" : "false",
+        context->display_features ? "true" : "false",
         context->ringer_min_volume,
         context->ringer_max_volume,
         context->ringer_volume_step,
@@ -167,12 +170,11 @@ int c300x_capabilities_json(
         (maintenance_supported && config->video_enabled && !context->camera_resolution_fixed) ? "true" : "false",
         /* Firmware 3.0.x too: there it sets the low stream. */
         (maintenance_supported && config->video_enabled) ? "true" : "false",
-        /* The key beep, the alerts and the bridge live in the patched
-         * display files. */
-        context->display_patchable ? "true" : "false",
-        context->display_patchable ? "true" : "false",
-        context->display_patchable ? "true" : "false",
-        context->display_patchable ? "true" : "false",
+        context->display_features ? "true" : "false",
+        context->display_features ? "true" : "false",
+        context->memo_led_present ? "true" : "false",
+        context->display_features ? "true" : "false",
+        context->display_features ? "true" : "false",
         config->display_bridge_enabled ? "true" : "false"
     );
     return written >= 0 && (size_t)written < body_len;

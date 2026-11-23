@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.8.2`
+- Current agent version: `2.9.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -59,8 +59,9 @@ Normal `/api/v1` endpoints require the configured device-agent API token unless
 Clients send the token in the HTTP `Authorization` header using the bearer
 scheme. Do not log or expose the header value.
 
-`GET /api/v1/health` is always unauthenticated. `GET /` and `GET /setup` are
-served only while `api.noAuth=true`.
+`GET /api/v1/health` and `POST /api/v1/identity/proof` are always
+unauthenticated; the proof route never returns the token. `GET /` and
+`GET /setup` are served only while `api.noAuth=true`.
 
 ### Maintenance Token
 
@@ -170,6 +171,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/` | setup/noAuth | Serves setup page only while bootstrap is open. |
 | `GET` | `/setup` | setup/noAuth | Same as `/`. |
 | `GET` | `/api/v1/health` | none | None. |
+| `POST` | `/api/v1/identity/proof` | none | None. |
 | `GET` | `/api/v1/capabilities` | API | None. |
 | `GET` | `/api/v1/self-test` | API | None. |
 | `GET` | `/api/v1/state` | API | None. |
@@ -276,6 +278,29 @@ Response:
 {"ok": true, "agent": "native-c", "version": "2.4.0"}
 ```
 
+### `POST /api/v1/identity/proof`
+
+Authentication: none. Side effects: none.
+
+Home Assistant uses this before it follows the station to a new address. The
+station proves that it holds the API token without sending it:
+
+```json
+{"nonce": "<64 lowercase hex characters>"}
+```
+
+```json
+{"ok": true, "id": "c300x-...", "proof": "<64 lowercase hex characters>"}
+```
+
+`proof` is HMAC-SHA256 with the API token as key over
+`c300x-identity-v1\n<id>\n<local IPv4>:<local port>\n<nonce>`, where the
+address and port are the ones this connection arrived on. A relay that forwards
+the nonce to the real station therefore gets a proof for the station's address,
+not its own. Errors: `400 invalid_nonce`; `404 identity_proof_unavailable`
+when `api.noAuth=true`, the token is shorter than 32 characters, or the
+connection is not IPv4.
+
 ### `GET /api/v1/capabilities`
 
 Authentication: normal API token.
@@ -297,10 +322,11 @@ Important top-level fields:
 - `device.display_kind`: `qt4_ondisk` (C300X 1.7.x/2.0.x), `qt5_rcc` (C300X
   3.0.x, display files built into the program) or `qt5_ondisk` (C100X)
 - `device.firmware`
-- `capabilities`. `touch_tone`, `display_alerts` and `display_bridge` are
-  supported only on a display whose files the Display patch can edit, the
-  `qt4_ondisk` display so far. `maintenance.gui_reload` is not offered on the
-  C100X, whose display program the agent does not restart.
+- `capabilities`. `touch_tone`, `display_alerts`, `display_bridge` and
+  `ringer.mute` are reported on every C300X as before; on the C100X only once
+  its display files can be patched, which they cannot yet.
+  `maintenance.gui_reload` is not offered on the C100X, whose display program
+  the agent does not restart.
 
 ### `GET /api/v1/state`
 
@@ -530,6 +556,14 @@ Request fields:
 ```json
 {"topic": "display_bridge.state"}
 ```
+
+For `display_bridge.state` and `notifications`, an optional boolean `unread`
+also synchronizes HA's memo LED claim, even without a display listener. The
+agent advertises `memo_led` only when it finds the LED and a usable, trusted
+volatile claim store at startup. An empty private directory on tmpfs records
+ownership across agent crashes, not device reboots. Releasing the claim
+respects the firmware LED trigger and any unread native memos. An accepted
+event is not a hardware delivery receipt.
 
 Response status: `202 Accepted` on success.
 
@@ -1062,6 +1096,12 @@ Returns non-sensitive Flexisip device-user and routing status. Important fields:
 The endpoint must derive the local SIP/domain state from device files. It must
 not hardcode device-specific SIP domains or account ids.
 
+An active route must use the recognized internal or external route symlink.
+An unrecognized link or regular active-route file reports `supported: false`,
+`routes_consistent: false` and `unsupported_active_route`. Internal readiness
+requires the HA destination in the active route; external forwarding deliberately
+excludes it.
+
 ### `POST /api/v1/maintenance/device-user/actions/ensure-homeassistant`
 
 Authentication: maintenance.
@@ -1079,6 +1119,11 @@ Request fields:
 ```
 
 `account_label` is optional.
+
+Unrecognized active routing is rejected before modifying routing binaries or SIP
+files. Applying the binary patch requires a complete known firmware hash, not
+only matching instruction ranges. These checks do not authorize replacing
+third-party routing files with stock configuration.
 
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
@@ -1162,7 +1207,7 @@ Validation examples:
 ## Maintenance Actions
 
 Execution is hybrid; **not every operation is off the HTTP loop yet** (see
-`docs/native-http-blocking-inventory.md`). QML status/patch, GUI reload, the read-only device-user
+[Remaining Blocking Work](../docs/dev/architecture.md#remaining-blocking-work)). QML status/patch, GUI reload, the read-only device-user
 status script, SSH probe/start/stop and SSH-before-reboot/removal share one
 asynchronous job slot. Connections stay open until the existing response
 boundary; no new job ID, queue or early-success response is introduced.
@@ -1202,8 +1247,8 @@ or advancing another phase, but cannot reach that cleanup during a synchronous
 label transaction. Existing QML-write job cancellation is unchanged, not newly
 certified as transaction-safe by the label-write fix.
 
-See [HTTP maintenance ownership](../docs/native-http-maintenance.md) and the
-[remaining blocking-path inventory](../docs/native-http-blocking-inventory.md).
+See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
+[remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).
 
 All endpoints in this section require maintenance authorization. Mutating
 endpoints require exact confirmation tokens so accidental browser/script calls
@@ -1495,7 +1540,7 @@ only the low-resolution stream, that one (`"stream": "low"`):
 {"ok": true, "supported": true, "stream": "high", "bitrate_kbps": 800, "fps": 15,
  "size": "688x480", "running_bitrate_kbps": 800, "running_fps": 15,
  "running_size": "688x480", "bitrate_min": 300, "bitrate_max": 3000,
- "fps_min": 5, "fps_max": 24, "sizes": ["688x480", "720x576"],
+ "fps_min": 5, "fps_max": 24, "sizes": ["688x480", "704x576", "960x576"],
  "restart_required": false, "changed": false, "remount_ro_failed": false,
  "rebooting": false}
 ```
@@ -1505,14 +1550,17 @@ the device started with (`0` and `""` when the agent cannot tell), and
 `restart_required` is `true` while the two differ. When the file could not be
 read at the agent's start, the agent takes the values the file has before its
 first change as the running ones. `sizes` lists the sizes a
-request may choose. The high stream takes 300–3000 kbit/s and 5–24 fps: at
+request may choose. `960x576` is included only for the exact verified C300X
+1.7.19 and 2.0.2 media executables, either original or patched. Each build
+requires its own matching stock backup; build IDs are not normalized away. Other builds retain the
+legacy High sizes. The high stream takes 300–3000 kbit/s and 5–24 fps: at
 25 fps the device drops its frame rate control and sends about 8 frames per
 second. The low stream takes 100–2000 kbit/s (the device lowers the bit rate
 at run time and raises it again only up to 2000) and 5–25 fps, in the sizes
 352x288, 400x288 (from the factory), 640x480, 704x576 and 720x576; the sizes
 other than 400x288 are not tested on a 3.0.x device yet.
 
-`POST` with `{"confirm": "apply_camera_quality", "size": "720x576",
+`POST` with `{"confirm": "apply_camera_quality", "size": "960x576",
 "bitrate_kbps": 3000, "fps": 24}` saves new values and returns the same body;
 each value may be left out and then stays as it is. Like the audio codec
 switch, the agent then restarts the device when the saved values differ from
@@ -1524,17 +1572,33 @@ rate outside the limits is answered `400` with
 `camera_quality_invalid_bitrate` or `camera_quality_invalid_fps`, and a
 request with no value with `camera_quality_value_required`. A value the file
 already has may stay even when it is outside the limits.
+An active or starting media session rejects changes with `409` and
+`camera_quality_media_session_active`. Geometry changes additionally require
+an exact known executable and a verified original backup; unknown files or
+invalid backups are not overwritten.
+Concurrent camera maintenance is rejected with `409` and
+`camera_quality_update_busy`, without changing configuration or the executable.
 
 The device keeps the values in the `[Answering Machine]` section of
 `/home/bticino/cfg/bt_answering_machine` and reads that file only when it
 starts: `BitrateRtpH`, `FpsRtpH`, `Width` and `Height` for the high stream,
 `BitrateRtpL`, `FpsRtpL`, `WidthLow` and `HeightLow` for the low one. For the
 high stream the device crops the camera picture when `Width` is more than
-1.5 times `Height` (800x480 from the factory gives 688x480) and sends the
-whole 720x576 picture otherwise, so the size `720x576` is written as
-`Width=720`, `Height=480`; the same values also set the camera picture on the
-device display and answering-machine recordings. The low stream is scaled to
-`WidthLow` x `HeightLow`.
+1.5 times `Height`. The offered sizes keep `Width=800`, `Height=480`, which
+also describe the LCD output, and adjust the crop in `stack_open.xml`:
+`688x480` uses `(16,48,688,480)`; `704x576` uses `(8,0,704,576)`.
+`960x576` uses the latter crop plus two hash-pinned instruction replacements
+in the original media program. Both High caps filters then request width 960
+before the existing hardware encoder; the height remains 576. There is no
+additional encoding stage. Selecting a legacy size restores the original
+binary. The low stream is scaled to `WidthLow` x `HeightLow` and is not patched.
+The 960x576 live test does not establish the answering-machine recording format.
+
+Saved geometry and running geometry are distinguished using the actual running
+executable and process generation, including after an agent-only restart.
+If the running geometry cannot be verified, `running_size` is empty. Unknown
+status alone does not trigger a reboot; confirmed changes remain pending until
+the device has restarted. There is no periodic geometry polling.
 
 The agent changes the file only when each of the four values is there exactly
 once, replaces those numbers and nothing else, keeps one backup of the
@@ -1542,8 +1606,9 @@ original file under `/home/bticino/cfg/extra/c300x-device-file-backups/original`
 writes a complete new file in one step, makes the root filesystem writable
 only for the write, and reads the result back. Removing the agent puts the
 original values back; a file without the values is left alone. After a
-firmware update the file holds the factory values again, which are the same on
-every firmware, so there is nothing to put back.
+firmware update, only recognized binaries can be modified; a backup from a
+different build must never be used to restore the new executable. An unsuccessful
+media restoration aborts agent removal before agent files and backups are deleted.
 
 Capabilities advertise the setting as `maintenance.camera_quality` whenever
 video is enabled. A `POST` is answered `409` with
@@ -1572,7 +1637,7 @@ or `"audio_codec_restore_failed"`.
 ## Loopback UI API
 
 The UI listener is intended for local QML pages. Routes accept only GET, except
-the guarded POST routes `/ui/preferences` and `/ui/touch-tone/state`. Routes forwarding
+the guarded POST routes for preferences, touch-tone reports and station maintenance. Routes forwarding
 requests to Home Assistant require an active display bridge.
 
 | Method | Path | Purpose |
@@ -1586,6 +1651,10 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
+| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
+| `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
+| `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
 | `GET` | `/ui/state` | Display bridge state. |
@@ -1597,6 +1666,22 @@ requests to Home Assistant require an active display bridge.
 Home Assistant proxy endpoints use the display bridge and shared secret
 configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
+
+Station maintenance works without HA. It requires the local maintenance and
+per-action permissions, no browser Origin, the `X-C300X-UI: settings-v1`
+header, and a loopback client socket owned by the unique trusted station GUI.
+The socket must belong to UID 0. The GUI and wrapper must have root real,
+effective, saved and filesystem UIDs and GIDs. Stock SysV startup runs
+`bin/bt_daemon` from `/home/bticino`; its GUI entry in `stack_open.xml`
+starts `bin/BtClass_qws`, whose shell waits for its direct `bin/gui/BtClass`
+child. The alternate launch from `qml_patch.sh reload_gui` uses the absolute
+wrapper path and is accepted once init has adopted the wrapper. Both paths
+require the expected shell, working directory, complete wrapper argv and open
+script inode, with read-only firmware files. A standalone GUI process, an
+ambiguous instance or incomplete process evidence is denied, even with the
+header. This identifies a local privileged process, not a physical gesture,
+and does not protect against another root process. A scheduled reboot or removal returns 202:
+it does not certify that the reboot or the restoration has already completed.
 
 `GET /ui/alerts/next` requires loopback and `X-C300X-GUI: alerts-v1`, with no
 `Origin` or request body. The optional exact query `protected=1` reports a
@@ -1634,6 +1719,26 @@ only updates the switch after confirmation; an ambiguous timeout requires a
 fresh read before another write.
 
 The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
+
+A connected GUI advertising `picture=1` provides the legacy ring-only path.
+An eligible C300X (firmware 1.7.19) can also report
+`bridge.picture_controls_scope: "ring_and_on_demand"` with
+`bridge.picture_controls_supported: true`. Model and firmware alone do not
+enable it: an authenticated status or capability request during owned media
+checks the capture source on the bounded media worker. The read result is
+cached for that media session; no source is opened while idle.
+`camera_picture.supported` reports whether either path is available.
+Missing or unknown scope does not extend GUI support beyond ring calls.
+
+Authenticated `GET /api/v1/video/picture` returns brightness, contrast and
+saturation; POST accepts one `control` with a percentage `value` (0 through
+100 in steps of 10). Direct success returns source readback; legacy success
+returns the GUI object's values. Neither measures the rendered picture.
+An active source that does not expose the required V4L2 control descriptors
+is unsupported, even if raw control reads return numbers.
+Direct operations check media ownership and session identity during execution.
+A failed direct write returns an error; it is not retried through the GUI.
+No extra idle poll, recording, configuration write or media restart is needed.
 It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight
 is allowed. One connection waits indefinitely without periodic device reads.
 An authorized API ringer request returns `{ok, id, muted, expires}` to that
@@ -1646,7 +1751,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.8.2` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `2.9.0` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family`
 comes from `device.firmware` of the agent config or, when that is empty as the
 installer writes it, from the device's own web server database, the same

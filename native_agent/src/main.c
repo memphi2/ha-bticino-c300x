@@ -1,13 +1,16 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
 #include "camera_quality.h"
+#include "camera_running.h"
 #include "display_touch.h"
 #include "device_routing.h"
 #include "https_client.h"
 #include "c100x_gui_response.h"
+#include "media_geometry_patch.h"
 
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void print_usage(const char *program)
@@ -16,7 +19,7 @@ static void print_usage(const char *program)
         stderr,
         "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
         " [--audio-codec status|apply|restore] [--display-touch status|apply|restore]"
-        " [--restore-media-patches] [--version]\n"
+        " [--restore-media-patches] [--restore-device-routing] [--version]\n"
         "       %s --c100x-gui-response MODE GENERATION PROBE < response.json\n",
         program, program
     );
@@ -148,6 +151,7 @@ int main(int argc, char **argv)
     int check_config = 0;
     int diagnose_startup = 0;
     int restore_media_patches = 0;
+    int restore_device_routing = 0;
     const char *audio_codec_action = NULL;
     const char *display_touch_action = NULL;
     struct c300x_config config;
@@ -177,6 +181,8 @@ int main(int argc, char **argv)
             display_touch_action = argv[++index];
         } else if (strcmp(argv[index], "--restore-media-patches") == 0) {
             restore_media_patches = 1;
+        } else if (strcmp(argv[index], "--restore-device-routing") == 0) {
+            restore_device_routing = 1;
         } else if (strcmp(argv[index], "--check-config") == 0) {
             check_config = 1;
         } else if (strcmp(argv[index], "--diagnose-startup") == 0) {
@@ -191,11 +197,15 @@ int main(int argc, char **argv)
         }
     }
 
-    if (restore_media_patches) {
+    if (restore_device_routing) {
         if (!c300x_device_routing_remove_patches(error, sizeof(error))) {
             fprintf(stderr, "Failed to restore device routing: %s\n", error);
             return 1;
         }
+        return 0;
+    }
+
+    if (restore_media_patches) {
         if (!c300x_audio_codec_remove_patches(error, sizeof(error))) {
             fprintf(stderr, "Failed to restore media patches: %s\n", error);
             return 1;
@@ -205,6 +215,9 @@ int main(int argc, char **argv)
             fprintf(stderr, "Failed to restore the camera quality: %s\n", quality_error);
             return 1;
         }
+        int pending = c300x_media_geometry_state(NULL) == C300X_MEDIA_GEOMETRY_STOCK
+            && c300x_camera_running_current_geometry() == C300X_MEDIA_GEOMETRY_PATCHED;
+        printf("{\"ok\":true,\"media_reboot_required\":%s}\n", json_bool(pending));
         return 0;
     }
 
@@ -230,6 +243,11 @@ int main(int argc, char **argv)
         printf("config ok\n");
         return 0;
     }
+
+    /* Patch subprocesses must use this listener, including custom --config paths. */
+    char ui_port[6];
+    snprintf(ui_port, sizeof(ui_port), "%u", (unsigned)config.ui_port);
+    if (setenv("C300X_QML_UI_PORT", ui_port, 1) != 0) return 1;
 
     /* The device libcurl must initialize before workers, and only on opt-in. */
     c300x_https_init(config.https_callbacks_enabled);

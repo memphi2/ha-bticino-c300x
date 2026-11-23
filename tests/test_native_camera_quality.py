@@ -98,7 +98,21 @@ def qt5() -> bool:
 
 
 @pytest.fixture
-def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
+def media_image(request: pytest.FixtureRequest) -> bytes:
+    if getattr(request, "param", None) != "stock":
+        return b"unrecognized test firmware"
+    paths = list((ROOT.parent / "c300x-fwpatch/work/rootfs-1.7.19/home/bticino/bin").glob("b?_av_me?ia"))
+    if not paths:
+        pytest.skip("local original firmware is not distributed")
+    assert len(paths) == 1
+    import hashlib
+    image = paths[0].read_bytes()
+    assert hashlib.sha256(image).hexdigest() == "97b61ad80e67c1b3ea494956568645b93c7fe3ef359f77af9c7e2ad6dff1bf9e"
+    return image
+
+
+@pytest.fixture
+def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool, media_image: bytes) -> Iterator[Lab]:
     port, ui_port, own = free_tcp_ports(3)
     settings = tmp_path / "bt_answering_machine"
     settings.write_text(SETTINGS)
@@ -108,6 +122,10 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
     (routing / "bt_answering_machine").write_bytes(ROUTING_STOCK)
     stack = tmp_path / "stack_open.xml"
     stack.write_text(STACK)
+    (tmp_path / "media-target").write_bytes(media_image)
+    (tmp_path / "media-target").chmod(0o755)
+    (tmp_path / "running_media").write_bytes(media_image)
+    (tmp_path / "running_media").chmod(0o755)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
         "api": {"token": TOKEN},
@@ -132,6 +150,10 @@ def lab(binary: Path, tmp_path: Path, reboot: bool, qt5: bool) -> Iterator[Lab]:
            "C300X_CAMERA_RUNNING_NOTE": str(tmp_path / "camera-running"),
            "C300X_ROUTING_TARGET_DIR": str(routing),
            "C300X_ROUTING_BACKUP_DIR": str(tmp_path / "routing-backups"),
+           "C300X_CAMERA_UPDATE_LOCK": str(tmp_path / "camera-update.lock"),
+           "C300X_MEDIA_GEOMETRY_TARGET": str(tmp_path / "media-target"),
+           "C300X_MEDIA_GEOMETRY_RUNNING_TARGET": str(tmp_path / "running_media"),
+           "C300X_MEDIA_GEOMETRY_BACKUP": str(tmp_path / "backups/media_geometry/original"),
            "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
            "C300X_AUDIO_BACKUP_DIR": str(tmp_path / "backups"), "C300X_AUDIO_NO_REMOUNT": "1"}
     log = (tmp_path / "agent.log").open("w")
@@ -230,7 +252,8 @@ def test_removal_refuses_unverified_routing_before_camera_restore(lab: Lab, dama
         original = routing.with_name("original")
         original.write_bytes(ROUTING_STOCK)
         routing.symlink_to(original)
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
+    # The C100X removal restores the routing first and stops there on failure.
+    result = subprocess.run([str(lab.binary), "--restore-device-routing"], env=lab.env,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode != 0
     assert "Failed to restore device routing" in result.stderr

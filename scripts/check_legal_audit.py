@@ -162,14 +162,14 @@ def _check_required_documents() -> list[str]:
         "PRIVACY.md",
         "SECURITY.md",
         "docs/legal.md",
-        "docs/audits/current-legal-provenance.md",
+        "docs/dev/audits/current-legal-provenance.md",
     ):
         if not (ROOT / rel).is_file():
             failures.append(f"missing legal/provenance document: {rel}")
-    audit_files = sorted(path.name for path in (ROOT / "docs" / "audits").glob("*.md"))
+    audit_files = sorted(path.name for path in (ROOT / "docs" / "dev" / "audits").glob("*.md"))
     if audit_files != ["current-legal-provenance.md"]:
         failures.append(
-            "docs/audits must contain only current-legal-provenance.md, got "
+            "docs/dev/audits must contain only current-legal-provenance.md, got "
             + ", ".join(audit_files)
         )
     legal_path = ROOT / "docs" / "legal.md"

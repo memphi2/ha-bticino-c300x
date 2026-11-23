@@ -45,8 +45,8 @@ def test_the_activations_form_says_that_further_locks_and_lights_are_added_there
             assert all(part in first for part in hint), (path.name, step)
 
 
-def test_the_snapshot_size_says_why_480_is_the_limit_and_what_keeps_a_576_picture_in_shape() -> None:
-    """A user tried 576 for a 704x576 camera picture; the form says the display sets the limit."""
+def test_snapshot_size_help_distinguishes_native_framebuffer_from_high_stream() -> None:
+    """The display sets the limit and proportions, even for the 960x576 stream."""
 
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)
@@ -56,8 +56,10 @@ def test_the_snapshot_size_says_why_480_is_the_limit_and_what_keeps_a_576_pictur
         ):
             help_texts = data[area]["step"][step]["data_description"]
             height = help_texts["snapshot_height"]
-            assert "800×480" in height and "704×576" in height and "587×480" in height, (path.name, step)
-            assert "800×480" in help_texts["snapshot_width"]
+            assert all(size in height for size in ("800×480", "960×576", "400×240", "5:3")), (path.name, step)
+            width = help_texts["snapshot_width"]
+            assert "800×480" in width
+            assert "688" not in width and "587×480" not in height
         for area in ("config", "options"):
             assert "800×480" in data[area]["error"]["invalid_snapshot_option"], path.name
 
@@ -597,5 +599,46 @@ def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_lo
         description = texts["options"]["step"]["camera_quality"]["description"]
 
         assert f"**{select['name']}**" in description, path.name
+        assert select["state"]["high"] in description, path.name
         assert select["state"]["low"] in description, path.name
+        assert "3.0.x" in description, path.name
+
+
+def test_camera_quality_help_is_brief_and_preserves_reboot_and_runtime_details() -> None:
+    reboot_hints = {
+        "strings": ("automatically reboots the device", "about a minute"),
+        "en": ("automatically reboots the device", "about a minute"),
+        "de": ("Gerät automatisch neu", "etwa eine Minute"),
+        "fr": ("redémarre automatiquement l'appareil", "environ une minute"),
+        "it": ("riavvia automaticamente il dispositivo", "circa un minuto"),
+    }
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        step = _load_json(path)["options"]["step"]["camera_quality"]
+        assert re.findall(r"\{([^{}]+)\}", step["description"]) == ["running"], path.name
+        assert len(step["description"]) <= 300, path.name
+        assert all(hint in step["description"] for hint in reboot_hints[path.stem]), path.name
+        assert set(step["data_description"]) == {"size", "bitrate_kbps", "fps", "use_recommended_snapshot_size"}, path.name
+        for key, text in step["data_description"].items():
+            assert len(text) <= (170 if key == "size" else 120), (path.name, key)
+
+
+def test_camera_quality_size_help_explains_agent_dependent_optional_size() -> None:
+    size_hints = {
+        "strings": ("firmware", "installed device agent", "Optional", "proportions", "when offered"),
+        "en": ("firmware", "installed device agent", "Optional", "proportions", "when offered"),
+        "de": ("Firmware", "installiertem Geräte-Agent", "Optionales", "Proportionen", "wenn angeboten"),
+        "fr": ("firmware", "agent installé", "option", "proportions", "si proposée"),
+        "it": ("firmware", "agente installato", "opzione", "proporzioni", "se disponibile"),
+    }
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        step = _load_json(path)["options"]["step"]["camera_quality"]
+        size = step["data_description"]["size"]
+        assert "960x576" in size, path.name
+        assert all(hint in size for hint in size_hints[path.stem]), path.name
+
+
+def test_camera_quality_english_translation_matches_base_strings() -> None:
+    base = _load_json(INTEGRATION / "strings.json")["options"]["step"]["camera_quality"]
+    english = _load_json(TRANSLATIONS / "en.json")["options"]["step"]["camera_quality"]
+    assert base == english
 

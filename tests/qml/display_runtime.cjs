@@ -360,6 +360,17 @@ function memoPage(r) {
 }
 
 {
+    const r = runtime("c300x_memos.js"), events = [];
+    memoPage(r);
+    r.Api.startEventWatch(event => events.push([event.topic, event.missedRevisions]));
+    for (const revision of [1, 3, 0]) {
+        r.request("/ui/events/next").finish(200, {revision, changed: true, topic: "memos"});
+    }
+    assert.deepEqual(events, [["memos", false], ["memos", true], ["memos", true]]);
+    r.Api.stopEventWatch();
+}
+
+{
     const r = runtime("c300x_memos.js"), p = memoPage(r), events = [];
     r.Api.startEventWatch(event => events.push(event.topic));
     assert.equal(r.timers.length, 1, "one lifetime-owned retry timer");

@@ -2,14 +2,14 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
       <style>
         :host {
           display: block;
-          height: 100%;
+          height: auto;
           container-type: inline-size;
         }
         dialog.window {
           display: block;
           position: static;
           width: auto;
-          height: 100%;
+          height: auto;
           max-width: none;
           max-height: none;
           margin: 0;
@@ -23,24 +23,28 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           position: fixed;
           inset: 0;
           margin: auto;
-          width: min(96vw, 1280px, calc((94vh - 64px) * var(--c300x-picture-ratio, 688 / 480)));
+          --dialog-ratio: var(--c300x-picture-ratio, 800 / 480);
+          width: min(96vw, 1280px, calc((94vh - 64px) * var(--dialog-ratio)));
           height: fit-content;
           max-height: 94vh;
           container-type: inline-size;
         }
-        dialog.window[open] ha-card { height: auto; }
         dialog.window::backdrop { background: rgb(0 0 0 / .72); }
+        dialog.window[open]:has(.snapshot-preview:not([hidden])) {
+          --dialog-ratio: var(--snapshot-ratio, var(--c300x-picture-ratio, 5 / 3));
+        }
         ha-card {
           overflow: hidden;
-          height: 100%;
+          height: auto;
           display: flex;
           flex-direction: column;
         }
+        ha-card:has(> .body:not(.doorstation)) { min-height: 104px; }
         .media {
           position: relative;
           width: 100%;
-          flex: 1 1 auto;
-          aspect-ratio: var(--c300x-picture-ratio, 688 / 480);
+          flex: 0 0 auto;
+          aspect-ratio: var(--c300x-picture-ratio, 800 / 480);
           background: #111;
           min-height: 0;
         }
@@ -96,6 +100,16 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           height: 100%;
           object-fit: contain;
           pointer-events: none;
+        }
+        ha-card:not(:fullscreen) .media:has(> .snapshot-preview:not([hidden])) {
+          aspect-ratio: auto;
+        }
+        ha-card:not(:fullscreen) .snapshot-preview:not([hidden]) {
+          position: relative;
+          inset: auto;
+          display: block;
+          height: auto;
+          aspect-ratio: auto var(--c300x-picture-ratio, 5 / 3);
         }
         [hidden] { display: none !important; }
         .body {
@@ -386,6 +400,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           <div class="empty"></div>
           <img class="snapshot-preview" alt="" hidden>
           <c300x-media-controls></c300x-media-controls>
+          <c300x-picture-controls hidden></c300x-picture-controls>
         </div>
         <div class="body">
           <div class="row-actions">

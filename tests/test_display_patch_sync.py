@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
 from custom_components.bticino_c300x import display_patch_sync, runtime_manager
-from custom_components.bticino_c300x.api import C300XAgentApiError
+from custom_components.bticino_c300x.api import C300XAgentApi, C300XAgentApiError
 from custom_components.bticino_c300x.const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_DISPLAY_SETTING_PENDING,
@@ -95,16 +96,16 @@ def test_without_a_setting_or_the_agent_action_nothing_is_to_do(monkeypatch):
     assert calls == []
 
 
-def _manager(entry: Any, updates: list[dict[str, Any]]) -> Any:
+def _manager(entry: Any, updates: list[dict[str, Any]]) -> runtime_manager.C300XRuntimeManager:
     def update_entry(target: Any, *, data: dict[str, Any]) -> None:
         updates.append(data)
         target.data = data
 
-    return SimpleNamespace(
-        hass=SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update_entry)),
-        entry=entry, connection_state=SimpleNamespace(available=True),
-        _platform_gate_state_loaded=True, _api=lambda: object(),
-    )
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update_entry))
+    manager = runtime_manager.C300XRuntimeManager(hass, entry)
+    manager.api = Mock(spec_set=C300XAgentApi)
+    manager._platform_gate_state_loaded = True
+    return manager
 
 
 def _start(monkeypatch: pytest.MonkeyPatch, entry: Any, results: list[bool | None]) -> list[Any]:
@@ -129,12 +130,11 @@ def test_a_new_entry_applies_its_display_setting_at_the_first_start(monkeypatch)
     entry = _entry(True, data={CONF_DISPLAY_SETTING_PENDING: True, "agent_host": "a"})
     seen = _start(monkeypatch, entry, [True])
     updates: list[dict[str, Any]] = []
-    sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
-    asyncio.run(sync(_manager(entry, updates)))
+    asyncio.run(_manager(entry, updates).async_sync_device_state())
     assert seen == [entry]
     assert updates == [{"agent_host": "a"}]
     # A plain restart changes nothing on the device.
-    asyncio.run(sync(_manager(entry, updates)))
+    asyncio.run(_manager(entry, updates).async_sync_device_state())
     assert seen == [entry]
 
 
@@ -142,10 +142,9 @@ def test_the_mark_stays_until_the_device_followed(monkeypatch):
     entry = _entry(True, data={CONF_DISPLAY_SETTING_PENDING: True})
     seen = _start(monkeypatch, entry, [None, True])
     updates: list[dict[str, Any]] = []
-    sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
-    asyncio.run(sync(_manager(entry, updates)))
+    asyncio.run(_manager(entry, updates).async_sync_device_state())
     assert entry.data == {CONF_DISPLAY_SETTING_PENDING: True}
-    asyncio.run(sync(_manager(entry, updates)))
+    asyncio.run(_manager(entry, updates).async_sync_device_state())
     assert entry.data == {}
     assert seen == [entry, entry]
 
@@ -158,9 +157,8 @@ def test_a_start_cut_off_during_the_apply_keeps_the_mark(monkeypatch):
         raise asyncio.CancelledError
 
     monkeypatch.setattr(display_patch_sync, "async_apply_display_setting", cut_off)
-    sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(sync(_manager(entry, [])))
+        asyncio.run(_manager(entry, []).async_sync_device_state())
     assert entry.data == {CONF_DISPLAY_SETTING_PENDING: True}
 
 
@@ -178,7 +176,7 @@ def test_other_settings_saved_leave_the_device_alone(monkeypatch):
     listener = runtime_manager._entry_update_listener(entry)
     entry.options = {CONF_DEVICE_UI_ENABLED: False, "video_enabled": True}
     asyncio.run(listener(None, entry))
-    asyncio.run(runtime_manager.C300XRuntimeManager.async_sync_device_state(_manager(entry, [])))
+    asyncio.run(_manager(entry, []).async_sync_device_state())
     assert seen == []
     assert entry.data == {}
 

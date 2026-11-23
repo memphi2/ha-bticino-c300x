@@ -2,6 +2,8 @@
 #define C300X_VIDEO_CONTROL_H
 
 #include "request_worker.h"
+#include "picture_control.h"
+#include <signal.h>
 
 struct c300x_video;
 
@@ -12,6 +14,7 @@ enum c300x_video_control_op {
     C300X_VIDEO_CONTROL_HANGUP,
     C300X_VIDEO_CONTROL_HOME_START, /* argument: duration in seconds */
     C300X_VIDEO_CONTROL_HOME_STOP,
+    C300X_VIDEO_CONTROL_PICTURE,
 };
 
 struct c300x_video_control_job {
@@ -19,6 +22,14 @@ struct c300x_video_control_job {
     enum c300x_video_control_op op;
     int argument;
     int result;
+    struct picture_command picture;
+    const struct c300x_config *picture_config;
+    int picture_profile;
+    unsigned long picture_session;
+    int picture_owner;
+    long long picture_deadline;
+    const volatile sig_atomic_t *shutdown;
+    int values[3];
 };
 
 enum c300x_video_control_state {
@@ -40,6 +51,10 @@ enum c300x_video_control_state {
 struct c300x_video_control {
     struct c300x_request_worker worker;
     struct c300x_video_control_job job;
+    int picture_baseline; /* cached only for this session and owner */
+    int baseline_owner;
+    const volatile sig_atomic_t *shutdown;
+    unsigned long baseline_session;
     int has_result; /* kept until the request is answered: its handler may run more than once more */
 };
 

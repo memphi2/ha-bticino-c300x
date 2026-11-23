@@ -19,10 +19,11 @@ from .api import (
     build_agent_base_url,
     display_bridge_callback_fingerprint,
 )
+from .api_errors import C300XDisplayBridgeNotRegisteredError
 from .capabilities import (
     capability_is_supported,
     entry_device_ui_configured,
-    entry_device_ui_enabled,
+    entry_device_ui_effective,
     entry_device_ui_enabled_or_patch_active,
     maintenance_action_is_advertised,
 )
@@ -76,6 +77,7 @@ from .device_user import (
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
 from .display_support import entry_display_supported, remember_display_support
+from .display_unread import async_release_unread_claim, async_send_unread_event
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
@@ -130,6 +132,8 @@ class C300XRuntimeManager:
         )
         self.platforms: tuple[str, ...] = BASE_PLATFORMS
         self._platform_gate_state_loaded = False
+        self._legacy_display_deferred = False
+        self._display_setup_lock = asyncio.Lock()
         self._setup_runtime_data: BticinoC300XRuntimeData | None = None
 
     async def async_prepare(self) -> bool:
@@ -186,6 +190,13 @@ class C300XRuntimeManager:
         )
         await async_setup_snapshots(self.hass, self.entry)
         await self.async_sync_platform_gate_state()
+        if (
+            self.connection_state.available
+            and entry_device_ui_effective(self.entry) is None
+            and maintenance_action_is_advertised(self.capabilities, "qml_status")
+        ):
+            # Retry a transient legacy read before services, platforms and notify decide.
+            await self.async_sync_platform_gate_state()
         # Delete services depend on the patch status loaded by the gate read.
         await async_setup_services(self.hass)
         # After the gate state, never before: the cleanup asks whether the
@@ -267,7 +278,7 @@ class C300XRuntimeManager:
         )
 
         async def _async_refresh_runtime_registration() -> None:
-            await _async_configure_display_bridge(self.hass, self.entry, api)
+            await self._async_refresh_display_registration(api)
 
         self.on_runtime_registration_created = _async_refresh_runtime_registration
         if self.unregister_event_registration is None:
@@ -283,20 +294,48 @@ class C300XRuntimeManager:
     async def async_sync_device_state(self) -> None:
         """Synchronize startup-only runtime state with the device agent."""
 
-        self.entry.runtime_data.resources.unregister_display_bridge_updates = (
-            await _async_track_display_updates(self.hass, self.entry)
-        )
+        api = self._api()
+        await self._async_refresh_display_registration(api, startup=True)
         if not self.connection_state.available:
             return
-
-        api = self._api()
-        await _async_configure_display_bridge(self.hass, self.entry, api)
-        if not self._platform_gate_state_loaded:
-            await self.async_sync_platform_gate_state()
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
         if display_setting_pending(self.entry):
             await async_settle_display_setting(self.hass, self.entry)
+
+    async def _async_refresh_display_registration(
+        self, api: C300XAgentApi, *, startup: bool = False,
+    ) -> None:
+        async with self._display_setup_lock:
+            runtime = self.entry.runtime_data
+            if startup:
+                self._legacy_display_deferred = entry_device_ui_effective(self.entry) is None
+            if startup or self._legacy_display_deferred:
+                can_probe = maintenance_action_is_advertised(runtime.capabilities, "qml_status")
+                if not self._platform_gate_state_loaded or (self._legacy_display_deferred and can_probe):
+                    await self.async_sync_platform_gate_state()
+                enabled = entry_device_ui_effective(self.entry)
+                if enabled is None:
+                    if self.connection_state.available and can_probe:
+                        from .events import async_notify_runtime_registration_failed
+
+                        runtime.resources.display_bridge_registration_pending = True
+                        async_notify_runtime_registration_failed(self.hass, self.entry)
+                    return
+                if enabled and self._legacy_display_deferred:
+                    from .notify import async_setup_notify
+
+                    await async_setup_notify(self.hass, self.entry)
+                if enabled:
+                    runtime.resources.unregister_display_bridge_updates = (
+                        await _async_track_display_updates(self.hass, self.entry)
+                    )
+                self._legacy_display_deferred = False
+            if not self.connection_state.available:
+                if entry_device_ui_enabled_or_patch_active(self.entry):
+                    runtime.resources.display_bridge_registration_pending = True
+                return
+            await _async_configure_display_bridge(self.hass, self.entry, api)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""
@@ -382,6 +421,7 @@ class C300XRuntimeManager:
                 await async_shutdown_snapshots(self.hass, self.entry.entry_id)
             finally:
                 cleanup_entry_runtime_resources(self.hass, self.entry, runtime_data)
+                await async_release_unread_claim(self.entry, runtime_data)
         return unload_ok
 
     def _build_agent_api(self) -> C300XAgentApi:
@@ -984,9 +1024,12 @@ async def _async_configure_display_bridge(
             raise asyncio.CancelledError
 
     check_active()
+    enabled = entry_device_ui_effective(entry)
+    if enabled is None:
+        # Registration can run while the initial patch read is still pending.
+        return
     if resources is not None:
         resources.display_bridge_registration_pending = True
-    enabled = entry_device_ui_enabled(entry)
     webhook_url = (
         await async_generate_agent_callback_url(
             hass,
@@ -1020,7 +1063,7 @@ async def _async_configure_display_bridge(
                 if resources is not None:
                     resources.display_bridge_registration_pending = False
                 diagnostics.mark_success(datetime.now(UTC))
-                await _async_notify_display_configuration(api)
+                await _async_notify_display_configuration(entry, api)
                 return
         elif not configured:
             if resources is not None:
@@ -1037,7 +1080,7 @@ async def _async_configure_display_bridge(
             resources.display_bridge_registration_pending = False
         diagnostics.mark_success(datetime.now(UTC))
         if enabled:
-            await _async_notify_display_configuration(api)
+            await _async_notify_display_configuration(entry, api)
     except C300XAgentApiUnsupportedError:
         check_active()
         if resources is not None:
@@ -1061,12 +1104,14 @@ async def _async_configure_display_bridge(
             _LOGGER.warning("C300X display bridge registration failed: %s", error)
 
 
-async def _async_notify_display_configuration(api: C300XAgentApi) -> None:
+async def _async_notify_display_configuration(
+    entry: BticinoC300XConfigEntry, api: C300XAgentApi,
+) -> None:
     """Refresh visible pages once after setup/options reload, even with the same URL."""
     try:
-        await api.async_notify_display_bridge_event("display_bridge.state")
-    except C300XAgentApiError:
-        _LOGGER.debug("C300X display configuration notification failed", exc_info=True)
+        await async_send_unread_event(entry, entry.runtime_data, api, "display_bridge.state")
+    except C300XAgentApiUnsupportedError:
+        _LOGGER.debug("C300X display configuration events are unsupported")
 
 
 async def _async_track_display_updates(
@@ -1106,7 +1151,7 @@ def _async_track_display_bridge_updates(
     """Wake visible display pages for selected HA state changes, without polling."""
 
     alarm_entity_id = _entry_config_value(entry, CONF_ALARM_ENTITY_ID, "")
-    if not entry_device_ui_enabled(entry):
+    if not entry_device_ui_enabled_or_patch_active(entry):
         return None
 
     from homeassistant.core import callback
@@ -1293,6 +1338,8 @@ def _async_schedule_display_bridge_notify(
         return
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not connection_state.available:
+        if notifications:
+            runtime_data.resources.display_bridge_registration_pending = True
         return
     runtime_data.display_bridge_notify_dirty = True
     if notifications:
@@ -1300,37 +1347,57 @@ def _async_schedule_display_bridge_notify(
     if getattr(runtime_data, "display_bridge_alarm_notify_pending", False):
         return
     runtime_data.display_bridge_alarm_notify_pending = True
-    hass.add_job(_async_notify_display_bridge_alarm_if_listening, entry, runtime_data)
+    hass.add_job(_async_notify_display_bridge_alarm_if_listening, hass, entry, runtime_data)
 
 
 async def _async_notify_display_bridge_alarm_if_listening(
+    hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
     runtime_data: BticinoC300XRuntimeData | None = None,
 ) -> None:
     """Advance the event revision, including between long-poll requests."""
 
     runtime_data = runtime_data or getattr(entry, "runtime_data", None)
+    if runtime_data is None:
+        return
+
+    def is_current_runtime() -> bool:
+        return getattr(entry, "runtime_data", None) is runtime_data
+
     try:
-        if runtime_data is None or getattr(entry, "runtime_data", None) is not runtime_data:
+        if not is_current_runtime():
             return
         while True:
             # Coalesce a state-event burst without dropping changes during delivery.
             await asyncio.sleep(0.05)
-            if getattr(entry, "runtime_data", None) is not runtime_data:
-                return
-            if runtime_data is None:
+            if not is_current_runtime():
                 return
             runtime_data.display_bridge_notify_dirty = False
             topic = "notifications" if getattr(runtime_data, "display_bridge_notify_messages", False) else "alarm"
             runtime_data.display_bridge_notify_messages = False
-            await runtime_data.api.async_notify_display_bridge_event(topic)
+            try:
+                if topic == "notifications":
+                    await async_send_unread_event(entry, runtime_data, runtime_data.api, topic)
+                else:
+                    await runtime_data.api.async_notify_display_bridge_event(topic)
+            except C300XAgentApiUnsupportedError:
+                _LOGGER.debug("C300X display bridge events are unsupported")
+            except C300XAgentApiError as err:
+                _LOGGER.debug("C300X display bridge event failed", exc_info=True)
+                registration_lost = isinstance(err, C300XDisplayBridgeNotRegisteredError)
+                if (
+                    (registration_lost or topic == "notifications")
+                    and is_current_runtime()
+                    and not runtime_data.resources.closed
+                ):
+                    from .events import async_notify_runtime_registration_failed
+
+                    runtime_data.resources.display_bridge_registration_pending = True
+                    async_notify_runtime_registration_failed(
+                        hass, entry, prompt=registration_lost,
+                    )
             if not runtime_data.display_bridge_notify_dirty:
                 break
-    except C300XAgentApiUnsupportedError:
-        _LOGGER.debug("C300X device agent does not support display bridge events")
-    except C300XAgentApiError:
-        _LOGGER.debug("C300X display bridge alarm notification failed", exc_info=True)
     finally:
-        if runtime_data is not None:
-            runtime_data.display_bridge_alarm_notify_pending = False
-            runtime_data.display_bridge_notify_dirty = False
+        runtime_data.display_bridge_alarm_notify_pending = False
+        runtime_data.display_bridge_notify_dirty = False

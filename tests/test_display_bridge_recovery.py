@@ -1,11 +1,15 @@
 """Failed bridge reconciliation remains owned by the registration lifecycle."""
 
 import asyncio
+import json
 from contextlib import suppress
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from homeassistant.exceptions import ServiceValidationError
+from test_api import _FakeSession
 from test_events import (
+    _active_scheduled_calls,
     _active_scheduled_delays,
     _drain_hass_tasks,
     _FakeApi,
@@ -14,7 +18,13 @@ from test_events import (
     event_ha_boundary,  # noqa: F401
 )
 
-from custom_components.bticino_c300x import callback_url, events, runtime_manager
+from custom_components.bticino_c300x import (
+    callback_url,
+    display_unread,
+    events,
+    runtime_manager,
+)
+from custom_components.bticino_c300x.api import C300XAgentApi
 from custom_components.bticino_c300x.api_errors import (
     C300XAgentApiConnectionError,
     C300XAgentApiUnsupportedError,
@@ -23,6 +33,11 @@ from custom_components.bticino_c300x.data import (
     BticinoC300XRuntimeData,
     C300XConnectionState,
     C300XEventState,
+)
+from custom_components.bticino_c300x.display_alerts import async_send_display_alert
+from custom_components.bticino_c300x.display_notifications import (
+    SHOW_SCHEMA,
+    notifications_for_entry,
 )
 
 
@@ -45,6 +60,14 @@ class Api(_FakeApi):
 
 def setup(monkeypatch, *, no_events=False):
     hass, entry, api = _FakeHass(), _FakeEntry(), Api()
+    hass.loop = asyncio.get_running_loop()
+
+    def add_job(job, *args):
+        result = job(*args)
+        if asyncio.iscoroutine(result):
+            hass.async_create_task(result)
+
+    hass.add_job = add_job
     entry.data.update(webhook_id="display", shared_secret="secret", device_ui_enabled=True)
     runtime = entry.runtime_data = BticinoC300XRuntimeData(
         api=api, capabilities={}, event_state=C300XEventState(),
@@ -61,6 +84,153 @@ def setup(monkeypatch, *, no_events=False):
     runtime.resources.unregister_event_registration = worker.unregister
     runtime.resources.on_runtime_registration_created = refresh
     return hass, entry, api, worker
+
+
+@pytest.mark.parametrize("setting", [None, False, True])
+def test_patched_entry_registration_matches_led_notify(monkeypatch, setting):
+    async def run():
+        hass, entry, api, _ = setup(monkeypatch)
+        del entry.data["device_ui_enabled"]
+        if setting is not None:
+            entry.options["device_ui_enabled"] = setting
+        runtime = entry.runtime_data
+        runtime.qml_patch_status = {"patched": True}
+        runtime.capabilities["memo_led"] = True
+        api.async_display_bridge_status.return_value = {"configured": True}
+        try:
+            await runtime_manager._async_configure_display_bridge(hass, entry, api)
+            notify = async_send_display_alert(hass, entry, "Door", data={"mode": "led"})
+            if setting is False:
+                api.async_configure_display_bridge.assert_awaited_once_with(
+                    enabled=False, webhook_url="", shared_secret="",
+                )
+                with pytest.raises(ServiceValidationError, match="disabled"):
+                    await notify
+                api.async_notify_display_bridge_event.assert_not_awaited()
+            else:
+                api.async_configure_display_bridge.assert_awaited_once_with(
+                    enabled=True, webhook_url="http://ha/display", shared_secret="secret",
+                )
+                await notify
+                await _drain_hass_tasks(hass)
+                api.async_notify_display_bridge_event.assert_awaited_with("notifications", unread=True)
+        finally:
+            runtime.resources.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("patched", [True, False])
+def test_legacy_display_waits_for_confirmed_status(monkeypatch, patched):
+    from custom_components.bticino_c300x import notify
+
+    async def run():
+        hass, entry, api, _ = setup(monkeypatch)
+        del entry.data["device_ui_enabled"]
+        runtime = entry.runtime_data
+        runtime.capabilities["maintenance"] = {"supported": True, "qml_status": True}
+        manager = runtime_manager.C300XRuntimeManager(hass, entry)
+        manager.connection_state = runtime.connection_state
+        runtime.connection_state.available = True
+        runtime.qml_patch_status = {"patched": None}
+        api.async_display_bridge_status.return_value = {"configured": True}
+        api.async_qml_patch_status = AsyncMock(side_effect=[
+            C300XAgentApiConnectionError("temporary"), {"patched": patched},
+        ])
+        listeners = AsyncMock(return_value=Mock())
+        setup_notify = AsyncMock()
+        monkeypatch.setattr(runtime_manager, "_async_track_display_updates", listeners)
+        monkeypatch.setattr(notify, "async_setup_notify", setup_notify)
+        try:
+            # A registration worker may run before startup has read the gate.
+            await manager._async_refresh_display_registration(api)
+            await manager._async_refresh_display_registration(api, startup=True)
+            assert runtime.resources.display_bridge_registration_pending
+            api.async_display_bridge_status.assert_not_called()
+            api.async_configure_display_bridge.assert_not_called()
+            listeners.assert_not_called()
+            setup_notify.assert_not_called()
+
+            await manager._async_refresh_display_registration(api)
+            assert not runtime.resources.display_bridge_registration_pending
+            assert api.async_configure_display_bridge.await_args.kwargs["enabled"] is patched
+            assert setup_notify.await_count == int(patched)
+            assert api.async_qml_patch_status.await_count == 2
+            await manager._async_refresh_display_registration(api)
+            assert listeners.await_count == int(patched)
+            assert setup_notify.await_count == int(patched)
+            assert api.async_qml_patch_status.await_count == 2
+        finally:
+            runtime.resources.close()
+    asyncio.run(run())
+
+
+def unload_lab(monkeypatch):
+    hass, entry, api, _ = setup(monkeypatch)
+    hass.data = {}
+    hass.config_entries = Mock(async_unload_platforms=AsyncMock(return_value=True))
+    runtime = entry.runtime_data
+    runtime.capabilities["memo_led"] = True
+    runtime.display_notifications = Mock()
+    return runtime_manager.C300XRuntimeManager(hass, entry), runtime, api.async_notify_display_bridge_event
+
+
+def test_unload_releases_after_inflight_claim_with_lost_response(monkeypatch):
+    async def run():
+        manager, runtime, send = unload_lab(monkeypatch)
+        entered, resume, closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        runtime.resources.close_display_notifications = closed.set
+        delivered = []
+
+        async def deliver(topic, *, unread):
+            if unread:
+                entered.set()
+                await resume.wait()
+            delivered.append(unread)
+            if unread:
+                raise C300XAgentApiConnectionError("response lost")
+
+        send.side_effect = deliver
+        runtime.display_notifications.has_unread.return_value = True
+        async def snapshot():
+            await display_unread.async_send_unread_event(manager.entry, runtime, runtime.api, "notifications")
+
+        claim = asyncio.create_task(snapshot())
+        await asyncio.wait_for(entered.wait(), 1)
+        unload = asyncio.create_task(manager.async_unload())
+        await asyncio.wait_for(closed.wait(), 1)
+        queued = asyncio.create_task(snapshot())
+        resume.set()
+        with pytest.raises(C300XAgentApiConnectionError):
+            await claim
+        assert await asyncio.wait_for(unload, 1)
+        await queued
+        assert delivered == [True, False]
+        assert not runtime.display_unread_claim_possible
+    asyncio.run(asyncio.wait_for(run(), 2))
+
+
+@pytest.mark.parametrize("scenario", ["empty", "cleared", "no_led", "failed_unload", "timeout"])
+def test_unload_only_releases_outstanding_claim_within_budget(monkeypatch, scenario):
+    async def run():
+        manager, runtime, send = unload_lab(monkeypatch)
+        runtime.capabilities["memo_led"] = scenario != "no_led"
+        sequence = {"empty": [], "cleared": [True, False]}.get(scenario, [True])
+        for unread in sequence:
+            runtime.display_notifications.has_unread.return_value = unread
+            await display_unread.async_send_unread_event(manager.entry, runtime, runtime.api, "notifications")
+        send.reset_mock()
+        if scenario == "timeout":
+            async def hang(*args, **kwargs):
+                await asyncio.Future()
+            send.side_effect = hang
+            monkeypatch.setattr(display_unread, "_RELEASE_TIMEOUT", 0.01)
+        manager.hass.config_entries.async_unload_platforms.return_value = scenario != "failed_unload"
+        assert await asyncio.wait_for(manager.async_unload(), 1) == (scenario != "failed_unload")
+        if scenario == "timeout":
+            send.assert_awaited_once_with("notifications", unread=False)
+        else:
+            send.assert_not_awaited()
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("failure", ["status", "configure"])
@@ -98,6 +268,67 @@ def test_bridge_failure_retries_without_recreating_subscription(monkeypatch, fai
     asyncio.run(run())
 
 
+def test_offline_notice_change_resyncs_with_an_existing_subscription(monkeypatch):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch)
+        try:
+            await worker._register()
+            runtime = entry.runtime_data
+            runtime.connection_state.available = False
+            runtime_manager._async_schedule_display_bridge_notify(hass, entry, notifications=True)
+            assert runtime.resources.display_bridge_registration_pending
+            api.async_notify_display_bridge_event.reset_mock()
+            await worker._register()
+            api.async_notify_display_bridge_event.assert_awaited_once_with(
+                "display_bridge.state", unread=False,
+            )
+            assert not runtime.resources.display_bridge_registration_pending
+            assert len(api.subscription_calls) == 1
+        finally:
+            entry.runtime_data.resources.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("failure", ["startup", "last_dismiss"])
+def test_lost_unread_snapshot_reconciles_without_steady_polling(monkeypatch, failure):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch, no_events=True)
+        runtime = entry.runtime_data
+        worker.start()
+        try:
+            await _drain_hass_tasks(hass)
+            if failure == "last_dismiss":
+                store = notifications_for_entry(hass, entry)
+                store.show(SHOW_SCHEMA({"notification_id": "a", "title": "Door", "message": "Open"}))
+                await _drain_hass_tasks(hass)
+                api.async_notify_display_bridge_event.assert_awaited_with("notifications", unread=True)
+            assert not _active_scheduled_delays()
+            send = api.async_notify_display_bridge_event
+            send.reset_mock()
+            send.side_effect = C300XAgentApiConnectionError("lost response")
+            if failure == "startup":
+                await runtime_manager._async_configure_display_bridge(hass, entry, api)
+                send.assert_awaited_once_with("display_bridge.state", unread=False)
+            else:
+                store.dismiss("a")
+                await _drain_hass_tasks(hass)
+                send.assert_awaited_once_with("notifications", unread=False)
+            assert runtime.connection_state.available
+            assert runtime.resources.display_bridge_registration_pending
+            assert _active_scheduled_delays() == [events._SUBSCRIPTION_REFRESH_SECONDS]
+            send.side_effect = None
+            timer, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+            await timer.callback()
+            send.assert_awaited_with("display_bridge.state", unread=False)
+            assert send.await_count == 2
+            assert not runtime.resources.display_bridge_registration_pending
+            assert not _active_scheduled_delays()
+        finally:
+            runtime.resources.close()
+
+    asyncio.run(run())
+
+
 def test_pending_startup_bridge_without_events_keeps_one_recovery_timer(monkeypatch):
     async def run():
         hass, entry, api, worker = setup(monkeypatch, no_events=True)
@@ -115,6 +346,88 @@ def test_pending_startup_bridge_without_events_keeps_one_recovery_timer(monkeypa
         finally:
             entry.runtime_data.resources.close()
 
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("error, retry", [("display_bridge_disabled", True), ("not_found", False)])
+def test_event_404_only_reconciles_lost_registration(monkeypatch, error, retry):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch, no_events=True)
+        runtime = entry.runtime_data
+        worker.start()
+        try:
+            await _drain_hass_tasks(hass)
+            api.async_configure_display_bridge.reset_mock()
+            send = api.async_notify_display_bridge_event
+            send.reset_mock()
+            session = _FakeSession(json.dumps({"ok": False, "error": error}), response_status=404)
+            send.side_effect = C300XAgentApi(session, "http://agent", "token").async_notify_display_bridge_event
+            store = notifications_for_entry(hass, entry)
+            store.show(SHOW_SCHEMA({
+                "notification_id": "short", "title": "Door", "message": "Open", "expires_in": 30,
+            }))
+            await _drain_hass_tasks(hass)
+            send.assert_awaited_once_with("notifications", unread=True)
+            assert runtime.resources.display_bridge_registration_pending is retry
+            if retry:
+                timer, = _active_scheduled_calls(0)
+                send.side_effect = None
+                await timer.callback()
+                api.async_configure_display_bridge.assert_awaited_once()
+                send.assert_awaited_with("display_bridge.state", unread=True)
+                assert send.await_count == 2
+            else:
+                api.async_configure_display_bridge.assert_not_awaited()
+            assert not _active_scheduled_delays()
+            assert not runtime.resources.display_bridge_registration_pending
+        finally:
+            runtime.resources.close()
+    asyncio.run(run())
+
+
+def test_missing_bridge_advances_one_renewal_then_backs_off(monkeypatch):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch)
+        runtime = entry.runtime_data
+        worker.start()
+
+        async def notify(topic):
+            runtime.display_bridge_notify_messages = topic == "notifications"
+            await runtime_manager._async_notify_display_bridge_alarm_if_listening(hass, entry, runtime)
+
+        try:
+            await _drain_hass_tasks(hass)
+            session = _FakeSession('{"error":"display_bridge_disabled"}', response_status=404)
+            send = api.async_notify_display_bridge_event
+            fail = C300XAgentApi(session, "http://agent", "token").async_notify_display_bridge_event
+            send.side_effect = C300XAgentApiConnectionError("request timed out")
+            renewal, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+            await notify("alarm")
+            assert not runtime.resources.display_bridge_registration_pending
+            assert _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS) == [renewal]
+
+            send.side_effect = fail
+            await notify("alarm")
+            assert runtime.resources.display_bridge_registration_pending
+            first, = _active_scheduled_calls(0)
+            await notify("notifications")
+            assert _active_scheduled_calls(0) == [first]
+            assert _active_scheduled_delays() == [0]
+            await first.callback()  # Even the registration snapshot still gets a 404.
+            backoff, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+            await notify("notifications")
+            assert _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS) == [backoff]
+            assert _active_scheduled_delays() == [events._SUBSCRIPTION_REFRESH_SECONDS]
+
+            send.side_effect = None
+            await backoff.callback()
+            assert not runtime.resources.display_bridge_registration_pending
+            send.side_effect = fail
+            await notify("notifications")
+            assert _active_scheduled_delays() == [0]
+        finally:
+            runtime.resources.close()
+        assert not _active_scheduled_delays()
     asyncio.run(run())
 
 

@@ -20,7 +20,7 @@ def ringer_response_binary(request, tmp_path_factory):
     build = subprocess.run(
         ["cc", "-std=c11", "-O1", "-g", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
          "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
-         "-Wl,--wrap=nanosleep", "-Wl,--wrap=c300x_device_display_files_patchable",
+         "-Wl,--wrap=nanosleep", "-Wl,--wrap=c300x_device_display_features",
          *flags, str(native / "test/ringer_response_test.c"),
          *sources, "-pthread", "-ldl", "-o", str(binary)],
         capture_output=True, text=True, timeout=120,

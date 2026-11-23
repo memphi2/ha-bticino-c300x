@@ -17,11 +17,12 @@ typedef struct {
     size_t len;
     /* Monotonic time after which no read waits any longer; 0 means none. */
     long long deadline_ms;
+    struct c300x_rtsp_writer *writer; /* Borrowed for servicing output during input waits. */
 } rtsp_read_buffer_t;
 
 /* Private media framing boundary, not a session or socket owner.
  * One reader per connection; caller owns the backing buffer (cap >= 2), fd,
- * and timeout policy. No allocation, locks, threads, or background work.
+ * and timeout policy. Input waits also service the borrowed writer, if any.
  * A complete request includes its body. Oversized interleaved payloads are
  * discarded and return INTERLEAVED with length zero. ERROR is terminal;
  * TIMEOUT is returned only before the first byte of a new frame.

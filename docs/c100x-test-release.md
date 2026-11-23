@@ -55,7 +55,7 @@ firmware codec setting; it does not authorize media activation during this test.
   before writing device files, not silently report a successful activation.
 - Notify sound, speech/TTS, voice memos and memo mutations are not part of this
   test. No alternative sound script or forced capability flag is supported.
-  The [audio investigation](c100x-audio-analysis.md) establishes concrete vendor
+  The [audio investigation](dev/c100x-audio-analysis.md) establishes concrete vendor
   playback/ownership hazards. Integrated safety guards block incompatible
   playback and startup cleanup; they do not add a local speaker/TTS backend.
 - Starting the agent is not permission to create a media user, patch routing,
@@ -67,7 +67,7 @@ does not establish that it created those users. Preserve accounts, credentials,
 routes and existing Companion configuration. The four reported tool/service/hash
 questions are cleared offline and are **not** outstanding prerequisites. Exact
 GUI activation/readiness/recovery on the device remains unproven. See the
-[field-report evidence](c100x-field-report.md).
+[field-report evidence](dev/c100x-field-report.md).
 
 ## Package and Channel Isolation
 
@@ -573,7 +573,7 @@ temporary-copy display upgrades/recovery, old-reader bundle delivery, host key/
 layout tests and compilation of 29 generated QML files using original Qt 5.10.1
 under QEMU. Compilation does not instantiate vendor QML or validate hardware.
 See [experimental support](c100x-experimental.md) and the
-[page/control matrix](c100x-display-parity.md) for commands and scope.
+[page/control matrix](dev/c100x-display-parity.md) for commands and scope.
 
 Before issue attachment delivery: complete the exact-source review, full local
 gate, browser tests and fresh complete-package/build-lock verification. This full

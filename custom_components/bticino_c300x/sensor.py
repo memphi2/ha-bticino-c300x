@@ -980,6 +980,7 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
 class C300XDeviceTemperatureSensor(C300XSystemMetricSensor):
     """Device-agent host temperature sensor."""
 
+    _attr_entity_registry_enabled_default = True
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_suggested_display_precision = 1
@@ -1071,6 +1072,7 @@ class C300XDeviceMemorySensor(C300XSystemMetricSensor):
 class C300XDeviceCpuSensor(C300XSystemMetricSensor):
     """Device-agent host CPU usage sensor."""
 
+    _attr_entity_registry_enabled_default = True
     _attr_suggested_display_precision = 1
     _attr_native_unit_of_measurement = _PERCENT
     _attr_translation_key = "device_cpu"

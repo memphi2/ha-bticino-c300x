@@ -4,11 +4,11 @@
 #include "../src/http.c"
 
 static int listener, normal_reply, include_muted, only_muted, mismatched, malformed_readback, short_reply;
-static int display_patchable = 1;
+static int display_features = 1;
 
-int __wrap_c300x_device_display_files_patchable(void)
+int __wrap_c300x_device_display_features(void)
 {
-    return display_patchable;
+    return display_features;
 }
 
 int __wrap_nanosleep(const struct timespec *requested, struct timespec *remaining)
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
 {
     assert(argc == 2);
     if (!strcmp(argv[1], "unpatchable")) {
-        display_patchable = 0;
+        display_features = 0;
         struct c300x_config config = {0};
         struct agent_runtime *runtime = calloc(1, sizeof(*runtime));
         int pair[2];

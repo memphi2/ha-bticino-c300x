@@ -11,7 +11,14 @@ struct c300x_config;
 #define C300X_AGENT_INIT_SCRIPT "/etc/init.d/c300x-native-agent"
 #define C300X_AGENT_INIT_LINK "/etc/rc5.d/S40c300x-native-agent"
 
+enum agent_update_error {
+    AGENT_UPDATE_ERROR_NONE,
+    AGENT_UPDATE_ROOT_ALREADY_WRITABLE,
+    AGENT_UPDATE_ROOT_READONLY_FAILED
+};
+
 struct agent_update_change_summary {
+    enum agent_update_error error;
     int changed_files;
     int runtime_changed;
     int qml_patch_changed;
@@ -21,6 +28,9 @@ struct agent_update_change_summary {
     int config_schema_changed;
     int manifest_changed;
 };
+
+int agent_update_error_status(enum agent_update_error error);
+const char *agent_update_error_json(enum agent_update_error error);
 
 int agent_base_dir(const struct c300x_config *config, char *out, size_t out_len);
 

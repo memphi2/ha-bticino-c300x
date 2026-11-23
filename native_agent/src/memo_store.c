@@ -11,6 +11,8 @@
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
 #include <string.h>
 #ifdef __arm__
 #include <sys/syscall.h>
@@ -49,6 +51,87 @@ static void set_error(char *error, size_t error_len, const char *value)
         return;
     }
     c300x_copy_string(error, error_len, value);
+}
+
+static const char *trim_ascii(char *value)
+{
+    char *start = value;
+    char *end;
+    while (*start != '\0' && isspace((unsigned char)*start)) {
+        start++;
+    }
+    end = start + strlen(start);
+    while (end > start && isspace((unsigned char)end[-1])) {
+        end--;
+    }
+    *end = '\0';
+    return start;
+}
+
+void c300x_read_voicemail_info(
+    const char *info_path,
+    int *read,
+    char *date,
+    size_t date_len,
+    long long *unix_time
+)
+{
+    FILE *file;
+    char line[256];
+    int in_section = 0;
+
+    *read = -1;
+    if (date_len > 0) {
+        date[0] = '\0';
+    }
+    *unix_time = 0;
+
+    file = fopen(info_path, "r");
+    if (file == NULL) {
+        return;
+    }
+    while (fgets(line, sizeof(line), file) != NULL) {
+        char *value = line;
+        const char *trimmed;
+        char *equals;
+
+        trimmed = trim_ascii(value);
+        if (trimmed[0] == '\0' || trimmed[0] == ';' || trimmed[0] == '#') {
+            continue;
+        }
+        if (trimmed[0] == '[') {
+            in_section = strcmp(trimmed, "[Message Information]") == 0;
+            continue;
+        }
+        if (!in_section) {
+            continue;
+        }
+        equals = strchr((char *)trimmed, '=');
+        if (equals == NULL) {
+            continue;
+        }
+        *equals = '\0';
+        {
+            const char *key = trim_ascii((char *)trimmed);
+            const char *field = trim_ascii(equals + 1);
+            if (strcasecmp(key, "Read") == 0) {
+                if (strcmp(field, "0") == 0) {
+                    *read = 0;
+                } else if (strcmp(field, "1") == 0) {
+                    *read = 1;
+                }
+            } else if (strcasecmp(key, "Date") == 0) {
+                snprintf(date, date_len, "%s", field);
+            } else if (strcasecmp(key, "UnixTime") == 0) {
+                char *parse_end = NULL;
+                long long parsed = strtoll(field, &parse_end, 10);
+                if (parse_end != field && parsed > 0) {
+                    *unix_time = parsed;
+                }
+            }
+        }
+    }
+    fclose(file);
 }
 
 static int memo_path_exists(const char *path)

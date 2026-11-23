@@ -31,9 +31,9 @@ PACKAGE_METADATA = (
     "docs/legal.md",
     "docs/c100x-test-release.md",
     "docs/c100x-experimental.md",
-    "docs/c100x-display-parity.md",
-    "docs/c100x-field-report.md",
-    "docs/c100x-audio-analysis.md",
+    "docs/dev/c100x-display-parity.md",
+    "docs/dev/c100x-field-report.md",
+    "docs/dev/c100x-audio-analysis.md",
 )
 
 

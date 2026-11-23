@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     routing_patched = atoi(argv[2]);
     config.video_enabled = 1;
     config.video_rtsp_port = 6554;
-    c300x_copy_string(config.device_firmware, sizeof(config.device_firmware), argc == 4 ? argv[3] : "1.7.19");
+    c300x_copy_string(config.device_firmware, sizeof(config.device_firmware), argc == 4 ? argv[3] : "");
     c300x_copy_string(config.video_rtsp_path, sizeof(config.video_rtsp_path), "/doorbell");
     c300x_copy_string(config.maintenance_firewall_path, sizeof(config.maintenance_firewall_path), argv[1]);
     video.enabled = 1;

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
+import os
+import select
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +20,7 @@ from native_agent.test.smoke import (
     CallbackServer,
     api_get,
     api_post,
+    api_request,
     assert_no_callback_type,
     callback_url,
     free_tcp_ports,
@@ -35,7 +39,8 @@ EVENTS = ("answering_machine.messages_changed", "memos.changed")
 def collection_binary(tmp_path_factory):
     build = tmp_path_factory.mktemp("collection-native-build")
     subprocess.run(
-        ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all"],
+        ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all",
+         "LDFLAGS=-pthread -ldl test/memo_led_scan_barrier.c -Wl,--wrap=eventfd_write"],
         check=True, capture_output=True, text=True,
     )
     return build / "host" / "c300x-agent-native"
@@ -136,6 +141,307 @@ def collection_lab(collection_binary, tmp_path, request):
 
 def collection_data(event, kind):
     return event["data"]["voicemail" if kind == "voicemail" else "memos"]
+
+
+def eventually(predicate):
+    deadline = time.monotonic() + 3
+    while not predicate():
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+
+
+@pytest.fixture
+def led_runtime():
+    with tempfile.TemporaryDirectory(dir="/dev/shm") as directory:
+        yield Path(directory)
+
+
+@pytest.mark.parametrize("fault", ["absent_led", "missing_store", "unsafe_dir", "symlink_marker"])
+def test_unusable_led_never_claims_or_scans(collection_binary, tmp_path, led_runtime, fault):
+    api, ui = free_tcp_ports(2)
+    state = led_runtime / "state"
+    state.mkdir()
+    marker = state / "c300x-agent.memo-led.claim"
+    led = tmp_path / "led_memo"
+    led.mkdir()
+    brightness = led / "brightness"
+    if fault != "absent_led":
+        brightness.write_text("0\n")
+    (led / "trigger").write_text("[none]\n")
+    (led / "max_brightness").write_text("255\n")
+    decoy = led_runtime / "decoy"
+    decoy.mkdir(mode=0o700)
+    if fault == "missing_store":
+        state.rmdir()
+    if fault == "unsafe_dir":
+        state.chmod(0o777)
+    if fault == "symlink_marker":
+        marker.symlink_to(decoy, target_is_directory=True)
+    memos = tmp_path / "memos"
+    memos.mkdir()
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({
+        "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
+        "api": {"token": TOKEN}, "memos": {"enabled": False, "watch": False,
+                                          "textRoot": str(memos), "voiceRoot": str(memos)},
+        "events": {"udp": {"enabled": False}}, "mdns": {"enabled": False},
+        "video": {"enabled": False}, "mqtt": {"enabled": False},
+    }))
+    proc = subprocess.Popen([str(collection_binary), "--config", str(config)], cwd=tmp_path,
+                            env={**os.environ, "C300X_LED_CLASS_ROOT": str(tmp_path),
+                                 "C300X_MEMO_LED_RUNTIME_DIR": str(state)})
+    try:
+        wait_for_health(api)
+        api_post(api, "/api/v1/display-bridge", {
+            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
+        })
+        # Observe actual opendir calls, independently of the brightness value.
+        libc = ctypes.CDLL(None)
+        watch = libc.inotify_init1(os.O_NONBLOCK | os.O_CLOEXEC)
+        assert watch >= 0
+        try:
+            assert libc.inotify_add_watch(watch, os.fsencode(memos), 0x20) >= 0  # IN_OPEN
+            for unread in (True, False, False):
+                assert not api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"]
+                api_post(api, "/api/v1/display-bridge/events", {
+                    "topic": "notifications", "unread": unread,
+                }, expected_status=202)
+            assert not select.select([watch], [], [], 0)[0]
+        finally:
+            os.close(watch)
+        if fault == "missing_store":
+            state.mkdir()
+            assert not api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"]
+        if fault == "symlink_marker":
+            assert marker.is_symlink() and decoy.is_dir()
+        else:
+            assert not marker.exists()
+        if brightness.exists():
+            assert brightness.read_text() == "0\n"
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+
+
+@pytest.mark.parametrize("native_at_shutdown", [False, True])
+def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, led_runtime):
+    api, ui = free_tcp_ports(2)
+    led = tmp_path / "led_memo"
+    stores = tmp_path / "vendor" / "stores"
+    stores.mkdir(parents=True)
+    text, voice = stores / "text", stores / "voice"
+    for directory in (led, text, voice):
+        directory.mkdir()
+    brightness, trigger = led / "brightness", led / "trigger"
+    brightness.write_text("0\n")
+    trigger.write_text("[none] timer\n")
+    (led / "max_brightness").write_text("255\n")
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({
+        "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
+        "api": {"token": TOKEN}, "displayBridge": {"enabled": True},
+        "events": {"udp": {"enabled": False}}, "mdns": {"enabled": False},
+        "video": {"enabled": False}, "mqtt": {"enabled": False},
+        "activations": {"autoDiscover": False},
+        "memos": {"enabled": False, "watch": False, "textRoot": str(text), "voiceRoot": str(voice)},
+    }))
+    path = "/api/v1/display-bridge/events"
+
+    def event(unread, topic="notifications", status=202):
+        return api_post(api, path, {"topic": topic, "unread": unread}, expected_status=status)
+
+    def expect(level):
+        deadline = time.monotonic() + 2
+        while brightness.read_text().strip() != str(level):
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+
+    marker = led_runtime / "c300x-agent.memo-led.claim"
+
+    def start():
+        return subprocess.Popen([str(collection_binary), "--config", str(config)], cwd=tmp_path,
+                                env={**os.environ, "C300X_LED_CLASS_ROOT": str(tmp_path),
+                                     "C300X_MEMO_LED_RUNTIME_DIR": str(led_runtime)})
+
+    def register():
+        api_post(api, "/api/v1/display-bridge", {
+            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
+        })
+
+    def tree_watched():
+        needle = f" ino:{text.stat().st_ino:x} "
+        for fd in Path(f"/proc/{proc.pid}/fdinfo").iterdir():
+            try:
+                if needle in fd.read_text():
+                    return True
+            except FileNotFoundError:
+                continue
+        return False
+
+    proc = start()
+    try:
+        wait_for_health(api)
+        assert api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"] is True
+        led.rename(tmp_path / "absent")
+        register()
+        event(True)
+        event(False)
+        assert not marker.exists()
+        (tmp_path / "absent").rename(led)
+        api_request(api, "POST", path, {"topic": "notifications", "unread": True},
+                    authorized=False, expected_status=401)
+        event("true", status=400)
+        event(True, topic="alarm", status=400)
+        assert brightness.read_text() == "0\n"
+        event(True, topic="display_bridge.state")
+        expect(255)
+        assert marker.is_dir() and marker.stat().st_mode & 0o777 == 0o700
+        directory_stamp = led_runtime.stat().st_mtime_ns
+        stamp = brightness.stat().st_mtime_ns
+        event(True)
+        api_post(api, path, {"topic": "notifications"}, expected_status=202)
+        assert brightness.stat().st_mtime_ns == stamp
+        assert led_runtime.stat().st_mtime_ns == directory_stamp
+        assert not tree_watched()
+        assert start().wait(timeout=5) == 2
+        assert marker.stat().st_mode & 0o777 == 0o700
+        expect(255)
+
+        # A confirmed empty scan held off-loop cannot release a newer claim.
+        barrier = tmp_path / "barrier"
+        barrier.mkdir()
+        (barrier / "hold").touch()
+        event(False)
+        eventually((barrier / "ready").exists)
+        assert tree_watched()
+        event(True)
+        assert marker.stat().st_mode & 0o777 == 0o700
+        (barrier / "hold").unlink()
+        eventually(lambda: not tree_watched())
+        expect(255)
+        assert marker.is_dir()
+
+        # Replacing an ancestor leaves the old parent and roots intact.
+        # The old empty tree must not authorize clearing the replacement's LED.
+        (barrier / "ready").unlink()
+        (barrier / "hold").touch()
+        event(False)
+        eventually((barrier / "ready").exists)
+        stores.parent.rename(tmp_path / "retired")
+        text.mkdir(parents=True)
+        voice.mkdir()
+        write_memo(text, "replacement", kind="text", read=False, unix_time=1710000000)
+        (barrier / "hold").unlink()
+        eventually(lambda: not marker.exists())
+        expect(255)
+        shutil.rmtree(text / "replacement")
+        event(True)
+
+        # A vendor memo arriving after the snapshot invalidates its off result.
+        (barrier / "ready").unlink()
+        (barrier / "hold").touch()
+        event(False)
+        eventually((barrier / "ready").exists)
+        write_memo(text, "late", kind="text", read=False, unix_time=1710000000)
+        (barrier / "hold").unlink()
+        eventually(lambda: not marker.exists())
+        expect(255)
+        shutil.rmtree(text / "late")
+        event(True)
+
+        # Firmware writes its own off edge after the native memo change.
+        write_memo(text, "memo_1", kind="text", read=False, unix_time=1710000000)
+        brightness.write_text("0\n")
+        expect(255)
+        event(False)
+        expect(255)
+        eventually(lambda: not marker.exists())
+        shutil.rmtree(text / "memo_1")
+        brightness.write_text("0\n")
+        event(False)
+        expect(0)
+
+        # Without an HA claim the vendor updater owns both edges.
+        for value in ("255\n", "0\n"):
+            brightness.write_text(value)
+            event(False)
+            assert brightness.read_text() == value
+
+        trigger.write_text("none [timer]\n")
+        event(True)
+        assert brightness.read_text() == "0\n"
+        assert trigger.read_text() == "none [timer]\n"
+        trigger.write_text("[none] timer\n")
+        expect(255)
+        # Do not clear until the native watcher sees conclusive metadata.
+        item = voice / "memo_1"
+        item.mkdir()
+        info = item / "msg_info.ini"
+        os.mkfifo(info)
+        event(False)
+        eventually(tree_watched)
+        assert marker.stat().st_mode & 0o777 == 0o500
+        # Unknown native state survives SIGKILL as pending, not HA unread.
+        proc.kill()
+        proc.wait(timeout=5)
+        proc = start()
+        wait_for_health(api)
+        eventually(tree_watched)
+        brightness.write_text("0\n")
+        assert api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"]
+        expect(0)
+        brightness.write_text("255\n")
+        # Neither symlinks nor oversized metadata authorize switching off.
+        info.unlink()
+        decoy = tmp_path / "read.ini"
+        decoy.write_text("[Message Information]\nRead=1\n")
+        info.symlink_to(decoy)
+        expect(255)
+        info.unlink()
+        info.write_text(decoy.read_text() + "#" * 5000)
+        expect(255)
+        info.write_text(decoy.read_text())
+        expect(0)
+        eventually(lambda: not tree_watched())
+        register()
+        event(True)
+        api_post(api, "/api/v1/display-bridge", {"enabled": False})
+        expect(0)
+        api_post(api, "/api/v1/display-bridge", {
+            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
+        })
+        event(True)
+        if native_at_shutdown:
+            (item / "msg_info.ini").write_text("[Message Information]\nRead=0\n")
+        expect(255)
+        proc.kill()
+        proc.wait(timeout=5)
+        assert marker.is_dir()
+        settings = json.loads(config.read_text())
+        settings["displayBridge"]["enabled"] = False
+        config.write_text(json.dumps(settings))
+        proc = start()
+        wait_for_health(api)
+        # No runtime registration survives the crash. Disable alone releases.
+        api_post(api, "/api/v1/display-bridge", {"enabled": False})
+        expect(255 if native_at_shutdown else 0)
+        eventually(lambda: not marker.exists())
+        register()
+        # A trigger takeover ends HA ownership even when memo metadata is unknown.
+        event(True)
+        trigger.write_text("none [timer]\n")
+        (item / "msg_info.ini").unlink()
+        event(False)
+        assert not marker.exists()
+        expect(255)
+        trigger.write_text("[none] timer\n")
+        (item / "msg_info.ini").write_text(f"[Message Information]\nRead={int(not native_at_shutdown)}\n")
+        event(True)
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+    assert proc.returncode == 0
+    expect(255 if native_at_shutdown else 0)
 
 
 @pytest.mark.parametrize("kind", ["voicemail", "text", "voice"])

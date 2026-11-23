@@ -3,14 +3,26 @@
 
 #include "c300x_agent.h"
 
+#include <stdint.h>
 #include <time.h>
+
+/* HA renews its registration every 300 s: three missed renewals mean it can
+ * no longer reach the station, for example after an address change. */
+#define C300X_MDNS_HOME_ASSISTANT_QUIET_MS 900000LL
 
 struct c300x_mdns {
     int fd;
     time_t next_announce_at;
     int announced;
+    uint32_t ipv4;
+    char instance_id[33];
 };
 
+long long c300x_mdns_home_assistant_present_ms(
+    int connected_this_run,
+    long long last_request_ms,
+    long long now_ms
+);
 void c300x_mdns_init(struct c300x_mdns *mdns);
 void c300x_mdns_close(struct c300x_mdns *mdns);
 void c300x_mdns_open_if_needed(

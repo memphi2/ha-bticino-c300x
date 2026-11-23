@@ -22,7 +22,7 @@ from .agent_update import (
     compare_agent_bundle,
 )
 from .api import C300XAgentApiError
-from .api_errors import C300XAgentApiUnsupportedError
+from .api_errors import C300XAgentApiUnsupportedError, C300XAgentUpdateError
 from .callback_url import async_suggest_callback_base_url
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
@@ -578,7 +578,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             return self.async_show_form(
                 step_id="confirm",
                 data_schema=vol.Schema({}),
-                errors={"base": "update_failed"},
+                errors={"base": err.repair_key if isinstance(err, C300XAgentUpdateError) else "update_failed"},
                 description_placeholders=placeholders,
             )
         if entry.data.get(CONF_AGENT_UPDATE_PAYLOAD_PENDING) is True:

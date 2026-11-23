@@ -22,7 +22,6 @@ CONF_BOOTSTRAP_SSH_PASSWORD = "bootstrap_ssh_password"
 CONF_BOOTSTRAP_SSH_USERNAME = "bootstrap_ssh_username"
 CONF_CALLBACK_BASE_URL = "callback_base_url"
 CONF_CREATE_HOMEASSISTANT_USER = "create_homeassistant_user"
-DEFAULT_CREATE_HOMEASSISTANT_USER = False
 CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED = "homeassistant_media_user_bootstrapped"
 CONF_DASHBOARD_PREVENT_RETURN = "dashboard_prevent_return"
 CONF_DASHBOARD_ENTITIES = "dashboard_entities"

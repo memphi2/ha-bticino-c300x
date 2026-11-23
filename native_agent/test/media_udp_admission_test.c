@@ -2,6 +2,39 @@
 #include "../src/media_bridge.c"
 #include <assert.h>
 
+/* Keep the real proxy and socket I/O, but isolate its well-known ports from
+ * other worktrees and local services. Also remap the historical raw fallback
+ * so its regression detector remains effective without reserving UDP/4000. */
+static in_port_t raw_sink_port;
+int __real_bind(int fd, const struct sockaddr *address, socklen_t size);
+ssize_t __real_sendto(int fd, const void *data, size_t len, int flags,
+    const struct sockaddr *address, socklen_t size);
+
+int __wrap_bind(int fd, const struct sockaddr *address, socklen_t size) {
+    if (size == sizeof(struct sockaddr_in) && address->sa_family == AF_INET) {
+        struct sockaddr_in local = *(const struct sockaddr_in *)address;
+        if (ntohs(local.sin_port) == C300X_TALKBACK_RTP_PORT || ntohs(local.sin_port) == 4000) {
+            local.sin_port = 0;
+            local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            return __real_bind(fd, (struct sockaddr *)&local, sizeof(local));
+        }
+    }
+    return __real_bind(fd, address, size);
+}
+
+ssize_t __wrap_sendto(int fd, const void *data, size_t len, int flags,
+    const struct sockaddr *address, socklen_t size) {
+    if (size == sizeof(struct sockaddr_in) && address->sa_family == AF_INET) {
+        struct sockaddr_in target = *(const struct sockaddr_in *)address;
+        if (ntohs(target.sin_port) == 4000 && target.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
+            assert(raw_sink_port != 0);
+            target.sin_port = raw_sink_port;
+            return __real_sendto(fd, data, len, flags, (struct sockaddr *)&target, sizeof(target));
+        }
+    }
+    return __real_sendto(fd, data, len, flags, address, size);
+}
+
 static int protect(c300x_srtp_t session, void *packet, int *len) {
     assert(session != NULL && packet != NULL && *len > 12);
     return 0;
@@ -37,10 +70,16 @@ int main(int argc, char **argv) {
     int sink = bound_socket(SOCK_DGRAM, "127.0.0.1", 0, &sink_addr);
     /* Detect the former unprotected fallback as well as protected dispatch. */
     int raw = bound_socket(SOCK_DGRAM, "127.0.0.1", 4000, &raw_addr);
+    raw_sink_port = raw_addr.sin_port;
     int sender = bound_socket(SOCK_DGRAM,
         strcmp(test, "untrusted") == 0 ? "127.0.0.2" : "127.0.0.1", 0, &sender_addr);
     int output = socket(AF_INET, SOCK_DGRAM, 0);
     assert(output >= 0);
+    struct sockaddr_in legacy_target = raw_addr;
+    legacy_target.sin_port = htons(4000);
+    assert(sendto(output, "x", 1, 0, (struct sockaddr *)&legacy_target, sizeof(legacy_target)) == 1);
+    unsigned char observed;
+    assert(recv(raw, &observed, 1, 0) == 1 && observed == 'x');
     bridge.rtsp_clients[0] = (rtsp_client_slot_t){.active = true, .played = true, .fd = peer};
     bridge.device_codec_pcmu = pcmu;
     if (strcmp(mode, "ring") == 0) {
@@ -107,8 +146,9 @@ int main(int argc, char **argv) {
         if (!ready) usleep(2000);
     }
     assert(ready);
-    struct sockaddr_in target = {.sin_family = AF_INET, .sin_port = htons(C300X_TALKBACK_RTP_PORT)};
-    assert(inet_pton(AF_INET, "127.0.0.1", &target.sin_addr) == 1);
+    struct sockaddr_in target;
+    socklen_t target_size = sizeof(target);
+    assert(getsockname(bridge.talkback_fd, (struct sockaddr *)&target, &target_size) == 0);
     assert(sendto(sender, packet, length, 0, (struct sockaddr *)&target, sizeof(target)) == (ssize_t)length);
     fd_set fds;
     FD_ZERO(&fds);

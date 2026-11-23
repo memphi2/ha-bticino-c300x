@@ -17,5 +17,7 @@ int c300x_http_service_commands_defer(const struct c300x_http_maintenance *owner
 int c300x_http_service_commands_route(struct c300x_http_maintenance *owner, int fd,
     const struct c300x_config *config, const struct request *request,
     c300x_schedule_command_fn schedule);
+int c300x_display_maintenance(struct c300x_http_maintenance *owner, int fd,
+    const struct c300x_config *config, struct request *request, c300x_schedule_command_fn schedule);
 
 #endif

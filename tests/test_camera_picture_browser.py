@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_picture_sliders_submit_on_release_and_ignore_late_response(tmp_path: Path):
+def _run_page(tmp_path: Path, script: str) -> None:
     chrome = shutil.which("google-chrome") or shutil.which("chromium")
     if not chrome:
         pytest.skip("Chrome or Chromium unavailable")
@@ -17,7 +17,62 @@ def test_picture_sliders_submit_on_release_and_ignore_late_response(tmp_path: Pa
     for name in ("c300x-picture-controls.js", "c300x-media-translations.js"):
         shutil.copy(frontend / name, tmp_path)
     page = tmp_path / "test.html"
-    page.write_text("""<!doctype html><c300x-picture-controls></c300x-picture-controls>
+    page.write_text(script, encoding="utf-8")
+    run = subprocess.run([chrome, "--headless", "--disable-gpu", "--disable-dev-shm-usage",
+                          "--allow-file-access-from-files", f"--user-data-dir={tmp_path / 'profile'}",
+                          "--virtual-time-budget=1500", "--dump-dom", page.as_uri()],
+                         capture_output=True, text=True, timeout=30, check=True)
+    assert 'data-test-result="passed"' in run.stdout
+
+
+def test_picture_errors_are_told_apart(tmp_path: Path):
+    _run_page(tmp_path, """<!doctype html><c300x-picture-controls></c300x-picture-controls>
+<script type="module">
+import "./c300x-picture-controls.js";
+import { C300X_MEDIA_TRANSLATIONS as T } from "./c300x-media-translations.js";
+const el = document.querySelector("c300x-picture-controls");
+const replies = [];
+const hass = {language:"de", callWS() { return new Promise((ok, fail) => replies.push({ok, fail})); }};
+const check = (test, name) => { if (!test) throw Error("picture error check failed: " + name); };
+const settle = () => new Promise(r => setTimeout(r));
+const agent = code => ({code:"home_assistant_error",
+  message:"C300X picture controls: device agent returned HTTP 409: " + code});
+const status = () => el.shadowRoot.querySelector("p").textContent;
+const ranges = () => [...el.shadowRoot.querySelectorAll("input")];
+const shown = () => ranges().every(r => !r.parentElement.hidden && !r.disabled);
+for (const lang of Object.keys(T))
+  for (const key of ["picture_not_applied", "picture_busy", "picture_unavailable"]) check(T[lang][key], lang + key);
+el.configure(hass,"entry","on_demand");
+el.button.click();
+replies.shift().ok({response:{brightness:40,contrast:50,saturation:60}});
+await settle();
+const brightness = el.shadowRoot.querySelector("[data-key=brightness]");
+brightness.value = "90"; brightness.dispatchEvent(new Event("change"));
+replies.shift().fail(agent("picture_not_applied"));
+await settle();
+check(status() === T.de.picture_not_applied && shown() && brightness.value === "40", "not applied");
+brightness.value = "70"; brightness.dispatchEvent(new Event("change"));
+replies.shift().fail(agent("media_busy"));
+await settle();
+check(status() === T.de.picture_busy && shown() && brightness.value === "40", "busy");
+brightness.value = "70"; brightness.dispatchEvent(new Event("change"));
+replies.shift().fail(agent("picture_controls_unavailable"));
+await settle();
+check(status() === T.de.picture_unavailable && ranges().every(r => r.parentElement.hidden), "unavailable");
+el.button.click(); el.button.click();
+replies.shift().fail(agent("media_busy"));
+await settle();
+check(status() === T.de.picture_busy && ranges().every(r => r.parentElement.hidden), "busy without values");
+el.button.click(); el.button.click();
+replies.shift().fail(new Error("socket closed"));
+await settle();
+check(status() === T.de.picture_unavailable && ranges().every(r => r.parentElement.hidden), "other error");
+document.documentElement.dataset.testResult="passed";
+</script>""")
+
+
+def test_picture_sliders_submit_on_release_and_ignore_late_response(tmp_path: Path):
+    _run_page(tmp_path, """<!doctype html><c300x-picture-controls></c300x-picture-controls>
 <script type="module">
 import "./c300x-picture-controls.js";
 const el = document.querySelector("c300x-picture-controls");
@@ -48,9 +103,4 @@ reply({response:{brightness:50,contrast:20,saturation:10}});
 await Promise.resolve();
 check(el.hidden && el.panel.hidden);
 document.documentElement.dataset.testResult="passed";
-</script>""", encoding="utf-8")
-    run = subprocess.run([chrome, "--headless", "--disable-gpu", "--disable-dev-shm-usage",
-                          "--allow-file-access-from-files", f"--user-data-dir={tmp_path / 'profile'}",
-                          "--virtual-time-budget=1500", "--dump-dom", page.as_uri()],
-                         capture_output=True, text=True, timeout=30, check=True)
-    assert 'data-test-result="passed"' in run.stdout
+</script>""")

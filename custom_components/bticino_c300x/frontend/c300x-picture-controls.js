@@ -1,4 +1,4 @@
-import { mediaLocalize } from "./c300x-media-translations.js?v=1a59577c730b7734";
+import { mediaLocalize } from "./c300x-media-translations.js?v=85b11206385b1f7f";
 
 const keys = ["brightness", "contrast", "saturation"];
 
@@ -51,6 +51,7 @@ export class C300XPictureControls extends HTMLElement {
   disconnectedCallback() { this.close(); }
   close() {
     this.generation++;
+    this.values = null;
     this.panel.hidden = true;
     this.button.setAttribute("aria-expanded", "false");
   }
@@ -70,15 +71,24 @@ export class C300XPictureControls extends HTMLElement {
       const values = result?.response;
       if (!keys.every(k => Number.isInteger(values?.[k]) && values[k] >= 0 && values[k] <= 100)) throw Error();
       this.status.textContent = "";
-      for (const input of this.inputs) {
-        input.parentElement.hidden = input.disabled = false;
-        input.value = values[input.dataset.key];
-        input.oninput();
-      }
-    } catch {
+      this.show(this.values = values);
+    } catch (error) {
       if (generation !== this.generation) return;
-      this.status.textContent = mediaLocalize(this.hass, "picture_unavailable");
-      for (const input of this.inputs) input.parentElement.hidden = true;
+      // The service error names the agent's code. Not applied or busy: the
+      // station kept the last confirmed values, so the sliders stay.
+      const code = /\b(picture_not_applied|media_busy)\b/.exec(String(error?.message || ""))?.[1];
+      this.status.textContent = mediaLocalize(this.hass,
+        code === "picture_not_applied" ? "picture_not_applied" : code ? "picture_busy" : "picture_unavailable");
+      this.show(code && this.values);
+    }
+  }
+
+  show(values) {
+    for (const input of this.inputs) {
+      input.parentElement.hidden = input.disabled = !values;
+      if (!values) continue;
+      input.value = values[input.dataset.key];
+      input.oninput();
     }
   }
 }

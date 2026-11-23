@@ -216,6 +216,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
+| `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the active video source. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
 | `POST` | `/api/v1/calls/doorbell/actions/answer` | API | Answers active ring-call media locally. |
@@ -985,6 +986,32 @@ Authentication: normal API token.
 
 Side effects: stops agent-owned on-demand doorbell media.
 
+### `GET`, `POST /api/v1/video/picture`
+
+Authentication: normal API token.
+
+Side effects: POST changes one picture control of the active video source.
+
+A connected GUI advertising `picture=1` provides the legacy ring-only path.
+An eligible C300X (firmware 1.7.19) can also report
+`bridge.picture_controls_scope: "ring_and_on_demand"` with
+`bridge.picture_controls_supported: true`. Model and firmware alone do not
+enable it: an authenticated status or capability request during owned media
+checks the capture source on the bounded media worker. The read result is
+cached for that media session; no source is opened while idle.
+`camera_picture.supported` reports whether either path is available.
+Missing or unknown scope does not extend GUI support beyond ring calls.
+
+`GET` returns brightness, contrast and saturation; POST accepts one `control`
+with a percentage `value` (0 through 100 in steps of 10). Direct success returns
+source readback; legacy success returns the GUI object's values. Neither
+measures the rendered picture.
+An active source that does not expose the required V4L2 control descriptors
+is unsupported, even if raw control reads return numbers.
+Direct operations check media ownership and session identity during execution.
+A failed direct write returns an error; it is not retried through the GUI.
+No extra idle poll, recording, configuration write or media restart is needed.
+
 ### `GET /api/v1/calls/doorbell`
 
 Authentication: normal API token.
@@ -1714,26 +1741,6 @@ only updates the switch after confirmation; an ambiguous timeout requires a
 fresh read before another write.
 
 The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
-
-A connected GUI advertising `picture=1` provides the legacy ring-only path.
-An eligible C300X (firmware 1.7.19) can also report
-`bridge.picture_controls_scope: "ring_and_on_demand"` with
-`bridge.picture_controls_supported: true`. Model and firmware alone do not
-enable it: an authenticated status or capability request during owned media
-checks the capture source on the bounded media worker. The read result is
-cached for that media session; no source is opened while idle.
-`camera_picture.supported` reports whether either path is available.
-Missing or unknown scope does not extend GUI support beyond ring calls.
-
-Authenticated `GET /api/v1/video/picture` returns brightness, contrast and
-saturation; POST accepts one `control` with a percentage `value` (0 through
-100 in steps of 10). Direct success returns source readback; legacy success
-returns the GUI object's values. Neither measures the rendered picture.
-An active source that does not expose the required V4L2 control descriptors
-is unsupported, even if raw control reads return numbers.
-Direct operations check media ownership and session identity during execution.
-A failed direct write returns an error; it is not retried through the GUI.
-No extra idle poll, recording, configuration write or media restart is needed.
 It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight
 is allowed. One connection waits indefinitely without periodic device reads.
 An authorized API ringer request returns `{ok, id, muted, expires}` to that
@@ -1747,7 +1754,8 @@ request has a monotonic five-second deadline. Diagnostics expose
 ## Compatibility
 
 Agent `2.9.0` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
-config and is `unknown` when that value is empty, which is what the installer
-writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
+`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` is derived from `device.firmware` of
+the agent config, or from the station's firmware info when that is empty, which
+is what the installer writes; it is `unknown` only when neither is readable. Of
+the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
 experimentally. The release notes list the agent changes of each version.

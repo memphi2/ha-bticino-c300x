@@ -7,7 +7,14 @@ import subprocess
 
 import pytest
 from test_c100x_bundle_delivery import payload
-from test_c100x_display_transaction import BOOT_ID, SCRIPT, advance_source, assert_original, fault_mv, run
+from test_c100x_display_transaction import (
+    BOOT_ID,
+    SCRIPT,
+    advance_source,
+    assert_original,
+    fault_mv,
+    run,
+)
 from test_c100x_display_transaction import tree as tree
 from test_c100x_qml_adapter import ROOT
 

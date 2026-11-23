@@ -457,7 +457,7 @@ non-ACK readback); hosts are numeric, no DNS. Sequence hold and settle delays us
 
 - the GUI-confirmed ringer write (`/ui/ringer/next` -> `c300x_ringer_control_next`
   -> `handle_ringer_post(..., gui_confirmed=1)`),
-- the forwarding read at startup and the periodic forwarding refresh,
+- the forwarding read at startup,
 - the 3-second `wait_for_path_absent` (100 ms polls) of the two delete handlers.
 
 Candidate design (not built): a bounded transaction state machine in the poll

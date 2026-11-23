@@ -12,6 +12,7 @@ from test_c100x_qml_adapter import ROOT, builder
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 
 SCRIPT = ROOT / "native_agent/scripts/c100x_display.sh"
+BOOT_ID = "0f6c1a52-3b7e-4d2a-9c11-5e8f2a7b4c90"
 
 
 @pytest.fixture
@@ -35,10 +36,13 @@ def tree(tmp_path):
     sync = tools / "sync"
     sync.write_text('#!/bin/sh\nprintf "sync\\n" >> "$SYNC_LOG"\n')
     sync.chmod(0o700)
+    # Activation records the boot it ran in; tests flip this file to "reboot".
+    (tmp_path / "boot_id").write_text(BOOT_ID + "\n")
     env = {**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"],
            "SYNC_LOG": str(tmp_path / "sync.log"), "C100X_GUI_DIR": str(gui), "C100X_SOURCE_DIR": str(source),
            "C100X_BACKUP_DIR": str(tmp_path / "backup"), "C100X_GUI_BIN": str(tmp_path / "binary"),
            "C100X_GUI_WRAPPER": str(tmp_path / "wrapper"), "C100X_NO_REMOUNT": "1",
+           "C100X_BOOT_ID_FILE": str(tmp_path / "boot_id"),
            "C100X_IDENTITY_SCRIPT": str(ROOT / "native_agent/scripts/c100x_display_identity.sh"),
            "C100X_TRIAL_SCRIPT": str(ROOT / "native_agent/scripts/c100x_display_trial.sh"),
            "C100X_PROBE_SCRIPT": str(ROOT / "native_agent/scripts/c100x_display_probe.sh"),

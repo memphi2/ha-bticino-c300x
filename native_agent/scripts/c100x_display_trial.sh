@@ -1,6 +1,26 @@
 # Persistent activation snapshots, authenticated by the archived stock recipe.
 PENDING="$BACKUP/pending"
+BOOT_ID=${C100X_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}
 trial_exists() { [ -e "$PENDING" ] || [ -L "$PENDING" ]; }
+# Boot markers live next to pending, never inside it: the journal stays three files.
+valid_boot_id() {
+    case "$1" in ????????-????-????-????-????????????) ;; *) return 1 ;; esac
+    case "$1" in *[!0-9a-f-]*) return 1 ;; esac
+}
+current_boot() {
+    CURRENT_BOOT=
+    read -r CURRENT_BOOT 2>/dev/null < "$BOOT_ID" || return 1
+    valid_boot_id "$CURRENT_BOOT"
+}
+read_marker() {
+    MARKER=
+    regular "$BACKUP/$1" && [ "$(stat -c %s "$BACKUP/$1")" -le 128 ] || return 1
+    read -r MARKER < "$BACKUP/$1"
+}
+write_marker() {
+    marker_stage=$(mktemp "$BACKUP/boot-stage.XXXXXX") || return 1
+    printf '%s\n' "$2" > "$marker_stage" && sync && mv -f "$marker_stage" "$BACKUP/$1" && sync
+}
 verify_trial() {
     safe_path "$PENDING" && [ -d "$PENDING" ] && regular "$PENDING/release" || return 1
     TRIAL_RELEASE=$(cat "$PENDING/release")
@@ -17,6 +37,9 @@ verify_trial() {
 }
 prepare_trial() {
     trial_exists && return 1
+    # A stale trial mark would make the prepare boot count as a later boot.
+    current_boot && rm -f "$BACKUP/pending.trial-boot" \
+        && write_marker pending.prepare-boot "$CURRENT_BOOT" || return 1
     trial_stage=$(mktemp -d "$BACKUP/trial-stage.XXXXXX") || return 1
     cp -p "$WORK/before/main.qml" "$WORK/before/MainPage.qml" "$trial_stage/" || return 1
     printf '%s\n' "$RELEASE" > "$trial_stage/release"
@@ -25,7 +48,8 @@ prepare_trial() {
 }
 archive_trial() {
     trial_history=$(mktemp -d "$BACKUP/trial-history.XXXXXX") || return 1
-    mv "$PENDING" "$trial_history/snapshot" && sync
+    mv "$PENDING" "$trial_history/snapshot" && sync \
+        && rm -f "$BACKUP/pending.prepare-boot" "$BACKUP/pending.trial-boot"
 }
 rollback_trial() {
     verify_trial || return 1

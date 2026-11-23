@@ -37,6 +37,7 @@ void c300x_media_bridge_set_doorstation_audio_gain_tenths(
     int gain_tenths
 );
 bool c300x_media_talkback_running(const struct c300x_video *video);
+bool c300x_media_ring_talkback_peer_ready(const struct c300x_video *video, int client_fd);
 bool c300x_media_ring_call_active(const struct c300x_video *video);
 void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_video_status *status);
 

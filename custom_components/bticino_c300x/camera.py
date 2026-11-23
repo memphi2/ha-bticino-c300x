@@ -97,6 +97,7 @@ from .camera_media.webrtc_session import (
 from .camera_media.webrtc_session import (
     webrtc_message_is_error as _webrtc_message_is_error,
 )
+from .camera_picture_scope import track_picture_scope
 from .const import (
     CONF_AGENT_HOST,
     CONF_NATIVE_TWO_WAY_AUDIO,
@@ -1684,6 +1685,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._last_media_state = self._last_media_decision.state
         if self._background_tasks.closing:
             return
+        track_picture_scope(self)
         publish_agent_media_facts(
             getattr(self, "hass", None), self._entry, self._bridge_status
         )

@@ -45,12 +45,11 @@ static int decoder_bound(const char *driver)
 int picture_source_supported(const char *model, const char *firmware)
 {
     if (!model || !firmware || strcmp(model, "C300X")) return 0;
-    /* The 1.7.19 kernel has only the adv7180 driver. 2.0.2 also runs HW rev 1/4
-     * boards with a tvp5150, which stays refused until tested on a device.
-     * 3.0.6: adv7180 on the rev 1-3 board files, tvp5150 (plain brightness) on rev 4. */
+    /* 1.7.19 has only the adv7180 driver. 2.0.2 and 3.0.6: adv7180 on HW rev 2/3,
+     * tvp5150 (plain brightness) on rev 1/4. */
     if (!strcmp(firmware, "1.7.19")) return 1;
-    if (!strcmp(firmware, "2.0.2")) return decoder_bound("adv7180");
-    return !strcmp(firmware, "3.0.6") && (decoder_bound("adv7180") || decoder_bound("tvp5150"));
+    return (!strcmp(firmware, "2.0.2") || !strcmp(firmware, "3.0.6")) &&
+           (decoder_bound("adv7180") || decoder_bound("tvp5150"));
 }
 
 static int capture_source(int fd)

@@ -165,7 +165,7 @@ int main(void)
     for (int d = 0; d < 4; d++) {
         decoder = decoders[d];
         assert(picture_source_supported("C300X", "1.7.19"));
-        assert(picture_source_supported("C300X", "2.0.2") == (d == 1));
+        assert(picture_source_supported("C300X", "2.0.2") == (d == 1 || d == 2));
         assert(picture_source_supported("C300X", "3.0.6") == (d == 1 || d == 2));
         assert(!picture_source_supported("C100X", "3.0.6") && !picture_source_supported("C300X", "3.0.5"));
         assert(!picture_source_supported("C300X", NULL) && !picture_source_supported(NULL, "2.0.2"));
@@ -215,7 +215,7 @@ int main(void)
     assert(run(PICTURE_BRIGHTNESS, 50, out) == PICTURE_SOURCE_UNAVAILABLE && !writes);
     reset(NONE);
     assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && !dirs);
-    /* adv7180: XOR (1.7.19, 2.0.2); unbound or tvp5150 (3.0.6 HW rev 4): plain. */
+    /* adv7180: XOR (all firmwares); unbound or tvp5150 (2.0.2 and 3.0.6, HW rev 1/4): plain. */
     for (int bound = 1; bound >= -1; bound--) {
         const char *name = bound > 0 ? "adv7180" : bound ? "tvp5150" : NULL;
         reset_stock(name);

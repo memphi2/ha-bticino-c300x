@@ -39,10 +39,15 @@ The existing agent's paired stack/linphone codec checks are appropriate;
 changing only one side would not constitute a codec implementation.
 
 Configuration compatibility is not hardware-safety evidence for switching
-the firmware to PCMU. The first-test baseline remains stock Speex; firmware
-codec changes must be blocked without removing read-only status or verified
-rollback. This restriction does not disable client-side PCMU transcoding,
-which is distinct from rewriting the device's stack/linphone configuration.
+the firmware to PCMU. The first-test baseline remains stock Speex. The C100X
+test-build guard rejects firmware-PCMU apply in the core, HTTP API and CLI;
+capabilities and the HA selector do not offer that change. Read-only status
+remains available. Explicit restore/removal can recover Speex only from a
+managed backup pair that passes stock-Speex field validation; missing, partial
+or incompatible backups do not authorize writes. Unpatched removal with no
+codec backups remains a no-op. These checks validate codec fields, not a full
+firmware identity or acoustic result. Client-side PCMU transport/transcoding
+is unchanged and distinct from rewriting the stack/linphone configuration.
 
 The same XML's `bt_av_media` section uses a 16000-Hz device sample rate,
 640-byte blocks, and 20000/60000 microsecond latency/buffer settings. This is

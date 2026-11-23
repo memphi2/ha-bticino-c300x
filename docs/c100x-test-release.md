@@ -17,11 +17,16 @@ The first authorized device test should establish agent startup, authenticated
 status/setup reads, model/firmware reporting, discovery, and continued vendor
 operation. It is not a display, routing migration, camera or audio trial.
 
-The audio baseline is the existing stock Speex configuration. Do not switch
-the firmware to PCMU: matching configuration keys and codec-library tests
-do not establish hardware safety. Read-only codec status and verified rollback
-must remain available. Client-side PCMU transcoding is a separate media path,
-not permission to change the firmware codec or start media during this test.
+The audio baseline is the existing stock Speex configuration. Firmware-PCMU
+apply is blocked in this C100X test build at the native core, API and CLI;
+HA does not offer the firmware codec selector. Matching configuration keys
+and codec-library tests do not establish hardware safety.
+Read-only codec status remains available. Explicit restore and removal retain
+Speex recovery only when both managed backups pass stock-Speex field validation;
+missing, partial or incompatible recovery backups are refused. Unpatched removal
+with neither codec backup remains a no-op. Recovery is not a first-test action.
+Client-side PCMU transport/transcoding is unchanged and separate from the
+firmware codec setting; it does not authorize media activation during this test.
 
 - The C100X-aware agent, installer and update guards are implemented offline.
   Routing restoration checks complete known firmware identity; GUI-free restore

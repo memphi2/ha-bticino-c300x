@@ -19,10 +19,10 @@ identity and discovery, while preserving the manufacturer app's provisioned acco
 and existing Companion configuration. Routing/media changes and MQTT migration
 are not part of first-test acceptance.
 
-Keep stock Speex as the firmware audio baseline. Configuration compatibility
-does not qualify a firmware PCMU switch for this test. Client-side PCMU
-transcoding is separate; read-only codec status and verified rollback must
-remain available without authorizing media activation.
+Keep stock Speex as the firmware audio baseline. Firmware-PCMU apply is blocked
+in core/API/CLI and not offered by HA for this test build. Read-only codec status
+and Speex recovery from validated managed backups remain available; client-side
+PCMU transport/transcoding is unchanged. None authorizes media activation.
 
 - Complete-file identity checks protect routing restoration; C100X restoration
   skips the unsupported C300X GUI-label operation.

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
+import select
 import shutil
 import subprocess
 import tempfile
@@ -140,8 +142,81 @@ def collection_data(event, kind):
     return event["data"]["voicemail" if kind == "voicemail" else "memos"]
 
 
+@pytest.fixture
+def led_runtime():
+    with tempfile.TemporaryDirectory(dir="/dev/shm") as directory:
+        yield Path(directory)
+
+
+@pytest.mark.parametrize("fault", ["absent_led", "missing_store", "unsafe_dir", "symlink_marker"])
+def test_unusable_led_never_claims_or_scans(collection_binary, tmp_path, led_runtime, fault):
+    api, ui = free_tcp_ports(2)
+    state = led_runtime / "state"
+    state.mkdir()
+    marker = state / "c300x-agent.memo-led.claim"
+    led = tmp_path / "led_memo"
+    led.mkdir()
+    brightness = led / "brightness"
+    if fault != "absent_led":
+        brightness.write_text("0\n")
+    (led / "trigger").write_text("[none]\n")
+    (led / "max_brightness").write_text("255\n")
+    decoy = led_runtime / "decoy"
+    decoy.mkdir(mode=0o700)
+    if fault == "missing_store":
+        state.rmdir()
+    if fault == "unsafe_dir":
+        state.chmod(0o777)
+    if fault == "symlink_marker":
+        marker.symlink_to(decoy, target_is_directory=True)
+    memos = tmp_path / "memos"
+    memos.mkdir()
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({
+        "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
+        "api": {"token": TOKEN}, "memos": {"enabled": False, "watch": False,
+                                          "textRoot": str(memos), "voiceRoot": str(memos)},
+        "events": {"udp": {"enabled": False}}, "mdns": {"enabled": False},
+        "video": {"enabled": False}, "mqtt": {"enabled": False},
+    }))
+    proc = subprocess.Popen([str(collection_binary), "--config", str(config)], cwd=tmp_path,
+                            env={**os.environ, "C300X_LED_CLASS_ROOT": str(tmp_path),
+                                 "C300X_MEMO_LED_RUNTIME_DIR": str(state)})
+    try:
+        wait_for_health(api)
+        api_post(api, "/api/v1/display-bridge", {
+            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
+        })
+        # Observe actual opendir calls, independently of the brightness value.
+        libc = ctypes.CDLL(None)
+        watch = libc.inotify_init1(os.O_NONBLOCK | os.O_CLOEXEC)
+        assert watch >= 0
+        try:
+            assert libc.inotify_add_watch(watch, os.fsencode(memos), 0x20) >= 0  # IN_OPEN
+            for unread in (True, False, False):
+                assert not api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"]
+                api_post(api, "/api/v1/display-bridge/events", {
+                    "topic": "notifications", "unread": unread,
+                }, expected_status=202)
+            assert not select.select([watch], [], [], 0)[0]
+        finally:
+            os.close(watch)
+        if fault == "missing_store":
+            state.mkdir()
+            assert not api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"]
+        if fault == "symlink_marker":
+            assert marker.is_symlink() and decoy.is_dir()
+        else:
+            assert not marker.exists()
+        if brightness.exists():
+            assert brightness.read_text() == "0\n"
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+
+
 @pytest.mark.parametrize("native_at_shutdown", [False, True])
-def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown):
+def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, led_runtime):
     api, ui = free_tcp_ports(2)
     led = tmp_path / "led_memo"
     text, voice = tmp_path / "text", tmp_path / "voice"
@@ -171,17 +246,28 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown):
             assert time.monotonic() < deadline
             time.sleep(0.01)
 
-    proc = subprocess.Popen([str(collection_binary), "--config", str(config)],
-                            cwd=tmp_path, env={**os.environ, "C300X_LED_CLASS_ROOT": str(tmp_path)})
+    marker = led_runtime / "c300x-agent.memo-led.claim"
+
+    def start():
+        return subprocess.Popen([str(collection_binary), "--config", str(config)], cwd=tmp_path,
+                                env={**os.environ, "C300X_LED_CLASS_ROOT": str(tmp_path),
+                                     "C300X_MEMO_LED_RUNTIME_DIR": str(led_runtime)})
+
+    def register():
+        api_post(api, "/api/v1/display-bridge", {
+            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
+        })
+
+    proc = start()
     try:
         wait_for_health(api)
         assert api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"] is True
         led.rename(tmp_path / "absent")
-        assert api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"] is False
+        register()
+        event(True)
+        event(False)
+        assert not marker.exists()
         (tmp_path / "absent").rename(led)
-        api_post(api, "/api/v1/display-bridge", {
-            "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
-        })
         api_request(api, "POST", path, {"topic": "notifications", "unread": True},
                     authorized=False, expected_status=401)
         event("true", status=400)
@@ -189,10 +275,13 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown):
         assert brightness.read_text() == "0\n"
         event(True, topic="display_bridge.state")
         expect(255)
+        assert marker.is_dir() and marker.stat().st_mode & 0o777 == 0o700
+        directory_stamp = led_runtime.stat().st_mtime_ns
         stamp = brightness.stat().st_mtime_ns
         event(True)
         api_post(api, path, {"topic": "notifications"}, expected_status=202)
         assert brightness.stat().st_mtime_ns == stamp
+        assert led_runtime.stat().st_mtime_ns == directory_stamp
 
         # Firmware writes its own off edge after the native memo change.
         write_memo(text, "memo_1", kind="text", read=False, unix_time=1710000000)
@@ -234,6 +323,25 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown):
         if native_at_shutdown:
             (item / "msg_info.ini").write_text("[Message Information]\nRead=0\n")
         expect(255)
+        proc.kill()
+        proc.wait(timeout=5)
+        assert marker.is_dir()
+        proc = start()
+        wait_for_health(api)
+        register()
+        event(False, topic="display_bridge.state")
+        expect(255 if native_at_shutdown else 0)
+        assert not marker.exists()
+        # A trigger takeover ends HA ownership even when memo metadata is unknown.
+        event(True)
+        trigger.write_text("none [timer]\n")
+        (item / "msg_info.ini").unlink()
+        event(False)
+        assert not marker.exists()
+        expect(255)
+        trigger.write_text("[none] timer\n")
+        (item / "msg_info.ini").write_text(f"[Message Information]\nRead={int(not native_at_shutdown)}\n")
+        event(True)
     finally:
         proc.terminate()
         proc.wait(timeout=5)

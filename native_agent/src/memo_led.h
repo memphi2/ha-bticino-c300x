@@ -6,8 +6,11 @@ struct c300x_memo_led {
     const char *voice_root;
     int claimed;
     int release_pending;
+    int claim_dir;
 };
 
+void c300x_memo_led_init(struct c300x_memo_led *led, const char *text, const char *voice);
+void c300x_memo_led_close(struct c300x_memo_led *led);
 int c300x_memo_led_present(void);
 int c300x_memo_led_watch(void);
 void c300x_memo_led_update(struct c300x_memo_led *led, int unread);

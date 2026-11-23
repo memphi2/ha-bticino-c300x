@@ -1,4 +1,5 @@
 #include "memo_led.h"
+#include "memo_led_claim.h"
 #include "memo_store.h"
 #include "json_util.h"
 #include <fcntl.h>
@@ -47,19 +48,13 @@ static int level(const char *path)
     return ok ? n : -1;
 }
 
-static int set_level(int on)
+static int manual_trigger(void)
 {
-    char brightness[PATH_MAX], path[PATH_MAX], token[128], value[32];
-    if (!attribute(brightness, sizeof(brightness), "brightness")) return 0;
-    int current = level(brightness);
-    if (current < 0) return 0;
-    if ((current != 0) == on) return 1;
-    if (!attribute(path, sizeof(path), "max_brightness")) return 0;
-    int max = level(path);
-    if (max <= 0 || !attribute(path, sizeof(path), "trigger")) return 0;
+    char path[PATH_MAX], token[128];
+    if (!attribute(path, sizeof(path), "trigger")) return -1;
     FILE *f = fopen(path, "r");
-    if (!f) return 0;
-    int manual = 0;
+    if (!f) return -1;
+    int manual = -1;
     while (fscanf(f, "%127s", token) == 1) {
         if (token[0] == '[') {
             manual = strcmp(token, "[none]") == 0;
@@ -67,7 +62,19 @@ static int set_level(int on)
         }
     }
     fclose(f);
-    if (!manual) return 0;
+    return manual;
+}
+
+static int set_level(int on)
+{
+    char brightness[PATH_MAX], path[PATH_MAX], value[32];
+    if (!attribute(brightness, sizeof(brightness), "brightness")) return 0;
+    int current = level(brightness);
+    if (current < 0) return 0;
+    if ((current != 0) == on) return 1;
+    if (!attribute(path, sizeof(path), "max_brightness")) return 0;
+    int max = level(path);
+    if (max <= 0 || manual_trigger() != 1) return 0;
     int len = snprintf(value, sizeof(value), "%d\n", on ? max : 0);
     int fd = open(brightness, O_WRONLY | O_TRUNC | O_CLOEXEC);
     if (fd < 0) return 0;
@@ -76,18 +83,48 @@ static int set_level(int on)
     return ok;
 }
 
+void c300x_memo_led_init(struct c300x_memo_led *led, const char *text, const char *voice)
+{
+    *led = (struct c300x_memo_led){.text_root = text, .voice_root = voice, .claim_dir = -1};
+    if (c300x_memo_led_present()) led->claim_dir = c300x_memo_claim_open(&led->claimed);
+}
+
+void c300x_memo_led_close(struct c300x_memo_led *led)
+{
+    c300x_memo_led_update(led, 0);
+    if (led->claim_dir >= 0) close(led->claim_dir);
+    led->claim_dir = -1;
+}
+
 void c300x_memo_led_update(struct c300x_memo_led *led, int unread)
 {
+    if (led->claim_dir < 0 || (!unread && !led->claimed && !led->release_pending)) return;
+    if (!c300x_memo_led_present()) {
+        if (led->claimed || led->release_pending) (void)c300x_memo_claim_remove(led->claim_dir);
+        led->claimed = led->release_pending = 0;
+        return;
+    }
     if (unread) {
+        if (!led->claimed && !led->release_pending && !c300x_memo_claim_create(led->claim_dir)) {
+            close(led->claim_dir);
+            led->claim_dir = -1;
+            return;
+        }
         led->claimed = 1;
         led->release_pending = 0;
         (void)set_level(1);
     } else if (led->claimed || led->release_pending) {
         led->claimed = 0;
-        int text = c300x_native_memo_unread(led->text_root);
-        int voice = c300x_native_memo_unread(led->voice_root);
-        int on = text == 1 || voice == 1;
-        led->release_pending = (!on && (text < 0 || voice < 0)) || !set_level(on);
+        led->release_pending = 1;
+        int manual = manual_trigger();
+        if (manual < 0) return;
+        if (manual) {
+            int text = c300x_native_memo_unread(led->text_root);
+            int voice = text == 1 ? 0 : c300x_native_memo_unread(led->voice_root);
+            int on = text == 1 || voice == 1;
+            if ((!on && (text < 0 || voice < 0)) || !set_level(on)) return;
+        }
+        led->release_pending = !c300x_memo_claim_remove(led->claim_dir);
     }
 }
 

@@ -1776,9 +1776,8 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
 
 static void memos_init(struct agent_runtime *runtime, const struct c300x_config *config)
 {
-    int watch = (config->memos_enabled && config->memos_watch) || c300x_memo_led_present();
-    runtime->memo_led.text_root = config->memos_text_root;
-    runtime->memo_led.voice_root = config->memos_voice_root;
+    c300x_memo_led_init(&runtime->memo_led, config->memos_text_root, config->memos_voice_root);
+    int watch = (config->memos_enabled && config->memos_watch) || runtime->memo_led.claim_dir >= 0;
     voicemail_runtime_init(
         &runtime->text_memos,
         config->memos_enabled,
@@ -5193,7 +5192,7 @@ static void api_capabilities(
     }
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
-        .memo_led_present = c300x_memo_led_present(),
+        .memo_led_present = runtime != NULL && runtime->memo_led.claim_dir >= 0,
         .picture_supported = runtime != NULL && c300x_gui_supports_picture(&runtime->ringer_control),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
@@ -9720,7 +9719,7 @@ int c300x_run(struct c300x_config *config)
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
     memos_init(runtime, config);
-    if (c300x_memo_led_present()) memo_led_fd = c300x_memo_led_watch();
+    if (runtime->memo_led.claim_dir >= 0) memo_led_fd = c300x_memo_led_watch();
     runtime->callbacks = c300x_callback_queue_create();
     if (runtime->callbacks == NULL) {
         fprintf(stderr, "fatal: callback_queue_init_failed\n");
@@ -10115,7 +10114,7 @@ int c300x_run(struct c300x_config *config)
 
 cleanup:
     if (memo_led_fd >= 0) close(memo_led_fd);
-    if (runtime) c300x_memo_led_update(&runtime->memo_led, 0);
+    if (runtime) c300x_memo_led_close(&runtime->memo_led);
     if (shutdown_requested && result == 1) {
         result = 0;
     }

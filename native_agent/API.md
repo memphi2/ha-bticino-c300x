@@ -525,6 +525,14 @@ Request fields:
 {"topic": "display_bridge.state"}
 ```
 
+For `display_bridge.state` and `notifications`, an optional boolean `unread`
+also synchronizes HA's memo LED claim, even without a display listener. The
+agent advertises `memo_led` only when it finds the LED and a usable, trusted
+volatile claim store at startup. An empty private directory on tmpfs records
+ownership across agent crashes, not device reboots. Releasing the claim
+respects the firmware LED trigger and any unread native memos. An accepted
+event is not a hardware delivery receipt.
+
 Response status: `202 Accepted` on success.
 
 ### `POST /api/v1/display/alert`

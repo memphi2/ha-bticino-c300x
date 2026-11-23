@@ -178,7 +178,8 @@ general_settings_partial_present() {
 
 home_page_feature_patch_present() {
     file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
-        || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
+        || { file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
+            && file_contains "$GUI_DIR/HomePage.qml" 'id: buttonRetryTimer'; } \
         || (
             file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
             && file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \
@@ -707,7 +708,7 @@ patch_home_page() {
             print ""
             print "    function handleMessageNotificationEvent(event) {"
             if (dynamic_home_page == "1") {
-                print "        if (event && (event.topic === \"notifications\" || event.topic === \"display_bridge.state\")) {"
+                print "        if (event && (event.missedRevisions || event.topic === \"notifications\" || event.topic === \"display_bridge.state\")) {"
                 print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
                 print "            refreshDisplayBridgeButtons()"
                 print "        }"
@@ -734,13 +735,31 @@ patch_home_page() {
             print ""
             print "    property bool alarmButtonVisible: false"
             print "    property bool haButtonVisible: false"
+            print "    property int buttonReadGeneration: 0"
+            print "    property int buttonRetries: 0"
+            print "    Timer {"
+            print "        id: buttonRetryTimer"
+            print "        repeat: false"
+            print "        onTriggered: page.refreshDisplayBridgeButtons()"
+            print "    }"
             print ""
             print "    function refreshDisplayBridgeButtons() {"
+            print "        if (!page.visible) return"
+            print "        buttonRetryTimer.stop()"
+            print "        var generation = ++page.buttonReadGeneration"
             print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable, valid) {"
-            print "            if (!valid) return"
+            print "            if (!page.visible || generation !== page.buttonReadGeneration) return"
+            print "            if (!valid) {"
+            print "                if (page.buttonRetries < 6) {"
+            print "                    buttonRetryTimer.interval = 1000 * Math.pow(2, page.buttonRetries++)"
+            print "                    buttonRetryTimer.restart()"
+            print "                }"
+            print "                return"
+            print "            }"
+            print "            page.buttonRetries = 0"
             print "            page.alarmButtonVisible = alarmConfigured"
             print "            page.haButtonVisible = dashboardAvailable"
-            print "        })"
+            print "        }, page)"
             print "    }"
         }
         function print_home_assistant_flow_item() {
@@ -842,6 +861,12 @@ patch_home_page() {
         $0 == "    property bool smallDateTimePresent: homeLinksModel.count > 0 || buttonHolder.buttonCount() > 2" {
             print "    onVisibleChanged: {"
             print "        if (!visible) {"
+            if (dynamic_home_page == "1") {
+                print "            ++page.buttonReadGeneration"
+                print "            page.buttonRetries = 0"
+                print "            buttonRetryTimer.stop()"
+                print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
+            }
             print "            stopMessageNotificationWatch()"
             print "        }"
             print "    }"

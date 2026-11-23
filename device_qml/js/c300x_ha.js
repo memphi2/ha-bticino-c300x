@@ -520,7 +520,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
     }, commandScope(pageItem, "commandGeneration"))
 }
 
-function homeButtons(callback) {
+function homeButtons(callback, owner) {
     getJsonShared("/ui/state", function(data) {
         if (callback) {
             callback(
@@ -533,7 +533,7 @@ function homeButtons(callback) {
         if (callback) {
             callback(false, false, false)
         }
-    })
+    }, owner)
 }
 
 function dashboardNextPage(statusItem, pageItem) {
@@ -1640,7 +1640,7 @@ function invalidateSharedRead(path) {
     if (forwardActive && forwardActive.sharedPath === path) forwardActive.sharedPath = ""
 }
 
-function getJsonShared(path, callback, errorCallback) {
+function getJsonShared(path, callback, errorCallback, owner) {
     // For an idempotent read only. Such a request answers every caller the
     // same way, so two pages asking for the same path at the same time share
     // one round trip instead of taking the slot twice - waking from standby
@@ -1648,25 +1648,25 @@ function getJsonShared(path, callback, errorCallback) {
     // Commands never come through here: folding two of them would execute one
     // and silently drop the other.
     if (forwardActive !== null && forwardActive.sharedPath === path) {
-        forwardActive.waiters.push({callback: callback, errorCallback: errorCallback})
+        forwardActive.waiters.push({callback: callback, errorCallback: errorCallback, owner: owner})
         return
     }
     for (var i = 0; i < forwardQueue.length; i++) {
         if (forwardQueue[i].sharedPath === path) {
-            forwardQueue[i].waiters.push({callback: callback, errorCallback: errorCallback})
+            forwardQueue[i].waiters.push({callback: callback, errorCallback: errorCallback, owner: owner})
             return
         }
     }
-    forwardRequest(path, callback, errorCallback, path)
+    forwardRequest(path, callback, errorCallback, path, null, owner)
 }
 
-function forwardRequest(path, callback, errorCallback, sharedPath, scope) {
+function forwardRequest(path, callback, errorCallback, sharedPath, scope, owner) {
     cleanupConnections()
     var entry = {
         path: path,
         scope: scope,
         sharedPath: sharedPath,
-        waiters: [{callback: callback, errorCallback: errorCallback}]
+        waiters: [{callback: callback, errorCallback: errorCallback, owner: owner}]
     }
     if (forwardActive !== null) {
         if (forwardQueue.length >= FORWARD_QUEUE_LIMIT) {
@@ -1683,6 +1683,12 @@ function forwardRequest(path, callback, errorCallback, sharedPath, scope) {
 
 function sendForward(entry) {
     if (!commandScopeCurrent(entry.scope)) return
+    if (entry.sharedPath) {
+        for (var w = entry.waiters.length - 1; w >= 0; w--) {
+            if (entry.waiters[w].owner && !entry.waiters[w].owner.visible) entry.waiters.splice(w, 1)
+        }
+        if (!entry.waiters.length) return
+    }
     if (entry.scope && Date.now() >= entry.scope.expires) {
         for (var i = 0; i < entry.waiters.length; i++) {
             try {

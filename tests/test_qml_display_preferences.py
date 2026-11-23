@@ -1,8 +1,11 @@
 """Stock-settings patch and GUI preference regressions without a device."""
 
+import re
 import shutil
 import stat
 import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 from test_qml_patch_script import (
@@ -29,7 +32,7 @@ def test_preferences_production_runtime():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("topic", ["display_bridge.state", "notifications"])
+@pytest.mark.parametrize("topic", ["display_bridge.state", "notifications", "missed"])
 def test_home_availability_event_refreshes_after_inflight_read(tmp_path, topic):
     node = shutil.which("node")
     if node is None:
@@ -62,9 +65,11 @@ for (const previous of [false, true]) {
     };
     const api = vm.createContext({XMLHttpRequest: Request});
     vm.runInContext(apiSource, api);
-    const page = {alarmButtonVisible: previous, haButtonVisible: previous};
+    const page = {visible: true, buttonReadGeneration: 0, buttonRetries: 0,
+                  alarmButtonVisible: previous, haButtonVisible: previous};
+    const buttonRetryTimer = {stop() {}, restart() { assert.fail('obsolete read scheduled retry'); }};
     let unreadRefreshes = 0;
-    const home = vm.createContext({page, HAConfig: api,
+    const home = vm.createContext({page, buttonRetryTimer, HAConfig: api,
         MemoSync: {syncHomeNotifications(owner) {
             assert.equal(owner, page);
             unreadRefreshes++;
@@ -81,7 +86,8 @@ for (const previous of [false, true]) {
     home.refreshDisplayBridgeButtons();
     home.refreshDisplayBridgeButtons();
     assert.equal(requests.length, 1);
-    home.handleMessageNotificationEvent({topic: process.argv[2]});
+    home.handleMessageNotificationEvent(process.argv[2] === 'missed'
+        ? {topic: 'media.closed', missedRevisions: true} : {topic: process.argv[2]});
     assert.equal(api.forwardQueue.length, 1, 'each availability event invalidates the pre-event read');
     home.handleMessageNotificationEvent({topic: 'notifications'});
     home.handleMessageNotificationEvent({topic: 'display_bridge.state'});
@@ -89,7 +95,11 @@ for (const previous of [false, true]) {
     home.handleMessageNotificationEvent({topic: 'answering_machine.messages'});
     assert.equal(unreadRefreshes, 2, 'memo and answering-machine refreshes are preserved');
     assert.equal(requests.length, 1, 'forwarded requests remain serialized');
-    requests[0].finish(previous);
+    // Both initial callers share the boot-time failure. Only the newer,
+    // queued post-registration snapshot may change buttons or schedule retries.
+    requests[0].readyState = 4;
+    requests[0].status = 404;
+    requests[0].onreadystatechange();
     assert.equal(requests.length, 2, 'the event must queue a fresh read after the old response');
     assert.ok(requests.every(request => request.url.endsWith('/ui/state')));
     requests[1].finish(!previous);
@@ -101,9 +111,82 @@ for (const previous of [false, true]) {
     assert.equal(unreadRefreshes, 2);
     assert.equal(api.forwardActive, null);
     assert.equal(api.forwardQueue.length, 0);
+    // Hide while a post-event refresh is queued. A HomePage-only read drops,
+    // but a shared caller from another page must still receive its answer.
+    home.refreshDisplayBridgeButtons();
+    home.handleMessageNotificationEvent({topic: 'notifications'});
+    let answered = false;
+    if (previous) api.getJsonShared('/ui/state', () => { answered = true; });
+    page.visible = false;
+    requests[2].finish(false);
+    assert.equal(requests.length, previous ? 4 : 3);
+    if (previous) { requests[3].finish(true); assert.ok(answered); }
 }
 """, str(gui), topic], capture_output=True, text=True, check=False, timeout=10)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_home_buttons_qt4_retry_without_navigation(tmp_path):
+    from scripts.setup_qt4_runtime import probe_command, runtime_paths
+
+    paths = runtime_paths()
+    if not paths:
+        pytest.skip("Local firmware Qt 4 runtime not configured")
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": "1"})
+    source = (gui / "HomePage.qml").read_text()
+    # Run the generated controls and lifecycle handler on firmware Qt without
+    # loading the hardware GUI. Only the forwarded HA request is substituted.
+    controls = re.search(r"    property bool alarmButtonVisible:.*?function refreshDisplayBridgeButtons\(\).*?^    }",
+                         source, re.S | re.M).group()
+    visibility = re.search(r"    onVisibleChanged: \{.*?^    }", source, re.S | re.M).group()
+    with tempfile.TemporaryDirectory(dir="/var/tmp") as folder:
+        qml = Path(folder) / "HomeButtons.qml"
+        (qml.parent / "mock.js").write_text("var requests = 0, reply = null\n"
+                                            "function homeButtons(cb) { requests++; reply = cb }\n"
+                                            "function invalidateSharedRead(path) {}\n")
+        qml.write_text('import QtQuick 1.1\nimport "mock.js" as HAConfig\nItem { id: page\n'
+                       + controls + "\n" + visibility + """
+    function respond(a, b, valid) { HAConfig.reply(a, b, valid) }
+    function stopMessageNotificationWatch() {}
+    function check(ok) { if (!ok) throw new Error("home recovery failed") }
+    Component.onCompleted: {
+        refreshDisplayBridgeButtons()
+        respond(false, false, false)
+        check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000)
+        // No availability event arrives. Fire the same one-shot as the Qt clock.
+        buttonRetryTimer.triggered()
+        respond(true, true, true)
+        check(HAConfig.requests === 2 && haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running)
+        refreshDisplayBridgeButtons()
+        respond(false, false, true)
+        check(!haButtonVisible && !alarmButtonVisible && !buttonRetryTimer.running)
+        refreshDisplayBridgeButtons()
+        for (var i = 0; i < 6; i++) {
+            respond(false, false, false)
+            check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000 * Math.pow(2, i))
+            buttonRetryTimer.triggered()
+        }
+        respond(false, false, false)
+        check(!buttonRetryTimer.running)
+        visible = false
+        visible = true
+        refreshDisplayBridgeButtons()
+        respond(false, false, false)
+        check(buttonRetryTimer.running)
+        visible = false
+        var count = HAConfig.requests
+        respond(true, true, true)
+        buttonRetryTimer.triggered()
+        check(!buttonRetryTimer.running && HAConfig.requests === count && !haButtonVisible)
+        console.log("QT4_HOME_BUTTON_RECOVERY_PASS")
+    }
+}
+""")
+        result = subprocess.run(probe_command(paths, qml), capture_output=True, text=True, timeout=15, check=True)
+    assert "QT4_HOME_BUTTON_RECOVERY_PASS" in result.stdout + result.stderr, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("action", ["status", "core-apply", "media-user-label-apply"])

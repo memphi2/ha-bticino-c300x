@@ -442,7 +442,7 @@ def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> No
     assert "function refreshDisplayBridgeButtons()" in home_page
     assert 'event.topic === "display_bridge.state"' in home_page
     assert "HAConfig.homeButtons" in home_page
-    assert "if (!valid) return" in home_page
+    assert "id: buttonRetryTimer" in home_page
     assert "id: homeAssistantButtonRow" not in home_page
     assert "opacity: page.alarmButtonVisible ? 1 : 0" in home_page
     assert "opacity: page.haButtonVisible ? 1 : 0" in home_page
@@ -454,6 +454,8 @@ def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> No
     assert home_page.index('objectName: "alarmButton"') < home_page.index(
         'objectName: "haButton"'
     )
+    (gui_dir / "HomePage.qml").write_text(home_page.replace("id: buttonRetryTimer", "id: oldTimer"))
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
 
 
 def test_qml_media_user_label_apply_installs_call_forwarding_label(tmp_path: Path) -> None:

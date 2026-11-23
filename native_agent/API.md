@@ -1011,26 +1011,33 @@ Missing or unknown scope does not extend GUI support beyond ring calls.
 with a percentage `value` (0 through 100 in steps of 10). Direct success returns
 source readback; legacy success returns the GUI object's values. Neither
 measures the rendered picture.
-The stock capture driver (`mxc_v4l2`) has no V4L2 control descriptors
-(`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts it only by its
-exact signature (character device 81:0 bound to `mxc_v4l2_capture`,
-`VIDIOC_QUERYCAP` driver `mxc_v4l2`, version `0x10b`, capabilities
-`0x05000005`, empty card and bus) and uses the stock firmware's fixed raw
-ranges (brightness 30-180, contrast 59-209, saturation 64-244, eleven steps).
+The source must be character device 81:0 bound to `mxc_v4l2_capture` with
+`VIDIOC_QUERYCAP` driver `mxc_v4l2` and video capture; any other device or
+driver is refused. The stock capture driver has no V4L2 control descriptors
+(`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts that only by its
+exact signature (version `0x10b`, capabilities `0x05000005`, `device_caps` 0,
+empty card and bus) and uses the stock firmware's fixed raw ranges
+(brightness 30-180, contrast 59-209, saturation 64-244, eleven steps). Any
+other `mxc_v4l2` device must expose integer descriptors that cover these
+ranges; raw control reads alone do not make it supported.
 The decoder is told by its bound I2C driver
 (`/sys/bus/i2c/drivers/adv7180/<bus>-<address>` or `.../tvp5150/...`). The
 stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
 raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
-contrast is a driver cache that stays 0 until the first write after boot, and
-such a value is reported as unavailable, not as a percentage. A read off the
-eleven steps is unavailable too. Because of that contrast cache, and because
-the driver ignores I2C write errors, a TVP5150 contrast write is always
-confirmed: it is never refused as not applied and never rolled back. Only
-brightness and saturation have a genuine read-back there. The TVP5150 driver
-queues its I2C write and returns at once, so when the read-back differs the
-agent reads again up to five times, 10 ms apart, before it reports the
-setting as not applied. Any other source must expose integer descriptors
-that cover these ranges; raw control reads alone do not make it supported.
+contrast is a driver cache that stays 0 until the first write after boot.
+Such a 0, like any read off the eleven steps, fails the whole read: all three
+controls are unavailable, and the agent refuses direct control for the rest
+of that media session (a Ring Call falls back to the GUI path). Once a
+TVP5150 contrast write ioctl succeeds, its read-back always matches, because
+it comes from that cache and the driver ignores I2C write errors; a failed
+I2C contrast write cannot be detected. Only brightness and saturation have a
+genuine read-back there. A contrast write is still answered as not applied
+and rolled back when the write ioctl fails, when a re-read (in practice of
+brightness or saturation) fails, or when the 750 ms deadline passes during
+verification.
+The TVP5150 driver queues its I2C write and returns at once, so when the
+read-back differs the agent reads again up to five times, 10 ms apart,
+before it reports the setting as not applied.
 Changes last for the current media session; the station applies its own
 values again when the next session starts. 3.0.6 and the 2.0.2 path are
 checked offline only; 1.7.19 is tested on a device.
@@ -1048,7 +1055,7 @@ Errors:
 | `405` | `method_not_allowed` | The method is neither `GET` nor `POST`. |
 | `409` | `media_busy` | The media worker is busy with another job; nothing was changed. Unlike the media actions, this route answers `409`. |
 | `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media, or the GUI answered with missing or out-of-range values. |
-| `409` | `picture_not_applied` | The source or the GUI read back a different value than the one sent. |
+| `409` | `picture_not_applied` | Direct path: the write failed, a re-read failed, the value read back differs, or the 750 ms verification deadline passed; the previous value is written back while the agent still owns the media. Legacy path: the GUI read back a different value than the one sent. |
 | `409` | `picture_gui_busy` | The GUI is still handling an earlier ringer or picture command. |
 | `500` | `ringer_gui_id_failed` | The agent could not create a command id for the GUI (reading `/dev/urandom` failed). |
 | `503` | `picture_gui_unavailable` | No GUI listener for the legacy path. |

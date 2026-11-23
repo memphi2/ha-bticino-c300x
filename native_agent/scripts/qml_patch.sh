@@ -109,6 +109,8 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MainApp.qml" 'alarmPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xDisplayPreferences' \
+        && feature_port="$(station_ui_port)" \
+        && file_contains "$GUI_DIR/MainApp.qml" "property string uiBaseUrl: \"http://127.0.0.1:$feature_port\"" \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xAlerts' \
         && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && file_contains "$GUI_DIR/Settings.qml" 'sourceUrl: "C300XSettings.qml"' \

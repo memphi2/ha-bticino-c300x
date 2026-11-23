@@ -517,6 +517,30 @@ def test_core_port_change_reapply_and_restore(tmp_path: Path, apply: str, restor
     assert not (gui / "C300XRingerControl.qml").exists()
 
 
+def test_full_apply_repairs_mixed_feature_and_core_ports(tmp_path: Path) -> None:
+    gui, backup = tmp_path / "gui", tmp_path / "backups"
+    gui.mkdir()
+    _write_original_gui(gui)
+
+    def run(action: str, port: int):
+        return _run_qml_patch(tmp_path, gui, backup, action,
+                              env_overrides={"C300X_QML_UI_PORT": str(port)})
+
+    assert run("apply", 1809)["patched"] is True
+    run("core-apply", 18090)
+    mixed = run("status", 18090)
+    assert mixed["core_patched"] is True
+    assert mixed["state"] == "partial" and mixed["patched"] is None
+
+    repaired = run("apply", 18090)
+    assert repaired["changed_files"] == 1
+    assert repaired["patched"] is True and repaired["core_patched"] is True
+    assert 'property string uiBaseUrl: "http://127.0.0.1:18090"' in (gui / "MainApp.qml").read_text()
+    _assert_media_hook_listener((gui / "EventManager.qml").read_text(), 18090)
+    assert run("status", 1809)["state"] == "partial"
+    assert run("apply", 18090)["changed_files"] == 0
+
+
 def test_qml_core_status_detects_missing_call_end_hook(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"

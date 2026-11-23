@@ -27,7 +27,7 @@
 #define C300X_MDNS_CLASS_FLUSH_IN 0x8001
 #define C300X_MDNS_FALLBACK_ID "c300x-agent"
 
-static int mdns_open_socket(void);
+static int mdns_open_socket(uint32_t *ipv4);
 static void mdns_send_response(
     struct c300x_mdns *mdns,
     const struct c300x_config *config,
@@ -120,7 +120,7 @@ void c300x_mdns_open_if_needed(
     if (mdns->fd >= 0 || mdns->next_announce_at > now) {
         return;
     }
-    mdns->fd = mdns_open_socket();
+    mdns->fd = mdns_open_socket(&mdns->ipv4);
     if (mdns->fd < 0) {
         mdns->next_announce_at = now + C300X_MDNS_ANNOUNCE_SECONDS;
         return;
@@ -232,12 +232,18 @@ void c300x_mdns_announce_if_due(
     if (mdns->fd < 0 || mdns->next_announce_at > now) {
         return;
     }
+    /* The socket stays bound to the interface address it was opened for. */
+    if (mdns_local_ipv4().s_addr != mdns->ipv4) {
+        c300x_mdns_close(mdns);
+        mdns->next_announce_at = now;
+        return;
+    }
     mdns_send_response(mdns, config, 120);
     mdns->announced = 1;
     mdns->next_announce_at = now + C300X_MDNS_ANNOUNCE_SECONDS;
 }
 
-static int mdns_open_socket(void)
+static int mdns_open_socket(uint32_t *ipv4)
 {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in bind_addr;
@@ -288,6 +294,7 @@ static int mdns_open_socket(void)
     (void)setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
     (void)setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
     mdns_set_fd_nonblocking(fd);
+    *ipv4 = local_address.s_addr;
     return fd;
 }
 

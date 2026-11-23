@@ -3,12 +3,14 @@
 
 #include "c300x_agent.h"
 
+#include <stdint.h>
 #include <time.h>
 
 struct c300x_mdns {
     int fd;
     time_t next_announce_at;
     int announced;
+    uint32_t ipv4;
     char instance_id[33];
 };
 

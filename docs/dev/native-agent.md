@@ -206,9 +206,12 @@ new IPv4 address only after an identity proof
 Limits: only entries saved with an IPv4 address move (host names and IPv6 stay),
 only to IPv4 announcements, only with a discovered station id and a token of at
 least 32 characters, at most once per entry in 10 minutes, and not if the entry
-changed while the requests ran. The agent refuses a proof with `api.noAuth=true`,
-a shorter token or a non-IPv4 connection. Otherwise the user runs
-**Reconfigure**; a DHCP reservation avoids address changes.
+changed while the requests ran. When the announced address gave no proof reply
+or the saved one still proved, HA checks the same announcement again itself, up
+to two more times, 10 minutes apart; a wrong proof is never retried, and a newer
+announcement replaces the pending check. The agent refuses a proof with
+`api.noAuth=true`, a shorter token or a non-IPv4 connection. Otherwise the user
+runs **Reconfigure**; a DHCP reservation avoids address changes.
 
 ## Display Patch
 

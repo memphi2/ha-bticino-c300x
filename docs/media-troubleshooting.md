@@ -255,9 +255,10 @@ follows it without your help:
 
 Expect up to about 15 minutes until the station announces itself, plus the
 time Home Assistant needs to pick it up; meanwhile Media readiness shows
-`unavailable`. Home Assistant tries at most once every 10 minutes per entry. A
-station that fails the proof is ignored, and the log warns that it "did not
-prove the saved identity".
+`unavailable`. Home Assistant tries at most once every 10 minutes per entry.
+When the station did not answer, Home Assistant tries again up to two more
+times, 10 minutes apart. A station that fails the proof is ignored, and the log
+warns that it "did not prove the saved identity".
 
 Enter the new address yourself with **Reconfigure** (**Settings > Devices &
 services > BTicino C300X**, entry menu) when:

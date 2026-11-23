@@ -110,6 +110,7 @@ void c300x_mdns_init(struct c300x_mdns *mdns)
     mdns->fd = -1;
     mdns->next_announce_at = 0;
     mdns->announced = 0;
+    mdns->wanted = 0;
     mdns->instance_id[0] = '\0';
 }
 
@@ -130,7 +131,8 @@ void c300x_mdns_open_if_needed(
     time_t now
 )
 {
-    if (!config->mdns_enabled || home_assistant_connected || !network_online) {
+    mdns->wanted = config->mdns_enabled && !home_assistant_connected && network_online;
+    if (!mdns->wanted) {
         c300x_mdns_close(mdns);
         return;
     }
@@ -151,9 +153,16 @@ int c300x_mdns_fd(const struct c300x_mdns *mdns)
     return mdns->fd;
 }
 
-time_t c300x_mdns_next_announce_at(const struct c300x_mdns *mdns)
+/* Also wakes the loop to retry a socket that could not be (re)opened. */
+int c300x_mdns_poll_timeout_ms(const struct c300x_mdns *mdns, time_t now)
 {
-    return mdns->next_announce_at;
+    if (!mdns->wanted) {
+        return -1;
+    }
+    if (mdns->next_announce_at <= now) {
+        return 0;
+    }
+    return mdns->next_announce_at - now > 3600 ? 3600000 : (int)((mdns->next_announce_at - now) * 1000);
 }
 
 static int mdns_read_name(const unsigned char *packet, size_t size, size_t *offset,

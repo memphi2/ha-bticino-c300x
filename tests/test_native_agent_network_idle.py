@@ -52,8 +52,8 @@ def test_mdns_is_disabled_while_network_is_offline() -> None:
     text = (ROOT / "native_agent" / "src" / "mdns.c").read_text(encoding="utf-8")
     body = _function_body(text, "void", "c300x_mdns_open_if_needed")
 
-    assert "!config->mdns_enabled || home_assistant_connected || !network_online" in body
-    assert body.index("!network_online") < body.index("mdns_open_socket")
+    assert "config->mdns_enabled && !home_assistant_connected && network_online" in body
+    assert body.index("if (!mdns->wanted)") < body.index("mdns_open_socket")
 
 
 def test_mdns_restart_changes_only_service_txt(tmp_path: Path) -> None:

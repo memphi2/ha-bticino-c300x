@@ -384,7 +384,6 @@ static int system_metrics_monitor_active(const struct c300x_config *config);
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
 static int local_network_online(void);
-static int timeout_until_ms(time_t now, time_t due);
 static int min_timeout_ms(int current, int candidate);
 static void system_metrics_dispatch_now(
     const struct c300x_config *config,
@@ -4335,17 +4334,6 @@ static int system_metrics_watch_active(
 static int system_metrics_monitor_active(const struct c300x_config *config)
 {
     return config->system_metrics_enabled && config->system_metrics_watch;
-}
-
-static int timeout_until_ms(time_t now, time_t due)
-{
-    if (due <= now) {
-        return 0;
-    }
-    if (due - now > 3600) {
-        return 3600000;
-    }
-    return (int)((due - now) * 1000);
 }
 
 static int min_timeout_ms(int current, int candidate)
@@ -9907,11 +9895,8 @@ int c300x_run(struct c300x_config *config)
             poll_fds[poll_count].events = POLLIN;
             poll_fds[poll_count].revents = 0;
             poll_count++;
-            poll_timeout_ms = min_timeout_ms(
-                poll_timeout_ms,
-                timeout_until_ms(now, c300x_mdns_next_announce_at(&mdns))
-            );
         }
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms, c300x_mdns_poll_timeout_ms(&mdns, now));
         if (c300x_mqtt_fd(&runtime->mqtt) >= 0) {
             mqtt_poll_index = (int)poll_count;
             poll_fds[poll_count].fd = c300x_mqtt_fd(&runtime->mqtt);

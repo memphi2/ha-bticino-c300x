@@ -5729,6 +5729,7 @@ static void handle_doorbell_call_get(
     int answered = 0, hangup = 0;
     int can_answer = 0;
     int can_hangup = 0;
+    int talkback_ready = 0;
     int bridge_open_fds = 0;
     int bridge_active_threads = 0;
     char media_owner_json[C300X_JSON_QUOTED_LEN(32)];
@@ -5747,6 +5748,7 @@ static void handle_doorbell_call_get(
         answered = video_status.ring_answered; hangup = video_status.ring_hangup_requested;
         can_answer = video_status.ring_call_active && !video_status.ring_answered;
         can_hangup = video_status.ring_call_active || video_status.ring_media_active;
+        talkback_ready = c300x_media_ring_talkback_peer_ready(runtime->video, client_fd);
         bridge_open_fds = video_status.bridge_open_fds;
         bridge_active_threads = video_status.bridge_active_threads;
         c300x_json_string(video_status.media_owner, media_owner_json, sizeof(media_owner_json));
@@ -5770,6 +5772,7 @@ static void handle_doorbell_call_get(
         "\"answered\":%s,\"hangup_requested\":%s,"
         "\"can_answer\":%s,"
         "\"can_hangup\":%s,"
+        "\"talkback_ready\":%s,"
         "\"media_owner\":%s,"
         "\"ring_receiver_running\":%s,"
         "\"ring_registered\":%s,"
@@ -5786,6 +5789,7 @@ static void handle_doorbell_call_get(
         answered ? "true" : "false", hangup ? "true" : "false",
         can_answer ? "true" : "false",
         can_hangup ? "true" : "false",
+        talkback_ready ? "true" : "false",
         media_owner_json,
         ring_receiver_running ? "true" : "false",
         ring_registered ? "true" : "false",

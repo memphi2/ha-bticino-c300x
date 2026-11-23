@@ -20,6 +20,8 @@ enum fault { NONE, OPEN_FAIL, REGULAR, OTHER_MINOR, OTHER_DRIVER, OTHER_CAP_DRIV
 static enum fault fault;
 /* stock: the mxc_v4l2 signature without descriptors; decoder: the bound I2C driver. */
 static int opens, closes, queries, reads, writes, flags, owner, raw[3], stock, i2c_fail, dirs;
+/* tvp5150: s_ctrl queues the I2C write; it lands after the first read-back pass. */
+static int queued = -1, queued_i, queued_after;
 static const char *decoder;
 static long long now;
 long long c300x_monotonic_ms(void) { return now; }
@@ -32,6 +34,7 @@ static void reset(enum fault f)
     now = 1000;
     raw[0] = 105; raw[1] = 134; raw[2] = 154;
     stock = i2c_fail = dirs = 0;
+    queued = -1;
     decoder = NULL;
 }
 
@@ -130,6 +133,7 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
     assert(i < 3);
     if (cmd == VIDIOC_G_CTRL) {
         assert(i == (unsigned)reads++ % 3);
+        if (queued >= 0 && reads > queued_after) { raw[queued_i] = queued; queued = -1; }
         if ((fault == READ_FAIL && reads == 3) || (fault == READBACK_FAIL && reads == 6)) return -1;
         c->value = raw[i] + (fault == OFF_GRID && i == 2);
         if (i2c_fail && reads == i2c_fail) c->value = -1;
@@ -145,7 +149,9 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
     assert(cmd == VIDIOC_S_CTRL && queries == 3 && (writes++ ? writes == 2 : reads == 3));
     assert((flags & O_ACCMODE) == O_RDWR);
     if (fault == WRITE_FAIL && writes == 1) return -1;
-    if (fault != NOT_CHANGED)
+    if (fault == NONE && stock && writes == 1 && decoder && !strcmp(decoder, "tvp5150")) {
+        queued = c->value; queued_i = (int)i; queued_after = reads + 3;
+    } else if (fault != NOT_CHANGED)
         raw[i] = c->value ^ (stock && i == 0 && decoder && !strcmp(decoder, "adv7180") ? 0x80 : 0);
     return 0;
 }
@@ -233,6 +239,15 @@ int main(void)
             }
         }
     }
+    for (int i = 0; i < 3; i++) {
+        reset_stock("tvp5150");
+        assert(run(PICTURE_BRIGHTNESS + i, 100, out) == PICTURE_SOURCE_OK);
+        assert(out[i] == 100 && raw[i] == first[i] + 10 * step[i] && writes == 1 && reads == 9);
+    }
+    reset_stock("tvp5150");
+    fault = NOT_CHANGED; /* A write that never lands: bounded retries, then put back. */
+    assert(run(PICTURE_BRIGHTNESS, 100, out) == PICTURE_SOURCE_NOT_APPLIED);
+    assert(raw[0] == 90 && writes == 2 && reads == 21);
     reset_stock("adv7180");
     decoder = NULL; /* Unbound: the register 218 is taken as is, off the range, never snapped. */
     assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_UNAVAILABLE);

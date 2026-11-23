@@ -140,8 +140,15 @@ enum picture_source_result picture_source_execute(const struct picture_command *
         if (!current(deadline, active, ctx)) goto done;
         result = PICTURE_SOURCE_NOT_APPLIED;
         int confirmed = !ioctl(fd, VIDIOC_S_CTRL, &c);
-        for (int i = 0; confirmed && i < 3; i++)
-            confirmed = current(deadline, active, ctx) && read_percent(fd, i, source, flip, &observed[i], &raw[i]);
+        /* tvp5150 s_ctrl only queues the I2C write: give it up to 5 x 10 ms to land. */
+        for (int retries = -1;; ) {
+            for (int i = 0; confirmed && i < 3; i++)
+                confirmed = current(deadline, active, ctx) && read_percent(fd, i, source, flip, &observed[i], &raw[i]);
+            if (!confirmed || raw[index] == target) break;
+            if (retries < 0) retries = decoder_bound("tvp5150") ? 5 : 0;
+            if (!retries--) break;
+            nanosleep(&(struct timespec){.tv_nsec = 10000000}, NULL);
+        }
         if (!confirmed || raw[index] != target) {
             /* Do not leave a value the caller is told was not applied: one
              * write back while the media is ours, even past the deadline. */

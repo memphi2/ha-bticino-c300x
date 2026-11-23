@@ -1,4 +1,4 @@
-# Local self-assessment, reviewed 2026-11-16; not an official HA tier.
+# Local self-assessment, reviewed 2026-11-23; not an official HA tier.
 # Per-rule evidence and open work: docs/dev/quality-scale.md.
 rules:
   action-setup: done

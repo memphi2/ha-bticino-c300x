@@ -33,6 +33,7 @@ PACKAGE_METADATA = (
     "docs/c100x-experimental.md",
     "docs/c100x-display-parity.md",
     "docs/c100x-field-report.md",
+    "docs/c100x-audio-analysis.md",
 )
 
 

@@ -139,7 +139,7 @@ def test_test_instructions_ship_with_the_local_package(monkeypatch, tmp_path):
     builder = importlib.import_module("build_hacs_release")
     monkeypatch.setattr(builder, "PACKAGE_ROOT", tmp_path)
     builder._copy_package_metadata()
-    for name in ("test-release", "experimental", "display-parity", "field-report"):
+    for name in ("test-release", "experimental", "display-parity", "field-report", "audio-analysis"):
         relative = f"docs/c100x-{name}.md"
         assert (tmp_path / relative).read_bytes() == (ROOT / relative).read_bytes()
 
@@ -167,6 +167,7 @@ def test_complete_archive_contains_current_card_and_device_assets(monkeypatch, t
         assert zipped.read("device_agent/armhf/c300x-agent-native") == binary.read_bytes()
         assert zipped.read("device_agent/qml/c100x_bundle.sh")
         assert zipped.read("docs/c100x-test-release.md") == (ROOT / "docs/c100x-test-release.md").read_bytes()
+        assert zipped.read("docs/c100x-audio-analysis.md") == (ROOT / "docs/c100x-audio-analysis.md").read_bytes()
         manifest = json.loads(zipped.read("device_agent/bundle.json"))
         assert manifest["c100x_only"] is True
         for item in manifest["files"]:

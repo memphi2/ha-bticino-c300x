@@ -25,6 +25,9 @@ gate.
 - Avoid sharing debug logs, diagnostics, screenshots, or packet captures without
   reviewing them for private hosts and local identifiers.
 
+Maintenance steps for keys, noAuth and SSH are in
+[Tokens and Access](docs/advanced-maintenance.md#tokens-and-access).
+
 ## Home Assistant Service Permissions
 
 Calls with a Home Assistant user context are checked before sending device
@@ -46,8 +49,9 @@ needs no login. It is signed with the entry's shared secret, serves only
 entities placed on the display pages while the entry is loaded and the display
 feature is on, and is sent to the device over the same connection as the other
 display data. The address does not expire and is served by Home Assistant's
-own web server, so it works from wherever Home Assistant can be reached. Do not place a camera on the display
-pages whose picture must not be readable on the local network.
+own web server, so it works from wherever Home Assistant can be reached. Do not
+place a camera on the display pages whose picture must not be readable on the
+local network.
 
 ## Stored Media Access
 
@@ -58,8 +62,8 @@ is separate from the service permissions above: playback does not authorize
 recording, deletion or device control.
 
 The integration's snapshot-image endpoint does check camera read permission.
-The media-history and visitor-journal metadata and playback endpoints use that
-same permission decision and isolate entries. History clip links do not change permissions on
+The media-history metadata and playback endpoints use that same permission
+decision and isolate entries. History clip links do not change permissions on
 the existing shared Ring Capture endpoint or the standard HA media browser.
 However, copies in HA's standard local-media directory follow HA media access
 rules, independently of camera permissions. Neither hiding an entity nor
@@ -73,6 +77,16 @@ to another path on the same origin. Connection changes are checked against the
 entry's confirmed device identity; discovery identity adoption verifies the
 saved endpoint instead of trusting an mDNS identifier alone.
 
+`POST /api/v1/identity/proof` needs no authentication, so that Home Assistant
+can follow the station to a new IPv4 address without sending the token there.
+It reveals only the device id and an HMAC-SHA256, keyed with the API token,
+over that id, the address and port the request arrived on, and a fresh nonce
+from Home Assistant. It never returns the token, and the address binding means
+a relay gets a proof for the station's address, not for its own. The route is
+disabled while `api.noAuth` is on and for API tokens shorter than 32
+characters, which a single proof would expose to offline guessing. See
+[Station Changed Its Address](docs/media-troubleshooting.md#station-changed-its-address).
+
 Home Assistant stores the configured agent token, maintenance token, webhook id,
 and webhook secret in its config entry storage. The native agent stores its
 local API token and maintenance token in its local JSON config unless the API
@@ -81,9 +95,9 @@ token is supplied through the `C300X_AGENT_TOKEN` environment variable.
 The setup page and diagnostics only report whether tokens are configured. They
 do not echo token values back.
 
-Reconfigure and options forms leave saved access and maintenance keys blank.
-Leaving a key field empty keeps the stored key; entering a value replaces it.
-These forms cannot remove a stored maintenance key.
+Reconfigure and options forms never display saved access and maintenance keys;
+an empty key field keeps the stored key. Changing keys:
+[Tokens and Access](docs/advanced-maintenance.md#tokens-and-access).
 
 ### RTSP Access
 
@@ -110,13 +124,12 @@ without its own played RTSP connection is not admitted.
 
 ## Legacy SSH Bootstrap
 
-First installation and explicit SSH recovery use
-`asyncssh==2.24.1`. Home Assistant installs it on demand; it is not a mandatory
-manifest requirement or bundled Python package. Paramiko is no longer imported,
-requested or pinned by this project. Its former advisory
+First installation and explicit SSH recovery use `asyncssh==2.24.1`. Home
+Assistant installs it on demand; it is not a mandatory manifest requirement or
+bundled Python package. The project does not import, request or pin Paramiko,
+which addresses its advisory
 [GHSA-r374-rxx8-8654 / CVE-2026-44405](https://github.com/advisories/GHSA-r374-rxx8-8654)
-is addressed by removing that dependency, not by hiding the scanner result.
-Older releases keep their original dependency and limitations.
+by removing that dependency, not by hiding the scanner result.
 
 ### LEGACY-SSH-001: RSA/SHA-1 During Bootstrap
 
@@ -152,51 +165,16 @@ Repeated reports of this exact device-protocol limitation should reference
 `LEGACY-SSH-001` instead of removing required interoperability or filing a
 duplicate fix. New memory-safety, credential-leak, authentication-bypass or update
 validation bugs are not covered. Do not dismiss findings based on a package name
-or reporter. Leave Dependabot alerts and security-update PRs enabled.
-
-## Dependency Update Coverage
-
-Normal GitHub Actions and Python tool updates are grouped quarterly, with at
-most one open version-update PR per ecosystem. Python major-version changes
-remain manual compatibility work. The groups explicitly apply only to version
-updates: security-update PRs do not wait for the quarterly schedule and use
-GitHub's separate security PR limit.
-
-The HA versions used in CI live in separate
-`requirements/ha-min/requirements.txt` and
-`requirements/ha-current/requirements.txt` manifests. Validate and Release
-install those exact manifests together with their corresponding direct tool
-pins. Neither HA target is excluded from its Dependabot entry. Routine HA
-version updates remain manual; `open-pull-requests-limit: 0` does not disable
-security-update PRs.
-
-Dependabot alerts and automatic security-update PRs must be enabled in the
-repository settings. A local configuration change cannot enable those settings.
-Alerts, security-update PRs and normal version-update schedules are distinct;
-an ignored update version does not suppress the advisory itself.
-
-There is no longer a package-specific SSH dependency ignore range. AsyncSSH
-updates follow the normal policy and require legacy-device compatibility tests.
-The minimum-HA **tool** file is maintained manually and excluded
-from automatic updates; that exception does not cover the minimum HA manifest.
-
-`requirements-dev.txt` and `requirements-dev-min-ha.txt` contain direct tools,
-not generated transitive lockfiles. Do not restore a matching `.in` file:
-Dependabot would treat the pair as pip-compile input/output and regenerate the
-transitive pins. `scripts/check_dependency_updates.py` checks parsed YAML,
-manifest contents and CI wiring, including forbidden coverage restrictions.
-Security PRs are not auto-merged; align `project-versions.json` and compatibility
-metadata with a changed HA pin and pass both validation targets before merging.
-
-See the [Dependabot configuration reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
+or reporter. Leave Dependabot alerts and security-update PRs enabled; how
+dependency updates are grouped and validated is described in
+[Release Validation](docs/dev/release-validation.md).
 
 ## Accepted Local-Only Security Exceptions
 
 The following narrowly scoped exceptions remain:
 
 - Bootstrap host-key validation and legacy algorithms: see `LEGACY-SSH-001`
-  above. The former Paramiko-specific source suppression has been removed
-  together with that client; the device-side limitation remains explicit.
+  above.
 - CodeQL `cpp/cleartext-transmission`: the native MQTT bridge uses the device's
   local MQTT transport model. TLS is not available on this device-side path, so
   MQTT must stay on a trusted local network and must not be exposed externally.
@@ -212,31 +190,21 @@ These exceptions do not apply to internet-exposed deployments. Do not expose
 SSH, MQTT, native-agent HTTP, RTSP, WebRTC, or Home Assistant callback surfaces
 outside the trusted local network.
 
-Reassess the SSH exception when changing the installer, its dependency pin, or
-device compatibility, and whenever a relevant advisory appears. A newer library
-must pass the legacy-device interoperability checks before replacing the pin.
-An accepted exception is not evidence that a dependency has no vulnerabilities;
-the release SBOM records the optional installer dependency separately.
+A newer SSH library must pass the legacy-device interoperability checks before
+replacing the pin. An accepted exception is not evidence that a dependency has
+no vulnerabilities; the release SBOM records the optional installer dependency
+separately.
 
 ## Availability Limits
 
-Incoming HTTP requests have bounded buffers, a total receive deadline and a
-bounded pending-client pool.
-HTTP response bodies may be up to 1200 KiB, the size of the largest visitor
-image, and all queued HTTP output together is limited to 1712 KiB, with at most
-eight waiting connections. A queued response ends after two seconds without
-progress and after ten seconds in any case. When that budget is exhausted, further output is rejected rather
-than blocking the device loop or growing the queue.
-Event delivery has one worker and a bounded queue; overflow and failed delivery
-are not reported as successful callbacks. Home
-Assistant media downloads, conversions and cache retention have explicit limits.
-Display forwarding uses a separate worker with at most one outstanding request,
-leaving the HTTP loop available for nested HA commands. It does not retry or
-queue additional physical actions. A callback timeout is not proof that a
-downstream physical action did not execute.
-These controls reduce resource-exhaustion risk but do not replace authentication,
-network isolation, or timely dependency review. They add no persistent packet
-capture or additional device polling.
+The agent and the integration bound their request buffers, queues, timeouts,
+response sizes and media downloads and conversions. Excess load is rejected
+instead of blocking the device or growing without limit, and failed or dropped
+event deliveries are not reported as successful. Display actions are not
+retried or queued, and a callback timeout is not proof that a physical action
+did not run. These limits reduce resource-exhaustion risk but do not replace
+authentication, network isolation or timely dependency review. The exact
+limits are in [Architecture](docs/dev/architecture.md#resource-limits).
 
 ## Maintenance Surface
 

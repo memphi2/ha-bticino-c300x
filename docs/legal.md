@@ -41,19 +41,29 @@ cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
 
 ## No firmware or APK payloads
 
-Documentation display illustrations under `docs/images/readme/` are based on
-maintainer-provided device photographs and direct display captures. The
-`-en.webp` examples use AI-assisted English localization and color matching;
-photographs also use display-only crops and perspective correction. They are
-not pixel-exact captures or extracted firmware assets. Their values are examples.
-Eight of them (`display-start-en`, `-general-en`, `-more-en`, `-camera-en`,
-`-appointments-en`, `-energy-flow-en`, `-energy-power-en`,
-`-energy-consumers-en`) are read-only
-captures of the display framebuffer of the maintainer's C300X on 2026-11-20.
-Their German texts were replaced by the display's English texts, and private
-content by examples: appointments and consumer names are example text, and
-the two camera pictures are AI-generated views of an entrance and a garden,
-supplied by the maintainer, cropped and softened.
+Documentation illustrations under `docs/images/readme/` come from the
+maintainer's own C300X and Home Assistant test instance. None of them are
+extracted firmware assets, and their values are examples.
+
+- `display-lights-en`, `-light-detail-en` and `-media-player-en` are device
+  photographs with AI-assisted English localization and color matching,
+  display-only crops and perspective correction. They are not pixel-exact.
+- `display-start-en`, `-general-en`, `-more-en`, `-camera-en`,
+  `-appointments-en`, `-energy-flow-en`, `-energy-power-en` and
+  `-energy-consumers-en` are read-only captures of the display framebuffer
+  from 2026-11-20. Their German texts were replaced by the display's English
+  texts, and private content by examples: appointments and consumer names are
+  example text, and the two camera pictures are AI-generated views of an
+  entrance and a garden, supplied by the maintainer, cropped and softened.
+- `display-c300x-dashboard-en`, `-alarmo-en`, `-settings-home-assistant-en`
+  and `-settings-tone-buttons-en` are read-only framebuffer captures from
+  2026-11-23, taken with the station set to English and left unchanged.
+- The `ha-*-en` images are browser captures of the Home Assistant test
+  instance from 2026-11-23, in English and dark mode. The picture in the
+  doorbell card is an earlier visitor image from the maintainer's own station,
+  the camera thumbnail in the sensor list was replaced by an icon, and the
+  connection-path field in the video and audio settings shows its default.
+
 Depicted product interfaces and names do not imply vendor affiliation.
 
 The repository must not contain:
@@ -100,5 +110,5 @@ common firmware/archive payloads, foreign runtime directories, tracked stock QML
 pages, private values, and third-party reference markers in runtime code.
 
 The current local provenance evidence is retained under
-[docs/audits/current-legal-provenance.md](audits/current-legal-provenance.md).
+[docs/dev/audits/current-legal-provenance.md](dev/audits/current-legal-provenance.md).
 That file is a technical audit snapshot, not a live legal opinion.

@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.8.2`
+- Current agent version: `2.9.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -1200,7 +1200,7 @@ Validation examples:
 ## Maintenance Actions
 
 Execution is hybrid; **not every operation is off the HTTP loop yet** (see
-`docs/native-http-blocking-inventory.md`). QML status/patch, GUI reload, the read-only device-user
+[Remaining Blocking Work](../docs/dev/architecture.md#remaining-blocking-work)). QML status/patch, GUI reload, the read-only device-user
 status script, SSH probe/start/stop and SSH-before-reboot/removal share one
 asynchronous job slot. Connections stay open until the existing response
 boundary; no new job ID, queue or early-success response is introduced.
@@ -1240,8 +1240,8 @@ or advancing another phase, but cannot reach that cleanup during a synchronous
 label transaction. Existing QML-write job cancellation is unchanged, not newly
 certified as transaction-safe by the label-write fix.
 
-See [HTTP maintenance ownership](../docs/native-http-maintenance.md) and the
-[remaining blocking-path inventory](../docs/native-http-blocking-inventory.md).
+See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
+[remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).
 
 All endpoints in this section require maintenance authorization. Mutating
 endpoints require exact confirmation tokens so accidental browser/script calls
@@ -1744,7 +1744,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.8.2` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `2.9.0` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
 config and is `unknown` when that value is empty, which is what the installer
 writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,

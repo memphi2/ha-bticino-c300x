@@ -88,8 +88,7 @@ check compares, so a display-only change is delivered to the device on the
 verified agent and does not require a version bump.
 
 Prepare a new version and its dated notes only when that release is intended.
-Creating a development branch does not publish a release. Version 2.3.0 is the
-direct stable successor to 2.1.3; 2.2.0 is withdrawn and is not an upgrade step.
+Creating a development branch does not publish a release.
 
 ## Isolated Integration Tests
 
@@ -253,10 +252,11 @@ the optional firmware-specific tests.
 
 ## Display Bundle Upgrade Tests
 
-File-set 6 adds `C300XChecks.qml`, `C300XSituations.qml` and
-`C300XOptionalPages.qml`. Both the staged manifest and the native capability
-must advertise 6: a file-set-5 updater cannot install these paths and needs
-the HA repair's second pass before the active display is patched or reloaded.
+The staged manifest (`update_file_set_version`) and the agent capability
+(`self_update_file_set_version`) must advertise the same update file set, today
+6. An installed updater with a lower file set cannot install the new paths; the
+HA Repair then runs its second pass before the active display is patched or
+reloaded.
 
 `tests/test_agent_update_display_bootstrap.py` compiles the unchanged updater
 from `e1192c7f4abfaad508f46a9add6402a5eb530856` and starts with its actual
@@ -269,13 +269,13 @@ Every generated source is compared with the package, then `restore-all` must
 recover the original GUI. The separate legacy-bootstrap test retains the inert
 Distribution input required by file-set 4; it must not become an active view.
 
-Local compile-only evidence (2026-11-16): the three new components compiled
-unchanged under QEMU ARM against the private firmware 1.7.19 Qt 4.8.7 libraries
-and stock Styles module (`compile_failed=0`). `C300XLeaveHome.qml` and the full
-`HomeAssistant.qml` also compiled with stock QML dependencies and an import-only
-`BtObjects` placeholder. The probe did not instantiate or render the GUI, execute
-the vendor plugin, or test device startup/reboot behavior. This is separate from
-the Qt6-adapted layout checks and is not hardware validation.
+After every display change, run the compile-only probe
+(`C300X_QT4_COMPILE_PROBE`, `C300X_QT4_COMPILE_IMPORTS`): it compiles the
+display components under QEMU ARM against the private firmware 1.7.19 Qt 4.8.7
+libraries and stock Styles module, with an import-only `BtObjects` placeholder,
+and must report `compile_failed=0`. It does not instantiate or render the GUI,
+execute the vendor plugin, or test device startup/reboot behaviour; it is
+separate from the Qt 6 layout checks and is not hardware validation.
 
 ## Clean Install Path
 
@@ -508,6 +508,42 @@ publication. It never replaces conflicting assets or an existing published
 release. An interrupted metadata upload can require manual cleanup of the
 unpublished draft before retrying.
 
+## Dependency Update Coverage
+
+Normal GitHub Actions and Python tool updates are grouped quarterly, with at
+most one open version-update PR per ecosystem. Python major-version changes
+remain manual compatibility work. The groups apply only to version updates:
+security-update PRs do not wait for the quarterly schedule and use GitHub's
+separate security PR limit.
+
+The HA versions used in CI live in separate
+`requirements/ha-min/requirements.txt` and
+`requirements/ha-current/requirements.txt` manifests. Validate and Release
+install those exact manifests together with their direct tool pins. Neither HA
+target is excluded from its Dependabot entry. Routine HA version updates remain
+manual; `open-pull-requests-limit: 0` does not disable security-update PRs.
+
+Dependabot alerts and automatic security-update PRs must be enabled in the
+repository settings; a local configuration change cannot enable them. Alerts,
+security-update PRs and version-update schedules are distinct; an ignored update
+version does not suppress the advisory itself.
+
+There is no package-specific SSH dependency ignore range. AsyncSSH updates
+follow the normal policy and require legacy-device compatibility tests. The
+minimum-HA **tool** file is maintained manually and excluded from automatic
+updates; that exception does not cover the minimum HA manifest.
+
+`requirements-dev.txt` and `requirements-dev-min-ha.txt` contain direct tools,
+not generated transitive lockfiles. Do not restore a matching `.in` file:
+Dependabot would treat the pair as pip-compile input/output and regenerate the
+transitive pins. `scripts/check_dependency_updates.py` checks parsed YAML,
+manifest contents and CI wiring, including forbidden coverage restrictions.
+Security PRs are not auto-merged; align `project-versions.json` and
+compatibility metadata with a changed HA pin and pass both validation targets
+before merging.
+
+See the [Dependabot configuration reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
+
 ## Legal and Provenance Audit
 
 Run the focused legal/provenance gate before each release:
@@ -535,3 +571,23 @@ Do not commit:
 
 Keep release screenshots free of private addresses, tokens, faces and household
 details.
+
+### Public Content Audit
+
+Maintainers can run `python scripts/audit_github_privacy.py --file <local-file>`
+for offline triage, or explicitly opt into read-only GitHub access with
+`--repository <owner>/<repo> --allow-network`. The latter inspects release
+metadata/assets, issue/PR text, comments and reviews. It can use `GH_TOKEN` for
+GitHub API authentication; that credential is not forwarded to asset redirects.
+Nothing is uploaded, edited, commented on, closed or deleted.
+
+Reports contain numbered source identifiers and finding categories, not matched
+text, private paths or credentials. JSON `complete: false` and exit status 2 mean
+the audit could not finish, including size, request or pagination limits. Exit 1
+means possible findings; exit 0 means no matches within the stated scope.
+
+Archive inspection never extracts files and enforces member, byte and download
+limits. These are heuristic warnings requiring manual review, not proof that
+content is private, safe or legally cleared. Images are not OCR-scanned; linked
+attachments, Git history and discussions are outside the audit's scope. The
+tool is not run automatically against GitHub by CI or the integration.

@@ -197,8 +197,8 @@ def test_cli_reports_success_or_structural_failure_without_traceback(checker, tm
     quality = tmp_path / "custom_components/bticino_c300x/quality_scale.yaml"
     quality.parent.mkdir(parents=True)
     quality.write_text(checker.QUALITY_SCALE.read_text() if valid else "rules: [", encoding="utf-8")
-    docs = tmp_path / "docs/quality-scale.md"
-    docs.parent.mkdir()
+    docs = tmp_path / "docs/dev/quality-scale.md"
+    docs.parent.mkdir(parents=True)
     docs.write_text(checker.QUALITY_DOC.read_text(), encoding="utf-8")
     result = subprocess.run([sys.executable, str(scripts / SCRIPT.name)], capture_output=True, text=True, timeout=10)
     assert result.returncode == (0 if valid else 1), result.stdout + result.stderr

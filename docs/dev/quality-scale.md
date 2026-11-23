@@ -5,7 +5,7 @@ Reviewed: 2026-11-23
 This is a **local self-assessment of a custom integration**, not an official
 Home Assistant tier or certification. Platinum remains a development goal, not
 an achieved rating. Open requirements exist at several tiers, including Bronze.
-The [tracking file](../custom_components/bticino_c300x/quality_scale.yaml) records
+The [tracking file](../../custom_components/bticino_c300x/quality_scale.yaml) records
 all 54 currently published rules. The checker validates that tracking and this
 audit agree; it cannot award a tier or prove implementation correctness.
 
@@ -30,7 +30,7 @@ Two coverage requirements must not be conflated:
 
 No full-suite coverage run was performed for this audit. Existing `.coverage`
 files, earlier full runs and historical release reports are **not current-source
-proof**. The local [coverage gate](../scripts/check_coverage.py) enforces an
+proof**. The local [coverage gate](../../scripts/check_coverage.py) enforces an
 aggregate 95% floor, not an official HA tier requirement. Both coverage rules
 stay TODO pending a fresh per-module report after all concurrent reviews.
 Code references below are inspection
@@ -45,8 +45,8 @@ establish acceptance into the Home Assistant brands repository.
 ## Rule Audit
 
 Module names below are relative to
-[`custom_components/bticino_c300x`](../custom_components/bticino_c300x/);
-test names are relative to [`tests`](../tests/). `todo` identifies a specific
+[`custom_components/bticino_c300x`](../../custom_components/bticino_c300x/);
+test names are relative to [`tests`](../../tests/). `todo` identifies a specific
 rule mismatch or missing evidence, not necessarily a runtime defect.
 
 | Rule | Tier | Status | Evidence / Remaining Work |
@@ -58,12 +58,12 @@ rule mismatch or missing evidence, not necessarily a runtime defect.
 | `config-flow-test-coverage` | Bronze | todo | `test_config_flow_helpers.py`, `test_config_flow_forms.py`, optional-page/activation/energy tests and `test_schema_runtime.py` exercise many paths. No current 100% report or complete error-to-success/unique-ID audit is available. Re-measure the flow and extracted helpers after reviews. |
 | `config-flow` | Bronze | done | Manifest enables the UI flow; `config_flow.py`, form helpers and `strings.json` provide setup, options, field help and reconfigure. `test_config_flow_helpers.py`, `test_translations.py`, `test_schema_runtime.py`. Separate validation/reauth rules are not implied. |
 | `dependency-transparency` | Bronze | todo | `device_installer.py:INSTALLER_REQUIREMENTS` pins optional `asyncssh==2.24.1` despite empty manifest requirements. [Provenance audit](audits/current-legal-provenance.md) discloses it; `test_device_ssh.py` checks use. Record the exact dependency release tag and public build/publish workflow before claiming this rule. |
-| `docs-actions` | Bronze | done | [Service reference](feature-reference.md#service-reference), [display notifications](feature-reference.md#display-notifications) and [blueprints](blueprints.md) describe commands and inputs. `services.yaml`, `test_services_metadata.py` provide the inventory. |
+| `docs-actions` | Bronze | done | [Service reference](../feature-reference.md#services), [display notifications](../display.md#display-notifications) and [blueprints](../user-guide.md#blueprints) describe commands and inputs. `services.yaml`, `test_services_metadata.py` provide the inventory. |
 | `docs-conditions` | Bronze | exempt | No custom condition platform or `conditions.yaml` exists. HA state/template conditions in blueprints are built-ins, not a C300X condition API. See the official exception below. |
-| `docs-high-level-description` | Bronze | done | [README](../README.md) and [user guide](user-guide.md) identify the Classe 300X, the unofficial integration and its purpose. |
-| `docs-installation-instructions` | Bronze | done | [Quickstart](quickstart.md) covers prerequisites, Marketplace/HACS, address entry, explicit bootstrap installation and first-use checks. Field completeness is separate below. |
-| `docs-removal-instructions` | Bronze | done | [HA removal guide](advanced-maintenance.md#remove-home-assistant-integration) separates entry/package/device removal and explains retained media, config and backups; Quickstart links it. Official HA/HACS steps checked 2026-11-16; `test_user_documentation.py` guards scope/warnings and links, `test_init_runtime.py` / `test_runtime_data.py` cover cleanup behavior. |
-| `docs-triggers` | Bronze | exempt | No custom trigger platform or `triggers.yaml` exists. `event.py` and bundled blueprints use standard event/state triggers; [blueprints](blueprints.md) explains those workflows. See the official exception below. |
+| `docs-high-level-description` | Bronze | done | [README](../../README.md) and [user guide](../user-guide.md) identify the Classe 300X, the unofficial integration and its purpose. |
+| `docs-installation-instructions` | Bronze | done | [Quickstart](../quickstart.md) covers prerequisites, Marketplace/HACS, address entry, explicit bootstrap installation and first-use checks. Field completeness is separate below. |
+| `docs-removal-instructions` | Bronze | done | [HA removal guide](../advanced-maintenance.md#remove-home-assistant-integration) separates entry/package/device removal and explains retained media, config and backups; Quickstart links it. Official HA/HACS steps checked 2026-11-16; `test_user_documentation.py` guards scope/warnings and links, `test_init_runtime.py` / `test_runtime_data.py` cover cleanup behavior. |
+| `docs-triggers` | Bronze | exempt | No custom trigger platform or `triggers.yaml` exists. `event.py` and bundled blueprints use standard event/state triggers; [blueprints](../user-guide.md#blueprints) explains those workflows. See the official exception below. |
 | `entity-event-setup` | Bronze | done | `C300XEntity.async_added_to_hass` and platform callbacks register listeners with `async_on_remove`; reconnect work is cancelled on removal. `test_entity.py`, `test_event_entity.py`, `test_binary_sensor.py`. |
 | `entity-unique-id` | Bronze | done | `entity.py:entry_entity_unique_id` combines the persistent config-entry ID with each entity key. Activation keys include their configured activation ID. `test_entity.py`, `test_button.py`, `test_event_entity.py`. |
 | `has-entity-name` | Bronze | done | `C300XEntity._attr_has_entity_name = True` is inherited by entity platforms. `test_entity.py` and platform tests inspect the entity contract. |
@@ -73,8 +73,8 @@ rule mismatch or missing evidence, not necessarily a runtime defect.
 | `unique-config-entry` | Bronze | done | `config_flow.py` checks stable identity and host/port matches before bootstrap and entry creation, and aborts competing discovery flows. `test_config_flow_helpers.py` duplicate/identity cases and `test_discovery.py`. |
 | `action-exceptions` | Silver | done | `use_cases/common.py` and entity actions map API failures to HA exceptions; notification validation uses `ServiceValidationError`. `test_entity_action_errors.py`, `test_services.py`, `test_alarm_service_results.py`. Translation completeness is separate. |
 | `config-entry-unloading` | Silver | done | `__init__.py:async_unload_entry`, runtime resource cleanup and Notify teardown release callbacks/tasks. `test_runtime_data.py`, `test_webhook_runtime_lifecycle.py`, `test_init_runtime.py`. |
-| `docs-configuration-parameters` | Silver | done | [Feature reference](feature-reference.md#setup-and-options) and form help cover settings areas; the linked [ICE reference](media-troubleshooting.md#connection-paths-for-the-live-picture) now explains all four choices, default, directional scope and exceptions. `test_user_documentation.py` compares the table with the filter and selector values; `test_config_flow_helpers.py` covers the field contract. |
-| `docs-installation-parameters` | Silver | done | [Quickstart](quickstart.md) covers setup and one-time SSH inputs and now links the same ICE reference, including that no address/token is needed for this selector. `test_user_documentation.py` checks discoverability/default; `test_config_flow_helpers.py` covers setup choices. |
+| `docs-configuration-parameters` | Silver | done | [Feature reference](../feature-reference.md#options) and form help cover settings areas; the linked [ICE reference](../media-troubleshooting.md#connection-paths-for-the-live-picture) now explains all four choices, default, directional scope and exceptions. `test_user_documentation.py` compares the table with the filter and selector values; `test_config_flow_helpers.py` covers the field contract. |
+| `docs-installation-parameters` | Silver | done | [Quickstart](../quickstart.md) covers setup and one-time SSH inputs and now links the same ICE reference, including that no address/token is needed for this selector. `test_user_documentation.py` checks discoverability/default; `test_config_flow_helpers.py` covers setup choices. |
 | `entity-unavailable` | Silver | done | `entity.py:available` follows shared connection state after grace; failed command reads also clear availability. Connection-diagnostic sensors intentionally remain readable. `test_entity.py`, `test_connection_state.py`, `test_switch.py`, `test_number.py`. |
 | `integration-owner` | Silver | done | `manifest.json` now lists `@memphi2`, matching the maintainer of the linked public source and issue repository. This is ownership metadata, not an awarded tier. |
 | `log-when-unavailable` | Silver | done | `events.py` emits one registration warning per outage and one recovery log, retaining registration-specific state across rediscovery. `test_event_registration_auth.py`, `test_event_registration_races.py`, `test_events.py` and `test_connection_state.py` cover retries, callbacks, recovery, repeated outages and teardown on HA 2026.10.0 and 2026.11.1. Optional diagnostics failures do not become registration outages. |
@@ -85,13 +85,13 @@ rule mismatch or missing evidence, not necessarily a runtime defect.
 | `diagnostics` | Gold | done | `diagnostics.py` supplies entry/runtime diagnostics with explicit redaction, including unloaded/offline paths. `test_diagnostics.py` exercises secrets, hostnames, IPv6 and error redaction. |
 | `discovery-update-info` | Gold | done | `discovery_move.py`, called from `config_flow.py:async_step_zeroconf`: an entry saved with an IPv4 address follows a new IPv4 announcement only when the saved address no longer proves the identity and the announced one does. A proof answers a fresh nonce (no credentials sent) with HMAC-SHA256 keyed by the saved access token over `c300x-identity-v1`, the identity and the `host:port` it was reached on, so relays and swapped stations fail. One attempt per entry per 10 minutes; host names and manual/legacy identities never move; the move uses the reconfigure update path. `test_config_flow_discovery_move.py`. |
 | `discovery` | Gold | done | Manifest advertises the agent mDNS service; `discovery.py` validates identity/address. The agent announces while HA is not using it, again after 15 minutes without an authenticated HA request, and reopens its responder when its IPv4 address changes. `test_discovery.py`, `test_native_mdns_runtime.py`. Address updates are a separate rule. |
-| `docs-data-update` | Gold | done | [Operating model](feature-reference.md#operating-model), [architecture](architecture.md#data-flow), agenda and energy sections explain device push, HA-side refresh and explicit reads/writes. |
-| `docs-examples` | Gold | done | [Blueprints](blueprints.md) and bundled automation examples cover ring, notifications and phrase decisions. `test_blueprint_installer.py` checks installation handling. |
-| `docs-known-limitations` | Gold | done | [Feature reference](feature-reference.md), [media troubleshooting](media-troubleshooting.md) and [readiness](media-readiness.md) distinguish unsupported capabilities, media prerequisites and transport limitations. |
-| `docs-supported-devices` | Gold | done | [README requirements](../README.md#requirements) and [quickstart prerequisites](quickstart.md#before-you-start) restrict support to the C300X family/firmware context and require SSH/root for bootstrap; no generic BTicino support claim. |
-| `docs-supported-functions` | Gold | done | [Feature reference](feature-reference.md#main-user-features), entity/service tables and display-page sections describe functionality and gates. |
-| `docs-troubleshooting` | Gold | done | [Media troubleshooting](media-troubleshooting.md), [readiness](media-readiness.md) and [advanced maintenance](advanced-maintenance.md) provide concrete diagnostic and recovery steps. |
-| `docs-use-cases` | Gold | done | [User guide](user-guide.md#common-tasks), [quickstart](quickstart.md) and [blueprints](blueprints.md) explain practical ring/camera/automation workflows. |
+| `docs-data-update` | Gold | done | [Operating model](architecture.md#operating-model), [architecture](architecture.md#data-flow), agenda and energy sections explain device push, HA-side refresh and explicit reads/writes. |
+| `docs-examples` | Gold | done | [Blueprints](../user-guide.md#blueprints) and bundled automation examples cover ring, notifications and phrase decisions. `test_blueprint_installer.py` checks installation handling. |
+| `docs-known-limitations` | Gold | done | [Feature reference](../feature-reference.md), [media troubleshooting](../media-troubleshooting.md) and [readiness](../media-troubleshooting.md#media-readiness) distinguish unsupported capabilities, media prerequisites and transport limitations. |
+| `docs-supported-devices` | Gold | done | [README requirements](../../README.md#requirements) and [quickstart prerequisites](../quickstart.md#requirements) restrict support to the C300X family/firmware context and require SSH/root for bootstrap; no generic BTicino support claim. |
+| `docs-supported-functions` | Gold | done | [Feature reference](../feature-reference.md), entity/service tables and display-page sections describe functionality and gates. |
+| `docs-troubleshooting` | Gold | done | [Media troubleshooting](../media-troubleshooting.md), [readiness](../media-troubleshooting.md#media-readiness) and [advanced maintenance](../advanced-maintenance.md) provide concrete diagnostic and recovery steps. |
+| `docs-use-cases` | Gold | done | [User guide](../user-guide.md), [quickstart](../quickstart.md) and [blueprints](../user-guide.md#blueprints) explain practical ring/camera/automation workflows. |
 | `dynamic-devices` | Gold | exempt | Each entry represents one physical C300X; activations are entities on it, not discovered child devices. `entity.py:_device_info`, `test_button.py`. |
 | `entity-category` | Gold | done | Configuration/maintenance entities set CONFIG and diagnostic sensors/events set DIAGNOSTIC; normal controls remain primary. `sensor.py`, `switch.py`, `button.py` and platform tests. |
 | `entity-device-class` | Gold | done | Doorbell events use DOORBELL, discrete status sensors ENUM, metrics relevant units/classes; arbitrary call-state enums are not forced into an unrelated class. `event.py`, `sensor.py`, `test_event_entity.py`, `test_sensor.py`. |

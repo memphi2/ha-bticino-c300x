@@ -22,46 +22,35 @@ Home Assistant may store:
 - Optional dashboard action configuration supplied by the user.
 - A mapping from config-entry IDs to reserved Notify action names in
   `.storage/bticino_c300x_notify_names`. It contains no notification text or
-  credentials and prevents names from changing device ownership on reload.
-  Permanently removing an entry removes its reservation. An empty reservation
+  credentials. Permanently removing an entry removes its reservation; an empty
   file can remain after removing the final entry.
 - Visitor images in the configured HA media directory. The per-device **Save
-  images** switch is enabled by default. A ring or active video session requests
-  one image after 3 seconds; images expire after 14 days by default. Delay and
-  retention are configurable. Storage is additionally limited to 1,000 images
-  and 128 MiB per device.
-- Per-entry media-history metadata in HA's private `.storage`: observed ring
-  times and outcomes, links to existing images, and entry-owned completed HA
-  capture clips with their recording times. Visits and capture references are
-  bounded and share a 1 MiB metadata budget. History follows the snapshot
-  retention setting (14 days by default); expiring a video reference does not
-  delete its MP4. The card's **Browse saved images and videos** option is on by
-  default and controls the view, not collection. No media is duplicated and no
-  additional device writes occur.
-  Removing the integration entry removes journal metadata, not media or backups.
+  images** switch is on by default: a ring or active video session requests one
+  image after 3 seconds, and images expire after 14 days. Delay and retention
+  are configurable; storage is limited to 1,000 images and 128 MiB per device.
+- Per-entry media-history metadata in HA's private `.storage`: ring times and
+  outcomes and links to existing images and clips, kept as long as the image
+  retention; an expired entry does not delete its MP4. Removing the integration
+  entry removes this metadata, not media or backups. Details:
+  [Visitor Images and Media History](docs/user-guide.md#visitor-images-and-media-history).
 
 Turning **Save images** off prevents new captures and hides previews, but does
 not delete existing images. Retention cleanup runs while the integration is
-loaded, including while the switch is off. Manage copies in backups separately.
-Images are served through authenticated HA endpoints, not a public `www` path.
-The integration's own image endpoint checks camera read permission. Because
-images are also stored in HA's configured media directory, users with access to
-HA's standard local-media browser can access them there independently of camera
-entity permissions. Restrict media access accordingly; camera permission alone
-does not protect this archive. Local filesystem copies and backups remain
-subject to your own access and backup policy.
+loaded, including while the switch is off. Images are served through
+authenticated HA endpoints, not a public `www` path; who can open them is set
+out in [Stored Media Access](SECURITY.md#stored-media-access). Local filesystem
+copies and backups remain subject to your own access and backup policy.
 
 Diagnostics redact secrets and avoid exposing callback URLs or token values.
 
-In LED-only Notify mode the envelope on the station indicates that a notice is
-pending. The LED update sends the unread state, not the notification text.
-The notice itself remains available in the Home Assistant display inbox until
-dismissed or expired.
+In LED-only Notify mode the station's envelope LED receives only the unread
+state, never the notification text; see
+[Notifications](docs/user-guide.md#notifications).
 
 The live text-memo sensor can expose the latest memo text to authorized Home
-Assistant clients. Its `latest_text` attribute is excluded from new Recorder
-history entries. This does not remove text already recorded by older versions,
-copied by automations, exported in logs, or retained in backups.
+Assistant clients. Its `latest_text` attribute is excluded from Recorder
+history. Text already in Recorder history, copied by automations, exported in
+logs or retained in backups is not removed.
 
 Deleting a message or memo on the C300X does not delete Home Assistant history,
 exports, optional local ring recordings, or backups. Manage those copies through
@@ -88,53 +77,25 @@ device CPU, RAM and network activity.
 ## Video and Audio
 
 Stored answering-machine videos, voice memos and local Ring Capture MP4 files
-can be played by any authenticated Home Assistant user through the integration's
-media endpoints. This is intentional shared-media access: those endpoints do
-not require administrator status or check camera entity permissions. Hiding a
-camera or denying its entity permission does not restrict these recordings.
-Only grant HA access to users trusted to view this shared archive. Playback
-does not grant permission to delete messages or start recordings; those
-services have separate authorization checks.
+can be played by any authenticated Home Assistant user; see
+[Stored Media Access](SECURITY.md#stored-media-access).
 
 Doorbell camera handling is local to the device, the native agent, and Home
 Assistant. Users should still treat video/audio streams and Home Assistant
 camera snapshots as sensitive local data.
 
 Stored video and voice-message playback uses a RAM-only cache in Home Assistant
-for up to 30 seconds, with at most four cached results and 64 MiB total. It is
-not written to the device or disk. Changes to the message inventory invalidate
-reuse of previous results. Agent downloads are limited to 32 MiB; converted
-videos are limited to 64 MiB and 1920x1080, with a 30-second conversion budget.
-One media preparation runs at a time, with at most four distinct pending jobs.
+for up to 30 seconds. It is not written to the device or disk.
 
 Speech and other sounds for the device's speaker are made in Home Assistant.
 The text of a spoken notification goes to the text-to-speech engine selected
 in Home Assistant: a cloud engine sends it to its provider, a local engine
 keeps it in your network. The converted sound is sent to the device as a
-temporary file that is removed when the sound has ended.
+temporary file that is removed when the sound has ended. See
+[Speaker Announcements and TTS](docs/user-guide.md#speaker-announcements-and-tts).
 
 ## What Is Not Included
 
 The repository intentionally excludes vendor firmware images, extracted
 firmware, APKs, generated runtime payloads, third-party controller code, local
 device backups, and local secrets.
-
-## Public Content Audit
-
-Maintainers can run `python scripts/audit_github_privacy.py --file <local-file>`
-for offline triage, or explicitly opt into read-only GitHub access with
-`--repository <owner>/<repo> --allow-network`. The latter inspects release
-metadata/assets, issue/PR text, comments and reviews. It can use `GH_TOKEN` for
-GitHub API authentication; that credential is not forwarded to asset redirects.
-Nothing is uploaded, edited, commented on, closed or deleted.
-
-Reports contain numbered source identifiers and finding categories, not matched
-text, private paths or credentials. JSON `complete: false` and exit status 2 mean
-the audit could not finish, including size, request or pagination limits. Exit 1
-means possible findings; exit 0 means no matches within the stated scope.
-
-Archive inspection never extracts files and enforces member, byte and download
-limits. These are heuristic warnings requiring manual review, not proof that
-content is private, safe or legally cleared. Images are not OCR-scanned; linked
-attachments, Git history and discussions are outside the audit's scope. The
-tool is not run automatically against GitHub by CI or the integration.

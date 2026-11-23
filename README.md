@@ -1,7 +1,7 @@
 # BTicino Classe 300X for Home Assistant (Unofficial)
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
-[![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/quality-scale.md)
+[![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/dev/quality-scale.md)
 [![Release](https://img.shields.io/badge/release-v2.9.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
@@ -9,84 +9,43 @@
 Current version: **2.9.0**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
-C300X video door station.
-
-It brings the C300X into Home Assistant as a local device: doorbell events,
-camera view, Ring Call handling, Home Call, door unlock, stair light, ringer and
-forwarding controls, messages and optional display pages.
+C300X video door station. A small agent on the station connects it to Home
+Assistant over your local network.
 
 <p align="center">
   <img src="custom_components/bticino_c300x/brand/logo.png" alt="BTicino C300X integration logo" width="140">
 </p>
 
-[Installation](#installation) | [Quickstart](docs/quickstart.md) |
-[User guide](docs/user-guide.md) | [Troubleshooting](docs/media-troubleshooting.md)
+[Quick Start](docs/quickstart.md) | [User guide](docs/user-guide.md) |
+[Display pages](docs/display.md) | [Troubleshooting](docs/media-troubleshooting.md)
 
 <p align="center">
   <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
 </p>
 
-## What You Get
+## Features
 
-- **See and answer the door.** Local live video and talkback through the bundled
-  card, doorbell events, and Ring Call answer/hang-up when forwarding is set to
-  Home Assistant. Audio-only Home Call reaches the C300X display.
-  With the updated agent, [picture controls](docs/feature-reference.md#camera-quality)
-  adjust Ring Call video. On-demand controls remain unavailable on the tested
-  C300X 1.7.19 stream. Saved media is unchanged.
-- **Choose the camera picture.** **Camera quality** keeps the original
-  688x480 and 704x576 high-stream choices, with up to 3000 kbit/s and 24 fps.
-  Optional **960x576** matches the display's 5:3 proportions while retaining
-  all 576 picture lines. It requires an exact verified C300X firmware 1.7.19 or 2.0.2
-  media executable, a backed-up device patch and a normal device reboot.
-  It scales before the existing encoder, not through added transcoding, and
-  does not turn the camera input into native 960-pixel detail.
-  The geometry patch contains only project-authored patch logic and checks,
-  not firmware binaries, vendor files or copied vendor code. The original
-  executable backup stays on the device and is never distributed; its original
-  permissions and ownership are preserved. Live video is device-tested on
-  1.7.19; 2.0.2 has been checked offline only.
-  [Camera quality](docs/feature-reference.md#camera-quality) explains compatibility
-  and restoring the original behavior. For clearer sound, set **Audio codec** to **PCMU**.
-- **Let the C300X speak.** The device loudspeaker is a media player: use it
-  with `tts.speak` and a local engine such as Piper, or have a notification
-  shown on the display, spoken, or both. A door call always takes priority.
-- **Control the door station.** Door unlock, stair light, ringer mute,
-  forwarding and answering-machine controls, plus stored video messages,
-  voice memos and text memos where supported by the agent.
-- **Browse saved images and videos.** [Media history](docs/visitor-journal.md)
-  is on by default in the doorstation card: previous/next browses HA snapshots
-  and saved capture videos chronologically in the same window as live video.
-  Live video and incoming rings take priority; browsing never starts, answers
-  or stops a device call. Automatic [visitor images](docs/feature-reference.md#visitor-images)
-  require **Save images** and need no open dashboard or image files on the C300X.
-  New snapshot settings default to the native **800x480** display size;
-  previously saved custom sizes remain unchanged.
-  Clips require a separate capture automation, such as the bundled Ring capture
-  blueprint. History does not include the device's answering-machine recordings.
-- **Use the C300X as a home-control display.** Keep the native blue interface
-  with configurable controls for lights, covers, climate, media and locks,
-  plus weather and Alarmo. Five built-in pages (Status, Energy, Agenda,
-  Leave home and Situations) and up to seven custom pages have configurable positions. Energy
-  includes live power, history and up to ten consumers configured in HA's
-  Energy dashboard, ranked by current W. Agenda shows upcoming calendar events; Leave home checks
-  selected contacts and lights, with explicitly confirmed actions. Situations
-  lists what is open, on or pending among the entities you pick. Change pages
-  with arrows or a favourites bar.
-  See [Display setup](docs/quickstart.md#9-optional-native-display).
-- **Connect notifications and automations.** The standard
-  [Notify service](docs/feature-reference.md#standard-notify-service) offers
-  info, warning and error notices with bounded display wake and sound, without
-  interrupting protected screens or calls. It is not a life-safety alarm.
-  Optional [blueprints](docs/blueprints.md) cover notifications, Ring Capture,
-  local transcription and phrase-based decisions.
-- **Diagnose and recover connections.** Media readiness diagnostics and guided
-  Repairs explain setup problems. Credential checks
-  distinguish rejected keys from unreachable devices and guide reauthentication,
-  while existing entries can still start offline.
-
-Talkback in the native HA camera view is separate from card talkback: it is
-off by default and requires HA 2026.11+ Labs and the integration option.
+- **See and answer the door:** live video, Ring Call, talkback and audio-only
+  Home Call in the bundled card ([details](#doorbell-video-ring-calls-and-talkback)).
+- **Choose the camera picture:** size, bit rate and frame rate, including an
+  optional 960x576 picture for the verified firmware 1.7.19 and 2.0.2 media
+  files. **PCMU** gives clearer sound
+  ([details](docs/user-guide.md#camera-quality-and-picture-size)).
+- **Keep visitor images:** one image per ring or video session, saved in Home
+  Assistant and browsable in the card together with recorded clips
+  ([details](docs/user-guide.md#visitor-images-and-media-history)).
+- **Let the station speak:** its loudspeaker is a media player for `tts.speak`;
+  a door call always takes priority.
+- **Control the station:** door unlock, stair light, ringer, forwarding,
+  answering machine, messages, memos and extra activation buttons.
+- **Use the station display:** Home Assistant pages for lights, covers,
+  climate, media, locks, weather, energy, calendars and Alarmo in the station's
+  blue interface ([Station Display Pages](docs/display.md)).
+- **Notify and automate:** notices shown on the station display, spoken, or
+  both (not a life-safety alarm), plus [blueprints](docs/user-guide.md#blueprints)
+  for notifications, Ring capture and local transcription.
+- **Guided recovery:** the **Media readiness** sensor and Repairs explain and
+  fix setup problems.
 
 ## Requirements
 
@@ -94,136 +53,95 @@ off by default and requires HA 2026.11+ Labs and the integration option.
 - BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`. Firmware `3.0.6` is
   supported experimentally: without the Home Assistant pages on the display and
   with the low-resolution camera stream.
-- Rooted or SSH-enabled C300X for the first device-agent installation.
-- A trusted local network between Home Assistant and the C300X.
+- Root or SSH access on the station for the first agent installation.
+- A trusted local network between Home Assistant and the station.
 
-If your device is still stock, root or SSH-enable it first with a separate
-workflow. This repository does not provide firmware images, firmware extraction
-output, APKs, exploits, rooting instructions or vendor files. If another
-workflow asks for a firmware target, use `1.7.19`; a device on `2.0.2` or
-`3.0.6` needs a workflow made for that firmware. Everything is used at your own risk and
-without warranty.
-
-## Support the Test Device
-
-Every release is tested on one C300X with firmware `1.7.19`; other firmware
-versions can only be checked against their firmware files. A second test unit
-would change that. A contribution towards it is welcome, as is a used or defective
-Classe 300X / C300X (`344642` or `344643`): please start a
-[discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
-Every contribution is voluntary and very welcome. Support and new features
-stay open to everyone either way.
+This project does not root a stock station and ships no firmware, APKs,
+exploits, rooting instructions or vendor files
+([firmware notes](docs/quickstart.md#requirements)). Use it at your own risk
+and without warranty.
 
 ## Installation
 
-### Home Assistant Marketplace
-
 [![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-bticino-c300x&category=integration)
 
-On Home Assistant `2026.11+`:
+- **Home Assistant 2026.11 or newer:** open the button above or
+  **Settings > Marketplace** and install **BTicino C300X**.
+- **Home Assistant 2026.10:** download **BTicino C300X** in HACS (no custom
+  repository needed) and restart Home Assistant.
 
-1. Open the button above, or go to **Settings > Marketplace**.
-2. Find **BTicino C300X**, install it and confirm the community-integration notice.
-3. Follow any restart request, then add **BTicino C300X** under
-   **Settings > Devices & services**.
+Then add **BTicino C300X** under **Settings > Devices & services** and follow
+the [Quick Start](docs/quickstart.md): it installs the device agent, walks
+through the options and adds the card. Later releases: [Update](docs/quickstart.md#update).
 
-### HACS
+## Doorbell Video, Ring Calls and Talkback
 
-On Home Assistant `2026.10`, find **BTicino C300X** in HACS, download it
-and restart Home Assistant. Then add the integration under
-**Settings > Devices & services**. No custom repository is needed.
+Use one **C300X Doorbell Call Card** in **Doorstation + Home Call** mode.
 
-Both installation methods use the same repository and release archive. Existing
-configuration entries and bundled cards remain unchanged when moving to Marketplace.
+| Task | How |
+| --- | --- |
+| Live video | Press **Stream**. Does not need **Forwarding** on Home Assistant. |
+| Ring Call | Set **Forwarding** to **Home Assistant**. When someone rings, the card shows the picture; press **Answer**, later **Hang Up**. With **Smartphone**, calls go to the Door Entry app instead. |
+| Home Call | Audio-only call from Home Assistant to the station display. |
+| Talkback | Speak through the browser microphone. Needs HTTPS or Home Assistant Cloud and microphone permission. |
+| Picture controls | Brightness, contrast and colour saturation during a Ring Call; for on-demand video only on firmware 1.7.19, once the station reads them back live. Saved media stays unchanged. |
 
-## First Setup
+Talking in Home Assistant's own camera view is optional and off by default
+(Home Assistant 2026.11+, **Two-way audio** in Labs and the option **Talk
+through the Home Assistant camera view**).
 
-Follow the [Quickstart](docs/quickstart.md) to install or update the device agent,
-complete any required Repairs and add the bundled C300X card.
-
-```text
-Install integration -> add device -> install/update agent -> check Media readiness
--> add the C300X card
-```
-
-Start with live video, Home Call and Ring Call. Add display pages, blueprints and
-other optional features once these work. Talkback requires a secure Home Assistant
-frontend and browser microphone permission; see [media troubleshooting](docs/media-troubleshooting.md#talkback-or-microphone-does-not-work).
-
-For updates, follow the [update instructions](docs/advanced-maintenance.md#updates).
+If something does not work, check the
+[Media readiness](docs/media-troubleshooting.md#media-readiness) sensor first.
+Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkback).
 
 ## Screenshots
 
-Screenshots show one representative setup. Exact entities and display pages
-depend on enabled options and installed agent capabilities.
-
-### Door Camera Inline Dashboard
-
-<p align="center">
-  <img src="docs/images/readme/ha-door-camera-inline-dark.png" alt="BTicino C300X inline door camera dashboard card in Home Assistant dark mode" width="720">
-</p>
-
-### C300X Display Pages
-
-Control Home Assistant entities from the C300X's native blue interface.
-Pages, tile sizes and names are configurable; controls follow each entity's
-capabilities. [Set up pages and tiles](docs/quickstart.md#9-optional-native-display).
-The [feature reference](docs/feature-reference.md#display-device-controls) shows
-every page.
-
 <table>
   <tr>
-    <td align="center"><strong>Pages with the favourites bar</strong><br><img src="docs/images/readme/display-start-en.webp" alt="Home Assistant start page on the C300X with weather, status and the favourites bar" width="360"></td>
-    <td align="center"><strong>Picture tiles</strong><br><img src="docs/images/readme/display-camera-en.webp" alt="Camera page on the C300X with two picture tiles" width="360"></td>
+    <td align="center"><strong>Doorbell card</strong><br><img src="docs/images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card in Home Assistant dark mode with a saved visitor snapshot, play, call, door and light buttons" width="360"></td>
+    <td align="center"><strong>Station display pages</strong><br><img src="docs/images/readme/display-start-en.webp" alt="Home Assistant start page on the C300X with weather, status and the favourites bar" width="360"></td>
   </tr>
 </table>
 
-Captured on a C300X and translated into English; the camera pictures are example pictures, not real cameras.
+Both screenshots come from a C300X and its Home Assistant; the card shows an
+earlier visitor image. Entities and pages depend on the enabled options.
 
 ## Documentation
 
-| User documentation | Link |
-| --- | --- |
-| Install and configure | [Quickstart](docs/quickstart.md) |
-| Task-focused user guide | [User guide](docs/user-guide.md) |
-| Complete feature and entity/service reference | [Feature reference](docs/feature-reference.md) |
-| Browse saved HA images and clips in the card | [Media history](docs/visitor-journal.md) |
-| Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
-| Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |
-| Ready-made automations | [Blueprints](docs/blueprints.md) |
-| Updates, callbacks, SSH, firewall and display patches | [Advanced maintenance](docs/advanced-maintenance.md) |
+1. [Quick Start](docs/quickstart.md): install, first tests, updates.
+2. [Using the Integration](docs/user-guide.md): daily use and automations.
+3. [Station Display Pages](docs/display.md): pages and tiles on the station.
+4. [Reference](docs/feature-reference.md): options, entities, services, events.
+5. [Troubleshooting](docs/media-troubleshooting.md): when something fails.
+6. [Maintenance and Removal](docs/advanced-maintenance.md): agent, tokens,
+   recovery, removal.
 
-| Maintainer documentation | Link |
-| --- | --- |
-| Architecture and data flow | [Architecture](docs/architecture.md) |
-| Native agent runtime and packaging | [Native agent](docs/native-agent.md) |
-| Native agent HTTP API contract | [Native Agent API](native_agent/API.md) |
-| Device QML display pages | [Device QML UI](device_qml/README.md) |
-| Quality scale tracking | [Quality scale](docs/quality-scale.md) |
-| Hardware release checks | [Release validation](docs/release-validation.md) |
-| Privacy, security, and legal notes | [Privacy](PRIVACY.md), [Security](SECURITY.md), [Legal notes](docs/legal.md) |
-| Legal and provenance audit | [Current legal/provenance audit](docs/audits/current-legal-provenance.md) |
-| Release history | [Changelog](CHANGELOG.md) |
+Also: [Security](SECURITY.md), [Privacy](PRIVACY.md), [Support](SUPPORT.md),
+[Legal notes](docs/legal.md), [Changelog](CHANGELOG.md).
 
-## Project Status
+For developers: [Architecture](docs/dev/architecture.md),
+[Native agent](docs/dev/native-agent.md), [Agent API](native_agent/API.md),
+[Quality scale](docs/dev/quality-scale.md),
+[Release validation](docs/dev/release-validation.md).
 
-- IoT class: `local_push`
-- HACS: default repository, installed as a custom integration with `zip_release`
-- Quality scale: per-rule [self-assessment](docs/quality-scale.md), not an awarded tier
-- License: Apache-2.0
-- Support scope: community project, not an official BTicino/Legrand or Home
-  Assistant Core integration
+## Status and Legal
 
-## AI Assistance
+- Independent community project, not an official BTicino/Legrand or Home
+  Assistant Core integration, and not affiliated with, endorsed, sponsored or
+  certified by BTicino, Legrand, Home Assistant, Nabu Casa, HACS or the
+  referenced community projects.
+- IoT class `local_push`; HACS default repository (`zip_release`). Quality
+  scale: per-rule [self-assessment](docs/dev/quality-scale.md), not an awarded
+  tier.
+- License: Apache-2.0. Developed with AI assistance, including Codex and Claude.
+- The repository contains no vendor firmware, extracted firmware, APKs,
+  third-party controller source trees, device backups, private captures or
+  secrets. See [Legal notes](docs/legal.md).
 
-- This project was developed with AI assistance, including Codex and Claude.
+### Support the Test Device
 
-## Legal Notes
-
-This repository is an independent community project. It is not affiliated with,
-endorsed by, sponsored by, or certified by BTicino, Legrand, Home Assistant,
-Nabu Casa, HACS or the referenced community projects.
-
-This repository does not include vendor firmware, extracted firmware, APKs,
-third-party controller source trees, local device backups, private captures or
-secrets. See [docs/legal.md](docs/legal.md).
+Every release is tested on one C300X with firmware `1.7.19`; other firmware can
+only be checked against its files. A contribution towards a second unit, or a
+used or defective Classe 300X / C300X (`344642` or `344643`), is welcome in a
+[discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
+It is voluntary; support and features stay open to everyone.

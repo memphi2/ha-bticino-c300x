@@ -1,127 +1,115 @@
 # Device QML UI
 
-This directory contains native Qt/QML pages for the C300X display.
-
-It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can use local HTTP, so the device UI talks to the optional local display bridge at `http://127.0.0.1:8090`.
+Native Qt/QML pages for the C300X display (Qt 4, firmware 1.7.x and 2.0.2). No
+Lovelace is embedded: the pages talk to the agent's loopback display bridge at
+`http://127.0.0.1:8090`. What users see and configure is in
+[Station Display Pages](../docs/display.md).
 
 ## Files
 
-- `Alarm.qml`: blue native Alarmo subpage with conditional PIN input, confirmed
-  state/readiness feedback, guarded arm/disarm commands and an optional selected
-  HA quick entity. No selection means no additional action button.
-- `HomeAssistant.qml`: native dynamic Home Assistant board page backed by the
-  local display bridge. Includes capability-based light, cover, climate, fan
-  and media player controls, read-only sensor details, dashboard pages, badges,
-  images, switches and buttons without a refresh timer. See
-  [Display Device Controls](../docs/feature-reference.md#display-device-controls).
-- `C300XPageNavigation.qml`: direct navigation to other visible dashboard pages,
-  using the existing snapshot without new requests. The same component draws
-  the page buttons of the status page, the optional favourites bar along the
-  bottom edge (`bar: true`, one row, current page marked) and the bar's More
-  list. See [Page navigation](../docs/feature-reference.md#page-navigation).
-- `C300XAgenda.qml` and `C300XLeaveHome.qml`: optional calendar and departure
-  pages. HA prepares at most five events in seven days from selected calendars
-  in a bounded background cache. Leave home uses explicit contacts, lights and
-  allowlisted actions; actions require a second Confirm tap within eight seconds.
-  No device polling is added. All regular and optional pages support positions
-  1 to 12 (Energy 2, Agenda 10, Leave home 11, Situations 12 by default);
-  disabling preserves selections and positions.
-- `C300XSituations.qml`: optional read-only page listing the selected contacts,
-  garage doors, lights and task lists that need attention. See
-  [Situations](../docs/feature-reference.md#situations).
-- `C300XChecks.qml`: the row list (name, coloured state) shared by Leave home
-  and Situations.
-- `C300XOptionalPages.qml`: loads Energy, Agenda, Leave home or Situations,
-  whichever the current page is, and unloads the others.
-- `C300XDetailControl.qml`: shared touch controls for entity detail pages.
-- `C300XEnergy.qml`: the optional energy page (views Now, Today, Power, Consumers, Balance).
-  `HomeAssistant.qml` loads it only while an energy page is shown and unloads
-  it again on every other page. It draws what Home Assistant has already
-  computed: no timer, no animation, no request of its own.
-- `C300XEnergyConsumers.qml` and `js/c300x_energy_consumers.js`: ten configured
-  device readings in current W, descending in two columns of five. Each column
-  scales bars independently; measured zero has an empty bar, unavailable values
-  are omitted, and colors remain stable per power sensor. No recorder reads.
-  The removed Distribution selection is discarded, not mapped to Consumers;
-  existing installations must explicitly enable the new view.
-- Energy chart selection shows the exact supplied interval and values from
-  compact HA history, without fabricated intermediate points.
-- `C300XAlerts.qml` and `js/c300x_alerts.js`: standard Notify popup with bounded
-  wake and stock short-beep effects, only on safe Home/HA screens. Calls,
-  Alarmo and other protected pages block effects, with no deferred replay.
-  A single sleeping loopback request reports protection for that connection's
-  lifetime; closing it clears the status. No periodic status timer or file write
-  is added. Protected requests never receive alert payloads.
-  One loopback request sleeps waiting for an alert; idle operation does not poll.
-  This is supplementary information, not a fire alarm. See the
-  [Notify contract](../docs/feature-reference.md#standard-notify-service).
-- `C300XRingerControl.qml`: core, page-independent ringer command receiver.
-  Uses the same `AudioState` enable/disable calls as the stock mute button.
-  One loopback HTTP request waits for work without periodic polling; a timer
-  reconnects only after a connection/protocol failure. Commands and replies
-  stay in RAM, with no runtime file writes. Installed and removed with the
-  core `EventManager.qml` patch.
-- `js/c300x_ha.js`: local HTTP helper used by the QML page.
-- `js/c300x_memos.js`: loopback-only local memo/message metadata helper used by patched device memo pages.
-- The stock `HomePage.qml`, `MemoPage.qml` and
-  `Components/Settings/GeneralsChoice.qml` are not stored in this
-  repository. The native agent patch script transforms the original files
-  already present on the device and keeps a one-time original backup there.
-- The HA device's **Touch tone** configuration switch uses the original GUI
-  setting with confirmed commands and push state, through one sleeping connection.
-- General retains the stock touch-tone switch. **Settings > Home Assistant**,
-  below Configuration, contains **HA feedback**, SSH, reboot and agent removal.
-  Maintenance uses the station's local agent, without an HA connection; reboot
-  and removal each require confirmation within ten seconds. Leaving the tab or
-  turning off the screen cancels confirmation. A GUI-owned preference object in the patched
-  `MainApp.qml` reads the local agent once; changes are saved only on user input.
-  It uses a declarative request deadline, not a polling timer or dynamically
-  created QML objects. Alarm states, error text and connection warnings remain
-  visible when feedback is disabled. Routine messages such as "Page loaded" in
-  the HA page's upper-right header are hidden; control-specific text is unchanged.
+| File | Purpose |
+| --- | --- |
+| `Alarm.qml` | Alarmo subpage: state, readiness, PIN input, guarded arm/disarm, optional quick entity. |
+| `HomeAssistant.qml` | Dynamic Home Assistant board: tiles, detail pages, badges, picture tiles, command feedback. No refresh timer. |
+| `C300XPageNavigation.qml` | Page buttons of the status page, the favourites bar (`bar: true`) and its More list, from the existing snapshot without new requests. |
+| `C300XOptionalPages.qml` | Loads whichever of Energy, Agenda, Leave home or Situations is current and unloads the others. |
+| `C300XAgenda.qml` | Calendar page; HA prepares at most five events in seven days in a bounded background cache. |
+| `C300XLeaveHome.qml` | Departure page: contacts, lights, allowlisted actions with second-tap Confirm (eight seconds). |
+| `C300XSituations.qml` | Read-only list of selected contacts, garage doors, lights and task lists that need attention. |
+| `C300XChecks.qml` | Row list (name, coloured state) shared by Leave home and Situations. |
+| `C300XDetailControl.qml` | Shared touch controls of entity detail pages. |
+| `C300XEnergy.qml` | Energy page (Now, Today, Power, Consumers, Balance); loaded by `HomeAssistant.qml` only while shown. Draws HA's computed values: no timer, animation or own request. |
+| `C300XEnergyReadout.qml` | Selected-interval readout of the energy charts (exact supplied interval and values, no invented points). |
+| `C300XEnergySums.qml` | Two-column sums grid used by the energy page and its readout. |
+| `C300XEnergyConsumers.qml` | Consumers view: up to ten current power readings in two independently scaled columns of five. |
+| `C300XAlerts.qml` | Notify popups with bounded wake and stock short-beep effects, only on safe Home/HA screens. |
+| `C300XRingerControl.qml` | Core, page-independent ringer command receiver using the stock `AudioState` calls. Installed with the core `EventManager.qml` patch. |
+| `C300XSettings.qml` | **Settings > Home Assistant** tab: HA feedback, SSH, reboot, agent removal. |
+| `js/c300x_ha.js` | Local HTTP helper of the HA pages. |
+| `js/c300x_i18n.js` | Display texts in the supported languages. |
+| `js/c300x_energy.js` | Energy chart formatting (HA wall time, not device timezone). |
+| `js/c300x_energy_consumers.js` | Consumers scaling, stable colours per sensor. |
+| `js/c300x_alerts.js` | Alert request and effect handling. |
+| `js/c300x_memos.js` | Loopback memo/message metadata helper for the patched memo pages. |
+| `js/c300x_maintenance.js` | Per-tab request state of the settings tab; late replies never update a reopened tab. |
+| `js/c300x_ringer.js` | Ringer request handling; deliberately not a shared library, each control owns its request. |
+
+The stock `HomePage.qml`, `MemoPage.qml`, `MainApp.qml`, `Settings.qml`,
+`EventManager.qml` and `Components/Settings/GeneralsChoice.qml` are not stored
+here. `native_agent/scripts/qml_patch.sh` transforms the originals on the device
+and keeps a one-time original backup there.
+
+## Implementation Notes
+
+- **Request serialisation:** the agent forwards display requests to HA one at a
+  time and refuses a second while the first is open, so pages queue instead of
+  colliding (waking from standby while the home page refreshes its buttons
+  shows no transport error). Pages asking for the same state at the same time
+  share one request; commands always keep their own.
+- **Response budget:** the display reads the whole dashboard in one response
+  inside the agent's 32 KiB buffer; HA keeps the body within 30 KiB of compact
+  UTF-8 (`dashboard_response.py`).
+- **Option byte budget** (`dashboard_controls.py`): a choice list (select
+  options, player sources, sound modes) sends at most 50 options and at most
+  2048 bytes, measured as sent (a non-ASCII character counts six bytes, an emoji
+  twelve). An option over 1024 bytes is left out. If the dashboard is still too
+  large, the longest choice lists are shortened one after another; short lists
+  such as thermostat modes are cut last. Too large even then: HA logs the size
+  and returns `dashboard_too_large`, and the display stays offline/stale. Check
+  states, actions and history values are never dropped to fit.
+- **Updates:** selected-entity changes use the existing event bridge; bursts are
+  combined, and changes that alter no displayed value, availability or control
+  do not notify the device. Unchanged GUI items are reused, keeping the overview
+  position and active input. Timeout and reconnect handling runs only while a
+  page is active.
+- **Waiting connections:** alerts, ringer control and touch tone each hold one
+  sleeping loopback request instead of polling. The alerts request also reports
+  screen protection for its lifetime; protected screens never receive alert
+  payloads and nothing is replayed later. The ringer receiver reconnects on a
+  timer only after a connection or protocol failure. Commands and replies stay
+  in RAM.
+- **Settings preference:** a GUI-owned preference object in the patched
+  `MainApp.qml` reads the local agent once and saves only on user input, with a
+  declarative request deadline instead of a polling timer or dynamically
+  created objects. The tab uses the configured `listen.uiPort`.
+- **Picture tiles:** HA scales the still to the tile before the display loads it
+  over a URL signed with the entry secret; the display can only open `http://`.
 
 ## Packaging
-
-The packaged patch script embeds the stripped settings panel and its transport
-helper. Updating an existing file-set 6 agent requires no additional upload paths.
-
-The 2.5.0 features require the matching native agent and complete display
-bundle, followed by reapplying the Display patch. Local strict simulations
-do not prove physical wake or sound on every device or firmware version.
 
 These sources are not written to the device as they stand. Packaging
 (`scripts/stage_device_agent_bundle.py`) and the development installer
 (`scripts/install_c300x_device.sh`) pass every `.qml` and `.js` file through
 `scripts/device_file_strip.py`, which drops comment-only lines, blank lines and
-indentation. That makes the installed display files about 30 % smaller, so
-comments here cost nothing on the device.
+indentation (about 30 % smaller on the device), so comments here cost nothing
+there. The staged `qml_patch.sh` also embeds the stripped `C300XSettings.qml`
+and `js/c300x_maintenance.js`, so an installed updater needs no new upload paths
+for them.
 
 The strip is line based on purpose. Keep it valid: no `/* */` block comments
 and no string literal continued over a line break with a backslash; packaging
-fails on either. A `//` comment after code on the same line is kept as is, so
-put comments on their own line. Line numbers in a device log refer to the
-stripped file; `scripts/device_file_strip.py --out <dir>` writes the same files
-locally for comparison.
+fails on either. A `//` comment after code on the same line is kept, so put
+comments on their own line. Device log line numbers refer to the stripped file;
+`scripts/device_file_strip.py --out <dir>` writes the same files locally.
 
 ## Safety
 
-- Apply the device UI only through the native agent QML maintenance API. It
-  installs generated project QML files, transforms original device pages, and
-  backs up original device files first.
-- Store device file backups under
+- Apply the device UI only through the agent's QML maintenance API. It installs
+  the generated project files, transforms original device pages and backs up
+  the originals first, under
   `/home/bticino/cfg/extra/c300x-device-file-backups/original/`, mirroring the
-  original GUI path.
-- The Settings menu and preserved General page participate in the same staged apply, transactional
-  rollback and restore-all paths as the other original pages. Reapplying uses
-  the preserved original; unsupported layouts and missing required backups fail
-  before any active GUI file is changed.
-- Do not create on-device backups of generated project code such as the agent,
-  display bridge, or their configs.
-- Restarting the GUI is required after a patch, but this repository does not run any device commands.
-- PINs are sent only to the local loopback agent API and must never be logged.
+  GUI path.
+- The Settings menu and preserved General page take part in the same staged
+  apply, transactional rollback and restore-all paths as the other original
+  pages. Reapplying uses the preserved original; unsupported layouts and missing
+  required backups fail before any active GUI file changes.
+- Never create on-device backups of generated project code (agent, display
+  bridge, their configs).
+- A patch needs a GUI restart; this repository runs no device commands itself.
+- PINs go only to the loopback agent API and are never logged.
 
 ## Related Documentation
 
-- [Architecture](../docs/architecture.md)
-- [Native agent runtime notes](../docs/native-agent.md)
-- [Native Agent API Contract](../native_agent/API.md#loopback-ui-api)
+- [Architecture](../docs/dev/architecture.md)
+- [Native agent](../docs/dev/native-agent.md#display-patch)
+- [Loopback UI API](../native_agent/API.md#loopback-ui-api)

@@ -1469,13 +1469,13 @@ def test_agent_write_diagnostics_refresh_dispatches_one_shot_update() -> None:
     asyncio.run(_run())
 
 
-def test_system_metric_sensors_are_disabled_by_default() -> None:
+def test_system_metric_sensor_registry_defaults() -> None:
+    for sensor_class in (C300XDeviceCpuSensor, C300XDeviceTemperatureSensor):
+        assert sensor_class(_FakeEntry()).entity_registry_enabled_default is True
     for sensor_class in (
         C300XAgentDiagnosticsSensor,
-        C300XDeviceCpuSensor,
         C300XDeviceLoadSensor,
         C300XDeviceMemorySensor,
-        C300XDeviceTemperatureSensor,
     ):
         assert sensor_class(_FakeEntry()).entity_registry_enabled_default is False
 

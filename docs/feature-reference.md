@@ -1057,8 +1057,10 @@ restart evidence.
 Detailed agent diagnostics remain available live, but volatile debug attributes
 (loop counters, descriptor counts and observation timestamps) are excluded from
 Recorder history. Health states, CPU measurements, write counters and watchdog
-triggers retain their normal history behavior. Diagnostic entities remain
-disabled by default.
+triggers retain their normal history behavior. CPU usage and device temperature
+are enabled by default when supported. Load, memory and detailed agent
+diagnostics stay disabled by default. The audio codec selector is also enabled
+when supported; enabling the entity does not change the device's codec.
 
 The diagnostics attribute `media_watchdog_last_percent` records the CPU value
 of the last actual watchdog trigger, not every healthy observation. Use the

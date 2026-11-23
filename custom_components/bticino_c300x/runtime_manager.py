@@ -20,6 +20,7 @@ from .api import (
     display_bridge_callback_fingerprint,
 )
 from .api_errors import C300XDisplayBridgeNotRegisteredError
+from .c100x_display_activation import async_follow_c100x_display_if_open
 from .capabilities import (
     capability_is_supported,
     entry_device_ui_configured,
@@ -302,6 +303,7 @@ class C300XRuntimeManager:
         await _async_refresh_self_test(self.entry)
         if display_setting_pending(self.entry):
             await async_settle_display_setting(self.hass, self.entry)
+        async_follow_c100x_display_if_open(self.hass, self.entry)
 
     async def _async_refresh_display_registration(
         self, api: C300XAgentApi, *, startup: bool = False,

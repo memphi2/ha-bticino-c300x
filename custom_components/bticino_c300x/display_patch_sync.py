@@ -20,6 +20,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .agent_update import async_retry_update_maintenance_busy
 from .api import C300XAgentApiError
+from .c100x_display_activation import async_follow_c100x_display, c100x_display_status
 from .capabilities import entry_device_ui_configured, maintenance_action_is_advertised
 from .const import CONF_DISPLAY_SETTING_PENDING, SIGNAL_QML_PATCH_CHANGED
 from .display_support import entry_display_supported
@@ -63,6 +64,9 @@ async def async_apply_display_setting(
     capabilities = getattr(runtime_data, "capabilities", None)
     if not capabilities:
         return None
+    c100x = c100x_display_status(capabilities)
+    if c100x is not None:
+        return await _async_apply_c100x_setting(hass, entry, wanted, c100x)
     if not maintenance_action_is_advertised(capabilities, "qml_patch" if wanted else "qml_restore"):
         return False
     run = async_apply_qml_patch_and_confirm if wanted else async_restore_qml_patch_and_confirm
@@ -85,6 +89,24 @@ async def async_apply_display_setting(
     if status.get("patched") is not wanted:
         _LOGGER.warning("C300X Display patch did not reach the state of the Display setting")
         return None
+    return True
+
+
+async def _async_apply_c100x_setting(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, wanted: bool, status: Any
+) -> bool | None:
+    """C100X: the pages come with their button; the setting turned off restores the display."""
+
+    if wanted or status.get("confirmed") is not True:
+        return False
+    try:
+        await entry.runtime_data.api.async_c100x_display_restore()
+    except C300XAgentApiError as err:
+        _LOGGER.warning(
+            "C100X display was not restored for the Display setting: %s", compact_error_text(err)
+        )
+        return None
+    async_follow_c100x_display(hass, entry)
     return True
 
 

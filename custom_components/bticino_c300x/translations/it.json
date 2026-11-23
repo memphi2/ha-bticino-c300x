@@ -1173,8 +1173,14 @@
       "door_unlock": {
         "name": "Apri porta"
       },
+      "activate_display_pages": {
+        "name": "Attiva pagine del display"
+      },
       "reboot": {
         "name": "Riavvia"
+      },
+      "restore_display_pages": {
+        "name": "Ripristina display originale"
       },
       "remove_agent": {
         "name": "Rimuovi agent"
@@ -1481,6 +1487,10 @@
     }
   },
   "issues": {
+    "c100x_display_rolled_back": {
+      "title": "Le pagine del display C100X sono state annullate",
+      "description": "{entry_title}: le pagine di Home Assistant non si sono avviate sul display del C100X dopo il riavvio, quindi all'avvio successivo la stazione è tornata al display originale. Nient'altro è stato modificato. Premi Attiva pagine del display per riprovare. Se viene annullato di nuovo, segnalalo con la diagnostica dell'agente."
+    },
     "agent_capability_mismatch": {
       "title": "Mancano le capacità del device agent C300X",
       "description": "Il device agent C300X configurato per {entry_title} ha risposto senza capacità utilizzabili. Aggiorna o riconfigura il device agent locale, poi ricarica l'integrazione."

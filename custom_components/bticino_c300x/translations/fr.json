@@ -1173,8 +1173,14 @@
       "door_unlock": {
         "name": "Ouvrir la porte"
       },
+      "activate_display_pages": {
+        "name": "Activer les pages de l'écran"
+      },
       "reboot": {
         "name": "Redémarrer"
+      },
+      "restore_display_pages": {
+        "name": "Restaurer l'écran d'origine"
       },
       "remove_agent": {
         "name": "Supprimer l'agent appareil"
@@ -1481,6 +1487,10 @@
     }
   },
   "issues": {
+    "c100x_display_rolled_back": {
+      "title": "Les pages de l'écran C100X ont été annulées",
+      "description": "{entry_title} : les pages Home Assistant n'ont pas démarré sur l'écran du C100X après le redémarrage, la station est donc revenue à son écran d'origine au démarrage suivant. Rien d'autre n'a été modifié. Appuyez sur Activer les pages de l'écran pour réessayer. Si l'annulation se reproduit, signalez-la avec le diagnostic de l'agent."
+    },
     "agent_capability_mismatch": {
       "title": "Les capacités de l'agent C300X sont manquantes",
       "description": "L'agent C300X configure pour {entry_title} a répondu sans capacités utilisables. Mettez à jour ou reconfigurez l'agent local, puis rechargez l'intégration."

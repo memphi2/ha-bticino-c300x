@@ -445,6 +445,40 @@ class _ApiMaintenanceMixin(_C300XApiCore):
         )
         return _ok_response(data)
 
+    async def async_c100x_display_status(self) -> dict[str, Any]:
+        """Read the C100X display activation state; the agent answers from memory."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/c100x-display",
+            extra_headers=self._maintenance_headers(),
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("c100x_display"), dict):
+            raise C300XAgentApiResponseError("Invalid C100X display status")
+        return data
+
+    async def async_c100x_display_activate(self) -> dict[str, Any]:
+        """Start the C100X display pages; the agent reboots once the station is idle."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/c100x-display/actions/activate",
+            json_data={"confirm": "activate_c100x_display"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return _ok_response(data)
+
+    async def async_c100x_display_restore(self) -> dict[str, Any]:
+        """Bring back the original C100X display, with one reboot once idle."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/c100x-display/actions/restore",
+            json_data={"confirm": "restore_c100x_display"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return _ok_response(data)
+
     async def async_remove_agent(self) -> dict[str, Any]:
         """Schedule native agent removal while keeping SSH available."""
 

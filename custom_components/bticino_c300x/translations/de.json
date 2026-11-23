@@ -1173,8 +1173,14 @@
       "door_unlock": {
         "name": "Tür öffnen"
       },
+      "activate_display_pages": {
+        "name": "Displayseiten aktivieren"
+      },
       "reboot": {
         "name": "Neu starten"
+      },
+      "restore_display_pages": {
+        "name": "Originales Display wiederherstellen"
       },
       "remove_agent": {
         "name": "Agent entfernen"
@@ -1481,6 +1487,10 @@
     }
   },
   "issues": {
+    "c100x_display_rolled_back": {
+      "title": "C100X-Displayseiten wurden zurückgesetzt",
+      "description": "{entry_title}: Die Home-Assistant-Seiten sind nach dem Neustart nicht auf dem C100X-Display gestartet, daher hat die Station beim folgenden Start ihr originales Display zurückgeholt. Sonst wurde nichts geändert. Drücke „Displayseiten aktivieren“, um es erneut zu versuchen. Wird wieder zurückgesetzt, melde es mit der Agent-Diagnose."
+    },
     "agent_capability_mismatch": {
       "title": "C300X Device-Agent meldet keine Capabilities",
       "description": "Der konfigurierte C300X Device-Agent für {entry_title} hat ohne nutzbare Capabilities geantwortet. Aktualisiere oder konfiguriere den lokalen Device-Agent neu und lade danach die Integration neu."

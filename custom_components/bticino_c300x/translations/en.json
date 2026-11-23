@@ -1173,8 +1173,14 @@
       "door_unlock": {
         "name": "Door unlock"
       },
+      "activate_display_pages": {
+        "name": "Activate display pages"
+      },
       "reboot": {
         "name": "Reboot"
+      },
+      "restore_display_pages": {
+        "name": "Restore original display"
       },
       "remove_agent": {
         "name": "Remove device agent"
@@ -1481,6 +1487,10 @@
     }
   },
   "issues": {
+    "c100x_display_rolled_back": {
+      "title": "C100X display pages were rolled back",
+      "description": "{entry_title}: the Home Assistant pages did not start on the C100X display after the reboot, so the station went back to its original display at the following boot. Nothing else was changed. Press Activate display pages to try again. If it rolls back again, report it with the agent diagnostics."
+    },
     "agent_capability_mismatch": {
       "title": "C300X device agent capabilities are missing",
       "description": "The configured C300X device agent for {entry_title} answered without usable capabilities. Update or reconfigure the local device agent, then reload the integration."

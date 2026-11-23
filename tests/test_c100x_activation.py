@@ -5,10 +5,11 @@ import json
 import shlex
 import shutil
 import subprocess
+import time
 
 import pytest
 from c100x_activation_lab import activation_binary as activation_binary
-from c100x_activation_lab import agent_lab, gui_peer
+from c100x_activation_lab import agent_lab, build_agent, gui_peer
 from test_c100x_boot_trial import LATER_BOOT, reboot
 from test_c100x_bundle_delivery import payload
 from test_c100x_display_transaction import (
@@ -265,3 +266,41 @@ def test_native_response_parser_rejects_ambiguous_or_unbounded_input(activation_
                            (json.dumps(body) + "\0", False)]:
         result = subprocess.run(arguments, input=value, capture_output=True, text=True, timeout=3)
         assert (result.returncode == 0) == success, result.stderr
+
+
+@pytest.fixture(scope="module")
+def quick_activation_binary(tmp_path_factory):
+    return build_agent(tmp_path_factory, "-DC100X_ACTIVATION_SETTLE_MS=300 -DC100X_ACTIVATION_CONFIRM_RETRY_MS=1000")
+
+
+def wait_for(condition, seconds=15):
+    deadline = time.monotonic() + seconds
+    while not condition():
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+
+
+def test_agent_confirms_its_trial_boot_once_the_trial_display_holds_its_lease(tree, quick_activation_binary):
+    run(tree, "prepare")
+    reboot(tree)
+    run(tree, "boot")
+    backup = tree[0] / "backup"
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle) as port:
+        # Without the display's lease the agent never checks.
+        time.sleep(1)
+        assert (backup / "pending").is_dir()
+        with gui_peer(port, generation(tree)):
+            wait_for(lambda: (backup / "confirmed-release").exists())
+    assert (backup / "confirmed-release").read_text() == ".c100x-" + generation(tree) + "\n"
+    assert not (backup / "pending").exists()
+
+
+def test_agent_never_checks_a_trial_outside_its_trial_boot(tree, quick_activation_binary):
+    run(tree, "prepare")
+    backup = tree[0] / "backup"
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle) as port, gui_peer(port, generation(tree)):
+        time.sleep(2)
+    assert (backup / "pending").is_dir()
+    assert not (backup / "confirmed-release").exists()

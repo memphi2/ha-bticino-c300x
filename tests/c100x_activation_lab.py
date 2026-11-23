@@ -17,25 +17,36 @@ from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 from native_agent.test.smoke import TOKEN, free_tcp_ports, wait_for_health
 
 
-@pytest.fixture(scope="module")
-def activation_binary(tmp_path_factory):
+def build_agent(tmp_path_factory, extra=""):
     original("c100x-1.5.8")
     marker = FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino/bin/gui/BtClass100"
     build = tmp_path_factory.mktemp("c100x-activation-build")
     flags = ("-std=c11 -O2 -g -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L "
              '-DC300X_NATIVE_AGENT_VERSION=\\\"test\\\" '
-             f'-DC300X_C100X_DISPLAY_MARKER=\\\"{marker}\\\"')
+             f'-DC300X_C100X_DISPLAY_MARKER=\\\"{marker}\\\" '
+             # Never the host's own reboot.
+             '-DC300X_REBOOT_PROGRAM=\\\"/nonexistent/reboot\\\" ' + extra)
     result = subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
                              f"CFLAGS={flags}", "-j2", "all"], capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr
     return build / "host/c300x-agent-native"
 
 
+@pytest.fixture(scope="module")
+def activation_binary(tmp_path_factory):
+    return build_agent(tmp_path_factory)
+
+
 @contextmanager
-def agent_lab(binary, tree):
+def agent_lab(binary, tree, bundle=None):
     root, _, _, env = tree
     agent = root / "agent"
     agent.mkdir()
+    if bundle is not None:
+        # The payload the agent's own activation jobs run.
+        (agent / "qml").mkdir()
+        (agent / "qml/c100x_bundle.sh").write_text(bundle)
+        (agent / "qml/c100x_bundle.sh").chmod(0o700)
     shutil.copy2(binary, agent / "c300x-agent-native")
     api, ui, own = free_tcp_ports(3)
     config = {

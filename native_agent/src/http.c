@@ -4,6 +4,8 @@
 #include "c300x_agent.h"
 #include "device_detect.h"
 #include "c100x_gui_presence.h"
+#include "http_c100x_display.h"
+#include "http_ui_preferences.h"
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "http_maintenance.h"
@@ -231,6 +233,7 @@ struct agent_runtime {
     struct c300x_ui_events ui_events;
     struct c300x_touch_tone touch_tone;
     struct c100x_gui_presence c100x_presence;
+    struct c100x_activation c100x_activation;
     struct c300x_display_alerts display_alerts;
     struct c300x_http_clients http_clients;
     struct c300x_http_file_transfers file_transfers;
@@ -4921,6 +4924,7 @@ static void handle_udp_event(
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
     c300x_announce_door_frame(&runtime->announce, msg);
+    c100x_activation_door_frame(&runtime->c100x_activation, msg, c300x_monotonic_ms());
     int confirmed_muted;
     if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)) {
         /* A multicast write echo is intent, not completed hardware state. */
@@ -9304,41 +9308,6 @@ static void handle_api_request(
     send_json(client_fd, 501, "Not Implemented", "{\"ok\":false,\"error\":\"not_implemented\"}\n");
 }
 
-static void handle_ui_preferences(int client_fd, struct c300x_config *config,
-                                  const struct request *request)
-{
-    if (!client_is_loopback(client_fd)) {
-        send_loopback_required(client_fd);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0) {
-        char header[3];
-        int enabled, changed;
-        char error[C300X_MAX_ERROR_LEN];
-        /* Browsers cannot send this custom header cross-origin without preflight. */
-        if (header_value(request, "origin", header, sizeof(header))
-            || !header_value(request, "x-c300x-ui", header, sizeof(header))
-            || strcmp(header, "1") != 0) {
-            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"ui_header_required\"}\n");
-            return;
-        }
-        if (!c300x_json_bool_field(request->body, "feedback_enabled", &enabled)) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_feedback_enabled\"}\n");
-            return;
-        }
-        if (!c300x_save_display_feedback(config, enabled, error, sizeof(error), &changed)) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"config_save_failed\"}\n");
-            return;
-        }
-    } else if (strcmp(request->method, "GET") != 0) {
-        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"method_not_allowed\"}\n");
-        return;
-    }
-    send_json(client_fd, 200, "OK", config->display_feedback_enabled
-        ? "{\"ok\":true,\"feedback_enabled\":true}\n"
-        : "{\"ok\":true,\"feedback_enabled\":false}\n");
-}
-
 static int handle_ui_request(
     int client_fd,
     struct c300x_config *config,
@@ -9352,7 +9321,7 @@ static int handle_ui_request(
     if (!strncmp(request->path, "/ui/maintenance", sizeof("/ui/maintenance") - 1))
         return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, run_detached_command);
     if (strcmp(request->path, "/ui/preferences") == 0) {
-        handle_ui_preferences(client_fd, config, request);
+        c300x_http_ui_preferences(client_fd, config, request, client_is_loopback(client_fd));
         return 1;
     }
     if (strcmp(request->path, "/ui/touch-tone/next") == 0 || strcmp(request->path, "/ui/touch-tone/state") == 0)
@@ -9646,7 +9615,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C100X_GUI_PRESENCE_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C100X_GUI_PRESENCE_POLL_FDS + C100X_ACTIVATION_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     int memo_led_fd = -1;
@@ -9688,6 +9657,7 @@ int c300x_run(struct c300x_config *config)
     c300x_ringer_control_init(&runtime->ringer_control);
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
     c100x_gui_presence_init(&runtime->c100x_presence);
+    c100x_display_init(&runtime->c100x_activation, config);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
     c300x_announce_init(&runtime->announce);
@@ -9928,6 +9898,9 @@ int c300x_run(struct c300x_config *config)
         c100x_presence_poll_index = (int)poll_count;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c100x_gui_presence_prepare(&runtime->c100x_presence, &poll_fds[poll_count++]));
+        /* Wakes the loop on the job's output; the step reads it. */
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c100x_activation_prepare(&runtime->c100x_activation, &poll_fds[poll_count++]));
         display_alerts_poll_index = (int)poll_count;
         (void)c300x_display_alerts_prepare(&runtime->display_alerts, &poll_fds[poll_count]);
         poll_count += C300X_DISPLAY_ALERTS_POLL_FDS;
@@ -9994,6 +9967,8 @@ int c300x_run(struct c300x_config *config)
         c300x_ringer_control_expire(&runtime->ringer_control);
         c300x_touch_tone_tick(&runtime->touch_tone, &poll_fds[touch_tone_poll_index]);
         c100x_gui_presence_tick(&runtime->c100x_presence, &poll_fds[c100x_presence_poll_index]);
+        c100x_display_step(&runtime->c100x_activation, config, video, &runtime->announce, &runtime->maintenance,
+            &runtime->c100x_presence, run_detached_command);
         c300x_display_alerts_tick(&runtime->display_alerts, &poll_fds[display_alerts_poll_index]);
         if (poll_fds[callback_poll_index].revents) {
             apply_callback_results(runtime, time(NULL));
@@ -10137,6 +10112,7 @@ cleanup:
         c300x_ringer_control_close(&runtime->ringer_control);
         c300x_touch_tone_close(&runtime->touch_tone);
         c100x_gui_presence_close(&runtime->c100x_presence);
+        c100x_activation_close(&runtime->c100x_activation);
         c300x_display_alerts_close(&runtime->display_alerts);
         c300x_http_maintenance_close(&runtime->maintenance);
         c300x_openwebnet_async_close(&runtime->openwebnet);

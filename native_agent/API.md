@@ -997,8 +997,8 @@ Authentication: normal API token.
 Side effects: POST changes one picture control of the active video source.
 
 A connected GUI advertising `picture=1` provides the legacy ring-only path.
-An eligible C300X (firmware 1.7.19; 2.0.2 with an ADV7180 video decoder;
-3.0.6 with an ADV7180 or TVP5150 decoder) can also report
+An eligible C300X (firmware 1.7.19; 2.0.2 or 3.0.6 with an ADV7180 video
+decoder, HW rev 2/3, or a TVP5150, HW rev 1/4) can also report
 `bridge.picture_controls_scope: "ring_and_on_demand"` with
 `bridge.picture_controls_supported: true`. Model and firmware alone do not
 enable it: an authenticated status or capability request during owned media
@@ -1026,11 +1026,14 @@ such a value is reported as unavailable, not as a percentage. A read off the
 eleven steps is unavailable too. Because of that contrast cache, and because
 the driver ignores I2C write errors, a TVP5150 contrast write is always
 confirmed: it is never refused as not applied and never rolled back. Only
-brightness and saturation have a genuine read-back there. Any other source
-must expose integer descriptors that cover these ranges; raw control reads
-alone do not make it supported. Changes last for the current media session;
-the station applies its own values again when the next session starts. 3.0.6 and the 2.0.2 path
-are checked offline only; 1.7.19 is tested on a device.
+brightness and saturation have a genuine read-back there. The TVP5150 driver
+queues its I2C write and returns at once, so when the read-back differs the
+agent reads again up to five times, 10 ms apart, before it reports the
+setting as not applied. Any other source must expose integer descriptors
+that cover these ranges; raw control reads alone do not make it supported.
+Changes last for the current media session; the station applies its own
+values again when the next session starts. 3.0.6 and the 2.0.2 path are
+checked offline only; 1.7.19 is tested on a device.
 Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.
 When the write or its read-back fails, the agent writes the previous value

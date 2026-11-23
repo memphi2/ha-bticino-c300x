@@ -110,13 +110,12 @@ saved recordings and snapshots are never recoloured.
 - **Ring Call:** uses the stock controls of the video call. Opening the sliders
   does not answer.
 - **On-demand video:** start live video first; the sliders icon appears about
-  two seconds later. On firmware 1.7.19, on 2.0.2 with the ADV7180 video
-  decoder and on 3.0.6 the agent checks during the session whether the video
-  source offers all three settings. A slider move writes only that setting and
-  succeeds only after reading the exact value back; otherwise the old value is
-  put back. Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only.
-  Changes last until the video ends; the station starts each video with its
-  own values.
+  two seconds later. On firmware 1.7.19, 2.0.2 and 3.0.6 the agent checks
+  during the session whether the video source offers all three settings. A
+  slider move writes only that setting and succeeds only after reading the
+  exact value back; otherwise the old value is put back. Tested on 1.7.19;
+  2.0.2 and 3.0.6 are checked offline only. Changes last until the video ends;
+  the station starts each video with its own values.
 
 Automations use `bticino_c300x.camera_picture` in an active session: omit
 `control` and `value` to read, or send both (for example `control: contrast`,

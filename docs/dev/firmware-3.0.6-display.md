@@ -192,7 +192,9 @@ as a rejected foreign-backup fixture. The Qt5 label path remains supported.
   `main.c:192` at `df2a2022` restored codec/camera patches but no routing, while
   `remove_agent.sh:233` could delete all backups. Removal now verifies that
   routing is already stock or restores it successfully before that cleanup.
-  Unknown/missing targets and bad backups block cleanup and reboot.
+  Bad backups, a patched target without a backup, and unknown or missing
+  targets next to a backup block cleanup and reboot. A target the agent never
+  patched (no backup and no patch) is left alone and removal continues.
 
 | Original-copy test path | 1.7.19 | 2.0.2 | 3.0.6 |
 | --- | --- | --- | --- |

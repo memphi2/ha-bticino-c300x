@@ -43,8 +43,9 @@ The agent has two HTTP listeners:
 - UI listener: loopback display bridge listener on `127.0.0.1`, port
   `listen.uiPort` (reported as `ui_listen_host`/`ui_port`). It is intended for
   QML pages running on the device. Keep the installer's `8090`: most display
-  pages call `127.0.0.1:8090` directly, and only the station Settings tab, the
-  ringer and the picture controls follow a changed port.
+  pages call `127.0.0.1:8090` directly. Only these calls follow a changed port:
+  `/ui/maintenance` (station Settings tab), `/ui/ringer/next` (ringer and
+  picture controls), `/ui/preferences` and `/ui/media-closed`.
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).
@@ -115,7 +116,7 @@ Common status codes:
 | `403 Forbidden` | Maintenance token is missing/invalid or maintenance is disabled, the endpoint requires loopback, or a required UI header is missing. |
 | `404 Not Found` | Setup disabled, media item missing, feature disabled, or maintenance module disabled (`maintenance_disabled`). |
 | `405 Method Not Allowed` | Wrong method on a loopback UI route. |
-| `409 Conflict` | Media action conflicts with the current device/media state. |
+| `409 Conflict` | The request conflicts with the current device, media or agent state, for example an agent update while `/` is already writable. |
 | `413 Payload Too Large` | HTTP body exceeded the static parser buffer. |
 | `429 Too Many Requests` | Snapshot requested less than two seconds after the previous one. |
 | `500 Internal Server Error` | Agent-side operation failed. |
@@ -561,7 +562,9 @@ ownership across agent crashes, not device reboots. Releasing the claim
 respects the firmware LED trigger and any unread native memos. An accepted
 event is not a hardware delivery receipt.
 
-Response status: `202 Accepted` on success.
+Response status: `202 Accepted` on success. `400 invalid_unread` when the body
+carries `unread` on any other topic, `unread` is not a boolean, or the body is
+not a valid JSON object; nothing is woken then.
 
 ### `POST /api/v1/display/alert`
 
@@ -1012,6 +1015,18 @@ Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.
 No extra idle poll, recording, configuration write or media restart is needed.
 
+Errors:
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_picture_control` | Invalid body, unknown `control`, or `value` is not 0 through 100 in steps of 10. |
+| `409` | `media_busy` | The media worker is busy with another job; nothing was changed. Unlike the media actions, this route answers `409`. |
+| `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media. |
+| `409` | `picture_not_applied` | The source or the GUI read back a different value than the one sent. |
+| `409` | `picture_gui_busy` | The GUI is still handling an earlier ringer or picture command. |
+| `503` | `picture_gui_unavailable` | No GUI listener for the legacy path. |
+| `504` | `picture_gui_timeout` | The GUI did not acknowledge within five seconds. |
+
 ### `GET /api/v1/calls/doorbell`
 
 Authentication: normal API token.
@@ -1390,6 +1405,14 @@ Allowed staged paths:
 
 Validates the staged manifest/hash, installs files, refreshes firewall state
 when needed, and returns update status.
+
+Errors:
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |
+| `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
+| `500` | `update_apply_failed` | Validation or installation failed. |
 
 ### Config Normalize
 

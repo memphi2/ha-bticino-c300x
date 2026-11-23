@@ -48,8 +48,25 @@ The **Alarm** and **Home Assistant** buttons on the station's home page appear
 automatically when they have something to open.
 
 The allowed actions are a JSON object, one entry per action ID (letters,
-digits, `_ . : -`) with `domain`, `service` and optional `target`, `data` and
-`name`. Leave home and display notices can only offer actions from this list.
+digits, `_ . : -`) with `domain`, `service` and optional `target`, `data`,
+`name` and `dashboard`. Leave home and display notices can only offer actions
+from this list.
+
+Every allowed action also becomes a tile that runs it, by default on an extra
+untitled page. A `toggle` of a light, switch, fan or input boolean is a switch
+tile; otherwise an action with a `source` is an image tile, any other a button.
+The optional `dashboard` object changes that tile:
+
+| Key | Meaning |
+| --- | --- |
+| `page` | Name of the page that shows the tile; a name no page has adds a page of that name. |
+| `name` | Tile name; otherwise the action's `name`, then its ID. |
+| `type` | `button`, `switch` or `image`. |
+| `order` | Position among the tiles of the page (default 1000). |
+| `state_entity_id`, `entity_id` | Entity whose state a switch tile shows; otherwise the first entity in `target` or `data`. |
+| `state_label` | Fixed state text. |
+| `source` | Picture address of an `image` tile; otherwise the state of the state entity. An image tile without a picture is left out. |
+| `width`, `height` | Size of an `image` tile in pixels (default 220×120). |
 
 ```json
 {
@@ -144,7 +161,7 @@ to the list. **Add a page** appears while a page of your own is still free.
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. Up to 60 characters; each name once, in any capitalisation. A page with entities needs one. The status page has none. |
 | **Position** | Place among all pages, 1 to 12. |
-| **Entities** | The page's tiles, in the order picked; drag to reorder. An entity is on one page only: picking one that another page shows moves it, with its tile settings, to this page. |
+| **Entities** | The page's tiles, in the order picked; drag to reorder. An entity is on one page only. In the form of a single page under **Display pages**, picking one that another page shows moves it, with its tile settings, to this page; setup and reconfigure, which show all pages at once, refuse it instead. |
 
 How positions work:
 
@@ -267,7 +284,8 @@ More tile behaviour:
 
 - A small symbol before the name shows the type or device class, for example
   a sun for a light or a note for a media player.
-- Timestamp and date sensors show a short local form such as `14.11. 10:30`.
+- Timestamp sensors show a short local form such as `14.11. 10:30`, date
+  sensors the date such as `14.11.2026`.
   Text cut to fit ends in three dots.
 - Sliders send one command when released, not while moving.
 - Numbers and select options follow Home Assistant's language: a decimal
@@ -299,7 +317,8 @@ and takes the picture's proportions, up to 320 px high; a taller picture is
 shown whole and narrower. With **Width** Half two pictures stand side by side.
 With **Height** Half (138 px) or Full (286 px) the picture is cut around its
 centre to fill the tile. Home Assistant scales the picture to the tile before
-the display loads it; a smaller picture is enlarged up to twice its size.
+the display loads it. At Automatic height a smaller picture is enlarged up to
+twice its size; with Half or Full it is enlarged as far as the tile needs.
 
 It is a still, not a stream: an image entity reloads when it has a new
 picture, a camera about every five minutes. The entity name is written in the

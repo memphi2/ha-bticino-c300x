@@ -147,3 +147,47 @@ def test_three_documentation_rules_are_closed_with_evidence_only():
     assert "test_user_documentation.py" in audit
     assert f"](../{REMOVAL_LINK})" in audit
     assert f"](../{ICE_LINK})" in audit
+
+
+def test_the_api_lists_every_error_the_agent_update_answers_with():
+    source = (ROOT / "native_agent/src/agent_update.c").read_text()
+    body = source.split("const char *agent_update_error_json", 1)[1].split("\n}\n", 1)[0]
+    codes = re.findall(r'\\"error\\":\\"([a-z_]+)\\"', body)
+    assert "update_root_already_writable" in codes
+    api = (ROOT / "native_agent/API.md").read_text()
+    section = api.split("`POST /api/v1/maintenance/update/apply`", 1)[1].split("\n### ", 1)[0]
+    for code in codes:
+        assert f"`{code}`" in section
+
+
+def test_the_api_names_every_display_call_that_follows_the_ui_port():
+    sources = [ROOT / "native_agent/scripts/qml_patch.sh"]
+    sources += sorted((ROOT / "device_qml").rglob("*.qml")) + sorted((ROOT / "device_qml").rglob("*.js"))
+    routes = set()
+    for path in sources:
+        routes |= set(re.findall(r'uiBaseUrl \+ "(/ui/[a-z/-]+)', path.read_text(encoding="utf-8")))
+    assert "/ui/media-closed" in routes
+    api = (ROOT / "native_agent/API.md").read_text()
+    paragraph = api.split("Only these calls follow a changed port:", 1)[1].split("\n\n", 1)[0]
+    assert set(re.findall(r"`(/ui/[a-z/-]+)`", paragraph)) == routes
+
+
+def test_the_api_lists_every_error_the_picture_route_answers_with():
+    sources = (ROOT / "native_agent/src/picture_control.c").read_text()
+    codes = set(re.findall(r'\\"error\\":\\"([a-z_]+)\\"', sources)) - {"method_not_allowed"}
+    ringer = (ROOT / "native_agent/src/ringer_control.c").read_text()
+    codes |= set(re.findall(r'"(picture_gui_[a-z]+)"', ringer))
+    assert {"media_busy", "picture_gui_timeout"} <= codes
+    api = (ROOT / "native_agent/API.md").read_text()
+    section = api.split("### `GET`, `POST /api/v1/video/picture`", 1)[1].split("\n### ", 1)[0]
+    for code in codes:
+        assert f"`{code}`" in section
+    assert "| `409` | `media_busy` |" in section
+
+
+def test_the_api_names_the_unread_refusal_of_display_bridge_events():
+    source = (ROOT / "native_agent/src/http.c").read_text()
+    assert '\\"error\\":\\"invalid_unread\\"' in source
+    api = (ROOT / "native_agent/API.md").read_text()
+    section = api.split("optional boolean `unread`", 1)[1].split("\n### ", 1)[0]
+    assert "`400 invalid_unread`" in section

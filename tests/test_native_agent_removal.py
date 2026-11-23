@@ -21,7 +21,10 @@ LINPHONE = (
     "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=0\n"
     "[audio_codec_1]\nmime=speex\nrate=8000\nenabled=1\n"
 )
-ROUTING_STOCK = b"isolated stock routing fixture\n"
+# Stand-in stock routing binary, built in as the 1.7.19 stock identity. It is
+# larger than the last 1.7.19 patch range; byte 0x282F8 lies in the first one.
+ROUTING_STOCK = bytes(index * 7 % 251 for index in range(0x40000))
+ROUTING_PATCH_OFFSET = 0x282F8
 
 
 @pytest.fixture(scope="module")
@@ -275,3 +278,60 @@ def test_removal_of_an_unchanged_device_with_a_single_backup_succeeds(device: di
     assert Path(device["C300X_AUDIO_STACK_OPEN"]).read_text() == STACK
     assert Path(device["C300X_AUDIO_LINPHONE_CONF"]).read_text() == LINPHONE
 
+
+
+def _patched_routing(env: dict[str, str]) -> tuple[Path, Path]:
+    """The HA media user patched the routing binary and kept its stock backup."""
+    target = Path(env["C300X_ROUTING_TARGET_DIR"], "bt_answering_machine")
+    backup = Path(env["C300X_ROUTING_BACKUP_DIR"], "bt_answering_machine")
+    backup.parent.mkdir(parents=True)
+    backup.write_bytes(ROUTING_STOCK)
+    data = bytearray(ROUTING_STOCK)
+    data[ROUTING_PATCH_OFFSET] ^= 0xFF
+    target.write_bytes(data)
+    target.chmod(0o751)
+    return target, backup
+
+
+def test_uninstall_restores_the_routing_binary_before_deleting_its_backup(device: dict[str, str]) -> None:
+    target, _ = _patched_routing(device)
+    _assert_removed(device, _remove(device))
+    assert target.read_bytes() == ROUTING_STOCK
+    assert not list(target.parent.glob("*.restore.*"))
+
+
+@pytest.mark.parametrize("fault", ["corrupt_backup", "unknown_target", "missing_target", "remount"])
+def test_uninstall_keeps_files_if_routing_restore_fails(device: dict[str, str], fault: str) -> None:
+    target, backup = _patched_routing(device)
+    if fault == "corrupt_backup":
+        backup.write_bytes(b"x" + backup.read_bytes()[1:])
+    elif fault == "unknown_target":
+        target.write_bytes(b"x" * len(ROUTING_STOCK))
+    elif fault == "missing_target":
+        target.unlink()
+    else:
+        device["C300X_DEVICE_PATCH_NO_REMOUNT"] = "ro_busy"
+    before = target.read_bytes() if target.exists() else None
+    saved = backup.read_bytes()
+    result = _remove(device)
+    _assert_kept(device, result)
+    assert "Failed to restore device routing" in result.stderr
+    assert backup.read_bytes() == saved
+    # The verified stock file is already in place when only the RO remount fails.
+    assert (target.read_bytes() if target.exists() else None) == (saved if fault == "remount" else before)
+    if fault == "remount":
+        device["C300X_DEVICE_PATCH_NO_REMOUNT"] = "1"
+        _assert_removed(device, _remove(device))
+
+
+@pytest.mark.parametrize("target", [b"unknown routing build", None])
+def test_uninstall_leaves_a_routing_binary_alone_the_agent_never_patched(
+    device: dict[str, str], target: bytes | None,
+) -> None:
+    path = Path(device["C300X_ROUTING_TARGET_DIR"], "bt_answering_machine")
+    if target is None:
+        path.unlink()
+    else:
+        path.write_bytes(target)
+    _assert_removed(device, _remove(device))
+    assert (path.read_bytes() if path.exists() else None) == target

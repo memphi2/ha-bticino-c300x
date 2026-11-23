@@ -130,13 +130,19 @@ enum picture_source_result picture_source_execute(const struct picture_command *
     int index = command->field - PICTURE_BRIGHTNESS;
     int target = set ? controls[index].min + controls[index].delta * (command->value / 10) : 0;
     if (set && raw[index] != target) {
+        int previous = raw[index];
         struct v4l2_control c = {.id = controls[index].id, .value = target};
         if (!current(deadline, active, ctx)) goto done;
         result = PICTURE_SOURCE_NOT_APPLIED;
-        if (ioctl(fd, VIDIOC_S_CTRL, &c)) goto done;
-        for (int i = 0; i < 3; i++)
-            if (!current(deadline, active, ctx) || !read_percent(fd, i, source, flip, &observed[i], &raw[i])) goto done;
-        if (raw[index] != target) goto done;
+        int confirmed = !ioctl(fd, VIDIOC_S_CTRL, &c);
+        for (int i = 0; confirmed && i < 3; i++)
+            confirmed = current(deadline, active, ctx) && read_percent(fd, i, source, flip, &observed[i], &raw[i]);
+        if (!confirmed || raw[index] != target) {
+            /* Do not leave a value the caller is told was not applied. */
+            c.value = previous;
+            if (current(deadline, active, ctx)) (void)ioctl(fd, VIDIOC_S_CTRL, &c);
+            goto done;
+        }
     }
     if (!current(deadline, active, ctx)) goto done;
     memcpy(values, observed, sizeof(observed));

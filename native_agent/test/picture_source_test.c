@@ -15,7 +15,7 @@
 
 enum fault { NONE, OPEN_FAIL, REGULAR, OTHER_MINOR, OTHER_DRIVER, OTHER_CAP_DRIVER,
     OUTPUT, QUERY_FAIL, BAD_TYPE, FLAGS, BAD_RANGE, BAD_STEP, READ_FAIL, OFF_GRID,
-    LOST_OWNER, EXPIRED, WRITE_FAIL, NOT_CHANGED, READBACK_FAIL };
+    LOST_OWNER, EXPIRED, WRITE_FAIL, NOT_CHANGED, READBACK_FAIL, READBACK_OTHER, LOST_AFTER_WRITE };
 static enum fault fault;
 /* stock: the mxc_v4l2 signature without descriptors; decoder: the bound I2C driver. */
 static int opens, closes, queries, reads, writes, flags, owner, raw[3], stock, i2c_fail, dirs;
@@ -132,13 +132,16 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
         if ((fault == READ_FAIL && reads == 3) || (fault == READBACK_FAIL && reads == 6)) return -1;
         c->value = raw[i] + (fault == OFF_GRID && i == 2);
         if (i2c_fail && reads == i2c_fail) c->value = -1;
+        if (fault == READBACK_OTHER && reads == 4) c->value += 15;
+        if (fault == LOST_AFTER_WRITE && reads == 4) owner = 0;
         if (reads == 3 && fault == LOST_OWNER) owner = 0;
         if (reads == 3 && fault == EXPIRED) now += 751;
         return 0;
     }
-    assert(cmd == VIDIOC_S_CTRL && reads == 3 && queries == 3 && writes++ == 0);
+    /* A second write only puts back the value read before the first. */
+    assert(cmd == VIDIOC_S_CTRL && queries == 3 && (writes++ ? writes == 2 : reads == 3));
     assert((flags & O_ACCMODE) == O_RDWR);
-    if (fault == WRITE_FAIL) return -1;
+    if (fault == WRITE_FAIL && writes == 1) return -1;
     if (fault != NOT_CHANGED)
         raw[i] = c->value ^ (stock && i == 0 && decoder && !strcmp(decoder, "adv7180") ? 0x80 : 0);
     return 0;
@@ -175,13 +178,15 @@ int main(void)
             assert(reads == (percent == 50 ? 3 : 6) && writes == (percent != 50) && closes == 1);
         }
     }
-    for (enum fault f = OPEN_FAIL; f <= READBACK_FAIL; f++) {
+    for (enum fault f = OPEN_FAIL; f <= LOST_AFTER_WRITE; f++) {
         reset(f);
         out[0] = out[1] = out[2] = -1;
         int attempted = f >= WRITE_FAIL;
         assert(run(PICTURE_BRIGHTNESS, 60, out) ==
                (attempted ? PICTURE_SOURCE_NOT_APPLIED : PICTURE_SOURCE_UNAVAILABLE));
-        assert(writes == attempted && closes == (f != OPEN_FAIL));
+        /* Not confirmed: the previous value goes back unless the media is no longer ours. */
+        assert(raw[0] == (f == LOST_AFTER_WRITE ? 120 : 105));
+        assert(writes == (attempted ? 2 - (f == LOST_AFTER_WRITE) : 0) && closes == (f != OPEN_FAIL));
         assert(out[0] == -1 && out[1] == -1 && out[2] == -1);
     }
     reset(NONE);
@@ -216,6 +221,7 @@ int main(void)
         out[0] = out[1] = out[2] = -1;
         enum picture_source_result r = run(failed <= 3 ? PICTURE_READ : PICTURE_BRIGHTNESS, 100, out);
         assert(r == (failed <= 3 ? PICTURE_SOURCE_UNAVAILABLE : PICTURE_SOURCE_NOT_APPLIED));
+        assert(raw[0] == (90 ^ 0x80) && writes == (failed > 3) * 2);
         assert(out[0] == -1 && out[1] == -1 && out[2] == -1);
     }
     return 0;

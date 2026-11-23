@@ -1052,7 +1052,8 @@ Errors:
 
 | Status | `error` | Meaning |
 | --- | --- | --- |
-| `400` | `invalid_picture_control` | Invalid body, unknown `control`, or `value` is not 0 through 100 in steps of 10. |
+| `400` | `invalid_picture_control` | A POST without a body, or a JSON object whose `control` is not `brightness`, `contrast` or `saturation`, or whose `value` is not an integer 0 through 100 in steps of 10. |
+| `400` | `invalid_json` | The body is not a JSON object. The agent's request parser answers this for every route before the route runs. |
 | `405` | `method_not_allowed` | The method is neither `GET` nor `POST`. |
 | `409` | `media_busy` | The media worker is busy with another job; nothing was changed. Unlike the media actions, this route answers `409`. |
 | `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media, or the GUI answered with missing or out-of-range values. |

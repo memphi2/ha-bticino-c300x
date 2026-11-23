@@ -418,6 +418,18 @@ def test_the_api_lists_every_error_the_picture_route_answers_with():
     assert set(ringer_only) <= {code for _, code in replies}
     replies = {(status, code) for status, code in replies if code not in ringer_only}
     assert {(409, "picture_gui_busy"), (504, "picture_gui_timeout"), (503, "ringer_gui_unavailable")} <= replies
+    # handle_client checks every request before any route runs. A picture body
+    # that is not a JSON object gets its invalid_json, never invalid_picture_control.
+    http = _c_functions((ROOT / "native_agent/src/http.c").read_text())
+    client = http["handle_client"]
+    checks = client[client.index("if (!parse_request("):client.index("if (kind == LISTENER_API)")]
+    assert client.index("if (kind == LISTENER_API)") < client.index("handle_api_request(")
+    http["request_checks"] = "static void request_checks(int client_fd)\n{\n" + checks + "}"
+    generic, _ = _client_answers(http, [("request_checks", "client_fd")])
+    route_unknown = {"bad_request": "the request line or headers do not parse, so no route is known yet"}
+    assert set(route_unknown) <= {code for _, code in generic}
+    replies |= {(status, code) for status, code in generic if code not in route_unknown}
+    assert (400, "invalid_json") in replies
     assert replies == _api_error_rows("### `GET`, `POST /api/v1/video/picture`")
     section = (ROOT / "native_agent/API.md").read_text().split("### `GET`, `POST /api/v1/video/picture`", 1)[1]
     unavailable = section.split("| `picture_controls_unavailable` |", 1)[1].split("\n", 1)[0]

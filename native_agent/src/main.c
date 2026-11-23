@@ -2,6 +2,7 @@
 #include "audio_codec.h"
 #include "camera_quality.h"
 #include "camera_running.h"
+#include "device_routing.h"
 #include "display_touch.h"
 #include "https_client.h"
 #include "media_geometry_patch.h"
@@ -188,6 +189,10 @@ int main(int argc, char **argv)
     }
 
     if (restore_media_patches) {
+        if (!c300x_device_routing_remove_patches(error, sizeof(error))) {
+            fprintf(stderr, "Failed to restore device routing: %s\n", error);
+            return 1;
+        }
         if (!c300x_audio_codec_remove_patches(error, sizeof(error))) {
             fprintf(stderr, "Failed to restore media patches: %s\n", error);
             return 1;

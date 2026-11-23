@@ -32,5 +32,6 @@ int c300x_device_routing_restore(
     char *error,
     size_t error_len
 );
+int c300x_device_routing_remove_patches(char *error, size_t error_len);
 
 #endif

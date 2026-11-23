@@ -246,13 +246,22 @@ the agent with TERM and checks for exit for up to ten seconds; an unverifiable
 or still-running agent aborts removal before any restore or delete (no SIGKILL
 fallback). It then restores all display changes (Display patch, core hook,
 media-user label), the IPv6 and IPv4 firewall scripts, the display library, the
-original audio codec and camera quality values and, if patched, the original
-media executable; removes the init files, agent directory and agent-owned
-backups; and schedules a reboot. SSH is started before and after the cleanup and
+stock routing executable of the Home Assistant media user, the original audio
+codec and camera quality values and, if patched, the original media executable;
+removes the init files, agent directory and agent-owned backups; and schedules
+a reboot. SSH is started before and after the cleanup and
 is not removed. A failed restore step stops the script before the backups are
 deleted, with one exception: a display library without a valid stock backup
 keeps the wider tap tolerance and removal continues. User steps:
 [Remove Agent](../advanced-maintenance.md#remove-agent).
+
+The media step checks the routing executable first. A verified stock file is
+left as it is, and so is a file the agent never patched (no backup and no
+patch). Otherwise the verified stock backup is put back through the same
+restore as turning the media user off, and the result must be the stock file
+of that firmware. A patched file without its backup, an invalid backup, an
+unknown or missing executable next to a backup, or a failed read-only remount
+stops removal with the agent and backups kept.
 
 If removal cannot remount the root filesystem read-only after restoration, it
 restores the original startup entries and keeps the agent and backups. The agent

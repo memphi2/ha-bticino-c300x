@@ -236,6 +236,7 @@ the device operation reports its outcome; do not repeatedly retry an uncertain
 result or manually delete recovery files.
 
 The current removal script restores supported QML, firewall and media patches,
+including the stock routing program the Home Assistant media user changed,
 removes startup files and the agent directory (including `config.json`), and on
 success also removes its managed device-file backup root before scheduling a
 device reboot. It starts SSH for recovery. On restoration failure it reports an

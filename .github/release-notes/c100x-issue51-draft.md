@@ -30,6 +30,9 @@ are not part of first-test acceptance.
   adds its own check; old updaters do not.
 - Initial setup leaves video and automatic SIP-user creation off. Enabling
   video later does not implicitly authorize SIP-user creation.
+- For a separately authorized media test, HA waits for peer-specific RTSP PLAY
+  admission before sending a ring announcement. UDP admission remains enforced;
+  an announcement that never starts or cannot finish is reported as a failure.
 - The bundled card registers locally with content-hashed resource URLs. Missing
   or unavailable media cannot start a stream or request the microphone. The
   first test does not authorize media, Home Call or door/light actions.

@@ -60,6 +60,7 @@ async def _async_wait_talkback_ready(entry: Any) -> None:
             last_status is not None
             and last_status.get("answered") is True
             and last_status.get("audio_active") is True
+            and last_status.get("talkback_ready", True) is True
         ):
             return
         await asyncio.sleep(0.2)
@@ -111,6 +112,8 @@ def _keep_talkback_alive_sync(
         raise HomeAssistantError("PyAV is not installed on Home Assistant") from err
 
     if stop_event.is_set():
+        if source is not None:
+            raise HomeAssistantError("C300X announcement playback never started")
         return
     sequence = random.randrange(0, 65536)
     timestamp = random.randrange(0, 2**32)
@@ -138,6 +141,7 @@ def _keep_talkback_alive_sync(
             payload_type=payload_type,
             stop_event=stop_event,
         )
+        announcement_start = sequence, timestamp
         if source is not None and not stop_event.is_set():
             with av.open(str(source)) as container:
                 audio_stream = next(
@@ -186,6 +190,8 @@ def _keep_talkback_alive_sync(
                         payload_type=payload_type,
                         stop_event=stop_event,
                     )
+        if source is not None and (sequence, timestamp) == announcement_start:
+            raise HomeAssistantError("C300X announcement playback never started")
         while keep_alive and not stop_event.is_set():
             frame = _new_silence_frame(av)
             sequence, timestamp, marker = _send_encoded_talkback_frame(

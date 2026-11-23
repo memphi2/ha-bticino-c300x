@@ -972,6 +972,11 @@ Side effects: none.
 
 Returns active ring-call status, media ownership, capture readiness, and
 `hangup_requested` while the native ring-call hangup path is being driven.
+`talkback_ready` is true only while the answered ring-call audio and UDP listener
+are active and the HTTP caller's peer has a live, unparked RTSP connection after
+PLAY. HA waits for this before sending an announcement. This field uses the same
+peer-admission check as UDP media; it does not reserve a connection or replace
+per-packet checks. Older agents omit it and retain their legacy readiness behavior.
 
 ### `POST /api/v1/calls/doorbell/actions/answer`
 

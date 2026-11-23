@@ -2278,6 +2278,17 @@ def test_stop_doorbell_video_requests_authenticated_endpoint() -> None:
     }
 
 
+@pytest.mark.parametrize("ready", [True, False, None, 0, 1, "true"])
+def test_doorbell_call_status_preserves_strict_transport_readiness(ready) -> None:
+    session = _FakeSession(json.dumps({
+        "answered": True, "audio_active": True, "talkback_ready": ready,
+    }))
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
+    status = asyncio.run(api.async_doorbell_call_status())
+    assert status.talkback_ready is (ready is True)
+    assert status["talkback_ready"] is (ready is True)
+
+
 def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
     session = _FakeSession(
         '{"ok": true, "supported": true, "active": true, '
@@ -2300,6 +2311,7 @@ def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
     assert status["can_answer"] is True
     assert status["hangup_requested"] is True
     assert status["capture_supported"] is False
+    assert status["talkback_ready"] is True  # Legacy agents have no admission field.
     assert status["open_fds"] == 5
     assert session.requests[0]["args"] == (
         "GET",

@@ -705,16 +705,54 @@ def test_camera_quality_english_translation_matches_base_strings() -> None:
     assert base == english
 
 
+# Where a flow puts an error key into a form: errors[field] = ...,
+# errors.setdefault(field, ...), a dict entry keyed by "base" or by a CONF_
+# field, and errors = {field: ... for ...}.
+_FLOW_ERROR_TARGET = (
+    r'(?:errors\[[^\]]+\]\s*=\s*|errors\.setdefault\([^,]+,\s*|"base":\s*'
+    r"|\bCONF_[A-Z0-9_]+:\s*|errors\s*=\s*\{\w+:\s*)"
+)
+
+
+def _flow_reported_errors() -> set[str]:
+    """Every error key a setup, reconfigure or options form can show."""
+
+    sources = [path.read_text(encoding="utf-8") for path in sorted(INTEGRATION.glob("config_flow*.py"))]
+    # The flows check the callback URL with this module's helper.
+    sources.append((INTEGRATION / "callback_url.py").read_text(encoding="utf-8"))
+    reported: set[str] = set()
+    for source in sources:
+        # A literal key, also both keys of "key" if ... else "other".
+        for key, other in re.findall(
+            _FLOW_ERROR_TARGET + r'"([a-z_]+)"(?:\s+if\s[^\n]*?\selse\s+"([a-z_]+)")?', source
+        ):
+            reported |= {key, other} - {""}
+        # A key held in a variable first: problem = "key", then {"base": problem}.
+        for name in re.findall(_FLOW_ERROR_TARGET + r"([a-z_]+)\b(?![.(\[])", source):
+            reported |= set(re.findall(rf'^\s*{name}(?:,\s*\w+)*\s*=\s*"([a-z_]+)"', source, re.MULTILINE))
+    # errors["base"] = err.reason reports the reason the device installer raised.
+    assert any(re.search(_FLOW_ERROR_TARGET + r"err\.reason\b", source) for source in sources)
+    integration = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.glob("*.py"))
+    constants = dict(re.findall(r'^([A-Z][A-Z0-9_]*) = "([a-z_]+)"$', integration, re.MULTILINE))
+    installer = (INTEGRATION / "device_installer.py").read_text(encoding="utf-8")
+    for key, constant in re.findall(r'C300XDeviceInstallError\((?:"([a-z_]+)"|([A-Z][A-Z0-9_]*))\)', installer):
+        reported.add(key or constants[constant])
+    return reported
+
 
 def test_every_flow_error_message_belongs_to_an_error_the_flows_report() -> None:
-    """A message for an error no flow reports is dead text that drifts unnoticed."""
+    """A message for an error no flow reports is dead text that drifts unnoticed.
 
-    source = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
+    Only places where a flow reports an error count: a key that is also, for
+    example, a repair issue id must not keep its form message alive.
+    """
+
+    reported = _flow_reported_errors()
     strings = json.loads((INTEGRATION / "strings.json").read_text(encoding="utf-8"))
     unused = sorted(
         f"{section}.error.{key}"
         for section in ("config", "options")
         for key in strings[section].get("error", {})
-        if f'"{key}"' not in source
+        if key not in reported
     )
     assert unused == []

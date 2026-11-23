@@ -1,13 +1,11 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-23. Integration and native agent `2.8.3`, a maintenance
-release that corrects existing geometry-backup ownership handling, camera
-controls, UDP peer admission and routing verification. It retains the optional
-display-matched High geometry for exact verified media builds from `2.8.2`.
-Version `2.8.1` fixed the Display restore and clarified settings of `2.8.0`,
-the successor of `2.7.0`, with speech and sounds on the device's speaker,
-spoken notifications and camera quality settings. This report covers the
-release source tree.
+Source review: 2026-11-23. Scope: integration and native agent `2.9.0`.
+The station settings panel and ring-call controls use the existing Qt runtime
+on the device. The package includes the project's QML, JavaScript, patch script
+and native agent, not the vendor settings page or the vendor GUI executable.
+The envelope indicator uses the station's Linux LED interface. None of these
+features requires shipping firmware libraries or station backups.
 
 This is a technical provenance and packaging review, not a legal opinion,
 authorship proof, patent clearance, or a current vulnerability assessment.

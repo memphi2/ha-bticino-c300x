@@ -53,6 +53,11 @@ subject to your own access and backup policy.
 
 Diagnostics redact secrets and avoid exposing callback URLs or token values.
 
+In LED-only Notify mode the envelope on the station indicates that a notice is
+pending. The LED update sends the unread state, not the notification text.
+The notice itself remains available in the Home Assistant display inbox until
+dismissed or expired.
+
 The live text-memo sensor can expose the latest memo text to authorized Home
 Assistant clients. Its `latest_text` attribute is excluded from new Recorder
 history entries. This does not remove text already recorded by older versions,

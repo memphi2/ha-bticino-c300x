@@ -823,15 +823,10 @@ patch_home_page() {
         }
         function print_home_assistant_dynamic_flow_items() {
             print ""
-            print "            Row {"
-            print "                id: displayBridgeButtonRow"
-            print "                width: buttonPrototype.width * 2 + foobar.spacing"
-            print "                height: buttonPrototype.height"
-            print "                spacing: foobar.spacing"
             print "            BasicButton {"
+            print "                id: alarmButton"
             print "                objectName: \"alarmButton\""
-            print "                opacity: page.alarmButtonVisible ? 1 : 0"
-            print "                enabled: page.alarmButtonVisible"
+            print "                visible: page.alarmButtonVisible"
             print "                style: HomePageButtonStyle {"
             print "                    pressedImage: \"images/function_btn_p.svg\""
             print "                    pressedIcon: \"images/keylock_icon-small_p.svg\""
@@ -843,9 +838,9 @@ patch_home_page() {
             print "            }"
             print ""
             print "            BasicButton {"
+            print "                id: haButton"
             print "                objectName: \"haButton\""
-            print "                opacity: page.haButtonVisible ? 1 : 0"
-            print "                enabled: page.haButtonVisible"
+            print "                visible: page.haButtonVisible"
             print "                style: HomePageButtonStyle {"
             print "                    pressedImage: \"images/function_btn_p.svg\""
             print "                    pressedIcon: \"images/call/icon_call-home_p.svg\""
@@ -854,7 +849,6 @@ patch_home_page() {
             print "                    description: \"Home Assistant\""
             print "                }"
             print "                onTouched: tabView.activateTab(haPage)"
-            print "            }"
             print "            }"
         }
         function delta(line, opened, closed, copy) {
@@ -906,6 +900,11 @@ patch_home_page() {
         }
         $0 ~ /function buttonCount\(\)/ {
             in_button_count=1
+            print
+            next
+        }
+        in_button_count && dynamic_home_page == "1" && $0 ~ /\+ 2$/ {
+            sub(/\+ 2$/, "+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2")
             print
             next
         }
@@ -989,8 +988,8 @@ patch_home_page() {
             'property alias memoEventRetryTimer: memoRetryTimer' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
-            'opacity: page.alarmButtonVisible ? 1 : 0' \
-            'opacity: page.haButtonVisible ? 1 : 0' \
+            'visible: page.alarmButtonVisible' \
+            'visible: page.haButtonVisible' \
             'objectName: "alarmButton"' \
             'objectName: "haButton"' \
             'images/call/icon_call-home.svg'

@@ -1,8 +1,8 @@
 """Conservative release decisions from the off-loop native memo scan."""
 
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 

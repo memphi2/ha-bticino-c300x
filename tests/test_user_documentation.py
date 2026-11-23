@@ -354,6 +354,10 @@ def test_the_api_lists_every_error_the_picture_route_answers_with():
     unavailable = section.split("| `picture_controls_unavailable` |", 1)[1].split("\n", 1)[0]
     # picture_reply answers it when the GUI sends malformed values.
     assert "the GUI answered with missing or out-of-range values" in unavailable
+    # The tvp5150 driver answers contrast from its cache and ignores I2C write errors.
+    text = " ".join(section.split("\nErrors:", 1)[0].split())
+    assert "a TVP5150 contrast write is always confirmed" in text
+    assert "Only brightness and saturation have a genuine read-back there." in text
 
 
 def test_the_api_names_the_unread_refusal_of_display_bridge_events():

@@ -1023,10 +1023,13 @@ stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
 raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
 contrast is a driver cache that stays 0 until the first write after boot, and
 such a value is reported as unavailable, not as a percentage. A read off the
-eleven steps is unavailable too. Any other source must expose integer
-descriptors that cover these ranges; raw control reads alone do not make it
-supported. Changes last for the current media session; the station applies
-its own values again when the next session starts. 3.0.6 and the 2.0.2 path
+eleven steps is unavailable too. Because of that contrast cache, and because
+the driver ignores I2C write errors, a TVP5150 contrast write is always
+confirmed: it is never refused as not applied and never rolled back. Only
+brightness and saturation have a genuine read-back there. Any other source
+must expose integer descriptors that cover these ranges; raw control reads
+alone do not make it supported. Changes last for the current media session;
+the station applies its own values again when the next session starts. 3.0.6 and the 2.0.2 path
 are checked offline only; 1.7.19 is tested on a device.
 Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.

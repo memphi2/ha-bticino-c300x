@@ -88,6 +88,23 @@ static int mdns_local_ipv6(struct in6_addr *result);
 static void mdns_set_fd_cloexec(int fd);
 static void mdns_set_fd_nonblocking(int fd);
 
+/* Milliseconds HA still counts as present, or 0 when the responder should
+ * announce again. Monotonic input: wall-clock steps cannot flap it. */
+long long c300x_mdns_home_assistant_present_ms(
+    int connected_this_run,
+    long long last_request_ms,
+    long long now_ms
+)
+{
+    long long left;
+
+    if (!connected_this_run || last_request_ms <= 0) {
+        return 0;
+    }
+    left = last_request_ms + C300X_MDNS_HOME_ASSISTANT_QUIET_MS - now_ms;
+    return left > 0 ? left : 0;
+}
+
 void c300x_mdns_init(struct c300x_mdns *mdns)
 {
     mdns->fd = -1;

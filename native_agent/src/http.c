@@ -199,6 +199,7 @@ struct agent_runtime {
     int display_client_fd;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
+    long long home_assistant_request_ms;
     int display_bridge_registered;
     struct c300x_memo_led memo_led;
     int display_bridge_disabled;
@@ -8957,6 +8958,7 @@ static void handle_api_request(
         send_auth_required(client_fd);
         return;
     }
+    runtime->home_assistant_request_ms = c300x_monotonic_ms();
 
     if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
@@ -9667,11 +9669,20 @@ cleanup:
 
 static int agent_has_home_assistant_connection(
     const struct agent_runtime *runtime,
-    time_t now
+    int *poll_timeout_ms
 )
 {
-    (void)now;
-    return runtime->home_assistant_connected_this_run;
+    long long left = c300x_mdns_home_assistant_present_ms(
+        runtime->home_assistant_connected_this_run,
+        runtime->home_assistant_request_ms,
+        c300x_monotonic_ms()
+    );
+
+    /* Wake up to announce again once HA has been quiet for too long. */
+    if (left > 0) {
+        *poll_timeout_ms = min_timeout_ms(*poll_timeout_ms, left < 3600000 ? (int)left : 3600000);
+    }
+    return left > 0;
 }
 
 int c300x_run(struct c300x_config *config)
@@ -9874,7 +9885,7 @@ int c300x_run(struct c300x_config *config)
         c300x_mdns_open_if_needed(
             &mdns,
             config,
-            agent_has_home_assistant_connection(runtime, now),
+            agent_has_home_assistant_connection(runtime, &poll_timeout_ms),
             network_online,
             now
         );

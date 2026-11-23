@@ -287,7 +287,13 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     dispatch_body = _function_body(text, "static int", "dispatch_event_internal")
 
     assert "runtime->home_assistant_connected_this_run" in body
+    # Outbound callbacks keep succeeding after the station's own address
+    # changes; only HA's authenticated requests prove that HA still reaches it.
     assert "runtime->home_assistant_last_seen_at" not in body
+    assert "runtime->home_assistant_request_ms" in body
+    assert "c300x_mdns_home_assistant_present_ms(" in body
+    assert "c300x_monotonic_ms()" in body
+    assert "min_timeout_ms(*poll_timeout_ms" in body
     assert "C300X_HOME_ASSISTANT_CONNECTED_SECONDS" not in text
     assert "runtime->subscription_count > 0" not in body
     assert "mark_home_assistant_callback_seen(runtime, time(NULL))" in subscription_body
@@ -296,6 +302,20 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     assert "if (subscription->last_ok)" in completed
     assert "mark_home_assistant_callback_seen(runtime, now)" in completed
     assert "mark_home_assistant_callback_seen" not in dispatch_body
+
+
+def test_only_authenticated_api_requests_refresh_home_assistant_presence() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    api_body = _function_body(text, "static void", "handle_api_request")
+    ui_body = _function_body(text, "static int", "handle_ui_request")
+    gate = api_body.index("if (!api_request_authorized(config, request)) {\n        send_auth_required")
+    stamp = api_body.index("runtime->home_assistant_request_ms = c300x_monotonic_ms();")
+
+    assert gate < stamp
+    assert api_body.count("home_assistant_request_ms") == 1
+    assert "home_assistant_request_ms" not in ui_body
+    loop_call = text[text.index("c300x_mdns_open_if_needed(\n            &mdns"):]
+    assert "agent_has_home_assistant_connection(runtime, &poll_timeout_ms)" in loop_call[:300]
 
 
 def test_subscription_snapshots_are_marked_as_non_live_events() -> None:

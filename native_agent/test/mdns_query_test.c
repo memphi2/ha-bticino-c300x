@@ -47,9 +47,23 @@ static void test_address_change_reopens_socket(void)
     test_ifaddrs = NULL;
 }
 
+static void test_home_assistant_presence_expires(void)
+{
+    const long long quiet = C300X_MDNS_HOME_ASSISTANT_QUIET_MS;
+
+    assert(c300x_mdns_home_assistant_present_ms(0, 1000, 2000) == 0);
+    assert(c300x_mdns_home_assistant_present_ms(1, 0, 2000) == 0);
+    assert(c300x_mdns_home_assistant_present_ms(1, 1000, 1000) == quiet);
+    assert(c300x_mdns_home_assistant_present_ms(1, 1000, 1000 + quiet - 1) == 1);
+    assert(c300x_mdns_home_assistant_present_ms(1, 1000, 1000 + quiet) == 0);
+    /* HA renews every 300 s: three missed renewals before announcing again. */
+    assert(quiet == 900000LL);
+}
+
 int main(void)
 {
     test_address_change_reopens_socket();
+    test_home_assistant_presence_expires();
     struct c300x_config config = {0};
     unsigned char packet[512] = {0};
     size_t size = 12;

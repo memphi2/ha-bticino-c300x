@@ -5,6 +5,7 @@
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "http_maintenance.h"
+#include "http_identity.h"
 #include "http_device_user.h"
 #include "http_service_commands.h"
 #include "http_setup_page.h"
@@ -8924,6 +8925,9 @@ static void handle_api_request(
 
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/health") == 0) {
         send_json(client_fd, 200, "OK", "{\"ok\":true,\"agent\":\"native-c\",\"version\":\"" C300X_NATIVE_AGENT_VERSION "\"}\n");
+        return;
+    }
+    if (c300x_http_identity_route(client_fd, config, request)) {
         return;
     }
 

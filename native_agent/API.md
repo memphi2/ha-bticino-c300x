@@ -59,8 +59,9 @@ Normal `/api/v1` endpoints require the configured device-agent API token unless
 Clients send the token in the HTTP `Authorization` header using the bearer
 scheme. Do not log or expose the header value.
 
-`GET /api/v1/health` is always unauthenticated. `GET /` and `GET /setup` are
-served only while `api.noAuth=true`.
+`GET /api/v1/health` and `POST /api/v1/identity/proof` are always
+unauthenticated; the proof route never returns the token. `GET /` and
+`GET /setup` are served only while `api.noAuth=true`.
 
 ### Maintenance Token
 
@@ -170,6 +171,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/` | setup/noAuth | Serves setup page only while bootstrap is open. |
 | `GET` | `/setup` | setup/noAuth | Same as `/`. |
 | `GET` | `/api/v1/health` | none | None. |
+| `POST` | `/api/v1/identity/proof` | none | None. |
 | `GET` | `/api/v1/capabilities` | API | None. |
 | `GET` | `/api/v1/self-test` | API | None. |
 | `GET` | `/api/v1/state` | API | None. |
@@ -275,6 +277,29 @@ Response:
 ```json
 {"ok": true, "agent": "native-c", "version": "2.4.0"}
 ```
+
+### `POST /api/v1/identity/proof`
+
+Authentication: none. Side effects: none.
+
+Home Assistant uses this before it follows the station to a new address. The
+station proves that it holds the API token without sending it:
+
+```json
+{"nonce": "<64 lowercase hex characters>"}
+```
+
+```json
+{"ok": true, "id": "c300x-...", "proof": "<64 lowercase hex characters>"}
+```
+
+`proof` is HMAC-SHA256 with the API token as key over
+`c300x-identity-v1\n<id>\n<local IPv4>:<local port>\n<nonce>`, where the
+address and port are the ones this connection arrived on. A relay that forwards
+the nonce to the real station therefore gets a proof for the station's address,
+not its own. Errors: `400 invalid_nonce`; `404 identity_proof_unavailable`
+when `api.noAuth=true`, the token is shorter than 32 characters, or the
+connection is not IPv4.
 
 ### `GET /api/v1/capabilities`
 

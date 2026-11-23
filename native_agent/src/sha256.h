@@ -12,6 +12,14 @@ int c300x_sha256_bytes_hex(
     char *out,
     size_t out_len
 );
+int c300x_hmac_sha256_hex(
+    const unsigned char *key,
+    size_t key_len,
+    const unsigned char *data,
+    size_t data_len,
+    char *out,
+    size_t out_len
+);
 int c300x_sha256_strings3(
     const char *part1,
     const char *part2,

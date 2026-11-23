@@ -23,12 +23,16 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           position: fixed;
           inset: 0;
           margin: auto;
-          width: min(96vw, 1280px, calc((94vh - 64px) * var(--c300x-picture-ratio, 800 / 480)));
+          --dialog-ratio: var(--c300x-picture-ratio, 800 / 480);
+          width: min(96vw, 1280px, calc((94vh - 64px) * var(--dialog-ratio)));
           height: fit-content;
           max-height: 94vh;
           container-type: inline-size;
         }
         dialog.window::backdrop { background: rgb(0 0 0 / .72); }
+        dialog.window[open]:has(.snapshot-preview:not([hidden])) {
+          --dialog-ratio: var(--snapshot-ratio, var(--c300x-picture-ratio, 5 / 3));
+        }
         ha-card {
           overflow: hidden;
           height: auto;

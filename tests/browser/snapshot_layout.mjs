@@ -43,6 +43,12 @@ export async function checkSnapshotLayout(page, artifacts) {
           };
           await tick();
           const preview = bounds();
+          card._cardMedia.setExpanded(true);
+          await tick();
+          const expanded = card.shadowRoot.querySelector(".body").getBoundingClientRect();
+          const footerFits = expanded.bottom <= innerHeight + 1 && expanded.top >= 0;
+          card._cardMedia.setExpanded(false);
+          await tick();
           const accessible = card._snapshotEl.getAttribute("aria-label");
           const overlay = !!card.shadowRoot.querySelector(".snapshot-label");
           const stream = lab.source.captureStream(10);
@@ -58,7 +64,7 @@ export async function checkSnapshotLayout(page, artifacts) {
             card._videoEl.srcObject = null;
             card._updateState();
             await tick();
-            return { preview, live, stopped: bounds(), accessible, overlay,
+            return { preview, live, stopped: bounds(), accessible, overlay, footerFits,
               snapshotHidden, snapshotRestored: !card._snapshotEl.hidden,
               fit: getComputedStyle(card._snapshotEl).objectFit,
               overflow: document.documentElement.scrollWidth > innerWidth };
@@ -74,6 +80,7 @@ export async function checkSnapshotLayout(page, artifacts) {
             `${label}: wrong picture frame: ${JSON.stringify(state)}`);
         }
         assert.ok(result.preview.mediaHeight > 0, label);
+        assert.ok(result.footerFits, `${label}: expanded preview footer outside viewport`);
         assert.equal(result.overlay, false, `${label}: duplicate timestamp overlay`);
         assert.match(result.accessible, /Archived image \(not live\)/);
         assert.equal(result.fit, "contain");

@@ -340,6 +340,9 @@ binaries on its own and does not check for updates when idle.
   raises a Repair when an update is needed.
 - The Repair uploads the packaged files through the maintenance API after user
   confirmation.
+- The agent refuses the update with `409 update_root_already_writable` when
+  `/` is already writable, so it never takes over a mount another operation
+  left open.
 - The agent verifies the complete staged bundle before replacing any file,
   keeps temporary backups of changed files, rolls them back on an apply error
   and writes bundle metadata only after activation. Config is preserved; restart

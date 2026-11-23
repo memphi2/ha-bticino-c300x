@@ -115,7 +115,7 @@ Common status codes:
 | `403 Forbidden` | Maintenance token is missing/invalid or maintenance is disabled, the endpoint requires loopback, or a required UI header is missing. |
 | `404 Not Found` | Setup disabled, media item missing, feature disabled, or maintenance module disabled (`maintenance_disabled`). |
 | `405 Method Not Allowed` | Wrong method on a loopback UI route. |
-| `409 Conflict` | Media action conflicts with the current device/media state. |
+| `409 Conflict` | The request conflicts with the current device, media or agent state, for example an agent update while `/` is already writable. |
 | `413 Payload Too Large` | HTTP body exceeded the static parser buffer. |
 | `429 Too Many Requests` | Snapshot requested less than two seconds after the previous one. |
 | `500 Internal Server Error` | Agent-side operation failed. |
@@ -1390,6 +1390,14 @@ Allowed staged paths:
 
 Validates the staged manifest/hash, installs files, refreshes firewall state
 when needed, and returns update status.
+
+Errors:
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |
+| `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
+| `500` | `update_apply_failed` | Validation or installation failed. |
 
 ### Config Normalize
 

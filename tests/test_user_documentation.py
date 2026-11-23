@@ -147,3 +147,14 @@ def test_three_documentation_rules_are_closed_with_evidence_only():
     assert "test_user_documentation.py" in audit
     assert f"](../{REMOVAL_LINK})" in audit
     assert f"](../{ICE_LINK})" in audit
+
+
+def test_the_api_lists_every_error_the_agent_update_answers_with():
+    source = (ROOT / "native_agent/src/agent_update.c").read_text()
+    body = source.split("const char *agent_update_error_json", 1)[1].split("\n}\n", 1)[0]
+    codes = re.findall(r'\\"error\\":\\"([a-z_]+)\\"', body)
+    assert "update_root_already_writable" in codes
+    api = (ROOT / "native_agent/API.md").read_text()
+    section = api.split("`POST /api/v1/maintenance/update/apply`", 1)[1].split("\n### ", 1)[0]
+    for code in codes:
+        assert f"`{code}`" in section

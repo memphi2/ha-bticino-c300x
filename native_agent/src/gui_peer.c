@@ -140,8 +140,29 @@ static enum launch stock_wrapper(int proc)
     return UNKNOWN;
 }
 
-/* SysV starts bin/bt_daemon in /home/bticino. Its GUI branch execs
- * bin/BtClass_qws; the shell waits for its direct BtClass child. */
+static unsigned daemon_parent(int proc)
+{
+    return same_file(proc, "exe", C300X_GUI_HOME "/bin/bt_daemon") ? trusted_parent(proc) : 0;
+}
+
+/* Stock launches the wrapper under one daemon, or under a fork of that daemon. */
+static int stock_daemons(unsigned pid)
+{
+    int child = open_process(pid);
+    if (child < 0) return 0;
+    unsigned parent = daemon_parent(child);
+    int ok = parent == C300X_GUI_INIT_PID;
+    if (parent && !ok) {
+        int supervisor = open_process(parent);
+        if (supervisor >= 0) {
+            ok = daemon_parent(supervisor) == C300X_GUI_INIT_PID && daemon_parent(child) == parent;
+            close(supervisor);
+        }
+    }
+    close(child);
+    return ok;
+}
+
 static int station_gui(int gui)
 {
     if (!same_file(gui, "exe", C300X_GUI_HOME "/bin/gui/BtClass")) return 0;
@@ -150,14 +171,11 @@ static int station_gui(int gui)
     if (wrapper < 0) return 0;
     enum launch launch = stock_wrapper(wrapper);
     unsigned parent = trusted_parent(wrapper);
-    int daemon = launch == STOCK && parent ? open_process(parent) : -1;
     /* reload_gui starts the absolute wrapper directly; init adopts it.
      * Never use orphanhood alone as the proof of a station launch. */
     int ok = ((launch == RELOAD && parent == C300X_GUI_INIT_PID) ||
-              (daemon >= 0 && trusted_parent(daemon) == C300X_GUI_INIT_PID &&
-               same_file(daemon, "exe", C300X_GUI_HOME "/bin/bt_daemon"))) &&
+              (launch == STOCK && parent && stock_daemons(parent))) &&
              trusted_parent(wrapper) == parent && trusted_parent(gui) == wrapper_pid;
-    if (daemon >= 0) close(daemon);
     close(wrapper);
     return ok;
 }

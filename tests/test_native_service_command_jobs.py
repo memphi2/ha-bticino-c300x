@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -131,6 +132,23 @@ def test_same_gui_binary_requires_unique_station_launch(lab):
         finally:
             done.touch()
     assert display(lab, **ui)["ok"]
+
+
+def test_stock_gui_accepts_only_one_or_two_pinned_daemons(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    lookalike = lab.root / "bt_daemon"
+    shutil.copy2(Path(sys.executable).resolve(), lookalike)
+    daemon = "bin/bt_daemon"
+    for chain, expected in [
+        ([daemon], 200), ([daemon, daemon], 200),
+        ([str(lookalike), daemon], 403), ([daemon, str(lookalike)], 403),
+        ([daemon, daemon, daemon], 403),
+    ]:
+        launcher = ["bin/BtClass_qws"]
+        for executable in reversed(chain):
+            launcher = [executable, "-c", f"import subprocess; subprocess.run({launcher!r}, check=True)"]
+        result = display(lab, status=expected, launcher=launcher, **ui)
+        assert result["ok"] is (expected == 200)
 
 
 def test_reload_requires_exact_immutable_wrapper(lab):

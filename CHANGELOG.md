@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.9.0 - Unreleased
+## v2.9.0 - 2026-11-23
 
 Discovery:
 

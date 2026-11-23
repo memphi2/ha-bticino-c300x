@@ -22,6 +22,10 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
     )
     result = subprocess.run([str(binary)], check=True, capture_output=True, text=True)
     documents = [json.loads(line) for line in result.stdout.splitlines()]
+    c300 = subprocess.run([str(binary), "C300X"], check=True, capture_output=True, text=True)
+    c300_documents = [json.loads(line) for line in c300.stdout.splitlines()]
+    for index, document in enumerate(c300_documents[:4]):
+        assert set(document["capabilities"]["maintenance"].values()) == {bool(index // 2)}
     assert len(documents) == 6
     for index, document in enumerate(documents[:4]):
         caps = document["capabilities"]
@@ -36,7 +40,12 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         assert document["agent"]["self_update_supported"] is maintenance
         assert document["agent"]["self_update_file_set_version"] == 7
         assert caps["https_callbacks"] is maintenance
-        assert set(caps["maintenance"].values()) == {maintenance}
+        assert caps["maintenance"]["audio_codec_apply"] is False
+        assert all(
+            value is maintenance
+            for key, value in caps["maintenance"].items()
+            if key != "audio_codec_apply"
+        )
         assert caps["doorbell_video"] == {
             "supported": True, "stream_path": '/doorbell"video',
             "audio_stream_path": "/audio", "recorder_stream_path": "/recorder",

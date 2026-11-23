@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int main(void)
+int main(int argc, char **argv)
 {
     struct c300x_config config = {0};
     struct c300x_capabilities_context context = {
@@ -20,6 +20,7 @@ int main(void)
     };
     char body[32768];
     char short_body[16];
+    if (argc == 2) context.device_model = argv[1];
     strcpy(config.device_model, "C300X");
     strcpy(config.video_rtsp_video_path, "/doorbell\"video");
     strcpy(config.video_rtsp_path, "/audio");

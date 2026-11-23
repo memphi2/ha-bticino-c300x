@@ -4,6 +4,7 @@
 #include "video_rtsp.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define C300X_MAX_PATH_JSON_LEN ((C300X_MAX_PATH_LEN * 6) + 1)
 #define C300X_JSON_QUOTED_LEN(value_len) (((value_len) * 6) + 3)
@@ -28,6 +29,8 @@ int c300x_capabilities_json(
     char lock_name[384];
     char bundle_hash_json[C300X_JSON_QUOTED_LEN(C300X_AGENT_BUNDLE_HASH_LEN)];
     int maintenance_supported = context->maintenance_supported;
+    const char *maintenance = maintenance_supported ? "true" : "false";
+    int codec_apply_allowed = context->device_model == NULL || strcmp(context->device_model, "C100X") != 0;
     int activations_count = context->activations_count;
     int written;
 
@@ -80,7 +83,7 @@ int c300x_capabilities_json(
         "}\n",
         C300X_NATIVE_AGENT_VERSION,
         bundle_hash_json,
-        maintenance_supported ? "true" : "false",
+        maintenance,
         device_id_json,
         device_model,
         display_kind,
@@ -129,22 +132,22 @@ int c300x_capabilities_json(
         config->api_no_auth ? "true" : "false",
         config->api_token[0] != '\0' ? "true" : "false",
         config->maintenance_admin_token[0] != '\0' ? "true" : "false",
-        maintenance_supported ? "true" : "false",
+        maintenance,
         (maintenance_supported && config->maintenance_ssh_start_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_ssh_start_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_ssh_start_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_reboot_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_agent_remove_enabled) ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
+        maintenance,
+        maintenance,
+        maintenance,
+        maintenance,
+        maintenance,
+        maintenance,
+        maintenance,
+        maintenance,
+        maintenance,
+        maintenance,
         (maintenance_supported && config->maintenance_gui_reload_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
@@ -157,9 +160,10 @@ int c300x_capabilities_json(
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
+        maintenance,
+        (maintenance_supported && codec_apply_allowed) ? "true" : "false",
+        /* Explicit recovery is checked against the managed backups by the core. */
+        maintenance,
         (maintenance_supported && config->video_enabled && !context->camera_resolution_fixed) ? "true" : "false",
         /* Firmware 3.0.x too: there it sets the low stream. */
         (maintenance_supported && config->video_enabled) ? "true" : "false",

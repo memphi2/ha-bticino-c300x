@@ -49,13 +49,13 @@ static int start_job(struct c300x_command_job *job, const char *program,
         goto fail_pipe;
     }
     for (size_t i = 0; i < count; i++) {
-        if (!dynamic_homepage || strncmp(environ[i], "C300X_QML_DYNAMIC_HOME_PAGE=",
+        if (dynamic_homepage < 0 || strncmp(environ[i], "C300X_QML_DYNAMIC_HOME_PAGE=",
                 sizeof("C300X_QML_DYNAMIC_HOME_PAGE=") - 1) != 0) {
             env[used++] = environ[i];
         }
     }
-    if (dynamic_homepage) {
-        env[used++] = "C300X_QML_DYNAMIC_HOME_PAGE=1";
+    if (dynamic_homepage >= 0) {
+        env[used++] = dynamic_homepage ? "C300X_QML_DYNAMIC_HOME_PAGE=1" : "C300X_QML_DYNAMIC_HOME_PAGE=0";
     }
     if (posix_spawn_file_actions_init(&actions) != 0) {
         goto fail_env;
@@ -118,20 +118,20 @@ int c300x_command_job_start(struct c300x_command_job *job, const char *program,
 int c300x_command_job_start_wait(struct c300x_command_job *job, const char *program,
     char *const argv[], int timeout_ms)
 {
-    return start_job(job, program, argv, 0, timeout_ms, 1);
+    return start_job(job, program, argv, -1, timeout_ms, 1);
 }
 
 int c300x_command_job_start_output(struct c300x_command_job *job, const char *program,
     char *const argv[], int timeout_ms)
 {
-    return start_job(job, program, argv, 0, timeout_ms, 0);
+    return start_job(job, program, argv, -1, timeout_ms, 0);
 }
 
 int c300x_command_job_start_capture(struct c300x_command_job *job, const char *program,
     const char *argument, char *out, size_t out_len, int timeout_ms)
 {
     if (out == NULL || out_len == 0
-        || !c300x_command_job_start(job, program, argument, 0, timeout_ms)) {
+        || !c300x_command_job_start(job, program, argument, -1, timeout_ms)) {
         return 0;
     }
     out[0] = '\0';

@@ -122,14 +122,14 @@
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
           "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -235,14 +235,14 @@
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
           "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -834,14 +834,14 @@
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
           "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
           "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },

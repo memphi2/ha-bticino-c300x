@@ -133,6 +133,34 @@ def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
             assert actions_word in text, (path.name, text)
 
 
+STAY_OPEN_WORDING = {
+    "strings": ("Keep the page open on screen standby", "standby", "Alarm"),
+    "en": ("Keep the page open on screen standby", "standby", "Alarm"),
+    "de": ("Seite im Bildschirm-Standby offen lassen", "Standby", "Alarm-Seite"),
+    "fr": ("Garder la page ouverte pendant la veille de l'écran", "veille", "Alarme"),
+    "it": ("Tenere aperta la pagina durante lo standby dello schermo", "standby", "Allarme"),
+}
+
+
+def test_stay_open_option_names_the_screen_standby_it_acts_on() -> None:
+    """The display pages only read the flag when the screen goes to standby
+    (handleScreenOff in HomeAssistant.qml and Alarm.qml); the old wording
+    promised a stay "after an action", which the flag never controlled."""
+
+    for path in (INTEGRATION / "strings.json", *sorted(TRANSLATIONS.glob("*.json"))):
+        data = _load_json(path)
+        label, standby, alarm_page = STAY_OPEN_WORDING[path.stem]
+        for area, step in (
+            ("config", "user_dashboard"), ("config", "reconfigure_dashboard"),
+            ("options", "dashboard"),
+        ):
+            form = data[area]["step"][step]
+            assert form["data"]["dashboard_prevent_return"] == label, (path.name, step)
+            help_text = form["data_description"]["dashboard_prevent_return"]
+            assert standby in help_text, (path.name, step, help_text)
+            assert alarm_page in help_text, (path.name, step, help_text)
+
+
 def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
     for path in (
         INTEGRATION / "strings.json",

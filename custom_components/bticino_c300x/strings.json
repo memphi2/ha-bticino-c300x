@@ -122,14 +122,14 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
           "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -235,14 +235,14 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
           "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -834,14 +834,14 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
           "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },

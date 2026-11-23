@@ -34,6 +34,9 @@ from custom_components.bticino_c300x.dashboard import (
     async_dashboard_payload,
     async_status,
 )
+from custom_components.bticino_c300x.dashboard_config import (
+    configured_dashboard_prevent_return,
+)
 from custom_components.bticino_c300x.dashboard_entities import (
     normalize_dashboard_entity_display_overrides,
     normalize_dashboard_pages,
@@ -322,6 +325,22 @@ def _display_flow(monkeypatch, flow_kind, entry):
     flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
     flow.add_suggested_values_to_schema = lambda schema, _values: schema
     return steps
+
+
+@pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
+def test_an_old_entry_without_the_stay_open_key_is_shown_as_the_display_applies_it(
+    monkeypatch, flow_kind
+):
+    entry = SimpleNamespace(data={"device_ui_enabled": True}, options={}, runtime_data=None)
+    dashboard_step, _pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step())
+
+    shown = next(
+        key.default() for key in form["data_schema"].schema
+        if str(key) == "dashboard_prevent_return"
+    )
+    assert shown is configured_dashboard_prevent_return(entry) is True
 
 
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])

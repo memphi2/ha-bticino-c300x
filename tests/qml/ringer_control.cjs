@@ -50,7 +50,7 @@ function runtime() {
         disableState(state) { assert.equal(state, 4); mute = false; operations.push("disable"); },
         isStateEnabled(state) { assert.equal(state, 4); return mute; },
     };
-    const context = vm.createContext({Ringer, stopped: false, XMLHttpRequest: Request,
+    const context = vm.createContext({Ringer, stopped: false, uiBaseUrl: "http://127.0.0.1:18090", XMLHttpRequest: Request,
         global: {audioState}, AudioState: {RingtoneMute: 4},
         reconnect: {start() { reconnects++; }, stop() { stops++; }}});
     Object.defineProperty(context, "pendingRequest", {
@@ -71,8 +71,7 @@ const r = runtime();
 r.context.waitForCommand();
 r.context.waitForCommand();
 assert.equal(r.requests.length, 1, "only one sleeping request");
-const config = JSON.parse(fs.readFileSync(path.join(root, "native_agent/config.example.json"), "utf8"));
-assert.equal(r.requests[0].url, "http://127.0.0.1:" + config.listen.uiPort + "/ui/ringer/next?picture=1");
+assert.equal(r.requests[0].url, "http://127.0.0.1:18090/ui/ringer/next?picture=1");
 r.requests[0].reply(command(false));
 assert.equal(r.mute, false);
 assert.deepEqual(r.operations, ["disable"]);

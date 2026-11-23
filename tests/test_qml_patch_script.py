@@ -328,7 +328,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
-    "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
+    "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
     "HomeAssistant.qml": "6b0d2c9dc68a15bfbec12edbc732d8476dae803d5fdd2e4cfbc8fcb4dcebb781",
     "C300XEnergy.qml": "087d7b251d583684897f07d8aa83a6632cda709bce567bf0cbfc44580208a0c1",
@@ -343,7 +343,7 @@ PATCH_OUTPUT_SHA256 = {
     "C300XSituations.qml": "63853c3376beb17514be5d47d4dadb0741dd3bca9ac9a2974cde0f82a24baeb4",
     "C300XOptionalPages.qml": "652645890db10c3797a9f11a165c1ff10faff1bc89164864921b9c3e94444a4d",
     "C300XPageNavigation.qml": "958aee89fe169d819c3abfd94cfecac0a2fb335845303282100f35b9f52ea638",
-    "C300XRingerControl.qml": "ec75a5b64938123a038a46a3bc3639319d1ff7b34bf8adf4fbfd3867c5757643",
+    "C300XRingerControl.qml": "18fd4869c4041c53078619da1e846aaeb599a59fdae4154499c861da7ff6740b",
     "js/c300x_alerts.js": "a06a136e24ba269ee49110d7586c5fb97deda137371e2f8a52a93696ec3ff3d1",
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
@@ -497,6 +497,26 @@ def test_qml_core_apply_installs_media_and_ringer_hooks(tmp_path: Path) -> None:
     assert not (gui_dir / "Alarm.qml").exists()
 
 
+@pytest.mark.parametrize(("apply", "restore"), [("core-apply", "core-restore"), ("apply", "restore-all")])
+def test_core_port_change_reapply_and_restore(tmp_path: Path, apply: str, restore: str) -> None:
+    gui, backup = tmp_path / "gui", tmp_path / "backups"
+    gui.mkdir()
+    _write_original_gui(gui)
+    def run(action: str, port: int):
+        return _run_qml_patch(tmp_path, gui, backup, action,
+                              env_overrides={"C300X_QML_UI_PORT": str(port)})
+
+    for port in (18090, 18091):
+        assert run(apply, port)["core_patched"] is True
+        _assert_media_hook_listener((gui / "EventManager.qml").read_text(), port)
+        assert run(apply, port)["changed_files"] == 0
+        assert run("status", port + 1)["core_state"] == "partial"
+        assert (backup / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
+    assert run(restore, 18091)["core_state"] == "original"
+    assert (gui / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
+    assert not (gui / "C300XRingerControl.qml").exists()
+
+
 def test_qml_core_status_detects_missing_call_end_hook(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -522,8 +542,8 @@ def test_qml_core_upgrade_corrects_legacy_media_port(tmp_path: Path) -> None:
     _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")
     event_manager = gui_dir / "EventManager.qml"
     event_manager.write_text(event_manager.read_text().replace(
-        "http://127.0.0.1:8090/ui/media-closed",
-        "http://127.0.0.1:8092/ui/media-closed",
+        'c300xRinger.uiBaseUrl + "/ui/media-closed"',
+        '"http://127.0.0.1:8092/ui/media-closed"',
     ))
 
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["core_state"] == "partial"
@@ -623,14 +643,14 @@ def test_qml_core_upgrade_adds_ringer_hook_without_replacing_original_backup(tmp
     _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")
     event_manager = gui_dir / "EventManager.qml"
     event_manager.write_text(event_manager.read_text().replace(
-        "    C300XRingerControl {}\n", "",
-    ).replace("http://127.0.0.1:8090/ui/media-closed", "http://127.0.0.1:8092/ui/media-closed"))
+        '    C300XRingerControl { id: c300xRinger; uiBaseUrl: "http://127.0.0.1:8090" }\n', "",
+    ))
     (gui_dir / "C300XRingerControl.qml").unlink()
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["core_state"] == "partial"
     upgraded = _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")
     assert upgraded["core_patched"] is True
     assert upgraded["changed_files"] == 2
-    assert event_manager.read_text().count("C300XRingerControl {}") == 1
+    assert event_manager.read_text().count("C300XRingerControl {") == 1
     _assert_media_hook_listener(event_manager.read_text())
     assert (backup_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")["changed_files"] == 0
@@ -1655,7 +1675,7 @@ def _assert_complete_gui_patch(
 
     event_manager = (gui_dir / "EventManager.qml").read_text()
     assert "function c300xNotifyMediaClosed()" in event_manager
-    assert event_manager.count("C300XRingerControl {}") == 1
+    assert event_manager.count("C300XRingerControl {") == 1
     _assert_media_hook_listener(event_manager)
     assert event_manager.count("c300xNotifyMediaClosed()") == 3
     assert event_manager.index("c300xNotifyMediaClosed()") < event_manager.index(
@@ -1721,10 +1741,9 @@ def _fake_mount_env(tmp_path: Path, mount_log: Path) -> dict[str, str]:
     return {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
 
-def _assert_media_hook_listener(event_manager: str) -> None:
-    config = json.loads((ROOT / "native_agent/config.example.json").read_text())
-    ui_port = config["listen"]["uiPort"]
-    assert f'request.open("GET", "http://127.0.0.1:{ui_port}/ui/media-closed", true)' in event_manager
+def _assert_media_hook_listener(event_manager: str, ui_port: int = 8090) -> None:
+    assert f'C300XRingerControl {{ id: c300xRinger; uiBaseUrl: "http://127.0.0.1:{ui_port}" }}' in event_manager
+    assert 'request.open("GET", c300xRinger.uiBaseUrl + "/ui/media-closed", true)' in event_manager
 
 
 def _sha256(path: Path) -> str:

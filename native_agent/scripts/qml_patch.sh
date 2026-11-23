@@ -186,8 +186,9 @@ home_page_feature_patch_present() {
 
 core_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
-        && file_contains "$GUI_DIR/EventManager.qml" 'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
-        && file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        && core_port="$(station_ui_port)" \
+        && file_contains "$GUI_DIR/EventManager.qml" "C300XRingerControl { id: c300xRinger; uiBaseUrl: \"http://127.0.0.1:$core_port\" }" \
+        && file_contains "$GUI_DIR/EventManager.qml" 'request.open("GET", c300xRinger.uiBaseUrl + "/ui/media-closed", true)' \
         && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && cmp -s "$SOURCE_DIR/C300XRingerControl.qml" "$GUI_DIR/C300XRingerControl.qml" \
         && cmp -s "$SOURCE_DIR/js/c300x_ringer.js" "$GUI_DIR/js/c300x_ringer.js" \
@@ -198,7 +199,7 @@ core_partial_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
         || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()' \
-        || file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        || file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {' \
         || [ -f "$GUI_DIR/C300XRingerControl.qml" ] \
         || [ -f "$GUI_DIR/js/c300x_ringer.js" ]
 }
@@ -1059,6 +1060,7 @@ patch_call_block_popup() {
 }
 
 patch_event_manager() {
+    core_port="$(station_ui_port)"
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     event_manager="$output_dir/EventManager.qml"
     source_event_manager="$BACKUP_DIR/EventManager.qml"
@@ -1073,17 +1075,17 @@ patch_event_manager() {
         printf 'Refusing to patch EventManager.qml from an already patched source\n' >&2
         return 1
     fi
-    awk '
+    awk -v port="$core_port" '
         $0 == "Item {" {
             print
             print ""
             print "    function c300xNotifyMediaClosed() {"
             print "        var request = new XMLHttpRequest()"
-            print "        request.open(\"GET\", \"http://127.0.0.1:8090/ui/media-closed\", true)"
+            print "        request.open(\"GET\", c300xRinger.uiBaseUrl + \"/ui/media-closed\", true)"
             print "        request.send()"
             print "    }"
             print ""
-            print "    C300XRingerControl {}"
+            print "    C300XRingerControl { id: c300xRinger; uiBaseUrl: \"http://127.0.0.1:" port "\" }"
             print "    property bool c300xCallActive: typeof intercomModel === \"undefined\" || intercomModel.isVideoCall || intercomModel.isIntercomCall || intercomModel.isSipIntercomCall"
             print "    property bool c300xRinging: false"
             print "    function c300xPreemptAlert() {"
@@ -1128,8 +1130,8 @@ patch_event_manager() {
         "$temp_file" \
         "EventManager.qml" \
         'function c300xNotifyMediaClosed()' \
-        'C300XRingerControl {}' \
-        'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
+        "C300XRingerControl { id: c300xRinger; uiBaseUrl: \"http://127.0.0.1:$core_port\" }" \
+        'request.open("GET", c300xRinger.uiBaseUrl + "/ui/media-closed", true)' \
         'c300xNotifyMediaClosed()' \
         'onCallEnded:'
     mv "$temp_file" "$event_manager"

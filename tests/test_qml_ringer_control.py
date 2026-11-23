@@ -61,14 +61,13 @@ const audioState = {
     disableState(state) { assert.equal(state, 4); mute = false; operations.push('disable'); },
     isStateEnabled(state) { assert.equal(state, 4); return mute; }
 };
-const context = vm.createContext({Ringer, stopped: false, XMLHttpRequest: Request,
+const context = vm.createContext({Ringer, stopped: false, uiBaseUrl: "http://127.0.0.1:18090", XMLHttpRequest: Request,
     global: {audioState}, AudioState: {RingtoneMute: 4}, reconnect: {start() { reconnects++; }}});
 vm.runInContext(handler, context);
 context.waitForCommand();
 context.waitForCommand();
 assert.equal(requests.length, 1); // One sleeping request, not duplicate polling.
-const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-assert.equal(requests[0].url, 'http://127.0.0.1:' + config.listen.uiPort + '/ui/ringer/next?picture=1');
+assert.equal(requests[0].url, 'http://127.0.0.1:18090/ui/ringer/next?picture=1');
 function command(muted, overrides = {}) {
     return Object.assign({ok: true, id: 'a'.repeat(32), muted, expires: Date.now() + 5000}, overrides);
 }
@@ -98,8 +97,7 @@ assert(source.includes('repeat: false'));
 assert(source.includes('Ringer.abort()'));
 """
     subprocess.run(
-        [node, "-e", script, str(ROOT / "device_qml/C300XRingerControl.qml"),
-         str(ROOT / "native_agent/config.example.json")],
+        [node, "-e", script, str(ROOT / "device_qml/C300XRingerControl.qml")],
         check=True, capture_output=True, text=True,
     )
 

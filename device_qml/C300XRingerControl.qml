@@ -4,10 +4,11 @@ import "js/c300x_ringer.js" as Ringer
 
 Item {
     id: control
+    property string uiBaseUrl: ""
     property bool stopped: false
 
     function waitForCommand(completed, muted, pictureReply) {
-        if (stopped || Ringer.currentRequest())
+        if (stopped || !uiBaseUrl || Ringer.currentRequest())
             return
         var request = new XMLHttpRequest()
         Ringer.setRequest(request)
@@ -41,7 +42,7 @@ Item {
             }
             reconnect.start()
         }
-        var url = "http://127.0.0.1:8090/ui/ringer/next?picture=1"
+        var url = uiBaseUrl + "/ui/ringer/next?picture=1"
         if (pictureReply) url += pictureReply
         if (completed)
             url += "&completed=" + completed + "&muted=" + (muted ? "1" : "0")

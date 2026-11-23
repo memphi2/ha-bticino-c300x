@@ -27,6 +27,9 @@ operation. It is not a display, routing migration, camera or audio trial.
   before writing device files, not silently report a successful activation.
 - Notify sound, speech/TTS, voice memos and memo mutations are not part of this
   test. No alternative sound script or forced capability flag is supported.
+  The [audio investigation](c100x-audio-analysis.md) establishes concrete vendor
+  playback/ownership hazards. Integrated safety guards block incompatible
+  playback and startup cleanup; they do not add a local speaker/TTS backend.
 - Starting the agent is not permission to create a media user, patch routing,
   migrate Companion/MQTT, activate streams, change codecs or operate a door.
 

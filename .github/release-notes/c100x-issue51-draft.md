@@ -40,6 +40,9 @@ are not part of first-test acceptance.
   text memos are implemented offline but **not enabled in this test**.
 - GUI activation/restart, ringer mute and key tone remain unavailable. Notify
   sound, voice/mutating memo operations and TTS are not advertised as supported.
+- Explicit model guards prevent incompatible C300X announcement playback,
+  startup mixer cleanup and legacy-worker takeover on C100X. These safety
+  fixes do not implement local speaker/TTS support.
 
 Offline tests and original-firmware compilation are not device validation.
 Supervised GUI startup/readiness/runtime rollback remain unfinished. This build

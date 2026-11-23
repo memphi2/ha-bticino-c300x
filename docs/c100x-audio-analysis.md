@@ -1,20 +1,19 @@
 # C100X 1.5.8 Audio Dossier
 
-Scope: `work/c100x-audio`, forked from frozen C100X candidate
+Scope: C100X 1.5.8, investigated separately from test candidate
 `63ee8d575199a0675d6b7efb63dcc871d3794fd7`. All inspection is offline.
 The original extracted firmware is a read-only input, not distributed here.
 No device, acoustic, microphone, amplifier, or sustained-call result follows
-from the tests below. Banach owns integration and the combined gate/test ZIP;
-this worktree does not publish a package or issue comment.
+from the tests below. The reviewed safety guards and firmware tests are now
+integrated into the C100X branch; no package or issue comment is published here.
 
-Status: **partial implementation, not clearance for speaker/TTS activation**.
-The production change contains incompatible C300X playback/recovery paths;
+Status: **local speaker/TTS unsupported; safety containment implemented**.
+The production change blocks incompatible C300X playback/recovery paths;
 the existing Speex media path is verified against the original codec library.
-Arbitrary local WAV/TTS playback still has the blockers below. The latest
-integration requirement is finished audio before test-package inclusion:
-**hold this sidecar for review; it does not meet that requirement**. Any
-separate integration of the containment fix needs an explicit decision;
-it must not be presented as a completed local-speaker implementation.
+Arbitrary local WAV/TTS playback still has the blockers below. The safety
+fixes do not implement a local-speaker backend. The decision whether to test
+the package without local speaker/TTS remains pending; the final combined
+gate and distribution must wait for that scope decision.
 
 ## Exact Inputs
 
@@ -113,7 +112,7 @@ QEMU with board identity, mixer writes, command execution and logging
 intercepted. No ALSA device is opened and no dispatcher is executed. The
 helper is our own observation harness, not copied vendor implementation.
 The active-IP overwrite, active-IP mute and local-ring-to-standby results
-were also reproduced with the independent Bohr review probe. HAL request 9
+were also reproduced with an independent review probe. HAL request 9
 is not a busy/ownership check, request 0 is not an owner-scoped release,
 and the play-volume call does not preserve microphone mute. None is suitable
 as an unguarded announcement primitive.
@@ -257,7 +256,7 @@ for state 1 and requests off. These checks do not establish atomic ownership,
 and the same DSP dispatcher can perform unbounded initialization. A short
 tone is not evidence of a safe arbitrary-WAV or TTS mechanism.
 
-Independent Bohr review additionally reports that BEEP is closest to an
+Independent firmware review additionally reports that BEEP is closest to an
 output-only profile but still shares DAC2/AECRX and changes global DSP state;
 RINGING_LOC shares call resources and has nonzero microphone/send settings.
 Those profile-window results are reviewer evidence, not a runtime PCM test
@@ -353,6 +352,11 @@ and missing-event tests also passed against the final production change.
 The extracted-module resource budget and Python lint checks passed. Both
 modified production modules also cross-compiled with ARM warnings-as-errors.
 No full gate was run and no device result is implied.
+
+After integration, 46 focused checks passed: four C100X lifecycle guards,
+19 original-firmware/QEMU cases, two C300X leftover-worker recovery cases,
+and 21 provenance/resource-budget checks. No firmware case was skipped.
+The combined full gate remains on hold pending the package-scope decision.
 
 ## Unresolved Implementation Blockers
 

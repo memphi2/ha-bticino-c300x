@@ -19,6 +19,11 @@ identity and discovery, while preserving the manufacturer app's provisioned acco
 and existing Companion configuration. Routing/media changes and MQTT migration
 are not part of first-test acceptance.
 
+Keep stock Speex as the firmware audio baseline. Configuration compatibility
+does not qualify a firmware PCMU switch for this test. Client-side PCMU
+transcoding is separate; read-only codec status and verified rollback must
+remain available without authorizing media activation.
+
 - Complete-file identity checks protect routing restoration; C100X restoration
   skips the unsupported C300X GUI-label operation.
 - Removal verifies agent termination before restoration, retains startup recovery

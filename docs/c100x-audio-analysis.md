@@ -38,6 +38,12 @@ evidence of working paths. `stack_open.xml` agrees with `enable_speex=1`.
 The existing agent's paired stack/linphone codec checks are appropriate;
 changing only one side would not constitute a codec implementation.
 
+Configuration compatibility is not hardware-safety evidence for switching
+the firmware to PCMU. The first-test baseline remains stock Speex; firmware
+codec changes must be blocked without removing read-only status or verified
+rollback. This restriction does not disable client-side PCMU transcoding,
+which is distinct from rewriting the device's stack/linphone configuration.
+
 The same XML's `bt_av_media` section uses a 16000-Hz device sample rate,
 640-byte blocks, and 20000/60000 microsecond latency/buffer settings. This is
 not a 16-kHz SIP codec claim: device PCM and negotiated RTP are distinct.

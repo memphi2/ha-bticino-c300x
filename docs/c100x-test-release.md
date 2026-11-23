@@ -17,6 +17,12 @@ The first authorized device test should establish agent startup, authenticated
 status/setup reads, model/firmware reporting, discovery, and continued vendor
 operation. It is not a display, routing migration, camera or audio trial.
 
+The audio baseline is the existing stock Speex configuration. Do not switch
+the firmware to PCMU: matching configuration keys and codec-library tests
+do not establish hardware safety. Read-only codec status and verified rollback
+must remain available. Client-side PCMU transcoding is a separate media path,
+not permission to change the firmware codec or start media during this test.
+
 - The C100X-aware agent, installer and update guards are implemented offline.
   Routing restoration checks complete known firmware identity; GUI-free restore
   and uninstall recovery guards have temporary-copy regression tests.

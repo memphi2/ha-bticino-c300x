@@ -19,6 +19,8 @@ struct c300x_display_alert_receipt {
 struct c300x_display_alerts {
     int gui_fd;
     int gui_protected;
+    /* The C100X adapter has no cancellable alert tone. */
+    int sound_supported;
     struct c300x_display_alert_receipt receipts[C300X_DISPLAY_ALERTS_DEDUP_SLOTS];
 };
 

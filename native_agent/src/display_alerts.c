@@ -1,4 +1,5 @@
 #include "display_alerts.h"
+#include "device_detect.h"
 #include "http_util.h"
 #include "json_util.h"
 #include "sha256.h"
@@ -141,6 +142,7 @@ void c300x_display_alerts_init(struct c300x_display_alerts *alerts)
 {
     memset(alerts, 0, sizeof(*alerts));
     alerts->gui_fd = -1;
+    alerts->sound_supported = c300x_device_model() != C300X_DEVICE_MODEL_C100X;
 }
 
 int c300x_display_alerts_prepare(const struct c300x_display_alerts *alerts, struct pollfd *fds)
@@ -197,6 +199,9 @@ void c300x_display_alerts_handle_api(struct c300x_display_alerts *alerts, int fd
     }
     if (request->query[0] || !parse_payload(request->body, &payload)) {
         fail(fd, 400, "invalid_display_alert"); return;
+    }
+    if (payload.sound_duration > 0 && !alerts->sound_supported) {
+        fail(fd, 400, "display_alert_sound_unsupported"); return;
     }
     if (!serialize(&payload, body, sizeof(body))
         || !c300x_sha256_bytes_hex((const unsigned char *)body, strlen(body), digest, sizeof(digest))) {

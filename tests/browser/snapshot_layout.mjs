@@ -39,7 +39,7 @@ export async function checkSnapshotLayout(page, artifacts) {
           const bounds = () => {
             const outer = card.getBoundingClientRect();
             const media = card._mediaEl.getBoundingClientRect();
-            return { height: outer.height, width: outer.width, mediaHeight: media.height };
+            return { height: outer.height, width: outer.width, mediaWidth: media.width, mediaHeight: media.height };
           };
           await tick();
           const preview = bounds();
@@ -68,11 +68,10 @@ export async function checkSnapshotLayout(page, artifacts) {
           }
         }, { height, size });
         const label = `${width}px ${height} ${size.join("x")}`;
-        for (const state of [result.live, result.stopped]) {
-          for (const key of ["height", "width", "mediaHeight"]) {
-            assert.ok(Math.abs(state[key] - result.preview[key]) < 1,
-              `${label}: ${key} changed: ${JSON.stringify(result)}`);
-          }
+        for (const [state, ratio] of [[result.preview, size[0] / size[1]],
+          [result.live, 4 / 3], [result.stopped, size[0] / size[1]]]) {
+          assert.ok(Math.abs(state.mediaHeight - state.mediaWidth / ratio) < 1,
+            `${label}: wrong picture frame: ${JSON.stringify(state)}`);
         }
         assert.ok(result.preview.mediaHeight > 0, label);
         assert.equal(result.overlay, false, `${label}: duplicate timestamp overlay`);

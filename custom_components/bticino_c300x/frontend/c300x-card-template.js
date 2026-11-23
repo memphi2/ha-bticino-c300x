@@ -2,14 +2,14 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
       <style>
         :host {
           display: block;
-          height: 100%;
+          height: auto;
           container-type: inline-size;
         }
         dialog.window {
           display: block;
           position: static;
           width: auto;
-          height: 100%;
+          height: auto;
           max-width: none;
           max-height: none;
           margin: 0;
@@ -28,18 +28,17 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           max-height: 94vh;
           container-type: inline-size;
         }
-        dialog.window[open] ha-card { height: auto; }
         dialog.window::backdrop { background: rgb(0 0 0 / .72); }
         ha-card {
           overflow: hidden;
-          height: 100%;
+          height: auto;
           display: flex;
           flex-direction: column;
         }
         .media {
           position: relative;
           width: 100%;
-          flex: 1 1 auto;
+          flex: 0 0 auto;
           aspect-ratio: var(--c300x-picture-ratio, 800 / 480);
           background: #111;
           min-height: 0;
@@ -96,6 +95,16 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           height: 100%;
           object-fit: contain;
           pointer-events: none;
+        }
+        ha-card:not(:fullscreen) .media:has(> .snapshot-preview:not([hidden])) {
+          aspect-ratio: auto;
+        }
+        ha-card:not(:fullscreen) .snapshot-preview:not([hidden]) {
+          position: relative;
+          inset: auto;
+          display: block;
+          height: auto;
+          aspect-ratio: auto var(--c300x-picture-ratio, 5 / 3);
         }
         [hidden] { display: none !important; }
         .body {

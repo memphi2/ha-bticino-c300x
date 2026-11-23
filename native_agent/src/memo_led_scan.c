@@ -99,10 +99,15 @@ static int open_root(const char *root, int watch)
     while (fd >= 0 && (name = strsep(&rest, "/"))) {
         if (!*name || !strcmp(name, ".")) continue;
         if (!strcmp(name, "..")) { close(fd); return -1; }
-        if (!rest && !watch_dir(watch, fd, 0)) { close(fd); return -1; }
-        int child = openat(fd, name, DIR_FLAGS);
-        if (child < 0 && watch_dir(watch, fd, 0))
-            child = openat(fd, name, DIR_FLAGS);
+        /* Pin the pathname decision before opening the child. Moving any
+         * ancestor invalidates the snapshot, but sibling activity need not. */
+        char child_path[C300X_MAX_PATH_LEN + 64];
+        snprintf(child_path, sizeof(child_path), "/proc/self/fd/%d/%s", fd, name);
+        uint32_t mask = IN_MOVE_SELF | IN_DELETE_SELF | IN_ONLYDIR | IN_DONT_FOLLOW | IN_MASK_ADD;
+        int wd = inotify_add_watch(watch, child_path, mask);
+        if (wd < 0 && watch_dir(watch, fd, 0))
+            wd = inotify_add_watch(watch, child_path, mask);
+        int child = wd < 0 ? -1 : openat(fd, name, DIR_FLAGS);
         close(fd);
         fd = child;
     }

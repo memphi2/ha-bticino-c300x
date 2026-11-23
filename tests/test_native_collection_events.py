@@ -227,7 +227,9 @@ def test_unusable_led_never_claims_or_scans(collection_binary, tmp_path, led_run
 def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, led_runtime):
     api, ui = free_tcp_ports(2)
     led = tmp_path / "led_memo"
-    text, voice = tmp_path / "text", tmp_path / "voice"
+    stores = tmp_path / "vendor" / "stores"
+    stores.mkdir(parents=True)
+    text, voice = stores / "text", stores / "voice"
     for directory in (led, text, voice):
         directory.mkdir()
     brightness, trigger = led / "brightness", led / "trigger"
@@ -318,6 +320,22 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, 
         eventually(lambda: not tree_watched())
         expect(255)
         assert marker.is_dir()
+
+        # Replacing an ancestor leaves the old parent and roots intact.
+        # The old empty tree must not authorize clearing the replacement's LED.
+        (barrier / "ready").unlink()
+        (barrier / "hold").touch()
+        event(False)
+        eventually((barrier / "ready").exists)
+        stores.parent.rename(tmp_path / "retired")
+        text.mkdir(parents=True)
+        voice.mkdir()
+        write_memo(text, "replacement", kind="text", read=False, unix_time=1710000000)
+        (barrier / "hold").unlink()
+        eventually(lambda: not marker.exists())
+        expect(255)
+        shutil.rmtree(text / "replacement")
+        event(True)
 
         # A vendor memo arriving after the snapshot invalidates its off result.
         (barrier / "ready").unlink()

@@ -851,7 +851,11 @@ patch_home_page() {
             print "        }"
             print "    }"
             print ""
-            print
+            if (layout == "stock") {
+                print
+            } else {
+                print "    property bool smallDateTimePresent: true"
+            }
             next
         }
         $0 == "    function aboutToShow() {" {

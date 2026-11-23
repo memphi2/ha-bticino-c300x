@@ -353,7 +353,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_memos.js": "c64084cdc8d44b90150488082aed7338876f756220fac763490fdf0809bf5998",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "cc2b7f5fab26267dc2986c37c0ac551103b20ef10105052f062e092b1fa5a7a1"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "428178cb856d51383519b24dbbe91b0417b66994a13cf3d95660b04a0e774cf9"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -514,6 +514,41 @@ def test_qml_patch_apply_can_keep_home_buttons_side_by_side(tmp_path: Path) -> N
     assert home_page.index('objectName: "alarmButton"') < home_page.index(
         'objectName: "haButton"'
     )
+
+
+@pytest.mark.parametrize(
+    ("flag", "clock_line"),
+    [
+        ("1", "    property bool smallDateTimePresent: homeLinksModel.count > 0 || buttonHolder.buttonCount() > 2\n"),
+        ("0", "    property bool smallDateTimePresent: true\n"),
+    ],
+    ids=["stock", "side_by_side"],
+)
+def test_qml_patch_side_by_side_pair_keeps_the_buttons_beside_the_small_clock(
+    tmp_path: Path, flag: str, clock_line: str
+) -> None:
+    """The pair always takes two slots that buttonCount() does not see.
+
+    With only Memo and Settings the count is 2, so the vendor switch picks
+    the big clock and squeezes the buttons into the left half; the uncounted
+    pair widens the Flow and the render put Memo and Settings off screen
+    (x -144 and -9). Side by side therefore always uses the small clock; in
+    the stock layout the count includes the visible buttons and the vendor
+    switch stays.
+    """
+
+    gui_dir = tmp_path / "gui"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    _run_qml_patch(
+        tmp_path, gui_dir, tmp_path / "backups", "apply",
+        env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": flag},
+    )
+
+    home_page = (gui_dir / "HomePage.qml").read_text()
+    assert home_page.count("    property bool smallDateTimePresent:") == 1
+    assert clock_line in home_page
 
 
 @pytest.mark.parametrize(

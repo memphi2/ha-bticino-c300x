@@ -70,7 +70,15 @@ int c300x_device_display_files_patchable(void)
     return c300x_device_display_kind() == C300X_DISPLAY_QT4_ONDISK;
 }
 
+static int display_adapter_confirmed;
+
+void c300x_device_set_display_adapter_confirmed(int confirmed)
+{
+    display_adapter_confirmed = confirmed != 0;
+}
+
 int c300x_device_display_features(void)
 {
-    return c300x_device_model() == C300X_DEVICE_MODEL_C300X || c300x_device_display_files_patchable();
+    return c300x_device_model() == C300X_DEVICE_MODEL_C300X || c300x_device_display_files_patchable()
+        || (c300x_device_model() == C300X_DEVICE_MODEL_C100X && display_adapter_confirmed);
 }

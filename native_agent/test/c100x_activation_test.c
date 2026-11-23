@@ -1,5 +1,6 @@
 /* The C100X activation state machine with a fake payload and an injected clock. */
 #include "../src/c100x_activation.h"
+#include "../src/device_detect.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -217,8 +218,10 @@ static void test_trial_confirms_without_reboot(void)
     start_with(&activation, inputs.now_ms);
     inputs.lease = 1;
     inputs.lease_generation = GENERATION;
+    assert(!c300x_device_display_features());
     assert(run_for(&activation, &inputs, inputs.now_ms + 20000) == 0);
     assert(c100x_activation_confirmed(&activation));
+    assert(c300x_device_display_features());
     assert(run_for(&activation, &inputs, inputs.now_ms + 10 * MINUTE) == 0);
     assert(c100x_activation_json(&activation, json, sizeof(json)));
     assert(strstr(json, "\"phase\":\"installed\",") && strstr(json, "\"confirmed\":true,"));
@@ -291,6 +294,26 @@ static void test_activate_and_restore_requests(void)
     c100x_activation_close(&activation);
 }
 
+/* Key beep, alerts, bridge and ringer mute: only with the confirmed adapter. */
+static void test_display_functions_follow_the_confirmed_adapter(void)
+{
+    struct c100x_activation activation;
+    struct c100x_activation_inputs inputs = idle_station(10 * MINUTE);
+    set_state("installed", 0, 0, 0);
+    start_with(&activation, inputs.now_ms);
+    assert(settle(&activation, &inputs) == 0);
+    assert(activation.known && !c300x_device_display_features());
+    set_state("installed", 0, 1, 0);
+    c100x_activation_close(&activation);
+    start_with(&activation, inputs.now_ms);
+    assert(settle(&activation, &inputs) == 0);
+    assert(c300x_device_display_features());
+    assert(c100x_activation_request(&activation, C100X_ACTION_RESTORE) == NULL);
+    assert(settle(&activation, &inputs) == 0);
+    assert(!c100x_activation_confirmed(&activation) && !c300x_device_display_features());
+    c100x_activation_close(&activation);
+}
+
 static void test_inert_without_a_c100x(void)
 {
     struct c100x_activation activation;
@@ -320,6 +343,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[1], "interrupted")) test_interrupted_prepare_recovers_without_reboot();
     else if (!strcmp(argv[1], "unknown")) test_unknown_status_fails_closed();
     else if (!strcmp(argv[1], "requests")) test_activate_and_restore_requests();
+    else if (!strcmp(argv[1], "features")) test_display_functions_follow_the_confirmed_adapter();
     else assert(!"unknown case");
     return 0;
 }

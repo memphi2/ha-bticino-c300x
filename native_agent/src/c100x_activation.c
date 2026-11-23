@@ -346,6 +346,8 @@ int c100x_activation_tick(struct c100x_activation *activation, const struct c100
         }
         run_jobs(activation);
     }
+    /* The display functions follow the confirmed adapter, also when it is restored. */
+    c300x_device_set_display_adapter_confirmed(c100x_activation_confirmed(activation));
     return reboot_step(activation, inputs);
 }
 

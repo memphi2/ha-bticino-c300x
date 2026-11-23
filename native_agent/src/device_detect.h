@@ -34,9 +34,11 @@ const char *c300x_device_sip_user(void);
 int c300x_device_display_files_patchable(void);
 
 /* The key beep, the display alerts, the display bridge and the ringer mute:
- * offered on every C300X, as before; on the C100X only with display files the
- * Display patch can edit, which it has not yet. */
+ * offered on every C300X, as before; on the C100X once its display adapter
+ * was confirmed in a trial boot. */
 int c300x_device_display_features(void);
+/* Set by the C100X activation from the payload's confirmed status. */
+void c300x_device_set_display_adapter_confirmed(int confirmed);
 
 /* The display program can be restarted: BtClass of the C300X, on every
  * firmware. The C100X's program is another one. */

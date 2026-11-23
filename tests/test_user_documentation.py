@@ -462,3 +462,18 @@ def test_the_api_names_the_unread_refusal_of_display_bridge_events():
     for case in ("the topic is another one", "the value is not a boolean", "the body is not a valid JSON object"):
         assert case in cases
     assert "A body without `unread` is not checked for it." in " ".join(section.split())
+
+
+def test_display_docs_name_the_home_page_button_layouts_as_the_form_does():
+    strings = json.loads((ROOT / "custom_components/bticino_c300x/strings.json").read_text())
+    label = strings["options"]["step"]["dashboard"]["data"]["dashboard_dynamic_homepage"]
+    options = strings["selector"]["dashboard_dynamic_homepage"]["options"]
+    display = section("display.md", "Enable the Display Pages")
+    row = next(line for line in display.splitlines() if line.startswith(f"| **{label}** |"))
+    assert f"**{options['stock']}** (default)" in row
+    assert f"**{options['side_by_side']}**" in row
+    assert "restarts the display once" in row
+    reference = (DOCS / "feature-reference.md").read_text(encoding="utf-8")
+    row = next(line for line in reference.splitlines() if line.startswith("| Display > Display and Display patch |"))
+    assert label in row
+    assert "Changing the home page buttons applies it again and restarts the display once" in row

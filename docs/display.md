@@ -43,10 +43,12 @@ settings stay.
 | **Home Assistant pages on the display** | On applies the Display patch, off restores the original display. |
 | **Keep the page open on screen standby** | Off (default): the Home Assistant and Alarm pages return to the station's home page when the screen goes to standby. On: they stay open. |
 | **Page navigation** | **Favourites bar** (default) or **Arrows (previous / next)**; see [Page navigation](#page-navigation). |
+| **Home page buttons** | Where the **Alarm** and **Home Assistant** buttons sit on the station's home page. **Like the original (when needed, also stacked)** (default): each button appears only while it has something to open and takes its place among the station's own buttons, which wrap into a second row like they always do. **Fixed side by side**: both keep two fixed places next to each other after **Settings**; a button with nothing to open leaves its place empty, so the other buttons never move. A change applies the Display patch again and restarts the display once. |
 | **Allowed actions (for experts)** | Actions the display and its notices may run. Leave empty if you use none. |
 
-The **Alarm** and **Home Assistant** buttons on the station's home page appear
-automatically when they have something to open.
+The Alarm button has something to open while an alarm panel is configured, the
+Home Assistant button while a display page has content. A short connection
+failure keeps the last confirmed state in both layouts.
 
 The allowed actions are a JSON object, one entry per action ID (letters,
 digits, `_ . : -`) with `domain`, `service` and optional `target`, `data`,
@@ -81,9 +83,9 @@ The optional `dashboard` object changes that tile:
 
 ### What the Display patch changes on the station
 
-- Two buttons on the home page open the Alarm and Home Assistant pages. Their
-  places stay reserved, so the other buttons never move; a short connection
-  failure keeps the last confirmed visibility.
+- Two buttons on the home page open the Alarm and Home Assistant pages,
+  arranged like the station's own buttons or as a fixed pair, as set under
+  **Home page buttons**.
 - A **Home Assistant** tab in the Settings menu
   ([Station Settings Tab](#station-settings-tab)).
 - The swipe threshold of the touch screen rises from 4 to 16 pixels, so a tap

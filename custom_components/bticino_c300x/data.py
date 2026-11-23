@@ -218,7 +218,6 @@ class C300XRuntimeResources:
     unregister_event_registration: Callable[[], None] | None = None
     on_runtime_registration_created: Callable[[], Awaitable[None]] | None = None
     display_bridge_registration_pending: bool = False
-    display_bridge_agent_instance: str = ""
     unregister_display_bridge_updates: Callable[[], None] | None = None
     close_display_notifications: Callable[[], None] | None = None
     prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None

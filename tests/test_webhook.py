@@ -54,7 +54,6 @@ from custom_components.bticino_c300x import (  # noqa: E402
     webhook as webhook_module,
 )
 from custom_components.bticino_c300x.const import (  # noqa: E402
-    CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_SHARED_SECRET,
     EVENT_AGENT_EVENT_RECEIVED,
@@ -84,42 +83,6 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
 )  # pylint: disable=wrong-import-position
 
 _REQUEST_CONTENT_LENGTH_AUTO = object()
-
-
-@pytest.mark.parametrize("enabled", [False, True])
-def test_agent_started_only_reconciles_once_per_authenticated_instance(monkeypatch, enabled):
-    from custom_components.bticino_c300x import events
-
-    reconciled = []
-
-    def reconcile(_hass, entry):
-        reconciled.append(entry)
-        return True
-
-    monkeypatch.setattr(events, "async_request_agent_event_registration", reconcile)
-    entry = SimpleNamespace(
-        data={CONF_SHARED_SECRET: "secret", CONF_DEVICE_UI_ENABLED: enabled},
-        options={},
-        runtime_data=SimpleNamespace(resources=C300XRuntimeResources()),
-    )
-
-    async def send(instance_id, secret="secret"):
-        async def payload():
-            return {"type": "agent_started", "instance_id": instance_id}
-
-        return await _async_handle_webhook(
-            None, entry, SimpleNamespace(headers={HEADER_SHARED_SECRET: secret}, json=payload)
-        )
-
-    async def run():
-        assert (await send("1" * 32, "wrong")).status == 401
-        assert (await send("invalid")).status == 400
-        assert (await send("1" * 32)).status == 200
-        assert (await send("1" * 32)).status == 200
-        assert (await send("2" * 32)).status == 200
-
-    asyncio.run(run())
-    assert reconciled == ([entry, entry] if enabled else [])
 
 
 @pytest.mark.parametrize("event", [False, True])

@@ -12,7 +12,7 @@
 #include "http_camera_quality.h"
 #include "http_announce.h"
 #include "camera_quality.h"
-#include "display_registration.h"
+#include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
 #include "firmware_version.h"
@@ -79,6 +79,7 @@
 #include <unistd.h>
 #define C300X_MAX_SUBSCRIPTIONS 4
 #define C300X_MAX_SUBSCRIPTION_EVENTS 24
+#define C300X_MAX_URL_LEN 512
 #define C300X_MAX_VOICEMAIL_WATCHES (C300X_MAX_VOICEMAIL_MESSAGES + 1)
 #define C300X_MESSAGE_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF)
 #define C300X_MAX_VOICEMAIL_DATE_LEN 64
@@ -199,7 +200,6 @@ struct agent_runtime {
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
     int display_bridge_registered;
-    int display_bridge_boot_pending;
     struct c300x_memo_led memo_led;
     int display_bridge_disabled;
     char display_bridge_webhook_url[C300X_MAX_URL_LEN];
@@ -702,13 +702,10 @@ static const char *display_bridge_shared_secret(
     return "";
 }
 
-static void display_bridge_send_boot(struct agent_runtime *runtime)
+static void perform_display_callback(struct c300x_callback_job *job)
 {
-    runtime->display_bridge_boot_pending = 0;
-    if (!display_bridge_runtime_active(runtime) || runtime->subscription_count != 0) return;
-    c300x_display_boot_notice(runtime->callbacks, runtime->display_bridge_webhook_url,
-        runtime->display_bridge_shared_secret, runtime->config->home_assistant_request_timeout_ms,
-        runtime->metrics.last.instance_id);
+    job->ok = c300x_display_post(job->url, job->token, job->timeout_ms,
+        job->payload, job->response, job->response_len);
 }
 
 static void forward_to_homeassistant(
@@ -731,13 +728,26 @@ static void forward_to_homeassistant(
     if (runtime->display_callbacks == NULL) {
         runtime->display_callbacks = c300x_callback_queue_create();
     }
-    if (strlen(body) >= sizeof(((struct c300x_callback_job *)0)->payload)) {
+    struct c300x_callback_job *job = calloc(1, sizeof(*job));
+    if (job == NULL) {
+        send_homeassistant_unavailable(client_fd);
+        return;
+    }
+    job->perform = perform_display_callback;
+    job->response_len = C300X_LARGE_RESPONSE_SIZE;
+    job->response = calloc(1, job->response_len);
+    snprintf(job->url, sizeof(job->url), "%s", display_bridge_webhook_url(config, runtime));
+    snprintf(job->token, sizeof(job->token), "%s", display_bridge_shared_secret(config, runtime));
+    job->timeout_ms = config->home_assistant_request_timeout_ms;
+    job->queued_at = c300x_system_metrics_monotonic_ms();
+    if (strlen(body) >= sizeof(job->payload)) {
+        c300x_callback_job_free(job);
         send_response_too_large(client_fd);
         return;
     }
-    if (!c300x_display_callback_submit(runtime->display_callbacks,
-        display_bridge_webhook_url(config, runtime), display_bridge_shared_secret(config, runtime),
-        config->home_assistant_request_timeout_ms, body, C300X_LARGE_RESPONSE_SIZE)) {
+    snprintf(job->payload, sizeof(job->payload), "%s", body);
+    if (job->response == NULL || !c300x_callback_queue_submit(runtime->display_callbacks, job)) {
+        c300x_callback_job_free(job);
         send_homeassistant_unavailable(client_fd);
         return;
     }
@@ -2215,7 +2225,7 @@ static void apply_callback_results(struct agent_runtime *runtime, time_t now)
                 }
             }
         }
-        c300x_callback_job_free(job);
+        free(job);
     }
 }
 
@@ -2470,11 +2480,6 @@ static void handle_display_bridge_post(
     }
     (void)c300x_json_bool_field(request->body, "enabled", &enabled);
     if (!enabled) {
-        if (!c300x_display_registration_clear(config)) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"display_registration_clear_failed\"}\n");
-            return;
-        }
-        runtime->display_bridge_boot_pending = 0;
         c300x_memo_led_update(&runtime->memo_led, 0);
         if (!display_bridge_runtime_active(runtime) && !config->display_bridge_enabled && !runtime->display_bridge_disabled) {
             handle_display_bridge_status(client_fd, config, runtime);
@@ -2517,10 +2522,6 @@ static void handle_display_bridge_post(
         && strcmp(runtime->display_bridge_shared_secret, shared_secret) == 0
     ) {
         handle_display_bridge_status(client_fd, config, runtime);
-        return;
-    }
-    if (!c300x_display_registration_save(config, webhook_url, shared_secret)) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"display_registration_save_failed\"}\n");
         return;
     }
     snprintf(runtime->display_bridge_webhook_url, sizeof(runtime->display_bridge_webhook_url), "%s", webhook_url);
@@ -9740,9 +9741,6 @@ int c300x_run(struct c300x_config *config)
         goto cleanup;
     }
     snprintf(mdns.instance_id, sizeof(mdns.instance_id), "%s", runtime->metrics.last.instance_id);
-    runtime->display_bridge_registered = c300x_display_registration_load(config,
-        runtime->display_bridge_webhook_url, runtime->display_bridge_shared_secret);
-    runtime->display_bridge_boot_pending = runtime->display_bridge_registered;
     listeners[listener_count].fd = make_listener(config->listen_host, config->api_port);
     listeners[listener_count].kind = LISTENER_API;
     if (listeners[listener_count].fd < 0) {
@@ -9834,7 +9832,6 @@ int c300x_run(struct c300x_config *config)
         int shutdown_poll_index;
         time_t now = time(NULL);
         int network_online = runtime_network_online(runtime, now);
-        if (runtime->display_bridge_boot_pending && network_online) display_bridge_send_boot(runtime);
 
         for (index = 0; index < listener_count; index++) {
             poll_fds[index].fd = listeners[index].fd;

@@ -32,7 +32,7 @@ def test_agent_skips_callback_io_without_local_network() -> None:
         dispatch_body.index("queue_callback")
     )
     assert bridge_body.index("runtime_network_online(runtime, time(NULL))") < (
-        bridge_body.index("c300x_display_callback_submit")
+        bridge_body.index("c300x_callback_queue_submit")
     )
 
 
@@ -322,7 +322,7 @@ def test_agent_event_subscriptions_are_runtime_only() -> None:
     assert "runtime->subscription_count = 1" in post_body
 
 
-def test_display_bridge_credentials_stay_out_of_agent_config() -> None:
+def test_display_bridge_callback_is_runtime_only() -> None:
     http_text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     config_text = (ROOT / "native_agent" / "src" / "config.c").read_text(
         encoding="utf-8"

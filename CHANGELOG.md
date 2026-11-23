@@ -18,8 +18,6 @@
   is unchanged.
 - Advertise a per-start instance in the existing mDNS record so Home Assistant
   can recognize an agent restart while the service is still cached.
-- Restore the display's saved Home Assistant connection after an agent restart
-  and notify Home Assistant to renew event delivery without waiting for discovery.
 - Camera quality offers a matching visitor snapshot size when changing stream
   size, including when returning to the factory setting.
 - The updater reports a writable root filesystem before replacing files, and

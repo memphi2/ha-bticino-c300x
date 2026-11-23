@@ -4935,6 +4935,9 @@ static void handle_udp_event(
         } else if (c300x_ringer_control_confirm(
                        &runtime->ringer_control, confirmed_muted)) {
             return;
+        } else {
+            c300x_ringer_control_observe(&runtime->ringer_control, confirmed_muted,
+                c100x_activation_confirmed(&runtime->c100x_activation));
         }
     }
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {

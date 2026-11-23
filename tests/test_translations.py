@@ -639,6 +639,18 @@ def test_the_display_form_texts_name_only_the_fields_of_its_schema() -> None:
             assert set(step["data_description"]) == fields, (path.name, step_id)
 
 
+def test_every_raised_service_error_has_a_message_in_every_language() -> None:
+    """A key passed to service_validation_error must exist under exceptions."""
+
+    raised: set[str] = set()
+    for path in INTEGRATION.rglob("*.py"):
+        raised |= set(re.findall(r'service_validation_error\(\s*"([a-z0-9_]+)"', path.read_text(encoding="utf-8")))
+    assert "text_memo_write_not_supported" in raised
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        exceptions = _load_json(path)["exceptions"]
+        assert sorted(key for key in raised if not exceptions.get(key, {}).get("message")) == [], path.name
+
+
 def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_low() -> None:
     # On older firmware the values belong to the high-resolution stream; with
     # the Camera resolution select on Low, Home Assistant gets the other one.

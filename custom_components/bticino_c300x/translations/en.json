@@ -1446,6 +1446,9 @@
     "text_memo_not_available": {
       "message": "No C300X text memo is available."
     },
+    "text_memo_write_not_supported": {
+      "message": "Writing a text memo is not supported by the installed C300X device agent."
+    },
     "unknown_action": {
       "message": "The action ID {action_id} is not configured."
     },

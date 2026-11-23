@@ -1,6 +1,8 @@
 # C100X 1.5.8 Complete Test ZIP: Issue Attachment Draft
 
 **For the agreed issue #51 test only. No tag, release or HACS publication.**
+Local draft only: do not post until the user can attach the verified ZIP and
+explicitly authorizes the issue handoff. Local speaker/TTS is excluded.
 This is not a C300X stable update or the firmware-3.0.6 beta. Use a separate HA
 test instance: the integration domain is shared and cannot coexist as a second
 version on a production HA instance.

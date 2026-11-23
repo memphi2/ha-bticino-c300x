@@ -10,6 +10,8 @@ The download is a **complete HA integration ZIP**, including the freshly built
 ARM agent, generated device bundle, all Lovelace card modules and documentation.
 "Agent-only" describes the first hardware acceptance phase, not a reduced ZIP.
 Unfinished GUI activation remains disabled even though adapter assets are included.
+The selected test-package scope excludes local speaker/TTS. Investigation of
+a safe audio backend continues separately; no unsupported audio path is enabled.
 
 ## What This First Test Covers
 

@@ -11,9 +11,9 @@ Status: **local speaker/TTS unsupported; safety containment implemented**.
 The production change blocks incompatible C300X playback/recovery paths;
 the existing Speex media path is verified against the original codec library.
 Arbitrary local WAV/TTS playback still has the blockers below. The safety
-fixes do not implement a local-speaker backend. The decision whether to test
-the package without local speaker/TTS remains pending; the final combined
-gate and distribution must wait for that scope decision.
+fixes do not implement a local-speaker backend. The selected test-package
+scope explicitly excludes local speaker/TTS. Audio investigation continues
+separately and must not activate an unverified backend in this package.
 
 ## Exact Inputs
 
@@ -367,7 +367,8 @@ No full gate was run and no device result is implied.
 After integration, 46 focused checks passed: four C100X lifecycle guards,
 19 original-firmware/QEMU cases, two C300X leftover-worker recovery cases,
 and 21 provenance/resource-budget checks. No firmware case was skipped.
-The combined full gate remains on hold pending the package-scope decision.
+The combined full gate must verify the selected package without local
+speaker/TTS before distribution; these focused results do not replace it.
 
 ## Unresolved Implementation Blockers
 

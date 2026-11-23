@@ -101,6 +101,11 @@ rate and frame rate. The original **688x480** factory cut-out and **704x576**
 full-height high-stream choices remain available with their original behavior.
 The optional **960x576** high-stream choice is not applied automatically.
 
+Select **Use recommended snapshot size (800×480)** for a preview that preserves
+the display's 5:3 proportions. This works both when switching to **960x576**
+and when returning to the factory stream size. Leave it unchecked to keep a
+custom snapshot size. It affects future snapshots only, not the capture delay.
+
 **960x576 is restricted to exact verified media executables from C300X
 firmware 1.7.19 and 2.0.2, each checked against its own full SHA-256 pair for
 the original and patched files.** A firmware version label alone is not enough. Other

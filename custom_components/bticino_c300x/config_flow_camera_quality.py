@@ -22,11 +22,13 @@ from homeassistant.helpers.selector import (
 
 from .api import C300XAgentApiError
 from .capabilities import entry_maintenance_action_is_advertised
+from .config_snapshots import CONF_SNAPSHOT_HEIGHT, CONF_SNAPSHOT_WIDTH, SNAPSHOT_DEFAULTS
 from .schema_compat import vol
 
 BITRATE = "bitrate_kbps"
 FPS = "fps"
 SIZE = "size"
+USE_SNAPSHOT_SIZE = "use_recommended_snapshot_size"
 
 
 def camera_quality_offered(entry: Any) -> bool:
@@ -77,6 +79,7 @@ def _schema(status: Mapping[str, Any], values: Mapping[str, Any]) -> vol.Schema:
             options=_sizes(status), mode=SelectSelectorMode.DROPDOWN)),
         vol.Required(BITRATE, default=values[BITRATE]): _number(*_range(status, "bitrate", _FALLBACK["bitrate"]), 10, "kbit/s"),
         vol.Required(FPS, default=values[FPS]): _number(*_range(status, "fps", _FALLBACK["fps"]), 1, "fps"),
+        vol.Optional(USE_SNAPSHOT_SIZE, description={"suggested_value": values.get(USE_SNAPSHOT_SIZE, False)}): bool,
     })
 
 
@@ -125,18 +128,23 @@ class CameraQualityOptionsStep:
             changes = {key: value for key, value in wanted.items() if value != saved[key]}
             errors = {key: "camera_quality_out_of_range" for key, name in ((BITRATE, "bitrate"), (FPS, "fps"))
                       if key in changes and not _within(status, name, changes[key])}
-            if not errors and not changes:
-                return cast(ConfigFlowResult, await self.async_step_init())
-            if not errors:
+            if not errors and changes:
                 try:
                     result = await api.async_camera_quality(**changes)
                 except C300XAgentApiError:
                     errors["base"] = "camera_quality_failed"
                 else:
                     # Saved, but no restart (turned off in the agent, or it failed).
-                    if result.get("restart_required") is not True or result.get("rebooting") is not False:
-                        return cast(ConfigFlowResult, await self.async_step_init())
-                    errors["base"] = "camera_quality_restart_pending"
+                    if result.get("restart_required") is True and result.get("rebooting") is False:
+                        errors["base"] = "camera_quality_restart_pending"
+            if not errors:
+                if user_input.get(USE_SNAPSHOT_SIZE) is True:
+                    defaults = self._load_saved()
+                    self._feature_options.update({key: SNAPSHOT_DEFAULTS[key] for key in (
+                        CONF_SNAPSHOT_WIDTH, CONF_SNAPSHOT_HEIGHT,
+                    )})
+                    return cast(ConfigFlowResult, await self._async_save_options(defaults))
+                return cast(ConfigFlowResult, await self.async_step_init())
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="camera_quality",
             data_schema=_schema(status, saved if user_input is None else user_input),

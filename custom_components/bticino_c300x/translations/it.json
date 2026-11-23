@@ -771,12 +771,14 @@
         "data": {
           "size": "Dimensione dell'immagine",
           "bitrate_kbps": "Bit rate",
-          "fps": "Frequenza dei fotogrammi"
+          "fps": "Frequenza dei fotogrammi",
+          "use_recommended_snapshot_size": "Usa la dimensione consigliata per le istantanee (800×480)"
         },
         "data_description": {
           "size": "Le dimensioni dipendono dal firmware e dall'agente installato sul dispositivo. L'opzione 960x576 rispetta le proporzioni del display, se disponibile.",
           "bitrate_kbps": "Valori più alti migliorano l'immagine ma aumentano il traffico di rete.",
-          "fps": "Valori più alti rendono i movimenti più fluidi; il selettore indica i limiti supportati."
+          "fps": "Valori più alti rendono i movimenti più fluidi; il selettore indica i limiti supportati.",
+          "use_recommended_snapshot_size": "Usa le proporzioni del display per le nuove istantanee. Altrimenti mantiene le dimensioni attuali."
         }
       },
       "speech": {

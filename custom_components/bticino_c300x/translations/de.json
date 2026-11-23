@@ -771,12 +771,14 @@
         "data": {
           "size": "Bildgröße",
           "bitrate_kbps": "Bitrate",
-          "fps": "Bildrate"
+          "fps": "Bildrate",
+          "use_recommended_snapshot_size": "Empfohlene Snapshot-Größe (800×480) übernehmen"
         },
         "data_description": {
           "size": "Die Größen hängen von Firmware und installiertem Geräte-Agent ab. Optionales 960x576 passt zu den Display-Proportionen, wenn angeboten.",
           "bitrate_kbps": "Höhere Werte verbessern die Bildqualität, erhöhen aber den Datenverkehr.",
-          "fps": "Höhere Werte sorgen für flüssigere Bewegungen; die Auswahl zeigt die unterstützten Grenzen."
+          "fps": "Höhere Werte sorgen für flüssigere Bewegungen; die Auswahl zeigt die unterstützten Grenzen.",
+          "use_recommended_snapshot_size": "Neue Snapshots im Seitenverhältnis des Displays speichern. Ohne Haken bleibt die bisherige Größe erhalten."
         }
       },
       "speech": {

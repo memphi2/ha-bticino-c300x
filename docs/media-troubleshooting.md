@@ -103,7 +103,11 @@ For snapshot shape, use **Configure > Visitor Snapshot**. Its default is
 make snapshots 960x576. Existing explicit settings such as 688x480 are preserved.
 Choose 800x480, or 400x240 for a smaller 5:3 image, for future captures. Already
 saved images are not resized. The card fits images without cropping; a custom
-image with different proportions can have bars. A cached old live-stream ratio
+image with different proportions can have bars. For example, a **720x480**
+snapshot squeezes the 5:3 display image into 3:2. The card then shows it
+with space on either side in the normal 5:3 view. Set the snapshot size to
+**800x480** to preserve the display proportions, then check a **new** capture.
+A cached old live-stream ratio
 is replaced when a new live stream reports its dimensions.
 
 A higher bit rate can reduce compression artifacts, and up to **24 fps** can

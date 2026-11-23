@@ -86,6 +86,24 @@ def test_only_a_changed_value_is_sent_and_no_change_writes_nothing() -> None:
     assert (result["type"], result["step_id"]) == ("menu", "init")
 
 
+def test_recommended_snapshot_both_directions() -> None:
+    from unittest.mock import AsyncMock
+
+    for before, after in (("688x480", "960x576"), ("960x576", "688x480")):
+        api = _QualityApi()
+        api.values["size"] = before
+        flow = _options_flow(_entry(api))
+        flow._load_saved = lambda: {}
+        flow._feature_options = {"snapshot_width": 720, "snapshot_delay_seconds": 7}
+        flow._async_save_options = AsyncMock(return_value={"type": "menu"})
+        asyncio.run(flow.async_step_camera_quality({
+            "size": after, "fps": 15, "bitrate_kbps": 800, "use_recommended_snapshot_size": True,
+        }))
+        flow._async_save_options.assert_awaited_once()
+        assert flow._feature_options == {"snapshot_width": 800, "snapshot_height": 480, "snapshot_delay_seconds": 7}
+        assert api.writes == [{"size": after}]
+
+
 def test_a_failed_write_keeps_the_form_with_what_was_typed() -> None:
     api = _QualityApi(fail_write=True)
     form = _open(_entry(api), {"size": "688x480", "bitrate_kbps": 3000.0, "fps": 15.0})

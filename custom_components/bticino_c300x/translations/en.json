@@ -771,12 +771,14 @@
         "data": {
           "size": "Picture size",
           "bitrate_kbps": "Bit rate",
-          "fps": "Frame rate"
+          "fps": "Frame rate",
+          "use_recommended_snapshot_size": "Use recommended snapshot size (800×480)"
         },
         "data_description": {
           "size": "Sizes depend on firmware and the installed device agent. Optional 960x576 matches the display's proportions when offered.",
           "bitrate_kbps": "Higher values improve picture quality but increase network traffic.",
-          "fps": "Higher values give smoother motion; the selector shows the supported limits."
+          "fps": "Higher values give smoother motion; the selector shows the supported limits.",
+          "use_recommended_snapshot_size": "Use the display proportions for future snapshots. Leave unchecked to keep your size."
         }
       },
       "speech": {

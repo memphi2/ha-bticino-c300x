@@ -771,12 +771,14 @@
         "data": {
           "size": "Taille de l'image",
           "bitrate_kbps": "Débit",
-          "fps": "Fréquence d'images"
+          "fps": "Fréquence d'images",
+          "use_recommended_snapshot_size": "Utiliser la taille de capture recommandée (800×480)"
         },
         "data_description": {
           "size": "Les tailles dépendent du firmware et de l'agent installé sur l'appareil. L'option 960x576 respecte les proportions de l'écran, si proposée.",
           "bitrate_kbps": "Des valeurs plus élevées améliorent l'image mais augmentent le trafic réseau.",
-          "fps": "Des valeurs plus élevées rendent les mouvements plus fluides ; le sélecteur indique les limites prises en charge."
+          "fps": "Des valeurs plus élevées rendent les mouvements plus fluides ; le sélecteur indique les limites prises en charge.",
+          "use_recommended_snapshot_size": "Utilise les proportions de l’écran pour les nouvelles captures. Sinon, la taille actuelle est conservée."
         }
       },
       "speech": {

@@ -617,7 +617,7 @@ def test_camera_quality_help_is_brief_and_preserves_reboot_and_runtime_details()
         assert re.findall(r"\{([^{}]+)\}", step["description"]) == ["running"], path.name
         assert len(step["description"]) <= 300, path.name
         assert all(hint in step["description"] for hint in reboot_hints[path.stem]), path.name
-        assert set(step["data_description"]) == {"size", "bitrate_kbps", "fps"}, path.name
+        assert set(step["data_description"]) == {"size", "bitrate_kbps", "fps", "use_recommended_snapshot_size"}, path.name
         for key, text in step["data_description"].items():
             assert len(text) <= (170 if key == "size" else 120), (path.name, key)
 

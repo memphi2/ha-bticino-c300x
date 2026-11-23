@@ -326,7 +326,7 @@ PATCH_OUTPUT_SHA256 = {
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
+    "HomePage.qml": "54b4d3b2cadd0b8446b2ce9793559c12f42e65425bd69cd89a8a8c26784e6ba2",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
@@ -348,9 +348,9 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "e702cd9b0cc12c20df1cac8848d1bb3a8c0fcfe1622f247c06368a88085851bc",
+    "js/c300x_ha.js": "c02a63e305455c8b9f340c86fbccf05c5a1fa69a7431615a48b990c247bf0481",
     "js/c300x_i18n.js": "c61b2534a23d93aaa893b993e1a5322ceace10119b97850a7ffd08f52ca40c35",
-    "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
+    "js/c300x_memos.js": "c64084cdc8d44b90150488082aed7338876f756220fac763490fdf0809bf5998",
 }
 
 
@@ -1306,7 +1306,7 @@ def test_home_page_message_watch_stops_on_hide(tmp_path: Path) -> None:
     ]
 
     assert "onVisibleChanged: {" in home_page
-    assert "if (!visible) {" in home_page
+    assert "if (visible) {\n            page.startMessageNotificationWatch()\n        } else {" in home_page
     assert "stopMessageNotificationWatch()" in home_page
     assert start_body.index("stopMessageNotificationWatch()") < start_body.index(
         "MemoSync.startEventWatch(handleMessageNotificationEvent)"

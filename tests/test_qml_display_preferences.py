@@ -152,16 +152,26 @@ def test_home_buttons_qt4_retry_without_navigation(tmp_path):
         qml.write_text('import QtQuick 1.1\nimport "mock.js" as HAConfig\nItem { id: page\n'
                        + controls + "\n" + visibility + "\n" + event_handler + """
     function respond(a, b, valid) { HAConfig.reply(a, b, valid) }
+    property int starts: 0
+    function startMessageNotificationWatch() { starts++ }
     function stopMessageNotificationWatch() {}
     function check(ok) { if (!ok) throw new Error("home recovery failed") }
     Component.onCompleted: {
+        // Stock TabView calls aboutToShow before setting visible=true.
+        // The first read and watch must start even with no clock loader.
+        visible = false
+        var beforeShow = HAConfig.requests
+        var beforeWatch = starts
         refreshDisplayBridgeButtons()
+        check(HAConfig.requests === beforeShow)
+        visible = true
+        check(HAConfig.requests === beforeShow + 1 && starts === beforeWatch + 1)
         respond(false, false, false)
         check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000)
         // No availability event arrives. Fire the same one-shot as the Qt clock.
         buttonRetryTimer.triggered()
         respond(true, true, true)
-        check(HAConfig.requests === 2 && haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running)
+        check(HAConfig.requests === beforeShow + 2 && haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running)
         refreshDisplayBridgeButtons()
         respond(false, false, true)
         check(!haButtonVisible && !alarmButtonVisible && !buttonRetryTimer.running)

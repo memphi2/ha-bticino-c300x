@@ -177,6 +177,7 @@ general_settings_partial_present() {
 }
 
 home_page_feature_patch_present() {
+    file_contains "$GUI_DIR/HomePage.qml" 'page.startMessageNotificationWatch()' || return 1
     file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' && return 0
     file_contains "$GUI_DIR/HomePage.qml" 'id: buttonRetryTimer' || return 1
     file_contains "$GUI_DIR/HomePage.qml" 'if (registrationPossible) page.buttonRetries = 0' || return 1
@@ -863,7 +864,12 @@ patch_home_page() {
         }
         $0 == "    property bool smallDateTimePresent: homeLinksModel.count > 0 || buttonHolder.buttonCount() > 2" {
             print "    onVisibleChanged: {"
-            print "        if (!visible) {"
+            print "        if (visible) {"
+            if (dynamic_home_page == "1") {
+                print "            page.refreshDisplayBridgeButtons()"
+            }
+            print "            page.startMessageNotificationWatch()"
+            print "        } else {"
             if (dynamic_home_page == "1") {
                 print "            ++page.buttonReadGeneration"
                 print "            page.buttonRetries = 0"
@@ -899,19 +905,6 @@ patch_home_page() {
         in_button_count && $0 ~ /^[[:space:]]*\}/ {
             in_button_count=0
             print
-            next
-        }
-        $0 == "                loader.item.setDate()" {
-            print
-            if (dynamic_home_page == "1") {
-                print "                refreshDisplayBridgeButtons()"
-            }
-            print "                startMessageNotificationWatch()"
-            next
-        }
-        $0 == "            } else {" {
-            print
-            print "                stopMessageNotificationWatch()"
             next
         }
         $0 ~ /notificationsCount: answeringModel\.obj\.unreadMessages/ {

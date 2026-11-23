@@ -177,9 +177,10 @@ general_settings_partial_present() {
 }
 
 home_page_feature_patch_present() {
-    file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
-        || { file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
-            && file_contains "$GUI_DIR/HomePage.qml" 'id: buttonRetryTimer'; } \
+    file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' && return 0
+    file_contains "$GUI_DIR/HomePage.qml" 'id: buttonRetryTimer' || return 1
+    file_contains "$GUI_DIR/HomePage.qml" 'if (registrationPossible) page.buttonRetries = 0' || return 1
+    file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || (
             file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
             && file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \

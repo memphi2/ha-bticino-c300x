@@ -457,6 +457,19 @@ def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> No
     (gui_dir / "HomePage.qml").write_text(home_page.replace("id: buttonRetryTimer", "id: oldTimer"))
     assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
 
+    # The older dynamic layout computed its button count instead of using a row.
+    legacy = home_page.replace("id: displayBridgeButtonRow", "id: legacyRow").replace(
+        "    id: page", "    id: page\n    function displayBridgeButtonCount() { return 0 }\n"
+        "    property int legacyCount: 0 + 2 + page.displayBridgeButtonCount()"
+    )
+    (gui_dir / "HomePage.qml").write_text(legacy)
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "patched"
+    (gui_dir / "HomePage.qml").write_text(legacy.replace("id: buttonRetryTimer", "id: oldTimer"))
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
+    for layout in (home_page, legacy):
+        (gui_dir / "HomePage.qml").write_text(layout.replace("if (registrationPossible) page.buttonRetries = 0", ""))
+        assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
+
 
 def test_qml_media_user_label_apply_installs_call_forwarding_label(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"

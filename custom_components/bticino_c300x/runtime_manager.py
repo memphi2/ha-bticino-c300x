@@ -75,7 +75,7 @@ from .device_user import (
     homeassistant_account_label,
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
-from .display_unread import async_send_unread_event
+from .display_unread import async_release_unread_claim, async_send_unread_event
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
@@ -383,6 +383,7 @@ class C300XRuntimeManager:
                 await async_shutdown_snapshots(self.hass, self.entry.entry_id)
             finally:
                 cleanup_entry_runtime_resources(self.hass, self.entry, runtime_data)
+                await async_release_unread_claim(self.entry, runtime_data)
         return unload_ok
 
     def _build_agent_api(self) -> C300XAgentApi:

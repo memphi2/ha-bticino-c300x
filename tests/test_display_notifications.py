@@ -88,7 +88,7 @@ def test_unread_events_follow_store_without_listeners_or_read_feedback():
         hass = SimpleNamespace(loop=Loop(), add_job=lambda *args: jobs.append(args))
         entry = SimpleNamespace(
             entry_id="front", data={}, options={"device_ui_enabled": True},
-            runtime_data=SimpleNamespace(api=api, resources=C300XRuntimeResources()),
+            runtime_data=SimpleNamespace(api=api, capabilities={}, resources=C300XRuntimeResources()),
         )
 
         async def deliver():
@@ -134,7 +134,7 @@ def test_reload_snapshot_follows_inflight_notification():
             events.append((topic, unread))
 
         api = SimpleNamespace(async_notify_display_bridge_event=post)
-        old = SimpleNamespace(api=api, display_bridge_notify_messages=True,
+        old = SimpleNamespace(api=api, capabilities={"memo_led": True}, display_bridge_notify_messages=True,
                               display_notifications=SimpleNamespace(has_unread=lambda: True))
         entry = SimpleNamespace(entry_id="front", runtime_data=old)
         sending = asyncio.create_task(

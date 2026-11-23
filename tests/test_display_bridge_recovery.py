@@ -15,7 +15,12 @@ from test_events import (
     event_ha_boundary,  # noqa: F401
 )
 
-from custom_components.bticino_c300x import callback_url, events, runtime_manager
+from custom_components.bticino_c300x import (
+    callback_url,
+    display_unread,
+    events,
+    runtime_manager,
+)
 from custom_components.bticino_c300x.api_errors import (
     C300XAgentApiConnectionError,
     C300XAgentApiUnsupportedError,
@@ -66,6 +71,75 @@ def setup(monkeypatch, *, no_events=False):
     runtime.resources.unregister_event_registration = worker.unregister
     runtime.resources.on_runtime_registration_created = refresh
     return hass, entry, api, worker
+
+
+def unload_lab(monkeypatch):
+    hass, entry, api, _ = setup(monkeypatch)
+    hass.data = {}
+    hass.config_entries = Mock(async_unload_platforms=AsyncMock(return_value=True))
+    runtime = entry.runtime_data
+    runtime.capabilities["memo_led"] = True
+    runtime.display_notifications = Mock()
+    return runtime_manager.C300XRuntimeManager(hass, entry), runtime, api.async_notify_display_bridge_event
+
+
+def test_unload_releases_after_inflight_claim_with_lost_response(monkeypatch):
+    async def run():
+        manager, runtime, send = unload_lab(monkeypatch)
+        entered, resume, closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        runtime.resources.close_display_notifications = closed.set
+        delivered = []
+
+        async def deliver(topic, *, unread):
+            if unread:
+                entered.set()
+                await resume.wait()
+            delivered.append(unread)
+            if unread:
+                raise C300XAgentApiConnectionError("response lost")
+
+        send.side_effect = deliver
+        runtime.display_notifications.has_unread.return_value = True
+        async def snapshot():
+            await display_unread.async_send_unread_event(manager.entry, runtime, runtime.api, "notifications")
+
+        claim = asyncio.create_task(snapshot())
+        await asyncio.wait_for(entered.wait(), 1)
+        unload = asyncio.create_task(manager.async_unload())
+        await asyncio.wait_for(closed.wait(), 1)
+        queued = asyncio.create_task(snapshot())
+        resume.set()
+        with pytest.raises(C300XAgentApiConnectionError):
+            await claim
+        assert await asyncio.wait_for(unload, 1)
+        await queued
+        assert delivered == [True, False]
+        assert not runtime.display_unread_claim_possible
+    asyncio.run(asyncio.wait_for(run(), 2))
+
+
+@pytest.mark.parametrize("scenario", ["empty", "cleared", "no_led", "failed_unload", "timeout"])
+def test_unload_only_releases_outstanding_claim_within_budget(monkeypatch, scenario):
+    async def run():
+        manager, runtime, send = unload_lab(monkeypatch)
+        runtime.capabilities["memo_led"] = scenario != "no_led"
+        sequence = {"empty": [], "cleared": [True, False]}.get(scenario, [True])
+        for unread in sequence:
+            runtime.display_notifications.has_unread.return_value = unread
+            await display_unread.async_send_unread_event(manager.entry, runtime, runtime.api, "notifications")
+        send.reset_mock()
+        if scenario == "timeout":
+            async def hang(*args, **kwargs):
+                await asyncio.Future()
+            send.side_effect = hang
+            monkeypatch.setattr(display_unread, "_RELEASE_TIMEOUT", 0.01)
+        manager.hass.config_entries.async_unload_platforms.return_value = scenario != "failed_unload"
+        assert await asyncio.wait_for(manager.async_unload(), 1) == (scenario != "failed_unload")
+        if scenario == "timeout":
+            send.assert_awaited_once_with("notifications", unread=False)
+        else:
+            send.assert_not_awaited()
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("failure", ["status", "configure"])

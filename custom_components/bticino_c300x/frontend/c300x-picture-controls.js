@@ -1,4 +1,4 @@
-import { mediaLocalize } from "./c300x-media-translations.js?v=85b11206385b1f7f";
+import { mediaLocalize } from "./c300x-media-translations.js?v=413014c016984e6d";
 
 const keys = ["brightness", "contrast", "saturation"];
 
@@ -10,11 +10,12 @@ export class C300XPictureControls extends HTMLElement {
     root.innerHTML = `<style>
       :host {position:absolute;inset:4px 8px;pointer-events:none;z-index:2;color:white;font:inherit}
       :host([hidden]),[hidden]{display:none!important}
-      button,section {pointer-events:auto;background:#202124;color:white}
-      button {position:absolute;left:0;bottom:clamp(0px,100% - 36px,48px);border:0;border-radius:50%;width:36px;height:36px;cursor:pointer}
+      button,section {pointer-events:auto;color:white}
+      button {background:#202124;position:absolute;left:0;bottom:clamp(0px,100% - 36px,48px);border:0;border-radius:50%;width:36px;height:36px;cursor:pointer}
       section {position:absolute;bottom:clamp(0px,100% - 145px,48px);left:42px;
         box-sizing:border-box;width:min(200px,100% - 42px);max-height:min(145px,100%);
-        overflow:auto;overscroll-behavior:contain;padding:4px;border-radius:6px}
+        overflow:auto;overscroll-behavior:contain;padding:4px;border-radius:6px;
+        background:rgb(32 33 36/.5);text-shadow:0 0 2px #000,0 0 2px #000,0 1px 3px #000}
       label {display:grid;grid-template-columns:1fr auto;font-size:12px}
       input {grid-column:1/-1;width:100%;margin:0}
       p {margin:0;font-size:12px}

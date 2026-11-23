@@ -75,7 +75,12 @@ def agent_home_page_env():
 
 
 @pytest.fixture
-def lab(binary, tmp_path, maintenance_options, agent_home_page_env):
+def lab(binary, tmp_path, maintenance_options, request):
+    # Modules that import only lab have no agent_home_page_env fixture.
+    try:
+        agent_home_page_env = request.getfixturevalue("agent_home_page_env")
+    except pytest.FixtureLookupError:
+        agent_home_page_env = "0"
     port, ui_port, own = free_tcp_ports(3)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
@@ -260,7 +265,9 @@ def test_extracted_qml_routes_preserve_actions_and_confirmation(lab, suffix, con
     ({"dynamic_homepage": True}, "1"),
     ({}, "1"),
 ])
-def test_apply_passes_the_home_page_layout_both_ways(lab, payload, expected):
+def test_apply_passes_the_home_page_layout_both_ways(
+    agent_home_page_env, lab, payload, expected
+):
     """Side by side (false) reaches the script too; without the field the
     script gets no setting from the request and keeps the device's layout."""
 

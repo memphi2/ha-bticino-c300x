@@ -1302,7 +1302,7 @@ def test_capture_plays_announcement_in_parallel(monkeypatch: pytest.MonkeyPatch,
     assert ("talkback", ("192.0.2.10", announcement, False)) in calls
 
 
-def test_capture_cancels_long_announcement_after_capture(
+def test_capture_reports_announcement_that_ignores_stop_signal(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1344,15 +1344,16 @@ def test_capture_cancels_long_announcement_after_capture(
         _talkback,
     )
 
-    asyncio.run(
-        async_capture_doorbell_ring_call(
-            hass,
-            entry,
-            output_path=str(target),
-            duration_seconds=1,
-            announcement_path=str(announcement),
+    with pytest.raises(HomeAssistantError, match="announcement did not finish"):
+        asyncio.run(
+            async_capture_doorbell_ring_call(
+                hass,
+                entry,
+                output_path=str(target),
+                duration_seconds=1,
+                announcement_path=str(announcement),
+            )
         )
-    )
 
     assert events == ["capture_done", "talkback_cancelled"]
 

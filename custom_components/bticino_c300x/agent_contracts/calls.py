@@ -27,6 +27,8 @@ class RingCallStatus(AgentContract):
     open_fds: int
     active_threads: int
     last_error: str | None
+    # Older agents did not gate UDP on a played RTSP connection.
+    talkback_ready: bool = True
 
 
 @dataclass(frozen=True, slots=True, eq=False)

@@ -12,7 +12,8 @@ Fixed:
   microphone and answer requests are cancelled when the camera disappears or
   the Ring Call ends, without interrupting a newer session.
 - UDP talkback accepts media only from a live, playing RTSP peer. Unsolicited
-  packets and packets from closed or parked sessions are discarded.
+  packets and packets from closed or parked sessions are discarded. Ring-capture
+  announcements wait for that media connection before starting playback.
   Needs the agent update.
 - Applying the routing patch verifies the complete supported firmware image
   before changing it or its recovery copy. Needs the agent update.

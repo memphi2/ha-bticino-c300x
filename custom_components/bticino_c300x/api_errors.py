@@ -11,6 +11,10 @@ class C300XAgentApiConnectionError(C300XAgentApiError):
     """Raised when the device agent cannot be reached."""
 
 
+class C300XDisplayBridgeNotRegisteredError(C300XAgentApiConnectionError):
+    """The event route is reachable but has lost its runtime bridge registration."""
+
+
 class C300XAgentUpdateError(C300XAgentApiConnectionError):
     """Structured failure from a maintenance/update endpoint, without retry advice."""
 

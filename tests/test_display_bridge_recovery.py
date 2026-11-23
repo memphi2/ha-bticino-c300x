@@ -60,6 +60,14 @@ class Api(_FakeApi):
 
 def setup(monkeypatch, *, no_events=False):
     hass, entry, api = _FakeHass(), _FakeEntry(), Api()
+    hass.loop = asyncio.get_running_loop()
+
+    def add_job(job, *args):
+        result = job(*args)
+        if asyncio.iscoroutine(result):
+            hass.async_create_task(result)
+
+    hass.add_job = add_job
     entry.data.update(webhook_id="display", shared_secret="secret", device_ui_enabled=True)
     runtime = entry.runtime_data = BticinoC300XRuntimeData(
         api=api, capabilities={}, event_state=C300XEventState(),
@@ -88,8 +96,6 @@ def test_patched_entry_registration_matches_led_notify(monkeypatch, setting):
         runtime = entry.runtime_data
         runtime.qml_patch_status = {"patched": True}
         runtime.capabilities["memo_led"] = True
-        hass.loop = asyncio.get_running_loop()
-        hass.add_job = lambda fn, *args: hass.async_create_task(fn(*args))
         api.async_display_bridge_status.return_value = {"configured": True}
         try:
             await runtime_manager._async_configure_display_bridge(hass, entry, api)
@@ -243,13 +249,6 @@ def test_lost_unread_snapshot_reconciles_without_steady_polling(monkeypatch, fai
     async def run():
         hass, entry, api, worker = setup(monkeypatch, no_events=True)
         runtime = entry.runtime_data
-        hass.loop = asyncio.get_running_loop()
-        def add_job(job, *args):
-            result = job(*args)
-            if asyncio.iscoroutine(result):
-                hass.async_create_task(result)
-
-        hass.add_job = add_job
         worker.start()
         try:
             await _drain_hass_tasks(hass)
@@ -318,14 +317,15 @@ def test_event_404_only_reconciles_lost_registration(monkeypatch, error, retry):
             send.reset_mock()
             session = _FakeSession(json.dumps({"ok": False, "error": error}), response_status=404)
             send.side_effect = C300XAgentApi(session, "http://agent", "token").async_notify_display_bridge_event
-            runtime.display_notifications = Mock()
-            runtime.display_notifications.has_unread.return_value = True
-            runtime.display_bridge_notify_messages = True
-            await runtime_manager._async_notify_display_bridge_alarm_if_listening(hass, entry, runtime)
+            store = notifications_for_entry(hass, entry)
+            store.show(SHOW_SCHEMA({
+                "notification_id": "short", "title": "Door", "message": "Open", "expires_in": 30,
+            }))
+            await _drain_hass_tasks(hass)
             send.assert_awaited_once_with("notifications", unread=True)
             assert runtime.resources.display_bridge_registration_pending is retry
             if retry:
-                timer, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+                timer, = _active_scheduled_calls(0)
                 send.side_effect = None
                 await timer.callback()
                 api.async_configure_display_bridge.assert_awaited_once()
@@ -337,6 +337,50 @@ def test_event_404_only_reconciles_lost_registration(monkeypatch, error, retry):
             assert not runtime.resources.display_bridge_registration_pending
         finally:
             runtime.resources.close()
+    asyncio.run(run())
+
+
+def test_missing_bridge_advances_one_renewal_then_backs_off(monkeypatch):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch)
+        runtime = entry.runtime_data
+        worker.start()
+
+        async def notify(topic):
+            runtime.display_bridge_notify_messages = topic == "notifications"
+            await runtime_manager._async_notify_display_bridge_alarm_if_listening(hass, entry, runtime)
+
+        try:
+            await _drain_hass_tasks(hass)
+            session = _FakeSession('{"error":"display_bridge_disabled"}', response_status=404)
+            send = api.async_notify_display_bridge_event
+            fail = C300XAgentApi(session, "http://agent", "token").async_notify_display_bridge_event
+            send.side_effect = fail
+            renewal, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+            await notify("alarm")
+            assert not runtime.resources.display_bridge_registration_pending
+            assert _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS) == [renewal]
+
+            await notify("notifications")
+            first, = _active_scheduled_calls(0)
+            await notify("notifications")
+            assert _active_scheduled_calls(0) == [first]
+            assert _active_scheduled_delays() == [0]
+            await first.callback()  # Even the registration snapshot still gets a 404.
+            backoff, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+            await notify("notifications")
+            assert _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS) == [backoff]
+            assert _active_scheduled_delays() == [events._SUBSCRIPTION_REFRESH_SECONDS]
+
+            send.side_effect = None
+            await backoff.callback()
+            assert not runtime.resources.display_bridge_registration_pending
+            send.side_effect = fail
+            await notify("notifications")
+            assert _active_scheduled_delays() == [0]
+        finally:
+            runtime.resources.close()
+        assert not _active_scheduled_delays()
     asyncio.run(run())
 
 

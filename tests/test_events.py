@@ -38,11 +38,11 @@ class _FakeDispatcher:
         self.listeners.append(listener)
         return lambda: self.listeners.remove(listener)
 
-    def async_dispatcher_send(self, hass: HomeAssistant, signal: str, entry_id: str) -> None:
+    def async_dispatcher_send(self, hass: HomeAssistant, signal: str, entry_id: str, *args: Any) -> None:
         self.signals.append((signal, entry_id))
         for listener_hass, listener_signal, callback in list(self.listeners):
             if listener_hass is hass and listener_signal == signal:
-                callback(entry_id)
+                callback(entry_id, *args)
 
 
 class _FakeScheduler:

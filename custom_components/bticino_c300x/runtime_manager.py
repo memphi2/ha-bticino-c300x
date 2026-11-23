@@ -19,6 +19,7 @@ from .api import (
     build_agent_base_url,
     display_bridge_callback_fingerprint,
 )
+from .api_errors import C300XDisplayBridgeNotRegisteredError
 from .capabilities import (
     capability_is_supported,
     entry_device_ui_configured,
@@ -1334,7 +1335,7 @@ async def _async_notify_display_bridge_alarm_if_listening(
                     await runtime_data.api.async_notify_display_bridge_event(topic)
             except C300XAgentApiUnsupportedError:
                 _LOGGER.debug("C300X display bridge events are unsupported")
-            except C300XAgentApiError:
+            except C300XAgentApiError as err:
                 _LOGGER.debug("C300X display bridge event failed", exc_info=True)
                 if (
                     topic == "notifications"
@@ -1344,7 +1345,9 @@ async def _async_notify_display_bridge_alarm_if_listening(
                     from .events import async_notify_runtime_registration_failed
 
                     runtime_data.resources.display_bridge_registration_pending = True
-                    async_notify_runtime_registration_failed(hass, entry)
+                    async_notify_runtime_registration_failed(
+                        hass, entry, prompt=isinstance(err, C300XDisplayBridgeNotRegisteredError),
+                    )
             if not runtime_data.display_bridge_notify_dirty:
                 break
     finally:

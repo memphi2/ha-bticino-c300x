@@ -23,6 +23,7 @@ from .api_errors import (
     C300XAgentApiUnsupportedError,
     C300XAgentUpdateError,
     C300XDeviceNotRegisteredError,
+    C300XDisplayBridgeNotRegisteredError,
 )
 from .const import (
     HEADER_MAINTENANCE_TOKEN,
@@ -224,7 +225,7 @@ class _C300XApiCore:
                 and _agent_error_field(text, "error") == "display_bridge_disabled"
             ):
                 # The route exists, but its runtime bridge registration is gone.
-                raise C300XAgentApiConnectionError(_http_error_text(status, text))
+                raise C300XDisplayBridgeNotRegisteredError(_http_error_text(status, text))
             raise C300XAgentApiUnsupportedError(
                 _http_error_text(
                     status,

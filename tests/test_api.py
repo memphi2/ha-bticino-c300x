@@ -3274,6 +3274,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
             "open_fd_count": "9",
             "agent_init_script_present": True,
             "agent_init_link_ok": False,
+            "agent_started_after_boot_seconds": "21",
             "subscription_count": "1",
             "recent_event_count": "4",
             "recent_event_capacity": "16",
@@ -3322,6 +3323,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
     assert normalized["open_fd_count"] == 9
     assert normalized["agent_init_script_present"] is True
     assert normalized["agent_init_link_ok"] is False
+    assert normalized["agent_started_after_boot_seconds"] == 21
     assert normalized["subscription_count"] == 1
     assert normalized["recent_event_count"] == 4
     assert normalized["recent_event_capacity"] == 16

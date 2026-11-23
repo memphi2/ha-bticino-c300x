@@ -110,6 +110,7 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "open_fd_count",
     "agent_init_script_present",
     "agent_init_link_ok",
+    "agent_started_after_boot_seconds",
     "subscription_count",
     "recent_event_count",
     "recent_event_capacity",

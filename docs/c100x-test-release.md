@@ -421,6 +421,11 @@ on does not silently turn a saved refusal or an absent permission into approval.
 5. Observe agent uptime and errors while idle. Record the actual observation
    duration, not a generic stability claim. Reboot persistence,
    ring/media/audio and update/remove tests need separately agreed phases.
+   In an agreed reboot phase, download the HA diagnostics once the station is
+   back: `agent_init_link_ok: true` and a small `agent_started_after_boot_seconds`
+   (the boot link starts the agent early) show that it came up with that boot.
+   A value close to the station's uptime means a later manual start, not
+   reboot persistence; `uptime_seconds` far below it means it restarted since.
 
 ## Recovery and Stop Conditions
 

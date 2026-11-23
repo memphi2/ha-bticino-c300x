@@ -283,6 +283,7 @@ def normalize_agent_diagnostics(data: Any) -> AgentDiagnosticsStatus:
         open_fd_count=_optional_int(data.get("open_fd_count")),
         agent_init_script_present=_optional_bool(data.get("agent_init_script_present")),
         agent_init_link_ok=_optional_bool(data.get("agent_init_link_ok")),
+        agent_started_after_boot_seconds=_optional_int(data.get("agent_started_after_boot_seconds")),
         subscription_count=_optional_int(data.get("subscription_count")),
         recent_event_count=_optional_int(data.get("recent_event_count")),
         recent_event_capacity=_optional_int(data.get("recent_event_capacity")),

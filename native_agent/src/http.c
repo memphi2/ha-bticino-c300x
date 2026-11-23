@@ -2768,6 +2768,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"open_fd_count\":%d,"
             "\"agent_init_script_present\":%s,"
             "\"agent_init_link_ok\":%s,"
+            "\"agent_started_after_boot_seconds\":%lld,"
             "\"subscription_count\":%d,"
             "\"recent_event_count\":%d,"
             "\"recent_event_capacity\":%d,"
@@ -2821,6 +2822,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             open_fd_count,
             agent_init_script_present ? "true" : "false",
             agent_init_link_ok ? "true" : "false",
+            runtime->start_monotonic_ms / 1000,
             runtime->subscription_count,
             c300x_recent_events_count(&runtime->recent_events),
             C300X_RECENT_EVENTS_CAPACITY,

@@ -83,6 +83,14 @@ def finish(conn: HTTPConnection, status: int = 200) -> dict:
     return body
 
 
+@pytest.mark.parametrize("ready", [False, True])
+def test_call_status_has_peer_readiness(lab: Lab, ready: bool) -> None:
+    if ready:
+        (lab.root / "talkback-ready").touch()
+    status = api_get(lab.api_port, "/api/v1/calls/doorbell/status")
+    assert status["talkback_ready"] is ready
+
+
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     directory = tmp_path_factory.mktemp("media-control-build")

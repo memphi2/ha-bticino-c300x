@@ -4775,9 +4775,8 @@ static void set_socket_receive_buffer(int fd, int size_bytes) {
 /* UDP carries no credential. Borrow admission only from a live, played RTSP
  * connection on the same host; optional RTSP credentials retain their policy.
  * This is peer binding, not protection against source-IP spoofing on the LAN. */
-static bool udp_talkback_peer_allowed(media_bridge_t *bridge, const struct sockaddr_in *sender) {
+static bool udp_talkback_peer_allowed_locked(media_bridge_t *bridge, const struct sockaddr_in *sender) {
     bool allowed = false;
-    pthread_mutex_lock(&bridge->mutex);
     if (!bridge->talkback_stop && !bridge->stop_in_progress) {
         for (size_t i = 0; i < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; i++) {
             const rtsp_client_slot_t *slot = &bridge->rtsp_clients[i];
@@ -4804,8 +4803,55 @@ static bool udp_talkback_peer_allowed(media_bridge_t *bridge, const struct socka
             if (allowed) break;
         }
     }
+    return allowed;
+}
+
+static bool udp_talkback_peer_allowed(media_bridge_t *bridge, const struct sockaddr_in *sender) {
+    pthread_mutex_lock(&bridge->mutex);
+    bool allowed = udp_talkback_peer_allowed_locked(bridge, sender);
     pthread_mutex_unlock(&bridge->mutex);
     return allowed;
+}
+
+bool c300x_media_ring_talkback_peer_ready(const struct c300x_video *video, int client_fd) {
+    struct sockaddr_storage peer;
+    socklen_t peer_size = sizeof(peer);
+    struct sockaddr_in sender = {.sin_family = AF_INET};
+    bool ready = false;
+    if (video == NULL || client_fd < 0
+        || getpeername(client_fd, (struct sockaddr *)&peer, &peer_size) != 0) {
+        return false;
+    }
+    if (peer.ss_family == AF_INET && peer_size >= sizeof(struct sockaddr_in)) {
+        sender.sin_addr = ((const struct sockaddr_in *)&peer)->sin_addr;
+    } else if (peer.ss_family == AF_INET6 && peer_size >= sizeof(struct sockaddr_in6)) {
+        const struct in6_addr *address = &((const struct sockaddr_in6 *)&peer)->sin6_addr;
+        if (!IN6_IS_ADDR_V4MAPPED(address)) return false;
+        memcpy(&sender.sin_addr, &address->s6_addr[12], sizeof(sender.sin_addr));
+    } else {
+        return false;
+    }
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    const media_srtp_state_t *state = g_bridge.ring_srtp_state;
+    if (g_bridge.video == video && g_bridge.talkback_started && g_bridge.talkback_fd >= 0
+        && !g_bridge.talkback_joining && !g_bridge.ring_stop && !g_bridge.ring_call_stop
+        && g_bridge.ring_call_active && g_bridge.ring_answered && g_bridge.ring_audio_active
+        && state != NULL && state->audio != NULL
+        && g_bridge.ring_audio_rtp_fd >= 0 && g_bridge.ring_target_audio_port > 0) {
+        struct sockaddr_in listener;
+        socklen_t listener_size = sizeof(listener);
+        int type = 0;
+        socklen_t type_size = sizeof(type);
+        /* A readiness query neither consumes RTSP data nor sends probe RTP. */
+        ready = getsockopt(g_bridge.talkback_fd, SOL_SOCKET, SO_TYPE, &type, &type_size) == 0
+            && type == SOCK_DGRAM
+            && getsockname(g_bridge.talkback_fd, (struct sockaddr *)&listener, &listener_size) == 0
+            && listener.sin_family == AF_INET && listener.sin_port != 0
+            && udp_talkback_peer_allowed_locked(&g_bridge, &sender);
+    }
+    pthread_mutex_unlock(&g_bridge.mutex);
+    return ready;
 }
 
 static void *talkback_proxy_thread(void *arg) {

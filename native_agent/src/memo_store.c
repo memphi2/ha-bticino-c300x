@@ -134,44 +134,6 @@ void c300x_read_voicemail_info(
     fclose(file);
 }
 
-/* The API snapshot is bounded by memos_max. A release must check even
- * older entries, and unknown metadata is never permission to turn off. */
-int c300x_native_memo_unread(const char *root)
-{
-    DIR *dir = opendir(root);
-    if (!dir) return -1;
-    int result = 0;
-    for (;;) {
-        errno = 0;
-        struct dirent *entry = readdir(dir);
-        if (!entry) {
-            if (errno) result = -1;
-            break;
-        }
-        if (entry->d_name[0] == '.') continue;
-        char path[C300X_MAX_PATH_LEN], dir_path[C300X_MAX_PATH_LEN], date[1];
-        C300X_MEMO_STAT_STRUCT st;
-        if (!c300x_join_path(dir_path, sizeof(dir_path), root, entry->d_name)
-            || memo_stat_path(dir_path, &st) < 0) {
-            result = -1;
-            continue;
-        }
-        if (!S_ISDIR(st.st_mode)) continue;
-        int n = snprintf(path, sizeof(path), "%s/%s/msg_info.ini", root, entry->d_name);
-        int read = -1;
-        long long timestamp;
-        if (n >= 0 && (size_t)n < sizeof(path))
-            c300x_read_voicemail_info(path, &read, date, sizeof(date), &timestamp);
-        if (read == 0) {
-            result = 1;
-            break;
-        }
-        if (read < 0) result = -1;
-    }
-    closedir(dir);
-    return result;
-}
-
 static int memo_path_exists(const char *path)
 {
     C300X_MEMO_STAT_STRUCT st;

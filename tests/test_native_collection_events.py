@@ -39,7 +39,8 @@ EVENTS = ("answering_machine.messages_changed", "memos.changed")
 def collection_binary(tmp_path_factory):
     build = tmp_path_factory.mktemp("collection-native-build")
     subprocess.run(
-        ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all"],
+        ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all",
+         "LDFLAGS=-pthread -ldl test/memo_led_scan_barrier.c -Wl,--wrap=eventfd_write"],
         check=True, capture_output=True, text=True,
     )
     return build / "host" / "c300x-agent-native"
@@ -140,6 +141,13 @@ def collection_lab(collection_binary, tmp_path, request):
 
 def collection_data(event, kind):
     return event["data"]["voicemail" if kind == "voicemail" else "memos"]
+
+
+def eventually(predicate):
+    deadline = time.monotonic() + 3
+    while not predicate():
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
 
 
 @pytest.fixture
@@ -258,6 +266,16 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, 
             "webhook_url": "http://127.0.0.1:1/webhook", "shared_secret": "secret",
         })
 
+    def tree_watched():
+        needle = f" ino:{text.stat().st_ino:x} "
+        for fd in Path(f"/proc/{proc.pid}/fdinfo").iterdir():
+            try:
+                if needle in fd.read_text():
+                    return True
+            except FileNotFoundError:
+                continue
+        return False
+
     proc = start()
     try:
         wait_for_health(api)
@@ -282,6 +300,36 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, 
         api_post(api, path, {"topic": "notifications"}, expected_status=202)
         assert brightness.stat().st_mtime_ns == stamp
         assert led_runtime.stat().st_mtime_ns == directory_stamp
+        assert not tree_watched()
+        assert start().wait(timeout=5) == 2
+        assert marker.stat().st_mode & 0o777 == 0o700
+        expect(255)
+
+        # A confirmed empty scan held off-loop cannot release a newer claim.
+        barrier = tmp_path / "barrier"
+        barrier.mkdir()
+        (barrier / "hold").touch()
+        event(False)
+        eventually((barrier / "ready").exists)
+        assert tree_watched()
+        event(True)
+        assert marker.stat().st_mode & 0o777 == 0o700
+        (barrier / "hold").unlink()
+        eventually(lambda: not tree_watched())
+        expect(255)
+        assert marker.is_dir()
+
+        # A vendor memo arriving after the snapshot invalidates its off result.
+        (barrier / "ready").unlink()
+        (barrier / "hold").touch()
+        event(False)
+        eventually((barrier / "ready").exists)
+        write_memo(text, "late", kind="text", read=False, unix_time=1710000000)
+        (barrier / "hold").unlink()
+        eventually(lambda: not marker.exists())
+        expect(255)
+        shutil.rmtree(text / "late")
+        event(True)
 
         # Firmware writes its own off edge after the native memo change.
         write_memo(text, "memo_1", kind="text", read=False, unix_time=1710000000)
@@ -289,6 +337,7 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, 
         expect(255)
         event(False)
         expect(255)
+        eventually(lambda: not marker.exists())
         shutil.rmtree(text / "memo_1")
         brightness.write_text("0\n")
         event(False)
@@ -309,10 +358,34 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, 
         # Do not clear until the native watcher sees conclusive metadata.
         item = voice / "memo_1"
         item.mkdir()
+        info = item / "msg_info.ini"
+        os.mkfifo(info)
         event(False)
-        expect(255)
-        (item / "msg_info.ini").write_text("[Message Information]\nRead=1\n")
+        eventually(tree_watched)
+        assert marker.stat().st_mode & 0o777 == 0o500
+        # Unknown native state survives SIGKILL as pending, not HA unread.
+        proc.kill()
+        proc.wait(timeout=5)
+        proc = start()
+        wait_for_health(api)
+        eventually(tree_watched)
+        brightness.write_text("0\n")
+        assert api_get(api, "/api/v1/capabilities")["capabilities"]["memo_led"]
         expect(0)
+        brightness.write_text("255\n")
+        # Neither symlinks nor oversized metadata authorize switching off.
+        info.unlink()
+        decoy = tmp_path / "read.ini"
+        decoy.write_text("[Message Information]\nRead=1\n")
+        info.symlink_to(decoy)
+        expect(255)
+        info.unlink()
+        info.write_text(decoy.read_text() + "#" * 5000)
+        expect(255)
+        info.write_text(decoy.read_text())
+        expect(0)
+        eventually(lambda: not tree_watched())
+        register()
         event(True)
         api_post(api, "/api/v1/display-bridge", {"enabled": False})
         expect(0)
@@ -334,7 +407,7 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, 
         # No runtime registration survives the crash. Disable alone releases.
         api_post(api, "/api/v1/display-bridge", {"enabled": False})
         expect(255 if native_at_shutdown else 0)
-        assert not marker.exists()
+        eventually(lambda: not marker.exists())
         register()
         # A trigger takeover ends HA ownership even when memo metadata is unknown.
         event(True)

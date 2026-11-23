@@ -1,9 +1,10 @@
 #include "memo_led.h"
 #include "memo_led_claim.h"
-#include "memo_store.h"
+#include "memo_led_scan.h"
 #include "json_util.h"
 #include <fcntl.h>
 #include <limits.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -85,26 +86,41 @@ static int set_level(int on)
 
 void c300x_memo_led_init(struct c300x_memo_led *led, const char *text, const char *voice)
 {
-    *led = (struct c300x_memo_led){.text_root = text, .voice_root = voice, .claim_dir = -1};
-    if (c300x_memo_led_present()) led->claim_dir = c300x_memo_claim_open(&led->claimed);
+    *led = (struct c300x_memo_led){.text_root = text, .voice_root = voice, .claim_dir = -1,
+                                   .scan_fd = -1, .watch_fd = -1};
+    enum memo_claim_state state = MEMO_UNCLAIMED;
+    if (c300x_memo_led_present()) led->claim_dir = c300x_memo_claim_open(&state);
+    led->claimed = state == MEMO_ACTIVE;
+    led->release_pending = state == MEMO_RELEASING;
+    if (led->release_pending) c300x_memo_led_update(led, 0);
 }
 
-void c300x_memo_led_close(struct c300x_memo_led *led)
+static void drop_watch(struct c300x_memo_led *led)
 {
-    c300x_memo_led_update(led, 0);
-    if (led->claim_dir >= 0) close(led->claim_dir);
-    led->claim_dir = -1;
+    if (led->watch_fd >= 0) close(led->watch_fd);
+    led->watch_fd = -1;
+}
+
+static void release_claim(struct c300x_memo_led *led)
+{
+    led->release_pending = !c300x_memo_claim_remove(led->claim_dir);
+    if (!led->release_pending) drop_watch(led);
 }
 
 void c300x_memo_led_update(struct c300x_memo_led *led, int unread)
 {
     if (led->claim_dir < 0 || (!unread && !led->claimed && !led->release_pending)) return;
     if (!c300x_memo_led_present()) {
+        if (led->scan) led->obsolete = 1;
+        drop_watch(led);
         if (led->claimed || led->release_pending) (void)c300x_memo_claim_remove(led->claim_dir);
         led->claimed = led->release_pending = 0;
         return;
     }
     if (unread) {
+        if (led->release_pending && !c300x_memo_claim_pending(led->claim_dir, 0)) return;
+        if (led->scan) led->obsolete = 1;
+        drop_watch(led);
         if (!led->claimed && !led->release_pending && !c300x_memo_claim_create(led->claim_dir)) {
             close(led->claim_dir);
             led->claim_dir = -1;
@@ -114,18 +130,60 @@ void c300x_memo_led_update(struct c300x_memo_led *led, int unread)
         led->release_pending = 0;
         (void)set_level(1);
     } else if (led->claimed || led->release_pending) {
+        if (led->claimed && !c300x_memo_claim_pending(led->claim_dir, 1)) return;
         led->claimed = 0;
         led->release_pending = 1;
         int manual = manual_trigger();
         if (manual < 0) return;
-        if (manual) {
-            int text = c300x_native_memo_unread(led->text_root);
-            int voice = text == 1 ? 0 : c300x_native_memo_unread(led->voice_root);
-            int on = text == 1 || voice == 1;
-            if ((!on && (text < 0 || voice < 0)) || !set_level(on)) return;
+        if (!manual) { release_claim(led); return; }
+        if (!led->scan) {
+            led->scan = memo_scan_start(led->text_root, led->voice_root, &led->scan_fd);
+            if (led->scan) drop_watch(led);
         }
-        led->release_pending = !c300x_memo_claim_remove(led->claim_dir);
     }
+}
+
+int c300x_memo_led_pollfd(const struct c300x_memo_led *led)
+{
+    return led->scan ? led->scan_fd : led->watch_fd;
+}
+
+static void finish_scan(struct c300x_memo_led *led, int allow_retry)
+{
+    int watch;
+    int on = memo_scan_finish(led->scan, &watch);
+    led->scan = NULL;
+    int obsolete = led->obsolete;
+    led->obsolete = 0;
+    if (!led->release_pending) { close(watch); return; }
+    led->watch_fd = watch;
+    struct pollfd changed = {.fd = watch, .events = POLLIN};
+    if (obsolete || poll(&changed, 1, 0) != 0) {
+        if (allow_retry) c300x_memo_led_update(led, 0);
+        return;
+    }
+    int manual = manual_trigger();
+    if (manual == 0 || (manual == 1 && on >= 0 && set_level(on))) release_claim(led);
+}
+
+void c300x_memo_led_ready(struct c300x_memo_led *led)
+{
+    if (led->scan) finish_scan(led, 1);
+    else {
+        drop_watch(led);
+        c300x_memo_led_update(led, 0);
+    }
+}
+
+void c300x_memo_led_close(struct c300x_memo_led *led)
+{
+    c300x_memo_led_update(led, 0);
+    /* Drain a superseded scan, allowing at most one fresh shutdown decision. */
+    if (led->scan && led->obsolete) finish_scan(led, 1);
+    if (led->scan) finish_scan(led, 0);
+    drop_watch(led);
+    if (led->claim_dir >= 0) close(led->claim_dir);
+    led->claim_dir = -1;
 }
 
 int c300x_memo_led_event(struct c300x_memo_led *led, const char *topic, const char *body)

@@ -27,17 +27,21 @@ static int trusted_dir(int fd, int marker)
     struct stat st;
     if (fstat(fd, &st) < 0) return 0;
 #endif
-    if (marker) return st.st_uid == geteuid() && (st.st_mode & 07777) == 0700;
+    if (marker && st.st_uid == geteuid()) {
+        if ((st.st_mode & 07777) == 0700) return MEMO_ACTIVE;
+        if ((st.st_mode & 07777) == 0500) return MEMO_RELEASING;
+    }
+    if (marker) return 0;
     return (st.st_uid == 0 || st.st_uid == geteuid())
         && (!(st.st_mode & 0022) || (st.st_mode & S_ISVTX));
 }
 
-int c300x_memo_claim_open(int *held)
+int c300x_memo_claim_open(enum memo_claim_state *held)
 {
     const char *override = getenv("C300X_MEMO_LED_RUNTIME_DIR");
     /* On the device /run is a firmware symlink to /var/volatile/run. */
     const char *roots[] = {"/run", "/var/volatile/run", "/tmp", "/var/volatile/tmp"};
-    *held = 0;
+    *held = MEMO_UNCLAIMED;
     for (size_t i = 0; i < (override ? 1 : sizeof(roots) / sizeof(*roots)); i++) {
         int dir = open(override ? override : roots[i], DIR_FLAGS);
         if (dir < 0) continue;
@@ -67,4 +71,14 @@ int c300x_memo_claim_create(int dir)
 int c300x_memo_claim_remove(int dir)
 {
     return dir >= 0 && (unlinkat(dir, CLAIM, AT_REMOVEDIR) == 0 || errno == ENOENT);
+}
+
+/* The mode of the same private inode journals the ownership edge atomically. */
+int c300x_memo_claim_pending(int dir, int pending)
+{
+    int fd = openat(dir, CLAIM, DIR_FLAGS);
+    if (fd < 0) return 0;
+    int ok = trusted_dir(fd, 1) && fchmod(fd, pending ? 0500 : 0700) == 0;
+    close(fd);
+    return ok;
 }

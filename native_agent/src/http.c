@@ -1776,8 +1776,7 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
 
 static void memos_init(struct agent_runtime *runtime, const struct c300x_config *config)
 {
-    c300x_memo_led_init(&runtime->memo_led, config->memos_text_root, config->memos_voice_root);
-    int watch = (config->memos_enabled && config->memos_watch) || runtime->memo_led.claim_dir >= 0;
+    int watch = config->memos_enabled && config->memos_watch;
     voicemail_runtime_init(
         &runtime->text_memos,
         config->memos_enabled,
@@ -2032,7 +2031,6 @@ static void handle_memos_inotify(
     if (structure_changed) {
         voicemail_refresh_watches(memos);
     }
-    c300x_memo_led_update(&runtime->memo_led, runtime->memo_led.claimed);
     if (config->memos_enabled && config->memos_watch)
         memos_event_dispatch_if_changed(config, runtime);
 }
@@ -9669,10 +9667,11 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 1 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     int memo_led_fd = -1;
+    int memo_led_owner = 0;
     int udp_joined = 0;
     struct c300x_mdns mdns;
     struct agent_runtime *runtime = NULL;
@@ -9719,7 +9718,6 @@ int c300x_run(struct c300x_config *config)
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
     memos_init(runtime, config);
-    if (runtime->memo_led.claim_dir >= 0) memo_led_fd = c300x_memo_led_watch();
     runtime->callbacks = c300x_callback_queue_create();
     if (runtime->callbacks == NULL) {
         fprintf(stderr, "fatal: callback_queue_init_failed\n");
@@ -9785,6 +9783,10 @@ int c300x_run(struct c300x_config *config)
         refresh_smartphone_forwarding_mode(config, runtime);
     }
 
+    /* A failed second start must not adopt or release the running agent's marker. */
+    c300x_memo_led_init(&runtime->memo_led, config->memos_text_root, config->memos_voice_root);
+    memo_led_owner = 1;
+    if (runtime->memo_led.claim_dir >= 0) memo_led_fd = c300x_memo_led_watch();
     fprintf(stderr, "c300x native agent %s listening api=%s:%u ui=%s\n",
         C300X_NATIVE_AGENT_VERSION,
         config->listen_host,
@@ -9828,6 +9830,8 @@ int c300x_run(struct c300x_config *config)
         poll_fds[poll_count++] = (struct pollfd){.fd = shutdown_fd, .events = POLLIN};
         int memo_led_index = (int)poll_count;
         poll_fds[poll_count++] = (struct pollfd){.fd = memo_led_fd, .events = POLLIN};
+        int memo_scan_index = (int)poll_count;
+        poll_fds[poll_count++] = (struct pollfd){.fd = c300x_memo_led_pollfd(&runtime->memo_led), .events = POLLIN};
         http_poll_index = (int)poll_count;
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
@@ -9990,6 +9994,7 @@ int c300x_run(struct c300x_config *config)
             runtime_set_wake_reason(runtime, "event");
         }
         /* Drain old descriptors before accept can reuse one of their numbers. */
+        if (poll_fds[memo_scan_index].revents) c300x_memo_led_ready(&runtime->memo_led);
         if (poll_fds[memo_led_index].revents & POLLIN) {
             drain_inotify_events(memo_led_fd);
             c300x_memo_led_update(&runtime->memo_led, runtime->memo_led.claimed);
@@ -10114,7 +10119,7 @@ int c300x_run(struct c300x_config *config)
 
 cleanup:
     if (memo_led_fd >= 0) close(memo_led_fd);
-    if (runtime) c300x_memo_led_close(&runtime->memo_led);
+    if (memo_led_owner) c300x_memo_led_close(&runtime->memo_led);
     if (shutdown_requested && result == 1) {
         result = 0;
     }

@@ -64,7 +64,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             return self.write(path, source.read_bytes())
 
         def run(self, command: str) -> str:
-            if command.startswith("if [ -L ") and "printf absent" in command:
+            if command.startswith("p=") and "printf absent" in command:
                 self.stage("firewall-preflight")
                 return "absent" if self.failure == "missing-hook" else ""
             if "libQt5Core" in command:
@@ -177,20 +177,28 @@ def test_missing_hook_leaves_firewall_alone_and_completes_install(transaction, m
     assert transaction.client.closed
 
 
-@pytest.mark.parametrize("kind", ["missing", "missing-directory", "file", "directory", "symlink", "dangling"])
+@pytest.mark.parametrize("kind", ["missing", "missing-directory", "file", "directory", "symlink", "dangling",
+                                  "linked-ancestor-present", "linked-ancestor-absent", "non-executable"])
 def test_firewall_preflight_checks_real_file_type(tmp_path, monkeypatch, kind):
     path = tmp_path / "path with spaces"
     source = tmp_path / "source"
     if kind == "missing-directory":
         path = path / "missing parent" / "iptables"
-    elif kind == "file":
+    elif kind in ("file", "non-executable"):
         path.write_text("#!/bin/sh\n")
+        path.chmod(0o755 if kind == "file" else 0o644)
     elif kind == "directory":
         path.mkdir()
     elif kind in ("symlink", "dangling"):
         if kind == "symlink":
             source.touch()
         path.symlink_to(source)
+    elif kind.startswith("linked-ancestor"):
+        (source / "if-pre-up.d").mkdir(parents=True)
+        path.symlink_to(source, target_is_directory=True)
+        path = path / "if-pre-up.d" / "iptables"
+        if kind.endswith("present"):
+            path.touch()
     monkeypatch.setattr(installer, "REMOTE_FIREWALL_PATH", str(path))
     client = SimpleNamespace(run=lambda command: subprocess.check_output(["sh", "-c", command], text=True))
     if kind in ("file", "missing", "missing-directory"):

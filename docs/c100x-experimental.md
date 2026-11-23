@@ -12,10 +12,11 @@ Use otherwise stock C100X firmware 1.5.8; only the changes needed for
 root/SSH access are in scope. Running alongside Companion is not supported.
 The release number/channel remain undecided; publication is blocked locally.
 
-A contributor has since supplied observations from a 1.5.8 device with Companion
-installed and non-stock routing. See the [field-report cross-check](c100x-field-report.md) for verified
-binary matches, readback evidence and the remaining coexistence limits. These
-observations do not validate installation or runtime of this branch's agent.
+A contributor subsequently installed the earlier agent-only package on a
+modified 1.5.8 station with Companion. The agent started and served
+authenticated requests after installer workarounds; the reporter then rolled
+back manually without rebooting. See the [field-report cross-check](c100x-field-report.md).
+This was not a stock-station test or acceptance of Companion coexistence.
 
 ## Prerequisites
 
@@ -43,7 +44,7 @@ observations do not validate installation or runtime of this branch's agent.
 
 | Area | C100X 1.5.8 status | Evidence and limits |
 | --- | --- | --- |
-| Model, firmware and SIP identity | Implemented; hardware unproven | Detects `BtClass100`, reports C100X and uses vendor SIP account `c100x`. Existing ID, hostname and `_bticino-c300x-agent._tcp` discovery service remain unchanged; default discovery name/model are C100X. |
+| Model, firmware and SIP identity | C100X / 1.5.8 reported on one modified station | SIP identity and discovery were not validated end to end. The discovery service remains `_bticino-c300x-agent._tcp`; manual setup by host worked. |
 | Agent build / ABI | Offline validated | Oldest C300X build baseline retained; C100X 1.5.8 remains an additional ABI check. This is not a process-start or endurance test. |
 | Routing / media user | Implemented; hardware unproven | C100X-specific `bt_answering_machine` table matches all nine stock patch ranges. Patch apply on a temporary firmware copy passed; registration, ring answering and vendor-app coexistence still require a device. |
 | HA entities and callbacks | Capability-gated; hardware unproven | Door, stair light, ring/call events and supported maintenance controls retain their existing paths. Physical outputs, event timing and callback reachability are not proven. |
@@ -54,7 +55,7 @@ observations do not validate installation or runtime of this branch's agent.
 | Listen / talkback | Implemented; hardware unproven | Stock Speex/8000 remains the first-test baseline. Firmware-PCMU apply is blocked in core/API/CLI and not offered by HA; read-only status and Speex recovery from validated managed backups remain available. Client-side PCMU transport/transcoding is unchanged. SIP negotiation, SRTP/RTP, both directions and stop/teardown still require separately authorized hardware acceptance. |
 | Announcements / TTS | **Unsupported; incompatible backend explicitly blocked** | Model guards reject C300X playback, startup cleanup and legacy-worker takeover on C100X even if foreign tools are present. The original memo/WAV route requests an unsupported HAL profile; ringtone/global-stop paths lack safe per-owner cancellation. No C100X speaker backend was implemented. See the [original-firmware audio evidence](c100x-audio-analysis.md). |
 | Memo / answering-machine features | **Text display implemented offline; recording/playback unproven** | A separate key-operated text page reads the existing bounded loopback snapshot, without changing read flags or files. Stock binaries identify the text storage/metadata and AnsweringMachine methods; these are not runtime acknowledgement or recording/playback proof. Voice controls and display-side mutations are not exposed. Do not treat generic entity availability as confirmation of working recordings. |
-| Install / authentication / update / uninstall | Offline guards and fixtures; hardware unproven | Actual credentials, service startup/reboot, runtime library loading, uninstall recovery and vendor operation afterward still require a device. Uninstall is not a factory reset or unroot operation. |
+| Install / authentication / update / uninstall | Earlier agent startup and token enforcement observed on one modified station | Fresh standalone install without workarounds, survival across reboot, update and scripted removal remain unverified on hardware. Uninstall is not a factory reset or unroot operation. |
 
 ## Package Protection
 

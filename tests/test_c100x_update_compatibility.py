@@ -72,12 +72,13 @@ def test_ssh_guard_before_first_write_and_successful_retry(tmp_path, monkeypatch
     # Allow only the read-only stock-hook probe, not an arbitrary shell conditional.
     hook = device_installer.REMOTE_FIREWALL_PATH
     hook_probe = (
+        f"p={hook.rpartition('/')[0]}; "
+        'while [ "$p" != / ]; do '
+        'if [ -L "$p" ] || { [ -e "$p" ] && { [ ! -d "$p" ] || [ ! -x "$p" ]; }; }; '
+        'then printf unsupported; exit 0; fi; p=${p%/*}; p=${p:-/}; done; '
         f"if [ -L {hook} ]; then printf unsupported; "
-        f"elif [ -f {hook} ] && [ -r {hook} ]; then :; "
-        f"elif [ ! -e {hook} ]; then p={hook.rpartition('/')[0]}; "
-        'while [ ! -e "$p" ] && [ ! -L "$p" ]; do p=${p%/*}; p=${p:-/}; done; '
-        'if [ -d "$p" ] && [ -x "$p" ]; then printf absent; else printf unsupported; fi; '
-        "else printf unsupported; fi"
+        f"elif [ -f {hook} ] && [ -r {hook} ] && [ -x {hook} ]; then :; "
+        f"elif [ ! -e {hook} ]; then printf absent; else printf unsupported; fi"
     )
 
     def first_write(command):

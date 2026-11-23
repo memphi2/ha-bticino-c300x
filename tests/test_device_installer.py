@@ -1224,6 +1224,7 @@ def test_installer_dependency_recovery_text_mentions_pinned_package_in_all_langu
     for path in (component / "strings.json", *(component / "translations").glob("*.json")):
         text = json.loads(path.read_text())["config"]["error"]["installer_dependency_missing"]
         assert INSTALLER_REQUIREMENTS[0] in text, path.name
+        assert "YAML" in text, path.name
 
 
 def test_dev_requirements_pin_asyncssh_with_legacy_ssh_rsa_support() -> None:

@@ -907,7 +907,7 @@ def _remote_symlink_target_matches_sync(
 
 
 def _verify_startup_sync(client: _DeviceSshClient) -> None:
-    """Verify that the freshly installed agent is running and boot-persistent."""
+    """Check the init link and current agent status, not survival across reboot."""
 
     try:
         link_target = client.run(f"readlink {_quote(REMOTE_INIT_LINK)}")
@@ -1033,12 +1033,13 @@ def _firewall_hook_present_sync(client: _DeviceSshClient) -> bool:
     path = _quote(REMOTE_FIREWALL_PATH)
     parent = _quote(REMOTE_FIREWALL_PATH.rpartition("/")[0])
     state = client.run(
+        f"p={parent}; "
+        'while [ "$p" != / ]; do '
+        'if [ -L "$p" ] || { [ -e "$p" ] && { [ ! -d "$p" ] || [ ! -x "$p" ]; }; }; '
+        'then printf unsupported; exit 0; fi; p=${p%/*}; p=${p:-/}; done; '
         f"if [ -L {path} ]; then printf unsupported; "
-        f"elif [ -f {path} ] && [ -r {path} ]; then :; "
-        f"elif [ ! -e {path} ]; then p={parent}; "
-        'while [ ! -e "$p" ] && [ ! -L "$p" ]; do p=${p%/*}; p=${p:-/}; done; '
-        'if [ -d "$p" ] && [ -x "$p" ]; then printf absent; else printf unsupported; fi; '
-        "else printf unsupported; fi"
+        f"elif [ -f {path} ] && [ -r {path} ] && [ -x {path} ]; then :; "
+        f"elif [ ! -e {path} ]; then printf absent; else printf unsupported; fi"
     )
     if state in ("", "absent"):
         return state != "absent"

@@ -382,7 +382,9 @@ creating a hook, reading or restoring a backup, or changing live rules.
 IPv4 firewall management by the agent is disabled in that configuration.
 Existing network policy must already permit HA to reach the authenticated API;
 skipping the hook does not guarantee connectivity. Do not create a placeholder.
-A symlink, unreadable hook or inaccessible directory stops setup before writes.
+A symlink in the hook path, a non-executable or unreadable hook, or an
+inaccessible directory stops setup before writes. Do not change permissions
+on a disabled vendor hook to make it pass.
 
 The supported entry point is the reviewed package's HA SSH bootstrap, not the
 blocked developer shell installer. Bootstrap writes agent payload/configuration,

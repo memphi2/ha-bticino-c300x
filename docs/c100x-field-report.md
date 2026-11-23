@@ -15,19 +15,58 @@ compatibility with an unmodified station. Parallel operation with Companion
 is not supported. Treat this report as diagnostic evidence, not acceptance
 of stair-light or door-unlock operation on a stock installation.
 
+The reporter identified the **agent-only round** as the local ZIP matching
+`58310042` (reported SHA-256 prefix `fa3eee15`), not the
+[later standalone attachment](https://github.com/memphi2/ha-bticino-c300x/issues/51#issuecomment-7105073876).
+The station used WLAN and root2 SSH; HA was Container 2026.11.2 with Python
+3.14.10 and uv 0.13.6. No-token API access returned 401. The init check and
+`startup_link_ok` passed **in that boot**.
+
 - The station lacked the vendor IPv4 firewall hook. The reporter supplied a
   placeholder for that test; **do not repeat this workaround**. Restoring a
   stock firewall on a modified device could also cut off maintenance access.
+  Current HA bootstrap skips an absent hook **before** writing payloads,
+  disables agent IPv4 firewall management and leaves live rules alone. A
+  symlink at the hook or in its directory path, or a non-executable hook,
+  stops installation before writes. Skipping does not guarantee reachability.
+- HA reported `installer_dependency_missing` even though dist-info for the
+  pinned AsyncSSH was present. Repeating the form did not help; checking
+  configuration under Developer tools > YAML cleared HA's failed-install
+  history and the next submit worked. The original resolver/import failure
+  was not captured. Check the logs; do not change the pin, log private index
+  URLs or bypass HA's resolver.
 - The tested package enabled video and opened media ports at bootstrap. RTSP
   listening is not evidence of successful video. The reporter did not start a
   stream, and a second SIP session can conflict with Companion.
+  On this branch fresh C100X bootstrap writes `video.enabled: false`. With
+  a supported hook it requests only the API port; it neither closes old live
+  rules nor overrides an explicit existing video choice. Separately, the
+  contributor reports quality `#0` was ACKed but sent no RTP to the external
+  destination, while `#1` gave 640x480. That agrees with the enforced Qt5
+  low selector, not proof of an agent RTSP stream, capture, or talkback.
 - The active SIP route is a regular file on this installation. Do not convert
   it to a symlink or replace it to pass the media-user check.
+  The expected self-test result is `unsupported_active_route`; the text-only
+  fixture below does not grant permission to edit the live file.
 - The reporter restored the recorded baseline **manually**. Neither reboot
   survival nor the packaged removal script was tested on hardware.
+  An earlier post-boot sweep reportedly stopped **Companion** started at S45.
+  There is no observation that it killed this agent at S40. Do not add a
+  respawn guardian or call startup-link verification a reboot test.
 - The reporter observed that terminating the GUI rebooted this station and
   touching the vendor configuration restarted the whole stack. Neither is a
   safe GUI reload for this test package.
+  Specifically, TERM to `BtClass100` reportedly rebooted the station;
+  touching `/var/tmp/conf.xml` disrupted the bus for about 23 seconds. Keep
+  both operations out of the agent-only test. The GUI followed bus mute but
+  not unmute on the tested LCM channels; its state was
+  `global.audioState.isRingtoneMute`. Do not advertise a two-way mute control.
+  The reporter identified a ZL38067 DSP; that is not audio-path validation.
+- Discovery did not find this station; **manual setup by host succeeded**.
+  There was no agent before SSH installation, the responder closes while HA
+  is connected, and HA and the station were on different subnets. This run
+  neither proves nor disproves discovery on one multicast segment. It does
+  not justify keeping port 5353 open after connection.
 
 ## Evidence And Limits
 

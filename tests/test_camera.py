@@ -529,6 +529,14 @@ def test_picture_support_follows_existing_video_status_without_reload() -> None:
     ]:
         camera._apply_status({"window_available": False, "bridge": bridge})
         assert camera.extra_state_attributes["picture_controls_supported"] is expected
+        assert camera.extra_state_attributes["picture_controls_scope"] == ("ring" if expected else None)
+    for supported, scope, expected_scope in [
+        (True, "ring_and_on_demand", "ring_and_on_demand"),
+        (True, True, "ring"), (True, "future", "ring"),
+        (1, "ring_and_on_demand", None), (False, "ring_and_on_demand", None),
+    ]:
+        camera._apply_status({"bridge": {"picture_controls_supported": supported, "picture_controls_scope": scope}})
+        assert camera.extra_state_attributes["picture_controls_scope"] == expected_scope
 
 
 def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
@@ -569,6 +577,7 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
         "external_owner": "external_client",
         "last_video_block_reason": "external_session_active",
         "picture_controls_supported": False,
+        "picture_controls_scope": None,
             "talkback_supported": True,
             "doorstation_audio_gain_db": 0.0,
             "media_user": {

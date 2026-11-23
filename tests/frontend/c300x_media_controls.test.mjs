@@ -34,6 +34,47 @@ globalThis.HTMLElement = class extends EventTarget {
 globalThis.customElements = { get() {}, define() {} };
 const { C300XMediaControls } = await import("../../custom_components/bticino_c300x/frontend/c300x-media-controls.js");
 const tick = () => new Promise(setImmediate);
+test("picture sliders preserve ring eligibility and require explicit scope plus live on-demand video", async () => {
+  const { C300XCardMedia } = await import("../../custom_components/bticino_c300x/frontend/c300x-card-media.js");
+  const attributes = {picture_controls_supported: true};
+  const entity = {state: "streaming", attributes};
+  const tracks = [];
+  const card = {shadowRoot: new Node(), _config: {}, _lifecycle: {}, _cameraEntity: () => entity,
+    _isHomeCallMode: () => false, _entryId: () => "entry",
+    _webrtc: {remoteStream: {getVideoTracks: () => tracks}}};
+  const media = new C300XCardMedia(card);
+  let enabled;
+  media.picture.configure = (_hass, _entry, session) => { enabled = !!session; };
+  function check(state, expected) {
+    attributes.media_state = state;
+    media.configure();
+    assert.equal(enabled, expected, state);
+  }
+  for (const state of ["ring_pending", "ring_preview_active", "ring_answering", "ring_active"]) check(state, true);
+  tracks.push({readyState: "live"});
+  for (const scope of [undefined, true, "ring", "unknown"]) {
+    attributes.picture_controls_scope = scope;
+    check("on_demand_active", false);
+  }
+  attributes.picture_controls_scope = "ring_and_on_demand";
+  for (const state of ["idle", "on_demand_starting", "on_demand_stopping", "home_call_active"]) check(state, false);
+  check("on_demand_active", true);
+  tracks[0].readyState = "ended";
+  check("on_demand_active", false);
+  tracks.pop();
+  check("on_demand_active", false);
+  tracks.push({readyState: "live"});
+  attributes.picture_controls_supported = 1;
+  check("ring_active", false);
+  check("on_demand_active", false);
+  attributes.picture_controls_supported = true;
+  media.controls.browsing = true;
+  check("on_demand_active", false);
+  media.controls.browsing = false;
+  card._config.show_picture_controls = false;
+  check("on_demand_active", false);
+  check("ring_active", false);
+});
 const item = (id = "a", kind = "image", at = 10) => ({ id: id.repeat(64), kind, at,
   expires_at: Date.now() / 1000 + 3600, revision: "first" });
 

@@ -1729,7 +1729,7 @@
   "services": {
     "camera_picture": {
       "name": "Regola immagine",
-      "description": "Leggi i controlli durante una videochiamata o imposta un valore.",
+      "description": "Leggi i controlli immagine durante una sessione video in diretta supportata, oppure specifica un controllo e il suo valore per modificarlo.",
       "fields": {
         "entry_id": {"name": "Voce"},
         "control": {"name": "Controllo"},

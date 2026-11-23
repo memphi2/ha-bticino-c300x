@@ -1,4 +1,4 @@
-import { mediaLocalize } from "./c300x-media-translations.js?v=dac28a69e2ec958a";
+import { mediaLocalize } from "./c300x-media-translations.js?v=a4594e604339af37";
 
 const keys = ["brightness", "contrast", "saturation"];
 
@@ -8,12 +8,13 @@ export class C300XPictureControls extends HTMLElement {
     this.generation = 0;
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `<style>
-      :host {position:absolute;left:8px;bottom:52px;z-index:2;color:white;font:inherit}
+      :host {position:absolute;inset:4px 8px;pointer-events:none;z-index:2;color:white;font:inherit}
       :host([hidden]),[hidden]{display:none!important}
-      button,section {background:#202124;color:white}
-      button {border:0;border-radius:50%;width:36px;height:36px;cursor:pointer}
-      section {position:absolute;bottom:0;left:42px;box-sizing:border-box;width:min(200px,55vw);
-        max-height:145px;overflow:auto;padding:8px;border-radius:6px}
+      button,section {pointer-events:auto;background:#202124;color:white}
+      button {position:absolute;left:0;bottom:clamp(0px,100% - 36px,48px);border:0;border-radius:50%;width:36px;height:36px;cursor:pointer}
+      section {position:absolute;bottom:clamp(0px,100% - 145px,48px);left:42px;
+        box-sizing:border-box;width:min(200px,100% - 42px);max-height:min(145px,100%);
+        overflow:auto;overscroll-behavior:contain;padding:4px;border-radius:6px}
       label {display:grid;grid-template-columns:1fr auto;font-size:12px}
       input {grid-column:1/-1;width:100%;margin:0}
       p {margin:0;font-size:12px}
@@ -36,9 +37,10 @@ export class C300XPictureControls extends HTMLElement {
     }
   }
 
-  configure(hass, entryId, enabled) {
-    if (!enabled || entryId !== this.entryId) this.close();
-    this.hidden = !enabled;
+  configure(hass, entryId, session) {
+    if (entryId !== this.entryId || session !== this.session) this.close();
+    this.session = session;
+    this.hidden = !session;
     this.hass = hass;
     this.entryId = entryId;
     this.button.title = mediaLocalize(hass, "picture");

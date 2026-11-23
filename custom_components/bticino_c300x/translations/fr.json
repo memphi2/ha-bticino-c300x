@@ -1729,7 +1729,7 @@
   "services": {
     "camera_picture": {
       "name": "Régler l’image",
-      "description": "Lire les réglages pendant un appel vidéo ou modifier une valeur.",
+      "description": "Lire les réglages d’image pendant une session vidéo en direct compatible, ou indiquer un réglage et sa valeur pour le modifier.",
       "fields": {
         "entry_id": {"name": "Entrée"},
         "control": {"name": "Réglage"},

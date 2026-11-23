@@ -278,6 +278,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose compact user-facing media state without bridge internals."""
 
+        picture_supported = self._bridge_status.get("picture_controls_supported") is True
+        shared_picture = self._bridge_status.get("picture_controls_scope") == "ring_and_on_demand"
         return {
             **snapshot_attributes(self.hass, self._entry),
             "media_state": self._last_media_state.value,
@@ -288,7 +290,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             "external_owner": self._external_owner,
             "last_video_block_reason": self._last_video_block_reason,
             "talkback_supported": self._talkback_supported(),
-            "picture_controls_supported": self._bridge_status.get("picture_controls_supported") is True,
+            "picture_controls_supported": picture_supported,
+            "picture_controls_scope": ("ring_and_on_demand" if shared_picture else "ring") if picture_supported else None,
             # The configured doorstation gain (from HA's own config-flow option,
             # not the agent) so the card can apply it client-side in PCMU mode
             # where the agent stays at passthrough.

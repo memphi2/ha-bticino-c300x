@@ -102,7 +102,13 @@ station's original call controls, not browser filters. The updated agent and
 core GUI patch are required, and the station must have an active video call.
 Opening the controls reads the current values without answering the call.
 Moving a slider sends one change when released. Archived media is not altered.
-Disable **Show picture controls during a ring call** in the card editor to hide
+On-demand video uses the same sliders and service **only if** the bridge explicitly
+advertises shared support and the card has an active on-demand video track.
+The existing ring-only GUI handshake does not establish on-demand support.
+Starting a stream does not enable the sliders on those agents. Reported values
+come from the GUI; they do not independently verify a change in camera output.
+
+Disable **Show picture controls for supported live video** in the card editor to hide
 the controls. Automations can use `bticino_c300x.camera_picture`: omit both
 `control` and `value` to read, or supply both to change one value.
 

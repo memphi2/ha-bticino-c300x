@@ -1729,7 +1729,7 @@
   "services": {
     "camera_picture": {
       "name": "Kamerabild einstellen",
-      "description": "Originalwerte während eines Videoanrufs lesen oder einen Regler mit seinem Wert setzen.",
+      "description": "Originalwerte in einer unterstützten Livevideositzung lesen oder einen Regler und seinen Wert zusammen angeben.",
       "fields": {
         "entry_id": {"name": "Integrationseintrag"},
         "control": {"name": "Regler"},

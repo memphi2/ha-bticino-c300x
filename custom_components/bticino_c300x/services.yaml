@@ -171,7 +171,7 @@ unlock_door:
 
 camera_picture:
   name: Adjust camera picture
-  description: Read the three original picture controls during a video call. Supply a control and a value together to change one setting.
+  description: Read the three original picture controls in a supported live video session. Supply a control and a value together to change one setting.
   fields:
     entry_id:
       selector:

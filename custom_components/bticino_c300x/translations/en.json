@@ -1729,7 +1729,7 @@
   "services": {
     "camera_picture": {
       "name": "Adjust camera picture",
-      "description": "Read the original controls during a video call, or set one control and its value.",
+      "description": "Read the original picture controls in a supported live video session, or supply a control and value together to change one setting.",
       "fields": {
         "entry_id": {"name": "Integration entry"},
         "control": {"name": "Control"},

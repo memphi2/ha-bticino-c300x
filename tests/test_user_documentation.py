@@ -288,29 +288,28 @@ def _api_error_rows(heading):
 
 
 def test_the_api_lists_every_error_the_agent_update_answers_with():
-    source = (ROOT / "native_agent/src/agent_update.c").read_text()
-    body = source.split("const char *agent_update_error_json", 1)[1].split("\n}\n", 1)[0]
-    codes = re.findall(r'\\"error\\":\\"([a-z_]+)\\"', body)
-    assert "update_root_already_writable" in codes
-    # The route handler refuses a request itself before the install starts.
-    http = (ROOT / "native_agent/src/http.c").read_text()
-    handler = _c_function(http, "handle_agent_update_apply")
-    error = r'"\{\\"ok\\":false,\\"error\\":\\"([a-z_]+)\\"'
-    answers = re.findall(r'send_json\(client_fd, (\d+), "[^"]*", ' + error, handler)
-    # Every other send_json is the install result from agent_update_error_json.
-    assert len(answers) == handler.count("send_json(client_fd, ") - 1
-    for helper in re.findall(r"\b(send_[a-z_]+)\(client_fd\);", handler):
-        answers += re.findall(rf"static void {helper}\(int client_fd\) {{ send_json\(client_fd, (\d+), \"[^\"]*\", {error}", http)
-    assert {
-        "maintenance_unauthorized", "maintenance_confirmation_required", "invalid_update_metadata",
-        "update_manifest_missing", "update_bundle_hash_mismatch", "out_of_memory", "invalid_agent_dir",
-    } == {code for _, code in answers}
-    api = (ROOT / "native_agent/API.md").read_text()
-    section = api.split("`POST /api/v1/maintenance/update/apply`", 1)[1].split("\n### ", 1)[0]
-    for code in codes:
-        assert f"`{code}`" in section
-    for status, code in answers:
-        assert f"| `{status}` | `{code}` |" in section
+    # The handler refuses a request itself, also through the send_* helpers it
+    # hands its client socket to, before the install starts.
+    functions = _client_functions(_c_functions((ROOT / "native_agent/src/http.c").read_text()),
+                                  "handle_agent_update_apply", "client_fd")
+    assert "send_maintenance_unauthorized" in functions
+    replies = _error_replies(functions)
+    assert None not in {status for status, _ in replies}
+    # A failed install answers agent_update_error_json(error) with the status
+    # agent_update_error_status(error) picks for the same error.
+    handler = functions["handle_agent_update_apply"]
+    assert "agent_update_error_status(summary.error)" in handler
+    assert "agent_update_error_json(summary.error)" in handler
+    update = _c_functions((ROOT / "native_agent/src/agent_update.c").read_text())
+    install = {code for _, code in _error_replies({"json": update["agent_update_error_json"]})}
+    cases = dict(re.findall(r'(?:case (\w+)|default):\s*return "(?:[^"\\]|\\.)*?\\"error\\":\\"([a-z_]+)\\"',
+                            update["agent_update_error_json"]))
+    assert set(cases.values()) == install
+    special, status, other = re.search(r"return error == (\w+) \? (\d{3}) : (\d{3});",
+                                       update["agent_update_error_status"]).groups()
+    replies |= {(int(status) if error == special else int(other), code) for error, code in cases.items()}
+    assert (409, "update_root_already_writable") in replies
+    assert replies == _api_error_rows("`POST /api/v1/maintenance/update/apply`")
 
 
 def test_the_api_names_every_display_call_that_follows_the_ui_port():

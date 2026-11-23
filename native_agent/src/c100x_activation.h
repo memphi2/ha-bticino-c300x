@@ -83,6 +83,8 @@ int c100x_activation_tick(struct c100x_activation *activation, const struct c100
 /* TERM first, so the script's own trap cleans up; KILL after 1.5 s. */
 void c100x_activation_close(struct c100x_activation *activation);
 int c100x_activation_busy(const struct c100x_activation *activation);
+/* A job that changes the display files runs or waits: other maintenance writes wait. */
+int c100x_activation_writing(const struct c100x_activation *activation);
 int c100x_activation_confirmed(const struct c100x_activation *activation);
 void c100x_activation_door_frame(struct c100x_activation *activation, const char *frame, long long now_ms);
 /* NULL once queued, else why not. */

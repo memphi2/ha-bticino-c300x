@@ -23,6 +23,8 @@ struct c300x_capabilities_context {
     int ringer_min_volume;
     int ringer_max_volume;
     int ringer_volume_step;
+    /* C100X only: ,"c100x_display":{...}; NULL elsewhere. */
+    const char *c100x;
 };
 
 /* Serialize an already resolved runtime snapshot without device or network I/O. */

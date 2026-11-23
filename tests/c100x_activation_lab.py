@@ -38,7 +38,7 @@ def activation_binary(tmp_path_factory):
 
 
 @contextmanager
-def agent_lab(binary, tree, bundle=None):
+def agent_lab(binary, tree, bundle=None, maintenance=False):
     root, _, _, env = tree
     agent = root / "agent"
     agent.mkdir()
@@ -57,8 +57,11 @@ def agent_lab(binary, tree, bundle=None):
         "systemMetrics": {"enabled": False}, "video": {"enabled": False}, "displayBridge": {"enabled": False},
         "mqtt": {"enabled": False}, "mdns": {"enabled": False},
     }
+    if maintenance:
+        config["maintenance"] = {"enabled": True, "adminToken": "test-admin",
+                                 "reboot": {"enabled": maintenance != "no_reboot"}}
     (agent / "config.json").write_text(json.dumps(config))
-    env.update(C300X_AGENT_DIR=str(agent), C100X_TEST_UI_PORT=str(ui))
+    env.update(C300X_AGENT_DIR=str(agent), C100X_TEST_UI_PORT=str(ui), C100X_TEST_API_PORT=str(api))
     wget = root / "tools/wget"
     wget.write_text(f"#!{sys.executable}\n" + '''import os, sys, urllib.request
 url = sys.argv[-1]

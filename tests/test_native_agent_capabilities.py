@@ -26,7 +26,11 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
     c300_documents = [json.loads(line) for line in c300.stdout.splitlines()]
     for index, document in enumerate(c300_documents[:4]):
         assert set(document["capabilities"]["maintenance"].values()) == {bool(index // 2)}
-    assert len(documents) == 6
+    assert len(documents) == 7
+    # Only the C100X activation adds its member; the documents before it are unchanged.
+    assert documents[6]["capabilities"].pop("c100x_display") == {"supported": True}
+    assert documents[6] == documents[5]
+    assert all("c100x_display" not in document["capabilities"] for document in documents[:6] + c300_documents[:6])
     for index, document in enumerate(documents[:4]):
         caps = document["capabilities"]
         pcmu = bool(index % 2)

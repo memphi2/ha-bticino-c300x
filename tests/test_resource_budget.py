@@ -63,6 +63,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_ui_preferences.c": (2_000, 45),
         "c100x_activation.c": (18_000, 440),
         "http_c100x_display.c": (3_500, 90),
+        "http_c100x_display_api.c": (4_500, 100),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name

@@ -72,5 +72,8 @@ int main(int argc, char **argv)
     context.display_features = 1;
     assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
     fputs(body, stdout);
+    context.c100x = ",\"c100x_display\":{\"supported\":true}";
+    assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
+    fputs(body, stdout);
     return 0;
 }

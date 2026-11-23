@@ -80,7 +80,7 @@ int c300x_capabilities_json(
         "\"touch_tone\":{\"supported\":%s,\"requires_display_patch\":true},"
         "\"display_alerts\":%s,"
         "\"memo_led\":%s,"
-        "\"display_bridge\":{\"supported\":%s,\"configurable\":%s,\"configured\":%s}"
+        "\"display_bridge\":{\"supported\":%s,\"configurable\":%s,\"configured\":%s}%s"
         "}"
         "}\n",
         C300X_NATIVE_AGENT_VERSION,
@@ -175,7 +175,8 @@ int c300x_capabilities_json(
         context->memo_led_present ? "true" : "false",
         context->display_features ? "true" : "false",
         context->display_features ? "true" : "false",
-        config->display_bridge_enabled ? "true" : "false"
+        config->display_bridge_enabled ? "true" : "false",
+        context->c100x ? context->c100x : ""
     );
     return written >= 0 && (size_t)written < body_len;
 }

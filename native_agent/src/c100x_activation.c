@@ -64,6 +64,12 @@ int c100x_activation_busy(const struct c100x_activation *activation)
     return activation->job.pid > 0 || activation->queued != C100X_ACTION_NONE;
 }
 
+int c100x_activation_writing(const struct c100x_activation *activation)
+{
+    return (activation->job.pid > 0 && activation->running != C100X_ACTION_STATUS)
+        || activation->queued != C100X_ACTION_NONE;
+}
+
 int c100x_activation_confirmed(const struct c100x_activation *activation)
 {
     return activation->enabled && activation->known && activation->confirmed;

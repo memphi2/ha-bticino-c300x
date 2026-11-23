@@ -6,6 +6,7 @@ import shlex
 import shutil
 import subprocess
 import time
+from http.client import HTTPConnection
 
 import pytest
 from c100x_activation_lab import activation_binary as activation_binary
@@ -20,6 +21,8 @@ from test_c100x_display_transaction import (
 )
 from test_c100x_display_transaction import tree as tree
 from test_c100x_qml_adapter import ROOT
+
+from native_agent.test.smoke import TOKEN
 
 
 def generation(tree):
@@ -304,3 +307,58 @@ def test_agent_never_checks_a_trial_outside_its_trial_boot(tree, quick_activatio
         time.sleep(2)
     assert (backup / "pending").is_dir()
     assert not (backup / "confirmed-release").exists()
+
+
+def api(tree, method, path, body=None, maintenance=True):
+    headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    if maintenance:
+        headers["X-Bticino-C300X-Maintenance-Token"] = "test-admin"
+    connection = HTTPConnection("127.0.0.1", int(tree[3]["C100X_TEST_API_PORT"]), timeout=5)
+    connection.request(method, path, None if body is None else json.dumps(body), headers)
+    response = connection.getresponse()
+    data = json.loads(response.read())
+    connection.close()
+    return response.status, data
+
+
+def display_status(tree):
+    status, data = api(tree, "GET", "/api/v1/maintenance/c100x-display")
+    assert status == 200, data
+    return data["c100x_display"]
+
+
+ROUTE = "/api/v1/maintenance/c100x-display"
+
+
+def test_maintenance_api_reports_refuses_and_restores_the_c100x_display(tree, quick_activation_binary):
+    run(tree, "apply")
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle, maintenance=True):
+        wait_for(lambda: display_status(tree)["status_known"])
+        status = display_status(tree)
+        assert status["phase"] == "installed" and status["confirmed"] is False
+        assert status["restore"] is True and status["alert_sound"] is False
+        capabilities = api(tree, "GET", "/api/v1/capabilities")[1]["capabilities"]
+        assert capabilities["c100x_display"]["phase"] == "installed"
+        assert api(tree, "GET", ROUTE, maintenance=False)[0] == 403
+        assert api(tree, "POST", ROUTE + "/actions/activate", {"confirm": "restore_c100x_display"})[0] == 400
+        # The adapter reaches the agent on port 8090 only.
+        assert api(tree, "POST", ROUTE + "/actions/activate", {"confirm": "activate_c100x_display"}) == (
+            409, {"ok": False, "error": "c100x_display_ui_port_unsupported"})
+        assert api(tree, "POST", ROUTE + "/actions/restore", {"confirm": "restore_c100x_display"}) == (
+            202, {"ok": True, "action": "restore", "scheduled": True})
+        wait_for(lambda: display_status(tree)["phase"] == "stock" and not display_status(tree)["busy"])
+        status = display_status(tree)
+        assert status["last_result"] == "restored" and status["reboot_pending"] is True
+        # No door events in the lab: the reboot waits and says why.
+        assert status["reboot_blocked"] == "call_state_unknown"
+        assert api(tree, "POST", ROUTE + "/actions/restore", {"confirm": "restore_c100x_display"}) == (
+            200, {"ok": True, "action": "restore", "changed": False})
+    assert_original(tree)
+
+
+def test_maintenance_api_needs_the_maintenance_reboot(tree, quick_activation_binary):
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle, maintenance="no_reboot"):
+        assert api(tree, "POST", ROUTE + "/actions/activate", {"confirm": "activate_c100x_display"}) == (
+            404, {"ok": False, "error": "maintenance_disabled"})

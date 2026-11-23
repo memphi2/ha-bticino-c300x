@@ -5122,6 +5122,7 @@ static void api_capabilities(
     char bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
     char bundle_agent_version[C300X_MAX_VERSION_LEN];
     char bundle_api_version[16];
+    char c100x[768] = "";
     struct c300x_video_status video_status = {0};
 
     if (body == NULL) {
@@ -5140,6 +5141,7 @@ static void api_capabilities(
     enum picture_route picture = runtime ? picture_worker_request(&runtime->video_control,
         runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
     if (picture == PICTURE_DEFERRED) { free(body); return; }
+    if (runtime != NULL) c100x_display_capability(&runtime->c100x_activation, c100x, sizeof(c100x));
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
         .device_model = c300x_device_model_name(c300x_device_model()),
@@ -5159,6 +5161,7 @@ static void api_capabilities(
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
         .ringer_max_volume = C300X_RINGER_VOLUME_MAX,
         .ringer_volume_step = C300X_RINGER_VOLUME_STEP,
+        .c100x = c100x,
     };
     if (!c300x_capabilities_json(config, &context, body, C300X_LARGE_RESPONSE_SIZE)) {
         send_response_too_large(client_fd);
@@ -8891,7 +8894,8 @@ static void handle_api_request(
 
     if (strcmp(request->method, "POST") == 0
         && strncmp(request->path, "/api/v1/maintenance/", sizeof("/api/v1/maintenance/") - 1) == 0
-        && (c300x_http_maintenance_busy(&runtime->maintenance))) {
+        && (c300x_http_maintenance_busy(&runtime->maintenance)
+            || c100x_activation_writing(&runtime->c100x_activation))) {
         if (!api_request_authorized(config, request)) {
             send_auth_required(client_fd);
         } else if (!maintenance_authorized(config, request)) {
@@ -8930,7 +8934,8 @@ static void handle_api_request(
             run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
             run_detached_command)
-        || c300x_http_announce_route(&runtime->announce, client_fd, request)) {
+        || c300x_http_announce_route(&runtime->announce, client_fd, request)
+        || c100x_display_route(&runtime->c100x_activation, client_fd, config, request)) {
         return;
     }
 

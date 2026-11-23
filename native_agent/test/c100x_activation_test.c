@@ -282,9 +282,12 @@ static void test_activate_and_restore_requests(void)
     struct c100x_activation_inputs inputs = idle_station(10 * MINUTE);
     set_state("stock", 0, 0, 0);
     start_with(&activation, inputs.now_ms);
+    assert(!c100x_activation_writing(&activation));
     assert(c100x_activation_request(&activation, C100X_ACTION_PREPARE) == NULL);
+    assert(c100x_activation_writing(&activation));
     assert(!strcmp(c100x_activation_request(&activation, C100X_ACTION_RESTORE), "c100x_display_busy"));
     assert(settle(&activation, &inputs) == 0);
+    assert(!c100x_activation_writing(&activation));
     assert(activation.phase == C100X_PHASE_PREPARED);
     assert(!strcmp(c100x_activation_request(&activation, C100X_ACTION_PREPARE), "c100x_display_trial_pending"));
     assert(c100x_activation_request(&activation, C100X_ACTION_RESTORE) == NULL);

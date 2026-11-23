@@ -85,6 +85,12 @@ from .config_flow_display_menu import (
     single_page_schema,
 )
 from .config_flow_features import (
+    RECONFIGURED_OPTION_KEYS as _RECONFIGURED_OPTION_KEYS,
+)
+from .config_flow_features import (
+    clear_reconfigured_option_overrides as _clear_reconfigured_option_overrides,
+)
+from .config_flow_features import (
     current_connection_options as _current_connection_options,
 )
 from .config_flow_features import (
@@ -162,15 +168,12 @@ from .config_schemas import (
 from .config_schemas import (
     setup_features_schema as _setup_features_schema,
 )
-from .config_snapshots import SNAPSHOT_DEFAULTS
 from .const import (
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
-    CONF_ALARM_ENTITY_ID,
-    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
@@ -183,9 +186,6 @@ from .const import (
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
-    CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_DISPLAY_SETTING_PENDING,
@@ -199,9 +199,6 @@ from .const import (
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
-    CONF_VIDEO_PORT,
-    CONF_VIDEO_STREAM_PATH,
-    CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
@@ -209,7 +206,7 @@ from .const import (
     DEFAULT_NAME,
     DOMAIN,
 )
-from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
+from .dashboard_optional_config import optional_page_values
 from .device_installer import (
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
@@ -222,7 +219,6 @@ from .display_support import (
     device_display_support,
     entry_display_supported,
 )
-from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import login_model, ssh_login, uses_factory_login
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
@@ -234,6 +230,7 @@ __all__ = [
     "_agent_missing_schema",
     "_alarm_entity_id",
     "_bootstrap_install_schema",
+    "_clear_reconfigured_option_overrides",
     "_connection_input",
     "_feature_input",
     "_initial_connection_input",
@@ -250,42 +247,6 @@ else:
 # This C100X-only test package must not provision media on first setup by default.
 _SETUP_VIDEO_ENABLED_DEFAULT = False
 _CREATE_HOMEASSISTANT_USER_DEFAULT = DEFAULT_CREATE_HOMEASSISTANT_USER
-_RECONFIGURED_OPTION_KEYS = frozenset(
-    {
-        *SNAPSHOT_DEFAULTS,
-        *OPTIONAL_PAGE_KEYS,
-        CONF_ACTIONS,
-        CONF_AGENT_HOST,
-        CONF_AGENT_PORT,
-        CONF_AGENT_TOKEN,
-        CONF_CALLBACK_BASE_URL,
-        CONF_CREATE_HOMEASSISTANT_USER,
-        CONF_ALARM_ENTITY_ID,
-        CONF_ALARM_PAGE_ENTITY_ID,
-        CONF_DASHBOARD_ENTITIES,
-        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-        CONF_DASHBOARD_NAVIGATION,
-        CONF_DASHBOARD_PAGES,
-        CONF_ENERGY_PAGE,
-        CONF_DASHBOARD_STATUS_PAGE_ENABLED,
-        CONF_DASHBOARD_PREVENT_RETURN,
-        CONF_DEVICE_ACTIVATION_MODE,
-        CONF_DEVICE_ACTIVATIONS,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-        CONF_DEVICE_UI_ENABLED,
-        CONF_DOORSTATION_AUDIO_GAIN_DB,
-        CONF_MAINTENANCE_TOKEN,
-        CONF_NATIVE_TWO_WAY_AUDIO,
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-        CONF_VIDEO_ENABLED,
-        CONF_VIDEO_PORT,
-        CONF_VIDEO_STREAM_PATH,
-        CONF_WEATHER_ENTITY_ID,
-        CONF_WEBRTC_ICE_POLICY,
-    }
-)
 
 
 class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
@@ -1960,32 +1921,3 @@ async def _async_agent_ready_for_setup(
         pass
     await api.async_list_event_subscriptions()
     return setup_data
-
-
-def _clear_reconfigured_option_overrides(
-    hass: Any,
-    config_entry: BticinoC300XConfigEntry,
-    data_updates: dict[str, Any],
-) -> None:
-    """Clear stale option values for settings written through reconfigure."""
-
-    options = dict(config_entry.options)
-    keys_to_clear = _RECONFIGURED_OPTION_KEYS & data_updates.keys()
-    if not options or not keys_to_clear:
-        return
-    updated_options = {
-        key: value for key, value in options.items() if key not in keys_to_clear
-    }
-    if updated_options == options:
-        return
-    hass.config_entries.async_update_entry(config_entry, options=updated_options)
-
-
-def _config_default(
-    config_entry: BticinoC300XConfigEntry,
-    key: str,
-    default: Any,
-) -> Any:
-    """Return an option override when present, otherwise setup data."""
-
-    return entry_config_value(config_entry, key, default)

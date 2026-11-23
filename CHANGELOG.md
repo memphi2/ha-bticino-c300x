@@ -4,6 +4,10 @@
 
 Fixed:
 
+- Saving **960x576** accepts existing backup directories owned by the
+  manufacturer user. The original file and directory ownership are preserved;
+  verified backups remain available for restoration and agent removal.
+  Needs the agent update.
 - Camera controls stay inactive when their camera is unavailable. Pending
   microphone and answer requests are cancelled when the camera disappears or
   the Ring Call ends, without interrupting a newer session.

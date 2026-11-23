@@ -144,13 +144,13 @@ enum picture_source_result picture_source_execute(const struct picture_command *
         for (int i = 0; confirmed && i < 3; i++)
             confirmed = current(deadline, active, ctx) && read_percent(fd, i, source, flip, &observed[i], &raw[i]);
         if (!confirmed || raw[index] != target) {
-            /* Do not leave a value the caller is told was not applied. */
+            /* Do not leave a value the caller is told was not applied: one
+             * write back while the media is ours, even past the deadline. */
             c.value = previous;
-            if (current(deadline, active, ctx)) (void)ioctl(fd, VIDIOC_S_CTRL, &c);
+            if (active(ctx)) (void)ioctl(fd, VIDIOC_S_CTRL, &c);
             goto done;
         }
-    }
-    if (!current(deadline, active, ctx)) goto done;
+    } else if (!current(deadline, active, ctx)) goto done;
     memcpy(values, observed, sizeof(observed));
     result = PICTURE_SOURCE_OK;
 done:

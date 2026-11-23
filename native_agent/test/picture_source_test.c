@@ -15,7 +15,8 @@
 
 enum fault { NONE, OPEN_FAIL, REGULAR, OTHER_MINOR, OTHER_DRIVER, OTHER_CAP_DRIVER,
     OUTPUT, QUERY_FAIL, BAD_TYPE, FLAGS, BAD_RANGE, BAD_STEP, READ_FAIL, OFF_GRID,
-    LOST_OWNER, EXPIRED, WRITE_FAIL, NOT_CHANGED, READBACK_FAIL, READBACK_OTHER, LOST_AFTER_WRITE };
+    LOST_OWNER, EXPIRED, WRITE_FAIL, NOT_CHANGED, READBACK_FAIL, READBACK_OTHER, LOST_AFTER_WRITE,
+    EXPIRED_IN_READBACK, EXPIRED_AFTER_READBACK };
 static enum fault fault;
 /* stock: the mxc_v4l2 signature without descriptors; decoder: the bound I2C driver. */
 static int opens, closes, queries, reads, writes, flags, owner, raw[3], stock, i2c_fail, dirs;
@@ -136,6 +137,8 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
         if (fault == LOST_AFTER_WRITE && reads == 4) owner = 0;
         if (reads == 3 && fault == LOST_OWNER) owner = 0;
         if (reads == 3 && fault == EXPIRED) now += 751;
+        if ((reads == 4 && fault == EXPIRED_IN_READBACK) || (reads == 6 && fault == EXPIRED_AFTER_READBACK))
+            now += 751;
         return 0;
     }
     /* A second write only puts back the value read before the first. */
@@ -197,6 +200,15 @@ int main(void)
         assert(writes == (attempted ? 2 - (f == LOST_AFTER_WRITE) : 0) && closes == (f != OPEN_FAIL));
         assert(out[0] == -1 && out[1] == -1 && out[2] == -1);
     }
+    /* The deadline bounds the read-back, not the rollback of a media that is still ours. */
+    reset(EXPIRED_IN_READBACK);
+    out[0] = -1;
+    assert(run(PICTURE_BRIGHTNESS, 60, out) == PICTURE_SOURCE_NOT_APPLIED);
+    assert(raw[0] == 105 && writes == 2 && reads == 4 && closes == 1 && out[0] == -1);
+    /* A read-back that matched is applied, even when the deadline passes right after it. */
+    reset(EXPIRED_AFTER_READBACK);
+    assert(run(PICTURE_BRIGHTNESS, 60, out) == PICTURE_SOURCE_OK);
+    assert(raw[0] == 120 && writes == 1 && reads == 6 && closes == 1 && out[0] == 60);
     reset(NONE);
     raw[0] = 0; /* Idle .82 returned 0,134,128; do not map this to 0%. */
     raw[2] = 128;

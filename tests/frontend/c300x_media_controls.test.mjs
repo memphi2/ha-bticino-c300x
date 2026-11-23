@@ -393,7 +393,7 @@ test("the time of a video is written like the time in an image and has no plate"
   const stage = template.slice(template.indexOf('<div class="stage">'), template.indexOf('<div class="toolbar"'));
   assert.match(stage, /<time class="stamp" hidden>/);
   for (const rule of [/\.stamp \{[^}]*\}/, /\.info \{[^}]*\}/]) assert.doesNotMatch(template.match(rule)[0], /background/);
-  assert.match(template, /\.stamp, \.info \{ color: #fff; text-shadow:/);
+  assert.match(template, /\.stamp, \.info, \.elapsed \{ color: #fff; text-shadow:/);
   // The bar of a video ends above the line of the time.
   assert.match(template, /\.toolbar\[data-dated\] \{ bottom: calc\(var\(--c300x-stamp-size\) \* 1\.5 \+ 8px\); \}/);
   // Time and bar share one size, also where the browser has no container units.

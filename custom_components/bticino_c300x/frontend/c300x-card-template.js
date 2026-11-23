@@ -39,6 +39,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           display: flex;
           flex-direction: column;
         }
+        ha-card:has(> .body:not(.doorstation)) { min-height: 104px; }
         .media {
           position: relative;
           width: 100%;

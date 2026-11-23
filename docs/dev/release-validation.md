@@ -337,15 +337,21 @@ Keep raw captures and device identifiers private.
 
 ## Firmware Versions
 
-Supported firmware versions share one agent binary and one set of display
-files. Before a release, and before a version is added:
+Firmware `1.7.19` and `2.0.2` share one agent binary and one set of display
+files. Before a release, and before a version of that kind is added:
 
 1. Run `scripts/check_firmware_rootfs.py` with the `1.7.19` root file system
-   as baseline against each other supported version. It must pass.
-2. Build the ARMHF agent once against each root file system
+   as baseline against `2.0.2`. It must pass.
+2. Build the ARMHF agent once against each of these root file systems
    (`C300X_DEVICE_SYSROOT`) and compare the binaries. They must be identical.
 3. Apply `scripts/device_routing_builder.py` to the stock routing target of
-   each version. It must accept the file and report the patched hash.
+   each of these versions. It must accept the file and report the patched hash.
+
+Firmware `3.0.6` (experimental) fails step 1, has its own routing table and
+no display files, so steps 1 to 3 do not apply; see
+[Supported Firmware Versions](native-agent.md#supported-firmware-versions).
+For it, run `armhf-abi-check` with its root file system in
+`C300X_ABI_SYSROOTS`, then the device tests below without the Display patch row.
 
 Device tests per firmware version, because the vendor media, SIP and D-Bus
 programs differ between versions:

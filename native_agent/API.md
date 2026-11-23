@@ -1020,11 +1020,14 @@ Errors:
 | Status | `error` | Meaning |
 | --- | --- | --- |
 | `400` | `invalid_picture_control` | Invalid body, unknown `control`, or `value` is not 0 through 100 in steps of 10. |
+| `405` | `method_not_allowed` | The method is neither `GET` nor `POST`. |
 | `409` | `media_busy` | The media worker is busy with another job; nothing was changed. Unlike the media actions, this route answers `409`. |
-| `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media. |
+| `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media, or the GUI answered with missing or out-of-range values. |
 | `409` | `picture_not_applied` | The source or the GUI read back a different value than the one sent. |
 | `409` | `picture_gui_busy` | The GUI is still handling an earlier ringer or picture command. |
+| `500` | `ringer_gui_id_failed` | The agent could not create a command id for the GUI (reading `/dev/urandom` failed). |
 | `503` | `picture_gui_unavailable` | No GUI listener for the legacy path. |
+| `503` | `ringer_gui_unavailable` | The command could not be handed to the GUI listener, or the agent shut down before the GUI answered. |
 | `504` | `picture_gui_timeout` | The GUI did not acknowledge within five seconds. |
 
 ### `GET /api/v1/calls/doorbell`

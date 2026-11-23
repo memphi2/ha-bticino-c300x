@@ -172,17 +172,38 @@ def test_the_api_names_every_display_call_that_follows_the_ui_port():
     assert set(re.findall(r"`(/ui/[a-z/-]+)`", paragraph)) == routes
 
 
+def _c_function(source, signature):
+    """The text of the C function whose definition starts with ``signature``."""
+    start = source.index(signature)
+    return source[start:source.index("\n}\n", start)]
+
+
 def test_the_api_lists_every_error_the_picture_route_answers_with():
-    sources = (ROOT / "native_agent/src/picture_control.c").read_text()
-    codes = set(re.findall(r'\\"error\\":\\"([a-z_]+)\\"', sources)) - {"method_not_allowed"}
+    picture = (ROOT / "native_agent/src/picture_control.c").read_text()
+    answers = re.findall(r'c300x_http_send_json\(fd, (\d+), "[^"]*", "\{\\"error\\":\\"([a-z_]+)\\"', picture)
+    assert len(answers) == picture.count("c300x_http_send_json(fd, ") - 1  # the success reply
+    # The legacy path hands the command to the GUI. ringer_control.c answers the
+    # picture client when it hands it over, on its timeout and at shutdown; its
+    # other answers belong to ringer commands or go to the GUI itself.
     ringer = (ROOT / "native_agent/src/ringer_control.c").read_text()
-    codes |= set(re.findall(r'"(picture_gui_[a-z]+)"', ringer))
-    assert {"media_busy", "picture_gui_timeout"} <= codes
+    gui_request = _c_function(ringer, "static void gui_request(")
+    handover = re.findall(r'fail\(fd, (\d+), (?:picture\.field \? )?"([a-z_]+)"', gui_request)
+    assert len(handover) == gui_request.count("fail(")
+    answers += handover
+    expire = _c_function(ringer, "void c300x_ringer_control_expire(")
+    answers += re.findall(r'if \(control->picture\.field\) fail\(control->client_fd, (\d+), "([a-z_]+)"', expire)
+    close = _c_function(ringer, "void c300x_ringer_control_close(")
+    answers += re.findall(r'fail\(control->client_fd, (\d+), "([a-z_]+)"', close)
+    assert {
+        "method_not_allowed", "media_busy", "picture_gui_timeout", "ringer_gui_id_failed", "ringer_gui_unavailable",
+    } <= {code for _, code in answers}
     api = (ROOT / "native_agent/API.md").read_text()
     section = api.split("### `GET`, `POST /api/v1/video/picture`", 1)[1].split("\n### ", 1)[0]
-    for code in codes:
-        assert f"`{code}`" in section
-    assert "| `409` | `media_busy` |" in section
+    for status, code in set(answers):
+        assert f"| `{status}` | `{code}` |" in section
+    unavailable = section.split("| `picture_controls_unavailable` |", 1)[1].split("\n", 1)[0]
+    # picture_reply answers it when the GUI sends malformed values.
+    assert "the GUI answered with missing or out-of-range values" in unavailable
 
 
 def test_the_api_names_the_unread_refusal_of_display_bridge_events():

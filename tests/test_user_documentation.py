@@ -211,72 +211,125 @@ def _c_function(source, name):
     return functions[name]
 
 
-def _client_functions(functions, name, fd):
-    """``name`` and every function in ``functions`` it (transitively) hands its client socket ``fd``."""
-    found, pending = {}, [(name, fd)]
-    while pending:
-        name, fd = pending.pop()
-        if name in found:
-            continue
-        assert name in functions, f"no C function {name}"
-        found[name] = text = functions[name]
-        for call in re.finditer(r"\b(\w+)\(", text[text.index("{"):]):
-            args, _ = _c_args(text, text.index("{") + call.end() - 1)
-            if call[1] in functions and fd in args:
-                params, _ = _c_args(functions[call[1]], functions[call[1]].index("("))
-                pending.append((call[1], params[args.index(fd)].split()[-1].lstrip("*")))
-    return found
+_C_KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof"}
+_ERROR_MEMBER = re.compile(r'\\"error\\"\s*:\s*\\"((?:[^"\\]|\\[^"])*)\\"')
+_CODE = re.compile(r"[a-z0-9_]+")
+_FORMAT = re.compile(r"%[-+ #0]*\d*(?:\.\d+)?(?:hh|h|ll|l|z|j|t)?[a-zA-Z]")
+# Calls that get a client socket without answering it.
+_NO_ANSWER = {"close_agent_socket": "closes the socket and sends nothing"}
 
 
-_ERROR_LITERAL = re.compile(r'\\"error\\":\\"([a-z_]+)\\"')
+def _c_calls(text):
+    """``(callee, arguments)`` of each call in the body of the C function ``text``."""
+    blank = _c_blank(text)
+    body = blank.index("{")
+    for call in re.finditer(r"\b(\w+)\s*\(", blank[body:]):
+        if call[1] not in _C_KEYWORDS:
+            yield call[1], _c_args(text, body + call.end() - 1)[0]
 
 
-def _error_replies(functions):
-    """``(status, code)`` of each error code the C ``functions`` answer with.
+def _c_params(text):
+    """The parameter names of the C function ``text``."""
+    params, _ = _c_args(text, text.index("("))
+    return [re.search(r"(\w+)\s*(?:\[[^]]*\])?$", param)[1] for param in params if param not in ("", "void")]
 
-    A code is an ``\\"error\\":\\"<code>\\"`` JSON literal or a literal passed to an error helper,
-    a function of ``functions`` that formats ``\\"error\\":\\"%s\\"``. Its status is the HTTP status
-    among the arguments of the innermost call that carries it, or None.
+
+def _c_literals(expression):
+    """The string literal ``expression`` is, or the two of ``cond ? "a" : "b"``; None for anything else."""
+    blank = _c_blank(expression)
+    if re.fullmatch(r"[^?:]+\?[\s]*:[\s]*", blank):
+        question = blank.index("?")
+        colon = blank.index(":", question)
+        sides = [expression[question + 1:colon], expression[colon + 1:]]
+    elif blank.strip():
+        return None
+    else:
+        sides = [expression]
+    return ["".join(re.findall(r'"((?:[^"\\]|\\.)*)"', side)) for side in sides]
+
+
+def _client_answers(functions, roots, resolved=None, ignore=None):
+    """``(status, code)`` of each error answer a client socket gets, and the ``resolved`` helpers met.
+
+    ``roots`` holds ``(function, socket expression)`` pairs. A call that hands the socket to a function
+    of ``functions`` is followed with its arguments bound to that function's parameters. Any other call
+    that gets the socket answers the client, unless ``_NO_ANSWER`` or ``ignore`` names it with a reason.
+    The body of an answer, its last argument followed back through the callers, must be a string literal
+    (or a ``?:`` of two), a buffer that an ``snprintf`` of the function owning it fills, or a call to a
+    ``resolved`` helper whose codes the caller reads in another way. A code is the
+    ``\\"error\\":\\"<code>\\"`` member of that body, or the literal given for the member's ``%s``; its
+    status is the HTTP status among the other arguments. Anything else fails, so no answer goes unread.
     """
-    helpers = {name for name, text in functions.items() if '\\"error\\":\\"%s\\"' in text}
-    replies = set()
-    for text in functions.values():
-        calls, index = [], 0
-        while index < len(text):
-            end = _c_skip(text, index)
-            if end != index:
-                literal = text[index:end]
-                codes = _ERROR_LITERAL.findall(literal)
-                if calls and calls[-1][0] in helpers:
-                    codes += re.findall(r'^"([a-z_]+)"$', literal)
-                if calls:
-                    calls[-1][2].extend(codes)
-                else:
-                    replies |= {(None, code) for code in codes}
-                index = end
+    resolved, ignore = resolved or {}, {**_NO_ANSWER, **(ignore or {})}
+    answers, helpers = set(), set()
+
+    def bound(expression, frame):
+        return frame[1].get(expression, (expression, frame))
+
+    def codes_of(literals, where):
+        for code in literals:
+            assert _CODE.fullmatch(code), f"{where}: the error code {code!r} is not [a-z0-9_]+"
+        return literals
+
+    def body_codes(expression, frame, where):
+        expression, frame = bound(expression, frame)
+        literals = _c_literals(expression)
+        if literals is not None:
+            return codes_of([code for literal in literals for code in _ERROR_MEMBER.findall(literal)], where)
+        fills = [args for callee, args in _c_calls(functions[frame[0]]) if callee == "snprintf" and args[0] == expression]
+        callee = re.match(r"(\w+)\s*\(", expression)
+        if callee and callee[1] in resolved:
+            helpers.add(callee[1])
+            return []
+        assert fills, f"{where}: the body {expression!r} is neither a literal nor a buffer built in {frame[0]}"
+        codes = []
+        for args in fills:
+            formats = _c_literals(args[2])
+            assert formats is not None and len(formats) == 1, f"{where}: the format of {expression!r} is not a literal"
+            for member in _ERROR_MEMBER.finditer(formats[0]):
+                if member[1] != "%s":
+                    codes += codes_of([member[1]], where)
+                    continue
+                argument = args[3 + len(_FORMAT.findall(formats[0][:member.start(1)].replace("%%", "")))]
+                argument, owner = bound(argument, frame)
+                literals = _c_literals(argument)
+                assert literals is not None, f"{where}: the error code {argument!r} in {owner[0]} is not a literal"
+                codes += codes_of(literals, where)
+        return codes
+
+    def visit(name, fd, bindings, depth):
+        assert name in functions, f"no C function {name}"
+        assert depth < 16, f"{name}: the client socket is handed on too deeply"
+        frame = (name, bindings)
+        for callee, args in _c_calls(functions[name]):
+            if fd not in args:
                 continue
-            if text[index] == "(":
-                calls.append((re.search(r"(\w*)\s*$", text[:index])[1], index, []))
-            elif text[index] == ")" and calls[-1][2]:
-                _, start, codes = calls.pop()
-                statuses = [int(status) for status in re.findall(r"\b[1-5]\d\d\b", _c_blank(text[start:index]))]
-                if not statuses and calls:
-                    calls[-1][2].extend(codes)  # e.g. a body built here and sent by the enclosing call
-                else:
-                    statuses = statuses * len(codes) if len(statuses) == 1 else statuses or [None] * len(codes)
-                    replies |= set(zip(statuses, codes, strict=True))
-            elif text[index] == ")":
-                calls.pop()
-            index += 1
-    return replies
+            if callee in functions:
+                params = _c_params(functions[callee])
+                visit(callee, params[args.index(fd)], {p: bound(a, frame) for p, a in zip(params, args, strict=True)}, depth + 1)
+                continue
+            if callee in ignore:
+                continue
+            where = f"{name}: {callee}({', '.join(args)})"
+            codes = body_codes(args[-1], frame, where)
+            if not codes:
+                continue
+            others = [bound(arg, frame)[0] for index, arg in enumerate(args[:-1]) if index != args.index(fd)]
+            statuses = [int(status) for arg in others for status in re.findall(r"\b[1-5]\d\d\b", _c_blank(arg))]
+            assert len(statuses) in (1, len(codes)), f"{where}: no literal HTTP status for {codes}"
+            answers.update(zip(statuses * len(codes) if len(statuses) == 1 else statuses, codes, strict=True))
+
+    for name, fd in roots:
+        visit(name, fd, {}, 0)
+    return answers, helpers
 
 
 def _c_blank(text):
-    """``text`` with its string and character literals and comments blanked out."""
+    """``text`` with its string and character literals and comments turned into spaces, at the same length."""
     blanked, index = [], 0
     while index < len(text):
         end = _c_skip(text, index)
-        blanked.append(" " if end != index else text[index])
+        blanked.append(" " * (end - index) if end != index else text[index])
         index = max(end, index + 1)
     return "".join(blanked)
 
@@ -284,26 +337,38 @@ def _c_blank(text):
 def _api_error_rows(heading):
     """``(status, code)`` of each row of the error table in the API.md section after ``heading``."""
     section = (ROOT / "native_agent/API.md").read_text().split(heading, 1)[1].split("\n### ", 1)[0]
-    return {(int(status), code) for status, code in re.findall(r"^\| `(\d{3})` \| `([a-z_]+)` \|", section, re.MULTILINE)}
+    table = section.split("\nErrors:\n", 1)[1].strip().split("\n\n", 1)[0].splitlines()
+    assert table[:2] == ["| Status | `error` | Meaning |", "| --- | --- | --- |"], heading
+    rows = set()
+    for line in table[2:]:
+        row = re.match(r"\|\s*`?(\d{3})`?\s*\|\s*`?([a-z0-9_]+)`?\s*\|", line)
+        assert row, f"unreadable error row after {heading}: {line}"
+        rows.add((int(row[1]), row[2]))
+    return rows
 
 
 def test_the_api_lists_every_error_the_agent_update_answers_with():
     # The handler refuses a request itself, also through the send_* helpers it
     # hands its client socket to, before the install starts.
-    functions = _client_functions(_c_functions((ROOT / "native_agent/src/http.c").read_text()),
-                                  "handle_agent_update_apply", "client_fd")
-    assert "send_maintenance_unauthorized" in functions
-    replies = _error_replies(functions)
-    assert None not in {status for status, _ in replies}
+    functions = _c_functions((ROOT / "native_agent/src/http.c").read_text())
+    replies, helpers = _client_answers(functions, [("handle_agent_update_apply", "client_fd")], resolved={
+        "agent_update_error_json": "a failed install: the codes of its enum switch, with the status "
+                                   "agent_update_error_status picks, are added below",
+    })
+    assert helpers == {"agent_update_error_json"}
+    assert (403, "maintenance_unauthorized") in replies
     # A failed install answers agent_update_error_json(error) with the status
     # agent_update_error_status(error) picks for the same error.
     handler = functions["handle_agent_update_apply"]
     assert "agent_update_error_status(summary.error)" in handler
     assert "agent_update_error_json(summary.error)" in handler
     update = _c_functions((ROOT / "native_agent/src/agent_update.c").read_text())
-    install = {code for _, code in _error_replies({"json": update["agent_update_error_json"]})}
-    cases = dict(re.findall(r'(?:case (\w+)|default):\s*return "(?:[^"\\]|\\.)*?\\"error\\":\\"([a-z_]+)\\"',
-                            update["agent_update_error_json"]))
+    text = update["agent_update_error_json"]
+    returns = re.findall(r"\breturn\b([^;]*);", _c_blank(text))
+    assert returns and not any(value.strip() for value in returns), "agent_update_error_json returns a non-literal"
+    install = set(_ERROR_MEMBER.findall(text))
+    cases = dict(re.findall(r'(?:case (\w+)|default):\s*return "(?:[^"\\]|\\.)*?\\"error\\"\s*:\s*\\"([a-z0-9_]+)\\"',
+                            text))
     assert set(cases.values()) == install
     special, status, other = re.search(r"return error == (\w+) \? (\d{3}) : (\d{3});",
                                        update["agent_update_error_status"]).groups()
@@ -330,25 +395,29 @@ def test_the_api_names_every_display_call_that_follows_the_ui_port():
 
 def test_the_api_lists_every_error_the_picture_route_answers_with():
     picture = _c_functions((ROOT / "native_agent/src/picture_control.c").read_text())
-    ringer = _c_functions((ROOT / "native_agent/src/ringer_control.c").read_text())
+    source = (ROOT / "native_agent/src/ringer_control.c").read_text()
+    ringer = _c_functions(source)
     assert not picture.keys() & ringer.keys()
     # picture_request answers itself or hands the client to the GUI path in
-    # ringer_control.c. That path keeps the client and answers it later from
-    # picture_reply, on its timeout and at shutdown.
-    functions = _client_functions(picture | ringer, "picture_request", "fd")
-    assert {"c300x_gui_picture_request", "gui_request"} <= functions.keys()
-    functions |= picture
-    for name in ("c300x_ringer_control_expire", "c300x_ringer_control_close"):
-        functions[name] = ringer[name]
-    replies = _error_replies(functions)
+    # ringer_control.c. That path keeps it as control->client_fd and answers
+    # it wherever a function there passes that socket on.
+    blank = _c_blank(source)
+    assert len(re.findall(r"\bclient_fd\b", blank)) == len(re.findall(r"\bcontrol->client_fd\b", blank))
+    roots = [("picture_request", "fd")] + [(name, "control->client_fd") for name in ringer]
+    replies, helpers = _client_answers(picture | ringer, roots, ignore={
+        "apply": "c300x_ringer_control_next sets it only for a ringer ack (completed=), never for a picture command",
+    })
+    assert not helpers
     ringer_only = {
         "ringer_gui_busy": "gui_request answers it to a ringer command; a picture command gets picture_gui_busy",
         "ringer_not_applied": "the ringer branch of c300x_ringer_control_expire",
         "ringer_gui_timeout": "the ringer branch of c300x_ringer_control_expire",
+        "ringer_gui_not_applied": "the completed= branch of c300x_ringer_control_next, which answers "
+                                  "the ack of a picture command as stale before",
     }
     assert set(ringer_only) <= {code for _, code in replies}
     replies = {(status, code) for status, code in replies if code not in ringer_only}
-    assert {(504, "picture_gui_timeout"), (503, "ringer_gui_unavailable")} <= replies
+    assert {(409, "picture_gui_busy"), (504, "picture_gui_timeout"), (503, "ringer_gui_unavailable")} <= replies
     assert replies == _api_error_rows("### `GET`, `POST /api/v1/video/picture`")
     section = (ROOT / "native_agent/API.md").read_text().split("### `GET`, `POST /api/v1/video/picture`", 1)[1]
     unavailable = section.split("| `picture_controls_unavailable` |", 1)[1].split("\n", 1)[0]

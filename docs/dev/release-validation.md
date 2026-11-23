@@ -25,12 +25,12 @@ the current `main` tip. Beta/RC tags retain the existing branch policy: use the
 current `beta` tip first, or `main` if only main matches the tagged commit.
 When both tips match, beta is selected and failed beta checks cannot fall back
 to main checks. The local `v2.9.0_fw3.0.6` development branch is not an additional
-release source. The firmware-3.0.6 `2.9.0b2` candidate is intended for canonical
+release source. The firmware-3.0.6 `2.10.0b1` candidate is intended for canonical
 `beta`, not for a merge into `main`.
 
 Local candidate preparation may proceed after the beta review, including its
 version bump, native rebuild and package approval. Before proceeding beyond
-local preparation, finish and publish stable **2.8.2 first**, then recompare
+local preparation, finish and publish stable **2.9.0 first**, then recompare
 and port any final changes into the beta worktree one way only. Run the
 full local checks on the final beta candidate **before opening its PR**; the
 focused port checks are not a substitute. After authorized integration into

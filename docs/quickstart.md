@@ -200,9 +200,9 @@ restore the agent on the device. On firmware 3.0.6, remove the display overlay
 first as described in
 [Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306).
 
-`2.9.0b2` is a beta for the display and Low camera settings of firmware `3.0.6`,
+`2.10.0b1` is a beta for the display and Low camera settings of firmware `3.0.6`,
 see [Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306).
-On `1.7.x` and `2.0.2` it includes the stable 2.8.2 fixes. Additional Low sizes
+On `1.7.x` and `2.0.2` it works like stable 2.9.0. Additional Low sizes
 and their framing/performance remain untested on hardware; see
 [Stream Settings](user-guide.md#stream-settings).
 

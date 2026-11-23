@@ -6,7 +6,7 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Beta: **2.9.0b2** (display pages and additional Low camera sizes for firmware 3.0.6, not yet tested on a device), including **2.9.0**.
+Beta: **2.10.0b1** (display pages and additional Low camera sizes for firmware 3.0.6, not yet tested on a device), including **2.9.0**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station. A small agent on the station connects it to Home
@@ -77,7 +77,7 @@ through the options and adds the card. Later releases: [Update](docs/quickstart.
 
 ### Beta Versions
 
-Betas are opt-in. The current beta, **2.9.0b2**, brings the Home Assistant
+Betas are opt-in. The current beta, **2.10.0b1**, brings the Home Assistant
 pages to the display of firmware `3.0.6` and is not yet tested on a device; on
 `1.7.x` and `2.0.2` it works like stable 2.9.0. Enable **Pre-release** for this
 repository in Marketplace, or beta versions in HACS. Stable installations are

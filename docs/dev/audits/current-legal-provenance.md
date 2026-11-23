@@ -1,6 +1,6 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-23. Scope: integration and native agent `2.9.0b2`, a
+Source review: 2026-11-23. Scope: integration and native agent `2.10.0b1`, a
 beta on top of `2.9.0` that brings the display pages to firmware 3.0.6.
 The station settings panel and ring-call controls use the existing Qt runtime
 on the device. The package includes the project's QML, JavaScript, patch script

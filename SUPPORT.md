@@ -2,7 +2,8 @@
 
 ## Supported Release Line
 
-- `2.9.x`: beta 2.9.0b2 for firmware 3.0.6, not yet tested on a device; stable line: local test candidate (2.9.0)
+- `2.10.x`: beta 2.10.0b1 for firmware 3.0.6, not yet tested on a device; includes 2.9.0
+- `2.9.x`: local test candidate (2.9.0)
 - `2.8.x`: current stable (2.8.3)
 - `2.7.x`: previous stable; upgrade to 2.8.x for maintenance fixes
 - `2.5.x`: no longer maintained; upgrade to 2.8.x

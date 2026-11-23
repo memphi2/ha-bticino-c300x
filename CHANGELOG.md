@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.10.0b1 - Unreleased
+
+Firmware 3.0.6 beta, not yet tested on a device. Includes 2.9.0; on firmware
+1.7.x and 2.0.2 it works like 2.9.0.
+
+- On firmware 3.0.6 the display overlay also carries the 2.9.0
+  **Settings > Home Assistant** tab (HA feedback, SSH, reboot, agent removal).
+  Checked offline against the original Qt 5 files only.
+- The Qt 5 display, the additional Low sizes, routing and downgrade recovery
+  stay as in 2.9.0b2. The native agent is rebuilt as 2.10.0b1; an agent update
+  is required.
+
 ## v2.9.0b2 - 2026-11-22
 
 Firmware 3.0.6 beta, not yet tested on a device. Includes final stable 2.8.2

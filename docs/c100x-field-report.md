@@ -11,7 +11,9 @@ In the [subsequent test on November 23](https://github.com/memphi2/ha-bticino-c3
 the reporter installed the test package on C100X 1.5.8. Authentication, model
 detection and startup verification worked. Companion kept running; the checked
 GUI, media, routing and identity files kept their hashes. This does not establish
-compatibility with an unmodified station.
+compatibility with an unmodified station. Parallel operation with Companion
+is not supported. Treat this report as diagnostic evidence, not acceptance
+of stair-light or door-unlock operation on a stock installation.
 
 - The station lacked the vendor IPv4 firewall hook. The reporter supplied a
   placeholder for that test; **do not repeat this workaround**. Restoring a
@@ -28,6 +30,25 @@ compatibility with an unmodified station.
   safe GUI reload for this test package.
 
 ## Evidence And Limits
+
+### Firewall layouts seen in firmware and community projects
+
+| Source | Evidence | Installer consequence |
+| --- | --- | --- |
+| C100X 1.5.8 stock image | `S01networking` starts `ifup -a`; WLAN is an automatic interface. The BusyBox ifup binary contains the `run-parts /etc/network/if-%s.d` hook dispatch. The IPv4 hook clears INPUT and sets its policy to DROP. Its SHA-256 is `737cf33df612f090c54505a6bdb283dd27a4d8df623837bee4d9941855235b0b`. The [firmware-tools comparison](https://github.com/daniel-sc/bticino-c100x-firmware-tools/blob/55f8aa5afe4d2e90c23d57f932a620598a6c1723/docs/WIRELESS-UPDATES.md) records the same hash for main and recovery. | Check both the live rules and the persistent hook. Do not execute the stock hook to test configuration: it replaces live INPUT rules. |
+| [c300x-controller installer](https://github.com/slyoldfox/c300x-controller/blob/4234a37d0ebb009b54893e82597f1e482dab9ff2/install.sh) | One installation path edits the existing hook; another moves both vendor hooks to backups. | A present hook need not be stock, and an absent hook need not mean a missing firewall tool. Preserve other software's changes and backups. |
+| [fquinto SIP guide](https://github.com/fquinto/bticinoClasse300x/blob/dc6071638a566e3cee392024683b3480668bbc79/sip/README.md) | Describes both a live policy change and moving the hooks. This is an optional SIP procedure, not evidence that every rooted installation has this layout. | Neither the existence of a backup nor the absence of the original determines the live policy. |
+
+An offline dry run of the original ARM BusyBox 1.27.2 `ifup` under QEMU with
+the shipped interfaces file printed the pre-up hook directory before the WLAN
+link command, then the up hook directory. This confirms dispatch order, not
+that a proposed hook works on a real boot.
+
+On the reported station the contributor observed INPUT ACCEPT and rules
+installed by Companion. An ACCEPT rule of our own would not restrict access
+under that policy. Conversely, restoring the vendor hook would not preserve
+the system the contributor is using. The source comparisons do not identify
+which tool changed that particular station.
 
 - The reported device is C100X Door Entry 1.5.8, ARMv7, with Companion already
   running. Manufacturer app/cloud deployment provisions vendor SIP accounts, as

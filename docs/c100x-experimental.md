@@ -7,7 +7,9 @@ or Home Assistant installation was accessed for this work. ABI compatibility
 does not establish runtime or hardware support.
 
 For the separately scoped issue #51 first test, use the
-[agent-only test preparation and recovery checklist](c100x-test-release.md).
+[agent, stair-light and door-unlock test checklist](c100x-test-release.md).
+Use otherwise stock C100X firmware 1.5.8; only the changes needed for
+root/SSH access are in scope. Running alongside Companion is not supported.
 The release number/channel remain undecided; publication is blocked locally.
 
 A contributor has since supplied observations from a 1.5.8 device with Companion

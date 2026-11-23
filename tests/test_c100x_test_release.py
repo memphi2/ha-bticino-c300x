@@ -66,7 +66,7 @@ def test_explicit_c100x_gui_request_is_not_silently_ignored(tmp_path, monkeypatc
     client = SimpleNamespace(run=lambda cmd: calls.append(cmd), close=lambda: calls.append("closed"))
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _: client)
     monkeypatch.setattr(device_installer, "_read_remote_config_sync", lambda *_: {})
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: None)
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: "qt5_ondisk")
     monkeypatch.setattr(device_installer, "_device_display_kind", lambda _: "qt5_ondisk")
     request = device_installer.C300XDeviceInstallRequest(
         host="unused.invalid", ssh_username="unused", ssh_password="unused", apply_gui_patch=True,

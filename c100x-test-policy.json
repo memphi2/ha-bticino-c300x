@@ -2,6 +2,6 @@
   "schema": 1,
   "target_model": "C100X",
   "target_firmware": "1.5.8",
-  "scope": "agent-only",
+  "scope": "agent-stair-light-door-unlock",
   "publication": "blocked-pending-channel-decision"
 }

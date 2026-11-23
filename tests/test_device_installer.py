@@ -278,7 +278,7 @@ def test_bootstrap_install_uses_python_ssh_client(
     monkeypatch: Any,
 ) -> None:
     # Exercise shared Qt4 installation mechanics, not C100X branch admission.
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: None)
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
     remote_dir = "/home/bticino/cfg/extra/custom-agent"
 
     class FakeSshClient:
@@ -449,7 +449,7 @@ def test_bootstrap_install_fails_when_startup_link_is_missing(
     monkeypatch: Any,
 ) -> None:
     # Admission has its own real-stager tests; inject failure after that boundary.
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: None)
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
     remote_dir = "/home/bticino/cfg/extra/custom-agent"
 
     class FakeSshClient:
@@ -802,14 +802,15 @@ def test_asyncssh_client_init_tells_a_refused_login(monkeypatch: Any) -> None:
         )
 
 
-def test_asyncssh_client_init_reports_missing_dependency(monkeypatch: Any) -> None:
+@pytest.mark.parametrize("failure", [ImportError, OSError])
+def test_asyncssh_client_init_reports_missing_dependency(monkeypatch: Any, caplog, failure) -> None:
     monkeypatch.delitem(sys.modules, "asyncssh", raising=False)
 
     original_import = __import__
 
     def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
         if name == "asyncssh":
-            raise ImportError("missing")
+            raise failure("private-index-token")
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr("builtins.__import__", fake_import)
@@ -826,6 +827,8 @@ def test_asyncssh_client_init_reports_missing_dependency(monkeypatch: Any) -> No
         assert err.reason == "installer_dependency_missing"
     else:  # pragma: no cover
         raise AssertionError("missing AsyncSSH dependency was accepted")
+    assert f"import optional SSH requirement asyncssh==2.24.1 ({failure.__name__})" in caplog.text
+    assert "private-index-token" not in caplog.text and "secret" not in caplog.text
 
 
 def test_startup_script_recreates_missing_rc_link_without_rewriting_init(
@@ -1130,9 +1133,10 @@ def test_asyncssh_connect_kwargs_force_legacy_ssh_rsa() -> None:
     assert kwargs["encryption_algs"] == "+aes128-cbc,3des-cbc"
 
 
-def test_installer_rejects_unvalidated_asyncssh_versions() -> None:
+@pytest.mark.parametrize(("value", "reported"), [("4.0.0", "4.0.0"), ("private-index-token", "unknown")])
+def test_installer_rejects_unvalidated_asyncssh_versions(value, reported, caplog) -> None:
     class FakeAsyncSSH:
-        __version__ = "4.0.0"
+        __version__ = value
 
     try:
         device_installer._validate_asyncssh_version(FakeAsyncSSH)
@@ -1140,6 +1144,8 @@ def test_installer_rejects_unvalidated_asyncssh_versions() -> None:
         assert err.reason == "installer_dependency_missing"
     else:  # pragma: no cover
         raise AssertionError("Expected installer_dependency_missing")
+    assert f"asyncssh==2.24.1 does not match loaded version {reported}" in caplog.text
+    assert "private-index-token" not in caplog.text
 
 
 def test_manifest_does_not_require_optional_asyncssh() -> None:
@@ -1191,6 +1197,33 @@ def test_installer_dependency_processing_uses_homeassistant_requirements(
     asyncio.run(async_ensure_installer_dependencies(hass))  # type: ignore[arg-type]
 
     assert calls == [(hass, "bticino_c300x", ["asyncssh==2.24.1"], False)]
+
+
+def test_installer_dependency_failure_can_retry_without_logging_secrets(monkeypatch, caplog):
+    from homeassistant import requirements
+
+    attempts = []
+
+    async def resolve(hass, name, packages, *, is_built_in):
+        attempts.append(packages)
+        if len(attempts) == 1:
+            raise requirements.RequirementsNotFound(name, ["https://user:private-key@index.invalid"])
+
+    monkeypatch.setattr(requirements, "async_process_requirements", resolve)
+    hass = object()
+    with pytest.raises(C300XDeviceInstallError, match="installer_dependency_missing"):
+        asyncio.run(async_ensure_installer_dependencies(hass))
+    assert "install optional SSH requirement asyncssh==2.24.1 (RequirementsNotFound)" in caplog.text
+    assert "private-key" not in caplog.text
+    asyncio.run(async_ensure_installer_dependencies(hass))
+    assert attempts == [list(INSTALLER_REQUIREMENTS)] * 2
+
+
+def test_installer_dependency_recovery_text_mentions_pinned_package_in_all_languages():
+    component = ROOT / "custom_components/bticino_c300x"
+    for path in (component / "strings.json", *(component / "translations").glob("*.json")):
+        text = json.loads(path.read_text())["config"]["error"]["installer_dependency_missing"]
+        assert INSTALLER_REQUIREMENTS[0] in text, path.name
 
 
 def test_dev_requirements_pin_asyncssh_with_legacy_ssh_rsa_support() -> None:
@@ -1255,11 +1288,71 @@ def test_merge_existing_device_config_keeps_device_owned_sections() -> None:
         assert result == json.loads(template)
 
 
+@pytest.mark.parametrize(("kind", "existing", "expected"), [
+    ("qt5_ondisk", None, False),
+    ("qt5_ondisk", {"video": {"rtsp": {"port": 7654}}}, False),
+    ("qt5_ondisk", {"video": {"enabled": True}}, True),
+    ("qt5_ondisk", {"video": {"enabled": True, "rtsp": {"port": 7654}}}, True),
+    ("qt5_ondisk", {"video": {"enabled": False}}, False),
+    ("qt5_rcc", None, True),
+    ("qt4_ondisk", None, True),
+])
+def test_bootstrap_firewall_uses_final_device_video_config(monkeypatch, kind, existing, expected):
+    from types import SimpleNamespace
+
+    commands, configs = [], []
+    client = SimpleNamespace(run=commands.append, close=lambda: None)
+    monkeypatch.setattr(device_installer, "_connect_device_client", lambda _: client)
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: kind)
+    monkeypatch.setattr(device_installer, "_read_remote_config_sync", lambda *_: existing)
+    monkeypatch.setattr(device_installer, "_firewall_hook_present_sync", lambda *_: True)
+    monkeypatch.setattr(device_installer, "_write_remote_file_sync",
+                        lambda _c, _p, data, **_: configs.append(json.loads(data)))
+    monkeypatch.setattr(device_installer, "_install_startup_script_sync", lambda *_: [])
+    monkeypatch.setattr(device_installer, "_verify_startup_sync", lambda *_: None)
+    monkeypatch.setattr(device_installer, "_apply_qml_patch_sync", lambda *_: None)
+    monkeypatch.setattr(device_installer, "_remove_obsolete_display_source_sync", lambda *_: None)
+    request = C300XDeviceInstallRequest(host="unused", ssh_username="unused", ssh_password="unused",
+                                        apply_gui_patch=False, apply_firewall_patch=True)
+    template = device_installer._device_config_json(
+        api_token="unused", maintenance_token="unused", agent_port=request.agent_port,
+    ).encode()
+    device_installer._install_device_agent_sync(
+        request, device_installer._ResolvedBundle((), Path("unused")), template,
+    )
+    config, = configs
+    command, = [cmd for cmd in commands if "/bootstrap_firewall.sh " in cmd]
+    assert config["video"]["enabled"] is expected
+    if kind == "qt5_ondisk":
+        assert f"C300X_VIDEO_ENABLED={int(expected)} " in command
+        if expected:
+            port = existing["video"].get("rtsp", {}).get("port", 6554)
+            assert f"C300X_RTSP_PORT={port} " in command
+        else:
+            assert "C300X_RTSP_PORT=" not in command
+        if existing and "rtsp" in existing["video"]:
+            assert config["video"]["rtsp"] == existing["video"]["rtsp"]
+    else:
+        assert "C300X_VIDEO_ENABLED" not in command
+
+
+@pytest.mark.parametrize("port", [0, 65536, True, "7654"])
+def test_bootstrap_rejects_invalid_media_port_before_firewall_command(port):
+    from types import SimpleNamespace
+
+    client = SimpleNamespace(run=lambda *_: pytest.fail("Unexpected firewall command"))
+    config = {"video": {"enabled": True, "rtsp": {"port": port}}}
+    with pytest.raises(C300XDeviceInstallError, match="device_install_failed"):
+        device_installer._apply_firewall_patch_sync(
+            client, "/agent", 8091, config_bytes=json.dumps(config).encode(),
+        )
+
+
 def test_install_reads_remote_config_and_writes_merged_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Isolate configuration preservation from the C100X package admission test.
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: None)
+    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
     old = json.dumps({"mqtt": {"enabled": True, "host": "broker.lan"}})
 
     class FakeSshClient:

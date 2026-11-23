@@ -30,3 +30,20 @@ def test_firewall_restore_keeps_the_vendor_blank_lines(tmp_path: Path, sanitize:
     result = subprocess.run([str(binary), str(work)], capture_output=True, text=True, timeout=10)
 
     assert result.returncode == 0, result.stderr
+
+    for family in ("iptables", "ip6tables"):
+        stub = work / family
+        stub.write_text('#!/bin/sh\nprintf "%s %s\\n" "${0##*/}" "$*" >> "$RULE_LOG"\n[ "$1" != "-C" ]\n')
+        stub.chmod(0o700)
+    log = work / "rules"
+    for mode in ("disabled", "enabled"):
+        log.write_text("")
+        result = subprocess.run(
+            [str(binary), str(work), mode], env={**os.environ, "RULE_LOG": str(log)},
+            capture_output=True, text=True, check=True, timeout=10,
+        )
+        for rules in (result.stdout, log.read_text()):
+            for append in ("iptables -A INPUT", "ip6tables -I INPUT 1"):
+                assert f"{append} -p tcp --dport 8080 -j ACCEPT" in rules
+                for media in ("tcp --dport 7654", "udp --dport 40004"):
+                    assert (f"{append} -p {media} -j ACCEPT" in rules) == (mode == "enabled")

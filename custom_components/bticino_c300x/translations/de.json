@@ -678,7 +678,7 @@
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
       "invalid_callback_base_url": "Eine vom C300X erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
       "invalid_device_host": "Gib die C300X-Adresse ein.",
-      "installer_dependency_missing": "Die optionale Python-SSH-Abhängigkeit konnte nicht installiert oder geladen werden. Prüfe die Home-Assistant-Paketinstallation und versuche es erneut.",
+      "installer_dependency_missing": "Home Assistant konnte das optionale SSH-Paket (asyncssh==2.24.1) nicht laden. Das ist kein SSH-Anmeldefehler. Prüfe den Paketfehler unter Einstellungen > System > Protokolle. Behebe die Ursache, starte Home Assistant neu und versuche die Installation erneut.",
       "invalid_ssh_password": "Gib das C300X-SSH-Passwort ein.",
       "invalid_ssh_username": "Gib den C300X-SSH-User ein.",
       "invalid_alarm_entity": "Wähle eine Alarmo-Alarm-Control-Panel-Entität oder lasse das Feld leer.",
@@ -703,7 +703,7 @@
       "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
       "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
       "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
-      "installer_firewall_hook_unsupported": "Der vorhandene Firewall-Hook fehlt, ist nicht lesbar oder ist ein symbolischer Link. Die Installation wurde vor Änderungen am Gerät beendet. Bitte keine Platzhalter anlegen oder Firewallregeln wiederherstellen, um fortzufahren.",
+      "installer_firewall_hook_unsupported": "Der Firewall-Hook lässt sich nicht sicher prüfen. Vor Änderungen am Gerät wurde abgebrochen. Bitte Dateityp und Berechtigungen prüfen und keinen Platzhalter anlegen.",
       "device_model_incompatible": "Dieses Paket unterstuetzt dieses Geraetemodell nicht. C100X-Testpakete duerfen keine C300X-Geraete aktualisieren. Installiere vor dem Agent-Update oder der Neuinstallation das passende Paket. Es wurden keine Geraetedateien ersetzt."
     }
   },

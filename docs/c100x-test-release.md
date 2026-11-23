@@ -8,7 +8,7 @@ local ZIP merely because it has that version.
 
 The download is a **complete HA integration ZIP**, including the freshly built
 ARM agent, generated device bundle, all Lovelace card modules and documentation.
-"Agent-only" describes the first hardware acceptance phase, not a reduced ZIP.
+The functional test scope is agent setup plus the two HA buttons below.
 Unfinished GUI activation remains disabled even though adapter assets are included.
 The selected test-package scope excludes local speaker/TTS. Investigation of
 a safe audio backend continues separately; no unsupported audio path is enabled.
@@ -18,6 +18,21 @@ a safe audio backend continues separately; no unsupported audio path is enabled.
 The first authorized device test should establish agent startup, authenticated
 status/setup reads, model/firmware reporting, discovery, and continued vendor
 operation. It is not a display, routing migration, camera or audio trial.
+
+**Test baseline:** use C100X firmware 1.5.8 in its normal manufacturer
+configuration, with at most the changes needed to obtain root/SSH access.
+Normal vendor-app provisioning is part of that baseline. Companion, another
+third-party controller or custom SIP/media/display changes make results
+unsuitable for acceptance. Parallel operation with Companion is not
+supported. Do not reset or dismantle a working station to participate.
+
+**First functional checks:** on the C100X device page in HA, press **Stair
+light** once and verify that the intended light switches on. For **Door
+unlock**, have an authorized person at the intended door; press the
+corresponding button once and verify the physical release. If the target is
+unknown, skip the action. Report each result separately; an accepted HA
+service call is not proof that the output operated. Neither test requires
+opening the camera, enabling video, creating a SIP user or changing routes.
 
 The audio baseline is the existing stock Speex configuration. Firmware-PCMU
 apply is blocked in this C100X test build at the native core, API and CLI;
@@ -97,7 +112,7 @@ Attachment: ha-bticino-c100x-issue51-local.zip
 SHA256: <all 64 hexadecimal digits of the final ZIP>
 C100X full gate: <result, date, command and retained log reference>
 Browser/package/build-lock checks: <results for this candidate>
-Scope: isolated HA, complete integration + agent + card; no GUI/media/actions
+Scope: otherwise stock C100X 1.5.8, agent + stair light + door unlock; no GUI/media trial
 ```
 
 Redact private paths from public log excerpts. Any later source or archive change
@@ -139,9 +154,9 @@ symlink targets. Do not dereference links while recording their identity.
 | `/home/bticino/cfg/extra/c300x-native-agent/` | Writes the executable, generated QML assets, helper scripts, `bundle.json`, `config.json` and `c300x-agent.env`; may remove obsolete generated source. The whole previous tree is recovery material. |
 | `/etc/init.d/c300x-native-agent` | Replaces the rendered init script, mode 0700. |
 | `/etc/rc5.d/S40c300x-native-agent` | Creates/replaces the link to `/etc/init.d/c300x-native-agent`. Record a pre-existing link's literal target, not only its referent. |
-| `/etc/network/if-pre-up.d/iptables` | Adds/replaces its managed IPv4 block, retaining the live file's metadata. |
+| `/etc/network/if-pre-up.d/iptables` | If present, adds/replaces the managed IPv4 block and retains file metadata. If absent, remains absent. |
 | `/home/bticino/cfg/extra/c300x-device-file-backups/` | May gain `original/etc/network/if-pre-up.d/iptables` and parent directories. A new managed firewall backup is mode 0600 and omits managed blocks; it is **not** the exact pre-test firewall snapshot. Preserve any older recovery data. |
-| Live IPv4 INPUT rules | Adds missing ACCEPT rules for TCP 8091, TCP 6554 and UDP 40004 by default. Bootstrap opens these media ports even before media is enabled in HA. File rollback alone does not undo live rules. |
+| Live IPv4 INPUT rules | With the vendor hook present, a fresh C100X install adds only the configured API port (default TCP 8091). A reinstall preserving `video.enabled: true` also adds the configured RTSP port (default TCP 6554) and talkback (UDP 40004). Without the hook, no live rules change. |
 | Agent runtime | Restarts only the native agent, writes/removes its PID file in its directory; completing HA setup can save callback configuration there. |
 | Staging | Uploads use `.new`; init uses `.c300x-native-agent-init.new` and `/etc/init.d/c300x-native-agent.new`. Firewall staging uses unique sibling files and `/tmp/c300x-firewall*` files. Inspect unexpected leftovers; never wildcard-delete them. |
 
@@ -303,8 +318,12 @@ card download for the tester. HA registers the bundled resource automatically
 after integration setup. The card picker currently calls it **C300X Doorbell Call
 Card**, also on C100X. Its type remains `custom:c300x-doorbell-call-card`.
 
+For a dashboard with just the first two actions, use Home Assistant's built-in
+Entities card and select the stair-light and door-unlock buttons from this
+C100X. Do not substitute a similarly named button from another entry.
+
 On the test dashboard select **Edit dashboard > Add card**. For the initial
-agent-only phase, confirm registration but do not enable media merely to obtain
+setup phase, confirm registration but do not enable media merely to obtain
 a camera entity. A missing/unavailable camera must leave media start buttons
 disabled and must not request the microphone. GUI restart, device ringer mute,
 key tone, Notify sound and TTS are not card features to enable in this test.
@@ -343,7 +362,8 @@ show_media_history: false
 ```
 
 Use the actual entity picker/name, not the placeholder. Do not press play, answer,
-Home Call, door or light during the first acceptance phase. Hidden controls are
+or Home Call during setup. Test door and light separately using the HA buttons
+on the device page as described above. Hidden card controls are
 not an authorization boundary; the test plan and backend capability checks remain
 necessary. Later media tests require their own authorization and hardware evidence.
 
@@ -357,11 +377,12 @@ registered resource or the package's validated handoff, not a guessed version.
 
 ## First Authorized Installation and Checks
 
-If the existing IPv4 firewall hook is missing, unreadable or a symlink, the
-installer stops before writing the agent, changing any rule or adding autostart.
-This also applies to stations modified by Companion or an earlier SSH setup.
-Do not create a placeholder hook, restore vendor rules or change the INPUT
-policy to get past this check. Report the unsupported layout instead.
+If the vendor IPv4 firewall hook is absent, bootstrap continues without
+creating a hook, reading or restoring a backup, or changing live rules.
+IPv4 firewall management by the agent is disabled in that configuration.
+Existing network policy must already permit HA to reach the authenticated API;
+skipping the hook does not guarantee connectivity. Do not create a placeholder.
+A symlink, unreadable hook or inaccessible directory stops setup before writes.
 
 The supported entry point is the reviewed package's HA SSH bootstrap, not the
 blocked developer shell installer. Bootstrap writes agent payload/configuration,
@@ -369,7 +390,12 @@ startup integration and, by its current default, the firewall allowance; it
 starts/restarts the **agent**, not the vendor GUI. Review these writes explicitly.
 The C100X bootstrap must leave legacy MQTT/Companion migration untouched.
 
-Video and automatic media-user creation default to off in this test package.
+Fresh C100X agent configuration and HA feature selection both default video to
+off. A reinstall preserves an explicit agent video setting; the HA form's
+default does not override an already enabled agent. Bootstrap uses the merged
+agent configuration for both its persistent IPv4 block and its live rule
+additions. It does not remove previously open live ports. Automatic media-user
+creation also defaults to off.
 Submitting the initial form unchanged does not enable media or provision SIP
 users. Enabling video alone does not authorize automatic SIP-user creation;
 that requires a separate explicit choice during an agreed later media trial.
@@ -387,11 +413,11 @@ on does not silently turn a saved refusal or an absent permission into approval.
    capabilities. Display/mute/key-tone/GUI-restart capabilities must remain false.
    An exposed unsupported toggle is a failed acceptance check, not an invitation
    to try it. No-auth access must remain disabled.
-4. Compare GUI/routing/provisioned-account identities and Companion state with
+4. Compare GUI/routing/provisioned-account identities with
    the pre-test record. Check normal physical keys and vendor app operation.
    A changed binary hash or missing account is a stop condition.
 5. Observe agent uptime and errors while idle. Record the actual observation
-   duration, not a generic stability claim. Reboot persistence, door actions,
+   duration, not a generic stability claim. Reboot persistence,
    ring/media/audio and update/remove tests need separately agreed phases.
 
 ## Recovery and Stop Conditions
@@ -492,16 +518,18 @@ do not substitute stock firmware files for the device's own pre-test files.
    agent stopped and startup disabled; do not reboot or retry installation.
 7. Compare the saved live-rule snapshots. Only for a rule **absent before**, added
    by this bootstrap and still present exactly once, the maintainer may remove
-   that exact addition. For the default ports the possible commands are:
+   that exact addition. For a fresh install on the default API port, the only
+   expected addition is:
 
    ```sh
    iptables -D INPUT -p tcp --dport 8091 -j ACCEPT
-   iptables -D INPUT -p tcp --dport 6554 -j ACCEPT
-   iptables -D INPUT -p udp --dport 40004 -j ACCEPT
    ```
 
-   These are conditional alternatives, **not a block to paste blindly**. Never
-   delete a rule present before the test; verify the SSH recovery connection does
+   For a media-enabled reinstall, compare the configured RTSP TCP port and
+   talkback UDP 40004 separately against the pre-test snapshot. Never remove
+   pre-existing Companion or firmware rules merely because their ports match.
+
+   Never delete a rule present before the test; verify the SSH recovery connection does
    not depend on the rule being removed. Stop on ambiguity or command failure.
    Verify with a fresh private `iptables-save`; do not flush chains, replay the
    complete saved ruleset, or restart networking/vendor services.

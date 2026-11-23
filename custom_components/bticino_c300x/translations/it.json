@@ -678,7 +678,7 @@
       "invalid_agent_host": "Inserisci l'host del device agent.",
       "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile dal C300X, oppure lasciare vuoto.",
       "invalid_device_host": "Inserisci l'indirizzo C300X.",
-      "installer_dependency_missing": "La dipendenza Python SSH opzionale non può essere installata o caricata. Controlla l'installazione dei pacchetti Home Assistant e riprova.",
+      "installer_dependency_missing": "Home Assistant non è riuscito a caricare il pacchetto SSH facoltativo (asyncssh==2.24.1). Non è un errore di accesso SSH. Controlla i registri in Impostazioni > Sistema per individuare la causa. Dopo averla risolta, riavvia Home Assistant e riprova l’installazione.",
       "invalid_ssh_password": "Inserisci la password SSH del C300X.",
       "invalid_ssh_username": "Inserisci l'utente SSH del C300X.",
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
@@ -703,7 +703,7 @@
       "invalid_maintenance_auth": "Il C300X ha rifiutato la chiave di manutenzione. Inserisci la chiave di manutenzione attuale.",
       "cannot_connect": "Impossibile verificare il C300X. Controlla indirizzo e connessione, poi riprova.",
       "ssh_login_refused": "Il C300X ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo.",
-      "installer_firewall_hook_unsupported": "Lo script firewall esistente è assente, illeggibile o è un collegamento simbolico. Installazione interrotta prima di modificare il dispositivo. Non creare uno script sostitutivo né ripristinare le regole per proseguire.",
+      "installer_firewall_hook_unsupported": "Impossibile verificare lo script firewall in sicurezza. Installazione interrotta prima di modificare il dispositivo. Controllare tipo e permessi del file senza creare uno script sostitutivo.",
       "device_model_incompatible": "Questo pacchetto non supporta questo modello. I pacchetti di prova C100X non possono aggiornare un C300X. Installa il pacchetto corrispondente prima di aggiornare o reinstallare l'agente. Nessun file del dispositivo e stato sostituito."
     }
   },

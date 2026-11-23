@@ -22,6 +22,7 @@ from .const import (
     DEFAULT_AGENT_PORT,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
+    DEFAULT_VIDEO_PORT,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
@@ -165,10 +166,7 @@ async def async_install_device_agent(
 async def async_ensure_installer_dependencies(hass: HomeAssistant) -> None:
     """Install optional SSH bootstrap dependencies only when the installer is used."""
 
-    from homeassistant.requirements import (
-        RequirementsNotFound,
-        async_process_requirements,
-    )
+    from homeassistant.requirements import async_process_requirements
 
     try:
         await async_process_requirements(
@@ -177,8 +175,12 @@ async def async_ensure_installer_dependencies(hass: HomeAssistant) -> None:
             list(INSTALLER_REQUIREMENTS),
             is_built_in=False,
         )
-    except RequirementsNotFound as err:
-        raise C300XDeviceInstallError("installer_dependency_missing") from err
+    except Exception as err:
+        # Resolver errors may contain private package-index URLs. Never include
+        # their text or traceback in installer diagnostics.
+        _LOGGER.error("HA could not install optional SSH requirement %s (%s)",
+                      INSTALLER_REQUIREMENTS[0], type(err).__name__)
+        raise C300XDeviceInstallError("installer_dependency_missing") from None
 
 
 def _install_device_agent_sync(
@@ -192,15 +194,18 @@ def _install_device_agent_sync(
     changed_files: list[str] = []
     try:
         config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
-        merged_config = _merge_existing_device_config(
-            config_bytes, _read_remote_config_sync(client, config_path)
-        )
-        _verify_c100x_bundle_sync(client, bundle, request.remote_dir)
-        if request.apply_gui_patch and _device_display_kind(client) == "qt5_ondisk":
+        existing = _read_remote_config_sync(client, config_path)
+        kind = _verify_c100x_bundle_sync(client, bundle, request.remote_dir)
+        if request.apply_gui_patch and kind == "qt5_ondisk":
             raise C300XDeviceInstallError("device_install_verify_failed")
-        if request.apply_firewall_patch:
-            _check_firewall_hook_sync(client)
-        merged_config = _apply_qt5_low_res_video_default(client, merged_config)
+        manage_firewall = request.apply_firewall_patch and _firewall_hook_present_sync(client)
+        c100x = kind == "qt5_ondisk"
+        merged_config = _merge_existing_device_config(config_bytes, existing, c100x=c100x)
+        merged_config = _apply_qt5_low_res_video_default(kind, merged_config)
+        if request.apply_firewall_patch and not manage_firewall:
+            config = json.loads(merged_config)
+            config.setdefault("maintenance", {}).setdefault("firewall", {})["enabled"] = False
+            merged_config = (json.dumps(config, indent=2, sort_keys=True) + "\n").encode()
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
         manifest: _PayloadFile | None = None
@@ -218,8 +223,13 @@ def _install_device_agent_sync(
             mode="600",
         ):
             changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
-        if request.apply_firewall_patch:
-            _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
+        if manage_firewall:
+            if c100x:
+                _apply_firewall_patch_sync(
+                    client, request.remote_dir, request.agent_port, config_bytes=merged_config,
+                )
+            else:
+                _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
         changed_files.extend(
             _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
         )
@@ -241,12 +251,15 @@ def _install_device_agent_sync(
     return tuple(changed_files)
 
 
-def _verify_c100x_bundle_sync(client: _DeviceSshClient, bundle: _ResolvedBundle, remote_dir: str) -> None:
+def _verify_c100x_bundle_sync(
+    client: _DeviceSshClient, bundle: _ResolvedBundle, remote_dir: str,
+) -> str:
     """Require C100X identity and a bound package before any installer writes."""
 
     # This development branch is C100X-only even if package metadata is removed
     # or relabelled. A mutable policy file must not relax its target restriction.
-    if _device_display_kind(client) != "qt5_ondisk":
+    kind = _device_display_kind(client)
+    if kind != "qt5_ondisk":
         raise C300XDeviceInstallError("device_model_incompatible")
     manifests = [p for p in bundle.payload_files if p.remote_path == f"{remote_dir}/bundle.json"]
     binaries = [p for p in bundle.payload_files if p.remote_path == f"{remote_dir}/{REMOTE_AGENT_NAME}"]
@@ -268,6 +281,7 @@ def _verify_c100x_bundle_sync(client: _DeviceSshClient, bundle: _ResolvedBundle,
             raise ValueError("unbound agent binary")
     except (OSError, ValueError) as err:
         raise C300XDeviceInstallError("device_model_incompatible") from err
+    return kind
 
 
 def installer_bundle_status() -> dict[str, Any]:
@@ -521,15 +535,19 @@ def _read_remote_config_sync(client: _DeviceSshClient, remote_path: str) -> Any:
         raise C300XDeviceInstallError("device_install_failed") from err
 
 
-def _merge_existing_device_config(template: bytes, existing: Any) -> bytes:
+def _merge_existing_device_config(template: bytes, existing: Any, *, c100x: bool = False) -> bytes:
     """Return the template with the device-owned sections of the old config."""
 
-    if not isinstance(existing, dict):
+    if not c100x and not isinstance(existing, dict):
         return template
     config = json.loads(template)
     for section in _DEVICE_OWNED_CONFIG_SECTIONS:
-        if isinstance(existing.get(section), dict):
+        if isinstance(existing, dict) and isinstance(existing.get(section), dict):
             config[section] = existing[section]
+    if c100x:
+        old_video = existing.get("video") if isinstance(existing, dict) else None
+        if not isinstance(old_video, dict) or "enabled" not in old_video:
+            config["video"] = {**config.get("video", {}), "enabled": False}
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
@@ -616,6 +634,13 @@ def _validate_asyncssh_version(asyncssh_module: Any) -> None:
     """Reject AsyncSSH versions that are not validated for the C300X SSH stack."""
     version = getattr(asyncssh_module, "__version__", "")
     if version != _REQUIRED_ASYNCSSH_VERSION:
+        safe_version = (
+            version if isinstance(version, str) and 0 < len(version) <= 32
+            and all(part.isascii() and part.isdigit() for part in version.split("."))
+            else "unknown"
+        )
+        _LOGGER.error("Optional SSH requirement %s does not match loaded version %s",
+                      INSTALLER_REQUIREMENTS[0], safe_version)
         raise C300XDeviceInstallError("installer_dependency_missing")
 
 
@@ -625,8 +650,11 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
     def __init__(self, request: C300XDeviceInstallRequest) -> None:
         try:
             import asyncssh
-        except ImportError as err:
-            raise C300XDeviceInstallError("installer_dependency_missing") from err
+        except Exception as err:
+            # Importing transitive native modules can also fail with non-ImportErrors.
+            _LOGGER.error("Could not import optional SSH requirement %s (%s)",
+                          INSTALLER_REQUIREMENTS[0], type(err).__name__)
+            raise C300XDeviceInstallError("installer_dependency_missing") from None
 
         _validate_asyncssh_version(asyncssh)
         self._asyncssh = asyncssh
@@ -932,7 +960,7 @@ def _device_display_kind(client: _DeviceSshClient) -> str:
 
 
 def _apply_qt5_low_res_video_default(
-    client: _DeviceSshClient, config_bytes: bytes
+    kind: str, config_bytes: bytes
 ) -> bytes:
     """Fix the camera to the low-res stream on Qt5 firmware (3.0.x+).
 
@@ -945,7 +973,7 @@ def _apply_qt5_low_res_video_default(
 
     # The camera keeps its low stream on every Qt 5 firmware until a C100X
     # shows otherwise, as in the agent.
-    if _device_display_kind(client) == _QT4_ONDISK:
+    if kind == _QT4_ONDISK:
         return config_bytes
     try:
         config = json.loads(config_bytes)
@@ -1000,24 +1028,48 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
         raise C300XDeviceInstallError("device_install_verify_failed")
 
 
-def _check_firewall_hook_sync(client: _DeviceSshClient) -> None:
-    """Refuse unsupported firewall layouts before writing the bootstrap payload."""
+def _firewall_hook_present_sync(client: _DeviceSshClient) -> bool:
+    """Distinguish a missing hook from a damaged or inaccessible layout."""
     path = _quote(REMOTE_FIREWALL_PATH)
-    if client.run(f"if ! [ -f {path} ] || [ -L {path} ] || ! [ -r {path} ]; then printf unsupported; fi"):
-        raise C300XDeviceInstallError("installer_firewall_hook_unsupported")
+    parent = _quote(REMOTE_FIREWALL_PATH.rpartition("/")[0])
+    state = client.run(
+        f"if [ -L {path} ]; then printf unsupported; "
+        f"elif [ -f {path} ] && [ -r {path} ]; then :; "
+        f"elif [ ! -e {path} ]; then p={parent}; "
+        'while [ ! -e "$p" ] && [ ! -L "$p" ]; do p=${p%/*}; p=${p:-/}; done; '
+        'if [ -d "$p" ] && [ -x "$p" ]; then printf absent; else printf unsupported; fi; '
+        "else printf unsupported; fi"
+    )
+    if state in ("", "absent"):
+        return state != "absent"
+    raise C300XDeviceInstallError("installer_firewall_hook_unsupported")
 
 
 def _apply_firewall_patch_sync(
     client: _DeviceSshClient,
     remote_dir: str,
     api_port: int,
+    *,
+    config_bytes: bytes | None = None,
 ) -> None:
     """Open the API port during bootstrap so HA can verify the new agent."""
 
+    media_env = ""
+    if config_bytes is not None:
+        video = json.loads(config_bytes)["video"]
+        enabled = video.get("enabled") is True
+        media_env = f"C300X_VIDEO_ENABLED={int(enabled)} "
+        if enabled:
+            rtsp = video.get("rtsp", {})
+            port = rtsp.get("port", DEFAULT_VIDEO_PORT) if isinstance(rtsp, dict) else None
+            if type(port) is not int or not 1 <= port <= 65535:
+                raise C300XDeviceInstallError("device_install_failed")
+            media_env += f"C300X_RTSP_PORT={port} "
     client.run(
         (
             f"C300X_IPTABLES={_quote(REMOTE_FIREWALL_PATH)} "
             f"C300X_IPTABLES_BACKUP={_quote(REMOTE_FIREWALL_BACKUP)} "
+            f"{media_env}"
             f"{_quote(f'{remote_dir}/{REMOTE_BOOTSTRAP_FIREWALL_NAME}')} "
             f"{api_port}"
         ),

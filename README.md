@@ -12,8 +12,10 @@ Version: **2.8.2**.
 and card test ZIP, not a C300X stable update. Start with the
 [C100X manual installation, backup, card and recovery guide](docs/c100x-test-release.md).
 The verified ZIP is handed off as an issue attachment only after the final C100X
-gate. The first device test is agent-only: **no supported GUI activation or media
-trial is claimed**. Use an isolated HA instance, not Marketplace/HACS installation.
+gate. The first functional tests are **Stair light** and **Door unlock** using
+the device's HA buttons, without camera, SIP changes or a display patch.
+Use stock firmware 1.5.8 with only the changes required for root/SSH access.
+Parallel operation with BTicino Companion is **not supported**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station.

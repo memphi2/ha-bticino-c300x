@@ -178,7 +178,7 @@ def test_a_c100x_gets_no_display_patch_and_the_low_stream_for_now(qt5):
     installer._apply_qml_patch_sync(c100x, "/data/agent", "apply")
     assert not any("qml_patch.sh" in command for command in c100x.commands)
     unset = json.dumps({"video": {"av": {}}}).encode()
-    low = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=qt5, c100x=True), unset))
+    low = json.loads(installer._apply_qt5_low_res_video_default(installer._device_display_kind(c100x), unset))
     assert low["video"]["av"]["highResolution"] is False
 
 
@@ -195,10 +195,10 @@ def test_the_display_patch_is_skipped_on_a_qt5_display_and_runs_on_a_qt4_one():
 
 def test_the_installer_fixes_the_low_resolution_only_on_a_qt5_display():
     unset = json.dumps({"video": {"av": {}}}).encode()
-    low = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True), unset))
+    low = json.loads(installer._apply_qt5_low_res_video_default("qt5_rcc", unset))
     assert low["video"]["av"]["highResolution"] is False
-    assert installer._apply_qt5_low_res_video_default(_Device(qt5=False), unset) == unset
+    assert installer._apply_qt5_low_res_video_default("qt4_ondisk", unset) == unset
     pinned = json.dumps({"video": {"av": {"highResolution": True}}}).encode()
-    fixed = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True), pinned))
+    fixed = json.loads(installer._apply_qt5_low_res_video_default("qt5_rcc", pinned))
     assert fixed["video"]["av"]["highResolution"] is False
-    assert installer._apply_qt5_low_res_video_default(_Device(qt5=False), pinned) == pinned
+    assert installer._apply_qt5_low_res_video_default("qt4_ondisk", pinned) == pinned

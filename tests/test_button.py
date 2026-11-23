@@ -754,6 +754,35 @@ def test_stop_doorbell_video_button_requires_enabled_video() -> None:
     asyncio.run(_run())
 
 
+def test_c100x_standalone_buttons_do_not_need_video_or_actuate_on_setup(monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+
+    async def run() -> None:
+        entry = _FakeEntry(title="C100X", data={CONF_VIDEO_ENABLED: False}, runtime_data=_FakeRuntimeData(
+            capabilities={"stair_light": {"supported": True}, "locks": {
+                "supported": True, "locks": [{"id": "entry", "name": "Entry"}],
+            }},
+        ))
+        hass = _FakeHass()
+        stair, unlock = AsyncMock(), AsyncMock()
+        monkeypatch.setattr(button_module, "async_trigger_stair_light", stair)
+        monkeypatch.setattr(button_module, "async_unlock_door", unlock)
+        entities: list[Any] = []
+        await async_setup_entry(hass, entry, entities.extend)  # type: ignore[arg-type]
+        stair.assert_not_awaited()
+        unlock.assert_not_awaited()
+        light_button, = [e for e in entities if isinstance(e, C300XStairLightButton)]
+        lock_button, = [e for e in entities if isinstance(e, C300XDoorUnlockButton)]
+        light_button.hass = lock_button.hass = hass
+        await light_button.async_press()
+        stair.assert_awaited_once_with(hass, entry)
+        unlock.assert_not_awaited()
+        await lock_button.async_press()
+        unlock.assert_awaited_once_with(hass, entry, "entry")
+
+    asyncio.run(run())
+
+
 def test_action_buttons_translate_executor_agent_errors(monkeypatch) -> None:  # noqa: ANN001
     async def _run() -> None:
         for button_class, patched_name, expected_call in [

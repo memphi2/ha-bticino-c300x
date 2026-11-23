@@ -15,7 +15,7 @@ from custom_components.bticino_c300x.agent_update import compare_agent_bundle
 def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Keep shared Qt4 transaction/failure coverage; C100X package admission is
     # exercised without this double in test_c100x_ssh_admission.py.
-    monkeypatch.setattr(installer, "_verify_c100x_bundle_sync", lambda *_: None)
+    monkeypatch.setattr(installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
     component = tmp_path / "component"
     manifest = {
         "agent_version": "same-version", "api_version": "1",
@@ -64,9 +64,9 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             return self.write(path, source.read_bytes())
 
         def run(self, command: str) -> str:
-            if command.startswith("if ! [ -f "):
+            if command.startswith("if [ -L ") and "printf absent" in command:
                 self.stage("firewall-preflight")
-                return "unsupported" if self.failure == "missing-hook" else ""
+                return "absent" if self.failure == "missing-hook" else ""
             if "libQt5Core" in command:
                 # A device with the Qt 4 display, which the Display patch edits.
                 return "qt4\nc300x\n"
@@ -164,13 +164,40 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     assert client.writes.count(transaction.manifest_path) == 1
 
 
-def test_missing_hook_rejects_install_before_any_write(transaction) -> None:
+def test_missing_hook_leaves_firewall_alone_and_completes_install(transaction, monkeypatch) -> None:
+    monkeypatch.setattr(installer, "_verify_c100x_bundle_sync", lambda *_: "qt5_ondisk")
     transaction.client.failure = "missing-hook"
-    with pytest.raises(installer.C300XDeviceInstallError, match="installer_firewall_hook_unsupported"):
-        transaction.install(apply_gui_patch=False)
-    assert transaction.client.operations == ["firewall-preflight"]
-    assert not transaction.client.writes
+    transaction.install(apply_gui_patch=False)
+    assert "firewall-preflight" in transaction.client.operations
+    assert "firewall" not in transaction.client.operations
+    for phase in ("startup", "restart", "verify", "manifest"):
+        assert phase in transaction.client.operations
+    config = next(data for path, data in transaction.client.files.items() if path.endswith("/config.json"))
+    assert json.loads(config)["maintenance"]["firewall"]["enabled"] is False
     assert transaction.client.closed
+
+
+@pytest.mark.parametrize("kind", ["missing", "missing-directory", "file", "directory", "symlink", "dangling"])
+def test_firewall_preflight_checks_real_file_type(tmp_path, monkeypatch, kind):
+    path = tmp_path / "path with spaces"
+    source = tmp_path / "source"
+    if kind == "missing-directory":
+        path = path / "missing parent" / "iptables"
+    elif kind == "file":
+        path.write_text("#!/bin/sh\n")
+    elif kind == "directory":
+        path.mkdir()
+    elif kind in ("symlink", "dangling"):
+        if kind == "symlink":
+            source.touch()
+        path.symlink_to(source)
+    monkeypatch.setattr(installer, "REMOTE_FIREWALL_PATH", str(path))
+    client = SimpleNamespace(run=lambda command: subprocess.check_output(["sh", "-c", command], text=True))
+    if kind in ("file", "missing", "missing-directory"):
+        assert installer._firewall_hook_present_sync(client) is (kind == "file")
+    else:
+        with pytest.raises(installer.C300XDeviceInstallError, match="installer_firewall_hook_unsupported"):
+            installer._firewall_hook_present_sync(client)
 
 
 def test_failed_firewall_does_not_install_autostart(transaction) -> None:

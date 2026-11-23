@@ -153,6 +153,7 @@ def normalize_doorbell_call(data: Any) -> RingCallStatus:
         active=bool(data.get("active")),
         early_media_active=bool(data.get("early_media_active")),
         audio_active=bool(data.get("audio_active")),
+        talkback_ready=data.get("talkback_ready", True) is True,
         answer_requested=bool(data.get("answer_requested")),
         answered=bool(data.get("answered")),
         hangup_requested=bool(data.get("hangup_requested")),

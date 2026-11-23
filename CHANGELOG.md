@@ -4,6 +4,17 @@
 
 Firmware 3.0.6 beta, not yet tested on a device. Includes final stable 2.8.2
 changes through `06f7396f`, without moving beta code into the stable line.
+Also includes the reviewed general camera-card, routing and talkback fixes
+selected from local 2.8.3 development; no C100X model detection is added.
+
+- Unavailable cameras disable media controls and cancel pending microphone
+  requests. Ending a ring call cancels pending answer and talkback starts.
+- UDP talkback requires a live, played RTSP connection from the same peer IP.
+  Announcements wait for that peer's transport readiness; playback that never
+  starts or fails to stop cooperatively reports an error. This is peer-IP
+  admission, not cryptographic authentication of UDP packets.
+- Routing changes verify the complete supported binary identity and preserve
+  unknown active routes instead of replacing them. Camera option help is shorter.
 
 - Camera transactions preserve rollback and saved/running state across agent
   restarts; unknown running state alone does not request a reboot. Removal

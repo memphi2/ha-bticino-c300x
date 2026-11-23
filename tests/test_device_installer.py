@@ -1202,6 +1202,9 @@ def test_installer_dependency_processing_uses_homeassistant_requirements(
 def test_installer_dependency_failure_can_retry_without_logging_secrets(monkeypatch, caplog):
     from homeassistant import requirements
 
+    import custom_components.bticino_c300x.device_installer as installer
+
+    monkeypatch.setattr(installer, "_installed_asyncssh_version", lambda: None)
     attempts = []
 
     async def resolve(hass, name, packages, *, is_built_in):
@@ -1217,6 +1220,42 @@ def test_installer_dependency_failure_can_retry_without_logging_secrets(monkeypa
     assert "private-key" not in caplog.text
     asyncio.run(async_ensure_installer_dependencies(hass))
     assert attempts == [list(INSTALLER_REQUIREMENTS)] * 2
+
+
+@pytest.mark.parametrize("installed", ["2.24.1", "2.21.0", None])
+def test_installer_uses_pinned_asyncssh_already_installed_when_ha_refuses(monkeypatch, caplog, installed):
+    from homeassistant import requirements
+
+    import custom_components.bticino_c300x.device_installer as installer
+
+    async def refuse(hass, name, packages, *, is_built_in):
+        # HA keeps a failed install in its history until restart or a config check,
+        # even when the package landed on disk.
+        raise requirements.RequirementsNotFound(name, packages)
+
+    monkeypatch.setattr(requirements, "async_process_requirements", refuse)
+    monkeypatch.setattr(installer, "_installed_asyncssh_version", lambda: installed)
+    if installed == "2.24.1":
+        asyncio.run(async_ensure_installer_dependencies(object()))
+        assert "already installed" in caplog.text
+        return
+    with pytest.raises(C300XDeviceInstallError, match="installer_dependency_missing"):
+        asyncio.run(async_ensure_installer_dependencies(object()))
+
+
+def test_installed_asyncssh_version_reads_package_metadata(monkeypatch):
+    import importlib.metadata
+
+    import custom_components.bticino_c300x.device_installer as installer
+
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: {"asyncssh": "2.24.1"}[name])
+    assert installer._installed_asyncssh_version() == "2.24.1"
+
+    def missing(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(importlib.metadata, "version", missing)
+    assert installer._installed_asyncssh_version() is None
 
 
 def test_installer_dependency_recovery_text_mentions_pinned_package_in_all_languages():

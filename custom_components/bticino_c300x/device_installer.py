@@ -176,11 +176,30 @@ async def async_ensure_installer_dependencies(hass: HomeAssistant) -> None:
             is_built_in=False,
         )
     except Exception as err:
+        # HA keeps a failed install in its history until a restart or a
+        # configuration check, even when the package did land on disk.
+        installed = await asyncio.get_running_loop().run_in_executor(None, _installed_asyncssh_version)
+        if installed == _REQUIRED_ASYNCSSH_VERSION:
+            _LOGGER.warning("HA reported optional SSH requirement %s as missing (%s), "
+                            "but it is already installed; using it",
+                            INSTALLER_REQUIREMENTS[0], type(err).__name__)
+            return
         # Resolver errors may contain private package-index URLs. Never include
         # their text or traceback in installer diagnostics.
         _LOGGER.error("HA could not install optional SSH requirement %s (%s)",
                       INSTALLER_REQUIREMENTS[0], type(err).__name__)
         raise C300XDeviceInstallError("installer_dependency_missing") from None
+
+
+def _installed_asyncssh_version() -> str | None:
+    """Version of the installed AsyncSSH distribution, without importing it."""
+
+    import importlib.metadata
+
+    try:
+        return importlib.metadata.version("asyncssh")
+    except Exception:  # noqa: BLE001 - any metadata problem means "not usable"
+        return None
 
 
 def _install_device_agent_sync(

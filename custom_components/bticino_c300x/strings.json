@@ -122,13 +122,15 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "actions_json": "Allowed actions (for experts)",
           "dashboard_prevent_return": "Keep the page open on screen standby",
-          "dashboard_navigation": "Page navigation"
+          "dashboard_navigation": "Page navigation",
+          "dashboard_dynamic_homepage": "Home page buttons"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
-          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Like the original: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "user_dashboard_entity_display": {
@@ -233,13 +235,15 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "actions_json": "Allowed actions (for experts)",
           "dashboard_prevent_return": "Keep the page open on screen standby",
-          "dashboard_navigation": "Page navigation"
+          "dashboard_navigation": "Page navigation",
+          "dashboard_dynamic_homepage": "Home page buttons"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
-          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Like the original: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -830,13 +834,15 @@
           "device_ui_enabled": "Home Assistant pages on the display",
           "actions_json": "Allowed actions (for experts)",
           "dashboard_prevent_return": "Keep the page open on screen standby",
-          "dashboard_navigation": "Page navigation"
+          "dashboard_navigation": "Page navigation",
+          "dashboard_dynamic_homepage": "Home page buttons"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
-          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Like the original: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "dashboard_entity_display": {
@@ -1711,6 +1717,12 @@
       "options": {
         "pager": "Arrows (previous / next)",
         "tabs": "Favourites bar"
+      }
+    },
+    "dashboard_dynamic_homepage": {
+      "options": {
+        "stock": "Like the original (when needed, also stacked)",
+        "side_by_side": "Fixed side by side"
       }
     },
     "display_patch_status": {

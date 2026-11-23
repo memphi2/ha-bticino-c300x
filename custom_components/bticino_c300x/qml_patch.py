@@ -8,6 +8,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .agent_update import async_retry_update_maintenance_busy
+from .const import (
+    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+    DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+)
+from .entry_config import entry_config_value
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 
@@ -55,10 +60,18 @@ async def async_apply_qml_patch_and_confirm(
 def _apply_full_patch_action(
     entry: BticinoC300XConfigEntry,
 ) -> Callable[[], Awaitable[dict[str, Any]]]:
-    """Return the Display-patch apply call with automatic home buttons."""
+    """Return the Display-patch apply call with the entry's home page layout."""
 
+    # True: the stock layout, False: the fixed pair side by side. An absent
+    # key is the stock layout, the same default the form shows.
     return lambda: entry.runtime_data.api.async_apply_qml_patch(
-        dynamic_homepage=True
+        dynamic_homepage=bool(
+            entry_config_value(
+                entry,
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+            )
+        )
     )
 
 

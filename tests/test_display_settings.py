@@ -343,6 +343,65 @@ def test_an_old_entry_without_the_stay_open_key_is_shown_as_the_display_applies_
     assert shown is configured_dashboard_prevent_return(entry) is True
 
 
+@pytest.mark.parametrize(
+    ("data", "options", "shown"),
+    [
+        ({}, {}, "stock"),
+        ({"dashboard_dynamic_homepage": True}, {}, "stock"),
+        ({"dashboard_dynamic_homepage": False}, {}, "side_by_side"),
+        ({"dashboard_dynamic_homepage": True}, {"dashboard_dynamic_homepage": False}, "side_by_side"),
+    ],
+    ids=["absent", "stored_true", "stored_false", "option_wins"],
+)
+@pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
+def test_the_display_form_shows_the_stored_home_page_layout(
+    monkeypatch, flow_kind, data, options, shown
+):
+    entry = SimpleNamespace(data={"device_ui_enabled": True, **data}, options=options, runtime_data=None)
+    dashboard_step, _pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step())
+
+    default = next(
+        key.default() for key in form["data_schema"].schema
+        if str(key) == "dashboard_dynamic_homepage"
+    )
+    assert default == shown
+
+
+@pytest.mark.parametrize(("choice", "stored"), [("side_by_side", False), ("stock", True)])
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+def test_the_display_flows_store_the_picked_home_page_layout(monkeypatch, flow_kind, choice, stored):
+    dashboard = {"device_ui_enabled": True, "dashboard_entities": ["light.room"]}
+    entry = SimpleNamespace(
+        data={**dashboard, "dashboard_dynamic_homepage": not stored}, options={}, runtime_data=None
+    )
+    dashboard_step, pages_step, display_step = _display_flow(
+        monkeypatch, flow_kind, None if flow_kind == "setup" else entry
+    )
+
+    form = asyncio.run(dashboard_step({"device_ui_enabled": True, "dashboard_dynamic_homepage": choice}))
+    result = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
+    if result["type"] == "form":
+        # A new setup has no tiles to describe and finishes after the pages.
+        result = asyncio.run(display_step(post_tiles_like_home_assistant(result["data_schema"])))
+
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_dynamic_homepage"] is stored
+
+
+def test_a_new_setup_offers_the_stock_home_page_layout(monkeypatch):
+    dashboard_step, _pages_step, _display_step = _display_flow(monkeypatch, "setup", None)
+
+    form = asyncio.run(dashboard_step())
+
+    default = next(
+        key.default() for key in form["data_schema"].schema
+        if str(key) == "dashboard_dynamic_homepage"
+    )
+    assert default == "stock"
+
+
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
 def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     saved = {"light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"}}

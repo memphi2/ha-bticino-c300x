@@ -24,6 +24,9 @@ from .config_flow_dashboard import (
     alarm_page_entity_id as _alarm_page_entity_id,
 )
 from .config_flow_dashboard import (
+    dashboard_dynamic_homepage as _dashboard_dynamic_homepage,
+)
+from .config_flow_dashboard import (
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
 )
 from .config_flow_dashboard import (
@@ -406,7 +409,9 @@ def _dashboard_feature_input(
     dashboard_entities: list[str] = []
     dashboard_pages: list[dict[str, Any]] = []
     dashboard_entity_display_overrides: dict[str, dict[str, str]] = {}
-    dashboard_dynamic_homepage = _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
+    dashboard_dynamic_homepage = _dashboard_dynamic_homepage(
+        user_input.get(CONF_DASHBOARD_DYNAMIC_HOMEPAGE, _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT)
+    )
     actions: dict[str, dict[str, Any]] = {}
     # The alarm commands do not need the Display patch, so Alarmo is kept
     # with it off.
@@ -448,7 +453,6 @@ def _dashboard_feature_input(
         except vol.Invalid:
             # Not a field of the form, where an error would not be shown.
             errors["base"] = "invalid_dashboard_entity_display_overrides"
-        dashboard_dynamic_homepage = True
     return {
         CONF_ALARM_ENTITY_ID: alarm_entity_id,
         **optional_page_values(user_input if device_ui_enabled else {}),

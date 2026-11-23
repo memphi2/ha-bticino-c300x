@@ -81,7 +81,6 @@ def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.Monkey
                 CONF_SHARED_SECRET: "token-32",
                 CONF_EVENT_WEBHOOK_ID: "token-24",
                 CONF_EVENT_WEBHOOK_TOKEN: "token-32",
-                "dashboard_dynamic_homepage": False,
             },
             "options": {},
             "version": 1,
@@ -2211,26 +2210,33 @@ def test_changed_home_page_button_mode_reapplies_the_display_patch(
     asyncio.run(listener(hass, entry))
     assert calls == ["entry-1"]
 
-    # Turning the mode on re-applies before the reload, because the re-apply
-    # needs the runtime data that the reload replaces.
+    # An absent key is the stock layout, so storing it is no change and must
+    # not restart the device GUI.
     calls.clear()
     entry.options["dashboard_dynamic_homepage"] = True
     asyncio.run(listener(hass, entry))
-    assert calls == ["apply", "entry-1"]
+    assert calls == ["entry-1"]
 
-    # And turning it off again.
+    # Choosing side by side re-applies before the reload, because the
+    # re-apply needs the runtime data that the reload replaces.
     calls.clear()
     entry.options["dashboard_dynamic_homepage"] = False
     asyncio.run(listener(hass, entry))
     assert calls == ["apply", "entry-1"]
 
-    # An absent key means the apply default, so storing that same value is not
-    # a change and must not restart the device GUI.
+    # And back to the stock layout.
     calls.clear()
-    entry.options.pop("dashboard_dynamic_homepage")
-    entry.options["video_enabled"] = False
+    entry.options["dashboard_dynamic_homepage"] = True
     asyncio.run(listener(hass, entry))
-    assert calls == ["entry-1"]
+    assert calls == ["apply", "entry-1"]
+
+    # Side by side kept in setup data, then the option dropped: the absent
+    # option falls back to the data, so the layout changes and re-applies.
+    calls.clear()
+    entry.data["dashboard_dynamic_homepage"] = False
+    entry.options.pop("dashboard_dynamic_homepage")
+    asyncio.run(listener(hass, entry))
+    assert calls == ["apply", "entry-1"]
 
 
 def test_home_page_button_mode_is_not_applied_without_an_active_display_patch(
@@ -2261,7 +2267,7 @@ def test_home_page_button_mode_is_not_applied_without_an_active_display_patch(
         runtime_data=types.SimpleNamespace(qml_patch_status={"patched": False}),
     )
     listener = _entry_update_listener(entry)
-    entry.options["dashboard_dynamic_homepage"] = True
+    entry.options["dashboard_dynamic_homepage"] = False
     asyncio.run(listener(hass, entry))
     assert calls == ["entry-1"]
 
@@ -2300,16 +2306,13 @@ def test_failed_home_page_reapply_still_reloads_the_entry(
     assert calls == ["apply", "entry-1"]
 
 
-def test_migrate_entry_pins_the_home_page_mode_the_device_is_running(
+def test_migrate_entry_leaves_the_home_page_layout_as_stored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An absent home-page button mode must stop meaning two different things.
+    """The migration no longer pins an absent layout to the fixed pair.
 
-    The dashboard form offered the setting ticked while the Display patch
-    apply read an absent key as off, so an entry that never stored it ran the
-    fixed pair of buttons while the form claimed the dynamic ones. Because the
-    dashboard step always writes the key, opening and saving that step switched
-    the device's home page without anyone choosing it.
+    An absent key is the stock layout everywhere it is read; a stored value,
+    in setup data or in options, stays what it is.
     """
 
     monkeypatch.setattr(integration.secrets, "token_urlsafe", lambda n: f"token-{n}")
@@ -2325,38 +2328,36 @@ def test_migrate_entry_pins_the_home_page_mode_the_device_is_running(
         assert asyncio.run(integration.async_migrate_entry(hass, entry)) is True
         return updates[0] if updates else {}
 
-    # Absent everywhere: pinned to what the apply was already doing.
     update = migrate({CONF_AGENT_HOST: "192.0.2.60"}, {})
-    assert update["data"]["dashboard_dynamic_homepage"] is False
-    assert update["minor_version"] == 3
-
-    # A stored choice is never overwritten, in setup data or in options.
-    update = migrate(
-        {CONF_AGENT_HOST: "192.0.2.60", "dashboard_dynamic_homepage": True},
-        {},
-    )
-    assert update["data"]["dashboard_dynamic_homepage"] is True
-    update = migrate(
-        {CONF_AGENT_HOST: "192.0.2.60"},
-        {"dashboard_dynamic_homepage": True},
-    )
     assert "dashboard_dynamic_homepage" not in update["data"]
-    assert update["options"]["dashboard_dynamic_homepage"] is True
+    assert "dashboard_dynamic_homepage" not in update["options"]
+    assert update["minor_version"] == 3
+    for stored in (True, False):
+        update = migrate({CONF_AGENT_HOST: "192.0.2.60", "dashboard_dynamic_homepage": stored}, {})
+        assert update["data"]["dashboard_dynamic_homepage"] is stored
+        update = migrate({CONF_AGENT_HOST: "192.0.2.60"}, {"dashboard_dynamic_homepage": stored})
+        assert "dashboard_dynamic_homepage" not in update["data"]
+        assert update["options"]["dashboard_dynamic_homepage"] is stored
 
 
-@pytest.mark.parametrize("legacy_options", [{}, {"dashboard_dynamic_homepage": False},
-                                          {"dashboard_dynamic_homepage": True}])
-def test_display_patch_apply_uses_automatic_home_buttons(legacy_options) -> None:
-    """Applying the patch uses automatic visibility without a separate option."""
+@pytest.mark.parametrize(
+    ("data", "options", "expected"),
+    [
+        ({}, {}, True),
+        ({}, {"dashboard_dynamic_homepage": True}, True),
+        ({}, {"dashboard_dynamic_homepage": False}, False),
+        ({"dashboard_dynamic_homepage": False}, {}, False),
+        ({"dashboard_dynamic_homepage": True}, {}, True),
+        ({"dashboard_dynamic_homepage": False}, {"dashboard_dynamic_homepage": True}, True),
+    ],
+    ids=["absent", "stock", "side_by_side", "data_side_by_side", "data_stock", "option_wins"],
+)
+def test_display_patch_apply_sends_the_stored_home_page_layout(data, options, expected) -> None:
+    """True or an absent key is the stock layout, False the fixed pair."""
 
-    from custom_components.bticino_c300x.config_flow_dashboard import dashboard_schema
     from custom_components.bticino_c300x.qml_patch import _apply_full_patch_action
 
     api = SimpleNamespace(async_apply_qml_patch=AsyncMock())
-    entry = SimpleNamespace(options=legacy_options, data={},
-                            runtime_data=SimpleNamespace(api=api))
+    entry = SimpleNamespace(options=options, data=data, runtime_data=SimpleNamespace(api=api))
     asyncio.run(_apply_full_patch_action(entry)())
-    api.async_apply_qml_patch.assert_awaited_once_with(dynamic_homepage=True)
-    assert "dashboard_dynamic_homepage" not in {
-        getattr(key, "schema", key) for key in dashboard_schema().schema
-    }
+    api.async_apply_qml_patch.assert_awaited_once_with(dynamic_homepage=expected)

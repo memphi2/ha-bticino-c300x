@@ -884,7 +884,25 @@ def test_feature_input_keeps_selected_gui_features() -> None:
         }
     }
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
-    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
+    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
+
+
+@pytest.mark.parametrize(
+    ("choice", "stored"),
+    [("stock", True), ("side_by_side", False), (True, True), (False, False)],
+)
+@pytest.mark.parametrize("device_ui_enabled", [True, False])
+def test_feature_input_stores_the_picked_home_page_layout(
+    choice: object, stored: bool, device_ui_enabled: bool
+) -> None:
+    """The form's choice is stored as picked; no save forces the stock layout."""
+
+    data, errors = _feature_input(
+        {CONF_DEVICE_UI_ENABLED: device_ui_enabled, CONF_DASHBOARD_DYNAMIC_HOMEPAGE: choice}
+    )
+
+    assert errors == {}
+    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is stored
 
 
 def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:
@@ -1901,6 +1919,7 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
         CONF_DEVICE_UI_ENABLED,
         CONF_DASHBOARD_PREVENT_RETURN,
         "dashboard_navigation",
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_ACTIONS_JSON,
     ]
     # Alarmo and the weather are set with the pages.
@@ -2894,7 +2913,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
         flow.async_step_reconfigure_dashboard(
             {
                 CONF_DEVICE_UI_ENABLED: True,
-                CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False,
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE: "side_by_side",
                 CONF_ACTIONS_JSON: "",
                 CONF_DASHBOARD_PREVENT_RETURN: True,
             }
@@ -2950,7 +2969,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert result["data_updates"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result["data_updates"][CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
     assert result["data_updates"][CONF_WEATHER_ENTITY_ID] == "weather.home"
-    assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
+    assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
     assert result["data_updates"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
         "select.forwarding": {
             "secondary": "last_changed",

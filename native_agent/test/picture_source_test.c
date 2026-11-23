@@ -19,8 +19,11 @@ enum fault { NONE, OPEN_FAIL, REGULAR, OTHER_MINOR, OTHER_DRIVER, OTHER_CAP_DRIV
     EXPIRED_IN_READBACK, EXPIRED_AFTER_READBACK };
 static enum fault fault;
 /* stock: the mxc_v4l2 signature without descriptors; decoder: the bound I2C driver. */
-static int opens, closes, queries, reads, writes, flags, owner, raw[3], stock, i2c_fail, dirs;
-/* tvp5150: s_ctrl queues the I2C write; it lands after the first read-back pass. */
+static int opens, closes, queries, reads, writes, written, flags, owner, raw[3], stock, i2c_fail, dirs;
+/* At this read: the media is no longer ours, or the deadline has passed. */
+static int lose_at, expire_at;
+/* tvp5150: s_ctrl queues the I2C write; it lands after the first read-back pass.
+ * Contrast is read from the driver cache, so it matches at once. */
 static int queued = -1, queued_i, queued_after;
 static const char *decoder;
 static long long now;
@@ -29,7 +32,8 @@ static int active(void *ctx) { return ctx == &owner && owner; }
 static void reset(enum fault f)
 {
     fault = f;
-    opens = closes = queries = reads = writes = flags = 0;
+    opens = closes = queries = reads = writes = written = flags = 0;
+    lose_at = expire_at = 0;
     owner = 1;
     now = 1000;
     raw[0] = 105; raw[1] = 134; raw[2] = 154;
@@ -140,6 +144,8 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
         if (fault == READBACK_OTHER && reads == 4) c->value += 15;
         if (fault == LOST_AFTER_WRITE && reads == 4) owner = 0;
         if (reads == 3 && fault == LOST_OWNER) owner = 0;
+        if (lose_at && reads == lose_at) owner = 0;
+        if (expire_at && reads == expire_at) now += 751;
         if (reads == 3 && fault == EXPIRED) now += 751;
         if ((reads == 4 && fault == EXPIRED_IN_READBACK) || (reads == 6 && fault == EXPIRED_AFTER_READBACK))
             now += 751;
@@ -148,8 +154,9 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
     /* A second write only puts back the value read before the first. */
     assert(cmd == VIDIOC_S_CTRL && queries == 3 && (writes++ ? writes == 2 : reads == 3));
     assert((flags & O_ACCMODE) == O_RDWR);
+    written = c->value;
     if (fault == WRITE_FAIL && writes == 1) return -1;
-    if (fault == NONE && stock && writes == 1 && decoder && !strcmp(decoder, "tvp5150")) {
+    if (fault == NONE && stock && writes == 1 && i != 1 && decoder && !strcmp(decoder, "tvp5150")) {
         queued = c->value; queued_i = (int)i; queued_after = reads + 3;
     } else if (fault != NOT_CHANGED)
         raw[i] = c->value ^ (stock && i == 0 && decoder && !strcmp(decoder, "adv7180") ? 0x80 : 0);
@@ -242,12 +249,22 @@ int main(void)
     for (int i = 0; i < 3; i++) {
         reset_stock("tvp5150");
         assert(run(PICTURE_BRIGHTNESS + i, 100, out) == PICTURE_SOURCE_OK);
-        assert(out[i] == 100 && raw[i] == first[i] + 10 * step[i] && writes == 1 && reads == 9);
+        assert(out[i] == 100 && raw[i] == first[i] + 10 * step[i] && writes == 1 && reads == (i == 1 ? 6 : 9));
     }
     reset_stock("tvp5150");
     fault = NOT_CHANGED; /* A write that never lands: bounded retries, then put back. */
     assert(run(PICTURE_BRIGHTNESS, 100, out) == PICTURE_SOURCE_NOT_APPLIED);
     assert(raw[0] == 90 && writes == 2 && reads == 21);
+    reset_stock("tvp5150");
+    fault = NOT_CHANGED;
+    lose_at = 12; /* No longer ours in the second retry: stop reading, no write back. */
+    assert(run(PICTURE_BRIGHTNESS, 100, out) == PICTURE_SOURCE_NOT_APPLIED);
+    assert(writes == 1 && written == 180 && reads == 12 && closes == 1);
+    reset_stock("tvp5150");
+    fault = NOT_CHANGED;
+    expire_at = 12; /* Deadline passed in the second retry: stop reading, one write back. */
+    assert(run(PICTURE_BRIGHTNESS, 100, out) == PICTURE_SOURCE_NOT_APPLIED);
+    assert(writes == 2 && written == 90 && reads == 12 && closes == 1);
     reset_stock("adv7180");
     decoder = NULL; /* Unbound: the register 218 is taken as is, off the range, never snapped. */
     assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_UNAVAILABLE);

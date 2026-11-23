@@ -219,6 +219,12 @@ class _C300XApiCore:
                 or path.startswith("/api/v1/maintenance/")
             )
         if status == 404:
+            if (
+                path == "/api/v1/display-bridge/events"
+                and _agent_error_field(text, "error") == "display_bridge_disabled"
+            ):
+                # The route exists, but its runtime bridge registration is gone.
+                raise C300XAgentApiConnectionError(_http_error_text(status, text))
             raise C300XAgentApiUnsupportedError(
                 _http_error_text(
                     status,

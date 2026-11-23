@@ -1,10 +1,12 @@
 """Failed bridge reconciliation remains owned by the registration lifecycle."""
 
 import asyncio
+import json
 from contextlib import suppress
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from test_api import _FakeSession
 from test_events import (
     _active_scheduled_calls,
     _active_scheduled_delays,
@@ -21,6 +23,7 @@ from custom_components.bticino_c300x import (
     events,
     runtime_manager,
 )
+from custom_components.bticino_c300x.api import C300XAgentApi
 from custom_components.bticino_c300x.api_errors import (
     C300XAgentApiConnectionError,
     C300XAgentApiUnsupportedError,
@@ -262,6 +265,41 @@ def test_pending_startup_bridge_without_events_keeps_one_recovery_timer(monkeypa
         finally:
             entry.runtime_data.resources.close()
 
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("error, retry", [("display_bridge_disabled", True), ("not_found", False)])
+def test_event_404_only_reconciles_lost_registration(monkeypatch, error, retry):
+    async def run():
+        hass, entry, api, worker = setup(monkeypatch, no_events=True)
+        runtime = entry.runtime_data
+        worker.start()
+        try:
+            await _drain_hass_tasks(hass)
+            api.async_configure_display_bridge.reset_mock()
+            send = api.async_notify_display_bridge_event
+            send.reset_mock()
+            session = _FakeSession(json.dumps({"ok": False, "error": error}), response_status=404)
+            send.side_effect = C300XAgentApi(session, "http://agent", "token").async_notify_display_bridge_event
+            runtime.display_notifications = Mock()
+            runtime.display_notifications.has_unread.return_value = True
+            runtime.display_bridge_notify_messages = True
+            await runtime_manager._async_notify_display_bridge_alarm_if_listening(hass, entry, runtime)
+            send.assert_awaited_once_with("notifications", unread=True)
+            assert runtime.resources.display_bridge_registration_pending is retry
+            if retry:
+                timer, = _active_scheduled_calls(events._SUBSCRIPTION_REFRESH_SECONDS)
+                send.side_effect = None
+                await timer.callback()
+                api.async_configure_display_bridge.assert_awaited_once()
+                send.assert_awaited_with("display_bridge.state", unread=True)
+                assert send.await_count == 2
+            else:
+                api.async_configure_display_bridge.assert_not_awaited()
+            assert not _active_scheduled_delays()
+            assert not runtime.resources.display_bridge_registration_pending
+        finally:
+            runtime.resources.close()
     asyncio.run(run())
 
 

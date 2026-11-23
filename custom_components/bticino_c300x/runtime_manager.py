@@ -1311,15 +1311,19 @@ async def _async_notify_display_bridge_alarm_if_listening(
     """Advance the event revision, including between long-poll requests."""
 
     runtime_data = runtime_data or getattr(entry, "runtime_data", None)
+    if runtime_data is None:
+        return
+
+    def is_current_runtime() -> bool:
+        return getattr(entry, "runtime_data", None) is runtime_data
+
     try:
-        if runtime_data is None or getattr(entry, "runtime_data", None) is not runtime_data:
+        if not is_current_runtime():
             return
         while True:
             # Coalesce a state-event burst without dropping changes during delivery.
             await asyncio.sleep(0.05)
-            if getattr(entry, "runtime_data", None) is not runtime_data:
-                return
-            if runtime_data is None:
+            if not is_current_runtime():
                 return
             runtime_data.display_bridge_notify_dirty = False
             topic = "notifications" if getattr(runtime_data, "display_bridge_notify_messages", False) else "alarm"
@@ -1335,7 +1339,7 @@ async def _async_notify_display_bridge_alarm_if_listening(
                 _LOGGER.debug("C300X display bridge event failed", exc_info=True)
                 if (
                     topic == "notifications"
-                    and getattr(entry, "runtime_data", None) is runtime_data
+                    and is_current_runtime()
                     and not runtime_data.resources.closed
                 ):
                     from .events import async_notify_runtime_registration_failed
@@ -1345,6 +1349,5 @@ async def _async_notify_display_bridge_alarm_if_listening(
             if not runtime_data.display_bridge_notify_dirty:
                 break
     finally:
-        if runtime_data is not None:
-            runtime_data.display_bridge_alarm_notify_pending = False
-            runtime_data.display_bridge_notify_dirty = False
+        runtime_data.display_bridge_alarm_notify_pending = False
+        runtime_data.display_bridge_notify_dirty = False

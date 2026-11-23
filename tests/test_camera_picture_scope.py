@@ -113,6 +113,42 @@ def test_media_that_ends_before_the_refresh_is_not_asked_about() -> None:
     asyncio.run(_run())
 
 
+def test_a_quick_restart_reads_only_for_the_new_session_at_its_full_delay(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    delay = 0.4
+    monkeypatch.setattr(camera_picture_scope, "PICTURE_SCOPE_REFRESH_DELAY_SECONDS", delay)
+
+    async def _run() -> None:
+        loop = asyncio.get_running_loop()
+        api = _OwnedMediaApi()
+        reads: list[float] = []
+        status = api.async_doorbell_video_status
+
+        async def _timed_status() -> dict[str, Any]:
+            reads.append(loop.time())
+            return await status()
+
+        api.async_doorbell_video_status = _timed_status  # type: ignore[method-assign]
+        camera = C300XDoorbellCamera(_FakeEntry(runtime_data=_FakeRuntimeData(api=api)))  # type: ignore[arg-type]
+        camera.hass = SimpleNamespace(async_create_task=loop.create_task)  # type: ignore[assignment]
+        camera._async_write_ha_state_if_ready = lambda: None  # type: ignore[method-assign]
+        camera._apply_status({"available": True, "window_available": False,
+                              "bridge": {"picture_controls_supported": True, SCOPE: "ring"}})
+        _view_started(camera)  # Session A.
+        await asyncio.sleep(delay / 4)
+        _event(camera, "doorbell_media_closed")
+        await asyncio.sleep(delay / 2)
+        started = loop.time()
+        _view_started(camera)  # Session B, while A's refresh would still sleep.
+        await asyncio.sleep(delay * 2)
+        assert len(reads) == 1
+        assert reads[0] - started >= delay - 0.02
+        assert camera.extra_state_attributes[SCOPE] == "ring_and_on_demand"
+        await camera._background_tasks.close()
+
+    asyncio.run(_run())
+
+
 def test_a_ring_keeps_the_scope_it_reported() -> None:
     camera, scheduled = _camera(_OwnedMediaApi())
     camera._apply_status({"available": True, "window_available": True, "media_owner": "ring",

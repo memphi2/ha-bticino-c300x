@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -156,3 +157,111 @@ def test_a_ring_keeps_the_scope_it_reported() -> None:
                                      "picture_controls_supported": True, SCOPE: "ring_and_on_demand"}})
     assert camera._last_media_state is MediaState.RING_PREVIEW_ACTIVE
     assert camera.extra_state_attributes[SCOPE] == "ring_and_on_demand" and scheduled == []
+
+
+class _GatedStatusApi(_OwnedMediaApi):
+    """Hold each status read until the test releases it."""
+
+    def __init__(self, *, ends_session: bool = False) -> None:
+        super().__init__()
+        self.gate = asyncio.Event()
+        self.ends_session = ends_session
+
+    async def async_doorbell_video_status(self) -> dict[str, Any]:
+        self.status_calls += 1
+        await self.gate.wait()
+        if self.ends_session:
+            return {"available": True, "window_available": False, "media_owner": "idle",
+                    "bridge": {"media_owner": "idle", "media_active": False, "clients": 0,
+                               "picture_controls_supported": True, SCOPE: "ring"}}
+        return {
+            "available": True, "window_available": True, "media_owner": "agent",
+            "bridge": {"media_owner": "agent", "media_active": True, "clients": 1,
+                       "picture_controls_supported": True, SCOPE: "ring_and_on_demand"},
+        }
+
+
+def _live_camera(api: _FakeApi) -> C300XDoorbellCamera:
+    """A camera whose refresh runs as a real task in its own background tasks."""
+
+    camera, _ = _camera(api)
+    del camera._background_tasks.create  # Back to the real scheduling.
+    camera.hass = SimpleNamespace(  # type: ignore[assignment]
+        async_create_task=asyncio.get_running_loop().create_task)
+    return camera
+
+
+async def _settle() -> None:
+    await asyncio.sleep(0.02)
+
+
+def _no_errors(caplog: pytest.LogCaptureFixture) -> None:
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+def test_a_refresh_cancelled_in_its_status_read_applies_nothing_and_the_next_session_asks(
+        caplog: pytest.LogCaptureFixture) -> None:
+    async def _run() -> None:
+        api = _GatedStatusApi()
+        camera = _live_camera(api)
+        _view_started(camera)
+        await _settle()
+        assert api.status_calls == 1  # Waiting for the agent's answer.
+        _event(camera, "doorbell_media_closed")
+        api.gate.set()  # The answer arrives in the same loop turn as the end of the media.
+        await _settle()
+        assert camera._last_media_state is not MediaState.ON_DEMAND_ACTIVE
+        assert camera.extra_state_attributes[SCOPE] == "ring"
+        _view_started(camera)
+        await _settle()
+        assert api.status_calls == 2
+        assert camera.extra_state_attributes[SCOPE] == "ring_and_on_demand"
+        assert not camera._background_tasks._tasks
+        await camera._background_tasks.close()
+
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(_run())
+    _no_errors(caplog)
+
+
+def test_a_refresh_whose_own_status_ends_the_session_still_writes_the_state(
+        caplog: pytest.LogCaptureFixture) -> None:
+    async def _run() -> None:
+        api = _GatedStatusApi(ends_session=True)
+        camera = _live_camera(api)
+        _view_started(camera)
+        await _settle()
+        assert api.status_calls == 1
+        writes = camera._state_writes  # type: ignore[attr-defined]
+        api.gate.set()
+        await _settle()
+        assert camera._last_media_state is not MediaState.ON_DEMAND_ACTIVE
+        assert camera.extra_state_attributes[SCOPE] == "ring"
+        assert camera._state_writes > writes  # type: ignore[attr-defined]
+        assert not camera._background_tasks._tasks and not camera._background_tasks._named
+        await camera._background_tasks.close()
+
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(_run())
+    _no_errors(caplog)
+
+
+def test_unload_during_the_delay_reads_nothing_and_leaves_no_task(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    delay = 0.2
+    monkeypatch.setattr(camera_picture_scope, "PICTURE_SCOPE_REFRESH_DELAY_SECONDS", delay)
+
+    async def _run() -> None:
+        api = _GatedStatusApi()
+        api.gate.set()
+        camera = _live_camera(api)
+        _view_started(camera)
+        await asyncio.sleep(delay / 10)
+        await camera._background_tasks.close()
+        _event(camera, "doorbell_media_closed")
+        _view_started(camera)  # Unloaded: no new refresh is scheduled.
+        await asyncio.sleep(delay * 1.5)
+        assert api.status_calls == 0
+        assert not camera._background_tasks._tasks and not camera._background_tasks._named
+
+    asyncio.run(_run())

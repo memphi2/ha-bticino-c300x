@@ -41,10 +41,12 @@ settings stay.
 | Field in **Display and Display patch** | Meaning |
 | --- | --- |
 | **Home Assistant pages on the display** | On applies the Display patch, off restores the original display. |
-| **Show home page buttons only when needed** | On (default): the Alarm button appears while an alarm panel is configured, the Home Assistant button while a page has content. Off: both are always shown. A change applies the patch again and restarts the screen once. |
 | **Keep the page open on screen standby** | Off (default): the Home Assistant and Alarm pages return to the station's home page when the screen goes to standby. On: they stay open. |
 | **Page navigation** | **Favourites bar** (default) or **Arrows (previous / next)**; see [Page navigation](#page-navigation). |
 | **Allowed actions (for experts)** | Actions the display and its notices may run. Leave empty if you use none. |
+
+The **Alarm** and **Home Assistant** buttons on the station's home page appear
+automatically when they have something to open.
 
 The allowed actions are a JSON object, one entry per action ID (letters,
 digits, `_ . : -`) with `domain`, `service` and optional `target`, `data` and

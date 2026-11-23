@@ -623,6 +623,22 @@ def test_the_display_menu_entry_names_only_what_its_form_offers() -> None:
         assert options["dashboard"]["data"]["dashboard_navigation"].lower() in text.lower(), name
 
 
+def test_the_display_form_texts_name_only_the_fields_of_its_schema() -> None:
+    """A field removed from the form must not keep a label or help text."""
+
+    from custom_components.bticino_c300x.config_flow_dashboard import dashboard_schema
+
+    fields = {str(key) for key in dashboard_schema().schema}
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for area, step_id in (
+            ("config", "user_dashboard"), ("config", "reconfigure_dashboard"), ("options", "dashboard"),
+        ):
+            step = data[area]["step"][step_id]
+            assert set(step["data"]) == fields, (path.name, step_id)
+            assert set(step["data_description"]) == fields, (path.name, step_id)
+
+
 def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_low() -> None:
     # On older firmware the values belong to the high-resolution stream; with
     # the Camera resolution select on Low, Home Assistant gets the other one.

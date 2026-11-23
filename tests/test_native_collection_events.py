@@ -326,12 +326,16 @@ def test_memo_led_coordination(collection_binary, tmp_path, native_at_shutdown, 
         proc.kill()
         proc.wait(timeout=5)
         assert marker.is_dir()
+        settings = json.loads(config.read_text())
+        settings["displayBridge"]["enabled"] = False
+        config.write_text(json.dumps(settings))
         proc = start()
         wait_for_health(api)
-        register()
-        event(False, topic="display_bridge.state")
+        # No runtime registration survives the crash. Disable alone releases.
+        api_post(api, "/api/v1/display-bridge", {"enabled": False})
         expect(255 if native_at_shutdown else 0)
         assert not marker.exists()
+        register()
         # A trigger takeover ends HA ownership even when memo metadata is unknown.
         event(True)
         trigger.write_text("none [timer]\n")

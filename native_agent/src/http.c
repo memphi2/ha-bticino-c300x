@@ -2481,12 +2481,12 @@ static void handle_display_bridge_post(
     }
     (void)c300x_json_bool_field(request->body, "enabled", &enabled);
     if (!enabled) {
+        c300x_memo_led_update(&runtime->memo_led, 0);
         if (!display_bridge_runtime_active(runtime) && !config->display_bridge_enabled && !runtime->display_bridge_disabled) {
             handle_display_bridge_status(client_fd, config, runtime);
             return;
         }
         runtime->display_bridge_registered = 0;
-        c300x_memo_led_update(&runtime->memo_led, 0);
         runtime->display_bridge_disabled = 1;
         runtime->display_bridge_webhook_url[0] = '\0';
         runtime->display_bridge_shared_secret[0] = '\0';

@@ -87,7 +87,7 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
-case "$ACTION" in status|apply|restore|recover|confirm|boot) ;; *) fail 'unsupported action' ;; esac
+case "$ACTION" in status|apply|restore|recover|confirm|boot|boot-confirm) ;; *) fail 'unsupported action' ;; esac
 for path in "$GUI" "$BACKUP" "$BIN" "$WRAPPER" "$IDENTITY"; do
     safe_path "$path" || fail 'unsafe path'
 done
@@ -108,6 +108,11 @@ if [ "$ACTION" = boot ]; then
         later) RESULT=rolled_back ;;
     esac
     ACTION=recover
+fi
+if [ "$ACTION" = boot-confirm ]; then
+    # Only the trial boot runs the trial GUI: any other boot proves nothing.
+    boot_phase
+    [ "$TRIAL_PHASE" = trial ] || fail 'not the trial boot'
 fi
 if trial_exists && [ "$ACTION" = apply ]; then fail 'pending trial requires confirmation or recovery'; fi
 if [ "$ACTION" != apply ] && [ "$ACTION" != confirm ] && ! trial_exists && originals "$GUI"; then
@@ -169,6 +174,8 @@ if [ "$ACTION" = confirm ]; then
     verify_trial || fail 'invalid pending trial'
     if confirm_trial; then
         remount_rw && archive_trial || fail 'trial confirmation archive failed; recovery retained'
+        write_marker confirmed-release "$TRIAL_RELEASE" || fail 'trial confirmed; confirmation not recorded'
+        note_result confirmed "$TRIAL_RELEASE"
         remount_ro || fail 'trial confirmed; read-only remount failed'
         printf '%s\n' '{"ok":true,"runtime_verified":true,"backups_retained":true}'
         exit 0
@@ -179,6 +186,16 @@ if [ "$ACTION" = confirm ]; then
     DIRTY=0
     remount_ro || fail 'rollback read-only remount failed'
     fail 'readiness failed; prior files restored; GUI runtime requires recovery'
+fi
+if [ "$ACTION" = boot-confirm ]; then
+    # A failed check never rolls back: a later boot does, by the start rule.
+    verify_trial && confirm_trial || fail 'readiness not confirmed; trial retained'
+    remount_rw && archive_trial || fail 'trial confirmation archive failed; trial retained'
+    write_marker confirmed-release "$TRIAL_RELEASE" || fail 'trial confirmed; confirmation not recorded'
+    note_result confirmed "$TRIAL_RELEASE"
+    remount_ro || fail 'trial confirmed; read-only remount failed'
+    printf '%s\n' '{"ok":true,"runtime_verified":true,"backups_retained":true}'
+    exit 0
 fi
 if [ "$ACTION" = recover ] && trial_exists; then
     DIRTY=1

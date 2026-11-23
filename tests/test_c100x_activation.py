@@ -35,6 +35,7 @@ def test_confirm_requires_actual_native_roundtrip_not_socket_or_marker(tree, act
     assert json.loads(result.stdout)["runtime_verified"] is True
     assert not pending.exists()
     assert list((tree[0] / "backup").glob("trial-history.*/snapshot/main.qml"))
+    assert (tree[0] / "backup/confirmed-release").read_text() == ".c100x-" + generation(tree) + "\n"
     run(tree, "restore")
     assert_original(tree)
 
@@ -50,6 +51,62 @@ def test_hung_gui_rolls_back_prior_generation_without_signalling_it(tree, activa
     assert prior == {name: (tree[1] / name).read_bytes() for name in tree[2]}
     assert not (tree[0] / "backup/pending").exists()
     assert all((tree[1] / name).stat().st_mode & 0o777 == 0o640 for name in prior)
+
+
+def trial_files(tree):
+    return {name: (tree[1] / name).read_bytes() for name in tree[2]}
+
+
+@pytest.mark.parametrize("boot", ["prepare_boot", "unmarked_later_boot", "further_boot"])
+def test_boot_confirm_is_refused_outside_the_trial_boot(tree, boot):
+    run(tree, "prepare")
+    trial = trial_files(tree)
+    if boot != "prepare_boot":
+        reboot(tree)
+    if boot == "further_boot":
+        run(tree, "boot")
+        reboot(tree, FURTHER_BOOT)
+    assert "not the trial boot" in run(tree, "boot-confirm", False).stderr
+    assert (tree[0] / "backup/pending").is_dir()
+    assert trial_files(tree) == trial
+    assert not (tree[0] / "backup/confirmed-release").exists()
+
+
+def test_boot_confirm_in_the_trial_boot_confirms_and_publishes(tree, activation_binary):
+    run(tree, "prepare")
+    reboot(tree)
+    run(tree, "boot")
+    with agent_lab(activation_binary, tree) as port, gui_peer(port, generation(tree)):
+        result = run(tree, "boot-confirm")
+    assert json.loads(result.stdout)["runtime_verified"] is True
+    backup = tree[0] / "backup"
+    release = ".c100x-" + generation(tree)
+    assert not (backup / "pending").exists()
+    assert (backup / "confirmed-release").read_text() == release + "\n"
+    assert (backup / "last-result").read_text() == f"confirmed {release}\n"
+    assert not (backup / "pending.prepare-boot").exists() and not (backup / "pending.trial-boot").exists()
+    reboot(tree, FURTHER_BOOT)
+    run(tree, "boot")
+    assert b"c100xFullScreen" in (tree[1] / "main.qml").read_bytes()
+
+
+def test_boot_confirm_with_a_hung_gui_keeps_the_trial_for_the_start_rule(tree, activation_binary):
+    run(tree, "apply")
+    prior = trial_files(tree)
+    advance_source(tree)
+    run(tree, "prepare")
+    trial = trial_files(tree)
+    reboot(tree)
+    run(tree, "boot")
+    with agent_lab(activation_binary, tree) as port, gui_peer(port, generation(tree), responsive=False):
+        result = run(tree, "boot-confirm", False)
+    assert "trial retained" in result.stderr
+    assert (tree[0] / "backup/pending").is_dir()
+    assert trial_files(tree) == trial
+    assert not (tree[0] / "backup/confirmed-release").exists()
+    reboot(tree, FURTHER_BOOT)
+    run(tree, "boot")
+    assert trial_files(tree) == prior
 
 
 @pytest.mark.parametrize("fault", ["kill_before", "kill_after"])

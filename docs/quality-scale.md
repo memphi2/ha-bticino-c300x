@@ -1,6 +1,6 @@
 # Home Assistant Quality Scale
 
-Reviewed: 2026-11-16
+Reviewed: 2026-11-23
 
 This is a **local self-assessment of a custom integration**, not an official
 Home Assistant tier or certification. Platinum remains a development goal, not
@@ -83,8 +83,8 @@ rule mismatch or missing evidence, not necessarily a runtime defect.
 | `test-coverage` | Silver | todo | Fresh per-module >95% evidence is pending; aggregate `scripts/check_coverage.py` and old reports cannot establish it. Run the final suite with coverage after reviews and inspect every module, not just the total. |
 | `devices` | Gold | done | `entity.py:_device_info` groups one C300X per entry with manufacturer, model, name and firmware when available. `test_entity.py` and platform tests. |
 | `diagnostics` | Gold | done | `diagnostics.py` supplies entry/runtime diagnostics with explicit redaction, including unloaded/offline paths. `test_diagnostics.py` exercises secrets, hostnames, IPv6 and error redaction. |
-| `discovery-update-info` | Gold | todo | `config_flow.py:async_step_zeroconf` calls `_abort_if_unique_id_configured()` without address updates. Untrusted mDNS must not redirect stored credentials. Same-endpoint discovery can renew registration/adopt identity, not change host/port. `test_config_flow_helpers.py` discovery/security cases preserve this guard. A securely verified address-change workflow is absent; retain manual reconfigure rather than weaken security for compliance. |
-| `discovery` | Gold | done | Manifest advertises the agent mDNS service; `discovery.py` validates identity/address. Advertising is intentionally disabled after registration. `test_discovery.py`, `test_native_mdns_runtime.py`. Address updates are a separate rule. |
+| `discovery-update-info` | Gold | done | `discovery_move.py`, called from `config_flow.py:async_step_zeroconf`: an entry saved with an IPv4 address follows a new IPv4 announcement only when the saved address no longer proves the identity and the announced one does. A proof answers a fresh nonce (no credentials sent) with HMAC-SHA256 keyed by the saved access token over `c300x-identity-v1`, the identity and the `host:port` it was reached on, so relays and swapped stations fail. One attempt per entry per 10 minutes; host names and manual/legacy identities never move; the move uses the reconfigure update path. `test_config_flow_discovery_move.py`. |
+| `discovery` | Gold | done | Manifest advertises the agent mDNS service; `discovery.py` validates identity/address. The agent announces while HA is not using it, again after 15 minutes without an authenticated HA request, and reopens its responder when its IPv4 address changes. `test_discovery.py`, `test_native_mdns_runtime.py`. Address updates are a separate rule. |
 | `docs-data-update` | Gold | done | [Operating model](feature-reference.md#operating-model), [architecture](architecture.md#data-flow), agenda and energy sections explain device push, HA-side refresh and explicit reads/writes. |
 | `docs-examples` | Gold | done | [Blueprints](blueprints.md) and bundled automation examples cover ring, notifications and phrase decisions. `test_blueprint_installer.py` checks installation handling. |
 | `docs-known-limitations` | Gold | done | [Feature reference](feature-reference.md), [media troubleshooting](media-troubleshooting.md) and [readiness](media-readiness.md) distinguish unsupported capabilities, media prerequisites and transport limitations. |

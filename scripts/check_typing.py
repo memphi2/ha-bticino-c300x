@@ -66,6 +66,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/device_user.py",
     "custom_components/bticino_c300x/diagnostics.py",
     "custom_components/bticino_c300x/discovery.py",
+    "custom_components/bticino_c300x/discovery_move.py",
     "custom_components/bticino_c300x/doorbell_state.py",
     "custom_components/bticino_c300x/doorstation_audio.py",
     "custom_components/bticino_c300x/entry_config.py",

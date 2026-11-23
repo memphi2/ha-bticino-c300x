@@ -997,7 +997,8 @@ Authentication: normal API token.
 Side effects: POST changes one picture control of the active video source.
 
 A connected GUI advertising `picture=1` provides the legacy ring-only path.
-An eligible C300X (firmware 1.7.19) can also report
+An eligible C300X (firmware 1.7.19; 2.0.2 with an ADV7180 video decoder;
+3.0.6 with an ADV7180 or TVP5150 decoder) can also report
 `bridge.picture_controls_scope: "ring_and_on_demand"` with
 `bridge.picture_controls_supported: true`. Model and firmware alone do not
 enable it: an authenticated status or capability request during owned media
@@ -1010,10 +1011,27 @@ Missing or unknown scope does not extend GUI support beyond ring calls.
 with a percentage `value` (0 through 100 in steps of 10). Direct success returns
 source readback; legacy success returns the GUI object's values. Neither
 measures the rendered picture.
-An active source that does not expose the required V4L2 control descriptors
-is unsupported, even if raw control reads return numbers.
+The stock capture driver (`mxc_v4l2`) has no V4L2 control descriptors
+(`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts it only by its
+exact signature (character device 81:0 bound to `mxc_v4l2_capture`,
+`VIDIOC_QUERYCAP` driver `mxc_v4l2`, version `0x10b`, capabilities
+`0x05000005`, empty card and bus) and uses the stock firmware's fixed raw
+ranges (brightness 30-180, contrast 59-209, saturation 64-244, eleven steps).
+The decoder is told by its bound I2C driver
+(`/sys/bus/i2c/drivers/adv7180/<bus>-<address>` or `.../tvp5150/...`). The
+stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
+raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
+contrast is a driver cache that stays 0 until the first write after boot, and
+such a value is reported as unavailable, not as a percentage. A read off the
+eleven steps is unavailable too. Any other source must expose integer
+descriptors that cover these ranges; raw control reads alone do not make it
+supported. Changes last for the current media session; the station applies
+its own values again when the next session starts. 3.0.6 and the 2.0.2 path
+are checked offline only; 1.7.19 is tested on a device.
 Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.
+When the write or its read-back fails, the agent writes the previous value
+back while the media session is still its own.
 No extra idle poll, recording, configuration write or media restart is needed.
 
 Errors:

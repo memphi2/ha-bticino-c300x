@@ -8866,7 +8866,8 @@ static void handle_agent_update_apply(
     }
     if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest,
             &summary, apply_agent_update_firewall_patches)) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_apply_failed\"}\n");
+        int status = agent_update_error_status(summary.error);
+        send_json(client_fd, status, status == 409 ? "Conflict" : "Internal Server Error", agent_update_error_json(summary.error));
         free(workspace);
         return;
     }

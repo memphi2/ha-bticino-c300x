@@ -1499,6 +1499,9 @@
         "error": {
           "ssh_install_failed": "Installazione di riparazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
           "update_failed": "Aggiornamento del device agent non riuscito. Verifica che l'accesso di manutenzione sia attivo e riprova.",
+          "update_root_already_writable": "L'aggiornamento è stato rifiutato prima dell'applicazione perché il filesystem radice (/) era già scrivibile. Se in precedenza hai rimontato manualmente / in scrittura, riavvia normalmente il dispositivo, poi ripeti questa riparazione. Altrimenti verifica perché / è scrivibile prima di riprovare.",
+          "update_root_readonly_failed": "L'aggiornamento non è riuscito a riportare il filesystem radice (/) in sola lettura. Lo stato finale del dispositivo è incerto; il ripristino non è confermato. Conserva i file di recupero e verifica l'agente e il filesystem prima di un altro aggiornamento.",
+          "update_apply_failed": "L'agente ha segnalato un errore generico di aggiornamento; la causa e lo stato finale del dispositivo sono sconosciuti. Se in precedenza hai rimontato manualmente / in scrittura, un normale riavvio del dispositivo può aiutare. Verifica lo stato del dispositivo prima di riprovare; questo errore non conferma il ripristino.",
           "update_verify_failed": "L'aggiornamento è stato inviato, ma l'agent segnala ancora un bundle vecchio o incompatibile.",
           "ssh_login_refused": "Il C300X ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo."
         },

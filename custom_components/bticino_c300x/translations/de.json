@@ -1499,6 +1499,9 @@
         "error": {
           "ssh_install_failed": "Die SSH-Reparaturinstallation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
           "update_failed": "Das Device-Agent-Update ist fehlgeschlagen. Prüfe, ob Maintenance-Zugriff aktiv ist, und versuche es erneut.",
+          "update_root_already_writable": "Das Update wurde vor dem Anwenden abgelehnt, weil das Root-Dateisystem (/) bereits beschreibbar war. Falls du / zuvor manuell beschreibbar eingehängt hast, starte das Gerät normal neu und wiederhole dann diese Reparatur. Andernfalls kläre vor einem neuen Versuch, warum / beschreibbar ist.",
+          "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",
+          "update_apply_failed": "Der Agent meldet einen allgemeinen Updatefehler; Ursache und endgültiger Gerätezustand sind unbekannt. Falls du / zuvor manuell beschreibbar eingehängt hast, kann ein normaler Geräteneustart helfen. Prüfe vor einem neuen Versuch den Gerätezustand; der Fehler bestätigt keine erfolgreiche Wiederherstellung.",
           "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle.",
           "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
         },

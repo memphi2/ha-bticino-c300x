@@ -1499,6 +1499,9 @@
         "error": {
           "ssh_install_failed": "La réparation par SSH a échoué. Vérifiez l'accès SSH et réessayez.",
           "update_failed": "La mise à jour de l'agent a échoué. Vérifiez que l'accès maintenance est actif et réessayez.",
+          "update_root_already_writable": "La mise à jour a été refusée avant application car le système de fichiers racine (/) était déjà accessible en écriture. Si vous avez auparavant remonté / manuellement en écriture, redémarrez normalement l'appareil, puis relancez cette réparation. Sinon, recherchez pourquoi / est accessible en écriture avant de réessayer.",
+          "update_root_readonly_failed": "La mise à jour n'a pas pu remettre le système de fichiers racine (/) en lecture seule. L'état final de l'appareil est incertain ; le retour à l'état précédent n'est pas confirmé. Conservez les fichiers de récupération et vérifiez l'agent et le système de fichiers avant toute autre mise à jour.",
+          "update_apply_failed": "L'agent a signalé un échec générique de mise à jour ; la cause et l'état final de l'appareil sont inconnus. Si vous avez auparavant remonté / manuellement en écriture, un redémarrage normal de l'appareil peut aider. Vérifiez son état avant de réessayer ; cette erreur ne confirme pas le retour à l'état précédent.",
           "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible.",
           "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
         },

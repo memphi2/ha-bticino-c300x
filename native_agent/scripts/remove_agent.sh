@@ -329,12 +329,18 @@ agent_tree_unchanged() {
 }
 
 restore_media_patches() {
+    media_errors="$REMOVE_WORK/media-restore-errors"
     if ! media_result="$(C300X_AUDIO_BACKUP_DIR="$BACKUP_ROOT/original" \
         C300X_ROUTING_BACKUP_DIR="$BACKUP_ROOT/original/home/bticino/bin" \
-        "$AGENT_DIR/c300x-agent-native" --restore-media-patches)"; then
+        "$AGENT_DIR/c300x-agent-native" --restore-media-patches 2>"$media_errors")"; then
+        cat "$media_errors" >&2
+        if grep -F -q -x 'Failed to restore device routing: remount_ro_failed' "$media_errors"; then
+            printf 'Root read-only remount failed after the routing restore; / may still be writable, perform a full device reboot before retrying removal\n' >&2
+        fi
         printf 'Failed to restore media patches; keeping agent files and backups in place\n' >&2
         exit 1
     fi
+    cat "$media_errors" >&2
     # The CLI emits this fixed JSON record only after verifying restoration.
     # Older agents returned no stdout. The pending flag explains a RO failure;
     # it never bypasses rollback or schedules a reboot before cleanup.

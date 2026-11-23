@@ -344,6 +344,9 @@ def test_uninstall_keeps_files_if_routing_restore_fails(device: dict[str, str], 
     result = _remove(device)
     _assert_kept(device, result)
     assert "Failed to restore device routing" in result.stderr
+    # Only a failed RO remount may leave / writable; then a reboot comes first.
+    hint = "/ may still be writable, perform a full device reboot before retrying removal"
+    assert (hint in result.stderr) == (fault == "remount")
     assert backup.read_bytes() == saved
     # The verified stock file is already in place when only the RO remount fails.
     assert (target.read_bytes() if target.exists() else None) == (saved if fault == "remount" else before)

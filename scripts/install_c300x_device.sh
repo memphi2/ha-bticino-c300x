@@ -210,7 +210,7 @@ if [[ "$UPLOAD_AGENT" == "1" ]]; then
 fi
 
 if [[ "$APPLY_QML" == "1" ]]; then
-    qml_result="$(ssh_cmd "C300X_QML_SOURCE_DIR='$REMOTE_DIR/qml' '$REMOTE_DIR/qml_patch.sh' apply")"
+    qml_result="$(ssh_cmd "C300X_AGENT_DIR='$REMOTE_DIR' C300X_QML_SOURCE_DIR='$REMOTE_DIR/qml' '$REMOTE_DIR/qml_patch.sh' apply")"
     # The device can exit zero while reporting a failed GUI reload in JSON.
     python3 -c '
 import json

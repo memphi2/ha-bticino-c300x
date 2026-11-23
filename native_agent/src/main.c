@@ -8,6 +8,7 @@
 
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void print_usage(const char *program)
@@ -224,6 +225,11 @@ int main(int argc, char **argv)
         printf("config ok\n");
         return 0;
     }
+
+    /* Patch subprocesses must use this listener, including custom --config paths. */
+    char ui_port[6];
+    snprintf(ui_port, sizeof(ui_port), "%u", (unsigned)config.ui_port);
+    if (setenv("C300X_QML_UI_PORT", ui_port, 1) != 0) return 1;
 
     /* The device libcurl must initialize before workers, and only on opt-in. */
     c300x_https_init(config.https_callbacks_enabled);

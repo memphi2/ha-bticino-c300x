@@ -17,10 +17,10 @@ class Request {
 const api = vm.createContext({XMLHttpRequest: Request});
 vm.runInContext(fs.readFileSync(path.join(dir, "js/c300x_maintenance.js"), "utf8"), api);
 const deadline = {stop() {}, restart() {}};
-const panel = {};
+const panel = {uiBaseUrl:"http://127.0.0.1:18123"};
 function next(method, suffix, payload) {
     const req = queue.shift();
-    assert.equal(req.url, "http://127.0.0.1:8090/ui/maintenance" + suffix);
+    assert.equal(req.url, "http://127.0.0.1:18123/ui/maintenance" + suffix);
     assert.equal(req.method, method);
     assert.equal(req.headers["x-c300x-ui"], "settings-v1");
     assert.equal(req.body, payload ? JSON.stringify(payload) : "");

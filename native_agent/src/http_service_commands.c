@@ -11,7 +11,12 @@
 #define C300X_SSH_INIT_SCRIPT "/etc/init.d/dropbear"
 #endif
 #ifndef C300X_SSH_STATUS_COMMAND
-#define C300X_SSH_STATUS_COMMAND "pidof dropbear >/dev/null 2>&1"
+/* The stock init script stops the listener by pidfile. Established SSH
+ * sessions can keep their own dropbear processes after a successful stop. */
+#define C300X_SSH_STATUS_COMMAND \
+    "file=/var/run/dropbear.pid; [ -e \"$file\" ] || exit 1; " \
+    "read -r pid < \"$file\" || exit 2; case $pid in ''|*[!0-9]*) exit 2;; esac; " \
+    "[ /proc/\"$pid\"/exe -ef /usr/sbin/dropbear ]"
 #endif
 /* A hanging init script or status check must not hold the maintenance
  * slot, and with it every other maintenance request, for good. */
@@ -134,7 +139,7 @@ static int finish_service(struct c300x_http_maintenance *owner)
     }
     if (state->phase == STATUS_COMMAND) {
         int running = !owner->job.failed;
-        /* pidof returns 1 for no daemon. A timeout or failed probe is unknown,
+        /* The probe returns 1 for no listener. A timeout or failed probe is unknown,
          * not proof that a requested stop succeeded. */
         if (state->display && ((owner->job.failed && owner->job.exit_status != 1)
             || (state->action == SSH_SET && state->requested_ssh != running))) {

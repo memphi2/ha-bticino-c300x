@@ -216,6 +216,40 @@ def test_local_maintenance_transport():
     subprocess.run(["node", str(ROOT / "tests/qml/maintenance.cjs")], check=True)
 
 
+def test_station_port_from_agent_or_direct_install(tmp_path):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    agent = tmp_path / "agent"
+    agent.write_text(
+        '#!/bin/sh\n[ "$3" != "--diagnose-startup" ] || echo \'    "ui_port": 18123,\'\n'
+    )
+    agent.chmod(0o700)
+    (tmp_path / "config.json").write_text("{}")
+    env = {"C300X_QML_AGENT_BIN": str(agent)}
+    for port in (18123, 65535):
+        if port == 65535:
+            env["C300X_QML_UI_PORT"] = str(port)
+        _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides=env)
+        assert f'property string uiBaseUrl: "http://127.0.0.1:{port}"' in (gui / "MainApp.qml").read_text()
+    previous = (gui / "MainApp.qml").read_bytes()
+    for port in ("0", "65536", "1/path"):
+        env["C300X_QML_UI_PORT"] = port
+        assert _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides=env).returncode != 0
+        assert (gui / "MainApp.qml").read_bytes() == previous
+
+
+def test_truncated_menu_backup_blocks_uninstall(tmp_path):
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    _run_qml_patch(tmp_path, gui, backup, "apply")
+    (backup / SETTINGS).write_text("import QtQuick 1.1\n")
+    assert not _run_qml_patch(tmp_path, gui, backup, "status")["backup_available"]
+    assert _run_qml_patch_raw(tmp_path, gui, backup, "restore-all").returncode != 0
+    assert "c300xSettings" in (gui / SETTINGS).read_text()
+
+
 @pytest.mark.parametrize("target", ["Settings.qml", "js/c300x_maintenance.js"])
 def test_settings_restore_rejects_untrusted_backup(tmp_path, target):
     gui, backup = tmp_path / "gui", tmp_path / "backup"

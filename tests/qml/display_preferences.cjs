@@ -22,7 +22,7 @@ function runtime() {
     vm.runInContext(fs.readFileSync(path.join(jsRoot, "c300x_ha.js"), "utf8")
         .replace(/^\.pragma library\s*/, ""), api);
     const owner = {feedbackEnabled: true, ready: false, busy: false, stopped: false,
-        errorKey: "", deadline: {
+        uiBaseUrl: "http://127.0.0.1:18123", errorKey: "", deadline: {
             running: false, restart() { this.running = true; }, stop() { this.running = false; },
         }};
     Object.defineProperty(owner, "request", {
@@ -40,6 +40,7 @@ function runtime() {
     api.loadDisplayPreferences(owner);
     assert.equal(requests.length, 1, "coalesce startup and settings entry");
     assert.equal(requests[0].method, "GET");
+    assert.equal(requests[0].url, owner.uiBaseUrl + "/ui/preferences");
     assert.equal(owner.deadline.running, true);
     requests[0].finish(200, {ok: true, feedback_enabled: false});
     assert.equal(owner.feedbackEnabled, false);
@@ -51,6 +52,7 @@ function runtime() {
     assert.equal(requests.length, 1, "no polling, unchanged saves or coercion");
     api.saveDisplayPreferences(owner, true);
     assert.equal(requests[1].method, "POST");
+    assert.equal(requests[1].url, owner.uiBaseUrl + "/ui/preferences");
     assert.equal(requests[1].headers["X-C300X-UI"], "1");
     assert.deepEqual(JSON.parse(requests[1].body), {feedback_enabled: true});
     assert.equal(owner.feedbackEnabled, false, "do not claim a save before confirmation");

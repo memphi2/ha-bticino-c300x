@@ -55,7 +55,7 @@ json_status() {
         media_user_label_state=partial
         media_user_label_patched=null
     fi
-    if [ -f "$BACKUP_DIR/MainApp.qml" ]; then
+    if feature_backup_available; then
         backup_available=true
     fi
     if [ -f "$BACKUP_DIR/EventManager.qml" ]; then
@@ -78,7 +78,7 @@ json_reload_failed() {
     backup_available=false
     core_backup_available=false
     gui_running=false
-    if [ -f "$BACKUP_DIR/MainApp.qml" ]; then
+    if feature_backup_available; then
         backup_available=true
     fi
     if [ -f "$BACKUP_DIR/EventManager.qml" ]; then
@@ -94,6 +94,13 @@ file_contains() {
     file="$1"
     text="$2"
     [ -f "$file" ] && grep -F -q "$text" "$file"
+}
+
+feature_backup_available() {
+    [ -f "$BACKUP_DIR/MainApp.qml" ] || return 1
+    if file_contains "$GUI_DIR/Settings.qml" c300xSettings; then
+        [ -f "$BACKUP_DIR/Settings.qml" ] && check_settings_paths 2>/dev/null || return 1
+    fi
 }
 
 full_patch_present() {
@@ -463,6 +470,7 @@ backup_file() {
             ;;
         Settings.qml)
             ! file_contains "$backup_src" c300xSettings || { echo "Missing original Settings.qml backup" >&2; return 1; }
+            render_settings "$backup_src" >/dev/null || return 1
             ;;
         EventManager.qml)
             if grep -F -q 'function c300xNotifyMediaClosed()' "$backup_src"; then
@@ -578,6 +586,9 @@ check_settings_paths() {
     if file_contains "$BACKUP_DIR/Settings.qml" c300xSettings; then
         printf 'Already patched Settings.qml backup\n' >&2; return 1
     fi
+    if [ -f "$BACKUP_DIR/Settings.qml" ]; then
+        render_settings "$BACKUP_DIR/Settings.qml" >/dev/null || return 1
+    fi
 }
 
 patch_general_settings() {
@@ -600,7 +611,13 @@ patch_general_settings() {
     stock="$BACKUP_DIR/Settings.qml"
     if file_contains "$stock" c300xSettings; then return 1; fi
     cp -p "$stock" "$PATCH_OUTPUT_DIR/Settings.qml"
+    render_settings "$stock" > "$PATCH_OUTPUT_DIR/Settings.qml"
+}
+
+render_settings() {
     awk '
+        NF { last = $0 }
+        $0 == "import QtQuick 1.1" { imports++ }
         $0 == "    function handleScreenOff() {" {
             print; print "        if (c300xSettings.item) c300xSettings.item.clearConfirmation()"; screen++; next
         }
@@ -632,10 +649,10 @@ patch_general_settings() {
         }
         /append\(\{label: QT_TR_NOOP\("Configuration"\), tab: configurationChoice,/ { config++ }
         { print }
-        END { if (screen != 1 || tabs != 1 || groups != 1 || gaps != 1 || config != 1) {
+        END { if (imports != 1 || last != "}" || screen != 1 || tabs != 1 || groups != 1 || gaps != 1 || config != 1) {
             print "Unsupported Settings.qml layout" > "/dev/stderr"; exit 12
         } }
-    ' "$stock" > "$PATCH_OUTPUT_DIR/Settings.qml"
+    ' "$1"
 }
 
 patch_home_page() {
@@ -1308,6 +1325,24 @@ apply_generated_patch_if_changed() {
     fi
 }
 
+station_ui_port() {
+    port=${C300X_QML_UI_PORT-}
+    if [ -z "$port" ]; then
+        # Direct installs are not children of the running agent. Ask the native
+        # config parser for its effective listener, never copy config into QML.
+        config="${AGENT_BIN%/*}/config.json"
+        if [ -f "$config" ]; then
+            diagnosis="$("$AGENT_BIN" --config "$config" --diagnose-startup)" || return 1
+            port="$(printf '%s\n' "$diagnosis" | sed -n 's/^    "ui_port": \([0-9][0-9]*\),$/\1/p')"
+        else
+            port=8090
+        fi
+    fi
+    case "$port" in ""|0*|*[!0-9]*) echo "Invalid station UI port" >&2; return 1 ;; esac
+    [ "${#port}" -le 5 ] && [ "$port" -le 65535 ] || return 1
+    printf '%s\n' "$port"
+}
+
 patch_main_app() {
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     main_app="$output_dir/MainApp.qml"
@@ -1320,7 +1355,8 @@ patch_main_app() {
     fi
     mkdir -p "$output_dir"
     cp -p "$source_main_app" "$main_app"
-    awk '
+    ui_port="$(station_ui_port)"
+    awk -v port="$ui_port" '
         $0 == "import QtQuick 1.1" {
             print
             print "import \"js/c300x_ha.js\" as C300XPreferencesApi"
@@ -1340,6 +1376,7 @@ patch_main_app() {
             print "    }"
             print "    Item {"
             print "        id: c300xDisplayPreferences"
+            print "        property string uiBaseUrl: \"http://127.0.0.1:" port "\""
             print "        property bool feedbackEnabled: true"
             print "        property bool ready: false"
             print "        property bool busy: false"

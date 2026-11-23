@@ -44,7 +44,7 @@ function request(panel, timer, path, payload) {
             }
             finish(data)
         }
-        xhr.open(payload ? "POST" : "GET", "http://127.0.0.1:8090/ui/maintenance" + path, true)
+        xhr.open(payload ? "POST" : "GET", panel.uiBaseUrl + "/ui/maintenance" + path, true)
         xhr.setRequestHeader("x-c300x-ui", "settings-v1")
         if (payload) xhr.setRequestHeader("Content-Type", "application/json")
         timer.restart()

@@ -321,11 +321,11 @@ Page {
 }
 """
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "5db95b56810c7eda043c082c4e20ea2f306315ac4c2893fd8cd87b46e2acb279",
+    "MainApp.qml": "f9febf12716dd3785951d941d158dea0c4d03c278c560d405f7fda6a15c318a9",
     "Settings.qml": "d1571baa609fda82b1cba5aab5549b7caa32fc72a27f9e5f0700643726aa9a6f",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
-    "C300XSettings.qml": "9e82260a150b2edf6785097a20ee892f36ee6ccb5ff864af46a8011a76362d09",
-    "js/c300x_maintenance.js": "1e7dcc1873b157818e01e05abe4ba1c5080c03f8c662bea11cee5b2499a35119",
+    "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
+    "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
     "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "4e769fc9460d7cf70fad5eff9cb6b88c8958aa6e9e915146b93fe7b1d040040b",
@@ -348,7 +348,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "e7b3a48aa31bf6f858876626fa6563645008f1a49742a2209be47d0e8d9de7ef",
+    "js/c300x_ha.js": "e702cd9b0cc12c20df1cac8848d1bb3a8c0fcfe1622f247c06368a88085851bc",
     "js/c300x_i18n.js": "c61b2534a23d93aaa893b993e1a5322ceace10119b97850a7ffd08f52ca40c35",
     "js/c300x_memos.js": "7a5806f0e2f5ca533b1b3f1645f519a225467c51cdee3f2d6228d8c8fa88059f",
 }

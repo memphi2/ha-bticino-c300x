@@ -6,6 +6,7 @@ import "js/c300x_maintenance.js" as Maintenance
 
 Item {
     id: panel
+    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl
     property bool sshKnown: false
     property bool sshRunning: false
     property bool canReboot: false

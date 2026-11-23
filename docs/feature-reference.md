@@ -502,6 +502,9 @@ spaced **Remove agent** action. Only maintenance operations enabled by the
 station agent are available. Reboot and removal require a second, explicit
 confirmation within ten seconds; leaving the tab or screen-off cancels it.
 These controls do not need Home Assistant to be online.
+The tab and its feedback switch use the configured `listen.uiPort`.
+After changing that port, restart the agent and reapply the Display patch to
+update the station menu.
 
 With the Display patch active, the C300X device page in Home Assistant also
 offers **Touch tone** under **Configuration**. It controls the same original

@@ -55,7 +55,7 @@ function requestDisplayPreferences(owner, enabled) {
         }
     }
     try {
-        request.open(enabled === null ? "GET" : "POST", "http://127.0.0.1:8090/ui/preferences", true)
+        request.open(enabled === null ? "GET" : "POST", owner.uiBaseUrl + "/ui/preferences", true)
         if (enabled !== null) {
             request.setRequestHeader("X-C300X-UI", "1")
             request.setRequestHeader("Content-Type", "application/json")

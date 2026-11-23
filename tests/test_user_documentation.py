@@ -310,6 +310,10 @@ def test_the_api_lists_every_error_the_agent_update_answers_with():
     replies |= {(int(status) if error == special else int(other), code) for error, code in cases.items()}
     assert (409, "update_root_already_writable") in replies
     assert replies == _api_error_rows("`POST /api/v1/maintenance/update/apply`")
+    # read_bounded_text_file also fails for a file that is empty or holds only line breaks.
+    api = (ROOT / "native_agent/API.md").read_text()
+    row = api.split("| `400` | `update_manifest_missing` |", 1)[1].split("\n", 1)[0]
+    assert "missing, empty or only line breaks, unreadable or 8 KiB or larger" in row
 
 
 def test_the_api_names_every_display_call_that_follows_the_ui_port():

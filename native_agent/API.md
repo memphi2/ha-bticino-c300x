@@ -1434,7 +1434,7 @@ Errors:
 | --- | --- | --- |
 | `400` | `maintenance_confirmation_required` | The body does not carry `"confirm": "update_agent"`. |
 | `400` | `invalid_update_metadata` | `bundle_hash` is missing or does not start with `sha256:`. |
-| `400` | `update_manifest_missing` | The staged `device_agent/bundle.json` is missing, unreadable or 8 KiB or larger. |
+| `400` | `update_manifest_missing` | The staged `device_agent/bundle.json` is missing, empty or only line breaks, unreadable or 8 KiB or larger. |
 | `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
 | `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
 | `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |

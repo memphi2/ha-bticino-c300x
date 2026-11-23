@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.9.0 - 2026-11-23
+## v2.9.0 - Unreleased
 
 - Direct RTSP viewers on slow WiFi can recover when a short write accepts only
   part of a video or audio packet. The agent finishes that packet before sending

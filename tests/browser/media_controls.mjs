@@ -102,6 +102,12 @@ try {
   const layout = async (label, collect = false) => {
     const failures = await page.evaluate(() => {
       const failures = [], root = lab.controls.shadowRoot;
+      for (const node of root.querySelectorAll(".toolbar, button")) {
+        const css = getComputedStyle(node);
+        if (css.backgroundColor !== "rgba(0, 0, 0, 0)" || css.backdropFilter !== "none") {
+          failures.push(`opaque media control: ${node.className}`);
+        }
+      }
       const box = lab.card.shadowRoot.querySelector("ha-card").getBoundingClientRect(), media = lab.card._mediaEl.getBoundingClientRect();
       const visible = (node) => !!node.getClientRects().length;
       if (document.documentElement.scrollWidth > innerWidth) failures.push("page overflow");

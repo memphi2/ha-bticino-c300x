@@ -16,6 +16,7 @@ VENDOR_FILES = (
     "HomePage.qml",
     "MainApp.qml",
     "MemoPage.qml",
+    "Settings.qml",
     "Components/Settings/GeneralsChoice.qml",
     "Components/Settings/CallBlockPopup.qml",
 )

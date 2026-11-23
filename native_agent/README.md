@@ -1,49 +1,30 @@
 # C300X Native Agent
 
-Native C runtime for BTicino C300X. This directory contains the agent source,
-local test harness, build scripts, and the example config.
+Native C runtime for the BTicino C300X. This directory holds the agent source
+(`src/`), device scripts (`scripts/`), the local test harness (`test/`), the
+Makefile and `config.example.json`.
 
-## Build and Check
+## Build and Run
 
-Install the compiler, `pkg-config` and libcurl development headers first
-(`libcurl4-openssl-dev` on Debian/Ubuntu). The binary loads `libcurl.so.4`
-dynamically; it is not linked against the build host's TLS libraries.
-
-Without `pkg-config`, or with the headers outside the system include path, set
-`CURL_INCLUDE_DIR` to the directory that contains `curl/curl.h`. The Makefile
-and the Python tests that compile `https_client.c` both honour it.
-
-```bash
-make -C native_agent
-make -C native_agent check
-make -C native_agent armhf armhf-abi-check
-make -C native_agent armhf-stack-check
-```
-
-`armhf-abi-check` needs the C300X firmware sysroot via
-`C300X_DEVICE_SYSROOT`. Public CI still compiles ARMHF and runs the stack
-guard, but local release builds should run the ABI check against the real
-device sysroot.
-
-## Run Locally
-
-```bash
-cp native_agent/config.example.json native_agent/config.json
-$EDITOR native_agent/config.json
-native_agent/build/host/c300x-agent-native --config native_agent/config.json
-```
+The build needs a C compiler, `pkg-config` and the libcurl development headers.
+`make -C native_agent` builds the host binary under `build/host/`,
+`make -C native_agent check` builds it and validates `config.example.json` with
+`--check-config`, and the `armhf` targets build and check the device binary.
+The native tests run with pytest: `.venv/bin/python -m pytest tests/test_native_*`. Prerequisites, `CURL_INCLUDE_DIR`, the ABI/stack
+guards and a local run with an untracked config are described once in
+[Native Agent: Build and Checks](../docs/dev/native-agent.md#build-and-checks).
 
 Keep real configs and tokens untracked.
 
 ## Documentation
 
-- Runtime, packaging, bootstrap, update, and security notes:
-  [docs/native-agent.md](../docs/native-agent.md)
+- Runtime, packaging, bootstrap, update and security notes:
+  [docs/dev/native-agent.md](../docs/dev/native-agent.md)
 - HTTP endpoint contract and compatibility rules: [API.md](API.md)
-- Internal media ownership and protocol modules:
-  [docs/native-media-architecture.md](../docs/native-media-architecture.md)
-- Device display QML files and safety rules:
+- Internal module ownership, workers and resource limits:
+  [docs/dev/architecture.md](../docs/dev/architecture.md)
+- Display QML files and safety rules:
   [device_qml/README.md](../device_qml/README.md)
 
-Do not duplicate endpoint lists in this README. `API.md` is the single source
-for the native-agent HTTP contract.
+`API.md` is the single source for the HTTP contract; do not copy endpoint lists
+here.

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "video_rtsp.h"
+#include "picture_worker.h"
 
 static void execute(void *context)
 {
@@ -10,6 +11,9 @@ static void execute(void *context)
 
     job->result = 1;
     switch (job->op) {
+    case C300X_VIDEO_CONTROL_PICTURE:
+        picture_worker_execute(job);
+        break;
     case C300X_VIDEO_CONTROL_ACTIVATE:
         job->result = c300x_video_activate(job->video, job->argument);
         break;
@@ -29,12 +33,6 @@ static void execute(void *context)
         c300x_video_home_call_stop(job->video);
         break;
     }
-}
-
-static int starts_something(enum c300x_video_control_op op)
-{
-    return op == C300X_VIDEO_CONTROL_ACTIVATE || op == C300X_VIDEO_CONTROL_ANSWER
-        || op == C300X_VIDEO_CONTROL_HOME_START;
 }
 
 static void reap(struct c300x_video_control *control)
@@ -92,7 +90,8 @@ enum c300x_video_control_state c300x_video_control_run(
         worker->deferred = 1;
         return C300X_VIDEO_CONTROL_DEFERRED;
     }
-    if (c300x_request_worker_caller_left(worker) && starts_something(op)) {
+    if (c300x_request_worker_caller_left(worker) && (op == C300X_VIDEO_CONTROL_ACTIVATE
+        || op == C300X_VIDEO_CONTROL_ANSWER || op == C300X_VIDEO_CONTROL_HOME_START)) {
         /* Nobody waits for it any more: no stream or call starts that late. */
         *error = "client_gone";
         return C300X_VIDEO_CONTROL_REFUSED;

@@ -64,7 +64,7 @@ def test_display_files_compile_on_the_device_qt():
 
     from test_device_file_strip import strip
 
-    names = ("QEMU", "ROOTFS", "PROBE", "IMPORTS", "GUI")
+    names = ("QEMU", "ROOTFS", "COMPILE_PROBE", "COMPILE_IMPORTS", "GUI")
     paths = [os.environ.get("C300X_QT4_" + name) for name in names]
     if not all(paths):
         pytest.skip("Optional Qt 4 runtime requires C300X_QT4_" + "/".join(names))

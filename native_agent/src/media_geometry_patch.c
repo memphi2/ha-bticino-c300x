@@ -194,11 +194,15 @@ static void patch_words(unsigned char *data)
         memcpy(data + writes[i].offset, writes[i].data, writes[i].len);
 }
 
-static int lock_backup(int dir)
+static int lock_backup(int dir, uid_t target_uid)
 {
     file_stat st;
     if (fd_stat(dir, &st)) return -1;
-    if (st.st_uid != geteuid() || (st.st_mode & 0022)) { errno = EINVAL; return -1; }
+    /* Existing shared backups can retain the verified vendor file's owner. */
+    if ((st.st_uid != geteuid() && st.st_uid != target_uid) || (st.st_mode & 0022)) {
+        errno = EINVAL;
+        return -1;
+    }
     int fd = openat(dir, ".geometry.lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
     if (fd_stat(fd, &st) || !S_ISREG(st.st_mode) || st.st_nlink != 1
@@ -302,7 +306,7 @@ static int operate(int enable, int prepare, int *ro_failed, const char **error)
     *error = "geometry_backup_invalid";
     backup = parent_dir(media_path(1, path), backup_name, prepare);
     if (backup < 0) goto done;
-    if ((lock = lock_backup(backup)) < 0) {
+    if ((lock = lock_backup(backup, meta.st_uid)) < 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) *error = "geometry_busy";
         goto done;
     }

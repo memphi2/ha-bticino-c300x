@@ -1740,34 +1740,6 @@ def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
     ]
 
 
-def test_zeroconf_identity_cannot_redirect_an_existing_entry(monkeypatch):
-    flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
-    flow.context = {}
-
-    async def set_identity(*args, **kwargs):
-        pass
-
-    def abort_existing(**kwargs):
-        assert "updates" not in kwargs
-        raise RuntimeError("already configured")
-
-    flow.async_set_unique_id = set_identity
-    flow._abort_if_unique_id_configured = abort_existing
-    flow._async_current_entries = lambda: []
-
-    async def forbid_probe(*args, **kwargs):
-        pytest.fail("A rediscovered identity must not probe the announced endpoint")
-
-    monkeypatch.setattr(config_flow_module, "_async_probe_agent", forbid_probe)
-    with pytest.raises(RuntimeError, match="already configured"):
-        asyncio.run(flow.async_step_zeroconf(SimpleNamespace(
-            host="192.0.2.99", port=8091,
-            properties={"id": "c300x-aabbcc001122"},
-            name="BTicino C300X Agent._bticino-c300x-agent._tcp.local.",
-        )))
-
-
 def test_zeroconf_rediscovery_requests_runtime_event_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

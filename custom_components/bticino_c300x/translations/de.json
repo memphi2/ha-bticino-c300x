@@ -120,16 +120,14 @@
         "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
-          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
           "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
-          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -233,16 +231,14 @@
         "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geräts: {qml_patch_status}.\n\nAnwenden oder Zurücksetzen des Display-Patches schreibt Display-Dateien auf dem Gerät, lädt die Geräteoberfläche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestätigt.\n\nIst der Display-Patch angewendet, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
-          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
           "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
-          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -771,12 +767,14 @@
         "data": {
           "size": "Bildgröße",
           "bitrate_kbps": "Bitrate",
-          "fps": "Bildrate"
+          "fps": "Bildrate",
+          "use_recommended_snapshot_size": "Empfohlene Snapshot-Größe (800×480) übernehmen"
         },
         "data_description": {
           "size": "Die Größen hängen von Firmware und installiertem Geräte-Agent ab. Optionales 960x576 passt zu den Display-Proportionen, wenn angeboten.",
           "bitrate_kbps": "Höhere Werte verbessern die Bildqualität, erhöhen aber den Datenverkehr.",
-          "fps": "Höhere Werte sorgen für flüssigere Bewegungen; die Auswahl zeigt die unterstützten Grenzen."
+          "fps": "Höhere Werte sorgen für flüssigere Bewegungen; die Auswahl zeigt die unterstützten Grenzen.",
+          "use_recommended_snapshot_size": "Neue Snapshots im Seitenverhältnis des Displays speichern. Ohne Haken bleibt die bisherige Größe erhalten."
         }
       },
       "speech": {
@@ -830,16 +828,14 @@
         "description": "Home-Assistant-Seiten auf dem Display des C300X.\n\nDisplay-Patch auf dem Gerät: {qml_patch_status}.\n\nEin- oder Ausschalten des Display-Patches schreibt Display-Dateien auf das Gerät und lädt dessen Anzeige neu; das kann bis zu etwa 60 Sekunden dauern. Der Status ändert sich, sobald das Gerät ihn bestätigt.\n\nIst der Display-Patch an, bietet das Display-Menü zusätzlich **Display-Seiten** (Wetter und was wo angezeigt wird) und **Display-Kacheln**.",
         "data": {
           "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
-          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
-          "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
           "dashboard_navigation": "Seitenwechsel"
         },
         "data_description": {
           "device_ui_enabled": "An: installiert die Home-Assistant-Seiten auf dem Display des C300X (Display-Patch). Aus: stellt das originale Display wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
-          "dashboard_dynamic_homepage": "An: Die Buttons Alarm und Home Assistant erscheinen auf der Startseite des C300X nur, solange sie etwas zu öffnen haben, neben den originalen Buttons. Aus: Beide stehen immer als festes Paar da. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Das Display bleibt nach einer Aktion auf der Home-Assistant-Seite, statt zur Startseite zurückzukehren.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -882,7 +878,7 @@
           "init": "Zurück"
         },
         "menu_option_descriptions": {
-          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Verhalten nach einer Aktion und erlaubte Aktionen.",
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Seite im Bildschirm-Standby und erlaubte Aktionen.",
           "dashboard_page_list": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
@@ -1450,6 +1446,9 @@
     "text_memo_not_available": {
       "message": "Es ist kein C300X-Text-Memo verfügbar."
     },
+    "text_memo_write_not_supported": {
+      "message": "Das Schreiben eines Text-Memos wird vom installierten C300X-Device-Agent nicht unterstützt."
+    },
     "unknown_action": {
       "message": "Die Action-ID {action_id} ist nicht konfiguriert."
     },
@@ -1497,6 +1496,9 @@
         "error": {
           "ssh_install_failed": "Die SSH-Reparaturinstallation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
           "update_failed": "Das Device-Agent-Update ist fehlgeschlagen. Prüfe, ob Maintenance-Zugriff aktiv ist, und versuche es erneut.",
+          "update_root_already_writable": "Das Update wurde vor dem Anwenden abgelehnt, weil das Root-Dateisystem (/) bereits beschreibbar war. Falls du / zuvor manuell beschreibbar eingehängt hast, starte das Gerät normal neu und wiederhole dann diese Reparatur. Andernfalls kläre vor einem neuen Versuch, warum / beschreibbar ist.",
+          "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",
+          "update_apply_failed": "Der Agent meldet einen allgemeinen Updatefehler; Ursache und endgültiger Gerätezustand sind unbekannt. Falls du / zuvor manuell beschreibbar eingehängt hast, kann ein normaler Geräteneustart helfen. Prüfe vor einem neuen Versuch den Gerätezustand; der Fehler bestätigt keine erfolgreiche Wiederherstellung.",
           "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle.",
           "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
         },
@@ -1723,6 +1725,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Kamerabild einstellen",
+      "description": "Liest alle drei Bildwerte. Zum Ändern einen Regler und einen Wert (0 bis 100 % in Zehnerschritten) angeben. Erfordert den aktualisierten Geräteagenten und ein aktives Klingelvideo oder Livevideo auf Abruf mit bestätigten Quellwerten und Wertebereichen. Gespeicherte Medien bleiben unverändert.",
+      "fields": {
+        "entry_id": {"name": "Integrationseintrag"},
+        "control": {"name": "Regler"},
+        "value": {"name": "Wert"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "C300X-Türvideo aufnehmen",
       "description": "Nimmt ein kurzes Video in Home Assistant auf: von einem eingehenden Klingelruf oder ohne Klingeln bei freiem Medienkanal.",

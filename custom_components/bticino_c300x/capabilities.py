@@ -224,13 +224,20 @@ def entry_device_ui_enabled(entry: Any) -> bool:
     return bool(entry_device_ui_configured(entry))
 
 
-def entry_device_ui_enabled_or_patch_active(entry: Any) -> bool:
-    """Return true when device UI is enabled or an older entry has an active patch."""
+def entry_device_ui_effective(entry: Any) -> bool | None:
+    """Prefer an explicit choice; only a confirmed patch state resolves a legacy entry."""
 
     configured = entry_device_ui_configured(entry)
     if configured is not None:
         return configured
-    return entry_gui_function_patch_active(entry)
+    status = getattr(getattr(entry, "runtime_data", None), "qml_patch_status", None)
+    patched = status.get("patched") if isinstance(status, dict) else None
+    return patched if isinstance(patched, bool) else None
+
+
+def entry_device_ui_enabled_or_patch_active(entry: Any) -> bool:
+    """Return true when device UI is enabled or an older entry has an active patch."""
+    return entry_device_ui_effective(entry) is True
 
 
 def qml_patch_status_is_active(status: Any) -> bool:

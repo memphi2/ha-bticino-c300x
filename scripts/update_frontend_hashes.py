@@ -26,6 +26,7 @@ FRONTEND_MODULES = (
     "c300x-entity-resolver.js",
     "c300x-media-attach.js",
     "c300x-media-controls.js",
+    "c300x-picture-controls.js",
     "c300x-media-controls-template.js",
     "c300x-media-history.js",
     "c300x-media-translations.js",

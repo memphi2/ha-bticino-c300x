@@ -1,26 +1,71 @@
-# Media Troubleshooting
+# Troubleshooting
 
 Start here when the card, camera, Ring Call, Home Call or talkback does not
-behave as expected.
+behave as expected. Check **Media readiness** first.
 
-First check the `Media readiness` diagnostic entity. Run a shown Repair for
-`blocked` or `unavailable`; review a `warning` without assuming media is broken.
+## Media Readiness
 
-## On-demand Stream Shows No Picture
+The `Media readiness` diagnostic sensor combines the agent connection, the
+agent's self-test, the media user and the callback into one state. Forwarding
+is reported separately: it chooses where an incoming Ring Call goes but does
+not gate on-demand video.
 
-Check:
+| State | Meaning | What to do |
+| --- | --- | --- |
+| `ready` | Required media checks passed. | Use the card. |
+| `warning` | No blocking failure, but not everything is proven. | Read `warnings`; forwarding and optional IPv6 warnings can usually stay. |
+| `blocked` | A required media prerequisite failed. | Open the Repair and run its fix. |
+| `unavailable` | Home Assistant cannot reach the agent. | Check network, address, keys and agent. If the station's address changed, see [Station Changed Its Address](#station-changed-its-address). |
 
-1. Doorbell camera/video is enabled in the integration options.
-2. `Media readiness` is `ready` or has only a Ring Call forwarding warning.
-3. No Ring Call capture or other viewer is already using the media path.
-4. The browser can reach the same local C300X/HA network path.
-5. The card has the C300X camera entity selected.
+### Attributes
 
-If the stream was left active by an old browser session, press **Stop** in the
-card or call `bticino_c300x.stop_doorbell_video`, then retry.
+`failed_checks` lists the blocking checks and `warnings` the non-blocking
+ones; `recommended_action` is the code Repairs and diagnostics use. Single
+results: `agent_reachable`, `agent_version_ok`,
+`media_user_ok` (media user and routing), `rtsp_ok`, `talkback_rtp_ok` and
+`callback_url_ok`. `forwarding_homeassistant` is `true` when Ring Calls go to
+Home Assistant; `false` does not block on-demand video.
+`ring_call_supported`, `home_call_supported` and `doorbell_video_supported`
+show what the installed agent offers.
 
-If this happens directly after updating the native agent or changing display
-pages, reload the integration once and re-check `Media readiness`.
+### Failed Checks
+
+| Check | Typical cause | Fix |
+| --- | --- | --- |
+| `agent_reachable` | Agent offline, wrong address or port, rejected key, device rebooting. | Check reachability and keys; restart or update the agent. |
+| `capabilities` | The agent answered without usable media features. | Update or reconfigure the agent. |
+| `firewall` | Required IPv4 media ports are closed on the station. | Run the firewall Repair. |
+| `rtsp` | RTSP server or stream configuration not ready. | Update or reconfigure the agent, then check readiness again. |
+| `talkback_rtp` | Talkback RTP port closed or not ready. | Run the firewall Repair. IPv6 is optional. |
+| `homeassistant_user`, `device_routing` | Media user missing, or its route files incomplete. | Run the Home Assistant media-user setup. |
+| `callback_url` | The callback address is unreachable or unsuitable. | Set a reachable `http` or `https` address; HTTPS needs a trusted certificate matching the host name. See [Callback URL](advanced-maintenance.md#callback-url). |
+| `startup` | The agent's startup link is missing. | Run the agent update or Repair. |
+
+### Warnings
+
+| Warning | Meaning |
+| --- | --- |
+| `forwarding_homeassistant` | Forwarding is not set to Home Assistant, so Ring Calls cannot be answered in HA. On-demand video, its talkback and Home Call still work. |
+| `forwarding_unprovisioned`, `forwarding_unknown` | The station reports forwarding as not provisioned, or it has not been read yet. |
+| `<check>:optional_ipv6` | Only the optional IPv6 part of that check failed. |
+| `callback_url_unknown`, `self_test_not_loaded` | The callback or the self-test has no result yet. |
+| `media_capabilities_missing` | Video is on, but the agent reports no media feature. |
+
+Keep **Forwarding** on **Smartphone** when the Door Entry app should receive
+calls; choose **Home Assistant** only when Ring Calls should be answered in HA.
+A Repair never changes forwarding.
+
+### Repairs
+
+When readiness is not `ready` and a known safe fix exists, Home Assistant
+raises a Repair. It can re-check the agent, refresh its setup data, open the
+IPv4 media firewall, repair the media user and routing, or guide you to a
+reachable callback address. Repairs run only when you start them. After one
+that changes the station, wait for it to finish and check readiness again
+before testing the card.
+
+IPv6 is optional. Enable IPv6 firewall support only when Home Assistant
+reaches the station over stable IPv6.
 
 ## Connection Paths for the Live Picture
 
@@ -63,226 +108,201 @@ Implementation reference:
 [`const.py`](../custom_components/bticino_c300x/const.py), and
 [`test_webrtc_ice_filter.py`](../tests/test_webrtc_ice_filter.py).
 
-## Picture Is Blurry, Cut Off or Jerky
+## On-demand Stream Shows No Picture
 
-**Configure > Camera quality** distinguishes the saved settings from the ones
-the device runs with. The original **688x480** factory cut-out and **704x576**
-full-height choice remain available. Optional **960x576** preserves the
-configured **704x576** crop's 576 lines and scales it before the existing
-encoder to match the **800x480 LCD's 5:3** proportions. This is not additional
-transcoding or native 960-pixel camera detail.
+Check:
 
-The option requires an exact verified C300X firmware **1.7.19 or 2.0.2** media
-executable, checked against the matching full-file original/patched hash pair.
-Live video is device-tested on 1.7.19; 2.0.2 is checked offline only.
-Its absence on other firmware or an unrecognized binary is intentional;
-do not force it through manually edited settings. Firmware 3.0.x/Qt5 and its
-low stream are unchanged. Applying the patch requires a verified original
-backup. Returning to 688x480 or 704x576 restores the original binary and the
-selected legacy configuration. Both directions use a **normal device reboot**;
-restarting only HA, the agent or the GUI is not sufficient. If restoration
-reports invalid or missing backup data, retain the recovery files and resolve
-the error before retrying. See [Camera quality](feature-reference.md#camera-quality).
+1. **Door station video and audio** is on under **Configure > Video and
+   audio**.
+2. Media readiness is `ready`, or `warning` with only a forwarding warning.
+3. No Ring Call capture or other viewer is using the media path.
+4. The browser reaches Home Assistant and the station over the same local
+   network path.
+5. The card has the C300X camera entity selected.
 
-If agent removal reports a failed read-only remount but confirms that the
-original startup entries were restored, the agent and backups are retained.
-The agent may already be stopped; retained files do not mean it is still running.
-Perform a full device reboot, then retry removal. A startup rollback error
-instead requires restoring the reported recovery files before rebooting;
-do not delete those files or force removal past the error.
-
-Removal first requires verified agent termination. If that fails, it does not
-start restoring or deleting files. A later partial-deletion error is different
-from a read-only remount failure: retain the reported recovery directory and
-remaining backups, repair the agent installation, then restore its startup
-entries before rebooting. The recovery directory does not contain copies of
-deleted agent files; an incomplete installation is not automatically re-enabled.
-
-For snapshot shape, use **Configure > Visitor Snapshot**. Its default is
-**800x480**, read from the native display framebuffer; a 960x576 stream does not
-make snapshots 960x576. Existing explicit settings such as 688x480 are preserved.
-Choose 800x480, or 400x240 for a smaller 5:3 image, for future captures. Already
-saved images are not resized. The card fits images without cropping; a custom
-image with different proportions can have bars. A cached old live-stream ratio
-is replaced when a new live stream reports its dimensions.
-
-A higher bit rate can reduce compression artifacts, and up to **24 fps** can
-make high video smoother. 25 is not offered for high video: older firmware then
-turns its frame-rate control off and sends only about 8 fps. After saving, wait
-for the normal device reboot before comparing a new stream. If a weak network
-shows stalls or grey blocks, lower the bit rate again. The live result does
-not establish the resolution of built-in answering-machine recordings;
-**960x576 recording there remains unverified**.
-
-## Device Reboots After PCMU On-demand Video
-
-Native agent **2.0.0** includes the correction for undersized PCMU silence packets
-associated with [issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55). When the
-microphone is inactive, the agent sends a complete 20 ms frame instead of one
-byte. Speex is unchanged; this fix does not patch firmware or add teardown delays.
-
-Three on-device HA-card tests passed without a reboot or firmware-process
-restart, including normal 60-second session renewal and at least 180 seconds
-of observation after each stop. The issue is closed following this validation;
-the reporter's exact cold-boot, short-gap and multi-unit setup has not yet been
-retested with the corrected agent.
-
-The fix is part of the packaged agent. Follow the
-[update instructions](advanced-maintenance.md#updates) so the device runs it;
-updating only Home Assistant files does not apply the correction.
-
-If a PCMU stream still reboots the C300X, stop repeating the test, switch the
-**Audio codec** select back to **Speex** and reopen issue #55 with the
-versions, reproduction steps and sanitized diagnostics. Changing the device
-codec is an explicit maintenance operation that reboots the C300X.
+If an old browser session left the stream running, press **Stop** in the card
+or call `bticino_c300x.stop_doorbell_video`, then retry. Directly after an
+agent update or a change of the display pages, reload the integration once and
+check readiness again.
 
 ## Card Shows Stream Instead of Answer
 
-The card can show **Answer** only when Home Assistant receives a real Ring Call.
+The card shows **Answer** only when Home Assistant receives a real Ring Call.
 
 Check:
 
-1. The **Forwarding** select is set to **Home Assistant**.
-2. The Home Assistant media-user setup is ready.
-3. The doorbell was rung after changing forwarding mode.
-4. `Media readiness` has no `homeassistant_user` or `device_routing` failure.
-   The `forwarding_homeassistant` warning specifically explains why Ring Call
-   is not answerable from Home Assistant.
+1. The **Forwarding** select is **Home Assistant**.
+2. The Home Assistant media user is set up.
+3. The doorbell was rung after forwarding was changed.
+4. Media readiness has no `homeassistant_user` or `device_routing` failure.
+   The `forwarding_homeassistant` warning means Ring Calls cannot be answered
+   from HA.
 
-In **Smartphone** mode, use the phone route. In **Blocked** mode, Home Assistant
-can still receive a ring event but cannot answer the call.
+With **Smartphone**, use the phone. With **Blocked**, HA still receives the
+ring event but cannot answer.
+
+If diagnostics report `unsupported_active_route`, the station's active routing
+file is not one of the known manufacturer links, and the media-user setup
+leaves it untouched. Keep any third-party configuration and report the redacted
+error; do not replace the route with a stock file or run the setup repeatedly.
 
 ## Preview Starts but Answer Fails
 
-Check:
-
-1. Keep only one active answer attempt.
+1. Keep only one answer attempt active.
 2. Close stale browser windows with old cards.
-3. Confirm that no Ring Call capture automation is running at the same time.
-4. Re-check `Media readiness`.
+3. Make sure no Ring Call capture automation runs at the same time.
+4. Check Media readiness again.
 5. Reload the integration if the card was open during an agent update.
 
 ## Talkback or Microphone Does Not Work
 
-The normal HA camera player's microphone is optional and **off by default**.
-In the integration options, enable **Talk through the Home Assistant camera view**
-under **Video and audio**. This requires Home Assistant 2026.11 or newer,
-**Settings > System > Labs > Two-way audio**, a WebRTC stream, HTTPS and browser
-microphone permission. See the [Home Assistant requirements](https://contributors.home-assistant.io/core/entities/camera/#two-way-audio).
-The integration declares support only when this option is enabled and the agent
-explicitly reports talkback and an audio stream.
-It uses the existing WebRTC backchannel without additional idle device polling
-or an agent update. Card talkback is unaffected by this option. On older
-supported HA versions, use the card's microphone.
+The browser must allow the microphone, which needs a secure Home Assistant
+frontend: HTTPS, Home Assistant Cloud or another secure URL. Plain HTTP is not
+a reliable microphone path. From a phone notification, open the dashboard and
+press **Answer** in the card; a notification action cannot grant microphone
+access. The secure frontend is independent of the station's callbacks; leave
+the [Callback URL](advanced-maintenance.md#callback-url) as it is.
 
-The native microphone supports on-demand video and already answered Ring Calls.
-Continue to answer and hang up incoming calls through the card; opening the
-camera or enabling its microphone does not automatically answer a pending call.
-
-Talkback needs browser microphone permission. Use:
-
-- HTTPS,
-- Home Assistant Cloud,
-- or another secure Home Assistant frontend URL.
-
-Plain HTTP is not a reliable microphone path. In mobile notifications, open the
-dashboard and press **Answer** in the card; do not expect a background
-notification action to grant microphone access.
-
-The secure browser frontend is independent of device callbacks. Leave callback
-transport unchanged unless the C300X needs a different reachable Home Assistant
-endpoint; see [Callback URL](advanced-maintenance.md#callback-url).
+Talking through the native HA camera view is off by default. It needs
+**Talk through the Home Assistant camera view** under **Configure > Video and
+audio**, Home Assistant 2026.11 or newer, **Settings > System > Labs > Two-way
+audio**, WebRTC, HTTPS and microphone permission (see the
+[Home Assistant requirements](https://contributors.home-assistant.io/core/entities/camera/#two-way-audio)).
+It never answers a call: answer in the card first. Details:
+[Live Picture and Talkback](user-guide.md#live-picture-and-talkback).
 
 ## Audio Is Too Quiet or Too Loud
 
-Use the integration options before changing automations:
+Adjust **Live audio level (dB)** for live and Ring Call audio and **Volume of
+ring recordings (dB)** for Ring Capture files under **Configure > Video and
+audio** before changing automations. Keep live audio at `0 dB` when the level
+is fine. Home Call has its own audio path; do not tune it with these options.
+For clearer sound use the PCMU codec. See
+[Codec and Audio Levels](user-guide.md#codec-and-audio-levels).
 
-- **Live audio level (dB)** affects live on-demand and Ring Call audio.
-- **Volume of ring recordings (dB)** affects Ring Capture output files.
-- Both values accept `-20 dB` to `+20 dB`.
-- Keep live gain at `0 dB` when the default audio level is acceptable; the
-  integration then avoids unnecessary runtime gain updates.
+## Device Reboots After PCMU On-demand Video
 
-Home Call uses its own media path. Do not tune Home Call volume by changing
-Ring Capture gain.
+The current agent fixes the reboots reported in [issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55).
+If a PCMU stream still reboots the station, stop testing, set **Audio codec**
+back to **Speex** (this reboots the station once) and report it with versions
+and diagnostics.
+
+## Picture Is Blurry, Cut Off or Jerky
+
+Picture size, bit rate and frame rate are set under **Configure > Camera
+quality**; what each value does is in
+[Camera Quality and Picture Size](user-guide.md#camera-quality-and-picture-size).
+
+| Symptom | What to try |
+| --- | --- |
+| Blurry or blocky | Raise the bit rate; lower it again if a weak network shows stalls or grey blocks. |
+| Jerky | Raise the frame rate. High video stops at 24 fps; 25 is not offered. |
+| Cut off at top and bottom | 688x480 is the factory cut-out; 704x576 shows the full height. |
+| 960x576 not offered | It needs the exact verified media program of firmware 1.7.19 or 2.0.2. This is intentional; do not force it through edited settings. |
+| No change after saving | Changes apply after the normal device reboot; restarting HA, the agent or the display is not enough. Wait for the reboot and open a new stream; the form shows saved and running values. |
+| Restoring reports a missing or invalid backup | Keep the recovery files and solve the error before retrying; see [Recovery](advanced-maintenance.md#recovery). |
+| Visitor image has bars or looks squeezed | Snapshots read the 800x480 display, so other proportions (for example 720x480) distort the image and the card shows bars. Set **Configure > Visitor Snapshot** to 800x480 or 400x240 and check a **new** capture; saved images are not resized. |
 
 ## Home Call Rings but Looks Connected Too Early
 
-Home Call is audio-only and has its own state path.
+Home Call is audio-only and has its own state.
 
-Check:
-
-1. Use the Home Call card or the `start_home_call` / `stop_home_call` services.
-2. Hang up from Home Assistant once if the display was rung but nobody answered.
-3. Watch the Home Call active entity and the camera media-state attributes.
+1. Use the Home Call card or `start_home_call` / `stop_home_call`.
+2. If the display rang but nobody answered, hang up from Home Assistant once.
+3. Watch the **Home call active** entity and the camera's media-state
+   attributes.
 4. If the next on-demand stream fails after a Home Call, stop media once and
-   re-check Readiness.
+   check readiness again.
 
 ## Ring or On-demand Capture Fails
 
-Capture is intended for short automation/analysis clips. The default
-`capture_mode: ring` uses an active Ring Call; `capture_mode: on_demand` starts
-an idle live view without a doorbell press. See the
-[capture example](feature-reference.md#capture-modes).
+Modes, files and the response are described in
+[Recording Clips and Capture Modes](user-guide.md#recording-clips-and-capture-modes).
 
-The message **"The C300X device-agent command failed or is not supported by the
-installed agent"** is a general agent-command failure. In `ring` mode,
-`include_audio: true` (the default) attempts to answer the Ring Call. Calling it
-without a current ring can therefore produce this message even with a compatible
-agent. Select `capture_mode: on_demand` for an idle recording. An
-`announcement_path` requires `ring` mode and is rejected for on-demand capture
-before media starts.
+- **"The C300X device-agent command failed or is not supported by the installed
+  agent"** is a general command failure. In `ring` mode with
+  `include_audio: true` (the default) the action answers the Ring Call, so
+  without a current ring it fails even with a compatible agent. Use
+  `capture_mode: on_demand` for an idle recording. `announcement_path` needs
+  `ring` mode.
+- On-demand capture needs idle media: close your live view first. A busy,
+  unknown or externally owned state is rejected before recording. A call that
+  starts while the recording connects can make it fail or record ring video.
+- Run one capture per device at a time. Separate devices use separate
+  workspaces; do not give them the same explicit MP4 path.
+- Output paths must be below `/media/c300x/`, `/config/c300x/` or
+  `/config/www/c300x/`. MP4 files go to `/media/c300x/`; WAV, JPEG frames and
+  metadata to the workspace under `/config/c300x/`. The `latest.*` files only
+  point to the most recent capture; automations should use the paths the action
+  returns.
+- The Ring Capture + Wyoming blueprint always records audio, because
+  transcription needs the WAV.
 
-If a call begins while an on-demand recording connects, the native RTSP route can
-change after the idle check. The recording may then fail or include Ring video.
-This is a limitation of native media routing: the idle check does not lock the media
-owner through connection setup. The metadata field `capture_mode` records the
-requested mode; it does not continuously verify the native owner. On-demand capture
-does not answer or hang up the Ring Call and closes its own recording client on
-completion, failure or cancellation.
+## Station Changed Its Address
 
-Check:
+When the station gets a new IPv4 address, for example from DHCP, Home Assistant
+follows it without your help:
 
-1. Select the mode that matches the intended capture. On-demand capture requires
-   an idle media path; close your live viewer first. A reported busy, unknown or
-   externally owned state is rejected before the recording client opens.
-2. Do not run multiple capture automations on the same device at once. Separate
-   devices use isolated workspaces; do not assign the same explicit MP4 path.
-3. Keep output paths below `/media/c300x/`, `/config/c300x/` or
-   `/config/www/c300x/`.
-4. Check `/media/c300x/` for the MP4 and `/config/c300x/` for `latest.raw.wav`,
-   `latest.capture.json`, `frame_01.jpg`,
-   `frame_02.jpg` and `frame_03.jpg`.
-   These are latest pointers. For automation use the exact paths returned by the
-   capture service. Per-recording workspaces expire after one hour on the next
-   capture; at most 64 are retained per capture directory.
+1. Home Assistant renews its connection every 5 minutes. After 15 minutes
+   without an authenticated request from it, the station announces itself
+   again on the network (mDNS). When its IPv4 address changes, it reopens the
+   announcement on the new address.
+2. Home Assistant sees the announcement and asks the station at the new
+   address to prove that it holds the saved access key. The request carries
+   only a fresh random value; the key is never sent to the new address.
+3. When the proof matches, the entry moves to the new address and reloads.
+   Nothing moves while the station still proves itself at the old address.
 
-Ring Capture blueprints retain the default `ring` mode. Use the Ring Capture +
-Wyoming blueprint only when audio is enabled. The blueprint always records audio
-because transcription needs `latest.raw.wav`.
+Expect up to about 15 minutes until the station announces itself, plus the
+time Home Assistant needs to pick it up; meanwhile Media readiness shows
+`unavailable`. Home Assistant tries at most once every 10 minutes per entry.
+When the station did not answer, Home Assistant tries again up to two more
+times, 10 minutes apart. A station that fails the proof is ignored, and the log
+warns that it "did not prove the saved identity".
 
-## Common Log Clues
+Enter the new address yourself with **Reconfigure** (**Settings > Devices &
+services > BTicino C300X**, entry menu) when:
+
+- the entry uses a host name or an IPv6 address (only IPv4 entries move, and
+  only to an IPv4 announcement);
+- the entry has no station ID, or its access key is shorter than 32
+  characters;
+- **Agent mDNS discovery** is off, or the announcements do not reach Home
+  Assistant;
+- the log shows the failed proof: check that it is your station and that the
+  access key is right;
+- you do not want to wait.
+
+A DHCP reservation for the station avoids address changes.
+
+## Agent Update or Removal Reports an Error
+
+Do not delete recovery files or force the operation past the error. Follow
+[Recovery](advanced-maintenance.md#recovery).
+
+## Reporting an Issue
+
+### Log Clues
 
 | Log or symptom | Meaning |
 | --- | --- |
 | `ring_call_not_active` | There was no answerable Ring Call at that moment. |
-| `external_session_active` | Another route/client owns the media session. |
+| `external_session_active` | Another route or client owns the media session. |
 | `rtsp_consumer_active` | A capture or stream tried to start while the path was busy. |
-| `go2rtc ... error=EOF` on stop | Usually the provider observed a native RTSP source closing. Treat it as relevant when it repeats during start or leaves the card/session busy. |
-| `callback_url` readiness failure | The C300X cannot reach the HA callback URL. |
-| Browser microphone unavailable | Use HTTPS/HA Cloud and allow microphone access. |
+| `go2rtc ... error=EOF` on stop | Usually the native RTSP source closing. Relevant when it repeats during start or leaves the card busy. |
+| `callback_url` readiness failure | The station cannot reach the HA callback address. |
+| Browser microphone unavailable | Use HTTPS or HA Cloud and allow the microphone. |
 
-## What to Include in an Issue
+### What to Attach
 
-Include:
+Open an issue at <https://github.com/memphi2/ha-bticino-c300x/issues> with:
 
-- Home Assistant version.
-- Integration version.
-- C300X firmware family.
-- Native agent version from diagnostics.
-- `Media readiness` state and attributes.
-- Whether Forwarding is Smartphone, Home Assistant or Blocked.
-- A diagnostics download from the integration.
+- Home Assistant version and integration version,
+- C300X firmware family and the agent version from diagnostics,
+- Media readiness state and attributes,
+- the **Forwarding** setting (Smartphone, Home Assistant or Blocked),
+- a diagnostics download of the integration,
+- the relevant log lines.
 
-Do not include tokens, private URLs, packet captures, private media clips or
-device-specific media user identifiers.
+Do not include keys or tokens, private URLs, packet captures, private media
+clips or device-specific media user identifiers.

@@ -1,5 +1,6 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=a2bdcf6613188ecd";
-import "./c300x-media-controls.js?v=a2bdcf6613188ecd";
+import { c300xMediaState } from "./c300x-state-model.js?v=1a59577c730b7734";
+import "./c300x-media-controls.js?v=1a59577c730b7734";
+import "./c300x-picture-controls.js?v=1a59577c730b7734";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -9,6 +10,7 @@ export class C300XCardMedia {
     this.fullscreenGeneration = 0;
     this.fullscreenPending = false;
     this.controls = card.shadowRoot.querySelector("c300x-media-controls");
+    this.picture = card.shadowRoot.querySelector("c300x-picture-controls");
     this.target = card.shadowRoot.querySelector("ha-card");
     this.frame = card.shadowRoot.querySelector("dialog");
     this.controls?.addEventListener("media-expand", () => this.setExpanded(true));
@@ -71,6 +73,19 @@ export class C300XCardMedia {
     }
   }
 
+  pictureSession(entity) {
+    const card = this.card;
+    const attrs = entity?.attributes;
+    if (!card._entryId() || card._isHomeCallMode() || attrs?.picture_controls_supported !== true
+      || card._config.show_picture_controls === false) return null;
+    const state = c300xMediaState(entity);
+    if (/^(ring_pending|ring_preview_active|ring_answering|ring_active)$/.test(state)) return "ring";
+    if (state === "on_demand_active" && attrs.picture_controls_scope === "ring_and_on_demand"
+      && entity.state !== "unavailable" && entity.state !== "unknown" && attrs.external_media_active !== true
+      && !this.browsing && card._webrtc?.remoteStream?.getVideoTracks?.().some(track => track.readyState === "live")) return "on_demand";
+    return null;
+  }
+
   configure() {
     const card = this.card;
     if (card._disposed || !card._config) return;
@@ -78,6 +93,7 @@ export class C300XCardMedia {
     const state = c300xMediaState(entity);
     const lifecycle = card._lifecycle;
     const live = !!card._webrtc?.remoteStream;
+    this.picture?.configure?.(card._hass, card._entryId(), this.pictureSession(entity));
     const busy = live || !!card._webrtc?.running || !!card._transitionWebrtc
       || card._talkbackStarting || lifecycle.startingCall || lifecycle.answeringDoorbell
       || lifecycle.hangupInProgress || lifecycle.activeHomeCallSession

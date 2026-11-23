@@ -215,6 +215,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .discovery_move import async_follow_proven_move
 from .display_patch_sync import async_mark_display_setting
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
@@ -513,7 +514,10 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             connection,
             discovery_matches_entry=discovery_matches_entry,
         )
-        # mDNS identity and addresses are untrusted. Never redirect stored credentials.
+        # mDNS is untrusted: a known station is followed to a new address only
+        # after it proves the saved identity there (discovery_move).
+        if await async_follow_proven_move(self, discovered_unique_id, connection):
+            return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured()
         existing_entry_abort = (
             await self._async_abort_if_zeroconf_targets_existing_manual_entry(

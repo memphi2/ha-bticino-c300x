@@ -207,6 +207,52 @@ static int sha256_digest_hex(
     return 1;
 }
 
+/* RFC 2104 HMAC-SHA256 as lowercase hex. */
+int c300x_hmac_sha256_hex(
+    const unsigned char *key,
+    size_t key_len,
+    const unsigned char *data,
+    size_t data_len,
+    char *out,
+    size_t out_len
+)
+{
+    struct sha256_context context;
+    unsigned char pad[64];
+    unsigned char digest[C300X_SHA256_DIGEST_LEN];
+    int ok;
+
+    if (key == NULL || data == NULL || out == NULL || out_len < 65) {
+        return 0;
+    }
+    memset(pad, 0, sizeof(pad));
+    if (key_len > sizeof(pad)) {
+        sha256_init(&context);
+        sha256_update(&context, key, key_len);
+        sha256_final(&context, pad);
+    } else if (key_len > 0) {
+        memcpy(pad, key, key_len);
+    }
+    for (size_t index = 0; index < sizeof(pad); index++) {
+        pad[index] ^= 0x36U;
+    }
+    sha256_init(&context);
+    sha256_update(&context, pad, sizeof(pad));
+    sha256_update(&context, data, data_len);
+    sha256_final(&context, digest);
+    for (size_t index = 0; index < sizeof(pad); index++) {
+        pad[index] ^= 0x36U ^ 0x5cU;
+    }
+    sha256_init(&context);
+    sha256_update(&context, pad, sizeof(pad));
+    sha256_update(&context, digest, sizeof(digest));
+    sha256_final(&context, digest);
+    ok = sha256_digest_hex(digest, out, out_len);
+    memset(pad, 0, sizeof(pad));
+    memset(&context, 0, sizeof(context));
+    return ok;
+}
+
 int c300x_sha256_bytes_hex(
     const unsigned char *data,
     size_t len,

@@ -230,6 +230,8 @@ function requestNextEvent() {
             try {
                 var data = JSON.parse(xhr.responseText)
                 if (data && data.revision !== undefined) {
+                    // The agent retains only the last topic, not a revision history.
+                    data.missedRevisions = data.changed === true && Number(data.revision) !== eventRevision + 1
                     eventRevision = Number(data.revision)
                 }
                 eventConnected = true

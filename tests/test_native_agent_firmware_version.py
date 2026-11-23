@@ -4,10 +4,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HTTP_C = ROOT / "native_agent" / "src" / "http.c"
+FIRMWARE_C = HTTP_C.with_name("firmware_version.c")
 
 
 def test_native_agent_reads_firmware_from_stock_webserver_db() -> None:
-    source = HTTP_C.read_text(encoding="utf-8")
+    source = FIRMWARE_C.read_text(encoding="utf-8")
 
     assert '#define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"' in source
     assert 'const char *open_tag = "<ver_webserver>";' in source
@@ -16,8 +17,8 @@ def test_native_agent_reads_firmware_from_stock_webserver_db() -> None:
 
 
 def test_native_agent_uses_configured_firmware_before_stock_fallback() -> None:
-    source = HTTP_C.read_text(encoding="utf-8")
-    resolver = source.rsplit("static void resolve_device_firmware(", 1)[1].split("\n}", 1)[0]
+    source = FIRMWARE_C.read_text(encoding="utf-8")
+    resolver = source.rsplit("void resolve_device_firmware(", 1)[1].split("\n}", 1)[0]
 
     configured_index = resolver.index("config->device_firmware[0] != '\\0'")
     fallback_index = resolver.index("read_firmware_from_webserver_db(out, out_len)")

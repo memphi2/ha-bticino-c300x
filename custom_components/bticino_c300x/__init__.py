@@ -157,8 +157,10 @@ def _ensure_generated_setup_secret(
 async def async_unload_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
     """Unload a C300X config entry."""
 
+    from .discovery_move import async_cancel_move_recheck
     from .notify import async_unload_notify
 
+    async_cancel_move_recheck(hass, entry.entry_id)
     unload_ok = await C300XRuntimeManager(hass, entry).async_unload()
     if unload_ok:
         async_unload_notify(hass, entry)
@@ -173,10 +175,12 @@ async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
     open issue would outlive the removed entry in the issue registry.
     """
 
+    from .discovery_move import async_cancel_move_recheck
     from .notify_names import async_remove_name
     from .repair_issues import async_clear_entry_repair_issues
     from .visitor_journal import async_remove_journal
 
+    async_cancel_move_recheck(hass, entry.entry_id)
     cleanup_entry_runtime_resources(hass, entry)
     async_clear_entry_repair_issues(hass, entry.entry_id)
     errors: list[Exception] = []

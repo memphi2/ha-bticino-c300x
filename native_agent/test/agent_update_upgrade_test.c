@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/statvfs.h>
 #include "../src/agent_update.h"
 
 static char init_script[512], init_link[512], gui_wrapper[512];
@@ -16,13 +17,24 @@ static int simulated_remount(const char *command)
     return 0;
 }
 
+/* External linkage keeps the same harness usable with older updater sources. */
+int simulated_statvfs(const char *path, struct statvfs *info)
+{
+    assert(strcmp(path, "/") == 0);
+    memset(info, 0, sizeof(*info));
+    info->f_flag = ST_RDONLY;
+    return 0;
+}
+
 #undef C300X_AGENT_INIT_SCRIPT
 #undef C300X_AGENT_INIT_LINK
 #define C300X_AGENT_INIT_SCRIPT init_script
 #define C300X_AGENT_INIT_LINK init_link
 #define C300X_AGENT_GUI_WRAPPER gui_wrapper
 #define system simulated_remount
+#define statvfs(path, info) simulated_statvfs(path, info)
 #include "../src/agent_update.c"
+#undef statvfs
 #undef system
 
 static int record_activation(const struct c300x_config *config, struct agent_update_change_summary *summary)

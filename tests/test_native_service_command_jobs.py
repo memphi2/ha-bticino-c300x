@@ -1,7 +1,10 @@
 """SSH/reboot/remove scheduling with real jobs and only temporary fake programs."""
 
 import json
+import os
+import shutil
 import subprocess
+import sys
 import time
 from http.client import RemoteDisconnected
 from pathlib import Path
@@ -20,6 +23,12 @@ REMOVE = "/api/v1/maintenance/agent/actions/remove"
 @pytest.fixture(scope="module", params=[False, True], ids=["host", "asan-ubsan"])
 def binary(request, tmp_path_factory):
     build = tmp_path_factory.mktemp("service-command-build")
+    (build / "bin/gui").mkdir(parents=True)
+    for path in ("bin/bt_daemon", "bin/gui/BtClass"):
+        (build / path).symlink_to(Path(sys.executable).resolve())
+    wrapper = build / "bin/BtClass_qws"
+    wrapper.write_text('#!/bin/sh\n./bin/gui/BtClass -c "$GUI_CLIENT" &\nwait\n')
+    wrapper.chmod(0o755)
     flags = ("-std=c11 -O2 -Wall -Wextra -Werror -pedantic "
              "-D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L "
              '-DC300X_NATIVE_AGENT_VERSION=\\\"test\\\" '
@@ -27,9 +36,12 @@ def binary(request, tmp_path_factory):
              '-DC300X_SSH_STATUS_COMMAND=\\\"./status-test.sh\\\" '
              '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\" '
              '-DC300X_SSH_COMMAND_TIMEOUT_MS=2000 -DC300X_SSH_STATUS_TIMEOUT_MS=2000')
+    flags += (f' -DC300X_GUI_HOME=\\"{build}\\" -DC300X_GUI_INIT_PID={os.getpid()}'
+              f' -DC300X_GUI_UID={os.getuid()} -DC300X_GUI_GID={os.getgid()}')
     if request.param:
         flags += " -fsanitize=address,undefined -fno-omit-frame-pointer"
     link = "-pthread -ldl " + str(ROOT / "native_agent/test/http_audio_codec_stub.c")
+    link += " -Wl,--wrap=statvfs " + str(ROOT / "native_agent/test/gui_firmware_mount_stub.c")
     for function in ("apply", "restore", "read_status"):
         link += " -Wl,--wrap=c300x_audio_codec_" + function
     result = subprocess.run(
@@ -58,6 +70,132 @@ def scripts(lab, service="exit 0\n", status="exit 0\n"):
     script(lab, "status", status)
     script(lab, "reboot", "touch reboot-done\n")
     script(lab, "remove", "touch remove-done\n")
+
+
+SUPERVISOR = ["bin/bt_daemon", "-c", 'import subprocess; subprocess.run(["bin/BtClass_qws"], check=True)']
+GUI_CLIENT = """
+import json, os
+from http.client import HTTPConnection
+port, action, payload, headers = json.loads(os.environ["GUI_REQUEST"])
+conn = HTTPConnection("127.0.0.1", port, timeout=5)
+conn.request("GET" if payload is None else "POST", "/ui/maintenance" + action,
+             body=None if payload is None else json.dumps(payload), headers=headers)
+reply = conn.getresponse()
+print(json.dumps([reply.status, json.loads(reply.read())]))
+"""
+
+
+def display(lab, action="", payload=None, *, status=200, launcher=SUPERVISOR, **headers):
+    home = Path(lab.process.args[0]).parents[1]
+    result = subprocess.run(launcher, cwd=home, check=True, timeout=8, capture_output=True,
+                            env={**os.environ, "GUI_CLIENT": GUI_CLIENT, "GUI_REQUEST":
+                                 json.dumps([lab.ui_port, action, payload, headers])})
+    code, body = json.loads(result.stdout)
+    assert code == status, body
+    return body
+
+
+def test_display_maintenance_offline(lab):
+    scripts(lab)
+    ui = {"X-C300X-UI": "settings-v1"}
+    for headers in ({}, {**ui, "Origin": "http://localhost"}):
+        assert display(lab, status=403, **headers)["ok"] is False
+    assert display(lab, **ui) == {
+        "ok": True, "ssh": True, "remove": True, "reboot": True,
+    }
+    for action in ("/remove", "/reboot"):
+        display(lab, action, {}, status=400, **ui)
+    assert not list(lab.root.glob("*-pid"))
+    display(lab, "/reboot", {"confirm": "reboot"}, status=202, **ui)
+    wait_until(lambda: (lab.root / "reboot-done").exists())
+    assert not (lab.root / "service-pid").exists()
+    assert display(lab, "/ssh", **ui)["running"]
+    assert display(lab, "/ssh", {"enabled": True}, **ui)["running"]
+    display(lab, "/remove", {"confirm": "remove_agent"}, status=202, **ui)
+    wait_until(lambda: (lab.root / "remove-done").exists())
+
+
+def test_same_gui_binary_requires_unique_station_launch(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    # Same uid, gid, socket, executable and header, but no station launcher.
+    for launcher in (["bin/gui/BtClass", "-c", GUI_CLIENT], ["bin/BtClass_qws"]):
+        assert display(lab, "/reboot", {"confirm": "reboot"}, status=403,
+                       launcher=launcher, **ui)["error"] == "display_maintenance_denied"
+    home = Path(lab.process.args[0]).parents[1]
+    ready, done = lab.root / "ready-gui", lab.root / "stop-gui"
+    hold = ("import pathlib,time\n" + f"pathlib.Path({str(ready)!r}).touch()\n"
+            + f"while not pathlib.Path({str(done)!r}).exists(): time.sleep(.02)")
+    with subprocess.Popen(SUPERVISOR, cwd=home, env={**os.environ, "GUI_CLIENT": hold}):
+        try:
+            wait_until(ready.exists)
+            assert display(lab, status=403, **ui)["error"] == "display_maintenance_denied"
+        finally:
+            done.touch()
+    assert display(lab, **ui)["ok"]
+
+
+def test_stock_gui_accepts_only_one_or_two_pinned_daemons(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    lookalike = lab.root / "bt_daemon"
+    shutil.copy2(Path(sys.executable).resolve(), lookalike)
+    daemon = "bin/bt_daemon"
+    for chain, expected in [
+        ([daemon], 200), ([daemon, daemon], 200),
+        ([str(lookalike), daemon], 403), ([daemon, str(lookalike)], 403),
+        ([daemon, daemon, daemon], 403),
+    ]:
+        launcher = ["bin/BtClass_qws"]
+        for executable in reversed(chain):
+            launcher = [executable, "-c", f"import subprocess; subprocess.run({launcher!r}, check=True)"]
+        result = display(lab, status=expected, launcher=launcher, **ui)
+        assert result["ok"] is (expected == 200)
+
+
+def test_reload_requires_exact_immutable_wrapper(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    home = Path(lab.process.args[0]).parents[1]
+    wrapper = str(home / "bin/BtClass_qws")
+    # The fixture's init anchor is this test process. Direct child, no daemon.
+    assert display(lab, launcher=["/bin/sh", wrapper], **ui)["ok"]
+    for launcher in (["/bin/sh", wrapper, "extra"],
+                     ["/bin/sh", "-c", './bin/gui/BtClass -c "$GUI_CLIENT" & wait']):
+        assert display(lab, launcher=launcher, status=403, **ui)["ok"] is False
+    (lab.root / "firmware-writable").touch()
+    assert display(lab, launcher=["/bin/sh", wrapper], status=403, **ui)["ok"] is False
+
+
+def test_gui_peer_checks_all_production_credential_fields(tmp_path):
+    # Compile with production IDs (not the unprivileged integration fixture).
+    probe = tmp_path / "credentials"
+    subprocess.run(["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
+                    "-I", str(ROOT / "native_agent/src"), "-x", "c", "-", "-o", str(probe)],
+                   input='#include "gui_peer.c"\nint main(void) { return trusted_parent(AT_FDCWD) != 42; }',
+                   text=True, check=True)
+    for changed in range(-1, 8):
+        fields = [0] * 8
+        if changed >= 0:
+            fields[changed] = 1000
+        uids, gids = (" ".join(map(str, ids)) for ids in (fields[:4], fields[4:]))
+        (tmp_path / "status").write_text(f"PPid:\t42\nUid:\t{uids}\nGid:\t{gids}\n")
+        assert subprocess.run([str(probe)], cwd=tmp_path).returncode == (changed >= 0)
+
+
+def test_header_without_trusted_gui_process_is_not_enough(lab):
+    result = subprocess.run([
+        "curl", "--silent", "--show-error", "--max-time", "4", "--noproxy", "*",
+        "-H", "X-C300X-UI: settings-v1",
+        f"http://127.0.0.1:{lab.ui_port}/ui/maintenance",
+    ], check=True, capture_output=True)
+    assert json.loads(result.stdout)["error"] == "display_maintenance_denied"
+
+
+def test_display_ssh_only_confirms_observed_state(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    scripts(lab, status="exit 1\n")  # pidof: daemon absent.
+    assert display(lab, "/ssh", {"enabled": False}, **ui)["running"] is False
+    display(lab, "/ssh", {"enabled": True}, status=502, **ui)
+    scripts(lab, status="exit 127\n")  # Broken probe: do not report SSH as off.
+    display(lab, "/ssh", status=502, **ui)
 
 
 @pytest.mark.parametrize("path,payload,expected", [

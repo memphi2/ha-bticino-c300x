@@ -120,16 +120,14 @@
         "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
-          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
           "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
-          "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -233,16 +231,14 @@
         "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
-          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
           "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
-          "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -771,12 +767,14 @@
         "data": {
           "size": "Picture size",
           "bitrate_kbps": "Bit rate",
-          "fps": "Frame rate"
+          "fps": "Frame rate",
+          "use_recommended_snapshot_size": "Use recommended snapshot size (800×480)"
         },
         "data_description": {
           "size": "Sizes depend on firmware and the installed device agent. Optional 960x576 matches the display's proportions when offered.",
           "bitrate_kbps": "Higher values improve picture quality but increase network traffic.",
-          "fps": "Higher values give smoother motion; the selector shows the supported limits."
+          "fps": "Higher values give smoother motion; the selector shows the supported limits.",
+          "use_recommended_snapshot_size": "Use the display proportions for future snapshots. Leave unchecked to keep your size."
         }
       },
       "speech": {
@@ -830,16 +828,14 @@
         "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the Display menu also offers **Display pages** (weather and what is shown where) and **Display tiles**.",
         "data": {
           "device_ui_enabled": "Home Assistant pages on the display",
-          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
-          "dashboard_prevent_return": "Stay on the page after an action",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
           "dashboard_navigation": "Page navigation"
         },
         "data_description": {
           "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X (Display patch). Off: restores the original display and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
-          "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -882,7 +878,7 @@
           "init": "Back"
         },
         "menu_option_descriptions": {
-          "dashboard": "Home Assistant pages on the display on or off, page navigation, behaviour after an action and allowed actions.",
+          "dashboard": "Home Assistant pages on the display on or off, page navigation, the page on screen standby and allowed actions.",
           "dashboard_page_list": "Weather, and which entities appear on which page and in which order.",
           "dashboard_entity_display": "Size, name and secondary line of each tile.",
           "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
@@ -1450,6 +1446,9 @@
     "text_memo_not_available": {
       "message": "No C300X text memo is available."
     },
+    "text_memo_write_not_supported": {
+      "message": "Writing a text memo is not supported by the installed C300X device agent."
+    },
     "unknown_action": {
       "message": "The action ID {action_id} is not configured."
     },
@@ -1497,6 +1496,9 @@
         "error": {
           "ssh_install_failed": "The SSH repair install failed. Check SSH access and retry.",
           "update_failed": "The device-agent update failed. Check that maintenance access is enabled and retry.",
+          "update_root_already_writable": "The update was refused before applying because the root filesystem (/) was already writable. If you previously remounted / writable manually, restart the device normally, then retry this Repair. Otherwise, investigate why / is writable before retrying.",
+          "update_root_readonly_failed": "The update could not return the root filesystem (/) to read-only. The final device state is uncertain; successful rollback is not confirmed. Keep recovery files and check the agent and filesystem state before any further update.",
+          "update_apply_failed": "The agent reported a generic update failure; the cause and final device state are unknown. If you previously remounted / writable manually, a normal device restart may help. Check the device state before retrying; this error does not confirm rollback.",
           "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle.",
           "ssh_login_refused": "The C300X refused the SSH login. Enter the SSH user and password of the device."
         },
@@ -1723,6 +1725,15 @@
     }
   },
   "services": {
+    "camera_picture": {
+      "name": "Adjust camera picture",
+      "description": "Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or on-demand video with verified source values and ranges. Saved media is unchanged.",
+      "fields": {
+        "entry_id": {"name": "Integration entry"},
+        "control": {"name": "Control"},
+        "value": {"name": "Value"}
+      }
+    },
     "capture_doorbell_call": {
       "name": "Capture C300X doorbell video",
       "description": "Record a short video on Home Assistant from an incoming ring call or an idle on-demand stream.",

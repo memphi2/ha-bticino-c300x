@@ -62,7 +62,7 @@ def _firmware_device(env, routing_binary, firmware):
         })
     else:
         gui = Path(env["C300X_QML_GUI_DIR"])
-        for rel in ("MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
+        for rel in ("Settings.qml", "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
                     "Components/Settings/GeneralsChoice.qml", "Components/Settings/CallBlockPopup.qml"):
             shutil.copy2(rootfs / "home/bticino/bin/gui/skins/default" / rel, gui / rel)
     for action in ("apply", "media-user-label-apply"):

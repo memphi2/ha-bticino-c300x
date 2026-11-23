@@ -42,7 +42,9 @@ The agent has two HTTP listeners:
   `listen.allowLan`.
 - UI listener: loopback display bridge listener on `127.0.0.1`, port
   `listen.uiPort` (reported as `ui_listen_host`/`ui_port`). It is intended for
-  QML pages running on the device.
+  QML pages running on the device. Keep the installer's `8090`: most display
+  pages call `127.0.0.1:8090` directly, and only the station Settings tab, the
+  ringer and the picture controls follow a changed port.
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).
@@ -59,8 +61,9 @@ Normal `/api/v1` endpoints require the configured device-agent API token unless
 Clients send the token in the HTTP `Authorization` header using the bearer
 scheme. Do not log or expose the header value.
 
-`GET /api/v1/health` is always unauthenticated. `GET /` and `GET /setup` are
-served only while `api.noAuth=true`.
+`GET /api/v1/health` and `POST /api/v1/identity/proof` are always
+unauthenticated; the proof route never returns the token. `GET /` and
+`GET /setup` are served only while `api.noAuth=true`.
 
 ### Maintenance Token
 
@@ -170,6 +173,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/` | setup/noAuth | Serves setup page only while bootstrap is open. |
 | `GET` | `/setup` | setup/noAuth | Same as `/`. |
 | `GET` | `/api/v1/health` | none | None. |
+| `POST` | `/api/v1/identity/proof` | none | None. |
 | `GET` | `/api/v1/capabilities` | API | None. |
 | `GET` | `/api/v1/self-test` | API | None. |
 | `GET` | `/api/v1/state` | API | None. |
@@ -212,6 +216,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
+| `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the active video source. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
 | `POST` | `/api/v1/calls/doorbell/actions/answer` | API | Answers active ring-call media locally. |
@@ -275,6 +280,29 @@ Response:
 ```json
 {"ok": true, "agent": "native-c", "version": "2.4.0"}
 ```
+
+### `POST /api/v1/identity/proof`
+
+Authentication: none. Side effects: none.
+
+Home Assistant uses this before it follows the station to a new address. The
+station proves that it holds the API token without sending it:
+
+```json
+{"nonce": "<64 lowercase hex characters>"}
+```
+
+```json
+{"ok": true, "id": "c300x-...", "proof": "<64 lowercase hex characters>"}
+```
+
+`proof` is HMAC-SHA256 with the API token as key over
+`c300x-identity-v1\n<id>\n<local IPv4>:<local port>\n<nonce>`, where the
+address and port are the ones this connection arrived on. A relay that forwards
+the nonce to the real station therefore gets a proof for the station's address,
+not its own. Errors: `400 invalid_nonce`; `404 identity_proof_unavailable`
+when `api.noAuth=true`, the token is shorter than 32 characters, or the
+connection is not IPv4.
 
 ### `GET /api/v1/capabilities`
 
@@ -524,6 +552,14 @@ Request fields:
 ```json
 {"topic": "display_bridge.state"}
 ```
+
+For `display_bridge.state` and `notifications`, an optional boolean `unread`
+also synchronizes HA's memo LED claim, even without a display listener. The
+agent advertises `memo_led` only when it finds the LED and a usable, trusted
+volatile claim store at startup. An empty private directory on tmpfs records
+ownership across agent crashes, not device reboots. Releasing the claim
+respects the firmware LED trigger and any unread native memos. An accepted
+event is not a hardware delivery receipt.
 
 Response status: `202 Accepted` on success.
 
@@ -950,6 +986,32 @@ Authentication: normal API token.
 
 Side effects: stops agent-owned on-demand doorbell media.
 
+### `GET`, `POST /api/v1/video/picture`
+
+Authentication: normal API token.
+
+Side effects: POST changes one picture control of the active video source.
+
+A connected GUI advertising `picture=1` provides the legacy ring-only path.
+An eligible C300X (firmware 1.7.19) can also report
+`bridge.picture_controls_scope: "ring_and_on_demand"` with
+`bridge.picture_controls_supported: true`. Model and firmware alone do not
+enable it: an authenticated status or capability request during owned media
+checks the capture source on the bounded media worker. The read result is
+cached for that media session; no source is opened while idle.
+`camera_picture.supported` reports whether either path is available.
+Missing or unknown scope does not extend GUI support beyond ring calls.
+
+`GET` returns brightness, contrast and saturation; POST accepts one `control`
+with a percentage `value` (0 through 100 in steps of 10). Direct success returns
+source readback; legacy success returns the GUI object's values. Neither
+measures the rendered picture.
+An active source that does not expose the required V4L2 control descriptors
+is unsupported, even if raw control reads return numbers.
+Direct operations check media ownership and session identity during execution.
+A failed direct write returns an error; it is not retried through the GUI.
+No extra idle poll, recording, configuration write or media restart is needed.
+
 ### `GET /api/v1/calls/doorbell`
 
 Authentication: normal API token.
@@ -1056,6 +1118,12 @@ Returns non-sensitive Flexisip device-user and routing status. Important fields:
 The endpoint must derive the local SIP/domain state from device files. It must
 not hardcode device-specific SIP domains or account ids.
 
+An active route must use the recognized internal or external route symlink.
+An unrecognized link or regular active-route file reports `supported: false`,
+`routes_consistent: false` and `unsupported_active_route`. Internal readiness
+requires the HA destination in the active route; external forwarding deliberately
+excludes it.
+
 ### `POST /api/v1/maintenance/device-user/actions/ensure-homeassistant`
 
 Authentication: maintenance.
@@ -1073,6 +1141,11 @@ Request fields:
 ```
 
 `account_label` is optional.
+
+Unrecognized active routing is rejected before modifying routing binaries or SIP
+files. Applying the binary patch requires a complete known firmware hash, not
+only matching instruction ranges. These checks do not authorize replacing
+third-party routing files with stock configuration.
 
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
@@ -1156,7 +1229,7 @@ Validation examples:
 ## Maintenance Actions
 
 Execution is hybrid; **not every operation is off the HTTP loop yet** (see
-`docs/native-http-blocking-inventory.md`). QML status/patch, GUI reload, the read-only device-user
+[Remaining Blocking Work](../docs/dev/architecture.md#remaining-blocking-work)). QML status/patch, GUI reload, the read-only device-user
 status script, SSH probe/start/stop and SSH-before-reboot/removal share one
 asynchronous job slot. Connections stay open until the existing response
 boundary; no new job ID, queue or early-success response is introduced.
@@ -1196,8 +1269,8 @@ or advancing another phase, but cannot reach that cleanup during a synchronous
 label transaction. Existing QML-write job cancellation is unchanged, not newly
 certified as transaction-safe by the label-write fix.
 
-See [HTTP maintenance ownership](../docs/native-http-maintenance.md) and the
-[remaining blocking-path inventory](../docs/native-http-blocking-inventory.md).
+See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
+[remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).
 
 All endpoints in this section require maintenance authorization. Mutating
 endpoints require exact confirmation tokens so accidental browser/script calls
@@ -1512,7 +1585,7 @@ at run time and raises it again only up to 2000) and 5–25 fps, in the sizes
 checked offline, not on hardware. Sizes other than 400x288, their framing and
 performance remain untested on a 3.0.x device. Low writes only configuration;
 it does not patch the executable or change the LCD window. 960x576 is never
-offered for the Low path. See [3.0.6 Low evidence](../docs/firmware-3.0.6-camera.md).
+offered for the Low path. See [3.0.6 Low evidence](../docs/dev/firmware-3.0.6-camera.md).
 
 `POST` with `{"confirm": "apply_camera_quality", "size": "960x576",
 "bitrate_kbps": 3000, "fps": 24}` saves new values and returns the same body;
@@ -1591,7 +1664,7 @@ or `"audio_codec_restore_failed"`.
 ## Loopback UI API
 
 The UI listener is intended for local QML pages. Routes accept only GET, except
-the guarded POST routes `/ui/preferences` and `/ui/touch-tone/state`. Routes forwarding
+the guarded POST routes for preferences, touch-tone reports and station maintenance. Routes forwarding
 requests to Home Assistant require an active display bridge.
 
 | Method | Path | Purpose |
@@ -1605,6 +1678,10 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
+| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
+| `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
+| `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
 | `GET` | `/ui/state` | Display bridge state. |
@@ -1616,6 +1693,22 @@ requests to Home Assistant require an active display bridge.
 Home Assistant proxy endpoints use the display bridge and shared secret
 configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
+
+Station maintenance works without HA. It requires the local maintenance and
+per-action permissions, no browser Origin, the `X-C300X-UI: settings-v1`
+header, and a loopback client socket owned by the unique trusted station GUI.
+The socket must belong to UID 0. The GUI and wrapper must have root real,
+effective, saved and filesystem UIDs and GIDs. Stock SysV startup runs
+`bin/bt_daemon` from `/home/bticino`; its GUI entry in `stack_open.xml`
+starts `bin/BtClass_qws`, whose shell waits for its direct `bin/gui/BtClass`
+child. The alternate launch from `qml_patch.sh reload_gui` uses the absolute
+wrapper path and is accepted once init has adopted the wrapper. Both paths
+require the expected shell, working directory, complete wrapper argv and open
+script inode, with read-only firmware files. A standalone GUI process, an
+ambiguous instance or incomplete process evidence is denied, even with the
+header. This identifies a local privileged process, not a physical gesture,
+and does not protect against another root process. A scheduled reboot or removal returns 202:
+it does not certify that the reboot or the restoration has already completed.
 
 `GET /ui/alerts/next` requires loopback and `X-C300X-GUI: alerts-v1`, with no
 `Origin` or request body. The optional exact query `protected=1` reports a
@@ -1666,7 +1759,8 @@ request has a monotonic five-second deadline. Diagnostics expose
 ## Compatibility
 
 Agent `2.9.0b2` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
-config and is `unknown` when that value is empty, which is what the installer
-writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
+`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` is derived from `device.firmware` of
+the agent config, or from the station's firmware info when that is empty, which
+is what the installer writes; it is `unknown` only when neither is readable. Of
+the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
 experimentally. The release notes list the agent changes of each version.

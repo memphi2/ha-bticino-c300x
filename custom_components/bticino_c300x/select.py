@@ -211,7 +211,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     """Select the on-demand/intercom audio codec (speex or native PCMU).
 
-    Disabled by default; firmware 3.0.x runs PCMU from the factory. Once enabled,
+    Firmware 3.0.x runs PCMU from the factory. When supported,
     this is the single source of truth in HA for the codec mode: the card reads
     this entity's state (no agent round-trip). Choosing an option patches the
     device config and reboots for the change to take effect.
@@ -220,7 +220,7 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     _attr_should_poll = False
     _attr_translation_key = "audio_codec"
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
     _attr_options = ["speex", "pcmu"]
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:

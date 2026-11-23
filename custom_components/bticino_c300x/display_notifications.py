@@ -153,6 +153,11 @@ class DisplayNotifications:
             )
         ]
 
+    def has_unread(self) -> bool:
+        """Snapshot live notices without purging or scheduling another event."""
+        now = self._loop.time()
+        return any(item["deadline"] > now for item in self._items.values())
+
     def close(self) -> None:
         self.closed = True
         for task in self._pending.values():

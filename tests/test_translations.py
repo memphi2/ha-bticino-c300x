@@ -133,6 +133,34 @@ def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
             assert actions_word in text, (path.name, text)
 
 
+STAY_OPEN_WORDING = {
+    "strings": ("Keep the page open on screen standby", "standby", "Alarm"),
+    "en": ("Keep the page open on screen standby", "standby", "Alarm"),
+    "de": ("Seite im Bildschirm-Standby offen lassen", "Standby", "Alarm-Seite"),
+    "fr": ("Garder la page ouverte pendant la veille de l'écran", "veille", "Alarme"),
+    "it": ("Tenere aperta la pagina durante lo standby dello schermo", "standby", "Allarme"),
+}
+
+
+def test_stay_open_option_names_the_screen_standby_it_acts_on() -> None:
+    """The display pages only read the flag when the screen goes to standby
+    (handleScreenOff in HomeAssistant.qml and Alarm.qml); the old wording
+    promised a stay "after an action", which the flag never controlled."""
+
+    for path in (INTEGRATION / "strings.json", *sorted(TRANSLATIONS.glob("*.json"))):
+        data = _load_json(path)
+        label, standby, alarm_page = STAY_OPEN_WORDING[path.stem]
+        for area, step in (
+            ("config", "user_dashboard"), ("config", "reconfigure_dashboard"),
+            ("options", "dashboard"),
+        ):
+            form = data[area]["step"][step]
+            assert form["data"]["dashboard_prevent_return"] == label, (path.name, step)
+            help_text = form["data_description"]["dashboard_prevent_return"]
+            assert standby in help_text, (path.name, step, help_text)
+            assert alarm_page in help_text, (path.name, step, help_text)
+
+
 def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
     for path in (
         INTEGRATION / "strings.json",
@@ -581,12 +609,46 @@ def test_the_display_menu_entry_names_only_what_its_form_offers() -> None:
     """The start page buttons are no setting any more; the page navigation is."""
 
     root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
-    removed = ("home page buttons", "Startseiten-Buttons", "boutons d'accueil", "pulsanti della pagina iniziale")
+    removed = (
+        "home page buttons", "Startseiten-Buttons", "boutons d'accueil", "pulsanti della pagina iniziale",
+        # The stay-open option acts on the screen standby, not after an action.
+        "after an action", "nach einer Aktion", "après une action", "dopo un'azione",
+    )
+    standby = {"de": "Standby", "fr": "veille", "it": "standby"}
     for name in ("strings.json", "translations/en.json", "translations/de.json", "translations/fr.json", "translations/it.json"):
         options = json.loads((root / name).read_text(encoding="utf-8"))["options"]["step"]
         text = options["display"]["menu_option_descriptions"]["dashboard"]
         assert not any(word in text for word in removed), name
+        assert standby.get(Path(name).stem, "standby") in text, name
         assert options["dashboard"]["data"]["dashboard_navigation"].lower() in text.lower(), name
+
+
+def test_the_display_form_texts_name_only_the_fields_of_its_schema() -> None:
+    """A field removed from the form must not keep a label or help text."""
+
+    from custom_components.bticino_c300x.config_flow_dashboard import dashboard_schema
+
+    fields = {str(key) for key in dashboard_schema().schema}
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for area, step_id in (
+            ("config", "user_dashboard"), ("config", "reconfigure_dashboard"), ("options", "dashboard"),
+        ):
+            step = data[area]["step"][step_id]
+            assert set(step["data"]) == fields, (path.name, step_id)
+            assert set(step["data_description"]) == fields, (path.name, step_id)
+
+
+def test_every_raised_service_error_has_a_message_in_every_language() -> None:
+    """A key passed to service_validation_error must exist under exceptions."""
+
+    raised: set[str] = set()
+    for path in INTEGRATION.rglob("*.py"):
+        raised |= set(re.findall(r'service_validation_error\(\s*"([a-z0-9_]+)"', path.read_text(encoding="utf-8")))
+    assert "text_memo_write_not_supported" in raised
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        exceptions = _load_json(path)["exceptions"]
+        assert sorted(key for key in raised if not exceptions.get(key, {}).get("message")) == [], path.name
 
 
 def test_camera_quality_form_says_which_stream_it_sets_when_the_resolution_is_low() -> None:
@@ -617,7 +679,7 @@ def test_camera_quality_help_is_brief_and_preserves_reboot_and_runtime_details()
         assert re.findall(r"\{([^{}]+)\}", step["description"]) == ["running"], path.name
         assert len(step["description"]) <= 300, path.name
         assert all(hint in step["description"] for hint in reboot_hints[path.stem]), path.name
-        assert set(step["data_description"]) == {"size", "bitrate_kbps", "fps"}, path.name
+        assert set(step["data_description"]) == {"size", "bitrate_kbps", "fps", "use_recommended_snapshot_size"}, path.name
         for key, text in step["data_description"].items():
             assert len(text) <= (170 if key == "size" else 120), (path.name, key)
 

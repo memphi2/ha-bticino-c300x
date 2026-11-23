@@ -1,6 +1,13 @@
 .pragma library
 
 var DE = {
+    "maintenance_reboot": "Station neu starten",
+    "maintenance_remove": "Agent entfernen",
+    "maintenance_confirm_reboot": "Neustart bestaetigen",
+    "maintenance_confirm_remove": "Entfernen bestaetigen",
+    "maintenance_cancel": "Abbrechen",
+    "maintenance_timeout": "Zeit abgelaufen",
+    "maintenance_accepted": "Auftrag angenommen",
     "alert_info": "Info",
     "alert_warning": "Warnung",
     "alert_error": "Fehler",
@@ -65,6 +72,13 @@ var DE = {
 }
 
 var EN = {
+    "maintenance_reboot": "Reboot station",
+    "maintenance_remove": "Remove agent",
+    "maintenance_confirm_reboot": "Confirm reboot",
+    "maintenance_confirm_remove": "Confirm removal",
+    "maintenance_cancel": "Cancel",
+    "maintenance_timeout": "Request timed out",
+    "maintenance_accepted": "Request accepted",
     "alert_info": "Info",
     "alert_warning": "Warning",
     "alert_error": "Error",
@@ -129,6 +143,13 @@ var EN = {
 }
 
 var IT = {
+    "maintenance_reboot": "Riavvia stazione",
+    "maintenance_remove": "Rimuovi agente",
+    "maintenance_confirm_reboot": "Conferma riavvio",
+    "maintenance_confirm_remove": "Conferma rimozione",
+    "maintenance_cancel": "Annulla",
+    "maintenance_timeout": "Tempo scaduto",
+    "maintenance_accepted": "Richiesta accettata",
     "alert_info": "Informazione",
     "alert_warning": "Avviso",
     "alert_error": "Errore",
@@ -193,6 +214,13 @@ var IT = {
 }
 
 var FR = {
+    "maintenance_reboot": "Redemarrer la station",
+    "maintenance_remove": "Retirer l'agent",
+    "maintenance_confirm_reboot": "Confirmer le redemarrage",
+    "maintenance_confirm_remove": "Confirmer le retrait",
+    "maintenance_cancel": "Annuler",
+    "maintenance_timeout": "Delai depasse",
+    "maintenance_accepted": "Demande acceptee",
     "alert_info": "Information",
     "alert_warning": "Avertissement",
     "alert_error": "Erreur",

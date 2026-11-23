@@ -236,8 +236,8 @@ def test_confirmation_and_missing_script_do_not_start_jobs(lab):
     ("restore", "restore_qml_patch", "restore"),
 ])
 def test_extracted_qml_routes_preserve_actions_and_confirmation(lab, suffix, confirmation, action):
-    lab.script('printf \'{"action":"%s","changed_files":0,"dynamic":"%s"}\' '
-               '"$1" "$C300X_QML_DYNAMIC_HOME_PAGE"\n')
+    lab.script('printf \'{"action":"%s","changed_files":0,"dynamic":"%s","ui_port":%s}\' '
+               '"$1" "$C300X_QML_DYNAMIC_HOME_PAGE" "$C300X_QML_UI_PORT"\n')
     path = QML + "/actions/" + suffix
     assert response(lab.request(path, {"confirm": "wrong"}), 400)["error"] == "maintenance_confirmation_required"
     assert not (lab.root / "started").exists()
@@ -245,6 +245,7 @@ def test_extracted_qml_routes_preserve_actions_and_confirmation(lab, suffix, con
                                       "dynamic_homepage": True, "dynamicHomepage": False}))
     assert body["action"] == action
     assert body["dynamic"] == "0"
+    assert body["ui_port"] == lab.ui_port
 
 
 @pytest.mark.parametrize("path,payload", [

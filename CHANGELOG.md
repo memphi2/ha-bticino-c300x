@@ -70,6 +70,56 @@ Display:
   Qt; damaged files are quarantined without registering them.
   Offline fault injection does not establish device or watchdog safety.
 
+## v2.9.0 - Unreleased
+
+- Direct RTSP viewers on slow WiFi can recover when a short write accepts only
+  part of a video or audio packet. The agent finishes that packet before sending
+  anything else on the connection, without lengthening the wait for other viewers.
+- Notifications can use `mode: led` to light only the station's envelope LED.
+  No popup, screen wake, tone or speech is requested. Clearing a Home Assistant
+  notice does not clear the indicator for an unread station memo.
+- The station's **Settings > Home Assistant** groups HA feedback, SSH, reboot
+  and agent removal. These controls use the local agent, even if HA is offline.
+  The original touch-tone switch stays under **General**.
+- The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
+  contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
+  controls require live source readback on C300X firmware 1.7.19. Live writes
+  have not been confirmed on hardware. Requires the updated agent; archived media
+  is unchanged.
+- Advertise a per-start instance in the existing mDNS record so Home Assistant
+  can recognize an agent restart while the service is still cached.
+- Camera quality offers a matching visitor snapshot size when changing stream
+  size, including when returning to the factory setting.
+- The updater reports a writable root filesystem before replacing files, and
+  distinguishes a failed read-only remount from other installation failures.
+  Capabilities and self-test now agree on the detected firmware family.
+
+## v2.8.3 - 2026-11-23
+
+Fixed:
+
+- Saving **960x576** accepts existing backup directories owned by the
+  manufacturer user. The original file and directory ownership are preserved;
+  verified backups remain available for restoration and agent removal.
+  Needs the agent update.
+- Camera controls stay inactive when their camera is unavailable. Pending
+  microphone and answer requests are cancelled when the camera disappears or
+  the Ring Call ends, without interrupting a newer session.
+- UDP talkback accepts media only from a live, playing RTSP peer. Unsolicited
+  packets and packets from closed or parked sessions are discarded. Ring-capture
+  announcements wait for that media connection before starting playback.
+  Needs the agent update.
+- Applying the routing patch verifies the complete supported firmware image
+  before changing it or its recovery copy. Needs the agent update.
+- Media-user setup preserves unrecognized active routing files and reports
+  unsupported routing instead of claiming readiness. Supported internal and
+  smartphone forwarding modes remain distinct. Needs the agent update.
+
+Settings:
+
+- Camera quality has shorter descriptions, retaining the device-restart warning
+  and explaining that available sizes depend on the installed device agent.
+
 ## v2.8.2 - 2026-11-22
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/oliver7557)
@@ -91,6 +141,10 @@ Camera:
 
 Fixed:
 
+- Agent shutdown wakes the idle network loop reliably, including signals
+  received by a worker thread. This avoids delayed restarts during updates.
+  Needs the agent update.
+
 - Short pauses in receiving on-demand video, for example over WiFi, no longer
   immediately close the connection when the next packet has not started.
   The agent skips that packet and lets the viewer recover. Media writes stay
@@ -100,6 +154,14 @@ Fixed:
 - Turning the firewall patch off gives back the device's firewall script
   exactly as it was. Before, it lost its trailing blank line. Needs the agent
   update.
+- Restoring call routing verifies the complete original backup and its match
+  to the installed firmware, including interrupted patches. Invalid or foreign
+  backups are rejected; the restored file is staged and verified before use.
+  Needs the agent update.
+
+Settings:
+
+- **Camera quality** appears before **Visitor snapshot** in the options menu.
 
 ## v2.8.1 - 2026-11-22
 

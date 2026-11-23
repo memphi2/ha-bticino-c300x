@@ -132,12 +132,13 @@ def test_apply_packs_the_changed_files_in_qt5_form_and_preloads_them(device: Dev
     status = device.ok("apply")
     assert (status["state"], status["core_state"], status["qt5_overlay"]) == ("patched", "patched", "active")
     for rel in ("MainApp.qml", "HomePage.qml", "EventManager.qml", "Alarm.qml", "js/c300x_ha.js",
-                "Components/Settings/GeneralsChoice.qml"):
+                "Settings.qml", "C300XSettings.qml", "js/c300x_maintenance.js"):
         expected = (device.gui / rel).read_text().replace("import QtQuick 1.1\n", "import QtQuick 2.7\n")
         assert device.packed(rel) == expected.encode(), rel
     assert b"import QtQuick 1.1" not in device.rcc.read_bytes()
-    # Not changed by this action: the program's own file stays in use.
+    # Not changed by this action: the program's own files stay in use.
     assert device.packed("Components/Settings/CallBlockPopup.qml") is None
+    assert device.packed("Components/Settings/GeneralsChoice.qml") is None
     assert device.lib.read_bytes() == (device.programs["agent"].parent / "c300x-qrc-overlay.so").read_bytes()
     wrapper = device.wrapper.read_text()
     assert f"LD_PRELOAD='{device.lib}' C300X_QRC_OVERLAY='{device.rcc}' QML_DISABLE_DISK_CACHE=1" in wrapper

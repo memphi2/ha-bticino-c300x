@@ -47,10 +47,10 @@ _SIGNAL_RUNTIME_REGISTRATION_FAILED = f"{DOMAIN}_runtime_registration_failed"
 
 @callback
 def async_notify_runtime_registration_failed(
-    hass: HomeAssistant, entry: BticinoC300XConfigEntry,
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, *, prompt: bool = False,
 ) -> None:
-    """Wake the owned registration worker after a separate startup failure."""
-    async_dispatcher_send(hass, _SIGNAL_RUNTIME_REGISTRATION_FAILED, entry.entry_id)
+    """Ask the registration worker to reconcile a failed bridge operation."""
+    async_dispatcher_send(hass, _SIGNAL_RUNTIME_REGISTRATION_FAILED, entry.entry_id, prompt)
 
 
 async def async_start_agent_event_registration(
@@ -158,6 +158,7 @@ class _AgentEventRegistration:
         self._task: Task[Any] | None = None
         self._active_tasks: set[Task[Any]] = set()
         self._registration_pending = False
+        self._prompt_bridge_retry_used = False
         self._registration_stage = "callback_url"
 
     def start(self) -> Callable[[], None]:
@@ -313,11 +314,10 @@ class _AgentEventRegistration:
         ):
             await self._handle_runtime_registration_created()
         self._check_active()
-        if (
-            getattr(resources, "display_bridge_registration_pending", False)
-            and self._renewal_cancel is None
-        ):
+        if getattr(resources, "display_bridge_registration_pending", False):
             self._schedule_renewal()
+        else:
+            self._prompt_bridge_retry_used = False
         self._registration_stage = "diagnostics"
         try:
             await async_refresh_agent_diagnostics(self._hass, self._entry)
@@ -389,7 +389,7 @@ class _AgentEventRegistration:
         )
 
     @callback
-    def _schedule_runtime_retry(self, entry_id: str) -> None:
+    def _schedule_runtime_retry(self, entry_id: str, prompt: bool = False) -> None:
         runtime = getattr(self._entry, "runtime_data", None)
         resources = getattr(runtime, "resources", None)
         if (
@@ -400,18 +400,23 @@ class _AgentEventRegistration:
             or getattr(resources, "closed", False)
             or not getattr(resources, "display_bridge_registration_pending", False)
             or self._retry_cancel is not None
-            or self._renewal_cancel is not None
             or self._registry_refresh_cancel is not None
         ):
             return
-        self._schedule_renewal()
+        if prompt and not self._prompt_bridge_retry_used:
+            # Advance a regular renewal once. Repeated 404s must respect backoff.
+            self._prompt_bridge_retry_used = True
+            self._cancel_renewal()
+            self._schedule_renewal(0)
+        else:
+            self._schedule_renewal()
 
-    def _schedule_renewal(self) -> None:
+    def _schedule_renewal(self, delay: int = _SUBSCRIPTION_REFRESH_SECONDS) -> None:
         if self._stopped or self._auth_failed or self._renewal_cancel is not None:
             return
         self._renewal_cancel = async_call_later(
             self._hass,
-            _SUBSCRIPTION_REFRESH_SECONDS,
+            delay,
             self._register,
         )
 

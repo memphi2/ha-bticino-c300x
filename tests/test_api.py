@@ -386,7 +386,11 @@ def test_display_bridge_status_requests_read_only_endpoint() -> None:
     )
 
 
-def test_notify_display_bridge_event_posts_topic() -> None:
+@pytest.mark.parametrize("payload", [
+    {"topic": "alarm"}, {"topic": "notifications", "unread": True},
+    {"topic": "display_bridge.state", "unread": False},
+])
+def test_notify_display_bridge_event_posts_topic(payload) -> None:
     session = _FakeSession('{"ok": true, "revision": 2, "topic": "alarm"}')
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -394,7 +398,7 @@ def test_notify_display_bridge_event_posts_topic() -> None:
         "agent-token",
     )
 
-    result = asyncio.run(api.async_notify_display_bridge_event("alarm"))
+    result = asyncio.run(api.async_notify_display_bridge_event(**payload))
 
     assert result["revision"] == 2
     request = session.requests[0]
@@ -402,7 +406,7 @@ def test_notify_display_bridge_event_posts_topic() -> None:
         "POST",
         "http://agent.local:8080/api/v1/display-bridge/events",
     )
-    assert request["kwargs"]["json"] == {"topic": "alarm"}
+    assert request["kwargs"]["json"] == payload
     assert request["kwargs"]["timeout"] == 2.0
 
 

@@ -103,13 +103,15 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             raise C300XAgentApiResponseError("display bridge status returned non-object JSON")
         return data
 
-    async def async_notify_display_bridge_event(self, topic: str) -> dict[str, Any]:
+    async def async_notify_display_bridge_event(
+        self, topic: str, *, unread: bool | None = None,
+    ) -> dict[str, Any]:
         """Wake local display-bridge UI long-poll listeners for one topic."""
 
         data = await self._request_json(
             "POST",
             "/api/v1/display-bridge/events",
-            json_data={"topic": str(topic)},
+            json_data={"topic": str(topic), **({"unread": unread} if unread is not None else {})},
             request_timeout=2.0,
         )
         if not isinstance(data, dict):

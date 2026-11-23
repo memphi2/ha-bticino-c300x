@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 
 static void drain_rtsp_interleaved_payload(
+    struct c300x_rtsp_writer *writer,
     int fd,
     size_t len,
     int timeout_seconds,
@@ -16,7 +17,7 @@ static void drain_rtsp_interleaved_payload(
 
     while (remaining > 0) {
         size_t chunk = remaining < sizeof(scratch) ? remaining : sizeof(scratch);
-        if (c300x_rtsp_wait_readable(fd, timeout_seconds, deadline_ms) <= 0) {
+        if (c300x_rtsp_wait_readable(writer, fd, timeout_seconds, deadline_ms) <= 0) {
             return;
         }
         ssize_t n = recv(fd, scratch, chunk, 0);
@@ -42,7 +43,7 @@ static int rtsp_buf_fill(rtsp_read_buffer_t *buf, int fd, int timeout_seconds) {
     if (buf->len + 1 >= buf->cap) {
         return -1;
     }
-    int ready = c300x_rtsp_wait_readable(fd, timeout_seconds, buf->deadline_ms);
+    int ready = c300x_rtsp_wait_readable(buf->writer, fd, timeout_seconds, buf->deadline_ms);
     if (ready <= 0) {
         return ready;
     }
@@ -90,7 +91,7 @@ static void rtsp_buf_discard(
     rtsp_buf_consume(buf, from_buf);
     n -= from_buf;
     if (n > 0) {
-        drain_rtsp_interleaved_payload(fd, n, timeout_seconds, buf->deadline_ms);
+        drain_rtsp_interleaved_payload(buf->writer, fd, n, timeout_seconds, buf->deadline_ms);
     }
 }
 

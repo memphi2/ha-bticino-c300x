@@ -49,8 +49,25 @@ The **Alarm** and **Home Assistant** buttons on the station's home page appear
 automatically when they have something to open.
 
 The allowed actions are a JSON object, one entry per action ID (letters,
-digits, `_ . : -`) with `domain`, `service` and optional `target`, `data` and
-`name`. Leave home and display notices can only offer actions from this list.
+digits, `_ . : -`) with `domain`, `service` and optional `target`, `data`,
+`name` and `dashboard`. Leave home and display notices can only offer actions
+from this list.
+
+Every allowed action also becomes a tile that runs it, by default on an extra
+untitled page. A `toggle` of a light, switch, fan or input boolean is a switch
+tile; otherwise an action with a `source` is an image tile, any other a button.
+The optional `dashboard` object changes that tile:
+
+| Key | Meaning |
+| --- | --- |
+| `page` | Name of the page that shows the tile; a name no page has adds a page of that name. |
+| `name` | Tile name; otherwise the action's `name`, then its ID. |
+| `type` | `button`, `switch` or `image`. |
+| `order` | Position among the tiles of the page (default 1000). |
+| `state_entity_id`, `entity_id` | Entity whose state a switch tile shows; otherwise the first entity in `target` or `data`. |
+| `state_label` | Fixed state text. |
+| `source` | Picture address of an `image` tile; otherwise the state of the state entity. An image tile without a picture is left out. |
+| `width`, `height` | Size of an `image` tile in pixels (default 220×120). |
 
 ```json
 {

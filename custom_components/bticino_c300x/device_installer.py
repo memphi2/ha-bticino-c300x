@@ -198,6 +198,8 @@ def _install_device_agent_sync(
         _verify_c100x_bundle_sync(client, bundle, request.remote_dir)
         if request.apply_gui_patch and _device_display_kind(client) == "qt5_ondisk":
             raise C300XDeviceInstallError("device_install_verify_failed")
+        if request.apply_firewall_patch:
+            _check_firewall_hook_sync(client)
         merged_config = _apply_qt5_low_res_video_default(client, merged_config)
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
@@ -216,11 +218,11 @@ def _install_device_agent_sync(
             mode="600",
         ):
             changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
+        if request.apply_firewall_patch:
+            _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
         changed_files.extend(
             _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
         )
-        if request.apply_firewall_patch:
-            _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
         _verify_startup_sync(client)
 
@@ -996,6 +998,13 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
         or (action == "apply" and result.get("patched") is not True)
     ):
         raise C300XDeviceInstallError("device_install_verify_failed")
+
+
+def _check_firewall_hook_sync(client: _DeviceSshClient) -> None:
+    """Refuse unsupported firewall layouts before writing the bootstrap payload."""
+    path = _quote(REMOTE_FIREWALL_PATH)
+    if client.run(f"if ! [ -f {path} ] || [ -L {path} ] || ! [ -r {path} ]; then printf unsupported; fi"):
+        raise C300XDeviceInstallError("installer_firewall_hook_unsupported")
 
 
 def _apply_firewall_patch_sync(

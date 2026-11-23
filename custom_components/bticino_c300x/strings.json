@@ -703,6 +703,7 @@
       "invalid_maintenance_auth": "The C300X rejected the maintenance key. Enter the current maintenance key.",
       "cannot_connect": "The C300X could not be validated. Check its address and connection, then try again.",
       "ssh_login_refused": "The C300X refused the SSH login. Enter the SSH user and password of the device.",
+      "installer_firewall_hook_unsupported": "The existing device firewall hook is missing, unreadable or a symbolic link. Installation stopped before changing the station. Do not create a placeholder or restore firewall rules just to continue.",
       "device_model_incompatible": "This package does not support this device model. C100X-only test packages cannot update C300X devices. Install the matching package before updating or reinstalling the agent. No device files were replaced."
     }
   },

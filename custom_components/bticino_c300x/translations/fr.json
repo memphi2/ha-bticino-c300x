@@ -703,6 +703,7 @@
       "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
       "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
       "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
+      "installer_firewall_hook_unsupported": "Le script de pare-feu existant est absent, illisible ou est un lien symbolique. Aucune modification n’a été apportée à la platine. Ne créez pas de script de substitution et ne rétablissez pas les règles pour poursuivre.",
       "device_model_incompatible": "Ce paquet ne prend pas en charge ce modele. Les paquets de test C100X ne peuvent pas mettre a jour un C300X. Installez le paquet correspondant avant de mettre a jour ou de reinstaller l'agent. Aucun fichier de l'appareil n'a ete remplace."
     }
   },

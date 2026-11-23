@@ -357,6 +357,12 @@ registered resource or the package's validated handoff, not a guessed version.
 
 ## First Authorized Installation and Checks
 
+If the existing IPv4 firewall hook is missing, unreadable or a symlink, the
+installer stops before writing the agent, changing any rule or adding autostart.
+This also applies to stations modified by Companion or an earlier SSH setup.
+Do not create a placeholder hook, restore vendor rules or change the INPUT
+policy to get past this check. Report the unsupported layout instead.
+
 The supported entry point is the reviewed package's HA SSH bootstrap, not the
 blocked developer shell installer. Bootstrap writes agent payload/configuration,
 startup integration and, by its current default, the firewall allowance; it

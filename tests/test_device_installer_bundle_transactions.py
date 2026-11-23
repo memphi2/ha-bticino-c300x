@@ -64,6 +64,9 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             return self.write(path, source.read_bytes())
 
         def run(self, command: str) -> str:
+            if command.startswith("if ! [ -f "):
+                self.stage("firewall-preflight")
+                return "unsupported" if self.failure == "missing-hook" else ""
             if "libQt5Core" in command:
                 # A device with the Qt 4 display, which the Display patch edits.
                 return "qt4\nc300x\n"
@@ -159,6 +162,23 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     assert transaction.install(apply_gui_patch=apply_gui_patch) == ()
     assert client.writes == writes
     assert client.writes.count(transaction.manifest_path) == 1
+
+
+def test_missing_hook_rejects_install_before_any_write(transaction) -> None:
+    transaction.client.failure = "missing-hook"
+    with pytest.raises(installer.C300XDeviceInstallError, match="installer_firewall_hook_unsupported"):
+        transaction.install(apply_gui_patch=False)
+    assert transaction.client.operations == ["firewall-preflight"]
+    assert not transaction.client.writes
+    assert transaction.client.closed
+
+
+def test_failed_firewall_does_not_install_autostart(transaction) -> None:
+    transaction.client.failure = "firewall"
+    with pytest.raises(installer.C300XDeviceInstallError):
+        transaction.install(apply_gui_patch=False)
+    assert "startup" not in transaction.client.operations
+    assert "restart" not in transaction.client.operations
 
 
 def test_full_patch_failure_does_not_publish_manifest(transaction) -> None:

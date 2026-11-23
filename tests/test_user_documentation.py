@@ -158,3 +158,15 @@ def test_the_api_lists_every_error_the_agent_update_answers_with():
     section = api.split("`POST /api/v1/maintenance/update/apply`", 1)[1].split("\n### ", 1)[0]
     for code in codes:
         assert f"`{code}`" in section
+
+
+def test_the_api_names_every_display_call_that_follows_the_ui_port():
+    sources = [ROOT / "native_agent/scripts/qml_patch.sh"]
+    sources += sorted((ROOT / "device_qml").rglob("*.qml")) + sorted((ROOT / "device_qml").rglob("*.js"))
+    routes = set()
+    for path in sources:
+        routes |= set(re.findall(r'uiBaseUrl \+ "(/ui/[a-z/-]+)', path.read_text(encoding="utf-8")))
+    assert "/ui/media-closed" in routes
+    api = (ROOT / "native_agent/API.md").read_text()
+    paragraph = api.split("Only these calls follow a changed port:", 1)[1].split("\n\n", 1)[0]
+    assert set(re.findall(r"`(/ui/[a-z/-]+)`", paragraph)) == routes

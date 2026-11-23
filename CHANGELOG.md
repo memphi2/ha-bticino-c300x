@@ -36,9 +36,12 @@ Camera and card:
 
 - The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
   contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
-  controls require live source readback on C300X firmware 1.7.19. Live writes
-  have not been confirmed on hardware. Requires the updated agent; archived media
-  is unchanged.
+  sliders appear shortly after live video starts, once the station reads its
+  values back: on firmware 1.7.19 (tested on a station) and on 2.0.2 and 3.0.6
+  with either video decoder (checked offline only). A setting the station does
+  not confirm is put back, and the card says whether it was not applied, the
+  station is busy or the controls are unavailable. Changes last until the video
+  ends. Requires the updated agent; archived media is unchanged.
 - The doorbell card is as tall as its picture instead of stretching to the height
   of its dashboard place. A visitor snapshot keeps its own proportions, and the
   enlarged preview fits it so the buttons below stay on screen. Playback controls
@@ -92,7 +95,9 @@ Settings:
 - The Display option **Stay on the page after an action** is now **Keep the page
   open on screen standby**, which is what it always did: when on, the Home
   Assistant and Alarm pages stay open when the screen goes to standby. The
-  Display menu entry describes it the same way.
+  Display menu entry describes it the same way. For entries that never saved
+  this option, the settings form now shows it on, as the display applies it;
+  before, it showed off, and saving the form unchanged turned it off.
 
 Documentation:
 

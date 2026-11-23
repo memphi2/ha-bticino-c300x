@@ -23,7 +23,7 @@ Design constraints:
 
 - No polling architecture for core device state; idle traffic near zero.
 - No Node.js runtime on the device.
-- Mutating APIs use POST and explicit auth.
+- Mutating APIs use POST (one `DELETE`, for event subscriptions) and explicit auth.
 - Show only capabilities the agent actually reports.
 
 ## Components
@@ -219,7 +219,7 @@ ASan/UBSan; symbol contracts limit each module's exports and dependencies.
 | `http_device_user.c` | Device-user validation and responses, synchronous label writes, asynchronous read-only status phase. |
 | `http_service_commands.c` | SSH probe/start/stop and the ordered SSH-before-reboot/removal continuations. |
 | `http_audio_codec.c` | Codec status/action validation and responses. The file transaction stays synchronous; only the reboot tail is a job. |
-| `http_camera_quality.c` | Camera quality routes, like the codec. `camera_quality.c` owns the file transaction, `camera_settings.c` the key edits, `camera_quality_body.c` offered sizes, limits and response body. |
+| `http_camera_quality.c` | Camera quality routes, like the codec. `camera_quality.c` reads the state and runs an apply under the update lock; `camera_files.c` and `camera_update.c` own the file transaction (backup, write, verify, rollback), `camera_settings.c` and `camera_crop.c` the key edits, `camera_sizes.c` the offered sizes and limits; `camera_quality_body.c` only formats the response. |
 | `http_clients.c`, `http_client_input.c` | Bounded slot admission and deferred dispatch; request receive, framing and deadline. |
 | `command_job.c` | Spawn, bounded nonblocking pipe reads, monotonic deadline, process-group cancellation and reap. Capture buffers are borrowed, never freed by the job. |
 | `command_transaction.c` | Synchronous label-write spawn, bounded output drain and reap. No deadline, cancellation, worker or timer; signal interruptions retry the read/wait so commit/rollback cleanup can finish. |
@@ -424,7 +424,7 @@ Paths are under `/api/v1/maintenance/` except device-user.
 | POST firewall/IPv6 firewall `actions/restore` | Backup restore and remount shell waits. |
 | POST `update/apply` | `apply_agent_update_files` (`agent_update.c`): hash/copy/backup transaction, `system(mount ...)`; may enter both firewall apply paths. |
 | POST `audio-codec/actions/apply` or `restore` | Paired-file backup/patch/fsync and remount; only the SSH/reboot tail is a job. |
-| POST `camera-quality` | Backup/write/fsync of one settings file and `c300x_device_file_remount`. |
+| POST `camera-quality` | Backup/write/fsync of the settings file and, for the high stream, the crop file, with `c300x_device_file_remount`; choosing or leaving 960x576 also patches or restores the media executable. Rollback included, all on the loop. |
 | GET `/api/v1/device-user`; POST `device-user/actions/ensure-homeassistant`, `restore-homeassistant-setup` | Status reads hash files; ensure/restore patch routing (`c300x_patch_remount_root` -> `system`, copies, fsync) and persist user credentials; label writes via `c300x_command_transaction_capture`. |
 
 Positive-delay `run_detached_command` calls (agent restart, update restart)

@@ -6,6 +6,7 @@ from contextlib import suppress
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from homeassistant.exceptions import ServiceValidationError
 from test_api import _FakeSession
 from test_events import (
     _active_scheduled_calls,
@@ -33,6 +34,7 @@ from custom_components.bticino_c300x.data import (
     C300XConnectionState,
     C300XEventState,
 )
+from custom_components.bticino_c300x.display_alerts import async_send_display_alert
 from custom_components.bticino_c300x.display_notifications import (
     SHOW_SCHEMA,
     notifications_for_entry,
@@ -74,6 +76,41 @@ def setup(monkeypatch, *, no_events=False):
     runtime.resources.unregister_event_registration = worker.unregister
     runtime.resources.on_runtime_registration_created = refresh
     return hass, entry, api, worker
+
+
+@pytest.mark.parametrize("setting", [None, False, True])
+def test_patched_entry_registration_matches_led_notify(monkeypatch, setting):
+    async def run():
+        hass, entry, api, _ = setup(monkeypatch)
+        del entry.data["device_ui_enabled"]
+        if setting is not None:
+            entry.options["device_ui_enabled"] = setting
+        runtime = entry.runtime_data
+        runtime.qml_patch_status = {"patched": True}
+        runtime.capabilities["memo_led"] = True
+        hass.loop = asyncio.get_running_loop()
+        hass.add_job = lambda fn, *args: hass.async_create_task(fn(*args))
+        api.async_display_bridge_status.return_value = {"configured": True}
+        try:
+            await runtime_manager._async_configure_display_bridge(hass, entry, api)
+            notify = async_send_display_alert(hass, entry, "Door", data={"mode": "led"})
+            if setting is False:
+                api.async_configure_display_bridge.assert_awaited_once_with(
+                    enabled=False, webhook_url="", shared_secret="",
+                )
+                with pytest.raises(ServiceValidationError, match="disabled"):
+                    await notify
+                api.async_notify_display_bridge_event.assert_not_awaited()
+            else:
+                api.async_configure_display_bridge.assert_awaited_once_with(
+                    enabled=True, webhook_url="http://ha/display", shared_secret="secret",
+                )
+                await notify
+                await _drain_hass_tasks(hass)
+                api.async_notify_display_bridge_event.assert_awaited_with("notifications", unread=True)
+        finally:
+            runtime.resources.close()
+    asyncio.run(run())
 
 
 def unload_lab(monkeypatch):

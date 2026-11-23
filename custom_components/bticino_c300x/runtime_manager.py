@@ -38,7 +38,6 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
-    CONF_DEVICE_UI_ENABLED,
     CONF_DISPLAY_SETTING_PENDING,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -286,7 +285,7 @@ class C300XRuntimeManager:
             await _async_track_display_updates(self.hass, self.entry)
         )
         if not self.connection_state.available:
-            if _entry_config_value(self.entry, CONF_DEVICE_UI_ENABLED, False):
+            if entry_device_ui_enabled_or_patch_active(self.entry):
                 self.entry.runtime_data.resources.display_bridge_registration_pending = True
             return
 
@@ -982,7 +981,7 @@ async def _async_configure_display_bridge(
     check_active()
     if resources is not None:
         resources.display_bridge_registration_pending = True
-    enabled = bool(_entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False))
+    enabled = entry_device_ui_enabled_or_patch_active(entry)
     webhook_url = (
         await async_generate_agent_callback_url(
             hass,
@@ -1104,7 +1103,7 @@ def _async_track_display_bridge_updates(
     """Wake visible display pages for selected HA state changes, without polling."""
 
     alarm_entity_id = _entry_config_value(entry, CONF_ALARM_ENTITY_ID, "")
-    if not _entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False):
+    if not entry_device_ui_enabled_or_patch_active(entry):
         return None
 
     from homeassistant.core import callback

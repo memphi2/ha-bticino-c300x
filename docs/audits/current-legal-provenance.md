@@ -1,8 +1,9 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-22. Integration and native agent `2.8.2`, a maintenance
-release that keeps on-demand video running for a client that reads late and
-adds optional display-matched High geometry for an exact verified media build.
+Source review: 2026-11-23. Integration and native agent `2.8.3`, a maintenance
+release that corrects existing geometry-backup ownership handling, camera
+controls, UDP peer admission and routing verification. It retains the optional
+display-matched High geometry for exact verified media builds from `2.8.2`.
 Version `2.8.1` fixed the Display restore and clarified settings of `2.8.0`,
 the successor of `2.7.0`, with speech and sounds on the device's speaker,
 spoken notifications and camera quality settings. This report covers the

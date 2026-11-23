@@ -7,6 +7,8 @@ from homeassistant.components.camera import const as camera_const
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import HomeAssistant
 
+from ..value_parsing import freeze_state_value
+
 if TYPE_CHECKING:
     from homeassistant.components.camera.webrtc import WebRTCError, WebRTCSendMessage
 else:
@@ -32,8 +34,19 @@ __all__ = (
     "WebRTCError",
     "WebRTCSendMessage",
     "async_get_supported_webrtc_provider",
+    "camera_state_snapshot",
     "native_camera_capabilities",
 )
+
+
+def camera_state_snapshot(camera: Any) -> tuple[Any, Any, Any]:
+    """Return HA-visible camera state for write deduplication."""
+
+    return (
+        getattr(camera, "_attr_is_streaming", False),
+        getattr(camera, "_attr_available", True),
+        freeze_state_value(camera.extra_state_attributes),
+    )
 
 
 def native_camera_capabilities(*, enabled: bool, supported: bool, audio_path: bool) -> Any:

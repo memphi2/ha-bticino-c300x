@@ -155,10 +155,18 @@ static enum picture_source_result run(enum picture_field field, int value, int *
 
 int main(void)
 {
-    assert(picture_source_supported("C300X", "1.7.19"));
+    reset(NONE);
+    assert(picture_source_supported("C300X", "1.7.19") && !dirs);
     assert(!picture_source_supported("C100X", "1.7.19"));
-    assert(!picture_source_supported("C300X", "2.0.2"));
-    assert(!picture_source_supported("C300X", "3.0.6"));
+    static const char *const decoders[] = {NULL, "adv7180", "tvp5150", "other"};
+    for (int d = 0; d < 4; d++) {
+        decoder = decoders[d];
+        assert(picture_source_supported("C300X", "1.7.19"));
+        assert(picture_source_supported("C300X", "2.0.2") == (d == 1));
+        assert(picture_source_supported("C300X", "3.0.6") == (d == 1 || d == 2));
+        assert(!picture_source_supported("C100X", "3.0.6") && !picture_source_supported("C300X", "3.0.5"));
+        assert(!picture_source_supported("C300X", NULL) && !picture_source_supported(NULL, "2.0.2"));
+    }
     int out[3] = {0};
     reset(NONE);
     owner = 0;
@@ -195,8 +203,9 @@ int main(void)
     assert(run(PICTURE_BRIGHTNESS, 50, out) == PICTURE_SOURCE_UNAVAILABLE && !writes);
     reset(NONE);
     assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && !dirs);
-    for (int bound = 1; bound >= 0; bound--) {
-        const char *name = bound ? "adv7180" : NULL;
+    /* adv7180: XOR (1.7.19, 2.0.2); unbound or tvp5150 (3.0.6 HW rev 4): plain. */
+    for (int bound = 1; bound >= -1; bound--) {
+        const char *name = bound > 0 ? "adv7180" : bound ? "tvp5150" : NULL;
         reset_stock(name);
         assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK);
         assert(out[0] == 40 && out[1] == 50 && out[2] == 60 && queries == 3 && dirs == 1);
@@ -205,7 +214,7 @@ int main(void)
                 reset_stock(name);
                 assert(run(PICTURE_BRIGHTNESS + i, percent, out) == PICTURE_SOURCE_OK);
                 int written = first[i] + step[i] * (percent / 10);
-                assert(raw[i] == (written ^ (bound && !i ? 0x80 : 0)) && out[i] == percent);
+                assert(raw[i] == (written ^ (bound > 0 && !i ? 0x80 : 0)) && out[i] == percent);
                 assert(writes == (percent != 40 + 10 * i) && closes == 1);
                 queries = reads = 0;
                 assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && out[i] == percent);
@@ -214,6 +223,9 @@ int main(void)
     }
     reset_stock("adv7180");
     decoder = NULL; /* Unbound: the register 218 is taken as is, off the range, never snapped. */
+    assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_UNAVAILABLE);
+    reset_stock("tvp5150");
+    raw[1] = 0; /* tvp5150 contrast is a driver cache that is 0 until the first write after boot. */
     assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_UNAVAILABLE);
     for (int failed = 1; failed <= 6; failed++) {
         reset_stock("adv7180");

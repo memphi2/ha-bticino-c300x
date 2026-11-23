@@ -41,7 +41,7 @@ def test_private_firmware_patch_round_trip(tmp_path: Path) -> None:
 
 def test_packaged_settings_compile_with_firmware_qt4(monkeypatch):
     sysroot = os.environ.get("C300X_DEVICE_SYSROOT")
-    probe = os.environ.get("C300X_QT4_PROBE")
+    probe = os.environ.get("C300X_QT4_COMPILE_PROBE")
     if not (sysroot and probe):
         pytest.skip("Private firmware and Qt4 compile probe required")
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))

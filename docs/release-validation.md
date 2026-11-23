@@ -237,6 +237,9 @@ Setup builds and verifies the ARM probe in `$XDG_CACHE_HOME/c300x-dev/qt4-runtim
 Changed probe sources or damaged cache files fail explicitly: rerun setup.
 The existing `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and
 `C300X_QT4_IMPORTS` overrides remain supported when all four are set.
+The separate compile-only checks use `C300X_QT4_COMPILE_PROBE` and
+`C300X_QT4_COMPILE_IMPORTS` for the compiler and its placeholder modules.
+Do not use the compile-only executable as the runtime probe.
 
 The probe checks the actual Qt version and executes the unchanged consumer
 JavaScript through a non-rendering QML test component, including 214 numeric

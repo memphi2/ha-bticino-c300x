@@ -2,9 +2,11 @@
 #include "picture_source.h"
 #include "time_util.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <linux/videodev2.h>
@@ -27,6 +29,22 @@ static const struct { unsigned id; int min, delta; } controls[] = {
 int picture_source_supported(const char *model, const char *firmware)
 {
     return model && firmware && !strcmp(model, "C300X") && !strcmp(firmware, "1.7.19");
+}
+
+/* A decoder counts only while its I2C driver has a client bound, such as 2-0020. */
+static int decoder_bound(const char *driver)
+{
+    char path[64];
+    snprintf(path, sizeof(path), "/sys/bus/i2c/drivers/%s", driver);
+    DIR *dir = opendir(path);
+    if (!dir) return 0;
+    int found = 0;
+    struct dirent *entry;
+    unsigned bus, address;
+    while (!found && (entry = readdir(dir)))
+        found = sscanf(entry->d_name, "%u-%4x", &bus, &address) == 2;
+    closedir(dir);
+    return found;
 }
 
 static int capture_source(int fd)
@@ -67,19 +85,17 @@ static int descriptor(int fd, int i, int source)
            ((int64_t)first - q.minimum) % q.step == 0 && delta % q.step == 0;
 }
 
-static int read_percent(int fd, int i, int source, int *out, int *raw)
+/* flip: the stock adv7180 driver writes brightness XOR 0x80 but reads the register raw. */
+static int read_percent(int fd, int i, int source, int flip, int *out, int *raw)
 {
     struct v4l2_control c = {.id = controls[i].id};
     if (ioctl(fd, VIDIOC_G_CTRL, &c) || c.id != controls[i].id) return 0;
+    /* The stock driver reports a failed I2C read as -1 with success. */
+    if (source == 2 && (c.value < 0 || c.value > 255)) return 0;
+    if (flip && i == 0) c.value ^= 0x80;
     int64_t offset = (int64_t)c.value - controls[i].min;
     int delta = controls[i].delta;
-    if (source == 2) {
-        if (c.value < 0 || c.value > 255) return 0;
-        /* The running capture may start outside the stock slider's travel.
-         * Snap only its displayed position, never an untouched hardware value. */
-        offset = offset < 0 ? 0 : offset > 10 * delta ? 10 * delta : offset;
-        offset += delta / 2;
-    } else if (offset < 0 || offset > 10 * delta || offset % delta) return 0;
+    if (offset < 0 || offset > 10 * delta || offset % delta) return 0;
     *raw = c.value;
     *out = (int)(offset / delta) * 10;
     return 1;
@@ -106,9 +122,10 @@ enum picture_source_result picture_source_execute(const struct picture_command *
     int observed[3], raw[3];
     int source = current(deadline, active, ctx) ? capture_source(fd) : 0;
     if (!source) goto done;
+    int flip = source == 2 && decoder_bound("adv7180");
     for (int i = 0; i < 3; i++) {
         if (!current(deadline, active, ctx) || !descriptor(fd, i, source) ||
-            !current(deadline, active, ctx) || !read_percent(fd, i, source, &observed[i], &raw[i])) goto done;
+            !current(deadline, active, ctx) || !read_percent(fd, i, source, flip, &observed[i], &raw[i])) goto done;
     }
     int index = command->field - PICTURE_BRIGHTNESS;
     int target = set ? controls[index].min + controls[index].delta * (command->value / 10) : 0;
@@ -118,7 +135,7 @@ enum picture_source_result picture_source_execute(const struct picture_command *
         result = PICTURE_SOURCE_NOT_APPLIED;
         if (ioctl(fd, VIDIOC_S_CTRL, &c)) goto done;
         for (int i = 0; i < 3; i++)
-            if (!current(deadline, active, ctx) || !read_percent(fd, i, source, &observed[i], &raw[i])) goto done;
+            if (!current(deadline, active, ctx) || !read_percent(fd, i, source, flip, &observed[i], &raw[i])) goto done;
         if (raw[index] != target) goto done;
     }
     if (!current(deadline, active, ctx)) goto done;

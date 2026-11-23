@@ -1,9 +1,11 @@
 #include "../src/picture_source.h"
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <linux/videodev2.h>
@@ -15,7 +17,9 @@ enum fault { NONE, OPEN_FAIL, REGULAR, OTHER_MINOR, OTHER_DRIVER, OTHER_CAP_DRIV
     OUTPUT, QUERY_FAIL, BAD_TYPE, FLAGS, BAD_RANGE, BAD_STEP, READ_FAIL, OFF_GRID,
     LOST_OWNER, EXPIRED, WRITE_FAIL, NOT_CHANGED, READBACK_FAIL };
 static enum fault fault;
-static int opens, closes, queries, reads, writes, flags, owner, raw[3];
+/* stock: the mxc_v4l2 signature without descriptors; decoder: the bound I2C driver. */
+static int opens, closes, queries, reads, writes, flags, owner, raw[3], stock, i2c_fail, dirs;
+static const char *decoder;
 static long long now;
 long long c300x_monotonic_ms(void) { return now; }
 static int active(void *ctx) { return ctx == &owner && owner; }
@@ -26,7 +30,41 @@ static void reset(enum fault f)
     owner = 1;
     now = 1000;
     raw[0] = 105; raw[1] = 134; raw[2] = 154;
+    stock = i2c_fail = dirs = 0;
+    decoder = NULL;
 }
+
+static void reset_stock(const char *bound)
+{
+    reset(NONE);
+    stock = 1;
+    decoder = bound;
+    /* .82 (1.7.19, adv7180) at every session start: written 90, 134, 172 = 40, 50, 60 %. */
+    raw[0] = bound && !strcmp(bound, "adv7180") ? 90 ^ 0x80 : 90;
+    raw[1] = 134; raw[2] = 172;
+}
+
+static char dir_token;
+static int listed;
+DIR *__wrap_opendir(const char *name)
+{
+    static const char root[] = "/sys/bus/i2c/drivers/";
+    assert(!strncmp(name, root, sizeof(root) - 1));
+    ++dirs;
+    listed = 0;
+    if (!decoder || strcmp(name + sizeof(root) - 1, decoder)) { errno = ENOENT; return NULL; }
+    return (DIR *)&dir_token;
+}
+struct dirent *__wrap_readdir(DIR *dir)
+{
+    static const char *const names[] = {".", "..", "bind", "module", "uevent", "unbind", "2-0020"};
+    static struct dirent entry;
+    assert(dir == (DIR *)&dir_token);
+    if (listed == (int)(sizeof(names) / sizeof(names[0]))) return NULL;
+    snprintf(entry.d_name, sizeof(entry.d_name), "%s", names[listed++]);
+    return &entry;
+}
+int __wrap_closedir(DIR *dir) { assert(dir == (DIR *)&dir_token); return 0; }
 
 int __wrap_open(const char *name, int f, ...)
 {
@@ -62,6 +100,11 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
     if (cmd == VIDIOC_QUERYCAP) {
         struct v4l2_capability *cap = arg;
         strcpy((char *)cap->driver, fault == OTHER_CAP_DRIVER ? "other" : "mxc_v4l2");
+        if (stock) {
+            cap->version = 0x10b;
+            cap->capabilities = 0x05000005;
+            return 0;
+        }
         cap->capabilities = V4L2_CAP_DEVICE_CAPS | V4L2_CAP_VIDEO_CAPTURE;
         cap->device_caps = fault == OUTPUT ? V4L2_CAP_VIDEO_OUTPUT : V4L2_CAP_VIDEO_CAPTURE;
         return 0;
@@ -69,6 +112,7 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
     if (cmd == VIDIOC_QUERYCTRL) {
         struct v4l2_queryctrl *q = arg;
         assert(q->id == V4L2_CID_BRIGHTNESS + (unsigned)queries++);
+        if (stock) { errno = EINVAL; return -1; }
         q->minimum = 0; q->maximum = 255; q->step = 1;
         q->type = V4L2_CTRL_TYPE_INTEGER;
         if (queries == 3) {
@@ -87,6 +131,7 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
         assert(i == (unsigned)reads++ % 3);
         if ((fault == READ_FAIL && reads == 3) || (fault == READBACK_FAIL && reads == 6)) return -1;
         c->value = raw[i] + (fault == OFF_GRID && i == 2);
+        if (i2c_fail && reads == i2c_fail) c->value = -1;
         if (reads == 3 && fault == LOST_OWNER) owner = 0;
         if (reads == 3 && fault == EXPIRED) now += 751;
         return 0;
@@ -94,7 +139,8 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
     assert(cmd == VIDIOC_S_CTRL && reads == 3 && queries == 3 && writes++ == 0);
     assert((flags & O_ACCMODE) == O_RDWR);
     if (fault == WRITE_FAIL) return -1;
-    if (fault != NOT_CHANGED) raw[i] = c->value;
+    if (fault != NOT_CHANGED)
+        raw[i] = c->value ^ (stock && i == 0 && decoder && !strcmp(decoder, "adv7180") ? 0x80 : 0);
     return 0;
 }
 
@@ -142,5 +188,35 @@ int main(void)
     raw[0] = 0; /* Idle .82 returned 0,134,128; do not map this to 0%. */
     raw[2] = 128;
     assert(run(PICTURE_BRIGHTNESS, 50, out) == PICTURE_SOURCE_UNAVAILABLE && !writes);
+    reset(NONE);
+    assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && !dirs);
+    for (int bound = 1; bound >= 0; bound--) {
+        const char *name = bound ? "adv7180" : NULL;
+        reset_stock(name);
+        assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK);
+        assert(out[0] == 40 && out[1] == 50 && out[2] == 60 && queries == 3 && dirs == 1);
+        for (int i = 0; i < 3; i++) {
+            for (int percent = 0; percent <= 100; percent += 10) {
+                reset_stock(name);
+                assert(run(PICTURE_BRIGHTNESS + i, percent, out) == PICTURE_SOURCE_OK);
+                int written = first[i] + step[i] * (percent / 10);
+                assert(raw[i] == (written ^ (bound && !i ? 0x80 : 0)) && out[i] == percent);
+                assert(writes == (percent != 40 + 10 * i) && closes == 1);
+                queries = reads = 0;
+                assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && out[i] == percent);
+            }
+        }
+    }
+    reset_stock("adv7180");
+    decoder = NULL; /* Unbound: the register 218 is taken as is, off the range, never snapped. */
+    assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_UNAVAILABLE);
+    for (int failed = 1; failed <= 6; failed++) {
+        reset_stock("adv7180");
+        i2c_fail = failed; /* The stock driver answers a failed I2C read with -1 and success. */
+        out[0] = out[1] = out[2] = -1;
+        enum picture_source_result r = run(failed <= 3 ? PICTURE_READ : PICTURE_BRIGHTNESS, 100, out);
+        assert(r == (failed <= 3 ? PICTURE_SOURCE_UNAVAILABLE : PICTURE_SOURCE_NOT_APPLIED));
+        assert(out[0] == -1 && out[1] == -1 && out[2] == -1);
+    }
     return 0;
 }

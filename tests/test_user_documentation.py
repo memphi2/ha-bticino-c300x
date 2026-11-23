@@ -149,10 +149,142 @@ def test_three_documentation_rules_are_closed_with_evidence_only():
     assert f"](../{ICE_LINK})" in audit
 
 
-def _c_function(source, signature):
-    """The text of the C function whose definition starts with ``signature``."""
-    start = re.search(re.escape(signature) + r"[^;{]*\)\s*\{", source).start()
-    return source[start:source.index("\n}\n", start)]
+def _c_skip(text, index):
+    """The index after the string, character literal or comment at ``index``, else ``index``."""
+    if text.startswith("/*", index):
+        return text.index("*/", index) + 2
+    if text.startswith("//", index):
+        return text.index("\n", index)
+    if text[index] in "\"'":
+        end = index + 1
+        while text[end] != text[index]:
+            end += 2 if text[end] == "\\" else 1
+        return end + 1
+    return index
+
+
+def _c_args(text, index):
+    """The top-level arguments of the parenthesis at ``index`` and the index of its closing one."""
+    args, depth, start = [], 0, index + 1
+    while True:
+        end = _c_skip(text, index)
+        if end != index:
+            index = end
+            continue
+        if text[index] in "([{":
+            depth += 1
+        elif text[index] in ")]}":
+            depth -= 1
+            if not depth:
+                args.append(text[start:index])
+                return [arg.strip() for arg in args], index
+        elif text[index] == "," and depth == 1:
+            args.append(text[start:index])
+            start = index + 1
+        index += 1
+
+
+def _c_functions(source):
+    """Every function defined in the C ``source``, by name, with its full text."""
+    functions = {}
+    for match in re.finditer(r"^[A-Za-z_][^;{}()\n]*?\b(\w+)\([^;{}]*?\)\s*\{", source, re.MULTILINE):
+        end = match.end() - 1
+        assert source[end] == "{"
+        depth = 0
+        while True:
+            skipped = _c_skip(source, end)
+            if skipped != end:
+                end = skipped
+                continue
+            depth += {"{": 1, "}": -1}.get(source[end], 0)
+            end += 1
+            if not depth:
+                break
+        functions[match[1]] = source[match.start():end]
+    return functions
+
+
+def _c_function(source, name):
+    """The text of the C function ``name`` defined in ``source``; fails when it is not defined there."""
+    functions = _c_functions(source)
+    assert name in functions, f"no C function {name}"
+    return functions[name]
+
+
+def _client_functions(functions, name, fd):
+    """``name`` and every function in ``functions`` it (transitively) hands its client socket ``fd``."""
+    found, pending = {}, [(name, fd)]
+    while pending:
+        name, fd = pending.pop()
+        if name in found:
+            continue
+        assert name in functions, f"no C function {name}"
+        found[name] = text = functions[name]
+        for call in re.finditer(r"\b(\w+)\(", text[text.index("{"):]):
+            args, _ = _c_args(text, text.index("{") + call.end() - 1)
+            if call[1] in functions and fd in args:
+                params, _ = _c_args(functions[call[1]], functions[call[1]].index("("))
+                pending.append((call[1], params[args.index(fd)].split()[-1].lstrip("*")))
+    return found
+
+
+_ERROR_LITERAL = re.compile(r'\\"error\\":\\"([a-z_]+)\\"')
+
+
+def _error_replies(functions):
+    """``(status, code)`` of each error code the C ``functions`` answer with.
+
+    A code is an ``\\"error\\":\\"<code>\\"`` JSON literal or a literal passed to an error helper,
+    a function of ``functions`` that formats ``\\"error\\":\\"%s\\"``. Its status is the HTTP status
+    among the arguments of the innermost call that carries it, or None.
+    """
+    helpers = {name for name, text in functions.items() if '\\"error\\":\\"%s\\"' in text}
+    replies = set()
+    for text in functions.values():
+        calls, index = [], 0
+        while index < len(text):
+            end = _c_skip(text, index)
+            if end != index:
+                literal = text[index:end]
+                codes = _ERROR_LITERAL.findall(literal)
+                if calls and calls[-1][0] in helpers:
+                    codes += re.findall(r'^"([a-z_]+)"$', literal)
+                if calls:
+                    calls[-1][2].extend(codes)
+                else:
+                    replies |= {(None, code) for code in codes}
+                index = end
+                continue
+            if text[index] == "(":
+                calls.append((re.search(r"(\w*)\s*$", text[:index])[1], index, []))
+            elif text[index] == ")" and calls[-1][2]:
+                _, start, codes = calls.pop()
+                statuses = [int(status) for status in re.findall(r"\b[1-5]\d\d\b", _c_blank(text[start:index]))]
+                if not statuses and calls:
+                    calls[-1][2].extend(codes)  # e.g. a body built here and sent by the enclosing call
+                else:
+                    statuses = statuses * len(codes) if len(statuses) == 1 else statuses or [None] * len(codes)
+                    replies |= set(zip(statuses, codes, strict=True))
+            elif text[index] == ")":
+                calls.pop()
+            index += 1
+    return replies
+
+
+def _c_blank(text):
+    """``text`` with its string and character literals and comments blanked out."""
+    blanked, index = [], 0
+    while index < len(text):
+        end = _c_skip(text, index)
+        blanked.append(" " if end != index else text[index])
+        index = max(end, index + 1)
+    return "".join(blanked)
+
+
+def _api_error_rows(heading):
+    """``(status, code)`` of each row of the error table in the API.md section after ``heading``."""
+    section = (ROOT / "native_agent/API.md").read_text().split(heading, 1)[1].split("\n### ", 1)[0]
+    return {(int(status), code) for status, code in re.findall(r"^\| `(\d{3})` \| `([a-z_]+)` \|", section, re.MULTILINE)}
 
 
 def test_the_api_lists_every_error_the_agent_update_answers_with():
@@ -162,7 +294,7 @@ def test_the_api_lists_every_error_the_agent_update_answers_with():
     assert "update_root_already_writable" in codes
     # The route handler refuses a request itself before the install starts.
     http = (ROOT / "native_agent/src/http.c").read_text()
-    handler = _c_function(http, "static void handle_agent_update_apply(")
+    handler = _c_function(http, "handle_agent_update_apply")
     error = r'"\{\\"ok\\":false,\\"error\\":\\"([a-z_]+)\\"'
     answers = re.findall(r'send_json\(client_fd, (\d+), "[^"]*", ' + error, handler)
     # Every other send_json is the install result from agent_update_error_json.
@@ -194,28 +326,28 @@ def test_the_api_names_every_display_call_that_follows_the_ui_port():
 
 
 def test_the_api_lists_every_error_the_picture_route_answers_with():
-    picture = (ROOT / "native_agent/src/picture_control.c").read_text()
-    answers = re.findall(r'c300x_http_send_json\(fd, (\d+), "[^"]*", "\{\\"error\\":\\"([a-z_]+)\\"', picture)
-    assert len(answers) == picture.count("c300x_http_send_json(fd, ") - 1  # the success reply
-    # The legacy path hands the command to the GUI. ringer_control.c answers the
-    # picture client when it hands it over, on its timeout and at shutdown; its
-    # other answers belong to ringer commands or go to the GUI itself.
-    ringer = (ROOT / "native_agent/src/ringer_control.c").read_text()
-    gui_request = _c_function(ringer, "static void gui_request(")
-    handover = re.findall(r'fail\(fd, (\d+), (?:picture\.field \? )?"([a-z_]+)"', gui_request)
-    assert len(handover) == gui_request.count("fail(")
-    answers += handover
-    expire = _c_function(ringer, "void c300x_ringer_control_expire(")
-    answers += re.findall(r'if \(control->picture\.field\) fail\(control->client_fd, (\d+), "([a-z_]+)"', expire)
-    close = _c_function(ringer, "void c300x_ringer_control_close(")
-    answers += re.findall(r'fail\(control->client_fd, (\d+), "([a-z_]+)"', close)
-    assert {
-        "method_not_allowed", "media_busy", "picture_gui_timeout", "ringer_gui_id_failed", "ringer_gui_unavailable",
-    } <= {code for _, code in answers}
-    api = (ROOT / "native_agent/API.md").read_text()
-    section = api.split("### `GET`, `POST /api/v1/video/picture`", 1)[1].split("\n### ", 1)[0]
-    for status, code in set(answers):
-        assert f"| `{status}` | `{code}` |" in section
+    picture = _c_functions((ROOT / "native_agent/src/picture_control.c").read_text())
+    ringer = _c_functions((ROOT / "native_agent/src/ringer_control.c").read_text())
+    assert not picture.keys() & ringer.keys()
+    # picture_request answers itself or hands the client to the GUI path in
+    # ringer_control.c. That path keeps the client and answers it later from
+    # picture_reply, on its timeout and at shutdown.
+    functions = _client_functions(picture | ringer, "picture_request", "fd")
+    assert {"c300x_gui_picture_request", "gui_request"} <= functions.keys()
+    functions |= picture
+    for name in ("c300x_ringer_control_expire", "c300x_ringer_control_close"):
+        functions[name] = ringer[name]
+    replies = _error_replies(functions)
+    ringer_only = {
+        "ringer_gui_busy": "gui_request answers it to a ringer command; a picture command gets picture_gui_busy",
+        "ringer_not_applied": "the ringer branch of c300x_ringer_control_expire",
+        "ringer_gui_timeout": "the ringer branch of c300x_ringer_control_expire",
+    }
+    assert set(ringer_only) <= {code for _, code in replies}
+    replies = {(status, code) for status, code in replies if code not in ringer_only}
+    assert {(504, "picture_gui_timeout"), (503, "ringer_gui_unavailable")} <= replies
+    assert replies == _api_error_rows("### `GET`, `POST /api/v1/video/picture`")
+    section = (ROOT / "native_agent/API.md").read_text().split("### `GET`, `POST /api/v1/video/picture`", 1)[1]
     unavailable = section.split("| `picture_controls_unavailable` |", 1)[1].split("\n", 1)[0]
     # picture_reply answers it when the GUI sends malformed values.
     assert "the GUI answered with missing or out-of-range values" in unavailable
@@ -225,7 +357,7 @@ def test_the_api_names_the_unread_refusal_of_display_bridge_events():
     source = (ROOT / "native_agent/src/http.c").read_text()
     assert '\\"error\\":\\"invalid_unread\\"' in source
     # Only a body that carries unread is validated; any other body is accepted.
-    event = _c_function((ROOT / "native_agent/src/memo_led.c").read_text(), "int c300x_memo_led_event(")
+    event = _c_function((ROOT / "native_agent/src/memo_led.c").read_text(), "c300x_memo_led_event")
     presence = event.index('c300x_json_find_member(body, body + strlen(body), "unread", &value)) return 1;')
     assert presence < event.index("c300x_json_object_valid(body)")
     api = (ROOT / "native_agent/API.md").read_text()

@@ -87,7 +87,7 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
-case "$ACTION" in status|apply|restore|recover|confirm) ;; *) fail 'unsupported action' ;; esac
+case "$ACTION" in status|apply|restore|recover|confirm|boot) ;; *) fail 'unsupported action' ;; esac
 for path in "$GUI" "$BACKUP" "$BIN" "$WRAPPER" "$IDENTITY"; do
     safe_path "$path" || fail 'unsafe path'
 done
@@ -98,6 +98,17 @@ regular "$IDENTITY" || fail 'identity helper unavailable'
 . "$IDENTITY"
 safe_path "$TRIAL" && regular "$TRIAL" || fail 'trial helper unavailable'
 . "$TRIAL"
+RESULT=interrupted
+if [ "$ACTION" = boot ]; then
+    # Start rule: keep the trial in its own boots, roll it back in any later one.
+    boot_phase
+    case "$TRIAL_PHASE" in
+        none|prepare|trial) exit 0 ;;
+        first) write_marker pending.trial-boot "$CURRENT_BOOT" || fail 'trial boot mark failed'; exit 0 ;;
+        later) RESULT=rolled_back ;;
+    esac
+    ACTION=recover
+fi
 if trial_exists && [ "$ACTION" = apply ]; then fail 'pending trial requires confirmation or recovery'; fi
 if [ "$ACTION" != apply ] && [ "$ACTION" != confirm ] && ! trial_exists && originals "$GUI"; then
     printf '%s\n' '{"ok":true,"state":"stock","runtime_verified":false}'
@@ -172,6 +183,7 @@ fi
 if [ "$ACTION" = recover ] && trial_exists; then
     DIRTY=1
     rollback_trial || fail 'pending trial recovery failed'
+    note_result "$RESULT" "$TRIAL_RELEASE"
     sync
     remount_ro || fail 'recovery read-only remount failed'
     DIRTY=0

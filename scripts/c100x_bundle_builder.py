@@ -19,7 +19,7 @@ HEADER = '''#!/bin/sh
 set -eu
 umask 077
 ACTION=${1:-status}
-case "$ACTION" in apply|prepare|confirm|status|restore|recover) ;; *) exit 1 ;; esac
+case "$ACTION" in apply|prepare|confirm|status|restore|recover|boot) ;; *) exit 1 ;; esac
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/c100x-payload.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 trap 'exit 1' HUP INT TERM

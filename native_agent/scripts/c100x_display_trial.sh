@@ -21,6 +21,26 @@ write_marker() {
     marker_stage=$(mktemp "$BACKUP/boot-stage.XXXXXX") || return 1
     printf '%s\n' "$2" > "$marker_stage" && sync && mv -f "$marker_stage" "$BACKUP/$1" && sync
 }
+# none: no trial. prepare: the boot that prepared it. first: the first later
+# boot, before init marked it. trial: that boot. later: a further boot with the
+# trial still unconfirmed, or an invalid trial mark. stale: no valid prepare
+# mark or no boot id.
+boot_phase() {
+    TRIAL_PHASE=none
+    trial_exists || return 0
+    TRIAL_PHASE=stale
+    current_boot && read_marker pending.prepare-boot && valid_boot_id "$MARKER" || return 0
+    if [ "$MARKER" = "$CURRENT_BOOT" ]; then TRIAL_PHASE=prepare; return 0; fi
+    if [ ! -e "$BACKUP/pending.trial-boot" ] && [ ! -L "$BACKUP/pending.trial-boot" ]; then
+        TRIAL_PHASE=first
+        return 0
+    fi
+    TRIAL_PHASE=later
+    if read_marker pending.trial-boot && [ "$MARKER" = "$CURRENT_BOOT" ]; then TRIAL_PHASE=trial; fi
+}
+note_result() {
+    write_marker last-result "$1 $2" || printf '%s\n' 'c100x_display: result not recorded' >&2
+}
 verify_trial() {
     safe_path "$PENDING" && [ -d "$PENDING" ] && regular "$PENDING/release" || return 1
     TRIAL_RELEASE=$(cat "$PENDING/release")

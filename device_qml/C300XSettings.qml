@@ -16,7 +16,7 @@ Item {
     property bool busy: false
     property string pending: ""
     property double expiresAt: 0
-    property string problem: c300xDisplayPreferences.bridgeProblem
+    property string problem: ""
     property bool answered: false
     property bool reachable: answered && problem === ""
     property string address: ""
@@ -118,7 +118,7 @@ Item {
         Bridge.bridgeDetails(function(data, reason) {
             panel.readLocal()
             panel.answered = true
-            c300xDisplayPreferences.bridgeProblem = reason
+            panel.problem = reason
             if (!data) return
             panel.integrationVersion = data.integration_version || ""
             panel.instanceName = data.instance_name || ""

@@ -392,7 +392,7 @@ function tab(language) {
     const calls = {status: [], details: [], setting: []};
     const preferences = {bridgeProblem: ''};
     const panel = vm.createContext({c300xDisplayPreferences: preferences, visible: true, pending: '', saving: false,
-        answered: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
+        answered: false, problem: '', address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
         instanceName: '', keepOpen: false, tabNavigation: false, status: '', Math,
         label(key) { return texts.text(language || 'de', key); },
         Bridge: {
@@ -401,8 +401,7 @@ function tab(language) {
             displaySetting(key, value, callback, owner) { calls.setting.push({key, value, callback, owner}); },
         }});
     panel.panel = panel;
-    Object.defineProperty(panel, 'problem', {get() { return preferences.bridgeProblem; }});
-    Object.defineProperty(panel, 'reachable', {get() { return panel.answered && preferences.bridgeProblem === ''; }});
+    Object.defineProperty(panel, 'reachable', {get() { return panel.answered && panel.problem === ''; }});
     vm.runInContext(qml.slice(qml.indexOf('    function contactText'), qml.indexOf('    function aboutToShow')), panel);
     return {panel, calls, preferences};
 }
@@ -442,18 +441,20 @@ assert.equal(calls.status.length, 2, 'the local status is read again after the b
 calls.status[1].callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
     home_assistant: 'http://192.0.2.10:8123', last_contact_age: 0});
 assert.equal(panel.contact, 'gerade eben');
-// Not reachable: the reason is kept for the home page symbol, the local facts stay.
+// Not reachable: the tab shows its own reason, the local facts stay.
 panel.readStatus();
 calls.status.at(-1).callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
     home_assistant: 'https://ha.example.org', last_contact_age: 10800});
 calls.details[1].callback(null, 'bridge_unreachable');
 calls.status.at(-1).callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
     home_assistant: 'https://ha.example.org', last_contact_age: 10800});
-assert.deepEqual([panel.reachable, preferences.bridgeProblem, panel.address, panel.contact],
+assert.deepEqual([panel.reachable, panel.problem, panel.address, panel.contact],
     [false, 'bridge_unreachable', 'https://ha.example.org', 'vor 3 Std']);
+assert.equal(preferences.bridgeProblem, '', 'the mark on the home page follows the home page reads alone');
+assert.ok(!qml.includes('c300xDisplayPreferences.bridgeProblem'));
 panel.readStatus();
 calls.details[2].callback({}, '');
-assert.deepEqual([panel.reachable, preferences.bridgeProblem], [true, ''], 'the next answer clears the reason');
+assert.deepEqual([panel.reachable, panel.problem], [true, ''], 'the next answer clears the reason');
 // The agent sends scheme, host and port only. Anything else is not shown at all.
 for (const bad of ['http://192.0.2.10:8123/api/webhook/abc', 'http://ha.local:8123?token=x', 'http://ha.local#x',
                    'http://user:pw@ha.local:8123', 'ftp://ha.local', 'ha.local:8123', '', null, 7, 'http://ha.local/ ']) {
@@ -492,10 +493,10 @@ const {panel, calls, preferences} = tab('de');
 panel.setDisplay('dashboard_navigation', 'tabs');
 assert.equal(calls.setting.length, 0, 'nothing is sent, and nothing kept locally, while Home Assistant is not reachable');
 panel.answered = true;
-preferences.bridgeProblem = 'bridge_unreachable';
+panel.problem = 'bridge_unreachable';
 panel.setDisplay('dashboard_navigation', 'tabs');
 assert.equal(calls.setting.length, 0);
-preferences.bridgeProblem = '';
+panel.problem = '';
 panel.setDisplay('dashboard_navigation', 'tabs');
 assert.deepEqual([calls.setting[0].key, calls.setting[0].value, panel.saving, panel.tabNavigation],
     ['dashboard_navigation', 'tabs', true, false], 'the switch waits for the stored value');

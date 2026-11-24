@@ -333,7 +333,7 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "1d112569fcaa49253da2bdc115b12306c4443dc588c999c26a5b3a1c4a593676",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
-    "Alarm.qml": "b0b874bdcd479a82d2c95341e36baf88383a41aaf8a6a6f39af37c5555b3008d",
+    "Alarm.qml": "8a3e97423af21c756f4fb92cfbd883ba6bf68ef5ba455beea0cd546509550f19",
     "HomeAssistant.qml": "54d5b80927b699cbb493d6ca89e695496969b8605ca0d3ee0a98b46469ece50b",
     "C300XEnergy.qml": "6f106d8637158fdf789c2d3339e9bae6fcf2c557c30dbbe5734fcd1b2acb73a2",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",

@@ -829,13 +829,30 @@ Page {
                     width: parent.width
                     height: 38
                     clip: true
-                    UbuntuLightText {
+                    Image {
                         anchors.fill: parent
+                        visible: statusLine.text !== ""
+                        source: "images/settings/act_btn.svg"
+                        fillMode: Image.Stretch
+                    }
+                    Rectangle {
+                        x: 8; y: 8; width: 4; height: 22
+                        visible: statusLine.text !== ""
+                        color: feedbackColorsEnabled || !alarmOnline ? status.color : "#c7d0d9"
+                    }
+                    UbuntuLightText {
+                        id: statusLine
+                        anchors.fill: parent
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 8
                         text: statusText()
                         textFormat: Text.PlainText
-                        color: feedbackColorsEnabled || !alarmOnline ? status.color : "#c7d0d9"
+                        color: "white"
                         font.pixelSize: 16
+                        verticalAlignment: Text.AlignVCenter
                         wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
                     }
                 }
             }

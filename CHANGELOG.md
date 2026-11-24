@@ -28,6 +28,9 @@ Station:
   (favourites bar or arrows). The value is stored in Home Assistant and shows
   the same in the integration's options; changing it on either side does not
   reload the integration.
+- The status line of the **Alarm** page ("PIN required: Away") is readable on
+  every station background: it sits on a dark panel with white text and
+  shows the status colour as a small marker.
 - **Agenda**, **Leave home** and **Situations** no longer end on a row cut in
   half: the lists show whole rows, stop on a row and have a thin scroll bar
   while there is more. On **Leave home** the alarm row and the actions such

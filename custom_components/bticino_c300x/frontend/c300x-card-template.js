@@ -275,6 +275,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           align-items: center;
           gap: 8px;
           min-width: 0;
+          min-height: 18px;
         }
         .secondary {
           flex: 0 1 auto;
@@ -295,6 +296,8 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           -webkit-line-clamp: 2;
           white-space: normal;
           overflow-wrap: break-word;
+          /* Title 20px + two 14px lines fill the footer's 48px: a message never resizes the card. */
+          line-height: 14px;
         }
         .status-line:has(.secondary.error, .secondary.notice) .readiness-text {
           display: none;
@@ -387,6 +390,12 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
             grid-template-columns: minmax(0, 1fr) auto;
             grid-template-areas: "text text" "controls devices";
             row-gap: 4px;
+          }
+          .entity-text {
+            min-height: 48px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
           }
         }
         @container (max-width: 199px) {

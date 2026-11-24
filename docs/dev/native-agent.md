@@ -206,9 +206,12 @@ new IPv4 address only after an identity proof
 Limits: only entries saved with an IPv4 address move (host names and IPv6 stay),
 only to IPv4 announcements, only with a discovered station id and a token of at
 least 32 characters, at most once per entry in 10 minutes, and not if the entry
-changed while the requests ran. The agent refuses a proof with `api.noAuth=true`,
-a shorter token or a non-IPv4 connection. Otherwise the user runs
-**Reconfigure**; a DHCP reservation avoids address changes.
+changed while the requests ran. When the announced address gave no proof reply
+or the saved one still proved, HA checks the same announcement again itself, up
+to two more times, 10 minutes apart; a wrong proof is never retried, and a newer
+announcement replaces the pending check. The agent refuses a proof with
+`api.noAuth=true`, a shorter token or a non-IPv4 connection. Otherwise the user
+runs **Reconfigure**; a DHCP reservation avoids address changes.
 
 ## Display Patch
 
@@ -243,13 +246,22 @@ the agent with TERM and checks for exit for up to ten seconds; an unverifiable
 or still-running agent aborts removal before any restore or delete (no SIGKILL
 fallback). It then restores all display changes (Display patch, core hook,
 media-user label), the IPv6 and IPv4 firewall scripts, the display library, the
-original audio codec and camera quality values and, if patched, the original
-media executable; removes the init files, agent directory and agent-owned
-backups; and schedules a reboot. SSH is started before and after the cleanup and
+stock routing executable of the Home Assistant media user, the original audio
+codec and camera quality values and, if patched, the original media executable;
+removes the init files, agent directory and agent-owned backups; and schedules
+a reboot. SSH is started before and after the cleanup and
 is not removed. A failed restore step stops the script before the backups are
 deleted, with one exception: a display library without a valid stock backup
 keeps the wider tap tolerance and removal continues. User steps:
 [Remove Agent](../advanced-maintenance.md#remove-agent).
+
+The media step checks the routing executable first. A verified stock file is
+left as it is, and so is a file the agent never patched (no backup and no
+patch). Otherwise the verified stock backup is put back through the same
+restore as turning the media user off, and the result must be the stock file
+of that firmware. A patched file without its backup, an invalid backup, an
+unknown or missing executable next to a backup, or a failed read-only remount
+stops removal with the agent and backups kept.
 
 If removal cannot remount the root filesystem read-only after restoration, it
 restores the original startup entries and keeps the agent and backups. The agent
@@ -337,6 +349,9 @@ binaries on its own and does not check for updates when idle.
   raises a Repair when an update is needed.
 - The Repair uploads the packaged files through the maintenance API after user
   confirmation.
+- The agent refuses the update with `409 update_root_already_writable` when
+  `/` is already writable, so it never takes over a mount another operation
+  left open.
 - The agent verifies the complete staged bundle before replacing any file,
   keeps temporary backups of changed files, rolls them back on an apply error
   and writes bundle metadata only after activation. Config is preserved; restart

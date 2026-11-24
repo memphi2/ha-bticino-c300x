@@ -391,7 +391,6 @@ static int system_metrics_monitor_active(const struct c300x_config *config);
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
 static int local_network_online(void);
-static int timeout_until_ms(time_t now, time_t due);
 static int min_timeout_ms(int current, int candidate);
 static void system_metrics_dispatch_now(
     const struct c300x_config *config,
@@ -905,6 +904,34 @@ static int path_is_symlink(const char *path, int *is_symlink)
     }
     return 0;
 }
+
+/* -1 once answered, else whether the entry is there. With the delete out the
+ * device may be removing the entry: then only its presence counts. */
+static int delete_target_present(int fd, struct agent_runtime *runtime, const char *path,
+                                 const char *stat_error, const char *entry_error)
+{
+    char body[96];
+    int is_symlink = 0;
+
+    if (c300x_openwebnet_async_owns(&runtime->openwebnet)) {
+        return path_exists(path);
+    }
+    if (!path_is_symlink(path, &is_symlink)) {
+        if (errno == ENOENT) {
+            return 0;
+        }
+        snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", stat_error);
+        send_json(fd, 502, "Bad Gateway", body);
+        return -1;
+    }
+    if (is_symlink || !path_is_directory(path)) {
+        snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", entry_error);
+        send_json(fd, 400, "Bad Request", body);
+        return -1;
+    }
+    return 1;
+}
+
 
 static int parse_file_mode(const char *value, mode_t fallback, mode_t *mode)
 {
@@ -4279,17 +4306,6 @@ static int system_metrics_monitor_active(const struct c300x_config *config)
     return config->system_metrics_enabled && config->system_metrics_watch;
 }
 
-static int timeout_until_ms(time_t now, time_t due)
-{
-    if (due <= now) {
-        return 0;
-    }
-    if (due - now > 3600) {
-        return 3600000;
-    }
-    return (int)((due - now) * 1000);
-}
-
 static int min_timeout_ms(int current, int candidate)
 {
     if (candidate < 0) {
@@ -6775,8 +6791,7 @@ static void handle_answering_message_delete(
     char error[C300X_MAX_ERROR_LEN];
     char body[512];
     int message_number = 0;
-    int is_symlink = 0;
-    int path_present = 1;
+    int path_present;
 
     if (!config->answering_machine_messages_enabled || !runtime->voicemail.enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"video_messages_disabled\"}\n");
@@ -6795,16 +6810,8 @@ static void handle_answering_message_delete(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_message_id\"}\n");
         return;
     }
-    if (!path_is_symlink(message_path, &is_symlink)) {
-        if (errno == ENOENT) {
-            path_present = 0;
-        } else {
-            send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"video_message_stat_failed\"}\n");
-            return;
-        }
-    }
-    if (path_present && (is_symlink || !path_is_directory(message_path))) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_message_entry\"}\n");
+    path_present = delete_target_present(client_fd, runtime, message_path, "video_message_stat_failed", "invalid_message_entry");
+    if (path_present < 0) {
         return;
     }
     if (!send_answering_delete_command(
@@ -7108,8 +7115,7 @@ static void handle_memos_delete(
     char kind_json[48];
     int memo_number = 0;
     int memo_directory = 0;
-    int is_symlink = 0;
-    int path_present = 1;
+    int path_present;
 
     if (!config->memos_enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
@@ -7136,16 +7142,8 @@ static void handle_memos_delete(
     memo_directory = strcmp(kind, "text") == 0
         ? C300X_ANSWERING_DIRECTORY_TEXT_MEMO
         : C300X_ANSWERING_DIRECTORY_VOICE_MEMO;
-    if (!path_is_symlink(memo_path, &is_symlink)) {
-        if (errno == ENOENT) {
-            path_present = 0;
-        } else {
-            send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_stat_failed\"}\n");
-            return;
-        }
-    }
-    if (path_present && (is_symlink || !path_is_directory(memo_path))) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_memo_entry\"}\n");
+    path_present = delete_target_present(client_fd, runtime, memo_path, "memo_stat_failed", "invalid_memo_entry");
+    if (path_present < 0) {
         return;
     }
     if (!send_answering_delete_command(
@@ -9841,11 +9839,8 @@ int c300x_run(struct c300x_config *config)
             poll_fds[poll_count].events = POLLIN;
             poll_fds[poll_count].revents = 0;
             poll_count++;
-            poll_timeout_ms = min_timeout_ms(
-                poll_timeout_ms,
-                timeout_until_ms(now, c300x_mdns_next_announce_at(&mdns))
-            );
         }
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms, c300x_mdns_poll_timeout_ms(&mdns, now));
         if (c300x_mqtt_fd(&runtime->mqtt) >= 0) {
             mqtt_poll_index = (int)poll_count;
             poll_fds[poll_count].fd = c300x_mqtt_fd(&runtime->mqtt);

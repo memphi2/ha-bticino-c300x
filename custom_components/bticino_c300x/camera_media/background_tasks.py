@@ -63,6 +63,11 @@ class CameraBackgroundTasks:
 
         task.add_done_callback(done)
 
+    def cancel(self, key: str) -> None:
+        """Cancel named work so the next create for the key is not coalesced into it."""
+        if (task := self._named.pop(key, None)) is not None:
+            task.cancel()
+
     async def close(self) -> None:
         """Reject new work, cancel outstanding tasks and await their cleanup."""
         self.closing = True

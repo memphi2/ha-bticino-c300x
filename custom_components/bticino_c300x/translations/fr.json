@@ -120,17 +120,17 @@
         "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
-          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action",
-          "dashboard_navigation": "Navigation entre les pages"
+          "dashboard_prevent_return": "Garder la page ouverte pendant la veille de l'écran",
+          "dashboard_navigation": "Navigation entre les pages",
+          "dashboard_dynamic_homepage": "Boutons de la page d'accueil"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
-          "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
-          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Comme l'original : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "user_dashboard_entity_display": {
@@ -233,17 +233,17 @@
         "description": "Configurez le dashboard optionnel de l'écran C300X et le patch display.\n\nÉtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display écrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'à environ 60 secondes. L'état ne change qu'après confirmation du résultat par l'agent.\n\nLorsque le patch display est appliqué, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
-          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action",
-          "dashboard_navigation": "Navigation entre les pages"
+          "dashboard_prevent_return": "Garder la page ouverte pendant la veille de l'écran",
+          "dashboard_navigation": "Navigation entre les pages",
+          "dashboard_dynamic_homepage": "Boutons de la page d'accueil"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
-          "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
-          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Comme l'original : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -836,17 +836,17 @@
         "description": "Pages Home Assistant sur l'écran du C300X.\n\nPatch display sur l'appareil : {qml_patch_status}.\n\nActiver ou désactiver le patch display écrit des fichiers d'écran sur l'appareil et recharge son affichage ; cela peut prendre jusqu'à environ 60 secondes. L'état change dès que l'appareil le confirme.\n\nAvec le patch display activé, le menu Écran propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
         "data": {
           "device_ui_enabled": "Pages Home Assistant sur l'écran",
-          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
-          "dashboard_prevent_return": "Rester sur la page après une action",
-          "dashboard_navigation": "Navigation entre les pages"
+          "dashboard_prevent_return": "Garder la page ouverte pendant la veille de l'écran",
+          "dashboard_navigation": "Navigation entre les pages",
+          "dashboard_dynamic_homepage": "Boutons de la page d'accueil"
         },
         "data_description": {
           "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
-          "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil.",
-          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Comme l'original : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "dashboard_entity_display": {
@@ -890,7 +890,7 @@
           "init": "Retour"
         },
         "menu_option_descriptions": {
-          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, comportement après une action et actions autorisées.",
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, page pendant la veille de l'écran et actions autorisées.",
           "dashboard_page_list": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
           "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
@@ -1125,7 +1125,6 @@
     },
     "error": {
       "invalid_action_map": "Le JSON de la liste autorisée d'actions est invalide.",
-      "invalid_actions": "Le JSON de la liste autorisée d'actions est invalide.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",
@@ -1464,6 +1463,9 @@
     "text_memo_not_available": {
       "message": "Aucun mémo texte C300X n'est disponible."
     },
+    "text_memo_write_not_supported": {
+      "message": "L'écriture d'un mémo texte n'est pas prise en charge par l'agent C300X installé."
+    },
     "unknown_action": {
       "message": "L'ID d'action {action_id} n'est pas configure."
     },
@@ -1733,6 +1735,12 @@
       "options": {
         "pager": "Flèches (précédent / suivant)",
         "tabs": "Barre de favoris"
+      }
+    },
+    "dashboard_dynamic_homepage": {
+      "options": {
+        "stock": "Comme l'original (si nécessaire, aussi empilés)",
+        "side_by_side": "Côte à côte, fixes"
       }
     },
     "display_patch_status": {

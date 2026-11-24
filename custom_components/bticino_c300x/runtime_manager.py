@@ -53,6 +53,7 @@ from .const import (
     CONF_WEBHOOK_ID,
     DATA_RUNTIME_ENTRIES,
     DEFAULT_AGENT_PORT,
+    DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
     DEFAULT_RECONNECT_GRACE_SECONDS,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
@@ -566,7 +567,9 @@ def _dynamic_homepage_setting(settings: tuple[dict[str, Any], dict[str, Any]]) -
     data, options = settings
     if CONF_DASHBOARD_DYNAMIC_HOMEPAGE in options:
         return bool(options[CONF_DASHBOARD_DYNAMIC_HOMEPAGE])
-    return bool(data.get(CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False))
+    return bool(
+        data.get(CONF_DASHBOARD_DYNAMIC_HOMEPAGE, DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE)
+    )
 
 
 async def _async_reapply_display_patch_for_home_page(
@@ -591,9 +594,11 @@ async def _async_reapply_display_patch_for_home_page(
     from .entry_config import entry_config_value
     from .qml_patch import async_apply_qml_patch_and_confirm
 
-    if bool(entry_config_value(entry, CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False)) == (
-        was_dynamic_homepage
-    ):
+    if bool(
+        entry_config_value(
+            entry, CONF_DASHBOARD_DYNAMIC_HOMEPAGE, DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE
+        )
+    ) == was_dynamic_homepage:
         return
     runtime_data = getattr(entry, "runtime_data", None)
     if not qml_patch_status_is_active(

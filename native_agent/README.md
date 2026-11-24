@@ -8,8 +8,9 @@ Makefile and `config.example.json`.
 
 The build needs a C compiler, `pkg-config` and the libcurl development headers.
 `make -C native_agent` builds the host binary under `build/host/`,
-`make -C native_agent check` runs the tests, and the `armhf` targets build and
-check the device binary. Prerequisites, `CURL_INCLUDE_DIR`, the ABI/stack
+`make -C native_agent check` builds it and validates `config.example.json` with
+`--check-config`, and the `armhf` targets build and check the device binary.
+The native tests run with pytest: `.venv/bin/python -m pytest tests/test_native_*`. Prerequisites, `CURL_INCLUDE_DIR`, the ABI/stack
 guards and a local run with an untracked config are described once in
 [Native Agent: Build and Checks](../docs/dev/native-agent.md#build-and-checks).
 

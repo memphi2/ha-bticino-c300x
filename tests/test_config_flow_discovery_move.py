@@ -19,9 +19,18 @@ from unittest.mock import Mock
 import pytest
 from aiohttp import ClientConnectionError
 from homeassistant.config_entries import UNDEFINED, ConfigEntryState
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers import aiohttp_client
+from homeassistant.helpers import event as event_helper
 
+import custom_components.bticino_c300x as integration
+from custom_components.bticino_c300x import (
+    discovery_move,
+    notify_names,
+    repair_issues,
+    visitor_journal,
+)
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
@@ -144,12 +153,39 @@ def make_hass(entry):
                 changed = True
         return changed
 
-    return SimpleNamespace(data={}, config_entries=SimpleNamespace(
-        async_update_entry=Mock(side_effect=update),
-        async_get_known_entry=lambda _: entry,
-        async_entry_for_domain_unique_id=lambda *_: entry,
-        async_schedule_reload=Mock(),
-    ))
+    tasks: list[Any] = []
+    return SimpleNamespace(
+        data={}, tasks=tasks, timers=[],
+        bus=SimpleNamespace(async_listen_once=Mock()),
+        async_create_background_task=lambda coro, _name, eager_start=True: tasks.append(coro),
+        config_entries=SimpleNamespace(
+            async_update_entry=Mock(side_effect=update),
+            async_get_known_entry=lambda _: entry,
+            async_entry_for_domain_unique_id=lambda *_: entry,
+            async_schedule_reload=Mock(),
+        ),
+    )
+
+
+class FakeTimer:
+    def __init__(self, delay, action) -> None:
+        self.delay, self.action, self.cancelled, self.fired = delay, action, False, False
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+
+def pending(hass):
+    return [timer for timer in hass.timers if not timer.cancelled and not timer.fired]
+
+
+def fire(hass):
+    """Fire the one pending re-check and run the check it starts."""
+    [timer] = pending(hass)
+    timer.fired = True
+    timer.action(None)
+    while hass.tasks:
+        asyncio.run(hass.tasks.pop(0))
 
 
 @pytest.fixture
@@ -161,6 +197,13 @@ def setup(monkeypatch):
         hass = make_hass(entry)
         session = FakeSession(answer)
         monkeypatch.setattr(aiohttp_client, "async_get_clientsession", lambda _hass: session)
+
+        def call_later(_hass, delay, action):
+            timer = FakeTimer(delay, action)
+            hass.timers.append(timer)
+            return timer.cancel
+
+        monkeypatch.setattr(event_helper, "async_call_later", call_later)
 
         def new_flow():
             flow = BticinoC300XConfigFlow()
@@ -431,3 +474,211 @@ def test_every_request_sends_a_fresh_nonce(setup, monkeypatch):
     nonces = {kwargs["json"]["nonce"] for _, _, kwargs in session.calls}
     assert len(nonces) == 4
     assert entry.data[CONF_AGENT_HOST] == "192.0.2.5"
+
+
+THIRD_HOST = "192.0.2.30"
+THIRD_PROOF_URL = f"http://{THIRD_HOST}:{NEW_PORT}/api/v1/identity/proof"
+NO_REPLY = (0, TimeoutError())
+
+
+def changing_station(new_answers, *, old_answers=None, third=(200, lambda n: _signed(n, proof=proof(n, host=THIRD_HOST)))):
+    """Answer each request to an address with the next of its answers; the last one repeats."""
+    queues = {OLD_PROOF_URL: list(old_answers or [GONE]), NEW_PROOF_URL: list(new_answers)}
+
+    def answer(method, url, body):
+        if method == "POST" and url == THIRD_PROOF_URL:
+            status, reply = third
+            return status, reply(body["nonce"]) if callable(reply) else reply
+        assert method == "POST" and url in queues, f"unexpected request {method} {url}"
+        queue = queues[url]
+        status, reply = queue.pop(0) if len(queue) > 1 else queue[0]
+        return status, reply(body["nonce"]) if callable(reply) else reply
+
+    return answer
+
+
+def assert_no_credentials(session):
+    for _method, url, kwargs in session.calls:
+        headers = {str(key).lower() for key in (kwargs.get("headers") or {})}
+        assert "authorization" not in headers
+        assert HEADER_MAINTENANCE_TOKEN.lower() not in headers
+        assert TOKEN not in url
+        assert TOKEN not in repr(kwargs)
+        assert set(kwargs["json"]) == {"nonce"}
+    nonces = [kwargs["json"]["nonce"] for _, _, kwargs in session.calls]
+    assert len(set(nonces)) == len(nonces)
+
+
+@pytest.mark.parametrize("first,old_answers", [
+    pytest.param(NO_REPLY, None, id="timeout"),
+    pytest.param((0, ClientConnectionError("refused")), None, id="refused"),
+    pytest.param((404, {"ok": False, "error": "identity_proof_unavailable"}), None, id="no-proof-reply"),
+    pytest.param((200, valid_reply), [STILL_THERE, GONE], id="old-address-still-proved"),
+])
+def test_unproven_attempt_is_checked_again_and_then_moves(setup, caplog, first, old_answers):
+    caplog.set_level(logging.DEBUG)
+    entry, hass, new_flow, session = setup(changing_station([first, (200, valid_reply)], old_answers=old_answers))
+    data, options = dict(entry.data), dict(entry.options)
+
+    assert announce(new_flow()) == "already_configured"
+
+    assert_unchanged(entry, hass, data, options)
+    assert [timer.delay for timer in pending(hass)] == [discovery_move.MOVE_RETRY_SECONDS]
+
+    fire(hass)
+
+    assert session.urls[-2:] == BOTH
+    assert_moved(entry, hass)
+    assert pending(hass) == []
+    assert_no_credentials(session)
+    assert TOKEN not in caplog.text
+
+
+@pytest.mark.parametrize("reply", [
+    pytest.param(lambda n: _signed(n, proof=proof(n, token=OTHER_TOKEN)), id="other-token"),
+    pytest.param(lambda n: _signed(n, id=OTHER_ID, proof=proof(n, device_id=OTHER_ID)), id="other-id"),
+    pytest.param(lambda n: _signed(n, proof=proof(n, host=THIRD_HOST)), id="relayed"),
+    pytest.param(lambda n: _signed(n, ok=False), id="not-ok"),
+])
+@pytest.mark.parametrize("on_recheck", [False, True], ids=["first-attempt", "recheck"])
+def test_wrong_proof_plans_no_recheck(setup, caplog, reply, on_recheck):
+    answers = [NO_REPLY, (200, reply)] if on_recheck else [(200, reply)]
+    entry, hass, new_flow, session = setup(changing_station(answers))
+    data, options = dict(entry.data), dict(entry.options)
+
+    assert announce(new_flow()) == "already_configured"
+    if on_recheck:
+        fire(hass)
+
+    assert session.urls == BOTH * (1 + on_recheck)
+    assert len(hass.timers) == on_recheck
+    assert pending(hass) == []
+    assert_unchanged(entry, hass, data, options)
+    assert "did not prove the saved identity" in caplog.text
+
+
+def test_rechecks_stop_after_two(setup):
+    entry, hass, new_flow, session = setup(changing_station([NO_REPLY]))
+    data, options = dict(entry.data), dict(entry.options)
+
+    announce(new_flow())
+    fire(hass)
+    fire(hass)
+
+    assert pending(hass) == []
+    assert len(hass.timers) == discovery_move.MOVE_RECHECKS == 2
+    assert all(timer.delay == discovery_move.MOVE_RETRY_SECONDS for timer in hass.timers)
+    assert session.urls == BOTH * 3
+    assert_unchanged(entry, hass, data, options)
+    assert_no_credentials(session)
+
+
+def test_recheck_sees_an_entry_changed_meanwhile(setup):
+    entry, hass, new_flow, session = setup(changing_station([NO_REPLY, (200, valid_reply)]))
+
+    announce(new_flow())
+    entry.options[CONF_AGENT_TOKEN] = "rotated-token-0123456789abcdefghijklm"
+    fire(hass)
+
+    assert session.urls == BOTH * 2
+    assert entry.data[CONF_AGENT_HOST] == "192.0.2.5"
+    hass.config_entries.async_update_entry.assert_not_called()
+
+
+def test_newer_announcement_inside_the_interval_replaces_the_pending_recheck(setup, monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr("custom_components.bticino_c300x.discovery_move.monotonic", lambda: now[0])
+    entry, hass, new_flow, session = setup(changing_station([NO_REPLY]))
+
+    announce(new_flow())
+    [first] = pending(hass)
+    now[0] += 100
+    announce(new_flow(), host=THIRD_HOST)
+
+    assert first.cancelled
+    assert [timer.delay for timer in pending(hass)] == [500.0]
+    assert session.urls == BOTH
+
+    now[0] += 500
+    fire(hass)
+
+    assert session.urls == [*BOTH, f"POST {OLD_PROOF_URL}", f"POST {THIRD_PROOF_URL}"]
+    assert entry.data[CONF_AGENT_HOST] == THIRD_HOST
+    assert pending(hass) == []
+    assert_no_credentials(session)
+
+
+def test_newer_announcement_with_a_wrong_proof_drops_the_pending_recheck(setup, monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr("custom_components.bticino_c300x.discovery_move.monotonic", lambda: now[0])
+    entry, hass, new_flow, _session = setup(changing_station(
+        [NO_REPLY], third=(200, lambda n: _signed(n, proof=proof(n, host=THIRD_HOST, token=OTHER_TOKEN))),
+    ))
+    data, options = dict(entry.data), dict(entry.options)
+
+    announce(new_flow())
+    [first] = pending(hass)
+    now[0] += 601
+    announce(new_flow(), host=THIRD_HOST)
+
+    assert first.cancelled
+    assert pending(hass) == []
+    assert_unchanged(entry, hass, data, options)
+
+
+def _unload(hass, entry, monkeypatch):
+    class Manager:
+        def __init__(self, *_args) -> None:
+            pass
+
+        async def async_unload(self):
+            return False
+
+    monkeypatch.setattr(integration, "C300XRuntimeManager", Manager)
+    asyncio.run(integration.async_unload_entry(hass, entry))
+
+
+def _remove(hass, entry, monkeypatch):
+    async def nothing(*_args):
+        return None
+
+    monkeypatch.setattr(integration, "cleanup_entry_runtime_resources", lambda *_: None)
+    monkeypatch.setattr(repair_issues, "async_clear_entry_repair_issues", lambda *_: None)
+    monkeypatch.setattr(visitor_journal, "async_remove_journal", nothing)
+    monkeypatch.setattr(notify_names, "async_remove_name", nothing)
+    asyncio.run(integration.async_remove_entry(hass, entry))
+
+
+def _stop(hass, _entry, _monkeypatch):
+    [(event, listener), _] = hass.bus.async_listen_once.call_args
+    assert event == EVENT_HOMEASSISTANT_STOP
+    listener(None)
+
+
+@pytest.mark.parametrize("end", [_unload, _remove, _stop], ids=["unload", "remove", "stop"])
+def test_unload_remove_and_stop_cancel_the_pending_recheck(setup, monkeypatch, end):
+    entry, hass, new_flow, session = setup(changing_station([NO_REPLY]))
+
+    announce(new_flow())
+    [timer] = pending(hass)
+    end(hass, entry, monkeypatch)
+
+    assert timer.cancelled
+    assert pending(hass) == []
+    assert session.urls == BOTH
+
+
+def test_check_running_during_unload_plans_no_recheck(setup):
+    unloading = changing_station([NO_REPLY])
+
+    def answer(method, url, body):
+        if url == NEW_PROOF_URL:
+            discovery_move.async_cancel_move_recheck(hass, "entry-1")
+        return unloading(method, url, body)
+
+    _entry, hass, new_flow, session = setup(answer)
+
+    announce(new_flow())
+
+    assert session.urls == BOTH
+    assert hass.timers == []

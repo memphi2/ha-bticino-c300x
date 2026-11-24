@@ -42,14 +42,35 @@ settings stay.
 | Field in **Display and Display patch** | Meaning |
 | --- | --- |
 | **Home Assistant pages on the display** | On applies the Display patch, off restores the original display. |
-| **Show home page buttons only when needed** | On (default): the Alarm button appears while an alarm panel is configured, the Home Assistant button while a page has content. Off: both are always shown. A change applies the patch again and restarts the screen once. |
-| **Stay on the page after an action** | Off (default): the Home Assistant and Alarm pages return to the station's home page when the screen goes to standby. On: they stay open. |
+| **Keep the page open on screen standby** | Off (default): the Home Assistant and Alarm pages return to the station's home page when the screen goes to standby. On: they stay open. |
 | **Page navigation** | **Favourites bar** (default) or **Arrows (previous / next)**; see [Page navigation](#page-navigation). |
+| **Home page buttons** | Where the **Alarm** and **Home Assistant** buttons sit on the station's home page. **Like the original (when needed, also stacked)** (default): each button appears only while it has something to open and takes its place among the station's own buttons, which wrap into a second row like they always do. **Fixed side by side**: both keep two fixed places next to each other after **Settings**; a button with nothing to open leaves its place empty, so the other buttons never move. While the station shows its **Quick actions** panel, the buttons fill up to two rows of four from left to right, so all of them fit beside the panel. A change applies the Display patch again and restarts the display once. |
 | **Allowed actions (for experts)** | Actions the display and its notices may run. Leave empty if you use none. |
 
+The Alarm button has something to open while an alarm panel is configured, the
+Home Assistant button while a display page has content. A short connection
+failure keeps the last confirmed state in both layouts.
+
 The allowed actions are a JSON object, one entry per action ID (letters,
-digits, `_ . : -`) with `domain`, `service` and optional `target`, `data` and
-`name`. Leave home and display notices can only offer actions from this list.
+digits, `_ . : -`) with `domain`, `service` and optional `target`, `data`,
+`name` and `dashboard`. Leave home and display notices can only offer actions
+from this list.
+
+Every allowed action also becomes a tile that runs it, by default on an extra
+untitled page. A `toggle` of a light, switch, fan or input boolean is a switch
+tile; otherwise an action with a `source` is an image tile, any other a button.
+The optional `dashboard` object changes that tile:
+
+| Key | Meaning |
+| --- | --- |
+| `page` | Name of the page that shows the tile; a name no page has adds a page of that name. |
+| `name` | Tile name; otherwise the action's `name`, then its ID. |
+| `type` | `button`, `switch` or `image`. |
+| `order` | Position among the tiles of the page (default 1000). |
+| `state_entity_id`, `entity_id` | Entity whose state a switch tile shows; otherwise the first entity in `target` or `data`. |
+| `state_label` | Fixed state text. |
+| `source` | Picture address of an `image` tile; otherwise the state of the state entity. An image tile without a picture is left out. |
+| `width`, `height` | Size of an `image` tile in pixels (default 220×120). |
 
 ```json
 {
@@ -63,9 +84,9 @@ digits, `_ . : -`) with `domain`, `service` and optional `target`, `data` and
 
 ### What the Display patch changes on the station
 
-- Two buttons on the home page open the Alarm and Home Assistant pages. Their
-  places stay reserved, so the other buttons never move; a short connection
-  failure keeps the last confirmed visibility.
+- Two buttons on the home page open the Alarm and Home Assistant pages,
+  arranged like the station's own buttons or as a fixed pair, as set under
+  **Home page buttons**.
 - A **Home Assistant** tab in the Settings menu
   ([Station Settings Tab](#station-settings-tab)).
 - The swipe threshold of the touch screen rises from 4 to 16 pixels, so a tap
@@ -97,7 +118,7 @@ to the list. **Add a page** appears while a page of your own is still free.
 | --- | --- |
 | **Name** | Heading of the page on the display, in place of Home Assistant. Up to 60 characters; each name once, in any capitalisation. A page with entities needs one. The status page has none. |
 | **Position** | Place among all pages, 1 to 12. |
-| **Entities** | The page's tiles, in the order picked; drag to reorder. An entity is on one page only: picking one that another page shows moves it, with its tile settings, to this page. |
+| **Entities** | The page's tiles, in the order picked; drag to reorder. An entity is on one page only. In the form of a single page under **Display pages**, picking one that another page shows moves it, with its tile settings, to this page; setup and reconfigure, which show all pages at once, refuse it instead. |
 
 How positions work:
 
@@ -220,7 +241,8 @@ More tile behaviour:
 
 - A small symbol before the name shows the type or device class, for example
   a sun for a light or a note for a media player.
-- Timestamp and date sensors show a short local form such as `14.11. 10:30`.
+- Timestamp sensors show a short local form such as `14.11. 10:30`, date
+  sensors the date such as `14.11.2026`.
   Text cut to fit ends in three dots.
 - Sliders send one command when released, not while moving.
 - Numbers and select options follow Home Assistant's language: a decimal
@@ -252,7 +274,8 @@ and takes the picture's proportions, up to 320 px high; a taller picture is
 shown whole and narrower. With **Width** Half two pictures stand side by side.
 With **Height** Half (138 px) or Full (286 px) the picture is cut around its
 centre to fill the tile. Home Assistant scales the picture to the tile before
-the display loads it; a smaller picture is enlarged up to twice its size.
+the display loads it. At Automatic height a smaller picture is enlarged up to
+twice its size; with Half or Full it is enlarged as far as the tile needs.
 
 It is a still, not a stream: an image entity reloads when it has a new
 picture, a camera about every five minutes. The entity name is written in the

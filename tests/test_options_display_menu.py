@@ -6,6 +6,8 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from custom_components.bticino_c300x.const import (
     CONF_ACTIONS,
     CONF_AGENT_HOST,
@@ -13,12 +15,18 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_TOKEN,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_NAVIGATION,
     CONF_DASHBOARD_PAGES,
+    CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
     CONF_DEVICE_UI_ENABLED,
     CONF_ENERGY_PAGE,
     CONF_VIDEO_ENABLED,
     CONF_WEATHER_ENTITY_ID,
+    DASHBOARD_NAVIGATION_PAGER,
+)
+from custom_components.bticino_c300x.dashboard_config import (
+    configured_dashboard_prevent_return,
 )
 from custom_components.bticino_c300x.dashboard_entities import DASHBOARD_STATUS_PAGE
 from tests.test_config_flow_helpers import _options_flow
@@ -306,6 +314,37 @@ def test_a_built_in_page_is_switched_on_from_the_list() -> None:
     assert [page["name"] for page in entry.options[CONF_DASHBOARD_PAGES]] == [
         DASHBOARD_STATUS_PAGE, "Doors", "Garden",
     ]
+
+
+def test_an_old_entry_without_the_stay_open_key_shows_what_the_display_applies() -> None:
+    entry = _entry()
+    assert CONF_DASHBOARD_PREVENT_RETURN not in {**entry.data, **entry.options}
+    form = _step(_options_flow(entry), "dashboard")
+    shown = next(
+        key.default() for key in form["data_schema"].schema
+        if str(key) == CONF_DASHBOARD_PREVENT_RETURN
+    )
+    assert shown is configured_dashboard_prevent_return(entry) is True
+
+
+@pytest.mark.parametrize(("area", "edit"), [
+    ("dashboard", {}),
+    ("dashboard", {CONF_DASHBOARD_NAVIGATION: DASHBOARD_NAVIGATION_PAGER}),
+    ("features", {}),
+    ("features", {CONF_VIDEO_ENABLED: True}),
+])
+def test_an_old_entry_saved_with_the_stay_open_option_as_shown_keeps_it_on(
+        area: str, edit: dict[str, Any]) -> None:
+    """An area saved as is stores nothing; a save with another edit stores what was shown."""
+    entry = _entry()
+    entry.entry_id = "entry-1"
+    entry.title = "C300X"
+    flow = _options_flow(entry)
+    form = _step(flow, area)
+    result = _step(flow, area, form["data_schema"](edit))
+    assert (result["type"], result["step_id"]) == ("menu", "init")
+    assert (CONF_DASHBOARD_PREVENT_RETURN in entry.options) is bool(edit)
+    assert configured_dashboard_prevent_return(entry) is True
 
 
 def test_a_display_area_returns_to_the_display_submenu() -> None:

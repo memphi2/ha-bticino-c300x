@@ -245,6 +245,10 @@ def test_removal_refuses_unverified_routing_before_camera_restore(lab: Lab, dama
     settings = lab.settings.read_bytes()
     backup = lab.backup.read_bytes()
     routing = Path(lab.env["C300X_ROUTING_TARGET_DIR"]) / "bt_answering_machine"
+    # A routing backup says the agent patched the target, so removal must restore it.
+    routing_backup = Path(lab.env["C300X_ROUTING_BACKUP_DIR"]) / "bt_answering_machine"
+    routing_backup.parent.mkdir(parents=True, exist_ok=True)
+    routing_backup.write_bytes(ROUTING_STOCK)
     routing.unlink()
     if damage == "modified":
         routing.write_bytes(b"unknown routing executable\n")
@@ -252,8 +256,8 @@ def test_removal_refuses_unverified_routing_before_camera_restore(lab: Lab, dama
         original = routing.with_name("original")
         original.write_bytes(ROUTING_STOCK)
         routing.symlink_to(original)
-    # The C100X removal restores the routing first and stops there on failure.
-    result = subprocess.run([str(lab.binary), "--restore-device-routing"], env=lab.env,
+    # Removal restores the routing first and stops there on failure.
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode != 0
     assert "Failed to restore device routing" in result.stderr

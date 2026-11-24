@@ -21,6 +21,7 @@ struct c300x_command_job {
 };
 
 void c300x_command_job_init(struct c300x_command_job *job);
+/* dynamic_homepage 1 or 0 sets C300X_QML_DYNAMIC_HOME_PAGE; -1 passes the agent environment on. */
 int c300x_command_job_start(struct c300x_command_job *job, const char *program,
     const char *argument, int dynamic_homepage, int timeout_ms);
 /* Legacy capture semantics: retain a bounded prefix and discard excess output.

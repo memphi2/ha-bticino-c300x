@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -21,17 +23,49 @@ LINPHONE = (
     "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=0\n"
     "[audio_codec_1]\nmime=speex\nrate=8000\nenabled=1\n"
 )
-ROUTING_STOCK = b"isolated stock routing fixture\n"
+# Stand-in stock routing binary, built in as the 1.7.19 stock identity. It is
+# larger than the last 1.7.19 patch range.
+ROUTING_STOCK = bytes(index * 7 % 251 for index in range(0x40000))
+
+
+def _routing_patches() -> tuple:
+    spec = importlib.util.spec_from_file_location(
+        "device_routing_builder", ROOT / "scripts/device_routing_builder.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.PATCHES
+
+
+def _patched_stand_in() -> bytes:
+    """The stand-in with the 1.7.19 writes; the build takes its range hashes."""
+    data = bytearray(ROUTING_STOCK)
+    for patch in ROUTING_PATCHES:
+        for write in patch.writes:
+            start = patch.offset + write.offset
+            data[start:start + len(write.data)] = write.data
+    return bytes(data)
+
+
+ROUTING_PATCHES = _routing_patches()
+ROUTING_PATCHED = _patched_stand_in()
 
 
 @pytest.fixture(scope="module")
 def removal_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     build = tmp_path_factory.mktemp("removal-build")
+    patched_ranges = "".join(
+        f" -DC300X_DEVICE_PATCH_PATCHED_RANGE_SHA256_{index}="
+        f'\\"{hashlib.sha256(ROUTING_PATCHED[patch.offset:patch.offset + patch.range_len]).hexdigest()}\\"'
+        for index, patch in enumerate(ROUTING_PATCHES)
+    )
     result = subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all",
          "CFLAGS=-std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE "
          "-D_POSIX_C_SOURCE=200809L -DC300X_DEVICE_PATCH_STOCK_SHA256="
-         f'\\"{hashlib.sha256(ROUTING_STOCK).hexdigest()}\\"'],
+         f'\\"{hashlib.sha256(ROUTING_STOCK).hexdigest()}\\"' + patched_ranges],
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -275,3 +309,80 @@ def test_removal_of_an_unchanged_device_with_a_single_backup_succeeds(device: di
     assert Path(device["C300X_AUDIO_STACK_OPEN"]).read_text() == STACK
     assert Path(device["C300X_AUDIO_LINPHONE_CONF"]).read_text() == LINPHONE
 
+
+def _patched_routing(env: dict[str, str]) -> tuple[Path, Path]:
+    """The HA media user patched the routing binary and kept its stock backup."""
+    target = Path(env["C300X_ROUTING_TARGET_DIR"], "bt_answering_machine")
+    backup = Path(env["C300X_ROUTING_BACKUP_DIR"], "bt_answering_machine")
+    backup.parent.mkdir(parents=True)
+    backup.write_bytes(ROUTING_STOCK)
+    target.write_bytes(ROUTING_PATCHED)
+    target.chmod(0o751)
+    return target, backup
+
+
+def test_uninstall_restores_the_routing_binary_before_deleting_its_backup(device: dict[str, str]) -> None:
+    target, _ = _patched_routing(device)
+    _assert_removed(device, _remove(device))
+    assert target.read_bytes() == ROUTING_STOCK
+    assert not list(target.parent.glob("*.restore.*"))
+
+
+@pytest.mark.parametrize("fault", ["corrupt_backup", "unknown_target", "missing_target", "remount"])
+def test_uninstall_keeps_files_if_routing_restore_fails(device: dict[str, str], fault: str) -> None:
+    target, backup = _patched_routing(device)
+    if fault == "corrupt_backup":
+        backup.write_bytes(b"x" + backup.read_bytes()[1:])
+    elif fault == "unknown_target":
+        target.write_bytes(b"x" * len(ROUTING_STOCK))
+    elif fault == "missing_target":
+        target.unlink()
+    else:
+        device["C300X_DEVICE_PATCH_NO_REMOUNT"] = "ro_busy"
+    before = target.read_bytes() if target.exists() else None
+    saved = backup.read_bytes()
+    result = _remove(device)
+    _assert_kept(device, result)
+    assert "Failed to restore device routing" in result.stderr
+    # Only a failed RO remount may leave / writable; then a reboot comes first.
+    hint = "/ may still be writable, perform a full device reboot before retrying removal"
+    assert (hint in result.stderr) == (fault == "remount")
+    assert backup.read_bytes() == saved
+    # The verified stock file is already in place when only the RO remount fails.
+    assert (target.read_bytes() if target.exists() else None) == (saved if fault == "remount" else before)
+    if fault == "remount":
+        device["C300X_DEVICE_PATCH_NO_REMOUNT"] = "1"
+        _assert_removed(device, _remove(device))
+
+
+@pytest.mark.parametrize("target", [b"unknown routing build", None])
+def test_uninstall_leaves_a_routing_binary_alone_the_agent_never_patched(
+    device: dict[str, str], target: bytes | None,
+) -> None:
+    path = Path(device["C300X_ROUTING_TARGET_DIR"], "bt_answering_machine")
+    if target is None:
+        path.unlink()
+    else:
+        path.write_bytes(target)
+    _assert_removed(device, _remove(device))
+    assert (path.read_bytes() if path.exists() else None) == target
+
+
+def test_uninstall_refuses_a_patched_routing_binary_without_its_backup(device: dict[str, str]) -> None:
+    target, backup = _patched_routing(device)
+    backup.unlink()
+    result = _remove(device)
+    _assert_kept(device, result)
+    assert "Failed to restore device routing: routing_backup_missing" in result.stderr
+    assert target.read_bytes() == ROUTING_PATCHED
+    assert not backup.exists()
+
+
+def test_uninstall_leaves_a_stock_routing_binary_with_a_stale_backup_alone(device: dict[str, str]) -> None:
+    target, backup = _patched_routing(device)
+    target.write_bytes(ROUTING_STOCK)
+    backup.write_bytes(b"old unusable backup")
+    _assert_removed(device, _remove(device))
+    assert target.read_bytes() == ROUTING_STOCK
+    assert target.stat().st_mode & 0o7777 == 0o751
+    assert not list(target.parent.glob("*.restore.*"))

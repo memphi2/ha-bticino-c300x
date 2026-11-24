@@ -18,7 +18,7 @@ Lovelace is embedded: the pages talk to the agent's loopback display bridge at
 | `C300XSituations.qml` | Read-only list of selected contacts, garage doors, lights and task lists that need attention. |
 | `C300XChecks.qml` | Row list (name, coloured state) shared by Leave home and Situations. |
 | `C300XDetailControl.qml` | Shared touch controls of entity detail pages. |
-| `C300XEnergy.qml` | Energy page (Now, Today, Power, Consumers, Balance); loaded by `HomeAssistant.qml` only while shown. Draws HA's computed values: no timer, animation or own request. |
+| `C300XEnergy.qml` | Energy page (Now, Today, Power, Consumers, Balance); loaded by `C300XOptionalPages.qml` only while shown. Draws HA's computed values: no timer, animation or own request. |
 | `C300XEnergyReadout.qml` | Selected-interval readout of the energy charts (exact supplied interval and values, no invented points). |
 | `C300XEnergySums.qml` | Two-column sums grid used by the energy page and its readout. |
 | `C300XEnergyConsumers.qml` | Consumers view: up to ten current power readings in two independently scaled columns of five. |
@@ -35,8 +35,8 @@ Lovelace is embedded: the pages talk to the agent's loopback display bridge at
 | `js/c300x_ringer.js` | Ringer request handling; deliberately not a shared library, each control owns its request. |
 
 The stock `HomePage.qml`, `MemoPage.qml`, `MainApp.qml`, `Settings.qml`,
-`EventManager.qml` and `Components/Settings/GeneralsChoice.qml` are not stored
-here. `native_agent/scripts/qml_patch.sh` transforms the originals on the device
+`EventManager.qml`, `Components/Settings/GeneralsChoice.qml` and
+`Components/Settings/CallBlockPopup.qml` are not stored here. `native_agent/scripts/qml_patch.sh` transforms the originals on the device
 and keeps a one-time original backup there.
 
 ## Implementation Notes
@@ -51,8 +51,9 @@ and keeps a one-time original backup there.
   UTF-8 (`dashboard_response.py`).
 - **Option byte budget** (`dashboard_controls.py`): a choice list (select
   options, player sources, sound modes) sends at most 50 options and at most
-  2048 bytes, measured as sent (a non-ASCII character counts six bytes, an emoji
-  twelve). An option over 1024 bytes is left out. If the dashboard is still too
+  2048 bytes, measured as escaped JSON (a non-ASCII character counts six bytes,
+  an emoji twelve). The response goes out as unescaped UTF-8, so this is an
+  upper bound. An option over 1024 bytes is left out. If the dashboard is still too
   large, the longest choice lists are shortened one after another; short lists
   such as thermostat modes are cut last. Too large even then: HA logs the size
   and returns `dashboard_too_large`, and the display stays offline/stale. Check
@@ -105,7 +106,10 @@ comments on their own line. Device log line numbers refer to the stripped file;
   required backups fail before any active GUI file changes.
 - Never create on-device backups of generated project code (agent, display
   bridge, their configs).
-- A patch needs a GUI restart; this repository runs no device commands itself.
+- A patch needs a GUI restart, which `qml_patch.sh` performs. Device commands
+  run only through the agent and the installers: `device_installer.py` (first
+  installation) and `scripts/install_c300x_device.sh` (development, optional
+  `--apply-qml`) run them over SSH.
 - PINs go only to the loopback agent API and are never logged.
 
 ## Related Documentation

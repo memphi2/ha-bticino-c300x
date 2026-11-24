@@ -117,16 +117,37 @@ def test_apply_qml_patch_confirms_with_fresh_status() -> None:
     assert entry.runtime_data.qml_patch_status == status
 
 
-def test_apply_qml_patch_forwards_dynamic_home_page_option() -> None:
+@pytest.mark.parametrize(
+    ("options", "expected"),
+    [({}, True), ({CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True}, True),
+     ({CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False}, False)],
+    ids=["absent_is_stock", "stock", "side_by_side"],
+)
+def test_apply_qml_patch_forwards_the_home_page_layout(
+    options: dict[str, Any], expected: bool
+) -> None:
     api = _FakeApi(
         status={"available": True, "patched": True, "state": "patched"},
         apply_status={"patched": True},
     )
-    entry = _entry(api, options={CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False})
+    entry = _entry(api, options=options)
 
     asyncio.run(async_apply_qml_patch_and_confirm(entry))
 
-    assert api.dynamic_homepage is True
+    assert api.dynamic_homepage is expected
+
+
+def test_agent_update_repatch_keeps_a_side_by_side_layout() -> None:
+    api = _FakeApi(
+        status={"available": True, "patched": True, "state": "patched"},
+        apply_status={"patched": True},
+        core_apply_status={"core_patched": True},
+    )
+    entry = _entry(api, options={CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False})
+
+    asyncio.run(async_restore_qml_patches_after_update(entry, apply_full_patch=True))
+
+    assert api.dynamic_homepage is False
 
 
 def test_restore_qml_patch_keeps_action_status_when_confirmation_mismatches() -> None:
@@ -303,7 +324,7 @@ def test_restore_after_update_waits_while_the_agent_runs_another_job(monkeypatch
             self._busy_once("qml_status")
             return await super().async_qml_patch_status()
 
-        async def async_apply_qml_patch(self, *, dynamic_homepage: bool = False) -> dict[str, Any]:
+        async def async_apply_qml_patch(self, *, dynamic_homepage: bool | None = None) -> dict[str, Any]:
             self._busy_once("apply_qml")
             return await super().async_apply_qml_patch(dynamic_homepage=dynamic_homepage)
 

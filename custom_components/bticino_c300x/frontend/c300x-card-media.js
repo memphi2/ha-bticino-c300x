@@ -1,6 +1,6 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=1a59577c730b7734";
-import "./c300x-media-controls.js?v=1a59577c730b7734";
-import "./c300x-picture-controls.js?v=1a59577c730b7734";
+import { c300xMediaState } from "./c300x-state-model.js?v=0ec1ebcd886b1321";
+import "./c300x-media-controls.js?v=0ec1ebcd886b1321";
+import "./c300x-picture-controls.js?v=0ec1ebcd886b1321";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -94,6 +94,10 @@ export class C300XCardMedia {
     const lifecycle = card._lifecycle;
     const live = !!card._webrtc?.remoteStream;
     this.picture?.configure?.(card._hass, card._entryId(), this.pictureSession(entity));
+    // The panel is see-through only over a live picture; over the empty text
+    // or a still it stays opaque.
+    this.picture?.toggleAttribute?.("live", !this.browsing
+      && !!card._webrtc?.remoteStream?.getVideoTracks?.().some(track => track.readyState === "live"));
     const busy = live || !!card._webrtc?.running || !!card._transitionWebrtc
       || card._talkbackStarting || lifecycle.startingCall || lifecycle.answeringDoorbell
       || lifecycle.hangupInProgress || lifecycle.activeHomeCallSession

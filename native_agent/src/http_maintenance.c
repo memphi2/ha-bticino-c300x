@@ -144,7 +144,7 @@ int c300x_http_maintenance_route(struct c300x_http_maintenance *owner, int clien
         {"/api/v1/maintenance/gui/actions/reload", "reload", "reload_gui"},
     };
     const char *action = NULL, *confirmation = NULL;
-    int gui_reload = 0, dynamic_homepage = 0;
+    int gui_reload = 0, dynamic_homepage = -1;
     if (strcmp(request->method, "GET") == 0
         && strcmp(request->path, "/api/v1/maintenance/qml-patch") == 0) {
         action = "status";

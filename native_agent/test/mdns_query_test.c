@@ -90,6 +90,28 @@ static void test_address_change_reopens_socket(void)
     test_ifaddrs = NULL;
 }
 
+static void test_failed_reopen_schedules_a_retry(void)
+{
+    struct c300x_config config = {0};
+    struct c300x_mdns mdns;
+
+    config.mdns_enabled = 1;
+    /* No IPv4 address yet, as between DHCP removing and adding one. */
+    test_ifaddrs = NULL;
+    c300x_mdns_init(&mdns);
+    assert(c300x_mdns_poll_timeout_ms(&mdns, 100) == -1);
+    c300x_mdns_open_if_needed(&mdns, &config, 0, 1, 100);
+    assert(mdns.fd < 0);
+    /* The loop must wake for the retry even without a socket to poll. */
+    assert(c300x_mdns_poll_timeout_ms(&mdns, 100) == C300X_MDNS_ANNOUNCE_SECONDS * 1000);
+    assert(c300x_mdns_poll_timeout_ms(&mdns, 100 + C300X_MDNS_ANNOUNCE_SECONDS) == 0);
+    /* No wake-up while the responder is meant to stay closed. */
+    c300x_mdns_open_if_needed(&mdns, &config, 1, 1, 130);
+    assert(c300x_mdns_poll_timeout_ms(&mdns, 130) == -1);
+    c300x_mdns_open_if_needed(&mdns, &config, 0, 0, 130);
+    assert(c300x_mdns_poll_timeout_ms(&mdns, 130) == -1);
+}
+
 static void test_home_assistant_presence_expires(void)
 {
     const long long quiet = C300X_MDNS_HOME_ASSISTANT_QUIET_MS;
@@ -107,6 +129,7 @@ int main(void)
 {
     check_identity();
     test_address_change_reopens_socket();
+    test_failed_reopen_schedules_a_retry();
     test_home_assistant_presence_expires();
     struct c300x_config config = {0};
     unsigned char packet[512] = {0};

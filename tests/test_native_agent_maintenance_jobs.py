@@ -70,7 +70,17 @@ def maintenance_options():
 
 
 @pytest.fixture
-def lab(binary, tmp_path, maintenance_options):
+def agent_home_page_env():
+    return "0"
+
+
+@pytest.fixture
+def lab(binary, tmp_path, maintenance_options, request):
+    # Modules that import only lab have no agent_home_page_env fixture.
+    try:
+        agent_home_page_env = request.getfixturevalue("agent_home_page_env")
+    except pytest.FixtureLookupError:
+        agent_home_page_env = "0"
     port, ui_port, own = free_tcp_ports(3)
     config = {
         "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
@@ -89,7 +99,7 @@ def lab(binary, tmp_path, maintenance_options):
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config))
-    env = {**os.environ, "C300X_QML_DYNAMIC_HOME_PAGE": "0",
+    env = {**os.environ, "C300X_QML_DYNAMIC_HOME_PAGE": agent_home_page_env,
            "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1", "UBSAN_OPTIONS": "halt_on_error=1"}
     with (tmp_path / "agent.log").open("w") as log:
         process = subprocess.Popen([str(binary), "--config", str(path)], cwd=tmp_path,
@@ -256,6 +266,24 @@ def test_extracted_qml_routes_preserve_actions_and_confirmation(lab, suffix, con
     assert body["action"] == action
     assert body["dynamic"] == "0"
     assert body["ui_port"] == lab.ui_port
+
+
+@pytest.mark.parametrize("agent_home_page_env", ["1"])
+@pytest.mark.parametrize("payload,expected", [
+    ({"dynamic_homepage": False}, "0"),
+    ({"dynamicHomepage": False}, "0"),
+    ({"dynamic_homepage": True}, "1"),
+    ({}, "1"),
+])
+def test_apply_passes_the_home_page_layout_both_ways(
+    agent_home_page_env, lab, payload, expected
+):
+    """Side by side (false) reaches the script too; without the field the
+    script gets no setting from the request and keeps the device's layout."""
+
+    lab.script('printf \'{"ok":true,"changed_files":0,"dynamic":"%s"}\' "$C300X_QML_DYNAMIC_HOME_PAGE"\n')
+    body = response(lab.request(QML + "/actions/apply", {"confirm": "apply_qml_patch", **payload}))
+    assert body["dynamic"] == expected
 
 
 @pytest.mark.parametrize("path,payload", [

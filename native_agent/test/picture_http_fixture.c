@@ -8,7 +8,7 @@
 void __wrap_resolve_device_firmware(const struct c300x_config *config, char *out, size_t size)
 {
     snprintf(out, size, "%s", config ? config->device_firmware :
-        (access("other-firmware", F_OK) == 0 ? "3.0.6" : "1.7.19"));
+        (access("other-firmware", F_OK) == 0 ? "9.9.9" : "1.7.19"));
 }
 
 void __wrap_c300x_video_status(struct c300x_video *video, struct c300x_video_status *s)

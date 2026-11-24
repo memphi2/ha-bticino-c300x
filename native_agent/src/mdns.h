@@ -14,6 +14,7 @@ struct c300x_mdns {
     int fd;
     time_t next_announce_at;
     int announced;
+    int wanted;
     uint32_t ipv4;
     char instance_id[33];
 };
@@ -33,7 +34,7 @@ void c300x_mdns_open_if_needed(
     time_t now
 );
 int c300x_mdns_fd(const struct c300x_mdns *mdns);
-time_t c300x_mdns_next_announce_at(const struct c300x_mdns *mdns);
+int c300x_mdns_poll_timeout_ms(const struct c300x_mdns *mdns, time_t now);
 void c300x_mdns_handle_query(
     struct c300x_mdns *mdns,
     const struct c300x_config *config

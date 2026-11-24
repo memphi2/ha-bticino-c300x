@@ -32,8 +32,9 @@ def test_preferences_production_runtime():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.parametrize("layout", ["1", "0"], ids=["stock", "side_by_side"])
 @pytest.mark.parametrize("topic", ["display_bridge.state", "notifications", "missed"])
-def test_home_availability_event_refreshes_after_inflight_read(tmp_path, topic):
+def test_home_availability_event_refreshes_after_inflight_read(tmp_path, topic, layout):
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
@@ -42,7 +43,7 @@ def test_home_availability_event_refreshes_after_inflight_read(tmp_path, topic):
     _write_original_gui(gui)
     _run_qml_patch(
         tmp_path, gui, backup, "apply",
-        env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": "1"},
+        env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": layout},
     )
     result = subprocess.run([node, "-e", r"""
 const assert = require('node:assert/strict');
@@ -126,7 +127,8 @@ for (const previous of [false, true]) {
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_home_buttons_qt4_retry_without_navigation(tmp_path):
+@pytest.mark.parametrize("layout", ["1", "0"], ids=["stock", "side_by_side"])
+def test_home_buttons_qt4_retry_without_navigation(tmp_path, layout):
     from scripts.setup_qt4_runtime import probe_command, runtime_paths
 
     paths = runtime_paths()
@@ -135,7 +137,7 @@ def test_home_buttons_qt4_retry_without_navigation(tmp_path):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
     _write_original_gui(gui)
-    _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": "1"})
+    _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": layout})
     source = (gui / "HomePage.qml").read_text()
     # Run the generated controls and lifecycle handler on firmware Qt without
     # loading the hardware GUI. Only the forwarded HA request is substituted.

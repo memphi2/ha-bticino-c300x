@@ -1872,13 +1872,12 @@ def test_apply_qml_patch_sends_maintenance_confirmation() -> None:
         "POST",
         "http://agent.local:8080/api/v1/maintenance/qml-patch/actions/apply",
     )
-    assert request["kwargs"]["json"] == {
-        "confirm": "apply_qml_patch",
-        "dynamic_homepage": False,
-    }
+    # Without a layout the agent keeps the one on the device.
+    assert request["kwargs"]["json"] == {"confirm": "apply_qml_patch"}
 
 
-def test_apply_qml_patch_sends_dynamic_homepage_flag() -> None:
+@pytest.mark.parametrize("dynamic_homepage", [True, False])
+def test_apply_qml_patch_sends_dynamic_homepage_flag(dynamic_homepage: bool) -> None:
     session = _FakeSession('{"ok": true, "state": "patched"}')
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -1888,13 +1887,13 @@ def test_apply_qml_patch_sends_dynamic_homepage_flag() -> None:
     )
 
     assert (
-        asyncio.run(api.async_apply_qml_patch(dynamic_homepage=True))["state"]
+        asyncio.run(api.async_apply_qml_patch(dynamic_homepage=dynamic_homepage))["state"]
         == "patched"
     )
     request = session.requests[0]
     assert request["kwargs"]["json"] == {
         "confirm": "apply_qml_patch",
-        "dynamic_homepage": True,
+        "dynamic_homepage": dynamic_homepage,
     }
 
 
@@ -2476,6 +2475,7 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "backup_available": None,
         "core_backup_available": None,
         "gui_running": None,
+        "home_buttons": None,
         "raw": {"patched": True},
     }
     assert normalize_qml_patch_status({"state": "original"})["patched"] is False
@@ -2499,6 +2499,11 @@ def test_normalize_qml_patch_status_derives_state() -> None:
     partial = normalize_qml_patch_status({"state": "partial", "patched": None})
     assert partial["state"] == "partial"
     assert partial["patched"] is None
+    for layout in ("stock", "side_by_side"):
+        assert normalize_qml_patch_status({"patched": True, "home_buttons": layout})["home_buttons"] == layout
+    assert normalize_qml_patch_status({"patched": True, "home_buttons": "other"})["home_buttons"] is None
+    for malformed in ([], {}, 1, True):
+        assert normalize_qml_patch_status({"patched": True, "home_buttons": malformed})["home_buttons"] is None
 
 
 def test_normalize_firewall_status_derives_patched_state() -> None:

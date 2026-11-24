@@ -165,6 +165,20 @@ def test_both_home_page_layouts_are_packed_and_reported(device: Device) -> None:
     assert device.ok("restore-all")["home_buttons"] is None
 
 
+@pytest.mark.parametrize("state", ["failed", "incomplete"])
+def test_the_home_page_layout_is_reported_only_while_the_overlay_is_active(device: Device, state: str) -> None:
+    """The working copy keeps the page, but the display shows the vendor home page."""
+
+    device.ok("apply", C300X_QML_DYNAMIC_HOME_PAGE="0")
+    if state == "failed":
+        Path(f"{device.rcc}.failed").write_text("boot-1\n")
+    else:
+        device.lib.unlink()
+    status = device.ok("status")
+    assert (status["qt5_overlay"], status["home_buttons"]) == (state, None)
+    assert (device.gui / "HomePage.qml").exists()
+
+
 def test_the_media_user_label_joins_the_packed_files(device: Device) -> None:
     device.ok("apply")
     device.ok("media-user-label-apply")

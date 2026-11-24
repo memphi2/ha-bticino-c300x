@@ -1569,7 +1569,9 @@ Assistant does not offer the IPv6 firewall switch; apply would answer
 Reads both optional Display patch state and required core media-hook state.
 `home_buttons` names the home page button layout installed on the device:
 `"stock"` (like the original), `"side_by_side"` (the fixed pair), or `null`
-when the home page carries neither layout.
+when the home page carries neither layout. On firmware 3.0.x it is also `null`
+while the overlay is not active (`qt5_overlay` other than `active`): the
+display then shows the vendor home page.
 
 On firmware 3.0.x, `qt5_unsupported` names why the station's display program or
 start script is not one the agent knows (`display_program_unknown`,

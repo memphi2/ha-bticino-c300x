@@ -105,6 +105,9 @@ json_status() {
         fi
     fi
     home_buttons="$(installed_home_buttons)"
+    if [ "$QT5_DISPLAY" = "1" ] && [ "$qt5_overlay" != "active" ]; then
+        home_buttons=null
+    fi
     if [ -n "$changed_files" ]; then
         printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"home_buttons":%s,"changed_files":%s%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$home_buttons" "$changed_files" "$qt5_fields"
     else

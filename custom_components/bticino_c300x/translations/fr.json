@@ -138,30 +138,30 @@
         "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : saisissez votre propre nom. Si le champ reste vide, la tuile affiche le nom de Home Assistant.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
       },
       "reconfigure": {
-        "title": "Reconfigurer BTicino C300X",
+        "title": "Reconfigurer BTicino {model}",
         "description": "Mettez à jour la connexion à l'agent ou la clé de maintenance, ou renouvelez les identifiants webhook.",
         "data": {
-          "agent_host": "Adresse du C300X",
+          "agent_host": "Adresse du {model}",
           "agent_port": "Port",
           "agent_token": "Clé d'accès",
           "maintenance_token": "Clé de maintenance",
-          "callback_base_url": "Adresse de Home Assistant pour le C300X (optionnel)",
+          "callback_base_url": "Adresse de Home Assistant pour le {model} (optionnel)",
           "rotate_shared_secret": "Renouveler le secret partage"
         },
         "data_description": {
-          "agent_host": "Adresse IP ou nom d'hôte de votre C300X.",
-          "agent_port": "Port sur lequel le C300X répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
-          "agent_token": "Clé avec laquelle Home Assistant se connecte au C300X. Elle a été créée à l'installation. Laisser vide pour conserver la clé enregistrée.",
+          "agent_host": "Adresse IP ou nom d'hôte de votre {model}.",
+          "agent_port": "Port sur lequel le {model} répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
+          "agent_token": "Clé avec laquelle Home Assistant se connecte au {model}. Elle a été créée à l'installation. Laisser vide pour conserver la clé enregistrée.",
           "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages. Laisser vide pour conserver la clé enregistrée.",
-          "callback_base_url": "Le C300X signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le C300X. Passer de http à https ou inversement redémarre le service du C300X dès qu'aucun appel ni flux n'est en cours."
+          "callback_base_url": "Le {model} signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le {model}. Passer de http à https ou inversement redémarre le service du {model} dès qu'aucun appel ni flux n'est en cours."
         }
       },
       "reconfigure_features": {
-        "title": "Reconfigurer les fonctions BTicino C300X",
+        "title": "Reconfigurer les fonctions BTicino {model}",
         "description": "Mettez à jour les réglages média et utilisateur média Home Assistant.",
         "data": {
           "video_enabled": "Vidéo et son du poste de porte",
-          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le C300X",
+          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le {model}",
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
@@ -169,11 +169,11 @@
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
-          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le C300X. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
+          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
         }
       },
       "reconfigure_visitor_snapshot": {
@@ -264,13 +264,13 @@
       },
       "reconfigure_dashboard_alarm": {
         "title": "Alarme (Alarmo)",
-        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du {model}. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
         "data": {
           "alarm_entity_id": "Centrale d'alarme Alarmo",
           "alarm_page_entity_id": "Action rapide"
         },
         "data_description": {
-          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
           "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
@@ -665,7 +665,7 @@
       "c100x_package_only": "Ce paquet de test est uniquement pour le Classe 100X, et cette station est un Classe 300X. Installez la version normale de l'intégration pour la configurer. Rien n'a été modifié.",
       "model_mismatch": "Cette annonce provient d'un autre modèle de poste que l'entrée configurée avec la même identité. Rien n'a été modifié.",
       "already_configured": "BTicino C300X est déjà configure.",
-      "reconfigure_successful": "BTicino C300X a été reconfigure. Mettez à jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvelé les identifiants.",
+      "reconfigure_successful": "BTicino {model} a été reconfigure. Mettez à jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvelé les identifiants.",
       "cannot_connect": "L'agent appareil est injoignable. Verifiez l'adresse et que l'agent fonctionne.",
       "unique_id_mismatch": "Ce n'est pas l'appareil configure. Reconfigurez l'entree correspondante ou ajoutez l'appareil comme nouvelle entree.",
       "reauth_wrong_device": "L'agent a une identité différente. L'entrée enregistrée n'a pas été modifiée.",
@@ -716,21 +716,21 @@
     },
     "step": {
       "connection": {
-        "title": "Connexion au C300X",
-        "description": "Comment Home Assistant et le C300X se joignent.",
+        "title": "Connexion au {model}",
+        "description": "Comment Home Assistant et le {model} se joignent.",
         "data": {
-          "agent_host": "Adresse du C300X",
+          "agent_host": "Adresse du {model}",
           "agent_port": "Port",
           "agent_token": "Clé d'accès",
           "maintenance_token": "Clé de maintenance",
-          "callback_base_url": "Adresse de Home Assistant pour le C300X (optionnel)"
+          "callback_base_url": "Adresse de Home Assistant pour le {model} (optionnel)"
         },
         "data_description": {
-          "agent_host": "Adresse IP ou nom d'hôte de votre C300X.",
-          "agent_port": "Port sur lequel le C300X répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
-          "agent_token": "Clé avec laquelle Home Assistant se connecte au C300X. Elle a été créée à l'installation. Laisser vide pour conserver la clé enregistrée.",
+          "agent_host": "Adresse IP ou nom d'hôte de votre {model}.",
+          "agent_port": "Port sur lequel le {model} répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
+          "agent_token": "Clé avec laquelle Home Assistant se connecte au {model}. Elle a été créée à l'installation. Laisser vide pour conserver la clé enregistrée.",
           "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages. Laisser vide pour conserver la clé enregistrée.",
-          "callback_base_url": "Le C300X signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le C300X. Passer de http à https ou inversement redémarre le service du C300X dès qu'aucun appel ni flux n'est en cours."
+          "callback_base_url": "Le {model} signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le {model}. Passer de http à https ou inversement redémarre le service du {model} dès qu'aucun appel ni flux n'est en cours."
         }
       },
       "features": {
@@ -738,7 +738,7 @@
         "description": "Image et son du poste de porte dans Home Assistant.",
         "data": {
           "video_enabled": "Vidéo et son du poste de porte",
-          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le C300X",
+          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le {model}",
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
@@ -746,11 +746,11 @@
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
-          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le C300X. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
+          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
         }
       },
       "visitor_snapshot": {
@@ -925,13 +925,13 @@
       },
       "dashboard_alarm": {
         "title": "Alarme (Alarmo)",
-        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du {model}. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
         "data": {
           "alarm_entity_id": "Centrale d'alarme Alarmo",
           "alarm_page_entity_id": "Action rapide"
         },
         "data_description": {
-          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
           "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
@@ -1129,7 +1129,7 @@
       "invalid_action_map": "Le JSON de la liste autorisée d'actions est invalide.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
-      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",
+      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}, ou laisser vide.",
       "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
@@ -1146,12 +1146,12 @@
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
       "required": "Ce champ est obligatoire.",
       "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480. L'image est lue sur l'écran 800×480.",
-      "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
-      "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
-      "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
-      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
-      "camera_quality_failed": "Le C300X n'a pas enregistré les valeurs. Vérifiez la connexion et réessayez.",
-      "camera_quality_unsupported": "Ce C300X ne propose pas le réglage de la qualité de la caméra.",
+      "invalid_auth": "Le {model} a refusé la clé d'accès. Saisissez la clé actuelle.",
+      "wrong_device": "Cette adresse appartient à un autre {model}. L'appareil existant n'a pas été modifié.",
+      "invalid_maintenance_auth": "Le {model} a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
+      "cannot_connect": "Le {model} n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
+      "camera_quality_failed": "Le {model} n'a pas enregistré les valeurs. Vérifiez la connexion et réessayez.",
+      "camera_quality_unsupported": "Ce {model} ne propose pas le réglage de la qualité de la caméra.",
       "camera_quality_out_of_range": "En dehors de ce que l'appareil accepte pour ce flux ; seule la valeur enregistrée sur l'appareil peut rester telle quelle.",
       "camera_quality_restart_pending": "Enregistré, mais l'appareil n'a pas redémarré. Il utilise les nouvelles valeurs après son prochain redémarrage.",
       "tts_engine_missing": "Cette entité de synthèse vocale n'existe pas.",

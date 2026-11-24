@@ -14,7 +14,10 @@ from types import SimpleNamespace
 
 from homeassistant import config_entries
 
-from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
+from custom_components.bticino_c300x.config_flow import (
+    BticinoC300XConfigFlow,
+    BticinoC300XOptionsFlow,
+)
 from custom_components.bticino_c300x.model_names import EITHER
 
 INTEGRATION = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
@@ -173,3 +176,29 @@ def test_reauth_and_reconfigure_name_the_model_of_their_entry(monkeypatch):
         monkeypatch.setattr(flow, "_get_reconfigure_entry", lambda: SimpleNamespace(), raising=False)
         monkeypatch.setattr(flow, "_get_reauth_entry", lambda: SimpleNamespace(), raising=False)
         assert flow.async_show_form(step_id="x")["description_placeholders"] == {"model": "C300X"}
+
+
+C100X_ENTRY = SimpleNamespace(runtime_data=SimpleNamespace(agent_info={"model": "C100X"}), data={}, options={})
+C300X_ENTRY = SimpleNamespace(runtime_data=SimpleNamespace(agent_info={"model": "C300X"}), data={}, options={})
+
+
+def test_options_and_reconfigure_texts_name_the_model_of_the_entry(monkeypatch):
+    assert_c300x_unchanged("reconfigure")
+    for method in ("async_show_form", "async_show_menu", "async_abort"):
+        monkeypatch.setattr(config_entries.OptionsFlow, method, lambda self, **values: values)
+    for entry, model in ((C100X_ENTRY, "C100X"), (C300X_ENTRY, "C300X"), (SimpleNamespace(), "C300X")):
+        flow = BticinoC300XOptionsFlow(entry)
+        assert flow.async_show_form(step_id="connection")["description_placeholders"] == {"model": model}
+        assert flow.async_show_menu(step_id="x", menu_options=[])["description_placeholders"] == {"model": model}
+        assert flow.async_abort(reason="unsupported_display")["description_placeholders"] == {"model": model}
+
+    assert text("en", "options", "step", "connection", "title", model="C100X") == "Connection to the C100X"
+    assert text("de", "options", "step", "connection", "title", model="C100X") == "Verbindung zum C100X"
+    assert text("en", "options", "error", "camera_quality_unsupported", model="C100X") == (
+        "This C100X does not offer the camera quality setting."
+    )
+    assert text("en", "config", "step", "reconfigure", "title", model="C100X") == "Reconfigure BTicino C100X"
+    assert text("de", "config", "step", "reconfigure_features", "data", "create_homeassistant_user", model="C100X") == (
+        "Zugang für Video und Ton auf dem C100X einrichten"
+    )
+

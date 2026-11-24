@@ -91,3 +91,10 @@ class ModelTextConfigFlow(ModelTextFlow):
         if title == DEFAULT_NAME and self._text_model() == C100X:
             title = C100X_DEFAULT_NAME
         return super().async_create_entry(title=title, **kwargs)  # type: ignore[misc]
+
+
+class ModelTextOptionsFlow(ModelTextFlow):
+    """Options name the model of their entry."""
+
+    def _text_model(self) -> str:
+        return entry_model(getattr(self, "_config_entry", None))

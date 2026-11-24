@@ -229,7 +229,7 @@ from .display_support import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import login_model, ssh_login, uses_factory_login
-from .model_names import ModelTextConfigFlow
+from .model_names import ModelTextConfigFlow, ModelTextOptionsFlow
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -1421,8 +1421,8 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
 
 
 class BticinoC300XOptionsFlow(
-    SnapshotOptionsStep, CameraQualityOptionsStep, SpeechOptionsStep, DisplayMenuSteps, OptionsMenuSteps,
-    config_entries.OptionsFlow,
+    ModelTextOptionsFlow, SnapshotOptionsStep, CameraQualityOptionsStep, SpeechOptionsStep, DisplayMenuSteps,
+    OptionsMenuSteps, config_entries.OptionsFlow,
 ):
     """Handle C300X options.
 

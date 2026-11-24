@@ -112,7 +112,7 @@ def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> No
             hint = form["data_description"]["native_two_way_audio"]
             for prerequisite in ("2026.11", "Labs", "WebRTC", "HTTPS"):
                 assert prerequisite in hint
-            assert "{model}" in hint or (area, step) != ("config", "user_features")
+            assert "{model}" in hint
 
 
 def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:

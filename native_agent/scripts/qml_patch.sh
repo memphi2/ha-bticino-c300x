@@ -891,6 +891,20 @@ patch_home_page() {
             print
             next
         }
+        in_button_count && $0 ~ /\+ 2$/ {
+            sub(/\+ 2$/, "+ (homeLinksModel.count > 0 ? 4 : 2)")
+            print
+            next
+        }
+        in_button_holder && layout != "stock" && $0 == "            flow: Flow.TopToBottom" {
+            print "            flow: homeLinksModel.count > 0 ? Flow.LeftToRight : Flow.TopToBottom"
+            print "            width: homeLinksModel.count > 0 ? buttonPrototype.width * 4 + spacing * 3 : undefined"
+            next
+        }
+        in_button_holder && layout != "stock" && $0 == "                visible: buttonHolder.buttonCount() === 5" {
+            print $0 " && homeLinksModel.count === 0"
+            next
+        }
         in_button_count && $0 ~ /^[[:space:]]*\}/ {
             in_button_count=0
             print
@@ -975,6 +989,10 @@ patch_home_page() {
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
             'id: displayBridgeButtonRow' \
+            '+ (homeLinksModel.count > 0 ? 4 : 2)' \
+            'flow: homeLinksModel.count > 0 ? Flow.LeftToRight : Flow.TopToBottom' \
+            'width: homeLinksModel.count > 0 ? buttonPrototype.width * 4 + spacing * 3 : undefined' \
+            'visible: buttonHolder.buttonCount() === 5 && homeLinksModel.count === 0' \
             'opacity: page.alarmButtonVisible ? 1 : 0' \
             'opacity: page.haButtonVisible ? 1 : 0' \
             'objectName: "alarmButton"' \

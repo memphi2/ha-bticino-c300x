@@ -79,6 +79,7 @@ ORIGINAL_HOME_PAGE = "\n".join(
         "            id: foobar",
         "            height: buttonHolder.buttonCount() > 4 ? (buttonPrototype.height + spacing) * 2 : buttonPrototype.height",
         "            anchors.horizontalCenterOffset: page.smallDateTimePresent ? 0 : (parent.width / 2 - width / 2) - page.width / 100 * 2 // 16",
+        "            flow: Flow.TopToBottom",
         "",
         "            BasicButton {",
         "                id: answerButton",
@@ -326,7 +327,7 @@ PATCH_OUTPUT_SHA256 = {
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "7fa96807eee4315a898ead3e77c2afff083237aa483a96d16fb50a521d80fa63",
+    "HomePage.qml": "8ca34ccda6fab0a954ad3edaa86beb67b6b92d709fd603aaed952a64e4587f38",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
@@ -353,7 +354,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_memos.js": "c64084cdc8d44b90150488082aed7338876f756220fac763490fdf0809bf5998",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "428178cb856d51383519b24dbbe91b0417b66994a13cf3d95660b04a0e774cf9"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "1609350cee81026a73eaa4b6927653217adb8f3ddc8e4574687696aaf3a00c95"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -507,13 +508,50 @@ def test_qml_patch_apply_can_keep_home_buttons_side_by_side(tmp_path: Path) -> N
     assert "enabled: page.haButtonVisible" in home_page
     assert "visible: page.alarmButtonVisible" not in home_page
     assert "displayBridgeButtonCount" not in home_page
-    assert "visible: buttonHolder.buttonCount() === 5\n" in home_page
+    assert "visible: buttonHolder.buttonCount() === 5 && homeLinksModel.count === 0\n" in home_page
     assert home_page.index('objectName: "settingsButton"') < home_page.index(
         "id: displayBridgeButtonRow"
     )
     assert home_page.index('objectName: "alarmButton"') < home_page.index(
         'objectName: "haButton"'
     )
+
+
+@pytest.mark.parametrize("flag", ["0", "1"], ids=["side_by_side", "stock"])
+def test_qml_patch_side_by_side_pair_fits_beside_the_quick_actions(tmp_path: Path, flag: str) -> None:
+    """With Quick actions the buttons have the 600 px left of that panel.
+
+    The vendor Flow runs top to bottom, so the two-slot pair always adds two
+    columns: with the answering machine or more the render put buttons left
+    of the screen edge (12 of 16 combinations; issue #119: Answering
+    machine, Intercom, Memo and Settings with no bridge button shown lost the
+    Answering machine off the left edge on 1.7.19). With Quick actions the pair
+    is counted, and the Flow fills four slots per line left to right: the
+    pair keeps two neighbouring slots and two lines hold every combination.
+    The vertical Settings spacer would break that grid. Without Quick
+    actions every binding gives the vendor value, so that layout stays.
+    """
+
+    gui_dir = tmp_path / "gui"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    _run_qml_patch(
+        tmp_path, gui_dir, tmp_path / "backups", "apply",
+        env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": flag},
+    )
+
+    home_page = (gui_dir / "HomePage.qml").read_text()
+    side_by_side = [
+        "                    + (homeLinksModel.count > 0 ? 4 : 2)\n",
+        "            flow: homeLinksModel.count > 0 ? Flow.LeftToRight : Flow.TopToBottom\n"
+        "            width: homeLinksModel.count > 0 ? buttonPrototype.width * 4 + spacing * 3 : undefined\n",
+        "                visible: buttonHolder.buttonCount() === 5 && homeLinksModel.count === 0\n",
+    ]
+    for line in side_by_side:
+        assert (line in home_page) is (flag == "0")
+    assert ("            flow: Flow.TopToBottom\n" in home_page) is (flag == "1")
+    assert ("                visible: buttonHolder.buttonCount() === 5\n" in home_page) is (flag == "1")
 
 
 @pytest.mark.parametrize(

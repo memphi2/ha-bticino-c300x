@@ -441,6 +441,46 @@ def test_route_diagnostics_reports_resolution_and_unusable_route_errors(
     assert result["error"] == "no_usable_route"
 
 
+def _getaddrinfo_v4_and_v6(_host, port, **_kwargs):
+    return [
+        (socket.AF_INET6, socket.SOCK_DGRAM, 17, "", ("2001:db8::10", port, 0, 0)),
+        (socket.AF_INET, socket.SOCK_DGRAM, 17, "", ("192.0.2.10", port)),
+    ]
+
+
+class _NoIpv6Socket:
+    """A host without IPv6 support refuses to create an AF_INET6 socket."""
+
+    def __init__(self, family, *_args):
+        if family == socket.AF_INET6:
+            raise OSError(97, "Address family not supported by protocol")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def settimeout(self, _timeout):
+        pass
+
+    def connect(self, _sockaddr):
+        pass
+
+    def getsockname(self):
+        return ("192.0.2.2", 5555)
+
+
+def test_route_diagnostics_skips_an_address_family_the_host_lacks(monkeypatch: Any) -> None:
+    monkeypatch.setattr(socket, "getaddrinfo", _getaddrinfo_v4_and_v6)
+    monkeypatch.setattr(socket, "socket", _NoIpv6Socket)
+
+    result = _route_diagnostics("c300x.example", 8080)
+
+    assert result["error"] is None
+    assert result["selected_source_type"] is not None
+
+
 def test_route_diagnostics_reports_selected_udp_route(
     monkeypatch: Any,
 ) -> None:

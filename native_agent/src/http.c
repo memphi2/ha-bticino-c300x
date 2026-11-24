@@ -3880,32 +3880,7 @@ static void handle_legacy_mqtt_post(
         send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"legacy_mqtt_backup_missing\"}\n");
         return;
     }
-    if (enabled && config->mqtt_enabled) {
-        updated = calloc(1, sizeof(*updated));
-        if (updated == NULL) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
-            return;
-        }
-        *updated = *config;
-        updated->mqtt_enabled = 0;
-        if (!c300x_save_mqtt_config(config, updated, error, sizeof(error), &native_config_changed)) {
-            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-            char body[2048];
-            c300x_json_string(error, error_json, sizeof(error_json));
-            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
-            send_json(client_fd, 500, "Internal Server Error", body);
-            free(updated);
-            return;
-        }
-        *config = *updated;
-        free(updated);
-        if (runtime != NULL) {
-            c300x_mqtt_close(&runtime->mqtt);
-        }
-        if (native_config_changed) {
-            record_agent_write(config, runtime, "config", "mqtt_disabled_for_legacy");
-        }
-    }
+    /* Switch the files first: a failure leaves the bridge that ran. */
     bridge_was_running = legacy_mqtt_bridge_running();
     firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
     if (enabled) {
@@ -3924,6 +3899,36 @@ static void handle_legacy_mqtt_post(
         should_stop_legacy = 1;
     }
     firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    if (enabled && config->mqtt_enabled) {
+        updated = calloc(1, sizeof(*updated));
+        if (updated != NULL) {
+            *updated = *config;
+            updated->mqtt_enabled = 0;
+        }
+        snprintf(error, sizeof(error), "out_of_memory");
+        if (updated == NULL || !c300x_save_mqtt_config(config, updated, error, sizeof(error), &native_config_changed)) {
+            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            char body[2048];
+            c300x_json_string(error, error_json, sizeof(error_json));
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
+            send_json(client_fd, 500, "Internal Server Error", body);
+            free(updated);
+            if (changed) { /* Back to the native bridge that was working. */
+                firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+                (void)legacy_mqtt_disable_patch(&changed);
+                firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            }
+            return;
+        }
+        *config = *updated;
+        free(updated);
+        if (runtime != NULL) {
+            c300x_mqtt_close(&runtime->mqtt);
+        }
+        if (native_config_changed) {
+            record_agent_write(config, runtime, "config", "mqtt_disabled_for_legacy");
+        }
+    }
     if (should_stop_legacy) {
         legacy_mqtt_stop_processes();
     }
@@ -4157,10 +4162,26 @@ static void handle_mqtt_post(
         send_json(client_fd, 400, "Bad Request", body);
         MQTT_POST_RETURN();
     }
+    /* Legacy files first: a failure on either side leaves the bridge that ran. */
+    int legacy_off = updated->mqtt_enabled && legacy_mqtt_installed();
+    if (legacy_off) {
+        firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+        if (!legacy_mqtt_disable_patch(&legacy_changed)) {
+            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
+            MQTT_POST_RETURN();
+        }
+        firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    }
     if (!c300x_config_persisted_equal(config, updated)) {
         int changed = 0;
         if (!c300x_save_mqtt_config(config, updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            if (legacy_changed) {
+                firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+                (void)legacy_mqtt_enable_patch(&changed);
+                firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            }
             c300x_json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
             send_json(client_fd, 500, "Internal Server Error", body);
@@ -4173,14 +4194,7 @@ static void handle_mqtt_post(
             record_agent_write(config, runtime, "config", "mqtt");
         }
     }
-    if (updated->mqtt_enabled && legacy_mqtt_installed()) {
-        firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-        if (!legacy_mqtt_disable_patch(&legacy_changed)) {
-            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
-            MQTT_POST_RETURN();
-        }
-        firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    if (legacy_off) {
         legacy_mqtt_stop_processes();
         if (legacy_changed) {
             record_agent_write(config, runtime, "legacy_mqtt", "disable_for_native");

@@ -167,18 +167,6 @@ def test_native_mqtt_status_response_checks_for_truncation() -> None:
     assert "mqtt_status_too_large" in status
 
 
-def test_native_mqtt_config_is_saved_before_legacy_bridge_disable() -> None:
-    http = _read("native_agent/src/http.c")
-    handler = http[
-        http.rindex("static void handle_mqtt_post") :
-        http.rindex("static void handle_subscription_delete")
-    ]
-
-    assert handler.index("c300x_save_mqtt_config") < handler.index(
-        "legacy_mqtt_disable_patch"
-    )
-
-
 def test_native_mqtt_migration_saves_config_before_legacy_bridge_disable() -> None:
     http = _read("native_agent/src/http.c")
     handler = http[
@@ -189,3 +177,22 @@ def test_native_mqtt_migration_saves_config_before_legacy_bridge_disable() -> No
     assert handler.index("c300x_save_mqtt_config") < handler.index(
         "legacy_mqtt_disable_patch"
     )
+
+
+def test_bridge_switch_failure_leaves_the_bridge_that_ran() -> None:
+    """A failed switch once left neither bridge (legacy enable) or both (native enable)."""
+    http = _read("native_agent/src/http.c")
+    legacy = http[
+        http.rindex("static void handle_legacy_mqtt_post(") :
+        http.rindex("static void handle_mqtt_migrate_legacy_post(")
+    ]
+    # Files first, native config after; a failed save undoes the files.
+    assert legacy.index("legacy_mqtt_enable_patch(&changed)") < legacy.index("c300x_save_mqtt_config(")
+    undo = legacy[legacy.index("c300x_save_mqtt_config("):legacy.index("*config = *updated;")]
+    assert "(void)legacy_mqtt_disable_patch(&changed);" in undo
+    native = http[http.rindex("static void handle_mqtt_post("):]
+    native = native[: native.index("#undef MQTT_POST_RETURN")]
+    assert native.index("legacy_mqtt_disable_patch(&legacy_changed)") < native.index("c300x_save_mqtt_config(")
+    undo = native[native.index("c300x_save_mqtt_config("):native.index("*config = *updated;")]
+    assert "(void)legacy_mqtt_enable_patch(&changed);" in undo
+    assert native.index("*config = *updated;") < native.index("legacy_mqtt_stop_processes();")

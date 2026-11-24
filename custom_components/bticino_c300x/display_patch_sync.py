@@ -87,9 +87,10 @@ async def async_apply_display_setting(
     home_buttons = entry_home_buttons(entry)
     try:
         differs = _differs(await async_refresh_qml_patch_status(entry, wait_busy=True), wanted, home_buttons)
-        if wanted and CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
+        if differs is False and wanted and CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
             # Pages of the earlier agent read as patched; an update or install
-            # still owes the new ones.
+            # still owes the new ones. A quarantined or unknown display (None)
+            # stays with the core Repair.
             differs = True
         if not differs:
             return None if differs is None else False

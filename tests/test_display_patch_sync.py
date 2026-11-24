@@ -401,3 +401,15 @@ def test_settling_the_setting_clears_owed_display_steps(monkeypatch):
     asyncio.run(display_patch_sync.async_settle_display_setting(hass, entry))
     assert calls == ["apply"]
     assert "display_followup_pending" not in entry.data
+
+
+@pytest.mark.parametrize("status", [
+    {"patched": True, "qt5_overlay": "failed"},
+    {"patched": False, "error": "display_unsupported", "qt5_unsupported": "unknown start script"},
+])
+def test_owed_display_steps_never_retry_a_quarantined_or_unknown_display(monkeypatch, status):
+    """Every HA start would otherwise run a retrying apply against a failing overlay."""
+
+    calls = _device(monkeypatch, status)
+    assert _apply(_entry(True, data={"display_followup_pending": True})) is None
+    assert calls == []

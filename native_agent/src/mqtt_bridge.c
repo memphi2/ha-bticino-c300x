@@ -65,6 +65,7 @@ void c300x_mqtt_close(struct c300x_mqtt *mqtt)
     mqtt->connected = 0;
     mqtt->subscribed = 0;
     mqtt->rx_len = 0;
+    mqtt->rx_skip = 0;
     memset(&mqtt->output, 0, sizeof(mqtt->output));
     mqtt->phase = MQTT_CLOSED;
     mqtt->connack_used = 0;
@@ -523,7 +524,17 @@ static void mqtt_handle_publish(struct c300x_mqtt *mqtt, const unsigned char *pa
 static void mqtt_process_rx(struct c300x_mqtt *mqtt)
 {
     size_t offset = 0;
-    while (!mqtt->has_pending_command && offset + 2 <= mqtt->rx_len) {
+    while (!mqtt->has_pending_command && offset < mqtt->rx_len) {
+        if (mqtt->rx_skip > 0) {
+            size_t drop = mqtt->rx_len - offset;
+            drop = drop < mqtt->rx_skip ? drop : mqtt->rx_skip;
+            offset += drop;
+            mqtt->rx_skip -= drop;
+            continue;
+        }
+        if (offset + 2 > mqtt->rx_len) {
+            break;
+        }
         size_t header_len = 0;
         size_t remaining = mqtt_remaining_length(mqtt->rx_buffer + offset, mqtt->rx_len - offset, &header_len);
         size_t packet_len;
@@ -532,6 +543,12 @@ static void mqtt_process_rx(struct c300x_mqtt *mqtt)
             break;
         }
         packet_len = header_len + remaining;
+        /* Never fits (a huge retained command): drop it as it arrives. A
+         * reconnect would only get the same retained message again. */
+        if (packet_len > sizeof(mqtt->rx_buffer)) {
+            mqtt->rx_skip = packet_len;
+            continue;
+        }
         if (offset + packet_len > mqtt->rx_len) {
             break;
         }

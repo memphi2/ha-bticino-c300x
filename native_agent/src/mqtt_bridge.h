@@ -26,6 +26,7 @@ struct c300x_mqtt {
     size_t ping_remaining; /* Remaining bytes through the queued PINGREQ. */
     unsigned char rx_buffer[4096];
     size_t rx_len;
+    size_t rx_skip; /* Bytes left of a packet larger than rx_buffer. */
     char pending_command[C300X_MAX_FRAME_LEN];
     int has_pending_command;
 };

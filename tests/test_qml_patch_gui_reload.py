@@ -529,3 +529,14 @@ def test_a_request_filed_while_a_worker_ends_is_still_served(station: Station) -
     assert status.returncode == 0, status.stderr
     assert _wait_for(lambda: _kinds(station).count("wrapper") == 2, 30)
     assert len(_settled(station)) == 1
+
+
+def test_without_flock_the_restart_fails_and_leaves_the_display_alone(station: Station) -> None:
+    station.boot()
+    old = station.running()
+    result = station.reload(C300X_QML_GUI_FLOCK=str(station.root / "no-flock"),
+                            C300X_QML_GUI_BUDGET_SECONDS="3")
+    assert result.returncode != 0
+    assert "needs flock" in result.stderr
+    assert station.running() == old
+    assert _kinds(station) == ["wrapper", "start"]

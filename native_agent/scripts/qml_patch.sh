@@ -610,6 +610,11 @@ gui_spawn_worker() {
 # 0: a display program runs, 1: none could be started, 2: still restarting
 # when the wait ended (not a failure; the worker finishes the restart).
 gui_restart() {
+    # Without the lock no worker can run: fail now instead of waiting for nobody.
+    if ! command -v "$GUI_FLOCK" >/dev/null 2>&1; then
+        printf 'The display restart needs flock, which is missing on this station\n' >&2
+        return 1
+    fi
     mkdir -p "$GUI_RUN_DIR/requests" "$GUI_RUN_DIR/serving" "$GUI_RUN_DIR/done" || return 1
     GUI_REQUESTS=$((GUI_REQUESTS + 1))
     gui_id="$$.$GUI_REQUESTS"

@@ -145,11 +145,11 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
   If rollback cannot finish, recovery files are retained and the overlay stays
   blocked. Do not delete recovery files or quarantine to force a GUI restart.
 - **Confirmation:** installed files alone do not confirm activation. A
-  quarantined or incomplete overlay never counts as active; settings and
-  update follow-up stay pending instead of accepting the stock fallback as
-  success. On firmware 3.0.6 a failed display step does not fail the SSH
-  install: the agent is installed, the HA log names the step and the core
-  hook Repair retries it.
+  quarantined or incomplete overlay never counts as active; settings stay
+  pending instead of accepting the stock fallback as success. On firmware
+  3.0.6 a failed display step does not fail the SSH install or the agent
+  update: the agent is installed or updated, the HA log names the step and
+  the core hook Repair retries it.
   An active overlay and a running process are still not proof that every QML
   page loaded correctly. Device checks remain required before merging this beta.
 - **Returning to stable:** on 3.0.6, run the beta's `qml_patch.sh restore-all`

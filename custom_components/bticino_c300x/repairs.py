@@ -72,7 +72,7 @@ from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
     async_apply_qml_core_patch_and_confirm,
-    async_restore_qml_patches_after_update,
+    async_restore_display_after_update,
 )
 from .repair_flows_device_user import DeviceUserRepairFlow
 from .repair_flows_frontend import FrontendCardSetupRepairFlow
@@ -1079,7 +1079,7 @@ async def _async_restore_external_patch_state(
     if _agent_offers_no_display_patch(setup_data):
         return
     if changed.qml_patch_changed or CONF_AGENT_UPDATE_QML_PENDING in entry.data:
-        await async_restore_qml_patches_after_update(
+        await async_restore_display_after_update(
             entry,
             apply_full_patch=(
                 patch_state.qml_patch_required or entry.data.get(CONF_AGENT_UPDATE_QML_PENDING) is True
@@ -1089,7 +1089,7 @@ async def _async_restore_external_patch_state(
         status = await busy_retry(api.async_qml_patch_status)
         if status.get("qt5_overlay") is not None:
             # The preload library is embedded in the runtime, not the QML group.
-            await async_restore_qml_patches_after_update(
+            await async_restore_display_after_update(
                 entry, apply_full_patch=patch_state.qml_patch_required,
             )
         elif patch_state.qml_patch_required:

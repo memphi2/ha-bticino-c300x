@@ -34,7 +34,10 @@ def test_parity_inventory_is_complete_and_sources_are_separate(tmp_path):
         assert "tabView" not in generated
     assert all(path.read_bytes() == content for path, content in before.items())
     for path in (source / "js").glob("*.js"):
-        assert (tmp_path / "js" / path.name).read_text() == strip_device_source(path.read_text())
+        if path.name in builder.C300X_ONLY_SCRIPTS:
+            assert not (tmp_path / "js" / path.name).exists()
+        else:
+            assert (tmp_path / "js" / path.name).read_text() == strip_device_source(path.read_text())
 
 
 def test_physical_keys_leave_vendor_actions_untouched():
@@ -107,8 +110,8 @@ def test_readiness_compiles_every_additional_page_and_rejects_broken_input(tmp_p
     ready = (source / "C100XReady.qml").read_text()
     for page in set(builder.PAGES) - {"C300XAlerts.qml"}:
         assert f'"{page}"' in ready
-    # Memos is a separate entry, not merely a dependency of the HA dashboard.
-    page = source / "C100XMemos.qml"
+    # An own entry, not merely a dependency of the HA dashboard.
+    page = source / "C100XStatusItem.qml"
     if damage == "missing":
         page.unlink()
     elif damage == "syntax":

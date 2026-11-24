@@ -101,8 +101,7 @@ assert not receive()
 evaluate("home.regulationState(false)")
 assert evaluate("!state().blocked")
 
-for name, allowed in (("C100XMenu.qml", True), ("HomeAssistant.qml", True), ("Alarm.qml", False),
-                      ("C100XMemos.qml", False)):
+for name, allowed in (("C100XMenu.qml", True), ("HomeAssistant.qml", True), ("Alarm.qml", False)):
     evaluate(f"showAdapter({json.dumps(name)})")
     assert evaluate("state().blocked") is not allowed, (name, evaluate("state()"))
     assert receive() is allowed, name

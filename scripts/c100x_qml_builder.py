@@ -19,6 +19,8 @@ PAGES = (
     "C300XEnergyReadout.qml", "C300XEnergySums.qml", "C300XLeaveHome.qml",
     "C300XOptionalPages.qml", "C300XPageNavigation.qml", "C300XSituations.qml",
 )
+# The C100X shows no memos and asks for none.
+C300X_ONLY_SCRIPTS = frozenset({"c300x_memos.js"})
 TYPES = {
     "Page": "C100XPage", "UbuntuLightText": "C100XText",
     "BeepingMouseArea": "C100XAction", "MouseArea": "C100XAction",
@@ -123,7 +125,10 @@ def build(destination: Path, source: Path = ROOT / "device_qml") -> None:
     for pattern in ("*.qml", "*.svg"):
         for path in (source / "c100x").glob(pattern):
             shutil.copyfile(path, destination / path.name)
-    shutil.copytree(source / "js", destination / "js", dirs_exist_ok=True)
+    (destination / "js").mkdir()
+    for path in (source / "js").glob("*.js"):
+        if path.name not in C300X_ONLY_SCRIPTS:
+            shutil.copyfile(path, destination / "js" / path.name)
     shutil.copytree(source / "c100x" / "js", destination / "js", dirs_exist_ok=True)
     shutil.copytree(source / "c100x" / "hooks", destination / "hooks", dirs_exist_ok=True)
     files = sorted(path for path in destination.rglob("*") if path.is_file() and path.name != "SHA256SUMS")

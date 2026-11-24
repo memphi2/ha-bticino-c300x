@@ -27,7 +27,7 @@ def test_all_generated_code_is_stripped_before_hashing_without_source_changes(tm
     for directory, prefix in ((source / "js", "js"), (source / "c100x/js", "js"),
                               (source / "c100x/hooks", "hooks")):
         for path in directory.rglob("*"):
-            if path.is_file():
+            if path.is_file() and path.name not in builder.C300X_ONLY_SCRIPTS:
                 expected[f"{prefix}/{path.relative_to(directory)}"] = path.read_bytes()
     builder.build(tmp_path)
     manifest = dict(line.split("  ", 1)[::-1]

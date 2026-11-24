@@ -1,6 +1,5 @@
 import QtQuick 2.7
 import "js/c300x_ha.js" as Api
-import "js/c100x_text.js" as Labels
 
 C100XPage {
     id: menu
@@ -22,16 +21,16 @@ C100XPage {
     Column {
         x: 24; y: 70; width: parent.width - 48; spacing: 12
         Repeater {
-            model: ["HomeAssistant.qml", "Alarm.qml", "C100XMemos.qml"]
+            model: ["HomeAssistant.qml", "Alarm.qml"]
             Rectangle {
                 width: parent.width; height: 76
                 color: index === 1 ? "#123a69" : "#244a59"
-                enabled: index === 0 ? menu.dashboardAvailable : index === 1 ? menu.alarmAvailable : true
+                enabled: index === 0 ? menu.dashboardAvailable : menu.alarmAvailable
                 opacity: enabled ? 1 : 0.45
                 C100XText {
                     anchors.fill: parent; anchors.margins: 16
                     verticalAlignment: Text.AlignVCenter
-                    text: index === 0 ? "Home Assistant" : index === 1 ? "Alarmo" : Labels.label(c100xHost.language, "memos")
+                    text: index === 0 ? "Home Assistant" : "Alarmo"
                     color: "white"; font.pixelSize: 26; elide: Text.ElideRight
                 }
                 C100XAction { anchors.fill: parent; onClicked: menu.openPage(modelData) }

@@ -1,40 +1,26 @@
-"""C100X text-only memo display; never writes the vendor store or plays audio."""
+"""The C100X display shows no memos and asks the agent for none (owner decision 2026-11-24)."""
 
-import importlib.util
-import os
-import subprocess
-import sys
-
-import pytest
 from test_c100x_qml_adapter import ROOT, builder
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 
 
-def test_original_firmware_has_text_memo_store_and_metadata():
+def test_original_firmware_has_no_memo_page_to_read_a_text_memo_on():
     original("c100x-1.5.8")
     root = FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino"
-    binary = (root / "bin/bt_answering_machine").read_bytes()
-    for marker in (b"/home/bticino/cfg/extra/47/memos_text", b"msg_info.ini", b"Message Information",
-                   b"MediaType", b"Read", b"Date", b"UnixTime", b"/var/tmp/records/message.txt"):
-        assert marker in binary
-    assert b"getMemos" in (root / "lib/BtObjects/libbtobjects.so").read_bytes()
+    # The vendor store exists, but the station's own display has no page for it.
+    assert b"/home/bticino/cfg/extra/47/memos_text" in (root / "bin/bt_answering_machine").read_bytes()
     assert not (root / "bin/gui/skins/default/MemoPage.qml").exists()
 
 
-def test_memo_protocol_bounds_cancel_errors_and_read_only_transport():
-    result = subprocess.run(["node", str(ROOT / "tests/fixtures/c100x_memos_probe.js"),
-                             str(ROOT / "device_qml/c100x/js/c100x_memos.js")],
-                            capture_output=True, text=True, timeout=10)
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_memo_full_list_detail_scroll_and_call_preemption_in_host_qt5(tmp_path):
-    if importlib.util.find_spec("PyQt5") is None:
-        pytest.skip("Optional host PyQt5 absent")
-    source = tmp_path / "source"
-    builder.build(source)
-    result = subprocess.run([sys.executable, str(ROOT / "tests/fixtures/c100x_memos_probe.py"),
-                             str(source), str(tmp_path / "screenshots")],
-                            env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
-                            capture_output=True, text=True, timeout=30)
-    assert result.returncode == 0, result.stdout + result.stderr
+def test_adapter_ships_no_memo_page_script_or_request(tmp_path):
+    assert not (ROOT / "device_qml/c100x/C100XMemos.qml").exists()
+    assert not (ROOT / "device_qml/c100x/js/c100x_memos.js").exists()
+    builder.build(tmp_path)
+    delivered = sorted(path for path in tmp_path.rglob("*") if path.is_file() and path.name != "SHA256SUMS")
+    assert len(delivered) > 20
+    for path in delivered:
+        assert "memo" not in path.name.lower(), path
+        text = path.read_text()
+        assert "/ui/memos" not in text and "C100XMemos" not in text and "c300x_memos" not in text, path
+    manifest = (tmp_path / "SHA256SUMS").read_text()
+    assert "memo" not in manifest.lower()

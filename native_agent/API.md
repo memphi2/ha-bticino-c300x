@@ -42,10 +42,11 @@ The agent has two HTTP listeners:
   `listen.allowLan`.
 - UI listener: loopback display bridge listener on `127.0.0.1`, port
   `listen.uiPort` (reported as `ui_listen_host`/`ui_port`). It is intended for
-  QML pages running on the device. Keep the installer's `8090`: most display
-  pages call `127.0.0.1:8090` directly. Only these calls follow a changed port:
-  `/ui/maintenance` (station Settings tab), `/ui/ringer/next` (ringer and
-  picture controls), `/ui/preferences` and `/ui/media-closed`.
+  QML pages running on the device. Every display call follows `listen.uiPort`:
+  the Display patch writes the port into the patched `MainApp.qml` and
+  `EventManager.qml`, and all other pages take it from there. After a port
+  change, restart the agent and reapply the Display patch; until then the patch
+  is reported as partially patched.
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).

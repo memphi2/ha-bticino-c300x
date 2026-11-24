@@ -15,7 +15,12 @@ var eventRefreshInFlight = false
 var eventGeneration = 0
 var notificationGeneration = 0
 
+function useBaseUrl(url) {
+    if (typeof url === "string" && /^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(url)) BASE_URL = url
+}
+
 function syncMemoModel(pageItem, textMemoType, callback) {
+    useBaseUrl(pageItem.uiBaseUrl)
     syncMemoObjectModel(pageItem.model, textMemoType, callback)
 }
 
@@ -33,6 +38,7 @@ function syncMemoObjectModel(model, textMemoType, callback) {
 }
 
 function syncHomeNotifications(pageItem, callback) {
+    if (pageItem) useBaseUrl(pageItem.uiBaseUrl)
     prepareEventRetry(pageItem)
     var generation = ++notificationGeneration
     var watchGeneration = eventGeneration

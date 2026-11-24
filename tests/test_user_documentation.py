@@ -381,16 +381,31 @@ def test_the_api_lists_every_error_the_agent_update_answers_with():
     assert "missing, empty or only line breaks, unreadable or 8 KiB or larger" in row
 
 
-def test_the_api_names_every_display_call_that_follows_the_ui_port():
-    sources = [ROOT / "native_agent/scripts/qml_patch.sh"]
-    sources += sorted((ROOT / "device_qml").rglob("*.qml")) + sorted((ROOT / "device_qml").rglob("*.js"))
-    routes = set()
-    for path in sources:
-        routes |= set(re.findall(r'uiBaseUrl \+ "(/ui/[a-z/-]+)', path.read_text(encoding="utf-8")))
-    assert "/ui/media-closed" in routes
+def test_every_display_call_follows_the_ui_port_as_the_api_says():
     api = (ROOT / "native_agent/API.md").read_text()
-    paragraph = api.split("Only these calls follow a changed port:", 1)[1].split("\n\n", 1)[0]
-    assert set(re.findall(r"`(/ui/[a-z/-]+)`", paragraph)) == routes
+    listeners = api.split("## Listeners", 1)[1].split("\n## ", 1)[0]
+    assert "Every display call follows `listen.uiPort`" in listeners
+    assert "8090" not in listeners
+    # The Display patch writes only the configured port into the pages it
+    # generates; a fixed port there would not follow listen.uiPort.
+    script = (ROOT / "native_agent/scripts/qml_patch.sh").read_text(encoding="utf-8")
+    ports = re.findall(r'127\.0\.0\.1:(\$[a-z_]+|" [a-z_]+ "|\S*)', script)
+    assert len(ports) >= 2
+    assert set(ports) <= {"$feature_port", "$core_port", '" port "'}, ports
+    # Device files keep 8090 only as the libraries' default until a page hands
+    # them the configured base URL, and never open a fixed URL.
+    sources = sorted((ROOT / "device_qml").rglob("*.qml")) + sorted((ROOT / "device_qml").rglob("*.js"))
+    defaults = []
+    opened = []
+    for path in sources:
+        text = path.read_text(encoding="utf-8")
+        defaults += [(path.name, line) for line in text.splitlines() if "127.0.0.1" in line]
+        opened += re.findall(r"\.open\([^,]+,\s*(\S+)", text)
+    opened += re.findall(r'\.open\(\\"[A-Z]+\\",\s*(\S+)', script)
+    assert sorted(defaults) == [("c300x_ha.js", 'var BASE_URL = "http://127.0.0.1:8090"'),
+                                ("c300x_memos.js", 'var BASE_URL = "http://127.0.0.1:8090"')]
+    assert len(opened) >= 10
+    assert not [first for first in opened if first.startswith(('"', '\\"'))]
 
 
 def test_the_api_lists_every_error_the_picture_route_answers_with():

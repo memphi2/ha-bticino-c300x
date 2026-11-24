@@ -1,9 +1,9 @@
 # Device QML UI
 
 Native Qt/QML pages for the C300X display (Qt 4, firmware 1.7.x and 2.0.2). No
-Lovelace is embedded: the pages talk to the agent's loopback display bridge at
-`http://127.0.0.1:8090`. What users see and configure is in
-[Station Display Pages](../docs/display.md).
+Lovelace is embedded: the pages talk to the agent's loopback display bridge on
+`127.0.0.1`, port `listen.uiPort` (installer default 8090). What users see and
+configure is in [Station Display Pages](../docs/display.md).
 
 ## Files
 

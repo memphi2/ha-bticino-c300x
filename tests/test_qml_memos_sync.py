@@ -40,3 +40,23 @@ def test_memo_sync_with_firmware_qt4() -> None:
     )
     assert "QT4_COMPONENT_CREATED" in run.stdout, run.stdout + run.stderr
     assert "QT4_MEMO_SYNC_PASS" in run.stdout + run.stderr
+
+
+def test_display_calls_follow_the_configured_ui_port() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    result = subprocess.run([node, str(ROOT / "tests/qml/ui_port.cjs")],
+                            capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_ui_port_with_firmware_qt4() -> None:
+    from scripts.setup_qt4_runtime import probe_command, runtime_paths
+
+    paths = runtime_paths()
+    if paths is None:
+        pytest.skip("Local firmware Qt 4 runtime not configured")
+    run = subprocess.run(probe_command(paths, ROOT / "tests/qml/ui_port_qt4.qml"),
+                         capture_output=True, text=True, timeout=60, check=False)
+    assert "QT4_UI_PORT_PASS" in run.stdout + run.stderr, run.stdout + run.stderr

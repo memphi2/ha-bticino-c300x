@@ -955,6 +955,7 @@ patch_home_page() {
             print ""
             print "    property int externalUnreadMessages: -1"
             print "    property int externalUnreadMemos: -1"
+            print "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl"
             print "    property alias memoEventRetryTimer: memoRetryTimer"
             print ""
             print "    Timer {"
@@ -1214,6 +1215,7 @@ patch_home_page() {
             'import "js/c300x_ha.js" as HAConfig' \
             'function refreshMessageNotifications()' \
             'property alias memoEventRetryTimer: memoRetryTimer' \
+            'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
             '+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2' \
@@ -1230,6 +1232,7 @@ patch_home_page() {
             'import "js/c300x_ha.js" as HAConfig' \
             'function refreshMessageNotifications()' \
             'property alias memoEventRetryTimer: memoRetryTimer' \
+            'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
             'id: displayBridgeButtonRow' \
@@ -1276,6 +1279,7 @@ patch_memo_page() {
             next
         }
         $0 == "    topMargin: 86" {
+            print "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl"
             print "    function aboutToShow() {"
             print "        MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)"
             print "    }"
@@ -1290,7 +1294,8 @@ patch_memo_page() {
         "MemoPage.qml" \
         'import "js/c300x_memos.js" as MemoSync' \
         'function aboutToShow()' \
-        'MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)'
+        'MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)' \
+        'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl'
     mv "$temp_file" "$memo_page"
 }
 

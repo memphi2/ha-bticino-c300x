@@ -110,3 +110,21 @@ console.log("Memo sync removes only agent-deleted memos passed");
     r.Api.stopEventWatch();
 }
 console.log("Home badges fall back to the stock count passed");
+
+// The memo library follows the station UI port the patched pages expose.
+{
+    const r = runtime(), home = {externalUnreadMessages: -1, externalUnreadMemos: -1,
+        uiBaseUrl: "http://127.0.0.1:18123"};
+    r.Api.syncHomeNotifications(home);
+    r.Api.startEventWatch(() => {});
+    assert.ok(r.sent.length === 3 && r.sent.every(x => x.url.startsWith("http://127.0.0.1:18123/ui/")));
+    r.Api.stopEventWatch();
+    const memoPage = {model: stockModel(), uiBaseUrl: "http://evil.example:80"};
+    r.Api.syncMemoModel(memoPage, TEXT);
+    assert.ok(r.sent[r.sent.length - 1].url.startsWith("http://127.0.0.1:18123/ui/memos"),
+        "only a loopback base URL is taken");
+    const plain = runtime();
+    plain.Api.syncMemoModel({model: stockModel()}, TEXT);
+    assert.ok(plain.sent[0].url.startsWith("http://127.0.0.1:8090/ui/memos"), "8090 stays the default");
+}
+console.log("Memo library follows the UI port passed");

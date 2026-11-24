@@ -329,15 +329,15 @@ PATCH_OUTPUT_SHA256 = {
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "8ca34ccda6fab0a954ad3edaa86beb67b6b92d709fd603aaed952a64e4587f38",
-    "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
+    "HomePage.qml": "de706cdb68db1dd0d255c60cd56676904173c81ca50170a8591d9663d722b34d",
+    "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "c0884022afda5ab4c0894fa3824bc835fef009d12f0b1edf886bee2f98675e17",
     "HomeAssistant.qml": "d2db286d2b6f82c6c58b72bec7d5bd376da1d18001d4ac3d7f1f8cb60c462a57",
     "C300XEnergy.qml": "087d7b251d583684897f07d8aa83a6632cda709bce567bf0cbfc44580208a0c1",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
     "C300XAgenda.qml": "487eed57021d45cbf78e79b844bd86513351e9c005c59b2e8d3ff4988f04b51e",
-    "C300XAlerts.qml": "d1bd1c10ebbe330ba76bb667a0a9b64f6ef6f76e190ec5033fcc7eb3ecad8837",
+    "C300XAlerts.qml": "fef6dccf89f5087c29e149677476722e2ff15ad93ed5fe4dd5b02bfa22ab34ae",
     "C300XDetailControl.qml": "07b3e761c43480d763bf0c943cfe1bb8d19de794fd095bd5478609ca3ec9c42f",
     "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
     "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
@@ -351,12 +351,12 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "c02a63e305455c8b9f340c86fbccf05c5a1fa69a7431615a48b990c247bf0481",
+    "js/c300x_ha.js": "0fcc223b5cfbec06c28cc2c3a38ddf17833f21e35fd0400d667c8ecb0b0e35c2",
     "js/c300x_i18n.js": "c61b2534a23d93aaa893b993e1a5322ceace10119b97850a7ffd08f52ca40c35",
-    "js/c300x_memos.js": "499fe3caad1ee81d92697013468fdbb75bba49b7ed3242d2ce77394cdd066c09",
+    "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "01ff29f347eb77c961dbd8810530138cb854084027a10e33ffddf981bbb30ee9"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "e5c13b1398716d78cebe6bf1751b736d7555506a16c5aabfb413dfaeccb8ef83"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -1939,6 +1939,8 @@ def _assert_complete_gui_patch(
     assert "function stopMessageNotificationWatch()" in home_page
     assert "MemoSync.syncHomeNotifications(page)" in home_page
     assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in home_page
+    # The .pragma libraries cannot see MainApp ids; the pages hand them the port.
+    assert "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl\n" in home_page
     assert 'event.topic === "memos"' in home_page
     assert 'event.topic === "answering_machine.messages"' in home_page
     # A fresh device without a layout setting gets the stock layout.
@@ -1971,6 +1973,7 @@ def _assert_complete_gui_patch(
     assert 'import "js/c300x_memos.js" as MemoSync' in memo_page
     assert "function aboutToShow()" in memo_page
     assert "MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)" in memo_page
+    assert "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl\n" in memo_page
 
     event_manager = (gui_dir / "EventManager.qml").read_text()
     assert "function c300xNotifyMediaClosed()" in event_manager

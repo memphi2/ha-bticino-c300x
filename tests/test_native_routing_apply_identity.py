@@ -138,3 +138,19 @@ def test_apply_whole_identity(apply_identity_binary, tmp_path, firmware, case):
         if case != "stock_symlink":
             assert "state=unsupported" in run(binary, target, backup, "status").stdout
     assert not list(target.parent.glob("*.tmp"))
+
+
+def test_apply_on_a_busy_root_is_done(apply_identity_binary, tmp_path):
+    """remount,ro fails while the daemon still runs the replaced binary.
+
+    The patch is on disk; the apply must succeed (so the HA user setup goes
+    on) and report root_writable instead of remount_ro_failed.
+    """
+    target, backup = stock_copy(tmp_path)
+    stock = target.read_bytes()
+    result = run(apply_identity_binary, target, backup, "apply", C300X_DEVICE_PATCH_NO_REMOUNT="ro_busy")
+    assert result.returncode == 0, result.stdout
+    assert "state=patched" in result.stdout and "root_writable=1" in result.stdout
+    assert target.read_bytes() != stock and backup.read_bytes() == stock
+    result = run(apply_identity_binary, target, backup, "apply")
+    assert result.returncode == 0 and "root_writable=0" in result.stdout

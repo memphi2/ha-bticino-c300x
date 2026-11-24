@@ -37,6 +37,7 @@ int main(int argc, char **argv)
         assert(strcmp(argv[3], "restore") == 0);
         ok = c300x_device_routing_restore(&status, error, sizeof(error));
     }
-    printf("ok=%d state=%s patched=%d error=%s\n", ok, status.state, status.patched, error);
+    printf("ok=%d state=%s patched=%d error=%s root_writable=%d\n", ok, status.state, status.patched,
+           error, status.root_writable);
     return ok ? 0 : 1;
 }

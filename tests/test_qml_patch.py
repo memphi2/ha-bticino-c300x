@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
 from custom_components.bticino_c300x.const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
 from custom_components.bticino_c300x.entry_locks import clear_entry_locks
 from custom_components.bticino_c300x.qml_patch import (
@@ -34,11 +35,15 @@ class _FakeApi:
     restore_status: dict[str, Any] = field(default_factory=dict)
     core_apply_status: dict[str, Any] = field(default_factory=dict)
     fail_action: str | None = None
+    fail_status: BaseException | None = None
+    action_error: BaseException | None = None
     dynamic_homepage: bool | None = None
     calls: list[str] = field(default_factory=list)
 
     async def async_qml_patch_status(self) -> dict[str, Any]:
         self.calls.append("qml_status")
+        if self.fail_status is not None:
+            raise self.fail_status
         return self.status
 
     async def async_apply_qml_patch(
@@ -48,6 +53,8 @@ class _FakeApi:
     ) -> dict[str, Any]:
         self.calls.append("apply_qml")
         self.dynamic_homepage = dynamic_homepage
+        if self.action_error is not None:
+            raise self.action_error
         if self.fail_action == "apply":
             raise RuntimeError("apply failed")
         return self.apply_status
@@ -60,6 +67,8 @@ class _FakeApi:
 
     async def async_apply_qml_core_patch(self) -> dict[str, Any]:
         self.calls.append("apply_qml_core")
+        if self.action_error is not None:
+            raise self.action_error
         if self.fail_action == "core_apply":
             raise RuntimeError("core apply failed")
         return self.core_apply_status
@@ -160,15 +169,26 @@ def test_restore_qml_patch_keeps_action_status_when_confirmation_mismatches() ->
     assert entry.runtime_data.qml_patch_status == status
 
 
-def test_apply_qml_patch_restores_previous_status_on_error() -> None:
-    api = _FakeApi(fail_action="apply")
-    previous = {"available": True, "patched": False, "state": "original"}
+@pytest.mark.parametrize("read_fails", [False, True])
+def test_apply_qml_patch_restores_previous_status_on_error(read_fails: bool) -> None:
+    """A failed write (a 504 timeout too) may have changed the device: its
+    status is read again; the status from before comes back only when that
+    read fails as well."""
+
+    device = {"available": True, "patched": False, "state": "partial", "transaction": "pending"}
+    api = _FakeApi(
+        fail_action="apply",
+        status=device,
+        fail_status=C300XAgentApiConnectionError("offline") if read_fails else None,
+    )
+    previous = {"available": True, "patched": True, "core_patched": False, "state": "patched"}
     entry = _entry(api, previous)
 
     with pytest.raises(RuntimeError, match="apply failed"):
         asyncio.run(async_apply_qml_patch_and_confirm(entry))
 
-    assert entry.runtime_data.qml_patch_status == previous
+    assert entry.runtime_data.qml_patch_status == (previous if read_fails else device)
+    assert api.calls[-1] == "qml_status"
 
 
 def test_core_patch_confirm_paths_update_core_state() -> None:
@@ -199,26 +219,48 @@ def test_core_patch_keeps_action_status_when_apply_confirmation_mismatches() -> 
     assert entry.runtime_data.qml_patch_status == status
 
 
-def test_core_patch_restores_previous_status_on_apply_error() -> None:
-    api = _FakeApi(fail_action="core_apply")
-    previous = {"available": True, "patched": True, "core_patched": False}
+@pytest.mark.parametrize("read_fails", [False, True])
+def test_core_patch_restores_previous_status_on_apply_error(read_fails: bool) -> None:
+    """A failed write (a 504 timeout too) may have changed the device: its
+    status is read again; the status from before comes back only when that
+    read fails as well."""
+
+    device = {"available": True, "patched": False, "state": "partial", "transaction": "pending"}
+    api = _FakeApi(
+        fail_action="core_apply",
+        status=device,
+        fail_status=C300XAgentApiConnectionError("offline") if read_fails else None,
+    )
+    previous = {"available": True, "patched": True, "core_patched": False, "state": "patched"}
     entry = _entry(api, previous)
 
     with pytest.raises(RuntimeError, match="core apply failed"):
         asyncio.run(async_apply_qml_core_patch_and_confirm(entry))
 
-    assert entry.runtime_data.qml_patch_status == previous
+    assert entry.runtime_data.qml_patch_status == (previous if read_fails else device)
+    assert api.calls[-1] == "qml_status"
 
 
-def test_restore_qml_patch_restores_previous_status_on_error() -> None:
-    api = _FakeApi(fail_action="restore")
-    previous = {"available": True, "patched": True, "state": "patched"}
+@pytest.mark.parametrize("read_fails", [False, True])
+def test_restore_qml_patch_restores_previous_status_on_error(read_fails: bool) -> None:
+    """A failed write (a 504 timeout too) may have changed the device: its
+    status is read again; the status from before comes back only when that
+    read fails as well."""
+
+    device = {"available": True, "patched": False, "state": "partial", "transaction": "pending"}
+    api = _FakeApi(
+        fail_action="restore",
+        status=device,
+        fail_status=C300XAgentApiConnectionError("offline") if read_fails else None,
+    )
+    previous = {"available": True, "patched": True, "core_patched": False, "state": "patched"}
     entry = _entry(api, previous)
 
     with pytest.raises(RuntimeError, match="restore failed"):
         asyncio.run(async_restore_qml_patch_and_confirm(entry))
 
-    assert entry.runtime_data.qml_patch_status == previous
+    assert entry.runtime_data.qml_patch_status == (previous if read_fails else device)
+    assert api.calls[-1] == "qml_status"
 
 
 def test_concurrent_patch_actions_do_not_run_the_device_action_together() -> None:
@@ -409,3 +451,45 @@ def test_restore_after_update_serializes_against_concurrent_switch_toggle() -> N
     asyncio.run(_run())
 
     assert api.max_active == 1
+
+
+@pytest.mark.parametrize("core", [False, True])
+def test_a_cancelled_write_never_keeps_the_transient_status(core: bool) -> None:
+    api = _FakeApi(action_error=asyncio.CancelledError())
+    previous = {"available": True, "patched": False, "state": "original", "core_patched": True}
+    entry = _entry(api, previous)
+    action = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(action(entry))
+
+    assert entry.runtime_data.qml_patch_status == previous
+
+
+@pytest.mark.parametrize("core", [False, True])
+def test_a_failed_confirming_read_keeps_the_writes_own_answer(core: bool) -> None:
+    """A busy or timed-out read right after a successful write must not leave
+    the "patching" status behind until a reload."""
+
+    answer = {"available": True, "patched": True, "state": "patched", "core_patched": True}
+    api = _FakeApi(
+        apply_status=answer,
+        core_apply_status=answer,
+        fail_status=C300XAgentApiConnectionError(
+            "device agent returned HTTP 409: maintenance_busy"
+        ),
+    )
+    entry = _entry(api, {"available": True, "patched": False, "core_patched": False})
+    changes = 0
+
+    def _changed() -> None:
+        nonlocal changes
+        changes += 1
+
+    action = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+    status = asyncio.run(action(entry, _changed))
+
+    assert status == answer
+    assert entry.runtime_data.qml_patch_status == answer
+    assert changes == 2
+

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from asyncio import Lock
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -17,6 +18,8 @@ from .const import (
 from .entry_config import entry_config_value
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _qml_patch_lock(entry: BticinoC300XConfigEntry) -> Lock:
@@ -130,20 +133,14 @@ async def async_apply_qml_core_patch_and_confirm(
     async with _qml_patch_lock(entry):
         previous_status = _qml_patch_status(entry)
         _store_transient_qml_core_patch_status(entry, "core_patching")
-        _notify_status_changed(status_changed)
-        try:
-            action_status = await entry.runtime_data.api.async_apply_qml_core_patch()
-        except Exception:
-            _store_qml_patch_status(entry, previous_status)
-            _notify_status_changed(status_changed)
-            raise
-        if action_status.get("core_patched") is not True:
-            _store_qml_patch_status(entry, action_status)
-            _notify_status_changed(status_changed)
-            return action_status
-        status = await async_refresh_qml_patch_status(entry)
-        _notify_status_changed(status_changed)
-        return status
+        return await _async_settle_qml_patch_action(
+            entry,
+            status_changed=status_changed,
+            previous_status=previous_status,
+            confirmed=lambda status: status.get("core_patched") is True,
+            action=entry.runtime_data.api.async_apply_qml_core_patch,
+            refresh=async_refresh_qml_patch_status,
+        )
 
 
 async def async_restore_qml_patch_and_confirm(
@@ -196,18 +193,62 @@ async def _async_run_qml_patch_action_unlocked(
 
     previous_status = _qml_patch_status(entry)
     _store_transient_qml_patch_status(entry, transient_state)
+    return await _async_settle_qml_patch_action(
+        entry,
+        status_changed=status_changed,
+        previous_status=previous_status,
+        confirmed=lambda status: status.get("patched") is expected_patched,
+        action=action,
+        refresh=refresh,
+    )
+
+
+async def _async_settle_qml_patch_action(
+    entry: BticinoC300XConfigEntry,
+    *,
+    status_changed: _StatusChanged | None,
+    previous_status: dict[str, Any],
+    confirmed: Callable[[dict[str, Any]], bool],
+    action: Callable[[], Awaitable[dict[str, Any]]],
+    refresh: Callable[[BticinoC300XConfigEntry], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Run a write whose transient status is stored; never leave that status.
+
+    A failed write (a 504 timeout included, whether it was rolled back or not)
+    is followed by a fresh status read, since the device may have changed; the
+    status from before the write comes back only when that read fails too, or
+    when the task is cancelled. A write that succeeded keeps its own answer
+    when the confirming read fails.
+    """
+
     _notify_status_changed(status_changed)
     try:
         action_status = await action()
     except Exception:
+        try:
+            await refresh(entry)
+        except Exception:
+            _store_qml_patch_status(entry, previous_status)
+        _notify_status_changed(status_changed)
+        raise
+    except BaseException:
         _store_qml_patch_status(entry, previous_status)
         _notify_status_changed(status_changed)
         raise
-    if action_status.get("patched") is not expected_patched:
+    if not confirmed(action_status):
         _store_qml_patch_status(entry, action_status)
         _notify_status_changed(status_changed)
         return action_status
-    status = await refresh(entry)
+    try:
+        status = await refresh(entry)
+    except Exception as err:
+        _LOGGER.warning("C300X Display patch status read after a write failed: %s", err)
+        status = action_status
+        _store_qml_patch_status(entry, status)
+    except BaseException:
+        _store_qml_patch_status(entry, action_status)
+        _notify_status_changed(status_changed)
+        raise
     _notify_status_changed(status_changed)
     return status
 

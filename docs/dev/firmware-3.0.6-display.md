@@ -213,7 +213,11 @@ A request left by a worker that died is taken over by the next worker.
 4. Verify: ready when `BtClass` has written its watchdog file after the start
    and the same `BtClass` still runs `C300X_QML_QT5_STABLE_SECONDS` (8) after
    that first write, so a display that crashes right after its first write is
-   still seen; the overlay failed when the start script wrote this boot's
+   still seen. A program other than the one seen before, and the shipped
+   display that the start script starts after a failed overlay, count only
+   on a write of their own (a fresh stamp), not on the crashed one's. A
+   writer's note counts only while its PID runs `qml_patch.sh`; the worker
+   removes any other. The overlay failed when the start script wrote this boot's
    quarantine mark; failed when no start script and no `BtClass` run any
    more, or when no watchdog write came within `C300X_QML_QT5_START_SECONDS`
    (40). bt_daemon checks that file at least every 32 s and reboots the

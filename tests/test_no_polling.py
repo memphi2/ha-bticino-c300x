@@ -81,7 +81,7 @@ def test_device_home_page_buttons_do_not_poll() -> None:
     assert 'print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home"' in text
     assert 'id: displayBridgeButtonRow' in text
     assert "width: buttonPrototype.width * 2 + foobar.spacing" in text
-    assert "spacing: foobar.spacing" in text
+    assert "x: buttonPrototype.width + foobar.spacing" in text
     assert "+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2" in text
     assert 'pressedIcon: \\"images/" icon "_p.svg\\""' in text
     assert 'defaultIcon: \\"images/" icon ".svg\\""' in text

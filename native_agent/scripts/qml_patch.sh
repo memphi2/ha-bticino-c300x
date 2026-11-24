@@ -798,6 +798,9 @@ patch_home_page() {
             } else {
                 print "                opacity: page." flag " ? 1 : 0"
                 print "                enabled: page." flag
+                if (name == "haButton") {
+                    print "                x: buttonPrototype.width + foobar.spacing"
+                }
             }
             print "                style: HomePageButtonStyle {"
             print "                    pressedImage: \"images/function_btn_p.svg\""
@@ -812,11 +815,10 @@ patch_home_page() {
         function print_home_assistant_flow_item() {
             print ""
             if (layout != "stock") {
-                print "            Row {"
+                print "            Item {"
                 print "                id: displayBridgeButtonRow"
                 print "                width: buttonPrototype.width * 2 + foobar.spacing"
                 print "                height: buttonPrototype.height"
-                print "                spacing: foobar.spacing"
             }
             print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
             print ""

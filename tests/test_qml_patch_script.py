@@ -354,7 +354,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_memos.js": "c64084cdc8d44b90150488082aed7338876f756220fac763490fdf0809bf5998",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "1609350cee81026a73eaa4b6927653217adb8f3ddc8e4574687696aaf3a00c95"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "01ff29f347eb77c961dbd8810530138cb854084027a10e33ffddf981bbb30ee9"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -480,7 +480,12 @@ def test_qml_patch_apply_places_home_buttons_like_the_stock_buttons(tmp_path: Pa
 
 
 def test_qml_patch_apply_can_keep_home_buttons_side_by_side(tmp_path: Path) -> None:
-    """Flag 0: the fixed pair, a Row whose hidden button keeps its space."""
+    """Flag 0: the fixed pair; a hidden button keeps its place empty.
+
+    The pair sits in a plain Item with Home Assistant at a fixed x, not in a
+    Row: the device's Qt 4.8 positioners skip children with opacity 0, so in
+    a Row Home Assistant moved into the Alarm place while Alarm was hidden.
+    """
 
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
@@ -500,8 +505,16 @@ def test_qml_patch_apply_can_keep_home_buttons_side_by_side(tmp_path: Path) -> N
     assert "id: buttonRetryTimer" in home_page
     assert "id: displayBridgeButtonRow" in home_page
     assert "id: homeAssistantButtonRow" not in home_page
-    assert "width: buttonPrototype.width * 2 + foobar.spacing" in home_page
-    assert "spacing: foobar.spacing" in home_page
+    assert (
+        "            Item {\n                id: displayBridgeButtonRow\n"
+        "                width: buttonPrototype.width * 2 + foobar.spacing\n"
+    ) in home_page
+    assert "Row {" not in home_page
+    assert (
+        "                enabled: page.haButtonVisible\n"
+        "                x: buttonPrototype.width + foobar.spacing\n"
+    ) in home_page
+    assert home_page.count("                x: ") == 1
     assert "opacity: page.alarmButtonVisible ? 1 : 0" in home_page
     assert "opacity: page.haButtonVisible ? 1 : 0" in home_page
     assert "enabled: page.alarmButtonVisible" in home_page

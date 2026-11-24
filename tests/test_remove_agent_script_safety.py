@@ -232,6 +232,49 @@ exit 0
     assert not list(Path(env["TMPDIR"]).iterdir())
 
 
+@pytest.mark.parametrize("failure", ["none", "qml", "firewall", "media"])
+@pytest.mark.parametrize("running", [True, False])
+def test_a_failed_removal_starts_the_agent_it_stopped(local_device, tmp_path, failure, running):
+    """HA retries a removal through the agent, so a removal that stopped the
+    agent and then gave up must start it again."""
+    env = local_device
+    label_patch(env)
+    env["AGENT_RUNNING"] = "1" if running else "0"
+    pidof = tmp_path / "commands/pidof"
+    pidof.write_text("#!/bin/sh\nprintf 'pidof\\n' >> \"$CALL_LOG\"\n"
+                     "[ \"$AGENT_RUNNING\" = 1 ] && ! grep -q '^killall$' \"$CALL_LOG\" || exit 1\n"
+                     "printf '12345\\n'\n")
+    init = Path(env["C300X_INIT_SCRIPT"])
+    init.write_text('#!/bin/sh\nprintf "init %s\\n" "$1" >> "$CALL_LOG"\n')
+    init.chmod(0o755)
+    if failure == "qml":
+        env["C300X_QML_PATCH_SCRIPT"] = str(tmp_path / "missing-patch-script")
+    elif failure == "firewall":
+        Path(env["C300X_IPTABLES"]).write_text("# c300x-native-agent firewall begin\n")
+    elif failure == "media":
+        Path(env["C300X_AGENT_DIR"], "c300x-agent-native").write_text(
+            '#!/bin/sh\nif [ "$1" = "--display-touch" ]; then\n'
+            '    printf \'{"ok":true,"changed":false}\\n\'\n    exit 0\nfi\n'
+            'printf "media-restore\\n" >> "$CALL_LOG"\nexit 1\n')
+    Path(env["CALL_LOG"]).write_text("")
+
+    result = subprocess.run(["sh", str(REMOVE), "remove"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    calls = Path(env["CALL_LOG"]).read_text().splitlines()
+    if failure == "none":
+        assert result.returncode == 0, result.stderr
+        assert "init start" not in calls
+        return
+    assert result.returncode == 1, result.stderr
+    assert calls.count("init start") == (1 if running else 0)
+    if running:
+        assert calls.index("killall") < calls.index("init start")
+        assert "started again so the removal can be retried" in result.stderr
+    assert "reboot" not in calls
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+
+
 @pytest.mark.parametrize("damage", ["none", "config", "qml", "mode", "link", "content",
                                     "hidden", "backup_only", "agent_all", "all", "silent", "signal",
                                     "directory", "added", "identity_error"])

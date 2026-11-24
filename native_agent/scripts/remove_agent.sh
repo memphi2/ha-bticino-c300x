@@ -28,6 +28,7 @@ STARTUP_ACTIVE=0
 STARTUP_RO_FAILED=0
 MEDIA_REBOOT_REQUIRED=0
 FINAL_DELETE_STARTED=0
+AGENT_STOPPED=0
 cleanup_workspace() {
     cleanup_status=$?
     cleanup_failed=0
@@ -66,6 +67,14 @@ cleanup_workspace() {
     fi
     if [ "$cleanup_status" = 0 ]; then
         cleanup_status=$cleanup_failed
+    fi
+    if [ "$cleanup_status" != 0 ] && [ "$AGENT_STOPPED" = 1 ] && [ "$keep_workspace" = 0 ] \
+        && [ -x "$INIT_SCRIPT" ] && [ -x "$AGENT_DIR/c300x-agent-native" ]; then
+        if "$INIT_SCRIPT" start >/dev/null 2>&1; then
+            printf 'Agent started again so the removal can be retried\n' >&2
+        else
+            printf 'Agent could not be started again; start it with %s start\n' "$INIT_SCRIPT" >&2
+        fi
     fi
     exit "$cleanup_status"
 }
@@ -285,6 +294,7 @@ stop_agent() {
     case $? in 0) return 0 ;; 1) ;; *) return 1 ;; esac
     # Match the process name, not a possibly stale PID file. TERM lets active
     # native transactions finish; never proceed on signal delivery alone.
+    AGENT_STOPPED=1
     if ! killall c300x-agent-native >/dev/null 2>&1; then
         agent_stopped
         return $?

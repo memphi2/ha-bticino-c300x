@@ -167,41 +167,56 @@ Item {
             id: content
             anchors.horizontalCenter: parent.horizontalCenter
             width: 400
-            Repeater {
-                model: 5
-                Item {
-                    width: content.width
-                    height: Math.max(23, statusValue.paintedHeight + 2)
-                    UbuntuLightText {
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: "#c7d0d9"
-                        font.pixelSize: 18
-                        text: panel.statusKey(index)
+            Item {
+                width: content.width
+                height: statusRows.height + 8
+                Image {
+                    anchors.fill: parent
+                    source: "images/settings/act_btn.svg"
+                    fillMode: Image.Stretch
+                }
+                Column {
+                    id: statusRows
+                    x: 8
+                    y: 4
+                    width: parent.width - 16
+                    Repeater {
+                        model: 5
+                        Item {
+                            width: statusRows.width
+                            height: Math.max(23, statusValue.paintedHeight + 2)
+                            UbuntuLightText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: "#c7d0d9"
+                                font.pixelSize: 18
+                                text: panel.statusKey(index)
+                            }
+                            UbuntuLightText {
+                                id: statusValue
+                                objectName: "statusValue" + index
+                                anchors.left: parent.left
+                                anchors.leftMargin: index === 1 ? 0 : 140
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: index > 0 ? "white" : panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"
+                                font.pixelSize: 18
+                                wrapMode: index === 1 ? Text.WrapAnywhere : Text.NoWrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                                text: panel.statusValue(index)
+                            }
+                        }
                     }
                     UbuntuLightText {
-                        id: statusValue
-                        objectName: "statusValue" + index
-                        anchors.left: parent.left
-                        anchors.leftMargin: index === 1 ? 0 : 140
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: index > 0 ? "white" : panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"
+                        objectName: "bridgeReason"
+                        visible: text !== ""
+                        width: parent.width
+                        color: "#f1c40f"
                         font.pixelSize: 18
-                        wrapMode: index === 1 ? Text.WrapAnywhere : Text.NoWrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        text: panel.statusValue(index)
+                        wrapMode: Text.WordWrap
+                        text: panel.problem ? panel.label(panel.problem) : ""
                     }
                 }
-            }
-            UbuntuLightText {
-                objectName: "bridgeReason"
-                visible: text !== ""
-                width: parent.width
-                color: "#f1c40f"
-                font.pixelSize: 18
-                wrapMode: Text.WordWrap
-                text: panel.problem ? panel.label(panel.problem) : ""
             }
             Repeater {
                 model: 6
@@ -221,7 +236,7 @@ Item {
                         anchors.right: toggle.left
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.verticalCenterOffset: head ? 1 : 0
-                        color: head ? "#c7d0d9" : "white"
+                        color: "white"
                         font.pixelSize: 18
                         elide: Text.ElideRight
                         text: panel.rowText(index)

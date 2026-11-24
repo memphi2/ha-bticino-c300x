@@ -739,3 +739,14 @@ def test_integration_tab_status_lines_fit_long_values():
     assert '(agentVersion || "-") + " \\u00b7 Firmware " + (firmwareVersion || "-")' in source
     assert '"Integration " +' not in source
     assert "status_server" not in (ROOT / "device_qml/js/c300x_i18n.js").read_text(encoding="utf-8")
+
+
+def test_integration_tab_status_block_is_readable_on_a_bright_background():
+    """Green and grey text straight on the sand-coloured wallpaper could not be read."""
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    block = source[source.index("height: statusRows.height + 8"):source.index("                model: 6\n")]
+    assert 'source: "images/settings/act_btn.svg"' in block
+    assert block.index("Image {") < block.index("id: statusRows") < block.index("model: 5")
+    assert 'objectName: "bridgeReason"' in block, "the reason lies on the panel too"
+    assert "width: statusRows.width" in block
+    assert "color: head ?" not in source, "section titles are white like the station's own text"

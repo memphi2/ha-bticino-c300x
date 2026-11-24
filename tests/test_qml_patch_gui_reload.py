@@ -123,6 +123,7 @@ fi
 if [ -n "${LD_PRELOAD:-}" ] && [ -f "$C300X_TEST_CRASHES.hang" ]; then
     while :; do sleep 1; done
 fi
+sleep "${C300X_TEST_ALIVE_DELAY:-0}"
 stop() {
     [ "${C300X_TEST_IGNORE_TERM:-0}" = 1 ] && return
     sleep "${C300X_TEST_TEARDOWN:-0}"
@@ -599,3 +600,21 @@ def test_a_display_that_writes_no_watchdog_file_falls_back_to_stock(overlay: Ove
     assert len(_settled(overlay)) == 1
     assert overlay.mark.read_text() == "boot-1\n"
     assert _starts(overlay)[-1] == "plain"
+
+
+def test_a_write_during_a_restart_is_not_taken_for_a_failed_overlay(overlay: OverlayStation) -> None:
+    """A write marks the overlay while it changes the files; a running cycle
+    must neither read that as a failed start nor start the display meanwhile."""
+
+    overlay.boot()
+    overlay.mark.write_text("boot-1\n")
+    # The first restart returns at once and its display writes the watchdog file only after 8 s.
+    assert overlay.run("core-apply", C300X_QML_GUI_BUDGET_SECONDS="0",
+                       C300X_TEST_ALIVE_DELAY="8")["ok"] is True
+    assert _wait_for(lambda: overlay.phase() == "verify", 30), overlay.phase()
+    status = overlay.run("apply", C300X_QML_DYNAMIC_HOME_PAGE="0")
+    assert status["qt5_overlay"] == "active" and status["changed_files"], status
+    assert len(_settled(overlay)) == 1
+    assert not overlay.mark.exists()
+    # The boot, the first restart, and one restart with the written files.
+    assert _starts(overlay) == ["overlay", "overlay", "overlay"]

@@ -463,7 +463,7 @@ gui_start() {
     fi
     (
         cd "$GUI_ROOT" || exit 1
-        exec 9>&-
+        exec 9>&- 8>&-
         $gui_session $gui_shell "$1" </dev/null >/tmp/BtClass_qws.agent.log 2>&1 &
     )
 }
@@ -475,20 +475,31 @@ gui_start() {
 # write within QT5_START_SECONDS).
 gui_verify() {
     gui_phase verify
-    gui_had_mark=0
-    if qt5_failed_now; then
-        gui_had_mark=1
-    fi
+    gui_had_mark=
     gui_waited=0
     gui_alive_at=
     gui_alive_pid=
     while :; do
-        sleep 1
-        gui_waited=$((gui_waited + 1))
-        if [ "$gui_had_mark" = "0" ] && qt5_failed_now; then
+        # A mark set while a write changes the files is the write's own.
+        "$GUI_FLOCK" 8
+        if gui_writer_active; then
+            "$GUI_FLOCK" -u 8
+            gui_result=superseded
+            return 0
+        fi
+        gui_marked=0
+        if qt5_failed_now; then
+            gui_marked=1
+        fi
+        "$GUI_FLOCK" -u 8
+        if [ -z "$gui_had_mark" ]; then
+            gui_had_mark="$gui_marked"
+        elif [ "$gui_had_mark" = "0" ] && [ "$gui_marked" = "1" ]; then
             gui_result=overlay_failed
             return 0
         fi
+        sleep 1
+        gui_waited=$((gui_waited + 1))
         gui_running="$(gui_pids BtClass)"
         if [ -z "$gui_running" ]; then
             gui_alive_at=
@@ -514,6 +525,24 @@ gui_verify() {
     done
 }
 
+# Start, with the mark dropped or set first, unless a write changes the
+# activation files: nothing starts with half of them (returns 2).
+gui_start_unless_writing() {
+    "$GUI_FLOCK" 8
+    if gui_writer_active; then
+        "$GUI_FLOCK" -u 8
+        return 2
+    fi
+    case "${2:-}" in
+        drop_mark) rm -f "$QT5_RCC.failed" ;;
+        mark) qt5_mark_failed 2>/dev/null || true ;;
+    esac
+    gui_start "$1" || true
+    "$GUI_FLOCK" -u 8
+}
+
+# 0: a display runs, 1: none could be started, 2: a write changes the
+# activation files; its own request restarts the display afterwards.
 gui_cycle() {
     gui_phase stop
     gui_stop || return 1
@@ -521,14 +550,13 @@ gui_cycle() {
     if [ -n "$(gui_pids BtClass)" ]; then
         return 0
     fi
-    gui_start "$GUI_WRAPPER" || true
+    gui_start_unless_writing "$GUI_WRAPPER" || return 2
     gui_verify
     if [ "$gui_result" = "overlay_failed" ] && [ "$1" = "retry" ]; then
         gui_phase stop
         gui_stop || return 1
         gui_settle
-        rm -f "$QT5_RCC.failed"
-        gui_start "$GUI_WRAPPER" || true
+        gui_start_unless_writing "$GUI_WRAPPER" drop_mark || return 2
         gui_verify
     fi
     if [ "$gui_result" = "overlay_failed" ]; then
@@ -536,26 +564,31 @@ gui_cycle() {
     fi
     if [ "$gui_result" = "failed" ] && grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null \
         && qt5_original_wrapper_valid "$QT5_WRAPPER_BACKUP"; then
-        qt5_mark_failed 2>/dev/null || true
         gui_phase stop
         gui_stop || return 1
         gui_settle
-        gui_start "$QT5_WRAPPER_BACKUP" || true
+        gui_start_unless_writing "$QT5_WRAPPER_BACKUP" mark || return 2
         gui_verify
     fi
+    [ "$gui_result" = "superseded" ] && return 2
     [ "$gui_result" = "ready" ]
 }
 
 gui_worker() {
     set +e
     mkdir -p "$GUI_RUN_DIR/requests" "$GUI_RUN_DIR/serving" "$GUI_RUN_DIR/done"
-    exec 9>>"$GUI_RUN_DIR/lock"
+    exec 9>>"$GUI_RUN_DIR/lock" 8>>"$GUI_RUN_DIR/activation"
     "$GUI_FLOCK" -n 9 || exit 0
     # Requests of a worker that died are served again.
     for gui_request in "$GUI_RUN_DIR"/serving/*; do
         [ -f "$gui_request" ] && mv -f "$gui_request" "$GUI_RUN_DIR/requests/"
     done
     while :; do
+        # A write in progress files its own request once its files are in place.
+        while gui_writer_active; do
+            gui_phase wait
+            sleep 1
+        done
         gui_mode=
         for gui_request in "$GUI_RUN_DIR"/requests/*; do
             case "$gui_request" in
@@ -577,9 +610,14 @@ gui_worker() {
             gui_requests_waiting && "$GUI_FLOCK" -n 9 && continue
             exit 0
         fi
-        gui_answer=1
-        if gui_cycle "$gui_mode"; then
-            gui_answer=0
+        gui_answer=0
+        gui_cycle "$gui_mode" || gui_answer=$?
+        if [ "$gui_answer" = "2" ]; then
+            # Served together with the write's request once it is done.
+            for gui_request in "$GUI_RUN_DIR"/serving/*; do
+                [ -f "$gui_request" ] && mv -f "$gui_request" "$GUI_RUN_DIR/requests/"
+            done
+            continue
         fi
         for gui_request in "$GUI_RUN_DIR"/serving/*; do
             [ -f "$gui_request" ] || continue
@@ -599,6 +637,32 @@ gui_worker() {
             kill -0 "${gui_request%%.*}" 2>/dev/null || rm -f "$GUI_RUN_DIR/done/$gui_request"
         done
     done
+}
+
+# A write that changes the activation files notes its PID here while it does;
+# the worker then neither starts the display nor reads the quarantine mark,
+# which the write sets while files change and settles when it is done.
+gui_writing_begin() {
+    [ "$QT5_DISPLAY" = "1" ] || return 0
+    mkdir -p "$GUI_RUN_DIR" 2>/dev/null || return 0
+    if command -v "$GUI_FLOCK" >/dev/null 2>&1; then
+        "$GUI_FLOCK" "$GUI_RUN_DIR/activation" sh -c 'printf "%s\n" "$1" > "$2"' sh "$$" "$GUI_RUN_DIR/writing" || true
+    else
+        printf '%s\n' "$$" > "$GUI_RUN_DIR/writing" 2>/dev/null || true
+    fi
+}
+
+gui_writing_end() {
+    [ "$QT5_DISPLAY" = "1" ] || return 0
+    if [ "$(cat "$GUI_RUN_DIR/writing" 2>/dev/null || true)" = "$$" ]; then
+        rm -f "$GUI_RUN_DIR/writing"
+    fi
+    return 0
+}
+
+gui_writer_active() {
+    gui_writer="$(cat "$GUI_RUN_DIR/writing" 2>/dev/null || true)"
+    [ -n "$gui_writer" ] && kill -0 "$gui_writer" 2>/dev/null
 }
 
 gui_requests_waiting() {
@@ -968,6 +1032,8 @@ finish_write_action() {
     # A signal that ended the write bounds the restart wait like a later one.
     FINISH_SIGNALLED="${WRITE_SIGNALLED:-0}"
     trap finish_signal HUP INT TERM
+    # A publish cut short leaves its note; the rollback below takes a new one.
+    gui_writing_end
     if [ "$write_rc" != "0" ]; then
         cleanup_staging
     fi
@@ -2202,6 +2268,14 @@ qt5_restore_artifact() {
 # any point can run again. Only a write that began to publish changed them.
 qt5_transaction_restore() {
     [ -f "$1/.qt5/.published" ] || return 0
+    gui_writing_begin
+    qt5_restore_rc=0
+    qt5_transaction_restore_files "$1" || qt5_restore_rc=$?
+    gui_writing_end
+    return "$qt5_restore_rc"
+}
+
+qt5_transaction_restore_files() {
     for qt5_artifact in rcc library wrapper; do
         qt5_artifact_path "$qt5_artifact"
         if [ -f "$1/.qt5/$qt5_artifact" ]; then
@@ -2320,6 +2394,7 @@ qt5_check_activation() {
 
 qt5_publish() {
     [ "$QT5_DISPLAY" = "1" ] || return 0
+    gui_writing_begin
     : > "$WRITE_TRANSACTION/.qt5/.published"
     sync
     qt5_mark_failed
@@ -2334,6 +2409,7 @@ qt5_publish() {
         qt5_wrapper_restore
         rm -f "$QT5_OVERLAY_LIB"
         rm -f "$QT5_RCC.failed"
+        gui_writing_end
         return
     fi
     qt5_write_overlay "$QT5_OVERLAY_LIB"
@@ -2344,6 +2420,7 @@ qt5_publish() {
     else
         rm -f "$QT5_RCC.failed"
     fi
+    gui_writing_end
 }
 
 cleanup_staging() {

@@ -236,6 +236,16 @@ once. An abnormal exit within 60 s writes the mark for this boot and starts
 `BtClass` as shipped. The mark holds the boot id; a mark of an earlier boot
 counts as absent, so the next boot tries the overlay once more.
 
+**Writes and the worker.** A write that changes the activation files notes
+its PID in `<tmp>/c300x-gui-restart/writing` (under the `activation` lock)
+for as long as it does, publish or rollback. The worker starts nothing and
+reads no quarantine mark while that note names a running process: a cycle
+in verify then ends without a verdict (no retry, no fallback, no mark
+dropped), its requests wait, and they are served together with the write's
+own request once its files are in place. The worker checks the note and
+starts the display under the same lock, so a write never begins halfway
+through a start decision.
+
 **The mark** is written only by a failed overlay start (start script or
 preload) and, while files change, by a write itself. It is dropped by the
 retrying actions and by full removal; a successful overlay start leaves none.

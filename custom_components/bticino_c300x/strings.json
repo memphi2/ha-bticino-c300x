@@ -678,7 +678,7 @@
       "invalid_agent_host": "Enter the device agent host.",
       "invalid_callback_base_url": "Enter a reachable Home Assistant HTTP or HTTPS base URL, or leave it empty.",
       "invalid_device_host": "Enter the C300X address.",
-      "installer_dependency_missing": "Home Assistant could not load the optional SSH package (asyncssh==2.24.1). This is not an SSH login error. Check Settings > System > Logs for the package error. After fixing it, run Developer tools > YAML > Check configuration (or restart Home Assistant) to clear the cached failure, then retry.",
+      "installer_dependency_missing": "Home Assistant could not install or load the optional SSH package (asyncssh==2.24.1). This is not an SSH login error. Home Assistant remembers a failed package install until a configuration check or a restart, even when the package arrived afterwards: run Developer tools > YAML > Check configuration (or restart Home Assistant), then retry. If it fails again, Settings > System > Logs names the cause and the installed asyncssh version.",
       "invalid_ssh_password": "Enter the C300X SSH password.",
       "invalid_ssh_username": "Enter the C300X SSH user.",
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",

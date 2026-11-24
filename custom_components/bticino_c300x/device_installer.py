@@ -185,17 +185,37 @@ async def async_ensure_installer_dependencies(hass: HomeAssistant) -> None:
                             INSTALLER_REQUIREMENTS[0], type(err).__name__)
             return
         # Resolver errors may contain private package-index URLs. Never include
-        # their text or traceback in installer diagnostics.
-        _LOGGER.error("HA could not install optional SSH requirement %s (%s)",
-                      INSTALLER_REQUIREMENTS[0], type(err).__name__)
+        # their text or traceback in installer diagnostics: only our own pins.
+        reported = getattr(err, "requirements", None)
+        reported = list(reported) if isinstance(reported, (list, tuple, set)) else []
+        known = [item for item in reported if item in INSTALLER_REQUIREMENTS]
+        others = len(reported) - len(known)
+        _LOGGER.error("HA could not install optional SSH requirement %s (%s); HA reported %s%s as not "
+                      "found; installed asyncssh: %s",
+                      INSTALLER_REQUIREMENTS[0], type(err).__name__, ", ".join(known) or "nothing of ours",
+                      f" and {others} other requirement{'s' if others != 1 else ''}" if others else "",
+                      _safe_version(installed) if installed else "not installed")
         raise C300XDeviceInstallError("installer_dependency_missing") from None
+
+
+def _safe_version(version: Any) -> str:
+    """A version string fit for the log, else "unknown"."""
+
+    if isinstance(version, str) and 0 < len(version) <= 32 and all(
+        part.isascii() and part.isdigit() for part in version.split(".")
+    ):
+        return version
+    return "unknown"
 
 
 def _installed_asyncssh_version() -> str | None:
     """Version of the installed AsyncSSH distribution, without importing it."""
 
+    import importlib
     import importlib.metadata
 
+    # A package that landed while HA runs is only found with fresh path caches.
+    importlib.invalidate_caches()
     try:
         return importlib.metadata.version("asyncssh")
     except Exception:  # noqa: BLE001 - any metadata problem means "not usable"
@@ -657,11 +677,7 @@ def _validate_asyncssh_version(asyncssh_module: Any) -> None:
     """Reject AsyncSSH versions that are not validated for the C300X SSH stack."""
     version = getattr(asyncssh_module, "__version__", "")
     if version != _REQUIRED_ASYNCSSH_VERSION:
-        safe_version = (
-            version if isinstance(version, str) and 0 < len(version) <= 32
-            and all(part.isascii() and part.isdigit() for part in version.split("."))
-            else "unknown"
-        )
+        safe_version = _safe_version(version)
         _LOGGER.error("Optional SSH requirement %s does not match loaded version %s",
                       INSTALLER_REQUIREMENTS[0], safe_version)
         raise C300XDeviceInstallError("installer_dependency_missing")

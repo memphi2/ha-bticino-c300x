@@ -1243,6 +1243,39 @@ def test_installer_uses_pinned_asyncssh_already_installed_when_ha_refuses(monkey
         asyncio.run(async_ensure_installer_dependencies(object()))
 
 
+@pytest.mark.parametrize(("installed", "state"), [(None, "not installed"), ("2.21.0", "2.21.0")])
+def test_installer_dependency_failure_logs_what_ha_reported_and_what_is_installed(
+    monkeypatch, caplog, installed, state,
+):
+    from homeassistant import requirements
+
+    import custom_components.bticino_c300x.device_installer as installer
+
+    async def refuse(hass, name, packages, *, is_built_in):
+        raise requirements.RequirementsNotFound(name, [*packages, "https://user:private-key@index.invalid"])
+
+    monkeypatch.setattr(requirements, "async_process_requirements", refuse)
+    monkeypatch.setattr(installer, "_installed_asyncssh_version", lambda: installed)
+    with pytest.raises(C300XDeviceInstallError, match="installer_dependency_missing"):
+        asyncio.run(async_ensure_installer_dependencies(object()))
+    assert "HA reported asyncssh==2.24.1 and 1 other requirement as not found" in caplog.text
+    assert f"installed asyncssh: {state}" in caplog.text
+    assert "private-key" not in caplog.text
+
+
+def test_installed_asyncssh_version_sees_a_package_installed_while_ha_runs(monkeypatch):
+    import importlib
+    import importlib.metadata
+
+    import custom_components.bticino_c300x.device_installer as installer
+
+    calls = []
+    monkeypatch.setattr(importlib, "invalidate_caches", lambda: calls.append("invalidate"))
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: calls.append("version") or "2.24.1")
+    assert installer._installed_asyncssh_version() == "2.24.1"
+    assert calls == ["invalidate", "version"]
+
+
 def test_installed_asyncssh_version_reads_package_metadata(monkeypatch):
     import importlib.metadata
 
@@ -1264,6 +1297,11 @@ def test_installer_dependency_recovery_text_mentions_pinned_package_in_all_langu
         text = json.loads(path.read_text())["config"]["error"]["installer_dependency_missing"]
         assert INSTALLER_REQUIREMENTS[0] in text, path.name
         assert "YAML" in text, path.name
+    # HA keeps the failure until a configuration check or restart: that comes first.
+    english = json.loads((component / "translations/en.json").read_text())["config"]["error"]
+    text = english["installer_dependency_missing"]
+    assert text.index("Check configuration") < text.index("Logs")
+    assert "even when the package" in text
 
 
 def test_dev_requirements_pin_asyncssh_with_legacy_ssh_rsa_support() -> None:

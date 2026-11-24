@@ -37,7 +37,10 @@ The station used WLAN and root2 SSH; HA was Container 2026.11.2 with Python
   configuration under Developer tools > YAML cleared HA's failed-install
   history and the next submit worked. The original resolver/import failure
   was not captured. Check the logs; do not change the pin, log private index
-  URLs or bypass HA's resolver.
+  URLs or bypass HA's resolver. The installer now reads the installed version
+  with fresh import caches, logs which of its own pins HA reported and the
+  installed asyncssh version, and the error text puts the configuration check
+  first.
 - The tested package enabled video and opened media ports at bootstrap. RTSP
   listening is not evidence of successful video. The reporter did not start a
   stream, and a second SIP session can conflict with Companion.

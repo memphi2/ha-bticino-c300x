@@ -678,7 +678,7 @@
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
       "invalid_callback_base_url": "Eine vom C300X erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
       "invalid_device_host": "Gib die C300X-Adresse ein.",
-      "installer_dependency_missing": "Home Assistant konnte das optionale SSH-Paket (asyncssh==2.24.1) nicht laden. Das ist kein SSH-Anmeldefehler. Prüfe den Paketfehler unter Einstellungen > System > Protokolle. Behebe die Ursache. Wähle dann unter Entwicklerwerkzeuge > YAML die Option „Konfiguration prüfen“ oder starte Home Assistant neu, damit der gespeicherte Fehler gelöscht wird. Versuche die Installation erneut.",
+      "installer_dependency_missing": "Home Assistant konnte das optionale SSH-Paket (asyncssh==2.24.1) nicht installieren oder laden. Das ist kein SSH-Anmeldefehler. Home Assistant merkt sich eine fehlgeschlagene Paketinstallation bis zur nächsten Konfigurationsprüfung oder zum Neustart, auch wenn das Paket danach angekommen ist: Wähle unter Entwicklerwerkzeuge > YAML „Konfiguration prüfen“ (oder starte Home Assistant neu) und versuche es dann erneut. Schlägt es wieder fehl, nennen Einstellungen > System > Protokolle die Ursache und die installierte asyncssh-Version.",
       "invalid_ssh_password": "Gib das C300X-SSH-Passwort ein.",
       "invalid_ssh_username": "Gib den C300X-SSH-User ein.",
       "invalid_alarm_entity": "Wähle eine Alarmo-Alarm-Control-Panel-Entität oder lasse das Feld leer.",

@@ -55,7 +55,7 @@ Item {
         if (action === "remove" && canRemove)
             Maintenance.request(panel, deadline, "/remove", {confirm: "remove_agent"})
     }
-    Timer { id: expiry; interval: 10000; onTriggered: panel.clearConfirmation() }
+    Timer { id: expiry; interval: 30000; onTriggered: panel.clearConfirmation() }
     property string status: ""
     Component {
         id: confirmation

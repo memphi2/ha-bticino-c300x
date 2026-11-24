@@ -51,8 +51,10 @@ assert.equal(panel.canReboot, false);
 assert.equal(queue.length, 0);
 
 const qml = fs.readFileSync(path.join(dir, "C300XSettings.qml"), "utf8");
+// Ten seconds were too short to read the removal question and decide.
+assert.ok(qml.includes("Timer { id: expiry; interval: 30000; onTriggered: panel.clearConfirmation() }"), "the question stays for 30 seconds");
 const ui = vm.createContext({panel, Maintenance: api, deadline, visible:true, busy:false,
-    canReboot:true, canRemove:true, pending:"", expiresAt:0, expiry:{interval:10000, restart(){}, stop(){}},
+    canReboot:true, canRemove:true, pending:"", expiresAt:0, expiry:{interval:30000, restart(){}, stop(){}},
     popups: [], dismissed: 0,
     installPopup(component) { ui.popups.push(component); ui.open = true },
     dismissPopup() { ui.dismissed++; ui.open = false }, confirmation: "confirmation"});

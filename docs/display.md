@@ -501,7 +501,7 @@ station, so they also show while Home Assistant cannot be reached.
 
 Reboot and removal ask first, in the station's own confirmation window with
 **Yes** and **No**. Nothing is sent before **Yes**; the question closes by
-itself after ten seconds, and leaving the tab, a call or the screen going off
+itself after 30 seconds, and leaving the tab, a call or the screen going off
 cancels it. **Keep page open in standby** and **Page change** are stored in Home
 Assistant: the switch shows the value Home Assistant confirmed, the
 integration's options show the same value, and a change made there reaches

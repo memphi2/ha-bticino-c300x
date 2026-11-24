@@ -494,3 +494,9 @@ def test_picture_control_docs_say_tvp5150_may_need_the_ring_call_path():
     for text in (guide.replace("\n  ", " "), readme):
         assert "checked offline only" in text
         assert "may only work during a Ring Call" in text
+
+
+def test_announcement_docs_name_each_stations_own_sound_files():
+    announcements = section("user-guide.md", "Speaker Announcements and TTS").replace("\n", " ")
+    assert "same sound parts" not in announcements
+    assert "each station's own sound files" in announcements

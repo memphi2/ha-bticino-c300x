@@ -396,8 +396,10 @@ The attribute `last_result` reports the outcome:
 | `failed` | Broke off for another reason. |
 | `unknown` | The agent could not be asked or restarted during the sound. |
 
-Tested on firmware 1.7.19. Firmware 2.0.2 and 3.0.6 have the same sound parts,
-but playing is not yet tested on such a device.
+Tested on firmware 1.7.19. On firmware 2.0.2 and 3.0.6 the agent uses each
+station's own sound files, such as its speaker setup for playing messages; that
+file differs between firmware versions. Playing is not yet tested on such a
+device.
 
 ## Notifications
 

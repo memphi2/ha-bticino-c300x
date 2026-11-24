@@ -19,9 +19,9 @@ QtObject {
         property bool isSoftAp: false
         property int strength: 70
         property string networkName: "HomeWiFi"
-        property string ipAddress: "192.168.1.50"
+        property string ipAddress: "192.0.2.50"
         property string netMask: "255.255.255.0"
-        property string gateway: "192.168.1.1"
+        property string gateway: "192.0.2.1"
         property string macAddress: "00:03:50:00:00:01"
     }
     property QtObject screenState: QtObject {

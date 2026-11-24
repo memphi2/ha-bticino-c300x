@@ -52,6 +52,11 @@ Page {
     property int runtimeGeneration: 0
     property int statusGeneration: 0
 
+    Connections {
+        target: global.screenState
+        onStateChangedInt: page.screenStateChanged(new_state)
+    }
+
     Timer {
         id: modeFeedbackTimer
         interval: 1000
@@ -72,6 +77,10 @@ Page {
         pausePage()
         lastStatusRefreshMs = 0
         return preventReturnToHomepage
+    }
+
+    function screenStateChanged(state) {
+        if (state !== ScreenState.ScreenOff && page.visible && !pageActive) aboutToShow()
     }
 
     function aboutToHide() {

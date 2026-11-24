@@ -3,7 +3,11 @@
 from collections.abc import Mapping
 from typing import Any
 
-from .api_errors import C300XDisplayNotConfirmedError
+from .api_errors import C300XAgentApiConnectionError, C300XDisplayNotConfirmedError
+
+# The agent's answers for a display write that ran on the station and failed:
+# 502 the script failed (reload_failed, script_failed), 504 its job limit.
+_DISPLAY_STEP_FAILED_HTTP = frozenset({502, 504})
 
 
 def display_activation_confirmed(status: Mapping[str, Any], *, required: bool = True) -> bool:
@@ -63,3 +67,19 @@ def require_display_activation(status: Mapping[str, Any], *, required: bool = Tr
             "A quarantined overlay holds until the next boot; applying the Display "
             "patch or the core Repair tries it once more."
         )
+
+
+def display_step_failed(err: BaseException) -> bool:
+    """Whether a display step ran on the station and its display failed.
+
+    True for a display that is not confirmed and for a write the agent ran
+    and answered as failed. False for a step that never ran: no connection, a
+    rejected key, the agent busy with another job until the wait ended.
+    """
+
+    if isinstance(err, C300XDisplayNotConfirmedError):
+        return True
+    return (
+        isinstance(err, C300XAgentApiConnectionError)
+        and err.http_status in _DISPLAY_STEP_FAILED_HTTP
+    )

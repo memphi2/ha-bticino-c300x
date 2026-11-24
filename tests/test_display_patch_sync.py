@@ -380,3 +380,24 @@ def test_the_agent_timeout_answer_names_itself():
     )
     with pytest.raises(C300XAgentApiConnectionError, match="qml_patch_timeout"):
         asyncio.run(api.async_apply_qml_patch(dynamic_homepage=True))
+
+
+def test_owed_display_steps_are_applied_although_the_old_pages_read_as_patched(monkeypatch):
+    calls = _device(monkeypatch, {"patched": True})
+    assert _apply(_entry(True, data={"display_followup_pending": True})) is True
+    assert calls == ["apply"]
+
+
+def test_settling_the_setting_clears_owed_display_steps(monkeypatch):
+    calls = _device(monkeypatch, {"patched": True})
+    entry = _entry(True, data={"display_followup_pending": True, CONF_DISPLAY_SETTING_PENDING: True})
+    updates: list[dict[str, Any]] = []
+
+    def update(_entry: Any, *, data: dict[str, Any]) -> None:
+        updates.append(data)
+        entry.data = data
+
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update))
+    asyncio.run(display_patch_sync.async_settle_display_setting(hass, entry))
+    assert calls == ["apply"]
+    assert "display_followup_pending" not in entry.data

@@ -15,6 +15,7 @@ from .capabilities import capability_is_supported, maintenance_action_is_adverti
 from .const import (
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
     CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_VIDEO_ENABLED,
@@ -416,7 +417,10 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
             DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
         )
         return
-    if not _entry_media_enabled(entry):
+    # Display steps an agent update or install still owes: offered whatever
+    # the status says, since pages left from the earlier agent look patched.
+    owed = CONF_DISPLAY_FOLLOWUP_PENDING in getattr(entry, "data", {})
+    if not owed and not _entry_media_enabled(entry):
         async_delete_repair_issue(
             hass,
             entry.entry_id,
@@ -451,6 +455,9 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
         else None
     )
     failed = bool(getattr(diagnostics, "last_error", None))
+    if owed:
+        missing = True
+        core_state = "display_followup_pending"
     if not missing and not failed:
         async_delete_repair_issue(
             hass,

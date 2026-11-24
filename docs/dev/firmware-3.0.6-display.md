@@ -89,9 +89,9 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 | Early startup failure | **F/H** original wrapper under original ARM Bash 5.1.16 and host Bash; stock controls and bounded-log fixtures | Only errors within 60 seconds qualify; exits 0,137,138,140,143, later exits and hangs are not a general watchdog recovery mechanism |
 | Quarantine recovery | **H** the mark holds for the boot that wrote it; partial restore and plain reloads keep it; the restart of an apply retries once (see Restart design) | Diagnose actual Qt error before retry: **D** |
 | GUI versus agent restart | **F/H** bt_daemon starts the wrapper once and never again; one detached restart worker stops the old display completely before it starts exactly one new wrapper | Display release timing on eglfs/Vivante: **D** |
-| Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off; a failed display follow-up on the Qt 5 display completes the update and is reported (core Repair), an unreachable agent keeps it pending | Complete update/reconnect on firmware: **D** |
+| Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off; a display follow-up that ran and failed on the Qt 5 display completes the update and stays owed (`display_followup_pending`, core Repair runs it all again); a step that never ran keeps the update pending | Complete update/reconnect on firmware: **D** |
 | Downgrade | **F/H** stable 2.8.2 payload refused without verified full removal; actual 3.0.6 restore-all then accepts it; Qt4 originals accepted | Guard requires this running updater; old agents and SSH/manual replacement bypass it; stock GUI restart: **D** |
-| Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation for the display steps; on the Qt 5 display a failed step is logged and ends only the display steps, the bundle identity is published and the core Repair retries; an unknown display (below) ends only the display steps | Neither installer proves every page rendered |
+| Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation for the display steps; the HA installer on the Qt 5 display: a step that ran and failed is owed (recorded by HA, core Repair), one that could not run fails the install; the shell installer stops with the error as in 2.9.1; an unknown display (below) ends only the display steps | Neither installer proves every page rendered |
 | Unknown display | **H** an unknown program or start script leaves everything as shipped and reports `display_unsupported`; install, update and media user go on without the display pages (see Unknown Display) | A later vendor firmware build on a device: **D** |
 | HA options/switch/sync | **H** quarantine/incomplete status is not success; optional-page setting is distinct from core hooks; no quarantine auto-retry | State freshness after spontaneous device failure: **D** |
 | HA services/buttons/Repairs | **H** shared GUI action gates and core Repair honor Qt5 activation; notification storage is distinct from popup delivery | End-to-end physical action results: **D** |
@@ -266,10 +266,32 @@ written and a failed restart shows in the display status. Only a cycle that
 ended without any display program fails the restart (and rolls a write
 back).
 
-**Install and update.** A failed core-apply or apply on the Qt 5 display does
-not fail the SSH install or the agent update: the agent is installed, the
-display steps are reported (HA log, core Repair, Display patch switch), and
-the core Repair retries them.
+**Install and update.** The agent and the display are separate: a display
+step that ran on the Qt 5 display and failed (not confirmed, answered 502 or
+504 by the agent) does not fail the HA SSH install or the agent update, but
+it is never dropped either. HA records the owed steps in the entry
+(`display_followup_pending`: `true` with the full Display patch, `false` for
+the core hook only), and:
+
+- the core hook Repair is raised while that record exists, whatever the
+  status says (pages left from the earlier agent read as patched), and runs
+  the whole follow-up again: core-apply, apply when the record says so and
+  the Display setting is not off, restart, confirmation; success clears it;
+- the next agent update or install runs the follow-up with it;
+- the Display setting sync applies the pages when the record exists and
+  clears it once the device followed.
+
+A step that never ran (no connection, a rejected key, the agent busy until
+the wait ended, an SSH failure) fails the update or install as before and
+leaves the update follow-up pending, as does every display failure on
+firmware 1.7.x and 2.0.x. The installer publishes the bundle identity once
+the agent runs and its display step either succeeded or is owed as above:
+the identity names the installed bundle (a self-update publishes it before
+HA's follow-up anyway), and the owed record is what keeps a display that did
+not follow visible. The shell installer (`scripts/install_c300x_device.sh`)
+is run by a person at the console: it stops with the display step's error as
+in 2.9.1 and publishes no identity; the person sees the error and runs it
+again or uses the HA Repair.
 
 | Scenario | Behaviour |
 | --- | --- |

@@ -118,6 +118,16 @@ class C300XDeviceInstallResult:
     remote_dir: str
     installed_files: tuple[str, ...]
     changed_files: tuple[str, ...]
+    # The display step ran and failed on the Qt 5 display: the agent is
+    # installed, the step is owed (HA records it, the core Repair runs it).
+    display_pending: bool = False
+
+
+@dataclass(slots=True)
+class _DisplaySteps:
+    """What the display steps of one install left undone."""
+
+    pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,11 +160,13 @@ async def async_install_device_agent(
         device_activations=request.device_activations,
     ).encode("utf-8")
 
+    display = _DisplaySteps()
     changed_files = await asyncio.to_thread(
         _install_device_agent_sync,
         request,
         bundle,
         config_bytes,
+        display,
     )
 
     return C300XDeviceInstallResult(
@@ -167,6 +179,7 @@ async def async_install_device_agent(
             REMOTE_INIT_LINK,
         ),
         changed_files=changed_files,
+        display_pending=display.pending,
     )
 
 
@@ -193,6 +206,7 @@ def _install_device_agent_sync(
     request: C300XDeviceInstallRequest,
     bundle: _ResolvedBundle,
     config_bytes: bytes,
+    display: _DisplaySteps | None = None,
 ) -> tuple[str, ...]:
     """Install the device files through a Python SSH client."""
 
@@ -232,10 +246,16 @@ def _install_device_agent_sync(
         actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
         display_is_qt5 = _device_display_is_qt5(client)
         for action in actions:
-            if not _apply_display_step_sync(client, request.remote_dir, action, qt5=display_is_qt5):
+            step = _apply_display_step_sync(client, request.remote_dir, action, qt5=display_is_qt5)
+            if step is None and display is not None:
+                display.pending = True
+            if not step:
                 break
-        # Capabilities reads this file on every request. Publish it only after
-        # activation succeeds so an interrupted install still needs repair.
+        # Capabilities reads this file on every request; it names the installed
+        # bundle. Published only once the agent runs and every display step
+        # either succeeded or, on the Qt 5 display, failed after it ran: such a
+        # step is owed and recorded by HA (display_pending), so the identity
+        # hides nothing. An install cut short before still needs repair.
         if manifest is not None and client.put_file(
             manifest.source, manifest.remote_path, manifest.mode
         ):
@@ -952,23 +972,25 @@ def _apply_qt5_low_res_video_default(
 
 def _apply_display_step_sync(
     client: _DeviceSshClient, remote_dir: str, action: str, *, qt5: bool
-) -> bool:
-    """Run one display step; on the Qt 5 display a failed step does not fail the install.
+) -> bool | None:
+    """Run one display step; True done, False not supported here, None owed.
 
-    The agent is installed either way. HA then reports the display state
-    (core Repair, Display patch switch) and the core Repair retries the step.
+    On the Qt 5 display a step that ran and whose display failed does not fail
+    the install: the agent is installed, the step is owed (None) and HA
+    records it for the core Repair. A step that could not run (SSH failure)
+    still fails the install, as every failure does on firmware 1.7.x/2.0.x.
     """
 
     try:
         return _apply_qml_patch_sync(client, remote_dir, action)
     except C300XDeviceInstallError as err:
-        if not qt5:
+        if not qt5 or err.reason != "device_install_verify_failed":
             raise
         _LOGGER.warning(
-            "C300X: the display step %s failed on the Qt 5 display (%s); the agent is "
-            "installed and the core Repair retries the display pages", action, err.reason,
+            "C300X: the display step %s failed on the Qt 5 display; the agent is "
+            "installed and the core Repair runs the display steps again", action,
         )
-        return False
+        return None
 
 
 # As for the agent API (qml_patch.DISPLAY_RESTART_*): the worker's cycle with

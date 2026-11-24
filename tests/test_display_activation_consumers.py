@@ -53,3 +53,23 @@ def test_a_display_restart_still_running_raises_no_repair_issue(monkeypatch: pyt
     ))
     repair_issues._sync_device_core_qml_hook_issue(SimpleNamespace(), entry)
     create.assert_not_called()
+
+
+def test_owed_display_steps_raise_the_core_repair_issue_even_when_the_status_looks_fine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pages of the earlier agent read as patched; the update still owes the new ones."""
+
+    create, delete = Mock(), Mock()
+    monkeypatch.setattr(repair_issues, "_entry_media_enabled", lambda entry: False)
+    monkeypatch.setattr(repair_issues, "_create_issue", create)
+    monkeypatch.setattr(repair_issues, "async_delete_repair_issue", delete)
+    entry = SimpleNamespace(entry_id="test", data={"display_followup_pending": True}, runtime_data=SimpleNamespace(
+        capabilities={"maintenance": {"supported": True, "qml_core_patch": True}},
+        qml_patch_status={"core_state": "patched", "core_patched": True, "qt5_overlay": "active",
+                          "gui_running": True},
+        diagnostics=SimpleNamespace(qml_patch_diagnostics=SimpleNamespace(last_error=None)),
+    ))
+    repair_issues._sync_device_core_qml_hook_issue(SimpleNamespace(), entry)
+    create.assert_called_once()
+    assert create.call_args.kwargs["placeholders"] == {"core_state": "display_followup_pending"}

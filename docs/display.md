@@ -147,9 +147,11 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
 - **Confirmation:** installed files alone do not confirm activation. A
   quarantined or incomplete overlay never counts as active; settings stay
   pending instead of accepting the stock fallback as success. On firmware
-  3.0.6 a failed display step does not fail the SSH install or the agent
-  update: the agent is installed or updated, the HA log names the step and
-  the core hook Repair retries it.
+  3.0.6 a display step that ran and failed does not fail the install from
+  Home Assistant or the agent update: the agent is installed or updated,
+  the HA log names the step, and the core hook Repair stays until it has
+  run all display steps again (the full Display patch included when it was
+  on). A step that could not run at all still fails the install or update.
   An active overlay and a running process are still not proof that every QML
   page loaded correctly. Device checks remain required before merging this beta.
 - **Returning to stable:** on 3.0.6, run the beta's `qml_patch.sh restore-all`

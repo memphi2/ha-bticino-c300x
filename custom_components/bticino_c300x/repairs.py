@@ -28,6 +28,7 @@ from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
 )
 from .capabilities import (
+    entry_device_ui_configured,
     entry_device_ui_enabled,
     gate_capabilities,
     maintenance_action_is_advertised,
@@ -46,6 +47,7 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
     DEFAULT_AGENT_PORT,
@@ -73,6 +75,7 @@ from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
     async_apply_qml_core_patch_and_confirm,
     async_restore_display_after_update,
+    async_restore_qml_patches_after_update,
 )
 from .repair_flows_device_user import DeviceUserRepairFlow
 from .repair_flows_frontend import FrontendCardSetupRepairFlow
@@ -406,14 +409,24 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
                 },
             )
         try:
-            status = await async_apply_qml_core_patch_and_confirm(
-                entry,
-                lambda: async_dispatcher_send(
-                    self.hass,
-                    SIGNAL_QML_PATCH_CHANGED,
-                    entry.entry_id,
-                ),
-            )
+            if CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
+                # What an update or install left undone: the whole sequence.
+                status = await async_restore_qml_patches_after_update(
+                    entry,
+                    apply_full_patch=entry.data[CONF_DISPLAY_FOLLOWUP_PENDING] is True
+                    and entry_device_ui_configured(entry) is not False,
+                )
+                async_dispatcher_send(self.hass, SIGNAL_QML_PATCH_CHANGED, entry.entry_id)
+                _settle_display_followup(self.hass, entry, True, full=False)
+            else:
+                status = await async_apply_qml_core_patch_and_confirm(
+                    entry,
+                    lambda: async_dispatcher_send(
+                        self.hass,
+                        SIGNAL_QML_PATCH_CHANGED,
+                        entry.entry_id,
+                    ),
+                )
         except C300XAgentApiError:
             if display_unsupported(getattr(entry.runtime_data, "qml_patch_status", None)):
                 return self.async_abort(reason="display_unsupported")
@@ -565,12 +578,14 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                     entry.runtime_data.api.async_normalize_agent_config
                 )
                 setup_data = await entry.runtime_data.api.async_validate_setup()
-            await _async_restore_external_patch_state(
+            display_full = _display_followup_full(entry, patch_state)
+            display = await _async_restore_external_patch_state(
                 entry,
                 patch_state,
                 changes,
                 setup_data,
             )
+            _settle_display_followup(self.hass, entry, display, full=display_full)
             _clear_qml_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
@@ -700,12 +715,17 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 "runtime_changed": changes.runtime_changed,
             })
             setup_data = await _async_wait_for_agent_after_update(entry.runtime_data.api)
-            await _async_restore_external_patch_state(
+            display_full = _display_followup_full(entry, patch_state)
+            display = await _async_restore_external_patch_state(
                 entry,
                 patch_state,
                 changes,
                 setup_data,
             )
+            if display is None and getattr(install_result, "display_pending", False):
+                # The installer's core step failed and nothing ran it again.
+                display = False
+            _settle_display_followup(self.hass, entry, display, full=display_full)
             self._ssh_install_followup = None
             _clear_qml_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)
@@ -1061,11 +1081,14 @@ async def _async_restore_external_patch_state(
     patch_state: _ExternalPatchState,
     changed: _ExternalPatchChanges,
     setup_data: Mapping[str, Any] | None = None,
-) -> None:
+) -> bool | None:
     """Re-apply active external patches only when their patch source changed.
 
     ``setup_data`` is the setup payload of the agent just installed. When it
     says the agent offers no Display patch, the display steps are skipped.
+    Returns None when no display step ran, True when the display steps ran
+    and were confirmed, False when they ran and failed on the Qt 5 display
+    (``_settle_display_followup`` records them as owed).
     """
 
     api = entry.runtime_data.api
@@ -1077,23 +1100,56 @@ async def _async_restore_external_patch_state(
             await busy_retry(lambda: api.async_set_ipv6_firewall_enabled(True))
         await busy_retry(api.async_apply_ipv6_firewall)
     if _agent_offers_no_display_patch(setup_data):
-        return
-    if changed.qml_patch_changed or CONF_AGENT_UPDATE_QML_PENDING in entry.data:
-        await async_restore_display_after_update(
-            entry,
-            apply_full_patch=(
-                patch_state.qml_patch_required or entry.data.get(CONF_AGENT_UPDATE_QML_PENDING) is True
-            ),
+        return None
+    if (
+        changed.qml_patch_changed
+        or CONF_AGENT_UPDATE_QML_PENDING in entry.data
+        or CONF_DISPLAY_FOLLOWUP_PENDING in entry.data
+    ):
+        return await async_restore_display_after_update(
+            entry, apply_full_patch=_display_followup_full(entry, patch_state),
         )
-    elif changed.runtime_changed:
+    if changed.runtime_changed:
         status = await busy_retry(api.async_qml_patch_status)
         if status.get("qt5_overlay") is not None:
             # The preload library is embedded in the runtime, not the QML group.
-            await async_restore_display_after_update(
+            return await async_restore_display_after_update(
                 entry, apply_full_patch=patch_state.qml_patch_required,
             )
-        elif patch_state.qml_patch_required:
+        if patch_state.qml_patch_required:
             await busy_retry(api.async_reload_gui)
+    return None
+
+
+def _display_followup_full(entry: Any, patch_state: _ExternalPatchState) -> bool:
+    """Whether the follow-up brings the full Display patch back, not only the core hook."""
+
+    return (
+        patch_state.qml_patch_required
+        or entry.data.get(CONF_AGENT_UPDATE_QML_PENDING) is True
+        or entry.data.get(CONF_DISPLAY_FOLLOWUP_PENDING) is True
+    )
+
+
+def _settle_display_followup(
+    hass: HomeAssistant, entry: Any, outcome: bool | None, *, full: bool,
+) -> None:
+    """Record the display steps an update or install still owes, or clear them.
+
+    Owed steps keep their own record after the agent update itself is done:
+    the core Repair runs them again (the full patch when it was on) and the
+    Display setting sync notices them.
+    """
+
+    if outcome is None:
+        return
+    data = dict(entry.data)
+    if outcome:
+        if data.pop(CONF_DISPLAY_FOLLOWUP_PENDING, None) is None:
+            return
+    else:
+        data[CONF_DISPLAY_FOLLOWUP_PENDING] = full or data.get(CONF_DISPLAY_FOLLOWUP_PENDING) is True
+    hass.config_entries.async_update_entry(entry, data=data)
 
 
 def _ssh_install_schema(ask_login: bool) -> vol.Schema:

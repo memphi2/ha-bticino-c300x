@@ -12,11 +12,7 @@ from time import monotonic
 from typing import Any
 
 from .agent_update import async_retry_update_maintenance_busy
-from .api_errors import (
-    C300XAgentApiAuthError,
-    C300XAgentApiConnectionError,
-    C300XAgentApiError,
-)
+from .api_errors import C300XAgentApiError
 from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -26,6 +22,7 @@ from .const import (
 from .display_activation import (
     display_activation_confirmed,
     display_restart_pending,
+    display_step_failed,
     display_unsupported,
     require_display_activation,
 )
@@ -204,30 +201,33 @@ async def async_restore_display_after_update(
     entry: BticinoC300XConfigEntry,
     *,
     apply_full_patch: bool,
-) -> None:
-    """Run the display follow-up of an agent update; on Qt 5 report a failure.
+) -> bool:
+    """Run the display follow-up of an agent update or install.
 
-    On the Qt 5 display of firmware 3.0.x a display step that fails does not
-    keep the agent update open: the agent runs, the status read here keeps the
-    core Repair and the Display patch switch accurate, and the core Repair
-    retries. An unreachable agent and firmware 1.7.x/2.0.x fail as before.
+    True: the display steps ran and the display is confirmed. False, on the
+    Qt 5 display of firmware 3.0.x only: the steps ran and the display failed
+    (quarantined overlay, failed restart, no confirmation). The agent itself
+    is in place then; the caller records the owed steps
+    (``display_followup_pending``), which the core Repair runs again and the
+    Display setting sync notices. A step that never ran (no connection, a
+    rejected key, the agent busy until the wait ended) raises, as does every
+    failure on firmware 1.7.x/2.0.x.
     """
 
     try:
         await async_restore_qml_patches_after_update(entry, apply_full_patch=apply_full_patch)
     except C300XAgentApiError as err:
-        if (
-            isinstance(err, (C300XAgentApiConnectionError, C300XAgentApiAuthError))
-            or _qml_patch_status(entry).get("qt5_overlay") is None
-        ):
+        if not display_step_failed(err) or _qml_patch_status(entry).get("qt5_overlay") is None:
             raise
         _LOGGER.warning(
-            "C300X: the display pages did not come back after the agent update (%s); "
-            "the update is complete and the core Repair retries them",
+            "C300X: the display pages did not come back (%s); the agent runs and the "
+            "core Repair runs the display steps again",
             err,
         )
         with suppress(C300XAgentApiError):
             await async_refresh_qml_patch_status(entry, wait_busy=True)
+        return False
+    return True
 
 
 async def async_apply_qml_core_patch_and_confirm(

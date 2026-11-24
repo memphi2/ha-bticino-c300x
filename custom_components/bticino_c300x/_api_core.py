@@ -242,7 +242,7 @@ class _C300XApiCore:
                 )
             if _agent_error_field(text, "detail") == "device_domain_missing":
                 raise C300XDeviceNotRegisteredError(_http_error_text(status, text))
-            raise C300XAgentApiConnectionError(_http_error_text(status, text))
+            raise C300XAgentApiConnectionError(_http_error_text(status, text), http_status=status)
 
     def _maintenance_headers(self) -> dict[str, str]:
         """Return maintenance authorization headers when configured."""

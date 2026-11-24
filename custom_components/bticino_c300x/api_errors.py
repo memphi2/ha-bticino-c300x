@@ -8,7 +8,15 @@ class C300XAgentApiError(Exception):
 
 
 class C300XAgentApiConnectionError(C300XAgentApiError):
-    """Raised when the device agent cannot be reached."""
+    """Raised when the device agent cannot be reached.
+
+    Also raised for an HTTP error answer; ``http_status`` then holds its
+    status (None when no answer came at all).
+    """
+
+    def __init__(self, *args: object, http_status: int | None = None) -> None:
+        super().__init__(*args)
+        self.http_status = http_status
 
 
 class C300XDisplayBridgeNotRegisteredError(C300XAgentApiConnectionError):

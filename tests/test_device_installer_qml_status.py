@@ -143,23 +143,41 @@ def test_only_a_reported_unknown_display_skips_the_display_steps(client: FakeCli
 
 @pytest.mark.parametrize("action", ["core-apply", "apply"])
 @pytest.mark.parametrize("response", [
-    None,
     json.dumps({"ok": False, "state": "reload_failed", "core_patched": None, "gui_running": False}),
     json.dumps({"ok": True, "core_patched": True, "gui_running": True, "patched": True,
                 "qt5_overlay": "failed"}),
 ])
-def test_a_failed_display_step_on_qt5_does_not_fail_the_install(
-    client: FakeClient, action: str, response: str | None
+def test_a_failed_display_step_on_qt5_is_owed_not_an_install_failure(
+    client: FakeClient, action: str, response: str
 ) -> None:
-    """The agent is installed; HA reports the display state and the core Repair retries it."""
+    """The agent is installed; the step is reported as owed for HA to record."""
 
     client.qt5 = True
     for name in client.responses:
         client.responses[name] = json.dumps({**json.loads(_success(name)), "qt5_overlay": "active"})
     client.responses[action] = response
-    assert _install() == ()
+    display = installer._DisplaySteps()
+    request = installer.C300XDeviceInstallRequest(
+        host="unused.local", ssh_username="root", ssh_password="unused",
+        apply_firewall_patch=False, apply_gui_patch=True,
+    )
+    assert installer._install_device_agent_sync(
+        request, installer._ResolvedBundle((), Path("unused-init")), b"{}", display) == ()
+    assert display.pending is True
     assert client.closed
     assert client.actions == (["core-apply"] if action == "core-apply" else ["core-apply", "apply"])
+
+
+@pytest.mark.parametrize("action", ["core-apply", "apply"])
+def test_a_display_step_that_could_not_run_still_fails_the_install(client: FakeClient, action: str) -> None:
+    """An SSH failure is not a display failure: nothing ran, the install fails as before."""
+
+    client.qt5 = True
+    for name in client.responses:
+        client.responses[name] = json.dumps({**json.loads(_success(name)), "qt5_overlay": "active"})
+    client.responses[action] = None
+    with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
+        _install()
 
 
 def test_a_restart_still_running_is_waited_for(client: FakeClient, monkeypatch: pytest.MonkeyPatch) -> None:

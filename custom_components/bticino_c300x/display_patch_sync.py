@@ -22,6 +22,7 @@ from .agent_update import async_retry_update_maintenance_busy
 from .api import C300XAgentApiError
 from .capabilities import entry_device_ui_configured, maintenance_action_is_advertised
 from .const import (
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_DISPLAY_SETTING_PENDING,
     HOME_BUTTONS_LAYOUTS,
     SIGNAL_QML_PATCH_CHANGED,
@@ -86,6 +87,10 @@ async def async_apply_display_setting(
     home_buttons = entry_home_buttons(entry)
     try:
         differs = _differs(await async_refresh_qml_patch_status(entry, wait_busy=True), wanted, home_buttons)
+        if wanted and CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
+            # Pages of the earlier agent read as patched; an update or install
+            # still owes the new ones.
+            differs = True
         if not differs:
             return None if differs is None else False
         status = await async_retry_update_maintenance_busy(
@@ -128,6 +133,11 @@ def async_mark_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEnt
 async def async_settle_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     """Apply the Display setting and keep it marked until the device followed."""
 
-    if await async_apply_display_setting(hass, entry) is not None:
+    applied = await async_apply_display_setting(hass, entry)
+    if applied is not None:
         async_mark_display_setting(hass, entry, pending=False)
+    if applied is True and entry_device_ui_configured(entry) and CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
+        data = dict(entry.data)
+        del data[CONF_DISPLAY_FOLLOWUP_PENDING]
+        hass.config_entries.async_update_entry(entry, data=data)
 

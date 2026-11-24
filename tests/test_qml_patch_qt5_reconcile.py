@@ -127,7 +127,7 @@ def test_restore_all_leaves_a_start_script_that_is_not_ours_alone(device, case):
         # A firmware update ships its own start script in place of ours.
         script = overlay.WRAPPER.replace("./bin/gui/BtClass &", "export QT_NEW=1\n./bin/gui/BtClass &")
     else:
-        script = device.wrapper.read_text().replace("sleep 3", "sleep 5")
+        script = device.wrapper.read_text().replace("-lt 60", "-lt 90")
     device.wrapper.write_text(script)
     device.wrapper.chmod(0o750)
     result = device.run("restore-all")

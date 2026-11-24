@@ -356,24 +356,21 @@ def test_full_removal_also_takes_away_a_mark_of_an_earlier_boot(device: Device) 
     assert not Path(f"{device.rcc}.failed").exists()
 
 
-def test_a_reload_start_tries_the_overlay_again_after_the_display_settled(device: Device, tmp_path: Path) -> None:
+def test_the_start_script_tries_the_overlay_once_per_start_without_a_pause(device: Device, tmp_path: Path) -> None:
+    """The restart worker retries; the start script never sleeps, so its trap always runs at once."""
+
     device.ok("apply")
+    assert "sleep" not in device.wrapper.read_text()
     attempts = tmp_path / "attempts"
     program = tmp_path / "bin/gui/BtClass"
     program.parent.mkdir(parents=True, exist_ok=True)
-    program.write_text(
-        f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{attempts}"\n'
-        f'[ "$(wc -l < "{attempts}")" -ge 2 ] && exit 0\nexit 134\n'
-    )
+    program.write_text(f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{attempts}"\n[ -n "${{LD_PRELOAD:-}}" ] && exit 134\nexit 0\n')
     program.chmod(0o755)
     environment = {**os.environ, "C300X_GUI_RELOAD": "1"}
+    started = time.monotonic()
     subprocess.run(["sh", str(device.wrapper)], cwd=tmp_path, env=environment, check=False, timeout=30)
-    assert attempts.read_text().splitlines() == [str(device.lib), str(device.lib)]
-    assert not Path(f"{device.rcc}.failed").exists()
-    attempts.unlink()
-    program.write_text(f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{attempts}"\n[ -n "${{LD_PRELOAD:-}}" ] && exit 134\nexit 0\n')
-    subprocess.run(["sh", str(device.wrapper)], cwd=tmp_path, env=environment, check=False, timeout=30)
-    assert attempts.read_text().splitlines() == [str(device.lib), str(device.lib), "plain"]
+    assert time.monotonic() - started < 2
+    assert attempts.read_text().splitlines() == [str(device.lib), "plain"]
     assert device.ok("status")["qt5_overlay"] == "failed"
 
 

@@ -19,7 +19,9 @@ checked offline only. Includes 2.9.1; on firmware 1.7.x and 2.0.2 it works like
 - On firmware 3.0.6 a display that fails with the pages starts as shipped until
   the station restarts; applying the Display patch, the core hook Repair or an
   agent update tries the pages once more. The agent restarts the display only
-  after the old one has ended and never starts two. Checked offline only.
+  after the old one and its start script have ended, one restart at a time,
+  and a restart cut short by a time limit still finishes. Checked offline
+  only.
 - On firmware 3.0.x a display program or start script the agent does not know
   no longer stops installation or agent updates: the display stays as shipped,
   the agent runs without the display pages and Repairs says why.

@@ -128,9 +128,12 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
   shipped**. This holds until the station restarts; the next start tries the
   pages again. Applying the Display patch, the core hook Repair or an agent
   update also tries them once more without a restart; if the display fails
-  again, it stays as shipped. When the agent restarts the display after a
-  change, it waits until the old display has ended and tries the pages twice
-  before it starts as shipped.
+  again, it stays as shipped. The agent runs one display restart at a time;
+  requests that arrive meanwhile share the next one. A restart waits until
+  the old display and its start script have ended, and after a change it
+  tries the pages twice before it starts as shipped. A restart cut short by
+  the agent's time limit still finishes, so the station is never left
+  without a display.
 - **On a display the agent does not know:** the pages are only built for the
   display program and start script of the firmware 3.0.6 the integration was
   made for. On any other build the agent leaves the display as shipped and

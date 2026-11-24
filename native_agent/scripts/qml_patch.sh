@@ -38,8 +38,16 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     QT5_WRAPPER_BACKUP="${C300X_QML_QT5_WRAPPER_BACKUP:-$QT5_BACKUP_ROOT/original/bin/BtClass_qws}"
     QT5_LOG="${C300X_QML_QT5_LOG:-/tmp/c300x-display-qt5.log}"
     QT5_BOOT_ID="${C300X_QML_BOOT_ID:-/proc/sys/kernel/random/boot_id}"
-    QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-10}"
+    QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-30}"
     QT5_ALIVE_FILE="${C300X_QML_GUI_ALIVE_FILE:-/var/tmp/bticino/bt_wd/BtClass_qws}"
+    # The Qt 5 restart: one worker in a session of its own serves the requests.
+    GUI_RUN_DIR="${C300X_QML_GUI_RUN_DIR:-${TMPDIR:-/tmp}/c300x-gui-restart}"
+    GUI_BUDGET_SECONDS="${C300X_QML_GUI_BUDGET_SECONDS:-24}"
+    GUI_FLOCK="${C300X_QML_GUI_FLOCK:-flock}"
+    GUI_SHELL="${C300X_QML_SHELL:-sh}"
+    GUI_WRAPPER_NAME="${GUI_WRAPPER##*/}"
+    GUI_REQUESTS=0
+    SCRIPT_STARTED="$(date +%s)"
     QT5_UNSUPPORTED="$QT5_ROOT/unsupported"
     GUI_DIR="${C300X_QML_GUI_DIR:-$QT5_ROOT/skins/default}"
     BACKUP_DIR="${C300X_QML_BACKUP_DIR:-$QT5_BACKUP_ROOT/original/qt5/skins/default}"
@@ -373,11 +381,13 @@ touch_patch() {
     fi
 }
 
+# A zombie has ended: bt_daemon, which started the first start script, may
+# never reap it.
 gui_pids_alive() {
     for gui_pid in $1; do
-        if kill -0 "$gui_pid" 2>/dev/null; then
-            return 0
-        fi
+        kill -0 "$gui_pid" 2>/dev/null || continue
+        gui_state="$(sed -n 's/^.*) \(.\).*$/\1/p' "$PROC_DIR/$gui_pid/stat" 2>/dev/null || true)"
+        [ "$gui_state" = "Z" ] || return 0
     done
     return 1
 }
@@ -393,15 +403,24 @@ gui_wait_gone() {
     done
 }
 
-stop_gui() {
-    if ! command -v killall >/dev/null 2>&1; then
-        return 0
+gui_pids() {
+    if [ "$1" = BtClass ]; then
+        pidof BtClass 2>/dev/null || true
+    else
+        # A start script runs as "sh <script>": only pidof -x names it.
+        pidof -x "$1" 2>/dev/null || pidof "$1" 2>/dev/null || true
     fi
-    gui_old=
-    if command -v pidof >/dev/null 2>&1; then
-        gui_old="$(pidof BtClass 2>/dev/null || true)"
-    fi
-    killall BtClass_qws >/dev/null 2>&1 || true
+}
+
+gui_phase() {
+    printf '%s\n' "$1" > "$GUI_RUN_DIR/phase" 2>/dev/null || true
+}
+
+# Every start script process and display program ends before anything starts:
+# a start script that does not end gets SIGKILL, so no trap of it runs later.
+gui_stop() {
+    gui_old="$(gui_pids "$GUI_WRAPPER_NAME") $(gui_pids BtClass)"
+    killall "$GUI_WRAPPER_NAME" >/dev/null 2>&1 || true
     killall BtClass >/dev/null 2>&1 || true
     if gui_wait_gone "$gui_old" "$GUI_STOP_SECONDS"; then
         return 0
@@ -412,38 +431,170 @@ stop_gui() {
     gui_wait_gone "$gui_old" 3
 }
 
-start_gui() {
-    if [ ! -f "$GUI_WRAPPER" ]; then
-        return 0
+gui_settle() {
+    : > "$GUI_RUN_DIR/started"
+    gui_phase settle
+    # At least one second: the watchdog file of the new program is then newer.
+    if [ "$GUI_RELOAD_DELAY_SECONDS" -ge 1 ]; then
+        sleep "$GUI_RELOAD_DELAY_SECONDS"
+    else
+        sleep 1
     fi
-    # A session of its own: the agent kills this script's process group
-    # when a job passes its time limit, and the GUI must outlive that.
+}
+
+gui_start() {
+    gui_phase start
+    [ -f "$1" ] || return 1
     gui_session=
     if command -v setsid >/dev/null 2>&1; then
         gui_session=setsid
     fi
     gui_shell=/bin/sh
-    if [ -x "$GUI_WRAPPER" ]; then
+    if [ -x "$1" ]; then
         gui_shell=
     fi
-    : > "$QT5_LOG.start" 2>/dev/null || true
     (
-        cd "$GUI_ROOT"
-        C300X_GUI_RELOAD=1 $gui_session $gui_shell "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
+        cd "$GUI_ROOT" || exit 1
+        exec 9>&-
+        $gui_session $gui_shell "$1" </dev/null >/tmp/BtClass_qws.agent.log 2>&1 &
     )
 }
 
-qt5_watch_start() {
-    if [ "$QT5_DISPLAY" != "1" ] || [ "$(qt5_overlay_state)" != "active" ]; then
-        return 0
+# gui_result: ready, overlay_failed (the start script marked the overlay and
+# went on as shipped) or failed (no start script and no display program left).
+gui_verify() {
+    gui_phase verify
+    gui_had_mark=0
+    if qt5_failed_now; then
+        gui_had_mark=1
     fi
-    qt5_watched=0
-    while [ "$qt5_watched" -lt "$QT5_START_SECONDS" ]; do
-        if qt5_failed_now || [ "$QT5_ALIVE_FILE" -nt "$QT5_LOG.start" ]; then
+    gui_waited=0
+    while [ "$gui_waited" -lt "$QT5_START_SECONDS" ]; do
+        sleep 1
+        gui_waited=$((gui_waited + 1))
+        if [ "$gui_had_mark" = "0" ] && qt5_failed_now; then
+            gui_result=overlay_failed
             return 0
         fi
+        gui_running="$(gui_pids BtClass)"
+        if [ -n "$gui_running" ] && [ "$QT5_ALIVE_FILE" -nt "$GUI_RUN_DIR/started" ]; then
+            gui_result=ready
+            return 0
+        fi
+        if [ -z "$gui_running" ] && [ -z "$(gui_pids "$GUI_WRAPPER_NAME")" ]; then
+            gui_result=failed
+            return 0
+        fi
+    done
+    gui_result=failed
+    if [ -n "$(gui_pids BtClass)" ]; then
+        gui_result=ready
+    fi
+}
+
+gui_cycle() {
+    gui_phase stop
+    gui_stop || return 1
+    gui_settle
+    if [ -n "$(gui_pids BtClass)" ]; then
+        return 0
+    fi
+    gui_start "$GUI_WRAPPER" || true
+    gui_verify
+    if [ "$gui_result" = "overlay_failed" ] && [ "$1" = "retry" ]; then
+        gui_phase stop
+        gui_stop || return 1
+        gui_settle
+        rm -f "$QT5_RCC.failed"
+        gui_start "$GUI_WRAPPER" || true
+        gui_verify
+    fi
+    if [ "$gui_result" = "overlay_failed" ]; then
+        gui_verify
+    fi
+    if [ "$gui_result" = "failed" ] && grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null \
+        && qt5_original_wrapper_valid "$QT5_WRAPPER_BACKUP"; then
+        qt5_mark_failed 2>/dev/null || true
+        gui_phase stop
+        gui_stop || return 1
+        gui_settle
+        gui_start "$QT5_WRAPPER_BACKUP" || true
+        gui_verify
+    fi
+    [ "$gui_result" = "ready" ]
+}
+
+gui_worker() {
+    set +e
+    mkdir -p "$GUI_RUN_DIR/requests" "$GUI_RUN_DIR/serving" "$GUI_RUN_DIR/done"
+    exec 9>>"$GUI_RUN_DIR/lock"
+    "$GUI_FLOCK" -n 9 || exit 0
+    # Requests of a worker that died are served again.
+    for gui_request in "$GUI_RUN_DIR"/serving/*; do
+        [ -f "$gui_request" ] && mv -f "$gui_request" "$GUI_RUN_DIR/requests/"
+    done
+    while :; do
+        gui_mode=
+        for gui_request in "$GUI_RUN_DIR"/requests/*; do
+            case "$gui_request" in
+                *.tmp) continue ;;
+            esac
+            [ -f "$gui_request" ] || continue
+            if [ "$(cat "$gui_request")" = "retry" ]; then
+                gui_mode=retry
+            elif [ -z "$gui_mode" ]; then
+                gui_mode=keep
+            fi
+            mv -f "$gui_request" "$GUI_RUN_DIR/serving/"
+        done
+        if [ -z "$gui_mode" ]; then
+            gui_phase idle
+            exit 0
+        fi
+        gui_answer=1
+        if gui_cycle "$gui_mode"; then
+            gui_answer=0
+        fi
+        for gui_request in "$GUI_RUN_DIR"/serving/*; do
+            [ -f "$gui_request" ] || continue
+            printf '%s\n' "$gui_answer" > "$GUI_RUN_DIR/done/${gui_request##*/}"
+            rm -f "$gui_request"
+        done
+    done
+}
+
+# 0: a display program runs, 1: none could be started, 2: still restarting
+# when the wait ended (not a failure; the worker finishes the restart).
+gui_restart() {
+    mkdir -p "$GUI_RUN_DIR/requests" "$GUI_RUN_DIR/serving" "$GUI_RUN_DIR/done" || return 1
+    GUI_REQUESTS=$((GUI_REQUESTS + 1))
+    gui_id="$$.$GUI_REQUESTS"
+    rm -f "$GUI_RUN_DIR/done/$gui_id"
+    printf '%s\n' "$1" > "$GUI_RUN_DIR/requests/$gui_id.tmp" || return 1
+    mv -f "$GUI_RUN_DIR/requests/$gui_id.tmp" "$GUI_RUN_DIR/requests/$gui_id" || return 1
+    gui_until=$((SCRIPT_STARTED + GUI_BUDGET_SECONDS))
+    if [ "${FINISH_SIGNALLED:-0}" = "1" ]; then
+        gui_until=$(($(date +%s) + 5))
+    fi
+    while :; do
+        if [ -f "$GUI_RUN_DIR/done/$gui_id" ]; then
+            gui_answer="$(cat "$GUI_RUN_DIR/done/$gui_id")"
+            rm -f "$GUI_RUN_DIR/done/$gui_id"
+            [ "$gui_answer" = "0" ] && return 0
+            return 1
+        fi
+        if "$GUI_FLOCK" -n "$GUI_RUN_DIR/lock" true 2>/dev/null; then
+            gui_session=
+            if command -v setsid >/dev/null 2>&1; then
+                gui_session=setsid
+            fi
+            (
+                exec 9>&-
+                $gui_session $GUI_SHELL "$0" gui-worker </dev/null >/dev/null 2>&1 &
+            )
+        fi
+        [ "$(date +%s)" -lt "$gui_until" ] || return 2
         sleep 1
-        qt5_watched=$((qt5_watched + 1))
     done
 }
 
@@ -498,21 +649,16 @@ reload_gui() {
         reload_gui_qt4
         return
     fi
-    if ! stop_gui; then
-        printf 'The display program did not stop; no second one is started\n' >&2
+    reload_mode=keep
+    if qt5_retry_action; then
+        reload_mode=retry
+    fi
+    reload_rc=0
+    gui_restart "$reload_mode" || reload_rc=$?
+    if [ "$reload_rc" = "1" ]; then
+        printf 'No display program could be started\n' >&2
         return 1
     fi
-    sleep "$GUI_RELOAD_DELAY_SECONDS"
-    if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
-        return 0
-    fi
-    start_gui
-    sleep "$GUI_RELOAD_DELAY_SECONDS"
-    if ! command -v pidof >/dev/null 2>&1 || ! pidof BtClass >/dev/null 2>&1; then
-        return 1
-    fi
-    qt5_watch_start
-    pidof BtClass >/dev/null 2>&1
 }
 
 remount_rw() {
@@ -1829,16 +1975,13 @@ qt5_wrapper_text() {
             print "# c300x-qrc-overlay: display pages of the Home Assistant integration"
             print "c300x_boot=$(cat \047" bootid "\047 2>/dev/null)"
             print "if [ -f \047" lib "\047 ] && [ -f \047" rcc "\047 ] && { [ ! -e \047" rcc ".failed\047 ] || [ \"$(cat \047" rcc ".failed\047 2>/dev/null)\" != \"$c300x_boot\" ]; }; then"
-            print "    for c300x_try in 1 ${C300X_GUI_RELOAD:+2}; do"
-            print "        [ $c300x_try = 1 ] || sleep 3"
-            print "        c300x_start=$(date +%s)"
-            print "        rm -f \047" errlog ".rc\047"
-            print "        { { LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 C300X_QRC_FAILED_ID=\"$c300x_boot\" ./bin/gui/BtClass 2>&1 1>&3 3>&-; echo $? > \047" errlog ".rc\047; } | { head -c 65536 > \047" errlog "\047; cat > /dev/null; }; } 3>&1 &"
-            print "        wait $!"
-            print "        c300x_rc=$(cat \047" errlog ".rc\047 2>/dev/null || echo 0)"
-            print "        case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac"
-            print "        [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc"
-            print "    done"
+            print "    c300x_start=$(date +%s)"
+            print "    rm -f \047" errlog ".rc\047"
+            print "    { { LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 C300X_QRC_FAILED_ID=\"$c300x_boot\" ./bin/gui/BtClass 2>&1 1>&3 3>&-; echo $? > \047" errlog ".rc\047; } | { head -c 65536 > \047" errlog "\047; cat > /dev/null; }; } 3>&1 &"
+            print "    wait $!"
+            print "    c300x_rc=$(cat \047" errlog ".rc\047 2>/dev/null || echo 0)"
+            print "    case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac"
+            print "    [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc"
             print "    printf \047%s\\n\047 \"$c300x_boot\" > \047" rcc ".failed\047"
             print "fi"
             done = 1
@@ -2652,6 +2795,9 @@ case "$ACTION" in
     reload)
         reload_gui
         json_status
+        ;;
+    gui-worker)
+        gui_worker
         ;;
     qt5-import)
         qt5_import "${2:?}"

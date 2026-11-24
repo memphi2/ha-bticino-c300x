@@ -1597,6 +1597,12 @@ the Settings > General HA feedback and touch-tone controls, the Alarmo, Home
 Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
 `C300XEnergy.qml`) and the local QML JavaScript bridge.
 
+`dynamic_homepage` chooses the home page button layout: `true` installs the
+Alarm and Home Assistant buttons like the original buttons (shown only when
+needed), `false` the fixed pair side by side. Without the field the layout
+on the device is kept; a device without the Display patch gets the `true`
+layout.
+
 `POST /api/v1/maintenance/qml-patch/actions/restore`
 
 ```json

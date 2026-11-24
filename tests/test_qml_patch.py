@@ -324,7 +324,7 @@ def test_restore_after_update_waits_while_the_agent_runs_another_job(monkeypatch
             self._busy_once("qml_status")
             return await super().async_qml_patch_status()
 
-        async def async_apply_qml_patch(self, *, dynamic_homepage: bool = False) -> dict[str, Any]:
+        async def async_apply_qml_patch(self, *, dynamic_homepage: bool | None = None) -> dict[str, Any]:
             self._busy_once("apply_qml")
             return await super().async_apply_qml_patch(dynamic_homepage=dynamic_homepage)
 

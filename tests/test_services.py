@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 import yaml
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.exceptions import HomeAssistantError
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
@@ -2648,7 +2649,9 @@ def test_common_agent_command_failures_are_translated() -> None:
     async def _run() -> None:
         try:
             await common_use_cases.raise_agent_command_failed(_failing_command(), entry=_FakeEntry(_FakeRuntimeData()))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            # A device-side failure, not invalid input.
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("agent failure was not translated")
@@ -2687,7 +2690,8 @@ def test_common_gui_patch_refresh_failures_are_translated(monkeypatch) -> None: 
 
         try:
             await common_use_cases.async_ensure_gui_function_patch(entry)
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("failed GUI patch refresh was not translated")
@@ -2777,7 +2781,8 @@ def test_common_latest_item_id_translates_refresh_and_empty_results() -> None:
                 latest=lambda payload: payload.get("latest"),
                 unavailable_error="missing_item",
             )
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("refresh failure was not translated")

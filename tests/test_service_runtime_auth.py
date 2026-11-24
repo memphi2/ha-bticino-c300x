@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from custom_components.bticino_c300x import events, services
 from custom_components.bticino_c300x.api_errors import (
@@ -66,9 +66,11 @@ def test_service_rejection_requests_reauth_only_for_confirmed_credentials(monkey
     unregister = entry.runtime_data.resources.unregister_event_registration = Mock()
     handler = getattr(services._C300XServiceHandlers(hass), f"async_{operation}")
     call = SimpleNamespace(data={"entry_id": "entry", "activation_id": "gate"})
-    with pytest.raises(ServiceValidationError) as error:
+    with pytest.raises(HomeAssistantError) as error:
         asyncio.run(handler(call))
     assert error.value.translation_key == "agent_command_failed"
+    # A rejected key or an unreachable agent is not invalid input.
+    assert not isinstance(error.value, ServiceValidationError)
     command.assert_awaited_once()
     assert api.async_validate_maintenance_auth.await_count == (0 if rejection == "bearer" else 1)
     state = entry.runtime_data.connection_state
@@ -116,8 +118,9 @@ def test_non_auth_service_results_do_not_probe_or_start_reauth(monkeypatch, resu
     if result == "success":
         assert asyncio.run(handler(SimpleNamespace(data={}))) is None
     else:
-        with pytest.raises(ServiceValidationError):
+        with pytest.raises(HomeAssistantError) as error:
             asyncio.run(handler(SimpleNamespace(data={})))
+        assert not isinstance(error.value, ServiceValidationError)
     api.async_reload_gui.assert_awaited_once()
     api.async_validate_maintenance_auth.assert_not_called()
     entry.async_start_reauth.assert_not_called()
@@ -198,7 +201,7 @@ def test_confirmed_maintenance_rejection_leaves_event_registration_running(monke
         renewal = asyncio.create_task(worker._register())
         try:
             await asyncio.wait_for(entered.wait(), 1)
-            with pytest.raises(ServiceValidationError):
+            with pytest.raises(HomeAssistantError):
                 await services._C300XServiceHandlers(hass).async_reload_gui(SimpleNamespace(data={}))
             assert not renewal.done()
             assert not entry.runtime_data.connection_state.authentication_failed

@@ -58,6 +58,8 @@ extracted firmware assets, and their values are examples.
 - `display-c300x-dashboard-en`, `-alarmo-en`, `-settings-home-assistant-en`
   and `-settings-tone-buttons-en` are read-only framebuffer captures from
   2026-11-23, taken with the station set to English and left unchanged.
+- `display-home-stock-en` is a read-only framebuffer capture from 2026-11-24,
+  taken with the station set to English and left unchanged.
 - The `ha-*-en` images are browser captures of the Home Assistant test
   instance from 2026-11-23, in English and dark mode. The picture in the
   doorbell card is an earlier visitor image from the maintainer's own station,

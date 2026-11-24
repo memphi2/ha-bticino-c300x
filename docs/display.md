@@ -8,7 +8,12 @@ firmware 1.7.x or 2.0.2; on firmware 3.0.6 (experimental) the station's Qt 5
 interface has no display files to patch, so the Display patch is skipped and
 these pages are not available.
 
-<p align="center"><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="480"></p>
+<table>
+  <tr>
+    <td align="center"><strong>Home page buttons: Stock</strong><br><img src="images/readme/display-home-stock-en.webp" alt="C300X home page in the Stock layout: the Alarm and Home Assistant buttons among the station's own buttons, wrapped into two rows" width="360"></td>
+    <td align="center"><strong>Home page buttons: Fixed side by side</strong><br><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home page with the Alarm and Home Assistant buttons in fixed places next to each other after Settings" width="360"></td>
+  </tr>
+</table>
 
 Page and tile settings are stored in Home Assistant, and the display asks for
 them, so changing them writes nothing to the station. Entity changes reach the

@@ -1,12 +1,12 @@
 # Changelog
 
-## v2.10.0b1 - Unreleased
+## v2.10.0b1 - 2026-11-24
 
 Firmware 3.0.6 beta. On a 3.0.6 station (Dave, PR #126) the display pages
 loaded at start, the Alarm and Home Assistant buttons sat in the right place
-and stayed after a configuration change; everything else in this beta is
-checked offline only. Includes 2.9.1; on firmware 1.7.x and 2.0.2 it works like
-2.9.1.
+and stayed after a configuration change; the display restart, install and
+update behaviour below is checked offline only. Includes 2.9.1; on firmware
+1.7.x and 2.0.2 it works like 2.9.1.
 
 - On firmware 3.0.6 the display overlay also carries the 2.9.0
   **Settings > Home Assistant** tab (HA feedback, SSH, reboot, agent removal).
@@ -16,12 +16,26 @@ checked offline only. Includes 2.9.1; on firmware 1.7.x and 2.0.2 it works like
   Assistant buttons among the station's own, as in Dave's 3.0.x fix in PR #126;
   **Fixed side by side** keeps the pair. The patch status reports the layout
   only while the display pages are active.
-- On firmware 3.0.6 a display that fails with the pages starts as shipped until
-  the station restarts; applying the Display patch, the core hook Repair or an
-  agent update tries the pages once more. The agent restarts the display only
-  after the old one and its start script have ended, one restart at a time,
-  and a restart cut short by a time limit still finishes. Checked offline
-  only.
+- On firmware 3.0.6 the agent restarts the display one restart at a time and
+  only after the old display and its start script have ended. Several
+  requests close together end in one restart, a restart never starts while
+  display files are being written, and a restart that outlasts a call keeps
+  running: the patch status reports it as `gui_restart: pending`, and Home
+  Assistant, both installers and the media-user label wait for its outcome
+  instead of reporting a failure. The display counts as started only once it
+  has written its watchdog file and kept running for 8 seconds; one that
+  never writes it within 40 seconds counts as failed.
+- On firmware 3.0.6 a display that fails with the pages is restarted once
+  more and then starts as shipped until the station restarts; applying the
+  Display patch, the core hook Repair or an agent update tries the pages
+  again.
+- On firmware 3.0.6 a display step that fails during an install from Home
+  Assistant or an agent update no longer fails the install or update. The
+  owed display steps stay recorded: the core hook Repair stays until it has
+  run them all again (the full Display patch included when it was on), and
+  the Display setting and the next agent update run them as well. A step
+  that could not run at all (no connection, agent busy, rejected key) still
+  fails the install or update.
 - On firmware 3.0.x a display program or start script the agent does not know
   no longer stops installation or agent updates: the display stays as shipped,
   the agent runs without the display pages and Repairs says why.

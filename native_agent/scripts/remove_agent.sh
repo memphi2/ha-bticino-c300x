@@ -113,7 +113,8 @@ restore_qml() {
     fi
     if [ -x "$QML_PATCH" ]; then
         status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" status 2>/dev/null || true)"
-        if printf '%s' "$status" | grep -F -q '"state":"original"' \
+        if ! printf '%s' "$status" | grep -F -q '"transaction":' \
+            && printf '%s' "$status" | grep -F -q '"state":"original"' \
             && printf '%s' "$status" | grep -F -q '"core_state":"original"' \
             && printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
             return 0
@@ -122,6 +123,7 @@ restore_qml() {
         # not keep the display files from being removed (see below).
         if ! status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" restore-all 2>/dev/null)" \
             || ! printf '%s' "$status" | grep -F -q -e '"ok":true' -e 'display_library_restore_failed' \
+            || printf '%s' "$status" | grep -F -q '"transaction":"stuck"' \
             || ! printf '%s' "$status" | grep -F -q '"state":"original"' \
             || ! printf '%s' "$status" | grep -F -q '"core_state":"original"' \
             || ! printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then

@@ -2,7 +2,9 @@
 
 import os
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,8 @@ from test_qml_patch_script import (
     ORIGINAL_CALL_BLOCK_POPUP,
     SCRIPT,
     SOURCE_DIR,
+    _blocking_commands,
+    _gui_files,
     _write_original_gui,
 )
 
@@ -991,3 +995,64 @@ def test_a_display_library_without_a_valid_backup_does_not_block_the_removal(loc
     assert result.returncode == 0, result.stderr
     assert "wider tap tolerance" in result.stderr
     assert not Path(env["C300X_AGENT_DIR"]).exists()
+
+
+def _killed_restore_all(env, tmp_path):
+    """A restore-all SIGKILLed during its GUI restart: the stock files are in
+    place, the transaction directory still holds the patched ones."""
+
+    result = subprocess.run([str(SCRIPT), "apply"], env=env, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    process = subprocess.Popen(
+        [str(SCRIPT), "restore-all"], start_new_session=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        env={**env, **_blocking_commands(tmp_path, "killall")})
+    deadline = time.monotonic() + 20
+    while not (tmp_path / "held").exists():
+        assert process.poll() is None and time.monotonic() < deadline
+        time.sleep(0.01)
+    os.killpg(process.pid, signal.SIGKILL)
+    process.wait(timeout=10)
+    leftover = next(Path(env["C300X_QML_GUI_DIR"]).glob(".c300x-qml-transaction.*"))
+    status = subprocess.run([str(SCRIPT), "status"], env=env, capture_output=True, text=True, timeout=10)
+    assert '"state":"original"' in status.stdout and '"core_state":"original"' in status.stdout
+    assert '"media_user_label_state":"original"' in status.stdout
+    assert '"transaction":"pending"' in status.stdout
+    return leftover
+
+
+@pytest.mark.parametrize("leftover_kind", ["pending", "legacy_stuck", "stuck"])
+def test_removal_settles_a_gui_transaction_even_when_the_gui_looks_original(local_device, tmp_path, leftover_kind):
+    """A reinstall would roll a transaction left behind back over the stock
+    GUI once the backups are gone, so removal finishes it or keeps everything."""
+
+    env = local_device
+    gui = Path(env["C300X_QML_GUI_DIR"])
+    original = _gui_files(gui)
+    leftover = _killed_restore_all(env, tmp_path)
+    if leftover_kind == "legacy_stuck":
+        (leftover / ".c300x-v2").unlink()
+        (leftover / ".c300x-files").unlink()
+    elif leftover_kind == "stuck":
+        (leftover / "blocker").mkdir()
+        (leftover / "blocker/page.qml").write_text("Item {}\n")
+        with (leftover / ".c300x-files").open("a") as files:
+            files.write("+blocker/page.qml\n")
+        (gui / "blocker").write_text("not a directory\n")
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=30)
+
+    if leftover_kind == "pending":
+        assert result.returncode == 0, result.stderr
+        assert _gui_files(gui) == original
+        assert not Path(env["C300X_BACKUP_ROOT"]).exists()
+        assert not Path(env["C300X_AGENT_DIR"]).exists()
+        return
+    assert result.returncode != 0
+    assert "Failed to restore Display patch; keeping agent files and backups in place" in result.stderr
+    assert leftover.is_dir()
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+    assert Path(env["C300X_QML_BACKUP_DIR"], "EventManager.qml").is_file()
+    assert Path(env["C300X_INIT_SCRIPT"]).is_file()
+    assert "reboot" not in Path(env["CALL_LOG"]).read_text().splitlines()

@@ -13,7 +13,8 @@ and card test ZIP, not a C300X stable update. Start with the
 [C100X manual installation, backup, card and recovery guide](docs/c100x-test-release.md).
 The verified ZIP is handed off as an issue attachment only after the final C100X
 gate. The first functional tests are **Stair light** and **Door unlock** using
-the device's HA buttons, without camera, SIP changes or a display patch.
+the device's HA buttons, then one video stream and one ring call; the display
+pages follow in their own phase, activated by a reboot.
 Use stock firmware 1.5.8 with only the changes required for root/SSH access.
 Parallel operation with BTicino Companion is **not supported**.
 
@@ -69,8 +70,9 @@ This `c100x_1.5.8` development branch also contains **experimental, offline-only
 validated C100X firmware 1.5.8 support**. It is not a general C100X support claim
 or part of the separate stable release. Read the [C100X support matrix and
 credential prerequisites](docs/c100x-experimental.md) before using its local
-package. Device display pages, display notifications and ringer mute are not
-supported on C100X.
+package. Device display pages, display notifications, ringer mute and key tone
+work on C100X only after the display activation by reboot was confirmed; TTS,
+the answering machine and voice memos are not supported there.
 
 This project does not root a stock station and ships no firmware, APKs,
 exploits, rooting instructions or vendor files

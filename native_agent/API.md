@@ -234,6 +234,9 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/ssh/actions/start` | maintenance | Starts SSH after confirmation. |
 | `POST` | `/api/v1/maintenance/ssh/actions/stop` | maintenance | Stops SSH after confirmation. |
 | `POST` | `/api/v1/maintenance/reboot` | maintenance | Schedules reboot after confirmation. |
+| `GET` | `/api/v1/maintenance/c100x-display` | maintenance | C100X only: reads the display activation state. |
+| `POST` | `/api/v1/maintenance/c100x-display/actions/activate` | maintenance | C100X only: prepares the display pages and reboots once idle. |
+| `POST` | `/api/v1/maintenance/c100x-display/actions/restore` | maintenance | C100X only: restores the original display and reboots once idle. |
 | `POST` | `/api/v1/maintenance/agent/actions/remove` | maintenance | Schedules agent removal after confirmation. |
 | `POST` | `/api/v1/maintenance/agent/actions/restart` | maintenance | Restarts the native agent after confirmation. |
 | `GET` | `/api/v1/maintenance/update/status` | maintenance | Reads staged update state. |
@@ -328,7 +331,8 @@ Important top-level fields:
 - `device.firmware`
 - `capabilities`. `touch_tone`, `display_alerts`, `display_bridge` and
   `ringer.mute` are reported on every C300X as before; on the C100X only once
-  its display files can be patched, which they cannot yet.
+  the display adapter was confirmed in its trial boot (see
+  [C100X display activation](#c100x-display-activation)).
   `maintenance.gui_reload` is not offered on the C100X, whose display program
   the agent does not restart.
 
@@ -1414,7 +1418,45 @@ Restarts the native agent.
 {"confirm": "reload_gui"}
 ```
 
-Reloads the C300X graphical interface.
+Reloads the C300X graphical interface. Not offered on the C100X: its display
+program cannot be restarted.
+
+### C100X Display Activation
+
+C100X only; the routes exist when the agent runs on a C100X and need the
+maintenance token and the reboot permission (`404 maintenance_disabled`
+otherwise).
+
+`GET /api/v1/maintenance/c100x-display` returns `{"ok":true,"c100x_display":{...}}`
+with `status_known`, `busy`, `phase` (`unknown`, `stock`, `installed`,
+`prepared`, `trial`, `stale`), `trial_switched`, `confirmed`, `generation`,
+`available`, `last_result`, `last_error`, `reboot_pending`, `reboot_blocked`,
+`activate`, `restore`, `alert_sound` (always false) and `boot_check`. The same
+object is the `c100x_display` capability.
+
+`POST /api/v1/maintenance/c100x-display/actions/activate`
+
+```json
+{"confirm": "activate_c100x_display"}
+```
+
+`POST /api/v1/maintenance/c100x-display/actions/restore`
+
+```json
+{"confirm": "restore_c100x_display"}
+```
+
+Both answer `202` with `{"ok":true,"action":"...","scheduled":true}`. The agent
+switches the files, then reboots the station once it has been idle;
+`reboot_blocked` names what it waits for (`waiting_for_idle`, `call_active`,
+`call_recent`, `station_busy`, `display_busy`, `starting`, `reboot_disabled`,
+`call_state_unknown`). The trial boot confirms the pages; otherwise the next
+start rolls back. Restore of an already stock station answers `200` with
+`"changed":false`. Errors: `409` `c100x_display_busy`,
+`c100x_display_trial_pending` (activate), `c100x_display_boot_check_failed`
+(activate), `c100x_display_ui_port_unsupported` (activate with a UI port other
+than 8090); `503` `c100x_display_status_unknown`. The whole sequence is in
+[C100X display parity](../docs/dev/c100x-display-parity.md#activation-by-reboot).
 
 ### Agent Self-Update
 
@@ -1784,6 +1826,7 @@ requests to Home Assistant require an active display bridge.
 | `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
+| `GET` | `/ui/c100x/presence/next`, `/status`, `/probe` | C100X display adapter only, loopback: the adapter's sleeping presence lease, its status and the readiness challenge the trial boot checks. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |

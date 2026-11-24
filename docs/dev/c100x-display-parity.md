@@ -101,7 +101,7 @@ The bundle now carries the adapter as one hashed `qml/c100x_bundle.sh` entry,
 with fixed text members extracted into a private temporary directory. File-set
 7 installs that entry; actual file-set-6 updater tests verify the two-pass
 bootstrap and reject missing/corrupt completion payloads. The measured manifest
-is 6,532 bytes (29 entries), below the unchanged old 8,192-byte reader limit;
+is about 6.5 KB (29 entries), below the unchanged old 8,192-byte reader limit;
 staging rejects oversized manifests and stale adapter output directories.
 Restore does not extract current QML sources. Source delivery does not modify
 the vendor GUI, start a loader or change display capabilities.

@@ -407,7 +407,8 @@ independent compiler/sysroot provenance. Procedure:
 ## Supported Firmware Versions
 
 The `c100x_1.5.8` development branch additionally carries experimental C100X
-1.5.8 detection, routing and package compatibility gates. Its
+1.5.8 detection, routing, package compatibility gates and the display
+activation by reboot. Its
 [separate matrix](../c100x-experimental.md) distinguishes offline evidence from
 unproven hardware behavior; the C300X statements below do not imply the same
 display, audio or credential support on C100X.

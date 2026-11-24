@@ -2,13 +2,14 @@
 
 Status: local preparation, not a published beta or authorization to install.
 Target: **C100X, original firmware 1.5.8**, branch `c100x_1.5.8`.
-No release number has been selected. The current `2.8.2` metadata is inherited
+No release number has been selected. The current `2.9.0` metadata is inherited
 development metadata, not a C100X release designation. Do not distribute an old
 local ZIP merely because it has that version.
 
 The download is a **complete HA integration ZIP**, including the freshly built
 ARM agent, generated device bundle, all Lovelace card modules and documentation.
-The functional test scope is agent setup, the two HA buttons below and the
+The functional test scope is agent setup, the two HA buttons below, one video
+stream and one ring call, and the
 [display activation by reboot](#display-activation-by-reboot-device-test).
 The display pages become active only through that supervised activation; no
 other GUI install path is enabled.
@@ -54,8 +55,7 @@ Read-only codec status remains available. Explicit restore and removal retain
 Speex recovery only when both managed backups pass stock-Speex field validation;
 missing, partial or incompatible recovery backups are refused. Unpatched removal
 with neither codec backup remains a no-op. Recovery is not a first-test action.
-The agent's PCMU transcode for HA is separate from the firmware codec setting;
-it does not authorize media activation during this test.
+The agent's PCMU transcode for HA is separate from the firmware codec setting.
 
 - The C100X-aware agent, installer and update guards are implemented offline.
   Routing restoration checks complete known firmware identity; GUI-free restore
@@ -63,10 +63,11 @@ it does not authorize media activation during this test.
 - Additional display pages, physical-key navigation, silent/wake Notify and
   read-only text memos exist as offline implementations. **They stay inactive
   until the display activation below.**
-- GUI restart remains unavailable. Display pages, ringer mute and key tone stay
-  unavailable until the separate [display activation](#display-activation-by-reboot-device-test)
-  is confirmed in its trial boot. Explicit GUI-install requests must still fail
-  before writing device files, not silently report a successful activation.
+- GUI restart remains unavailable; HA shows no Display reload button. Display
+  pages, ringer mute and key tone stay unavailable until the separate
+  [display activation](#display-activation-by-reboot-device-test) is confirmed
+  in its trial boot. The C300X Display patch is refused before it writes device
+  files.
 - Notify sound, speech/TTS, the answering machine, voice memos and memo
   deletion are not part of this test; the C100X has no answering machine (see
   the [support matrix](c100x-experimental.md#support-matrix)). No alternative sound script or forced capability flag is supported.
@@ -332,9 +333,12 @@ accounts unchanged; their presence is not permission to migrate them.
    Use a trusted isolated network: the legacy bootstrap SSH client currently does
    not pin host keys (`known_hosts=None`). The manual backup SSH connection above
    must still verify its host key; model/package guards are not host authentication.
+   The package refuses a Classe 300X: the SSH bootstrap stops before any write,
+   and a station that already runs a C300X agent ends setup with "This test
+   package is for the Classe 100X only".
 6. Follow the first-test steps below. Video and the HA media user stay at their
-   ticked defaults. Do not enable display or MQTT migration just to clear a
-   Repair or populate a card.
+   ticked defaults. The display settings appear only after the
+   [display activation](#display-activation-by-reboot-device-test).
 
 ## Lovelace Card Setup
 
@@ -390,7 +394,8 @@ Use the actual entity picker/name, not the placeholder. Do not press play, answe
 or Home Call during setup. Test door and light separately using the HA buttons
 on the device page as described above. Hidden card controls are
 not an authorization boundary; the test plan and backend capability checks remain
-necessary. Later media tests require their own authorization and hardware evidence.
+necessary. The video stream and the ring call are
+[step 6](#first-authorized-installation-and-checks) below.
 
 For a missing/stale card, hard-reload the browser and inspect dashboard Resources
 (advanced mode). Keep one JavaScript-module entry beginning
@@ -464,9 +469,9 @@ again, as on a C300X.
    any Flexisip change beyond those in step 2; the vendor app no longer
    rings or connects; a physical key stopped working.
 5. Observe agent uptime and errors while idle. Record the actual observation
-   duration, not a generic stability claim. Reboot persistence,
-   ring/media/audio and update/remove tests need separately agreed phases.
-   In an agreed reboot phase, download the HA diagnostics once the station is
+   duration, not a generic stability claim. Update and removal tests need a
+   separately agreed phase; the display activation below reboots the station.
+   After any reboot, download the HA diagnostics once the station is
    back: `agent_init_link_ok: true` and a small `agent_started_after_boot_seconds`
    (the boot link starts the agent early) show that it came up with that boot.
    A value close to the station's uptime means a later manual start, not
@@ -529,7 +534,7 @@ so.
    pages were rolled back" in HA, and no further reboot.
 4. **Restore.** With confirmed pages, press **Restore original display** (or
    turn the device-UI setting off). Expect `confirmed` false at once,
-   `reboot_due`, one reboot once idle, and afterwards the original display with
+   `reboot_pending` true, one reboot once idle, and afterwards the original display with
    the original hashes and `phase` `stock`.
 5. **Ringer mute, after step 2** (analysis steps 2, 4, 5):
    - Stock path: on the device press Down to mute, then Up to unmute. Each time
@@ -547,8 +552,9 @@ so.
 
 ## Recovery and Stop Conditions
 
-Stop on unexpected reboot, loss of vendor calls/app service, GUI changes,
-authentication loss, non-stock identity refusal, or failed restoration. Do not
+Stop on an unexpected reboot (the display activation's own reboots are
+expected), loss of vendor calls/app service, GUI changes outside the display
+activation, authentication loss, non-stock identity refusal, or failed restoration. Do not
 repeat a failing installation, force a capability, delete backups, restart the
 entire vendor stack, or replace provisioned SIP accounts to recover.
 
@@ -579,8 +585,10 @@ substitute for its pre-test backup.
 
 ### Concrete First-Test Rollback
 
-This procedure restores only the paths changed by the agent-only installer. Undo
-the media-user setup first, while the agent still runs: turning the **Home
+This procedure restores only the paths changed by the agent-only installer. If
+the display pages were activated, press **Restore original display** first and
+wait for its reboot and `phase` `stock`. Undo
+the media-user setup next, while the agent still runs: turning the **Home
 Assistant media user** switch off restores the stock routing binary from its
 backup; the Flexisip user lines stay. The procedure does not recover an unknown
 GUI restart, app provisioning change, power loss or inaccessible SSH. Stop and
@@ -723,7 +731,7 @@ The preparation ran focused groups, not a full suite:
   mocked; firmware originals are read-only. This is not device recovery evidence.
 - 83 tests for the refreshed build lock, compact bundle delivery/old-reader
   bootstrap and C100X-only test-package isolation. The rebuilt manifest is
-  6,532 bytes with 29 entries, below the old 8,192-byte reader limit. Old updaters
+  about 6.5 KB with 29 entries, below the old 8,192-byte reader limit. Old updaters
   still lack the new model guard; these delivery tests do not remove that limit.
 - The SSH admission follow-up passed 199 focused installer/package tests and six
   display-kind helper tests. Real staged metadata is tested with missing,

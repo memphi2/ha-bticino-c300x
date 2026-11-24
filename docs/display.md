@@ -6,7 +6,8 @@ page and notices from automations. They are native station pages, not the
 Lovelace card or an embedded Home Assistant dashboard. Display pages need
 firmware 1.7.x or 2.0.2; on firmware 3.0.6 (experimental) the station's Qt 5
 interface has no display files to patch, so the Display patch is skipped and
-these pages are not available. The C100X has no display pages yet; see the
+these pages are not available. On the C100X test branch the pages come as a
+separate Qt 5 adapter that a reboot activates; see the
 [C100X support matrix](c100x-experimental.md).
 
 <p align="center"><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="480"></p>

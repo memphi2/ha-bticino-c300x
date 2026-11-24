@@ -1,13 +1,14 @@
 # C100X 1.5.8: Experimental Branch
 
-This document applies only to `c100x_1.5.8`, not the separate stable 2.8.2 or
+This document applies only to `c100x_1.5.8`, not the separate stable 2.9.0 or
 3.0.6 beta worktrees/packages. C100X 1.5.8 has been inspected and tested
 offline against extracted firmware and synthetic fixtures. No C100X device
 or Home Assistant installation was accessed for this work. ABI compatibility
 does not establish runtime or hardware support.
 
-For the separately scoped issue #51 first test, use the
-[agent, stair-light and door-unlock test checklist](c100x-test-release.md).
+For the separately scoped issue #51 test, use the
+[test checklist](c100x-test-release.md): agent, stair light, door unlock, one
+video stream and ring call, then the display activation by reboot.
 Use otherwise stock C100X firmware 1.5.8; only the changes needed for
 root/SSH access are in scope. Running alongside Companion is not supported.
 The release number/channel remain undecided; publication is blocked locally.
@@ -46,18 +47,18 @@ This was not a stock-station test or acceptance of Companion coexistence.
 | --- | --- | --- |
 | Model, firmware and SIP identity | C100X / 1.5.8 reported on one modified station | SIP identity was not validated end to end. Discovery: **implemented offline; hardware unproven.** A C100X agent announces `_bticino-c100x-agent._tcp` (a C300X keeps `_bticino-c300x-agent._tcp`); HA discovers both, and an announcement of one model never matches, renews or moves an entry whose agent reported the other model. Manual setup by host worked. |
 | Agent build / ABI | Offline validated | Oldest C300X build baseline retained; C100X 1.5.8 remains an additional ABI check. This is not a process-start or endurance test. |
-| Routing / media user | Implemented; hardware unproven | C100X-specific `bt_answering_machine` table matches all nine stock patch ranges. Patch apply on a temporary firmware copy passed; registration, ring answering and vendor-app coexistence still require a device. |
-| HA entities and callbacks | Capability-gated; hardware unproven | Door, stair light, ring/call events and supported maintenance controls retain their existing paths. Physical outputs, event timing and callback reachability are not proven. |
+| Routing / media user | Implemented; hardware unproven | As on a C300X, setup presets video and the HA media user, and the first HA start creates the user and patches `bt_answering_machine`. The C100X-specific table matches all nine stock patch ranges; patch apply on a temporary firmware copy passed. A `route.conf` that is not a link to `route_int.conf`/`route_ext.conf` is refused (`unsupported_active_route`) and nothing is written. Registration, ring answering and vendor-app coexistence still require a device. |
+| HA entities and callbacks | Capability-gated; hardware unproven | Door, stair light, ring/call events and supported maintenance controls retain their existing paths. There is no Display reload button (the GUI cannot be restarted) and no firmware codec selector. Physical outputs, event timing and callback reachability are not proven. |
 | Ringer volume | Retained; hardware unproven | Independent from mute; the vendor volume command still needs physical-level and persistence checks. |
 | Ringer mute / key tone | **Only after the display activation; hardware unproven** | The separate Qt5 bridge uses stock AudioState/beep properties with readback and call/commissioning guards. Mute and key tone are advertised only once the adapter was confirmed in its trial boot; before that, mute is rejected before device I/O. The bridge acks the AudioState flag it reads back and undoes a change that caused no transition; the agent pushes an unmute seen on the bus to the GUI, which otherwise follows only a bus mute. Volume/events retain their paths. |
-| Device dashboard / display notify | **Available after the display activation by reboot; hardware unproven** | All additional pages remain the target, tracked in [Display Parity](dev/c100x-display-parity.md). Separate Qt5 pages, Loader hooks, key navigation, settings, compact file-set-7 delivery, silent/wake Notify and read-only text memos have focused offline tests. The pages take effect by reboot: **Activate display pages** switches the files, the agent reboots the idle station, confirms the trial display in the next boot and otherwise rolls back at the start after it ([details](dev/c100x-display-parity.md#activation-by-reboot)). A confirmed adapter enables the display setting in HA; turning it off or **Restore original display** brings back the original display with one reboot. GUI restart stays unavailable. Notify sound and memo mutations lack the specific contracts documented in the parity matrix. Setup/options and bridge setup stay suppressed until the adapter is confirmed; the C300X Display patch is never applied. Until then, saved display configuration is retained but ineffective; Alarmo configuration remains independently available. |
+| Device dashboard / display notify | **Available after the display activation by reboot; hardware unproven** | All additional pages remain the target, tracked in [Display Parity](dev/c100x-display-parity.md). Separate Qt5 pages, Loader hooks, key navigation, settings, compact file-set-7 delivery, silent/wake Notify and read-only text memos have focused offline tests. The pages take effect by reboot: **Activate display pages** switches the files, the agent reboots the idle station, confirms the trial display in the next boot and otherwise rolls back at the start after it ([details](dev/c100x-display-parity.md#activation-by-reboot)). A confirmed adapter enables the display setting in HA; turning it off or **Restore original display** brings back the original display with one reboot. GUI restart stays unavailable. Notify sound and memo mutations lack the specific contracts documented in the parity matrix. Setup/options and bridge setup stay suppressed until the adapter is confirmed; the C300X Display patch is never applied, and its home-button layout is not offered. Until then, saved display configuration is retained but ineffective; Alarmo configuration remains independently available. |
 | Camera / snapshot / RTSP | Implemented; hardware unproven | C100X is fixed to the low-resolution branch; no resolution selector. Stock settings describe 640x480, 12 fps and 800 kbps. Decoding, quality changes, snapshots, ring capture and multi-client behavior need device tests; these values are not a quality guarantee. |
 | Camera picture controls | Implemented offline; hardware unproven | Brightness, contrast and saturation through the direct V4L2 path, as on a C300X HW rev 4: same `mxc_v4l2` capture signature and TVP5150 decoder; eligible only on C100X 1.5.8 with the TVP5150 bound, by the runtime model. HA writes the station's day steps (brightness 30-220, contrast 80-255, saturation 80-255, from its `stack_open.xml`); night values and off-grid menu steps read as the nearest day step. Picture effect, night switching and the start values of the next stream need a device test. |
 | Listen / talkback | Implemented; hardware unproven | Speex/8000 is the C100X firmware codec; HA and the browser still get PCMU through the agent's transcode. **Firmware PCMU is unsupported on the C100X:** 1.5.8 runs the device-side PCM at 16 kHz (`<sampling_rate>16000</sampling_rate>`, C100X only), its PCMU send pipeline has no resampler and `rtppcmupay` accepts only 8000 Hz (the device's own gst-launch fails to negotiate at 16 kHz under qemu); 8000 Hz is not possible either, because the ZL38067 is the I2S clock master with all DSP profiles at 16 kHz ([details](dev/c100x-audio-analysis.md)). Firmware-PCMU apply is therefore blocked in core/API/CLI and not offered by HA; read-only status and Speex recovery from validated managed backups remain available. SIP negotiation, SRTP/RTP, both directions and stop/teardown still require separately authorized hardware acceptance. |
 | Announcements / TTS | **Unsupported; incompatible backend explicitly blocked** | Model guards reject C300X playback, startup cleanup and legacy-worker takeover on C100X even if foreign tools are present. The original memo/WAV route requests an unsupported HAL profile; ringtone/global-stop paths lack safe per-owner cancellation. No C100X speaker backend was implemented. See the [original-firmware audio evidence](dev/c100x-audio-analysis.md). |
 | Answering machine and voice memos | **Unsupported: the vendor HAL switches it off** | The C100X is the SHARK board (board id 16 in `liblghal`'s `hal_board()` table). Its `hal_get_aswm()` returns `0xff` for boards 16/18 and `hal_set_aswm()` refuses them; `bt_answering_machine` (stock key object 154) then logs "Force answering machine OFF" at start, and on a ring "Answering machine is not enabled!": nothing is recorded. `*8*91` would only write `Activated=1` to `aswm_settings.ini`. Voice memos need a GUI recorder the C100X lacks. The agent therefore reports `answering_machine` and voice memos unsupported and answers their routes, and memo delete, with `409 answering_machine_unsupported_model` before any device I/O; HA creates no answering-machine switch, video-message or voice-memo sensor, delete button or media entries for a C100X, and its video-message and voice-memo actions refuse a C100X entry. |
 | Text memos | Read and write offline-verified; hardware unproven | The memo store format and the vendor's `memos_text` code are identical to C300X 1.7.19, where HA's text-memo write is established. A separate key-operated text page reads them through the agent, read-only. Memo delete is off on the C100X: HA offers it only with the C300X Display patch. |
-| Install / authentication / update / uninstall | Earlier agent startup and token enforcement observed on one modified station | Fresh standalone install without workarounds, survival across reboot, update and scripted removal remain unverified on hardware. Uninstall is not a factory reset or unroot operation. |
+| Install / authentication / update / uninstall | Earlier agent startup and token enforcement observed on one modified station | The test package installs only on a C100X: the SSH bootstrap refuses a C300X before any write, setup refuses a C300X that already runs an agent, and a C300X entry is told to use the regular package. Fresh standalone install without workarounds, survival across reboot, update and scripted removal remain unverified on hardware. Uninstall restores the original display files and the stock routing binary before it deletes the agent; it is not a factory reset or unroot operation. |
 
 ## Package Protection
 
@@ -113,14 +114,14 @@ These steps require separate explicit authorization and have **not** been run:
 
 1. Confirm SSH credentials and backup/recovery access. Record firmware/model,
    vendor app operation, SIP provisioning and original changed-file hashes.
-2. Use the separate agent-only checklist first: install only the approved package
-   on an authorized C100X and check startup, API/maintenance auth and discovery.
-   Before any later display trial, finish supervised GUI restart/runtime recovery
-   and verify the complete rebuilt bundle/update path offline.
-   A package whose display gate remains false must not patch/restart the GUI
-   or expose display controls. Do not force the gate through metadata changes.
-3. For an explicitly enabled display trial, verify original backups, safe
-   activation, failed-start rollback and reboot persistence. Exercise every
+2. Use the [test checklist](c100x-test-release.md) first: install only the
+   approved package on an authorized C100X and check startup, API/maintenance
+   auth, discovery, the media user, video and a ring call.
+   Until the display activation is confirmed, the package must not change the
+   GUI or expose display controls. Do not force the gate through metadata changes.
+3. For the [display activation by reboot](c100x-test-release.md#display-activation-by-reboot-device-test),
+   verify original backups, the trial-boot confirmation, the rollback after an
+   interrupted trial and restore by reboot. Exercise every
    enabled/ordered page at 800x480 with Up/Down/Return/back, including scrolling,
    entity controls, Energy subpages, Alarmo/PIN, notifications and settings.
    Verify mute/key-tone readback and call/commissioning preemption. Check door,

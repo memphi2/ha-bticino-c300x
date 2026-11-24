@@ -28,6 +28,8 @@ Station:
   (favourites bar or arrows). The value is stored in Home Assistant and shows
   the same in the integration's options; changing it on either side does not
   reload the integration.
+- The energy page no longer writes "Unable to assign [undefined]" lines to the
+  station log when its boxes change.
 - The texts of the station pages are spelled properly in German, Italian and
   French, with umlauts and accents ("PIN benötigt", "Umidità", "Arrêt")
   instead of stand-ins such as "benoetigt".

@@ -132,3 +132,9 @@ def test_lock_activation_run_emits_unlock_events_and_dedupes_echoes() -> None:
     assert event_body.index("c300x_local_action_event_remember") < event_body.index(
         "dispatch_event(config, runtime, event_type, event_data, 0);"
     )
+
+
+def test_udp_event_socket_never_blocks_the_loop() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    create_body = _function_body(text, "create_udp_event_socket")
+    assert create_body.index("set_fd_nonblocking(fd);") < create_body.index("bind(")

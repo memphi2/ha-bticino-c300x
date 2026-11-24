@@ -5065,6 +5065,9 @@ static int create_udp_event_socket(const struct c300x_config *config, int *joine
         return -1;
     }
     set_fd_cloexec(fd);
+    /* poll() can report a datagram the kernel then drops (bad checksum): a
+     * blocking recvfrom() would hold the whole loop until the next one. */
+    set_fd_nonblocking(fd);
     allow_socket_reuse(fd);
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;

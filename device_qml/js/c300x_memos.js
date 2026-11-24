@@ -21,7 +21,7 @@ function syncMemoModel(pageItem, textMemoType, callback) {
 
 function syncMemoObjectModel(model, textMemoType, callback) {
     getJson("/ui/memos", function(data) {
-        syncObjectModel(model, data && data.memos, textMemoType)
+        syncObjectModel(model, data, textMemoType)
         if (callback) {
             callback(true, data)
         }
@@ -150,18 +150,32 @@ function unreadCountFromData(data) {
     return 0
 }
 
-function syncObjectModel(model, memos, textMemoType) {
-    var known = memoSet(memos)
-    if (!model || !model.binder) {
+function syncObjectModel(model, data, textMemoType) {
+    if (!model || !model.binder || !data || data.ok !== true || data.available !== true) {
         return
     }
+    var deleted = idSet(data.deleted)
+    var known = memoSet(data.memos)
     for (var index = model.count - 1; index >= 0; index--) {
         var itemObject = model.binder.getObject(index)
         var key = memoObjectKey(itemObject, textMemoType)
-        if (key !== "" && known[key] !== true) {
+        if (key !== "" && deleted[key] === true && known[key] !== true) {
             model.remove(itemObject)
         }
     }
+}
+
+function idSet(items) {
+    var ids = {}
+    if (!items || items.length === undefined) {
+        return ids
+    }
+    for (var index = 0; index < items.length; index++) {
+        if (typeof items[index] === "string") {
+            ids[items[index]] = true
+        }
+    }
+    return ids
 }
 
 function memoSet(items) {

@@ -42,7 +42,9 @@ def test_device_homeassistant_page_has_no_refresh_timer() -> None:
     text = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(encoding="utf-8")
     helper = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(encoding="utf-8")
 
-    assert text.count("Timer {") == 3
+    # The fourth timer runs once: it releases a held error line after 30 seconds and reads nothing.
+    assert text.count("Timer {") == 4
+    assert "Timer { interval: 30000; running: status.held; onTriggered: status.held = false }" in text
     assert "repeat: true" not in text
     assert "running: pageActive && watchFailed" in text
     assert "running: pageActive && pendingEntity.length > 0" in text

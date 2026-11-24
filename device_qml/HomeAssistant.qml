@@ -109,7 +109,7 @@ Page {
     function aboutToShow() {
         c300xDisplayPreferences.load()
         pageActive = true
-        status.heldUntil = 0
+        status.held = false
         Api.dashboard(status, page)
         startWatch()
     }
@@ -1935,7 +1935,7 @@ Page {
         property string text: ""
         property color color: "#c7d0d9"
         property bool optionalFeedback: false
-        property double heldUntil: 0
+        property bool held: false
         UbuntuLightText {
             anchors.fill: parent
             text: statusText()
@@ -1945,5 +1945,6 @@ Page {
             horizontalAlignment: Text.AlignRight
             elide: Text.ElideRight
         }
+        Timer { interval: 30000; running: status.held; onTriggered: status.held = false }
     }
 }

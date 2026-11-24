@@ -2,9 +2,10 @@
 
 function setStatus(statusItem, text, color, optionalFeedback, fromRead) {
     var routine = optionalFeedback === true
-    if (fromRead === true && routine && statusItem.heldUntil > Date.now()) return
-    if (statusItem.heldUntil !== undefined) {
-        statusItem.heldUntil = !routine && fromRead !== true && text ? Date.now() + 30000 : 0
+    if (fromRead === true && routine && statusItem.held === true) return
+    if (statusItem.held !== undefined) {
+        statusItem.held = false
+        if (!routine && fromRead !== true && text) statusItem.held = true
     }
     statusItem.optionalFeedback = routine
     statusItem.text = text

@@ -325,7 +325,7 @@ for (const data of [{ok: true}, {ok: true, id: "../bad", enabled: true, expires:
 function alarmPage(api, values) {
     const noop = () => {};
     const p = page("Alarm.qml", Object.assign({Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
-        feedbackColorsEnabled: false, status: {heldUntil: 0}, alarmState: {}, activeSince: {},
+        feedbackColorsEnabled: false, status: {held: false}, alarmState: {}, activeSince: {},
         alarmOnline: true, alarmConfigured: true, alarmRawState: "disarmed", alarmCommands: ["arm_home"],
         alarmCommandDetails: [], selectedCommand: "arm_home", commandPending: false, commandInFlight: false,
         commandAwaitedState: "", commandFeedback: "", commandFeedbackColor: "", activeFeedbackCommand: "",
@@ -338,8 +338,10 @@ function alarmPage(api, values) {
 
 {
     // A status the user has to read is not replaced by the routine line of
-    // the next status read. It holds for 30 seconds; a new command, another
-    // error or a failed read replace it at once.
+    // the next status read. It holds until its timer on the page releases it
+    // after 30 seconds, whatever the station clock does meanwhile (it is set
+    // by NTP after boot); a new command, another error or a failed read
+    // replace it at once.
     const {api} = runtime();
     let now = 1000000;
     api.clock = () => now;
@@ -356,10 +358,13 @@ function alarmPage(api, values) {
         const shown = p.status.text;
         connected();
         assert.equal(p.statusText(), shown, key + " survives the next status read");
-        now += 29000;
-        connected();
-        assert.equal(p.statusText(), shown, key + " is still held after 29 seconds");
-        now += 2000;
+        for (const step of [29000, 86400000, -172800000]) {
+            now += step;
+            connected();
+            assert.equal(p.statusText(), shown, key + " is still held when the clock moves by " + step);
+        }
+        assert.equal(p.status.held, true);
+        p.status.held = false;
         connected();
         assert.equal(p.status.text, "ha_connected", key + " gives way after 30 seconds");
         assert.equal(p.statusText(), "", "and the routine line is hidden with the switch off");
@@ -382,9 +387,11 @@ function alarmPage(api, values) {
     connected();
     assert.equal(p.status.text, "ha_connected", "and is itself not held once Home Assistant answers again");
     api.setStatus(p.status, "", "#ff6b6b");
-    assert.equal(p.status.heldUntil, 0, "an empty line holds nothing");
+    assert.equal(p.status.held, false, "an empty line holds nothing");
     const alarm = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");
-    assert.match(alarm, /function aboutToShow\(\) \{[^}]*status\.heldUntil = 0/, "opening the page starts fresh");
+    assert.match(alarm, /function aboutToShow\(\) \{[^}]*status\.held = false/, "opening the page starts fresh");
+    assert.ok(alarm.includes("Timer { interval: 30000; running: status.held; onTriggered: status.held = false }"));
+    assert.ok(!/heldUntil|Date\.now\(\) \+ 30000/.test(alarm + api.setStatus.toString()), "no wall clock in the hold");
 }
 
 {
@@ -394,7 +401,7 @@ function alarmPage(api, values) {
     api.clock = () => now;
     vm.runInContext("Date.now = function() { return clock(); }", api);
     const p = page("HomeAssistant.qml", {Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
-        feedbackColorsEnabled: true, status: {heldUntil: 0}, selectedItem: null,
+        feedbackColorsEnabled: true, status: {held: false}, selectedItem: null,
         runtimeGeneration: 0, dashboardLoading: false, dashboardRefreshAgain: false,
         currentPageIndex: 0, pageCount: 1, dashboardPages: [{items: []}]});
     p.page = p;
@@ -406,6 +413,9 @@ function alarmPage(api, values) {
     assert.equal(p.statusText(), "action_error", "an action error survives the next board read");
     now += 31000;
     loaded();
+    assert.equal(p.statusText(), "action_error", "the clock alone releases nothing");
+    p.status.held = false;
+    loaded();
     assert.equal(p.statusText(), "board_loaded");
     api.dashboard(p.status, p);
     queued.shift().failure("offline");
@@ -414,7 +424,8 @@ function alarmPage(api, values) {
     assert.equal(p.statusText(), "board_loaded", "the offline line goes as soon as a read works again");
     const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
     assert.match(qml, /uiText\("stale_state"\), "#f1c40f", false, true\)/, "a lost event stream is a read result too");
-    assert.match(qml, /function aboutToShow\(\) \{[^}]*status\.heldUntil = 0/);
+    assert.match(qml, /function aboutToShow\(\) \{[^}]*status\.held = false/);
+    assert.ok(qml.includes("Timer { interval: 30000; running: status.held; onTriggered: status.held = false }"));
 }
 
 {

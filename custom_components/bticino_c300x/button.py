@@ -31,6 +31,7 @@ from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from .display_support import entry_is_c100x
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
@@ -76,7 +77,9 @@ async def async_setup_entry(
     entities.append(C300XRebootButton(entry))
     entities.append(C300XRemoveAgentButton(entry))
     entities.append(C300XRestartAgentButton(entry))
-    entities.append(C300XReloadGuiButton(entry))
+    if not entry_is_c100x(entry):
+        # The C100X GUI cannot be restarted; its agent never offers gui_reload.
+        entities.append(C300XReloadGuiButton(entry))
     if c100x_display_status(capabilities) is not None:
         entities.append(C300XActivateDisplayPagesButton(entry))
         entities.append(C300XRestoreDisplayPagesButton(entry))

@@ -2107,3 +2107,17 @@ def test_an_agent_without_voice_memos_gets_no_voice_delete_button() -> None:
     entities = asyncio.run(_run())
     assert any(isinstance(entity, C300XDeleteLatestTextMemoButton) for entity in entities)
     assert not any(isinstance(entity, C300XDeleteLatestVoiceMemoButton) for entity in entities)
+
+
+@pytest.mark.parametrize("model", ["C100X", "C300X"])
+def test_only_a_c300x_gets_the_display_reload_button(model: str) -> None:
+    async def _run() -> list[Any]:
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={}))
+        entry.runtime_data.agent_info = {"model": model}  # type: ignore[attr-defined]
+        entities: list[Any] = []
+        await async_setup_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        return entities
+
+    entities = asyncio.run(_run())
+    assert any(isinstance(entity, C300XReloadGuiButton) for entity in entities) is (model == "C300X")
+    assert any(isinstance(entity, C300XRebootButton) for entity in entities)

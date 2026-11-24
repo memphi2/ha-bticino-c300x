@@ -1722,8 +1722,10 @@ compare target files byte-for-byte, back up original device files under
 filesystem writable only for final copy/write work, then remount read-only.
 The agent's own device writes (routing, audio codec, camera, firewall, touch
 patch) leave `/` as they found it: on a root that is already writable they
-write without remounting, keep it writable and report that
-(`root_writable` / `remount_ro_failed`).
+write without remounting and keep it writable, which is success.
+`root_writable` / `remount_ro_failed` only report a root the agent made
+writable and could not make read-only again; an agent removal stops for a
+reboot only then.
 
 ### Camera Resolution
 

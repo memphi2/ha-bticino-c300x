@@ -34,7 +34,7 @@ int c300x_root_remount(const char *mode)
     } else {
         root_writers -= root_writers > 0;
         if (root_writers == 0) {
-            ok = !root_found_writable && root_mount_run("ro");
+            ok = root_found_writable || root_mount_run("ro");
         }
     }
     pthread_mutex_unlock(&root_lock);

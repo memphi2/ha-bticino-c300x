@@ -35,10 +35,11 @@ static void check(int (*remount)(const char *))
     root_read_only = 1;
     assert(remount("rw") == 1 && remount("ro") == 1);
     assert(strcmp(calls, "rw ro ") == 0 && root_read_only);
-    /* Found writable: not ours to close; the writer hears it stays so. */
+    /* Found writable: not ours to close, and leaving it so is success
+     * (a removal once stopped and asked for a reboot over it). */
     calls[0] = '\0';
     root_read_only = 0;
-    assert(remount("rw") == 1 && remount("ro") == 0);
+    assert(remount("rw") == 1 && remount("ro") == 1);
     assert(strcmp(calls, "") == 0 && !root_read_only);
     /* A later write on a read-only root remounts again. */
     root_read_only = 1;

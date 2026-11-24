@@ -666,7 +666,9 @@ def test_a_busy_agent_during_the_restart_wait_does_not_end_it(monkeypatch):
     """Inside a busy wait further out, a 409 comes straight back; the wait goes on."""
 
     from custom_components.bticino_c300x import qml_patch
-    from custom_components.bticino_c300x.agent_update import async_retry_update_maintenance_busy
+    from custom_components.bticino_c300x.agent_update import (
+        async_retry_update_maintenance_busy,
+    )
     from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
 
     monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)

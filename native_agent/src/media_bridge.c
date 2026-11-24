@@ -2035,23 +2035,24 @@ static bool ring_call_active_locked(const media_bridge_t *bridge) {
 
 static bool request_ring_answer_if_active(media_bridge_t *bridge) {
     bool active;
-    struct timespec deadline;
+    long long deadline = c300x_monotonic_ms() + 2000;
 
     pthread_mutex_lock(&bridge->mutex);
     active = ring_call_active_locked(bridge);
     if (active && !bridge->ring_answered) {
         bridge->ring_answer_requested = true;
         pthread_cond_broadcast(&bridge->ready_cond);
-        clock_gettime(CLOCK_REALTIME, &deadline);
-        deadline.tv_sec += 2;
+        /* Polled on the monotonic clock: ready_cond waits on the wall clock,
+         * and a clock step must neither stretch nor skip this wait. */
         while (
             bridge->ring_call_active
             && !bridge->ring_call_stop
             && !bridge->ring_answered
+            && c300x_monotonic_ms() < deadline
         ) {
-            if (pthread_cond_timedwait(&bridge->ready_cond, &bridge->mutex, &deadline) == ETIMEDOUT) {
-                break;
-            }
+            pthread_mutex_unlock(&bridge->mutex);
+            usleep(10000);
+            pthread_mutex_lock(&bridge->mutex);
         }
     }
     pthread_mutex_unlock(&bridge->mutex);
@@ -2170,6 +2171,7 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
     bridge->ring_last_talkback_ms = 0;
     bridge->ring_srtp_state = NULL;
     reset_backchannel_talkback_locked(bridge);
+    pthread_cond_broadcast(&bridge->ready_cond);
     pthread_mutex_unlock(&bridge->mutex);
     c300x_video_bridge_media_stopped(bridge->video);
     if (was_unanswered) {

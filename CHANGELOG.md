@@ -28,6 +28,10 @@ Station:
   (favourites bar or arrows). The value is stored in Home Assistant and shows
   the same in the integration's options; changing it on either side does not
   reload the integration.
+- **Agenda**, **Leave home** and **Situations** no longer end on a row cut in
+  half: the lists show whole rows, stop on a row and have a thin scroll bar
+  while there is more. On **Leave home** the alarm row and the actions such
+  as "All off" stay fixed under the checks and are fully visible.
 - A display notification now looks like the station's own popups: a grey
   panel on black with the station font and a grey button. The severity shows
   as a small coloured marker instead of colouring the whole box.

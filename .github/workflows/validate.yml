@@ -52,6 +52,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev pkg-config qemu-user
+      - name: Install FFmpeg for the capture tests
+        run: sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Set up pinned TurboJPEG 3
         run: python scripts/setup_turbojpeg.py --github-env
       - name: Validation gates

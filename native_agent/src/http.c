@@ -7073,53 +7073,44 @@ static void handle_text_memo_create(
 {
     char text_b64[1024];
     unsigned char text[C300X_MAX_MEMO_TEXT_LEN + 1];
-    size_t text_len = 0;
-    int read = 0;
-    char entry_name[C300X_MAX_VOICEMAIL_ID_LEN];
+    struct c300x_memo_vendor_text memo;
     char error[C300X_MAX_ERROR_LEN];
     char body[512];
+    int result;
 
     if (!config->memos_enabled || !runtime->text_memos.enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
         return;
     }
+    memset(&memo, 0, sizeof(memo));
     c300x_json_string_field(request->body, "text_b64", text_b64, sizeof(text_b64));
     if (
         text_b64[0] == '\0'
-        || !base64_decode_bytes(text_b64, text, sizeof(text) - 1, &text_len)
+        || !base64_decode_bytes(text_b64, text, sizeof(text) - 1, &memo.text_len)
+        || !c300x_text_memo_normalize(text, &memo.text_len)
     ) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_text\"}\n");
         return;
     }
-    (void)c300x_json_bool_field(request->body, "read", &read);
-    if (!c300x_text_memo_create(
-        runtime->text_memos.root,
-        runtime->text_memos.max_messages,
-        text,
-        text_len,
-        read,
-        entry_name,
-        sizeof(entry_name),
-        error,
-        sizeof(error)
-    )) {
-        if (strcmp(error, "memos_dir_missing") == 0) {
-            send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_dir_missing\"}\n");
+    (void)c300x_json_bool_field(request->body, "read", &memo.read);
+    memo.client_fd = client_fd;
+    memo.owns = c300x_openwebnet_async_owns(&runtime->openwebnet);
+    memo.records_dir = config->memos_records_dir;
+    memo.text_root = runtime->text_memos.root;
+    memo.text = text;
+    result = c300x_memo_vendor_create_text(config, &memo, error, sizeof(error));
+    if (result == C300X_MEMO_VENDOR_REFUSED) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_refused\"}\n");
+        return;
+    }
+    if (result != C300X_MEMO_VENDOR_DONE) {
+        if (error[0] == '\0') {
+            if (c300x_openwebnet_async_refusal(&runtime->openwebnet) != NULL) {
+                c300x_memo_vendor_create_text_abort(&memo);
+            }
             return;
         }
-        if (strcmp(error, "memo_store_full") == 0) {
-            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"memo_store_full\"}\n");
-            return;
-        }
-        if (strcmp(error, "invalid_text") == 0) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_text\"}\n");
-            return;
-        }
-        if (strcmp(error, "invalid_memo_path") == 0) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_memo_path\"}\n");
-            return;
-        }
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_failed\"}\n");
+        send_device_error(client_fd, error);
         return;
     }
     voicemail_refresh_watches(&runtime->text_memos);
@@ -7128,9 +7119,9 @@ static void handle_text_memo_create(
     snprintf(
         body,
         sizeof(body),
-        "{\"ok\":true,\"created\":true,\"id\":\"text/%s\",\"kind\":\"text\",\"read\":%s}\n",
-        entry_name,
-        read ? "true" : "false"
+        "{\"ok\":true,\"created\":true,\"id\":\"text/memo_%d\",\"kind\":\"text\",\"read\":%s}\n",
+        memo.number,
+        memo.read_set ? "true" : "false"
     );
     send_json(client_fd, 201, "Created", body);
 }

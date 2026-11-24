@@ -916,12 +916,19 @@ still shows only once its id is listed there. `/ui/memos` returns the same.
 
 Authentication: normal API token.
 
-Side effects: creates one local text memo.
+Side effects: has the station save one local text memo, the way its own
+display does: the agent writes `message.txt` into `memos.recordsDir`, sends
+`*8*87#4*##`, and `bt_answering_machine` numbers the memo, writes its
+`msg_info.ini` and moves the file in. The agent then sends the display's list
+request `*#8**100#3##`, whose answer the station also sends to the display,
+and for `read: true` marks the memo read with `*#8**#101#3#<n>*1##`.
+A save the station refuses (it is recording, for example) answers
+`502 memo_create_refused`.
 
 Request fields:
 
 ```json
-{"text": "memo text", "read": false}
+{"text_b64": "bWVtbyB0ZXh0", "read": false}
 ```
 
 ### `GET /api/v1/memos/voice/{id}/audio`
@@ -937,6 +944,10 @@ The id is percent-decoded and bounded by `C300X_MAX_VOICEMAIL_ID_LEN`.
 Authentication: normal API token.
 
 Side effects: deletes selected local memos.
+
+The station deletes only memos it has listed since it started; it refuses
+any other one, which answers `502 memo_delete_refused` at once. The video
+message delete answers `502 video_message_delete_refused` the same way.
 
 Request fields:
 

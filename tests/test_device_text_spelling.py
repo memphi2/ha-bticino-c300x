@@ -115,3 +115,46 @@ def test_device_files_only_use_letters_the_station_font_has():
             seen |= {char for char in path.read_bytes().decode("utf-8") if not char.isascii()}
     assert seen, "the display texts carry umlauts and accents"
     assert seen <= LETTERS, sorted(seen - LETTERS)
+
+
+# Labels Home Assistant builds and sends to the station pages.
+HA_FORMER_FR = ["Arrete", "Bloque", "Connecte", "Deconnecte", "Deverrouillage", "Deverrouille", "Ensoleille",
+                "Ferme", "Fumee", "detectee", "detecte", "Grele", "Mise a jour", "Occupe", "Present", "Pret",
+                "Probleme", "Sur", "Verrouille", "Energie", "Reseau", "Decharge", "Cout"]
+
+
+def _label_tables():
+    tables = {}
+    for name in ("dashboard_labels", "dashboard_optional_labels", "dashboard_situations"):
+        path = ROOT / "custom_components/bticino_c300x" / f"{name}.py"
+        source = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"^(_?[A-Z][A-Z0-9_]*_(DE|FR|IT))\b[^\n]*= [{(]\n(.*?)^[})]", source, re.M | re.S):
+            body = match.group(3).encode("utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8") \
+                if "\\u" in match.group(3) and match.group(3).isascii() else match.group(3)
+            values = [value for value in re.findall(r'"((?:[^"\\]|\\.)*)"', body)
+                      if not re.fullmatch(r"[a-z0-9_.{}-]*", value)]
+            tables[f"{name}.{match.group(1)}"] = (match.group(2), values)
+    return tables
+
+
+def test_home_assistant_side_labels_use_umlauts_and_accents():
+    tables = _label_tables()
+    languages = {language for language, _values in tables.values()}
+    assert languages == {"DE", "FR", "IT"} and len(tables) >= 9
+    source = (ROOT / "custom_components/bticino_c300x/dashboard_labels.py").read_text(encoding="utf-8")
+    for proper in ("Öffnet", "Schließt", "Fährt zurück", "Lädt", "Heiß", "Läuft", "Geräusch", "Bewölkt",
+                   "Verrouillé", "Déverrouillé", "Bloqué", "Fermé", "Arrêté", "Présent", "Problème",
+                   "Fumée détectée", "Prêt", "Sûr", "Mise à jour"):
+        assert f'"{proper}"' in source, proper
+    for name, (language, values) in tables.items():
+        for value in values:
+            if language == "DE":
+                assert not GERMAN_STAND_IN.search(value.replace("Aktuell", "")), (name, value)
+            if language == "FR":
+                # "charge" is a real word here ("Ne charge pas").
+                found = [word for word in HA_FORMER_FR + [word for word in FORMER["fr"] if word != "charge"]
+                         if re.search(rf"(?<![^\W\d_]){re.escape(word)}(?![^\W\d_])", value)]
+                assert not found, (name, value)
+            if language == "IT":
+                found = [word for word in FORMER["it"] if re.search(rf"(?<![^\W\d_]){re.escape(word)}(?![^\W\d_])", value)]
+                assert not found, (name, value)

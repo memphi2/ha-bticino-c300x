@@ -333,8 +333,8 @@ def test_the_c100x_reads_its_own_display_mechanism(monkeypatch):
         assert asyncio.run(getattr(flow, f"async_step_{step}_c100x")({"a": 1})) == (step, {"a": 1})
     menu_word = {"base": "main menu", "en": "main menu", "de": "Hauptmenü", "it": "menu principale", "fr": "menu principal"}
     old_words = ("Display patch", "Display-Patch", "patch display", "home page", "Startseite", "pagina iniziale",
-                 "page d'accueil", "Alarm page", "Alarm-Seite", "pagina Allarme", "page Alarme", "Button", "pulsante Allarme",
-                 "bouton Alarme")
+                 "page d'accueil", "Alarm page", "Alarm-Seite", "pagina Allarme", "page Alarme", "Alarm button", "Button Alarm",
+                 "Der Button", "pulsante Allarme", "bouton Alarme")
     for lang in LANGUAGES:
         data = _load(lang)
         for area, step in (("config", "user_dashboard_alarm"), ("config", "reconfigure_dashboard_alarm"),

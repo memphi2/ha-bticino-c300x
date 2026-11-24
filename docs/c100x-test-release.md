@@ -116,7 +116,7 @@ Attachment: ha-bticino-c100x-issue51-local.zip
 SHA256: <all 64 hexadecimal digits of the final ZIP>
 C100X full gate: <result, date, command and retained log reference>
 Browser/package/build-lock checks: <results for this candidate>
-Scope: otherwise stock C100X 1.5.8, agent + stair light + door unlock + display activation by reboot; no other GUI change, no media trial
+Scope: otherwise stock C100X 1.5.8, agent + stair light + door unlock + display activation by reboot + one video stream and one ring call; no other GUI change
 ```
 
 Redact private paths from public log excerpts. Any later source or archive change
@@ -356,7 +356,7 @@ controls are disabled; no microphone request or device command is acceptable.
 Do not replace the missing entity with a different device's camera. This checks
 asset loading/inert UI only, not video, calls, device readiness or C100X GUI support.
 
-Only in a separately approved media phase, select the camera entity belonging to
+For the video step of the agent-only test, select the camera entity belonging to
 the C100X test entry. A conservative card configuration is:
 
 ```yaml

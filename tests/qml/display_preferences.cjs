@@ -321,4 +321,99 @@ for (const data of [{ok: true}, {ok: true, id: "../bad", enabled: true, expires:
     values.feedbackColorsEnabled = true;
     assert.equal(vm.runInContext(color, values), "#ff6b6b");
 }
+
+function alarmPage(api, values) {
+    const noop = () => {};
+    const p = page("Alarm.qml", Object.assign({Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
+        feedbackColorsEnabled: false, status: {heldUntil: 0}, alarmState: {}, activeSince: {},
+        alarmOnline: true, alarmConfigured: true, alarmRawState: "disarmed", alarmCommands: ["arm_home"],
+        alarmCommandDetails: [], selectedCommand: "arm_home", commandPending: false, commandInFlight: false,
+        commandAwaitedState: "", commandFeedback: "", commandFeedbackColor: "", activeFeedbackCommand: "",
+        runtimeGeneration: 0, statusGeneration: 0, pinCode: "", bypassOffered: false, lastStatusRefreshMs: 0,
+        quickActionPending: false, quickActionGeneration: 0,
+        modeFeedbackTimer: {restart: noop}, delayedStatusRefresh: {restart: noop, stop: noop}}, values || {}));
+    p.page = p;
+    return p;
+}
+
+{
+    // A status the user has to read is not replaced by the routine line of
+    // the next status read. It holds for 30 seconds; a new command, another
+    // error or a failed read replace it at once.
+    const {api} = runtime();
+    let now = 1000000;
+    api.clock = () => now;
+    vm.runInContext("Date.now = function() { return clock(); }", api);
+    const p = alarmPage(api);
+    const reads = [];
+    api.getJsonShared = (url, success, failure) => reads.push({success, failure});
+    const connected = () => {
+        api.status(p.status, p, p.alarmState, p.activeSince);
+        reads.pop().success({alarm: {state: "disarmed", commands: ["arm_home"]}});
+    };
+    for (const key of ["alarm_command_error", "pin_required", "not_ready_to_arm"]) {
+        p.setCommandFeedback(key, "arm_home", "#ff6b6b");
+        const shown = p.status.text;
+        connected();
+        assert.equal(p.statusText(), shown, key + " survives the next status read");
+        now += 29000;
+        connected();
+        assert.equal(p.statusText(), shown, key + " is still held after 29 seconds");
+        now += 2000;
+        connected();
+        assert.equal(p.status.text, "ha_connected", key + " gives way after 30 seconds");
+        assert.equal(p.statusText(), "", "and the routine line is hidden with the switch off");
+    }
+    api.setStatus(p.status, "action_error", "#ff6b6b");
+    connected();
+    assert.equal(p.statusText(), "action_error", "the quick-action error is held the same way");
+    p.setCommandFeedback("sending", "arm_home", "#f1c40f");
+    assert.equal(p.status.text, "sending: " + p.commandLabel("arm_home"), "a new command replaces a held error at once");
+    p.commandPending = false;
+    connected();
+    assert.equal(p.status.text, "ha_connected", "and nothing is held after it");
+    p.setCommandFeedback("alarm_command_error", "arm_home", "#ff6b6b");
+    p.setCommandFeedback("pin_required", "arm_home", "#f1c40f");
+    assert.match(p.status.text, /^pin_required/, "a newer prompt replaces the error");
+    api.status(p.status, p, p.alarmState, p.activeSince);
+    reads.pop().failure("API error: 503");
+    assert.equal(p.statusText(), "status_error (503)", "a failed read replaces a held status");
+    p.alarmOnline = true;
+    connected();
+    assert.equal(p.status.text, "ha_connected", "and is itself not held once Home Assistant answers again");
+    api.setStatus(p.status, "", "#ff6b6b");
+    assert.equal(p.status.heldUntil, 0, "an empty line holds nothing");
+    const alarm = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");
+    assert.match(alarm, /function aboutToShow\(\) \{[^}]*status\.heldUntil = 0/, "opening the page starts fresh");
+}
+
+{
+    // The Home Assistant page has the same rule for its header line.
+    const {api} = runtime();
+    let now = 1000000;
+    api.clock = () => now;
+    vm.runInContext("Date.now = function() { return clock(); }", api);
+    const p = page("HomeAssistant.qml", {Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
+        feedbackColorsEnabled: true, status: {heldUntil: 0}, selectedItem: null,
+        runtimeGeneration: 0, dashboardLoading: false, dashboardRefreshAgain: false,
+        currentPageIndex: 0, pageCount: 1, dashboardPages: [{items: []}]});
+    p.page = p;
+    const queued = [];
+    api.getJson = (url, success, failure) => queued.push({success, failure});
+    const loaded = () => { api.dashboard(p.status, p); queued.shift().success({data: {pages: [{items: []}]}}); };
+    api.setStatus(p.status, "action_error", "#ff6b6b");
+    loaded();
+    assert.equal(p.statusText(), "action_error", "an action error survives the next board read");
+    now += 31000;
+    loaded();
+    assert.equal(p.statusText(), "board_loaded");
+    api.dashboard(p.status, p);
+    queued.shift().failure("offline");
+    assert.equal(p.statusText(), "stale_state");
+    loaded();
+    assert.equal(p.statusText(), "board_loaded", "the offline line goes as soon as a read works again");
+    const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
+    assert.match(qml, /uiText\("stale_state"\), "#f1c40f", false, true\)/, "a lost event stream is a read result too");
+    assert.match(qml, /function aboutToShow\(\) \{[^}]*status\.heldUntil = 0/);
+}
 console.log("display preferences: persistence protocol, lifecycle and feedback isolation passed");

@@ -1,7 +1,12 @@
 .pragma library
 
-function setStatus(statusItem, text, color, optionalFeedback) {
-    statusItem.optionalFeedback = optionalFeedback === true
+function setStatus(statusItem, text, color, optionalFeedback, fromRead) {
+    var routine = optionalFeedback === true
+    if (fromRead === true && routine && statusItem.heldUntil > Date.now()) return
+    if (statusItem.heldUntil !== undefined) {
+        statusItem.heldUntil = !routine && fromRead !== true && text ? Date.now() + 30000 : 0
+    }
+    statusItem.optionalFeedback = routine
     statusItem.text = text
     statusItem.color = color
 }
@@ -195,7 +200,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
             pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         }
         setStatus(statusItem, uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected"),
-            pageItem.commandPending ? "#f1c40f" : "#58d68d", true)
+            pageItem.commandPending ? "#f1c40f" : "#58d68d", true, true)
         if (data.alarm && data.alarm.state) {
             var previousState = pageItem.alarmRawState
             var previousCommand = pageItem.selectedCommand
@@ -257,7 +262,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         // such as "API error: 503" in a translated interface. The code stays
         // visible because it names the cause exactly, but the sentence around
         // it is the user's language.
-        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b")
+        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b", false, true)
         if (pageItem.setAlarmDelayRemaining) {
             pageItem.setAlarmDelayRemaining(0)
         }
@@ -290,7 +295,7 @@ function dashboard(statusItem, pageItem) {
         }
         pageItem.dashboardOnline = true
         if (data && data.not_modified === true) {
-            setStatus(statusItem, uiText(pageItem, "board_loaded"), "#58d68d", true)
+            setStatus(statusItem, uiText(pageItem, "board_loaded"), "#58d68d", true, true)
             finishDashboardRefresh(statusItem, pageItem)
             return
         }
@@ -312,9 +317,9 @@ function dashboard(statusItem, pageItem) {
         if (pageItem.currentPageIndex >= pages.length) {
             pageItem.currentPageIndex = 0
         }
-        loadDashboardPage(statusItem, pageItem)
+        loadDashboardPage(statusItem, pageItem, true)
         setStatus(statusItem, uiText(pageItem, pages.length > 0 ? "board_loaded" : "no_dashboard_pages"),
-            pages.length > 0 ? "#58d68d" : "#f1c40f", pages.length > 0)
+            pages.length > 0 ? "#58d68d" : "#f1c40f", pages.length > 0, true)
         if (pageItem.refreshSelectedItem) pageItem.refreshSelectedItem()
         finishDashboardRefresh(statusItem, pageItem)
     }, function(error) {
@@ -325,7 +330,7 @@ function dashboard(statusItem, pageItem) {
         pageItem.watchFailed = true
         dashboardRevision = ""
         if (!pageItem.controlInFlight) clearPendingControl(pageItem)
-        setStatus(statusItem, uiText(pageItem, "stale_state"), "#f1c40f")
+        setStatus(statusItem, uiText(pageItem, "stale_state"), "#f1c40f", false, true)
     })
 }
 
@@ -1112,7 +1117,7 @@ function assignDashboardValue(target, key, value) {
     target[key] = value
 }
 
-function loadDashboardPage(statusItem, pageItem) {
+function loadDashboardPage(statusItem, pageItem, fromRead) {
     var pageData = currentDashboardPage(pageItem)
     var energy = pageData.energy && isList(pageData.energy.views) ? pageData.energy : null
     assignDashboardValue(pageItem, "badges", listOrEmpty(pageData.badges))
@@ -1130,7 +1135,7 @@ function loadDashboardPage(statusItem, pageItem) {
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {
         setStatus(statusItem, uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1)
-            + " " + uiText(pageItem, "status_loaded"), "#58d68d", true)
+            + " " + uiText(pageItem, "status_loaded"), "#58d68d", true, fromRead === true)
     }
 }
 

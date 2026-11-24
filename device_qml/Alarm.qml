@@ -67,6 +67,7 @@ Page {
     function aboutToShow() {
         c300xDisplayPreferences.load()
         pageActive = true
+        status.heldUntil = 0
         activeFeedbackCommand = ""
         clearCommandFeedback()
         refreshAlarmStatus(false)
@@ -824,6 +825,7 @@ Page {
                     property string text: ""
                     property color color: "#c7d0d9"
                     property bool optionalFeedback: false
+                    property double heldUntil: 0
                     width: parent.width
                     height: 38
                     clip: true

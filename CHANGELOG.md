@@ -28,6 +28,10 @@ Station:
   (favourites bar or arrows). The value is stored in Home Assistant and shows
   the same in the integration's options; changing it on either side does not
   reload the integration.
+- An error, warning or PIN prompt on the **Alarm** page and in the header of
+  the **Home Assistant** page is no longer replaced at once by the routine
+  line of the next status read ("Connected", "loaded"). It stays for 30
+  seconds unless a new command, a newer message or a failed read replaces it.
 - The energy page no longer writes "Unable to assign [undefined]" lines to the
   station log when its boxes change.
 - The texts of the station pages are spelled properly in German, Italian and

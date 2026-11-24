@@ -56,6 +56,8 @@ Fixed:
   picture, and the camera no longer stays streaming after the hang-up. A
   failed stream start no longer leaves the card busy, and a ring call this
   browser answered keeps its hang-up button after a reload or lost connection.
+- The doorbell card no longer grows for a moment when a stream starts over
+  plain HTTP or shows a long message; notices and errors fit the footer.
 - All display pages follow a changed `listen.uiPort`. Under 2.9.0 the HA and
   Alarm pages, the home buttons, alerts, memo sync and the touch tone still
   needed port 8090. After a port change, restart the agent and reapply the

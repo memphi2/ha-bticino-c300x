@@ -80,7 +80,15 @@ static int start_job(struct c300x_command_job *job, const char *program,
     for (int fd = STDERR_FILENO + 1; fd < fd_limit; fd++) {
         error |= posix_spawn_file_actions_addclose(&actions, fd);
     }
-    error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
+    {
+        /* The agent ignores SIGPIPE, and an ignored signal stays ignored
+         * across exec: scripts and their pipelines get the default back. */
+        sigset_t defaults;
+        sigemptyset(&defaults);
+        sigaddset(&defaults, SIGPIPE);
+        error |= posix_spawnattr_setsigdefault(&attr, &defaults);
+    }
+    error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
     error |= posix_spawnattr_setpgroup(&attr, 0);
     if (error == 0) {
         c300x_command_job_init(job);

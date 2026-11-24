@@ -893,12 +893,12 @@ release the socket and file.
 
 Authentication: normal API token.
 
-Side effects: deletes selected local video messages.
+Side effects: deletes one local video message.
 
 Request fields:
 
 ```json
-{"ids": ["message-id"]}
+{"id": "message_1"}
 ```
 
 ### `GET /api/v1/memos`
@@ -923,7 +923,14 @@ display does: the agent writes `message.txt` into `memos.recordsDir`, sends
 request `*#8**100#3##`, whose answer the station also sends to the display,
 and for `read: true` marks the memo read with `*#8**#101#3#<n>*1##`.
 A save the station refuses (it is recording, for example) answers
-`502 memo_create_refused`.
+`502 memo_create_refused`. Further `502` errors of this route:
+
+| `error` | Meaning |
+| --- | --- |
+| `memo_records_dir_missing` | The records directory is missing and could not be created or opened to the station. Nothing was sent. |
+| `memo_create_failed` | `message.txt` could not be written. Nothing was sent. |
+| `memo_list_unreadable` | The station answered the list request with something the agent cannot read. |
+| `memo_create_unconfirmed` | The station acknowledged the save, but its list names no new memo. |
 
 Request fields:
 
@@ -943,7 +950,7 @@ The id is percent-decoded and bounded by `C300X_MAX_VOICEMAIL_ID_LEN`.
 
 Authentication: normal API token.
 
-Side effects: deletes selected local memos.
+Side effects: deletes one local memo.
 
 The station deletes only memos it has listed since it started; it refuses
 any other one, which answers `502 memo_delete_refused` at once. The video
@@ -952,7 +959,7 @@ message delete answers `502 video_message_delete_refused` the same way.
 Request fields:
 
 ```json
-{"ids": ["memo-id"]}
+{"id": "text/memo_1"}
 ```
 
 ## Media and Calls
@@ -1005,7 +1012,17 @@ Request fields:
 {"audio": true}
 ```
 
-The endpoint may return `409 Conflict` when another media owner is active.
+The endpoint may return `409 Conflict` with `external_session_active` when
+another media owner is active, for example a call answered on the station's
+display; that guard lasts for the whole display call (at least 65 s, renewed by
+each view frame) unless the call's end frame clears it earlier.
+
+While the station is busy it answers `503` with `error`
+`video_activate_failed` and `last_error` `station_busy`, and does not call
+the station; an RTSP `PLAY` that would start on-demand media
+gets `503` (reason `ondemand_start_refused`). The guard is set when the
+station answers the on-demand call with `486 Busy`, lasts up to 65 s and is
+freed at once by the next call-end bus frame.
 
 ### `POST /api/v1/video/doorbell/actions/stop`
 
@@ -1656,7 +1673,10 @@ can repeat from any point where it was cut off:
    changed. Without the marker (a write of agent 2.9.0 or older, which kept
    no list): only copies proven complete are moved back, i.e. byte-equal to
    the stock backup of that file, to the agent's own source of a generated
-   file, or to the file in place. If any copy cannot be proven, the directory
+   file, or to the file in place. When a display file is newer than that
+   directory, a later write has replaced the files since, and the proven
+   copies are dropped instead of moved back (a restore that already started
+   is finished). If any copy cannot be proven, the directory
    stays, the GUI is left as it is and the leftover is reported `stuck` for
    good; remove the directory by hand once the display works.
 2. Restart the GUI, only when step 1 changed a file. A marker file in the

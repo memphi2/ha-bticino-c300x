@@ -37,10 +37,14 @@ def reconcile_due(camera: Any, entry_id: str) -> bool:
     pending = agent_restart_pending(camera)
     # RTSP_BUSY comes from client counts alone: no agent event ends it, so a
     # count read mid-start would hold it after the last session is gone.
+    # EXTERNAL_MEDIA_ACTIVE ends with the display call's bus end frame; when
+    # that frame is lost the agent's guard expires without an event. The
+    # status read keeps it while the agent still reports the display call.
     return (
         pending
         or bool(camera._webrtc_sessions.active)
-        or camera._last_media_state is MediaState.RTSP_BUSY
+        or camera._last_media_state
+        in (MediaState.RTSP_BUSY, MediaState.EXTERNAL_MEDIA_ACTIVE)
     )
 
 

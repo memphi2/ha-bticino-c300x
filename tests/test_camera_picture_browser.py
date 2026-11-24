@@ -106,19 +106,30 @@ document.documentElement.dataset.testResult="passed";
 </script>""")
 
 
-def test_picture_panel_lets_the_live_picture_show_through(tmp_path: Path):
-    _run_page(tmp_path, """<!doctype html><c300x-picture-controls></c300x-picture-controls>
+def _check_panel_surface(tmp_path: Path, live: bool) -> None:
+    attribute = " live" if live else ""
+    expected = ("Number(alpha) > 0 && Number(alpha) <= 0.6 && style.textShadow !== 'none'" if live
+                else "alpha === '1' && style.backgroundColor === 'rgb(32, 33, 36)' && style.textShadow === 'none'")
+    _run_page(tmp_path, f"""<!doctype html><c300x-picture-controls{attribute}></c300x-picture-controls>
 <script type="module">
 import "./c300x-picture-controls.js";
 const el = document.querySelector("c300x-picture-controls");
-el.configure({language:"en", callWS: async () => ({response:{brightness:50,contrast:50,saturation:50}})},"entry","ring");
+el.configure({{language:"en", callWS: async () => ({{response:{{brightness:50,contrast:50,saturation:50}}}})}},"entry","ring");
 el.button.click();
 await new Promise(r => setTimeout(r));
 const style = getComputedStyle(el.panel);
 const alpha = (/rgba?\\(([^)]*)\\)/.exec(style.backgroundColor)?.[1].split(/[\\s,/]+/).filter(Boolean)[3]) ?? "1";
-const check = (test, name) => { if (!test) throw Error("picture panel check failed: " + name + " " + style.backgroundColor); };
+const check = (test, name) => {{ if (!test) throw Error("picture panel check failed: " + name + " " + style.backgroundColor); }};
 check(!el.panel.hidden, "open");
-check(Number(alpha) > 0 && Number(alpha) <= 0.6, "translucent");
-check(style.textShadow !== "none", "text shadow");
+check({expected}, "surface");
 document.documentElement.dataset.testResult="passed";
 </script>""")
+
+
+def test_picture_panel_stays_opaque_without_a_live_picture(tmp_path: Path):
+    # A ring session can show the panel over the empty text or the media toolbar.
+    _check_panel_surface(tmp_path, live=False)
+
+
+def test_picture_panel_lets_the_live_picture_show_through(tmp_path: Path):
+    _check_panel_surface(tmp_path, live=True)

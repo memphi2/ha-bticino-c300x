@@ -27,6 +27,9 @@ export async function checkPictureControls(page) {
   await page.waitForFunction(() => !lab.picture.hidden);
   await (await page.evaluateHandle(() => lab.picture.button)).click();
   await page.waitForFunction(() => !lab.picture.inputs[0].disabled);
+  // No picture plays: the panel must hide the empty text and toolbar under it.
+  assert.deepEqual(await page.evaluate(() => [lab.picture.hasAttribute("live"),
+    getComputedStyle(lab.picture.panel).backgroundColor]), [false, "rgb(32, 33, 36)"]);
   for (const [width, fraction] of [[180, 0.8], [200, 0.2], [640, 0.7]]) {
     await page.evaluate(w => { document.querySelector("#mount").style.width = w + "px"; }, width);
     for (const key of ["brightness", "contrast", "saturation"]) {
@@ -59,6 +62,8 @@ export async function checkPictureControls(page) {
   await page.waitForFunction(() => !lab.picture.hidden);
   await (await page.evaluateHandle(() => lab.picture.button)).click();
   await page.waitForFunction(() => !lab.picture.panel.hidden);
+  await page.waitForFunction(() => lab.picture.hasAttribute("live")
+    && getComputedStyle(lab.picture.panel).backgroundColor === "rgba(32, 33, 36, 0.5)");
   await page.evaluate(() => {
     lab.deliverPicture("on_demand_active", true, "ring");
     lab.deliverPicture("on_demand_active", true, "ring_and_on_demand");

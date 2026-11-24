@@ -19,7 +19,8 @@ a safe audio backend continues separately; no unsupported audio path is enabled.
 
 The first authorized device test should establish agent startup, authenticated
 status/setup reads, model/firmware reporting, discovery, and continued vendor
-operation. It is not a display, routing migration, camera or audio trial.
+operation, plus one on-demand video stream and one ring call (video is on after
+bootstrap, as on a C300X). It is not a display, routing migration or audio trial.
 
 **Test baseline:** use C100X firmware 1.5.8 in its normal manufacturer
 configuration, with at most the changes needed to obtain root/SSH access.
@@ -159,7 +160,7 @@ symlink targets. Do not dereference links while recording their identity.
 | `/etc/rc5.d/S40c300x-native-agent` | Creates/replaces the link to `/etc/init.d/c300x-native-agent`. Record a pre-existing link's literal target, not only its referent. |
 | `/etc/network/if-pre-up.d/iptables` | If present, adds/replaces the managed IPv4 block and retains file metadata. If absent, remains absent. |
 | `/home/bticino/cfg/extra/c300x-device-file-backups/` | May gain `original/etc/network/if-pre-up.d/iptables` and parent directories. A new managed firewall backup is mode 0600 and omits managed blocks; it is **not** the exact pre-test firewall snapshot. Preserve any older recovery data. |
-| Live IPv4 INPUT rules | With the vendor hook present, a fresh C100X install adds only the configured API port (default TCP 8091). A reinstall preserving `video.enabled: true` also adds the configured RTSP port (default TCP 6554) and talkback (UDP 40004). Without the hook, no live rules change. |
+| Live IPv4 INPUT rules | With the vendor hook present, a fresh C100X install adds, as on a C300X, the configured API port (default TCP 8091), the RTSP port (default TCP 6554) and talkback (UDP 40004). A reinstall that keeps an explicit `video.enabled: false` adds only the API port. Without the hook, HA leaves the live rules alone. |
 | Agent runtime | Restarts only the native agent, writes/removes its PID file in its directory; completing HA setup can save callback configuration there. |
 | Staging | Uploads use `.new`; init uses `.c300x-native-agent-init.new` and `/etc/init.d/c300x-native-agent.new`. Firewall staging uses unique sibling files and `/tmp/c300x-firewall*` files. Inspect unexpected leftovers; never wildcard-delete them. |
 
@@ -399,24 +400,22 @@ startup integration and, by its current default, the firewall allowance; it
 starts/restarts the **agent**, not the vendor GUI. Review these writes explicitly.
 The C100X bootstrap must leave legacy MQTT/Companion migration untouched.
 
-Fresh C100X agent configuration and HA feature selection both default video to
-off. A reinstall preserves an explicit agent video setting; the HA form's
-default does not override an already enabled agent. Bootstrap uses the merged
-agent configuration for both its persistent IPv4 block and its live rule
-additions. It does not remove previously open live ports. Automatic media-user
-creation also defaults to off.
-Submitting the initial form unchanged does not enable media or provision SIP
-users. Enabling video alone does not authorize automatic SIP-user creation;
-that requires a separate explicit choice during an agreed later media trial.
+A fresh C100X agent configuration has video on, as on a C300X. A reinstall
+preserves an explicit agent video setting. Bootstrap uses the merged agent
+configuration for both its persistent IPv4 block and its live rule additions;
+it does not remove previously open live ports. The HA feature form still asks
+on a C100X before Home Assistant uses media: video and automatic media-user
+creation start unticked there. Submitting the form unchanged does not provision
+SIP users; enabling video alone does not authorize automatic SIP-user creation.
 Options and reconfiguration preserve a previously saved choice; switching video
 on does not silently turn a saved refusal or an absent permission into approval.
 
 1. Install the approved package on the isolated HA test instance; authorize only
    the agreed C100X host. Leave GUI/display installation disabled.
 2. After agent installation, pause at feature selection for the first inspection.
-   Leave video/audio, display and media-user creation disabled. After confirming
-   the host/model and unchanged vendor operation, finish setup with those features
-   off; do not invoke device actions or MQTT migration. If setup or a Repair demands
+   Turn video on and allow the media user; leave display installation disabled.
+   After confirming the host/model and unchanged vendor operation, finish setup;
+   do not invoke device actions or MQTT migration. If setup or a Repair demands
    a routing/user change, stop instead of accepting it to complete the wizard.
 3. Check authenticated setup/status, C100X/1.5.8 identity, discovery and available
    capabilities. Display/mute/key-tone/GUI-restart capabilities must remain false
@@ -434,6 +433,9 @@ on does not silently turn a saved refusal or an absent permission into approval.
    (the boot link starts the agent early) show that it came up with that boot.
    A value close to the station's uptime means a later manual start, not
    reboot persistence; `uptime_seconds` far below it means it restarted since.
+6. **Video.** Video is on after bootstrap. Start one on-demand stream from the HA
+   card and check picture and sound; then ring from the outdoor station and
+   answer the call in HA. Report both separately, with the agent diagnostics.
 
 ## Display Activation by Reboot (device test)
 

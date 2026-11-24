@@ -1367,8 +1367,9 @@ def test_merge_existing_device_config_keeps_device_owned_sections() -> None:
 
 
 @pytest.mark.parametrize(("kind", "existing", "expected"), [
-    ("qt5_ondisk", None, False),
-    ("qt5_ondisk", {"video": {"rtsp": {"port": 7654}}}, False),
+    ("qt5_ondisk", None, True),
+    # An existing video section is kept as it is, as on a C300X.
+    ("qt5_ondisk", {"video": {"rtsp": {"port": 7654}}}, None),
     ("qt5_ondisk", {"video": {"enabled": True}}, True),
     ("qt5_ondisk", {"video": {"enabled": True, "rtsp": {"port": 7654}}}, True),
     ("qt5_ondisk", {"video": {"enabled": False}}, False),
@@ -1400,11 +1401,11 @@ def test_bootstrap_firewall_uses_final_device_video_config(monkeypatch, kind, ex
     )
     config, = configs
     command, = [cmd for cmd in commands if "/bootstrap_firewall.sh " in cmd]
-    assert config["video"]["enabled"] is expected
+    assert config["video"].get("enabled") is expected
     if kind == "qt5_ondisk":
-        assert f"C300X_VIDEO_ENABLED={int(expected)} " in command
+        assert f"C300X_VIDEO_ENABLED={int(bool(expected))} " in command
         if expected:
-            port = existing["video"].get("rtsp", {}).get("port", 6554)
+            port = (existing or {}).get("video", {}).get("rtsp", {}).get("port", 6554)
             assert f"C300X_RTSP_PORT={port} " in command
         else:
             assert "C300X_RTSP_PORT=" not in command

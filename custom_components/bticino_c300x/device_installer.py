@@ -239,7 +239,7 @@ def _install_device_agent_sync(
             raise C300XDeviceInstallError("device_install_verify_failed")
         manage_firewall = request.apply_firewall_patch and _firewall_hook_present_sync(client)
         c100x = kind == "qt5_ondisk"
-        merged_config = _merge_existing_device_config(config_bytes, existing, c100x=c100x)
+        merged_config = _merge_existing_device_config(config_bytes, existing)
         merged_config = _apply_qt5_low_res_video_default(kind, merged_config)
         if request.apply_firewall_patch and not manage_firewall:
             config = json.loads(merged_config)
@@ -578,19 +578,15 @@ def _read_remote_config_sync(client: _DeviceSshClient, remote_path: str) -> Any:
         raise C300XDeviceInstallError("device_install_failed") from err
 
 
-def _merge_existing_device_config(template: bytes, existing: Any, *, c100x: bool = False) -> bytes:
+def _merge_existing_device_config(template: bytes, existing: Any) -> bytes:
     """Return the template with the device-owned sections of the old config."""
 
-    if not c100x and not isinstance(existing, dict):
+    if not isinstance(existing, dict):
         return template
     config = json.loads(template)
     for section in _DEVICE_OWNED_CONFIG_SECTIONS:
-        if isinstance(existing, dict) and isinstance(existing.get(section), dict):
+        if isinstance(existing.get(section), dict):
             config[section] = existing[section]
-    if c100x:
-        old_video = existing.get("video") if isinstance(existing, dict) else None
-        if not isinstance(old_video, dict) or "enabled" not in old_video:
-            config["video"] = {**config.get("video", {}), "enabled": False}
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 

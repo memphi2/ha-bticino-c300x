@@ -46,7 +46,7 @@ def _live(tmp_path: Path) -> Path:
 
 
 @pytest.mark.parametrize(("c100x", "enabled", "want_media"), [
-    (True, None, False), (True, "0", False), (True, "1", True), (False, None, True),
+    (True, None, True), (True, "0", False), (True, "1", True), (False, None, True),
 ])
 def test_bootstrap_media_policy_matches_live_and_persistent_rules(
     tmp_path, c100x, enabled, want_media,

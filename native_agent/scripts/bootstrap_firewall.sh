@@ -8,13 +8,7 @@ BACKUP="${C300X_IPTABLES_BACKUP:-/home/bticino/cfg/extra/c300x-device-file-backu
 PORT="${C300X_API_PORT:-${1:-}}"
 RTSP_PORT="${C300X_RTSP_PORT:-${2:-6554}}"
 TALKBACK_RTP_PORT="${C300X_TALKBACK_RTP_PORT:-${3:-40004}}"
-# A direct invocation has no merged HA config. On a C100X require an explicit
-# opt-in for media; keep the historical C300X default.
-if [ -e "${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}" ]; then
-    VIDEO_ENABLED="${C300X_VIDEO_ENABLED:-0}"
-else
-    VIDEO_ENABLED="${C300X_VIDEO_ENABLED:-1}"
-fi
+VIDEO_ENABLED="${C300X_VIDEO_ENABLED:-1}"
 BEGIN="# c300x-native-agent firewall begin"
 END="# c300x-native-agent firewall end"
 IPV6_BEGIN="# c300x-native-agent ipv6 firewall begin"

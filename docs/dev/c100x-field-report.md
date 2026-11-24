@@ -44,9 +44,10 @@ The station used WLAN and root2 SSH; HA was Container 2026.11.2 with Python
 - The tested package enabled video and opened media ports at bootstrap. RTSP
   listening is not evidence of successful video. The reporter did not start a
   stream, and a second SIP session can conflict with Companion.
-  On this branch fresh C100X bootstrap writes `video.enabled: false`. With
-  a supported hook it requests only the API port; it neither closes old live
-  rules nor overrides an explicit existing video choice. Separately, the
+  The owner decided that video is a core function: a fresh C100X bootstrap
+  writes `video.enabled: true` and opens the media ports exactly as on a C300X.
+  An explicit existing video choice is kept, and old live rules are not
+  closed. Separately, the
   contributor reports quality `#0` was ACKed but sent no RTP to the external
   destination, while `#1` gave 640x480. That agrees with the enforced Qt5
   low selector, not proof of an agent RTSP stream, capture, or talkback.

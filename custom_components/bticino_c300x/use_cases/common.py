@@ -33,12 +33,12 @@ MEDIA_PLAYER_DOMAIN = "media_player"
 MEDIA_PLAYER_PLAY_MEDIA_SERVICE = "play_media"
 
 
-async def raise_agent_command_failed(awaitable: Awaitable[Any], *, entry: Any) -> None:
-    """Run an agent command and translate failures into HA service errors."""
+async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) -> T:
+    """Run an agent command, return its result, translate failures into HA service errors."""
 
     runtime = getattr(entry, "runtime_data", None)
     try:
-        await awaitable
+        return await awaitable
     except C300XAgentApiAuthError as err:
         ensure_current_runtime(entry, runtime)
         if runtime is None:

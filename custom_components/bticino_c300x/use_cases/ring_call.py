@@ -25,7 +25,9 @@ class RingCallUseCase:
         ensure_doorbell_call_supported(self._entry)
         runtime = self._entry.runtime_data
         ensure_current_runtime(self._entry, runtime)
-        status = await runtime.api.async_doorbell_video_status()
+        status = await raise_agent_command_failed(
+            runtime.api.async_doorbell_video_status(), entry=self._entry,
+        )
         ensure_current_runtime(self._entry, runtime)
         await async_ensure_doorstation_audio_gain(self._entry, status=status)
         ensure_current_runtime(self._entry, runtime)

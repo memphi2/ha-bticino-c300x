@@ -2,10 +2,12 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from http.client import RemoteDisconnected
 from pathlib import Path
 
@@ -26,8 +28,11 @@ def binary(request, tmp_path_factory):
     (build / "bin/gui").mkdir(parents=True)
     for path in ("bin/bt_daemon", "bin/gui/BtClass"):
         (build / path).symlink_to(Path(sys.executable).resolve())
+    # The station's /bin/sh is bash; its argv[0] stays the shell path, as there.
+    shell = build / "sh"
+    shell.symlink_to(Path(shutil.which("bash")).resolve())
     wrapper = build / "bin/BtClass_qws"
-    wrapper.write_text('#!/bin/sh\n./bin/gui/BtClass -c "$GUI_CLIENT" &\nwait\n')
+    wrapper.write_text(f'#!{shell}\n./bin/gui/BtClass -c "$GUI_CLIENT" &\nwait\n')
     wrapper.chmod(0o755)
     flags = ("-std=c11 -O2 -Wall -Wextra -Werror -pedantic "
              "-D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L "
@@ -36,7 +41,7 @@ def binary(request, tmp_path_factory):
              '-DC300X_SSH_STATUS_COMMAND=\\\"./status-test.sh\\\" '
              '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\" '
              '-DC300X_SSH_COMMAND_TIMEOUT_MS=2000 -DC300X_SSH_STATUS_TIMEOUT_MS=2000')
-    flags += (f' -DC300X_GUI_HOME=\\"{build}\\" -DC300X_GUI_INIT_PID={os.getpid()}'
+    flags += (f' -DC300X_GUI_HOME=\\"{build}\\" -DC300X_GUI_SHELL=\\"{shell}\\" -DC300X_GUI_INIT_PID={os.getpid()}'
               f' -DC300X_GUI_UID={os.getuid()} -DC300X_GUI_GID={os.getgid()}')
     if request.param:
         flags += " -fsanitize=address,undefined -fno-omit-frame-pointer"
@@ -154,14 +159,66 @@ def test_stock_gui_accepts_only_one_or_two_pinned_daemons(lab):
 def test_reload_requires_exact_immutable_wrapper(lab):
     ui = {"X-C300X-UI": "settings-v1"}
     home = Path(lab.process.args[0]).parents[1]
-    wrapper = str(home / "bin/BtClass_qws")
+    wrapper, shell = str(home / "bin/BtClass_qws"), str(home / "sh")
     # The fixture's init anchor is this test process. Direct child, no daemon.
-    assert display(lab, launcher=["/bin/sh", wrapper], **ui)["ok"]
-    for launcher in (["/bin/sh", wrapper, "extra"],
-                     ["/bin/sh", "-c", './bin/gui/BtClass -c "$GUI_CLIENT" & wait']):
+    assert display(lab, launcher=[shell, wrapper], **ui)["ok"]
+    for launcher in ([shell, wrapper, "extra"],
+                     [shell, "-c", './bin/gui/BtClass -c "$GUI_CLIENT" & wait']):
         assert display(lab, launcher=launcher, status=403, **ui)["ok"] is False
     (lab.root / "firmware-writable").touch()
-    assert display(lab, launcher=["/bin/sh", wrapper], status=403, **ui)["ok"] is False
+    assert display(lab, launcher=[shell, wrapper], status=403, **ui)["ok"] is False
+
+
+def qt5_start_script(lab):
+    """The Qt 5 start script exactly as qml_patch.sh generates it from a stock one."""
+    home = Path(lab.process.args[0]).parents[1]
+    source = (ROOT / "native_agent/scripts/qml_patch.sh").read_text()
+    generator = re.search(r"^qt5_wrapper_text\(\) \{\n.*?^\}\n", source, re.S | re.M).group(0)
+    stock = lab.root / "stock-wrapper"
+    stock.write_text(f"#!{home / 'sh'}\n./bin/gui/BtClass &\nwait\n")
+    for name in ("overlay.so", "overlay.rcc"):
+        (lab.root / name).write_bytes(b"")
+    env = {**os.environ, "QT5_OVERLAY_LIB": str(lab.root / "overlay.so"),
+           "QT5_RCC": str(lab.root / "overlay.rcc"), "QT5_LOG": str(lab.root / "display-qt5.log"),
+           "QT5_BOOT_ID": str(lab.root / "boot_id")}
+    text = subprocess.run(["sh", "-c", generator + 'qt5_wrapper_text "$1"', "sh", str(stock)],
+                          env=env, check=True, capture_output=True, text=True).stdout
+    assert "{ { LD_PRELOAD=" in text and "} 3>&1 &" in text
+    return text.replace("./bin/gui/BtClass", './bin/gui/BtClass -c "$GUI_CLIENT"')
+
+
+@contextmanager
+def start_script(lab, text):
+    wrapper = Path(lab.process.args[0]).parents[1] / "bin/BtClass_qws"
+    stock = wrapper.read_text()
+    wrapper.write_text(text)
+    try:
+        yield
+    finally:
+        wrapper.write_text(stock)
+
+
+def test_qt5_start_script_runs_the_display_in_a_station_launch(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    home = Path(lab.process.args[0]).parents[1]
+    rc = lab.root / "display-qt5.log.rc"
+    with start_script(lab, qt5_start_script(lab)):
+        # At boot bt_daemon runs bin/BtClass_qws; reload_gui runs the absolute path under init.
+        for launcher in (SUPERVISOR, [str(home / "sh"), str(home / "bin/BtClass_qws")]):
+            rc.unlink(missing_ok=True)
+            assert display(lab, launcher=launcher, **ui)["ok"]
+            assert rc.read_text() == "0\n"
+
+
+def test_qt5_start_script_with_one_more_fork_is_not_a_station_launch(lab):
+    ui = {"X-C300X-UI": "settings-v1"}
+    home = Path(lab.process.args[0]).parents[1]
+    text = qt5_start_script(lab).replace("{ { LD_PRELOAD=", "{ { ( LD_PRELOAD=")
+    text = text.replace("3>&-; echo $?", "3>&-; true; ); echo $?")
+    with start_script(lab, text):
+        for launcher in (SUPERVISOR, [str(home / "sh"), str(home / "bin/BtClass_qws")]):
+            assert display(lab, launcher=launcher, status=403, **ui)["error"] == "display_maintenance_denied"
+    assert (lab.root / "display-qt5.log.rc").read_text() == "0\n"
 
 
 def test_gui_peer_checks_all_production_credential_fields(tmp_path):

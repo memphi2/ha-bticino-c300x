@@ -1794,10 +1794,14 @@ The socket must belong to UID 0. The GUI and wrapper must have root real,
 effective, saved and filesystem UIDs and GIDs. Stock SysV startup runs
 `bin/bt_daemon` from `/home/bticino`; its GUI entry in `stack_open.xml`
 starts `bin/BtClass_qws`, whose shell waits for its direct `bin/gui/BtClass`
-child. The alternate launch from `qml_patch.sh reload_gui` uses the absolute
-wrapper path and is accepted once init has adopted the wrapper. Both paths
-require the expected shell, working directory, complete wrapper argv and open
-script inode, with read-only firmware files. A standalone GUI process, an
+child. The Qt 5 display pages' start script runs `bin/gui/BtClass` inside a
+pipeline instead, so up to two forks of the wrapper shell may sit between the
+two; each must carry the same shell, working directory, wrapper argv and
+credentials as the wrapper above it. The alternate launch from
+`qml_patch.sh reload_gui` uses the absolute wrapper path and is accepted once
+init has adopted the wrapper. Both paths require the expected shell, working
+directory, complete wrapper argv and open script inode on the wrapper itself,
+with read-only firmware files. A standalone GUI process, an
 ambiguous instance or incomplete process evidence is denied, even with the
 header. This identifies a local privileged process, not a physical gesture,
 and does not protect against another root process. A scheduled reboot or removal returns 202:

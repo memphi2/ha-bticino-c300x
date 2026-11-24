@@ -27,6 +27,9 @@ static int path_stat(const char *path, file_stat *st) { return stat(path, st); }
 #define C300X_GUI_UID 0
 #define C300X_GUI_GID 0
 #endif
+#ifndef C300X_GUI_SHELL
+#define C300X_GUI_SHELL "/bin/sh"
+#endif
 #ifndef C300X_GUI_INIT_PID
 #define C300X_GUI_INIT_PID 1
 #endif
@@ -117,10 +120,10 @@ static int wrapper_script_open(int proc)
 
 enum launch { UNKNOWN, STOCK, RELOAD };
 
-static enum launch stock_wrapper(int proc)
+static enum launch shell_launch(int proc, int script)
 {
-    static const char relative[] = "/bin/sh\0bin/BtClass_qws";
-    static const char absolute[] = "/bin/sh\0" C300X_GUI_HOME "/bin/BtClass_qws";
+    static const char relative[] = C300X_GUI_SHELL "\0bin/BtClass_qws";
+    static const char absolute[] = C300X_GUI_SHELL "\0" C300X_GUI_HOME "/bin/BtClass_qws";
     char data[sizeof(absolute) + 1];
     int fd = openat(proc, "cmdline", O_RDONLY | O_CLOEXEC);
     if (fd < 0) return 0;
@@ -133,8 +136,8 @@ static enum launch stock_wrapper(int proc)
         used += (size_t)n;
     }
     close(fd);
-    if (!same_file(proc, "exe", "/bin/sh") || !same_file(proc, "cwd", C300X_GUI_HOME) ||
-        !wrapper_script_open(proc)) return UNKNOWN;
+    if (!same_file(proc, "exe", C300X_GUI_SHELL) || !same_file(proc, "cwd", C300X_GUI_HOME) ||
+        (script && !wrapper_script_open(proc))) return UNKNOWN;
     if (used == sizeof(relative) && !memcmp(data, relative, sizeof(relative))) return STOCK;
     if (used == sizeof(absolute) && !memcmp(data, absolute, sizeof(absolute))) return RELOAD;
     return UNKNOWN;
@@ -163,20 +166,43 @@ static int stock_daemons(unsigned pid)
     return ok;
 }
 
+/* The Qt 5 start script runs the display inside a pipeline, so up to two forks
+ * of the wrapper shell sit in between. A fork keeps the exe, cwd, cmdline and
+ * credentials but closes the script; only the wrapper itself has it open. */
+#define SHELL_FORKS 2
+
 static int station_gui(int gui)
 {
     if (!same_file(gui, "exe", C300X_GUI_HOME "/bin/gui/BtClass")) return 0;
-    unsigned wrapper_pid = trusted_parent(gui);
-    int wrapper = wrapper_pid ? open_process(wrapper_pid) : -1;
-    if (wrapper < 0) return 0;
-    enum launch launch = stock_wrapper(wrapper);
-    unsigned parent = trusted_parent(wrapper);
+    int shell[SHELL_FORKS + 1];
+    unsigned pid[SHELL_FORKS + 2];
+    enum launch launch = UNKNOWN;
+    int depth = 0;
+    pid[0] = trusted_parent(gui);
+    while (depth <= SHELL_FORKS && pid[depth]) {
+        int proc = open_process(pid[depth]);
+        if (proc < 0) break;
+        enum launch seen = shell_launch(proc, 0);
+        if (seen == UNKNOWN || (depth && seen != launch)) { close(proc); break; }
+        launch = seen;
+        shell[depth] = proc;
+        pid[++depth] = trusted_parent(proc);
+        int next = pid[depth] ? open_process(pid[depth]) : -1;
+        int forked = next >= 0 && shell_launch(next, 0) == launch;
+        if (next >= 0) close(next);
+        if (!forked) break;
+    }
+    int ok = depth && shell_launch(shell[depth - 1], 1) == launch;
+    unsigned parent = depth ? pid[depth] : 0;
     /* reload_gui starts the absolute wrapper directly; init adopts it.
      * Never use orphanhood alone as the proof of a station launch. */
-    int ok = ((launch == RELOAD && parent == C300X_GUI_INIT_PID) ||
-              (launch == STOCK && parent && stock_daemons(parent))) &&
-             trusted_parent(wrapper) == parent && trusted_parent(gui) == wrapper_pid;
-    close(wrapper);
+    ok = ok && ((launch == RELOAD && parent == C300X_GUI_INIT_PID) ||
+                (launch == STOCK && parent && stock_daemons(parent))) &&
+         trusted_parent(gui) == pid[0];
+    for (int i = 0; i < depth; ++i) {
+        ok = ok && trusted_parent(shell[i]) == pid[i + 1];
+        close(shell[i]);
+    }
     return ok;
 }
 

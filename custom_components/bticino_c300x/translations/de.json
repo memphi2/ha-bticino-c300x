@@ -783,7 +783,7 @@
       },
       "speech": {
         "title": "Sprachausgabe",
-        "description": "Gesprochene Meldungen (Notify-Aktion mit mode speech oder both) nutzen diese Engine und Sprache. Mit einer lokalen Engine wie Piper verlässt nichts dein Netz. Ohne Auswahl nimmt Home Assistant seine Standard-Engine, die mit Home Assistant Cloud die aus der Cloud ist. tts_engine und language in einer Meldung gehen diesen Einstellungen vor.",
+        "description": "Gesprochene Meldungen (Notify-Aktion mit tts: true oder dem alten mode speech oder both) nutzen diese Engine und Sprache. Mit einer lokalen Engine wie Piper verlässt nichts dein Netz. Ohne Auswahl nimmt Home Assistant seine Standard-Engine, die mit Home Assistant Cloud die aus der Cloud ist. tts_engine und language in einer Meldung gehen diesen Einstellungen vor.",
         "data": {
           "tts_engine": "Sprachausgabe-Engine",
           "tts_language": "Sprache"

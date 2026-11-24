@@ -783,7 +783,7 @@
       },
       "speech": {
         "title": "Sintesi vocale",
-        "description": "Le notifiche parlate (azione Notify con mode speech o both) usano questo motore e questa lingua. Con un motore locale come Piper nulla lascia la tua rete. Senza una scelta Home Assistant usa il suo motore predefinito, quello cloud se è configurato Home Assistant Cloud. tts_engine e language in una notifica hanno la precedenza su queste impostazioni.",
+        "description": "Le notifiche parlate (azione Notify con tts: true o con il vecchio mode speech o both) usano questo motore e questa lingua. Con un motore locale come Piper nulla lascia la tua rete. Senza una scelta Home Assistant usa il suo motore predefinito, quello cloud se è configurato Home Assistant Cloud. tts_engine e language in una notifica hanno la precedenza su queste impostazioni.",
         "data": {
           "tts_engine": "Motore di sintesi vocale",
           "tts_language": "Lingua"

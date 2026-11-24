@@ -783,7 +783,7 @@
       },
       "speech": {
         "title": "Speech",
-        "description": "Spoken notifications (Notify action with mode speech or both) use this engine and language. With a local engine such as Piper, nothing leaves your network. Without a choice, Home Assistant uses its default engine, which is the cloud one where Home Assistant Cloud is set up. tts_engine and language in a notification come before these settings.",
+        "description": "Spoken notifications (Notify action with tts: true, or the legacy mode speech or both) use this engine and language. With a local engine such as Piper, nothing leaves your network. Without a choice, Home Assistant uses its default engine, which is the cloud one where Home Assistant Cloud is set up. tts_engine and language in a notification come before these settings.",
         "data": {
           "tts_engine": "Text-to-speech engine",
           "tts_language": "Language"

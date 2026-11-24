@@ -444,6 +444,8 @@ removes a notice.
   reloading the integration clears them, so automations should resend
   conditions that still apply. Nothing is written to the station or the
   recorder.
+- Where the agent reports message LED support, a notice also lights the
+  station's message LED until it is dismissed or expires.
 - An action never runs because a notice arrives, only when tapped. **Mark
   read** only dismisses the notice; it neither fixes the condition nor runs an
   action. Commands for a notice that has since changed are rejected.

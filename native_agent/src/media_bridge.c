@@ -6108,15 +6108,27 @@ static void *rtsp_server_thread(void *arg) {
     pthread_cond_broadcast(&bridge->ready_cond);
     pthread_mutex_unlock(&bridge->mutex);
 
-    while (bridge->running) {
+    for (;;) {
         struct sockaddr_storage peer;
         socklen_t peer_len = sizeof(peer);
         int client_fd = accept(server_fd, (struct sockaddr *)&peer, &peer_len);
-        if (client_fd < 0) {
-            if (errno == EINTR) {
-                continue;
+        int accept_errno = errno;
+        pthread_mutex_lock(&bridge->mutex);
+        bool running = bridge->running;
+        pthread_mutex_unlock(&bridge->mutex);
+        if (!running) {
+            if (client_fd >= 0) {
+                close(client_fd);
             }
             break;
+        }
+        if (client_fd < 0) {
+            /* Only stop ends the listener; start would not rebuild it while
+             * running stays set. Back off on resource errors instead. */
+            if (accept_errno != EINTR && accept_errno != ECONNABORTED) {
+                usleep(100000);
+            }
+            continue;
         }
         start_rtsp_client(bridge, client_fd, &peer);
     }

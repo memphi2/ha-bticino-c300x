@@ -186,6 +186,11 @@ scp_cmd \
     "$QML_STAGE_DIR/js/c300x_memos.js" \
     "$REMOTE:$REMOTE_DIR/qml/js/"
 
+# Unpackaged development installs use the patch template and its source files.
+if [[ "$UPLOAD_AGENT" == "0" ]]; then
+    scp_cmd "$QML_STAGE_DIR/C300XSettings.qml" "$REMOTE:$REMOTE_DIR/qml/"
+    scp_cmd "$QML_STAGE_DIR/js/c300x_maintenance.js" "$REMOTE:$REMOTE_DIR/qml/js/"
+fi
 scp_cmd "$SCRIPT_SOURCE_DIR/qml_patch.sh" "$REMOTE:$REMOTE_DIR/qml_patch.sh"
 ssh_cmd "chmod 700 '$REMOTE_DIR/qml_patch.sh'"
 
@@ -205,7 +210,7 @@ if [[ "$UPLOAD_AGENT" == "1" ]]; then
 fi
 
 if [[ "$APPLY_QML" == "1" ]]; then
-    qml_result="$(ssh_cmd "C300X_QML_SOURCE_DIR='$REMOTE_DIR/qml' '$REMOTE_DIR/qml_patch.sh' apply")"
+    qml_result="$(ssh_cmd "C300X_AGENT_DIR='$REMOTE_DIR' C300X_QML_SOURCE_DIR='$REMOTE_DIR/qml' '$REMOTE_DIR/qml_patch.sh' apply")"
     # The device can exit zero while reporting a failed GUI reload in JSON.
     python3 -c '
 import json

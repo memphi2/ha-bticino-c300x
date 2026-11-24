@@ -60,7 +60,7 @@ def test_manifest_identifies_maintainer_without_claiming_an_official_quality_tie
     assert "quality_scale" not in manifest
     readme = (ROOT / "README.md").read_text()
     assert "Self%20assessment" in readme
-    assert "](docs/quality-scale.md)" in readme
+    assert "](docs/dev/quality-scale.md)" in readme
 
 
 def _load_bundle_stager():
@@ -216,7 +216,7 @@ def test_every_script_the_bundle_stager_imports_is_a_bundle_input() -> None:
     lock_script = (ROOT / "scripts/native_build_lock.py").read_text(encoding="utf-8")
     documents = {
         name: (ROOT / name).read_text(encoding="utf-8")
-        for name in ("docs/release-validation.md", "docs/native-agent.md", "SUPPORT.md")
+        for name in ("docs/dev/release-validation.md", "docs/dev/native-agent.md", "SUPPORT.md")
     }
     for helper in helpers:
         assert helper in checker.NATIVE_AGENT_BUNDLE_INPUT_PATHS

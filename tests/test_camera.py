@@ -520,6 +520,25 @@ def test_doorbell_camera_exposes_native_webrtc_offer_handler() -> None:
     assert "async_on_webrtc_candidate" in C300XDoorbellCamera.__dict__
 
 
+def test_picture_support_follows_existing_video_status_without_reload() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    for bridge, expected in [
+        ({}, False), ({"picture_controls_supported": True}, True),
+        ({"picture_controls_supported": False}, False), ({"picture_controls_supported": 1}, False),
+    ]:
+        camera._apply_status({"window_available": False, "bridge": bridge})
+        assert camera.extra_state_attributes["picture_controls_supported"] is expected
+        assert camera.extra_state_attributes["picture_controls_scope"] == ("ring" if expected else None)
+    for supported, scope, expected_scope in [
+        (True, "ring_and_on_demand", "ring_and_on_demand"),
+        (True, True, "ring"), (True, "future", "ring"),
+        (1, "ring_and_on_demand", None), (False, "ring_and_on_demand", None),
+    ]:
+        camera._apply_status({"bridge": {"picture_controls_supported": supported, "picture_controls_scope": scope}})
+        assert camera.extra_state_attributes["picture_controls_scope"] == expected_scope
+
+
 def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     entry = _FakeEntry()
     entry.runtime_data.device_user_status = {
@@ -557,6 +576,8 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
         "external_media_active": True,
         "external_owner": "external_client",
         "last_video_block_reason": "external_session_active",
+        "picture_controls_supported": False,
+        "picture_controls_scope": None,
             "talkback_supported": True,
             "doorstation_audio_gain_db": 0.0,
             "media_user": {
@@ -2480,6 +2501,12 @@ def test_doorbell_camera_provider_video_only_offer_uses_on_demand_audio_path(
     class _IdleApi(_FakeApi):
         async def async_doorbell_video_status(self) -> dict[str, Any]:
             status = await super().async_doorbell_video_status()
+            if self.activate_calls:
+                status["bridge"].update(
+                    picture_controls_supported=True,
+                    picture_controls_scope="ring_and_on_demand",
+                )
+                return status
             status["media_owner"] = "idle"
             status["window_available"] = False
             status["bridge"] = {
@@ -2496,6 +2523,9 @@ def test_doorbell_camera_provider_video_only_offer_uses_on_demand_audio_path(
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     camera.hass = SimpleNamespace()
+    published = []
+    monkeypatch.setattr(camera, "async_write_ha_state",
+                        lambda: published.append(camera.extra_state_attributes))
     provider = _FakeWebRTCProvider()
     _install_fake_webrtc_provider(monkeypatch, provider)
     _stub_rtsp_ready(camera)
@@ -2516,6 +2546,7 @@ def test_doorbell_camera_provider_video_only_offer_uses_on_demand_audio_path(
     assert provider.offer_sources == ["rtsp://127.0.0.1:6554/doorbell"]
     assert provider.support_sources == ["rtsp://127.0.0.1:6554/doorbell"]
     assert entry.runtime_data.api.activate_calls == [True]
+    assert published[-1]["picture_controls_scope"] == "ring_and_on_demand"
 
 
 def test_doorbell_camera_uses_active_ring_media_without_on_demand_activation() -> None:

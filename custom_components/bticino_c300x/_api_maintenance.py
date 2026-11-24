@@ -103,13 +103,15 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             raise C300XAgentApiResponseError("display bridge status returned non-object JSON")
         return data
 
-    async def async_notify_display_bridge_event(self, topic: str) -> dict[str, Any]:
+    async def async_notify_display_bridge_event(
+        self, topic: str, *, unread: bool | None = None,
+    ) -> dict[str, Any]:
         """Wake local display-bridge UI long-poll listeners for one topic."""
 
         data = await self._request_json(
             "POST",
             "/api/v1/display-bridge/events",
-            json_data={"topic": str(topic)},
+            json_data={"topic": str(topic), **({"unread": unread} if unread is not None else {})},
             request_timeout=2.0,
         )
         if not isinstance(data, dict):
@@ -586,17 +588,22 @@ class _ApiMaintenanceMixin(_C300XApiCore):
     async def async_apply_qml_patch(
         self,
         *,
-        dynamic_homepage: bool = False,
+        dynamic_homepage: bool | None = None,
     ) -> dict[str, Any]:
-        """Apply the device UI patch through the maintenance API."""
+        """Apply the device UI patch through the maintenance API.
 
+        ``dynamic_homepage`` True installs the stock home page buttons, False
+        the fixed pair side by side; None sends no layout, so the agent keeps
+        the one on the device.
+        """
+
+        json_data: dict[str, Any] = {"confirm": "apply_qml_patch"}
+        if dynamic_homepage is not None:
+            json_data["dynamic_homepage"] = dynamic_homepage
         data = await self._request_json(
             "POST",
             "/api/v1/maintenance/qml-patch/actions/apply",
-            json_data={
-                "confirm": "apply_qml_patch",
-                "dynamic_homepage": dynamic_homepage,
-            },
+            json_data=json_data,
             extra_headers=self._maintenance_headers(),
             request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )

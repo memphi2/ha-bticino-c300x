@@ -334,6 +334,41 @@ static int client_count(void) {
     return count;
 }
 
+static void teardown_with_retained_targets(int fd, const char *auth) {
+    int other[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, other) == 0);
+    struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
+    assert(writer);
+    rtsp_send_target_t video[2], audio[2];
+    pthread_mutex_lock(&g_bridge.mutex);
+    assert(!g_bridge.rtsp_clients[1].active);
+    g_bridge.rtsp_clients[1] = (rtsp_client_slot_t){
+        .active = true, .played = true, .transport_tcp = true, .audio_enabled = true,
+        .fd = other[0], .writer = writer, .video_interleaved_channel = 2,
+        .audio_interleaved_channel = 4,
+    };
+    assert(rtsp_send_targets_locked(&g_bridge, false, video, 2) == 2);
+    assert(rtsp_send_targets_locked(&g_bridge, true, audio, 2) == 1);
+    pthread_mutex_unlock(&g_bridge.mutex);
+
+    /* Both relays have snapshotted their targets. Resume them after the 200. */
+    request(fd, "TEARDOWN", auth, 200);
+    c300x_rtsp_send_targets(video, 2, "v", 1);
+    c300x_rtsp_send_targets(audio, 1, "a", 1);
+    unsigned char frames[10];
+    assert(recv(fd, frames, 1, MSG_DONTWAIT) < 0 && errno == EAGAIN);
+    assert(recv(other[1], frames, sizeof(frames), MSG_DONTWAIT) == 10);
+    assert(memcmp(frames, "$\002\000\001v$\004\000\001a", 10) == 0);
+    request(fd, "OPTIONS", "", 200);
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    assert(unregister_rtsp_client_locked(&g_bridge, 1, other[0]));
+    pthread_mutex_unlock(&g_bridge.mutex);
+    c300x_rtsp_writer_release(writer);
+    close(other[0]);
+    close(other[1]);
+}
+
 static void auth_test(struct c300x_config *config, bool legacy, bool pending_stop) {
     int pair[2];
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
@@ -408,7 +443,8 @@ static void auth_test(struct c300x_config *config, bool legacy, bool pending_sto
         pthread_mutex_lock(&g_bridge.mutex);
         g_bridge.media_active = false;
         pthread_mutex_unlock(&g_bridge.mutex);
-        request(pair[0], "TEARDOWN", auth, 200);
+        if (legacy) request(pair[0], "TEARDOWN", auth, 200);
+        else teardown_with_retained_targets(pair[0], auth);
         assert(client_count() == 0);
     }
     shutdown(pair[0], SHUT_RDWR);
@@ -494,12 +530,12 @@ static void target_ownership_test(void) {
         replacement_fd = replacement[0];
         replaced_connection = reserve_rtsp_client(&g_bridge, replaced_fd);
         assert(replaced_connection >= 0);
+        if (disconnected) close(original[1]);
+        int before = open_test_fds();
         replaced_writer = c300x_rtsp_writer_create();
         assert(replaced_writer);
         g_bridge.rtsp_clients[0] = (rtsp_client_slot_t){.active = true,
             .played = true, .fd = replaced_fd, .writer = replaced_writer, .transport_tcp = true};
-        if (disconnected) close(original[1]);
-        int before = open_test_fds();
         after_target_snapshot = replace_forward_target;
         forward_worker(NULL);
         after_target_snapshot = NULL;

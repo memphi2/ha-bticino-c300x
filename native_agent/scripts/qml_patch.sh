@@ -12,13 +12,14 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 PROC_DIR="${C300X_QML_PROC_DIR:-/proc}"
 AGENT_BIN="${C300X_QML_AGENT_BIN:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/c300x-agent-native}"
-DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
+# 1: stock layout, 0: side by side, unset: keep the layout on the device.
+HOME_BUTTONS_REQUEST="${C300X_QML_DYNAMIC_HOME_PAGE:-}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml js/c300x_ringer.js EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
 # The display files this integration adds; every list of them derives from here.
-GENERATED_FEATURE_FILES="Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XChecks.qml C300XSituations.qml C300XOptionalPages.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
-FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
+GENERATED_FEATURE_FILES="C300XSettings.qml js/c300x_maintenance.js Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XChecks.qml C300XSituations.qml C300XOptionalPages.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+FEATURE_PATCH_FILES="Settings.qml MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
@@ -55,7 +56,7 @@ json_status() {
         media_user_label_state=partial
         media_user_label_patched=null
     fi
-    if [ -f "$BACKUP_DIR/MainApp.qml" ]; then
+    if feature_backup_available; then
         backup_available=true
     fi
     if [ -f "$BACKUP_DIR/EventManager.qml" ]; then
@@ -67,10 +68,21 @@ json_status() {
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         gui_running=true
     fi
+    home_buttons="$(installed_home_buttons)"
     if [ -n "$changed_files" ]; then
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"changed_files":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$changed_files"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"home_buttons":%s,"changed_files":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$home_buttons" "$changed_files"
     else
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"home_buttons":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$home_buttons"
+    fi
+}
+
+installed_home_buttons() {
+    if file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow'; then
+        printf '"side_by_side"\n'
+    elif file_contains "$GUI_DIR/HomePage.qml" '+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2'; then
+        printf '"stock"\n'
+    else
+        printf 'null\n'
     fi
 }
 
@@ -78,7 +90,7 @@ json_reload_failed() {
     backup_available=false
     core_backup_available=false
     gui_running=false
-    if [ -f "$BACKUP_DIR/MainApp.qml" ]; then
+    if feature_backup_available; then
         backup_available=true
     fi
     if [ -f "$BACKUP_DIR/EventManager.qml" ]; then
@@ -96,15 +108,28 @@ file_contains() {
     [ -f "$file" ] && grep -F -q "$text" "$file"
 }
 
+feature_backup_available() {
+    [ -f "$BACKUP_DIR/MainApp.qml" ] || return 1
+    if file_contains "$GUI_DIR/Settings.qml" c300xSettings; then
+        [ -f "$BACKUP_DIR/Settings.qml" ] && check_settings_paths 2>/dev/null || return 1
+    fi
+}
+
 full_patch_present() {
     file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "Alarm.qml"' \
         && file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "HomeAssistant.qml"' \
         && file_contains "$GUI_DIR/MainApp.qml" 'alarmPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xDisplayPreferences' \
+        && feature_port="$(station_ui_port)" \
+        && file_contains "$GUI_DIR/MainApp.qml" "property string uiBaseUrl: \"http://127.0.0.1:$feature_port\"" \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xAlerts' \
         && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
-        && general_settings_patch_present \
+        && file_contains "$GUI_DIR/Settings.qml" 'sourceUrl: "C300XSettings.qml"' \
+        && file_contains "$GUI_DIR/Settings.qml" 'c300xSettings.item.clearConfirmation()' \
+        && file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'onTouched: global.beepEnabled = checked' \
+        && [ -f "$GUI_DIR/C300XSettings.qml" ] && [ -f "$GUI_DIR/js/c300x_maintenance.js" ] \
+        && ! general_settings_partial_present \
         && home_page_feature_patch_present \
         && file_contains "$GUI_DIR/HomePage.qml" 'MemoSync.syncHomeNotifications(page)' \
         && file_contains "$GUI_DIR/HomePage.qml" 'property alias memoEventRetryTimer: memoRetryTimer' \
@@ -143,7 +168,9 @@ partial_patch_present() {
         || file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
         || file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
         || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
+        || file_contains "$GUI_DIR/HomePage.qml" 'property bool alarmButtonVisible' \
         || file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
+        || file_contains "$GUI_DIR/Settings.qml" c300xSettings \
         || general_settings_partial_present \
         || generated_feature_file_present
 }
@@ -157,31 +184,27 @@ generated_feature_file_present() {
     return 1
 }
 
-general_settings_patch_present() {
-    file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'id: c300xFeedbackSetting' \
-        && file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'checked: c300xFeedbackSetting.visible ? c300xDisplayPreferences.feedbackEnabled : true' \
-        && file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'onTouched: global.beepEnabled = checked'
-}
-
 general_settings_partial_present() {
     file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'c300xDisplayPreferences' \
         || file_contains "$GUI_DIR/Components/Settings/GeneralsChoice.qml" 'c300xFeedbackSetting'
 }
 
 home_page_feature_patch_present() {
-    file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
-        || file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
+    file_contains "$GUI_DIR/HomePage.qml" 'page.startMessageNotificationWatch()' || return 1
+    file_contains "$GUI_DIR/HomePage.qml" 'id: buttonRetryTimer' || return 1
+    file_contains "$GUI_DIR/HomePage.qml" 'if (registrationPossible) page.buttonRetries = 0' || return 1
+    file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || (
-            file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
-            && file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \
-            && file_contains "$GUI_DIR/HomePage.qml" '+ 2 + page.displayBridgeButtonCount()'
+            file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \
+            && file_contains "$GUI_DIR/HomePage.qml" '+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2'
         )
 }
 
 core_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
-        && file_contains "$GUI_DIR/EventManager.qml" 'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
-        && file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        && core_port="$(station_ui_port)" \
+        && file_contains "$GUI_DIR/EventManager.qml" "C300XRingerControl { id: c300xRinger; uiBaseUrl: \"http://127.0.0.1:$core_port\" }" \
+        && file_contains "$GUI_DIR/EventManager.qml" 'request.open("GET", c300xRinger.uiBaseUrl + "/ui/media-closed", true)' \
         && file_contains "$GUI_DIR/EventManager.qml" 'function c300xPreemptAlert()' \
         && cmp -s "$SOURCE_DIR/C300XRingerControl.qml" "$GUI_DIR/C300XRingerControl.qml" \
         && cmp -s "$SOURCE_DIR/js/c300x_ringer.js" "$GUI_DIR/js/c300x_ringer.js" \
@@ -192,7 +215,7 @@ core_partial_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
         || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()' \
-        || file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        || file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {' \
         || [ -f "$GUI_DIR/C300XRingerControl.qml" ] \
         || [ -f "$GUI_DIR/js/c300x_ringer.js" ]
 }
@@ -462,6 +485,10 @@ backup_file() {
         Components/Settings/GeneralsChoice.qml)
             require_clean_general_settings "$backup_src"
             ;;
+        Settings.qml)
+            ! file_contains "$backup_src" c300xSettings || { echo "Missing original Settings.qml backup" >&2; return 1; }
+            render_settings "$backup_src" >/dev/null || return 1
+            ;;
         EventManager.qml)
             if grep -F -q 'function c300xNotifyMediaClosed()' "$backup_src"; then
                 printf 'Refusing to back up an already patched EventManager.qml\n' >&2
@@ -504,6 +531,7 @@ install_file() {
 }
 
 copy_generated_file() {
+    # C300X_EMBEDDED_DISPLAY_FILES
     install_file "$1" generated
 }
 
@@ -513,6 +541,7 @@ require_clean_original_page() {
     [ -s "$page_file" ]
     if grep -F -q 'homeAssistantButtonRow' "$page_file" \
         || grep -F -q 'homeAssistantButtonColumn' "$page_file" \
+        || grep -F -q 'alarmButtonVisible' "$page_file" \
         || grep -F -q 'MemoSync.syncMemoModel' "$page_file"; then
         printf 'Refusing to patch %s from an already patched source\n' "$page_name" >&2
         return 1
@@ -550,7 +579,38 @@ require_clean_general_settings() {
     fi
 }
 
+check_settings_paths() {
+    for base in "$GUI_DIR" "$BACKUP_DIR"; do
+        for rel in Settings.qml Components Components/Settings Components/Settings/GeneralsChoice.qml js C300XSettings.qml js/c300x_maintenance.js; do
+            if [ -L "$base/$rel" ]; then
+                printf 'Unsafe settings symlink: %s\n' "$base/$rel" >&2; return 1
+            fi
+        done
+    done
+    for rel in C300XSettings.qml js/c300x_maintenance.js; do
+        if [ -e "$BACKUP_DIR/$rel" ]; then
+            printf 'Unexpected original for generated settings file: %s\n' "$rel" >&2; return 1
+        fi
+    done
+    for rel in Settings.qml Components/Settings/GeneralsChoice.qml; do
+        original="$BACKUP_DIR/$rel"
+        if [ -e "$original" ] && { [ ! -f "$original" ] || [ ! -s "$original" ]; }; then
+            printf 'Invalid stock settings backup: %s\n' "$rel" >&2; return 1
+        fi
+    done
+    if [ -f "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" ]; then
+        require_clean_general_settings "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" || return 1
+    fi
+    if file_contains "$BACKUP_DIR/Settings.qml" c300xSettings; then
+        printf 'Already patched Settings.qml backup\n' >&2; return 1
+    fi
+    if [ -f "$BACKUP_DIR/Settings.qml" ]; then
+        render_settings "$BACKUP_DIR/Settings.qml" >/dev/null || return 1
+    fi
+}
+
 patch_general_settings() {
+    check_settings_paths
     settings_rel="Components/Settings/GeneralsChoice.qml"
     settings_original="$BACKUP_DIR/$settings_rel"
     settings_output="${PATCH_OUTPUT_DIR:-$GUI_DIR}/$settings_rel"
@@ -562,92 +622,74 @@ patch_general_settings() {
     require_clean_general_settings "$settings_original"
     mkdir -p "$(dirname "$settings_output")"
     cp -p "$settings_original" "$settings_output"
-    # Keep the vendor tone switch; make room for one native-style row below it.
+    verify_generated_page "$settings_output" "$settings_rel" \
+        'checked: global.beepEnabled' 'onTouched: global.beepEnabled = checked'
+    # Upgrades discard only the legacy feedback row by staging the preserved original.
+    backup_file Settings.qml
+    stock="$BACKUP_DIR/Settings.qml"
+    if file_contains "$stock" c300xSettings; then return 1; fi
+    cp -p "$stock" "$PATCH_OUTPUT_DIR/Settings.qml"
+    render_settings "$stock" > "$PATCH_OUTPUT_DIR/Settings.qml"
+}
+
+render_settings() {
     awk '
+        NF { last = $0 }
         $0 == "import QtQuick 1.1" { imports++ }
-        $0 == "    anchors.topMargin: parent.height / 100 * 4" {
-            print "    anchors.topMargin: 8"
-            top_margins++
-            next
+        $0 == "    function handleScreenOff() {" {
+            print; print "        if (c300xSettings.item) c300xSettings.item.clearConfirmation()"; screen++; next
         }
-        !tone && $0 == "        spacing: 6" {
-            print "        spacing: 4"
-            column_spacing++
-            next
+        $0 == "                configurationChoice" {
+            print $0 ","; print "                c300xSettings"; tabs++; next
         }
-        $0 == "        id: beepButton" { tone++ }
-        tone && $0 == "        anchors.topMargin: 32" {
-            print "        anchors.topMargin: 8"
-            margins++
-            next
-        }
-        tone && $0 == "            id: space" { spacer = 1; print; next }
-        spacer == 1 && $0 == "            width: 50" {
-            print "            width: Math.max(0, buttonColumn.width - 40 - textBeep.width - selectorOnOff.width)"
-            spacer = 2
-            next
-        }
-        $0 == "            checked: global.beepEnabled" { checked++ }
-        $0 == "            onTouched: global.beepEnabled = checked" { handler++ }
-        $0 == "}" {
-            roots++
-            print ""
-            print "    Item {"
-            print "        id: c300xFeedbackSetting"
+        $0 == "        spacing: 6" { print "        spacing: 4"; gaps++; next }
+        $0 == "    ExclusiveGroup {" {
+            print "    BasicButton {"
             print "        visible: typeof c300xDisplayPreferences !== \"undefined\""
-            print "        anchors.horizontalCenter: parent.horizontalCenter"
-            print "        anchors.top: beepButton.bottom"
-            print "        anchors.topMargin: 6"
-            print "        width: buttonColumn.width"
-            print "        height: 44"
-            print "        onVisibleChanged: if (visible) c300xDisplayPreferences.load()"
-            print "        Component.onCompleted: if (visible) c300xDisplayPreferences.load()"
-            print "        UbuntuLightText {"
-            print "            anchors.left: parent.left"
-            print "            anchors.leftMargin: 8"
-            print "            anchors.right: c300xFeedbackSwitch.left"
-            print "            anchors.rightMargin: 12"
-            print "            anchors.verticalCenter: parent.verticalCenter"
-            print "            text: c300xFeedbackSetting.visible ? c300xDisplayPreferences.label : \"\""
-            print "            color: \"white\""
-            print "            font.pixelSize: 18"
-            print "            horizontalAlignment: Text.AlignLeft"
-            print "            wrapMode: Text.WordWrap"
-            print "        }"
-            print "        BasicButton {"
-            print "            id: c300xFeedbackSwitch"
-            print "            anchors.right: parent.right"
-            print "            anchors.rightMargin: 8"
-            print "            anchors.verticalCenter: parent.verticalCenter"
-            print "            enabled: c300xFeedbackSetting.visible && c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy"
-            print "            opacity: enabled ? 1 : 0.5"
-            print "            checked: c300xFeedbackSetting.visible ? c300xDisplayPreferences.feedbackEnabled : true"
-            print "            style: CheckableButtonStyle {"
-            print "                defaultImage: \"../../images/ringtones/switch-bg_btn.svg\""
-            print "                checkedImage: \"../../images/ringtones/switch-bg_btn_p.svg\""
-            print "                defaultIconLeft: \"../../images/ringtones/switch_btn.svg\""
-            print "                defaultIconRight: \"../../images/ringtones/disable_icon.svg\""
-            print "                checkedIconLeft: \"../../images/ringtones/enable_icon.svg\""
-            print "                checkedIconRight: \"../../images/ringtones/switch_btn_p.svg\""
-            print "            }"
-            print "            onTouched: c300xDisplayPreferences.setFeedbackEnabled(!c300xDisplayPreferences.feedbackEnabled)"
+            print "        anchors.right: column.right"
+            print "        anchors.top: column.bottom"
+            print "        anchors.topMargin: 4"
+            print "        property Item tab: c300xSettings"
+            print "        checkable: true"
+            print "        exclusiveGroup: menuGroup"
+            print "        style: CheckableButtonStyle {"
+            print "            defaultImage: \"images/settings/settings-menu_btn.svg\""
+            print "            checkedImage: \"images/settings/settings-menu_btn_p.svg\""
+            print "            description: \"Home Assistant\""
             print "        }"
             print "    }"
+            print "    PageLoader {"
+            print "        id: c300xSettings"
+            print "        anchors.fill: sectionView"
+            print "        sourceUrl: \"C300XSettings.qml\""
+            print "    }"
+            groups++
         }
+        /append\(\{label: QT_TR_NOOP\("Configuration"\), tab: configurationChoice,/ { config++ }
         { print }
-        END {
-            if (imports != 1 || top_margins != 1 || column_spacing != 1 || tone != 1 || spacer != 2 || margins != 1 || checked != 1 || handler != 1 || roots != 1) {
-                print "Unsupported original GeneralsChoice.qml layout" > "/dev/stderr"
-                exit 12
-            }
-        }
-    ' "$settings_original" > "$settings_output"
-    verify_generated_page "$settings_output" "$settings_rel" \
-        'anchors.top: beepButton.bottom' 'id: c300xFeedbackSetting' \
-        'onTouched: global.beepEnabled = checked'
+        END { if (imports != 1 || last != "}" || screen != 1 || tabs != 1 || groups != 1 || gaps != 1 || config != 1) {
+            print "Unsupported Settings.qml layout" > "/dev/stderr"; exit 12
+        } }
+    ' "$1"
+}
+
+home_buttons_layout() {
+    case "$HOME_BUTTONS_REQUEST" in
+        1) printf 'stock\n' ;;
+        0) printf 'side_by_side\n' ;;
+        *)
+            if file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
+                || file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow'; then
+                printf 'side_by_side\n'
+            else
+                printf 'stock\n'
+            fi
+            ;;
+    esac
 }
 
 patch_home_page() {
+    layout="$(home_buttons_layout)"
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     home_page="$output_dir/HomePage.qml"
     source_home_page="$BACKUP_DIR/HomePage.qml"
@@ -659,13 +701,11 @@ patch_home_page() {
     fi
     mkdir -p "$output_dir"
     require_clean_original_page "$source_home_page" "HomePage.qml"
-    awk -v dynamic_home_page="$DYNAMIC_HOME_PAGE" '
+    awk -v layout="$layout" '
         function print_memo_sync_import() {
             if (!printed_memo_sync_import) {
                 print "import \"js/c300x_memos.js\" as MemoSync"
-                if (dynamic_home_page == "1") {
-                    print "import \"js/c300x_ha.js\" as HAConfig"
-                }
+                print "import \"js/c300x_ha.js\" as HAConfig"
                 printed_memo_sync_import=1
             }
         }
@@ -695,12 +735,12 @@ patch_home_page() {
             print "    }"
             print ""
             print "    function handleMessageNotificationEvent(event) {"
-            if (dynamic_home_page == "1") {
-                print "        if (event && (event.topic === \"notifications\" || event.topic === \"display_bridge.state\")) {"
-                print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
-                print "            refreshDisplayBridgeButtons()"
-                print "        }"
-            }
+            print "        var registrationPossible = event && (event.missedRevisions || event.topic === \"display_bridge.state\")"
+            print "        if (registrationPossible || (event && event.topic === \"notifications\")) {"
+            print "            if (registrationPossible) page.buttonRetries = 0"
+            print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
+            print "            refreshDisplayBridgeButtons()"
+            print "        }"
             print "        if (event && (event.topic === \"memos\" || event.topic === \"answering_machine.messages\")) {"
             print "            refreshMessageNotifications()"
             print "        }"
@@ -717,93 +757,75 @@ patch_home_page() {
             print "    }"
         }
         function print_display_bridge_button_helpers() {
-            if (dynamic_home_page != "1") {
-                return
-            }
             print ""
             print "    property bool alarmButtonVisible: false"
             print "    property bool haButtonVisible: false"
+            print "    property int buttonReadGeneration: 0"
+            print "    property int buttonRetries: 0"
+            print "    Timer {"
+            print "        id: buttonRetryTimer"
+            print "        repeat: false"
+            print "        onTriggered: page.refreshDisplayBridgeButtons()"
+            print "    }"
             print ""
             print "    function refreshDisplayBridgeButtons() {"
+            print "        if (!page.visible) return"
+            print "        buttonRetryTimer.stop()"
+            print "        var generation = ++page.buttonReadGeneration"
             print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable, valid) {"
-            print "            if (!valid) return"
+            print "            if (!page.visible || generation !== page.buttonReadGeneration) return"
+            print "            if (!valid) {"
+            print "                if (page.buttonRetries < 6) {"
+            print "                    buttonRetryTimer.interval = 1000 * Math.pow(2, page.buttonRetries++)"
+            print "                    buttonRetryTimer.restart()"
+            print "                }"
+            print "                return"
+            print "            }"
+            print "            page.buttonRetries = 0"
             print "            page.alarmButtonVisible = alarmConfigured"
             print "            page.haButtonVisible = dashboardAvailable"
-            print "        })"
+            print "        }, page)"
             print "    }"
         }
-        function print_home_assistant_flow_item() {
-            if (dynamic_home_page == "1") {
-                print_home_assistant_dynamic_flow_items()
-                return
+        function print_home_assistant_button(name, flag, icon, description, target) {
+            print "            BasicButton {"
+            if (layout == "stock") {
+                print "                id: " name
             }
-            print ""
-            print "            Row {"
-            print "                id: homeAssistantButtonRow"
-            print "                width: buttonPrototype.width * 2 + foobar.spacing"
-            print "                height: buttonPrototype.height"
-            print "                spacing: foobar.spacing"
-            print ""
-            print "                BasicButton {"
-            print "                    objectName: \"alarmButton\""
-            print "                    style: HomePageButtonStyle {"
-            print "                        pressedImage: \"images/function_btn_p.svg\""
-            print "                        pressedIcon: \"images/keylock_icon-small_p.svg\""
-            print "                        defaultIcon: \"images/keylock_icon-small.svg\""
-            print "                        defaultImage: \"images/function_btn.svg\""
-            print "                        description: trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))"
-            print "                    }"
-            print "                    onTouched: tabView.activateTab(alarmPage)"
+            print "                objectName: \"" name "\""
+            if (layout == "stock") {
+                print "                visible: page." flag
+            } else {
+                print "                opacity: page." flag " ? 1 : 0"
+                print "                enabled: page." flag
+                if (name == "haButton") {
+                    print "                x: buttonPrototype.width + foobar.spacing"
+                }
+            }
+            print "                style: HomePageButtonStyle {"
+            print "                    pressedImage: \"images/function_btn_p.svg\""
+            print "                    pressedIcon: \"images/" icon "_p.svg\""
+            print "                    defaultIcon: \"images/" icon ".svg\""
+            print "                    defaultImage: \"images/function_btn.svg\""
+            print "                    description: " description
             print "                }"
-            print ""
-            print "                BasicButton {"
-            print "                    objectName: \"haButton\""
-            print "                    style: HomePageButtonStyle {"
-            print "                        pressedImage: \"images/function_btn_p.svg\""
-            print "                        pressedIcon: \"images/call/icon_call-home_p.svg\""
-            print "                        defaultIcon: \"images/call/icon_call-home.svg\""
-            print "                        defaultImage: \"images/function_btn.svg\""
-            print "                        description: \"Home Assistant\""
-            print "                    }"
-            print "                    onTouched: tabView.activateTab(haPage)"
-            print "                }"
+            print "                onTouched: tabView.activateTab(" target ")"
             print "            }"
         }
-        function print_home_assistant_dynamic_flow_items() {
+        function print_home_assistant_flow_item() {
             print ""
-            print "            Row {"
-            print "                id: displayBridgeButtonRow"
-            print "                width: buttonPrototype.width * 2 + foobar.spacing"
-            print "                height: buttonPrototype.height"
-            print "                spacing: foobar.spacing"
-            print "            BasicButton {"
-            print "                objectName: \"alarmButton\""
-            print "                opacity: page.alarmButtonVisible ? 1 : 0"
-            print "                enabled: page.alarmButtonVisible"
-            print "                style: HomePageButtonStyle {"
-            print "                    pressedImage: \"images/function_btn_p.svg\""
-            print "                    pressedIcon: \"images/keylock_icon-small_p.svg\""
-            print "                    defaultIcon: \"images/keylock_icon-small.svg\""
-            print "                    defaultImage: \"images/function_btn.svg\""
-            print "                    description: trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))"
-            print "                }"
-            print "                onTouched: tabView.activateTab(alarmPage)"
-            print "            }"
+            if (layout != "stock") {
+                print "            Item {"
+                print "                id: displayBridgeButtonRow"
+                print "                width: buttonPrototype.width * 2 + foobar.spacing"
+                print "                height: buttonPrototype.height"
+            }
+            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
             print ""
-            print "            BasicButton {"
-            print "                objectName: \"haButton\""
-            print "                opacity: page.haButtonVisible ? 1 : 0"
-            print "                enabled: page.haButtonVisible"
-            print "                style: HomePageButtonStyle {"
-            print "                    pressedImage: \"images/function_btn_p.svg\""
-            print "                    pressedIcon: \"images/call/icon_call-home_p.svg\""
-            print "                    defaultIcon: \"images/call/icon_call-home.svg\""
-            print "                    defaultImage: \"images/function_btn.svg\""
-            print "                    description: \"Home Assistant\""
-            print "                }"
-            print "                onTouched: tabView.activateTab(haPage)"
-            print "            }"
-            print "            }"
+            print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "\"Home Assistant\"", "haPage")
+            if (layout != "stock") {
+                print "            }"
+            }
         }
         function delta(line, opened, closed, copy) {
             copy=line
@@ -830,12 +852,23 @@ patch_home_page() {
         }
         $0 == "    property bool smallDateTimePresent: homeLinksModel.count > 0 || buttonHolder.buttonCount() > 2" {
             print "    onVisibleChanged: {"
-            print "        if (!visible) {"
+            print "        if (visible) {"
+            print "            page.refreshDisplayBridgeButtons()"
+            print "            page.startMessageNotificationWatch()"
+            print "        } else {"
+            print "            ++page.buttonReadGeneration"
+            print "            page.buttonRetries = 0"
+            print "            buttonRetryTimer.stop()"
+            print "            HAConfig.invalidateSharedRead(\"/ui/state\")"
             print "            stopMessageNotificationWatch()"
             print "        }"
             print "    }"
             print ""
-            print
+            if (layout == "stock") {
+                print
+            } else {
+                print "    property bool smallDateTimePresent: true"
+            }
             next
         }
         $0 == "    function aboutToShow() {" {
@@ -844,9 +877,7 @@ patch_home_page() {
             next
         }
         in_about_to_show && $0 == "    }" {
-            if (dynamic_home_page == "1") {
-                print "        refreshDisplayBridgeButtons()"
-            }
+            print "        refreshDisplayBridgeButtons()"
             print "        refreshMessageNotifications()"
             print
             in_about_to_show=0
@@ -857,22 +888,28 @@ patch_home_page() {
             print
             next
         }
+        in_button_count && layout == "stock" && $0 ~ /\+ 2$/ {
+            sub(/\+ 2$/, "+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2")
+            print
+            next
+        }
+        in_button_count && $0 ~ /\+ 2$/ {
+            sub(/\+ 2$/, "+ (homeLinksModel.count > 0 ? 4 : 2)")
+            print
+            next
+        }
+        in_button_holder && layout != "stock" && $0 == "            flow: Flow.TopToBottom" {
+            print "            flow: homeLinksModel.count > 0 ? Flow.LeftToRight : Flow.TopToBottom"
+            print "            width: homeLinksModel.count > 0 ? buttonPrototype.width * 4 + spacing * 3 : undefined"
+            next
+        }
+        in_button_holder && layout != "stock" && $0 == "                visible: buttonHolder.buttonCount() === 5" {
+            print $0 " && homeLinksModel.count === 0"
+            next
+        }
         in_button_count && $0 ~ /^[[:space:]]*\}/ {
             in_button_count=0
             print
-            next
-        }
-        $0 == "                loader.item.setDate()" {
-            print
-            if (dynamic_home_page == "1") {
-                print "                refreshDisplayBridgeButtons()"
-            }
-            print "                startMessageNotificationWatch()"
-            next
-        }
-        $0 == "            } else {" {
-            print
-            print "                stopMessageNotificationWatch()"
             next
         }
         $0 ~ /notificationsCount: answeringModel\.obj\.unreadMessages/ {
@@ -927,7 +964,7 @@ patch_home_page() {
             }
         }
     ' "$source_home_page" > "$temp_file"
-    if [ "$DYNAMIC_HOME_PAGE" = "1" ]; then
+    if [ "$layout" = "stock" ]; then
         verify_generated_page \
             "$temp_file" \
             "HomePage.qml" \
@@ -937,8 +974,9 @@ patch_home_page() {
             'property alias memoEventRetryTimer: memoRetryTimer' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
-            'opacity: page.alarmButtonVisible ? 1 : 0' \
-            'opacity: page.haButtonVisible ? 1 : 0' \
+            '+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2' \
+            'visible: page.alarmButtonVisible' \
+            'visible: page.haButtonVisible' \
             'objectName: "alarmButton"' \
             'objectName: "haButton"' \
             'images/call/icon_call-home.svg'
@@ -947,12 +985,18 @@ patch_home_page() {
             "$temp_file" \
             "HomePage.qml" \
             'import "js/c300x_memos.js" as MemoSync' \
+            'import "js/c300x_ha.js" as HAConfig' \
             'function refreshMessageNotifications()' \
             'property alias memoEventRetryTimer: memoRetryTimer' \
             'onTriggered: MemoSync.retryEventWatch()' \
-            'function startMessageNotificationWatch()' \
-            'MemoSync.syncHomeNotifications(page)' \
-            'id: homeAssistantButtonRow' \
+            'HAConfig.homeButtons' \
+            'id: displayBridgeButtonRow' \
+            '+ (homeLinksModel.count > 0 ? 4 : 2)' \
+            'flow: homeLinksModel.count > 0 ? Flow.LeftToRight : Flow.TopToBottom' \
+            'width: homeLinksModel.count > 0 ? buttonPrototype.width * 4 + spacing * 3 : undefined' \
+            'visible: buttonHolder.buttonCount() === 5 && homeLinksModel.count === 0' \
+            'opacity: page.alarmButtonVisible ? 1 : 0' \
+            'opacity: page.haButtonVisible ? 1 : 0' \
             'objectName: "alarmButton"' \
             'objectName: "haButton"' \
             'images/call/icon_call-home.svg'
@@ -1051,6 +1095,7 @@ patch_call_block_popup() {
 }
 
 patch_event_manager() {
+    core_port="$(station_ui_port)"
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     event_manager="$output_dir/EventManager.qml"
     source_event_manager="$BACKUP_DIR/EventManager.qml"
@@ -1065,17 +1110,17 @@ patch_event_manager() {
         printf 'Refusing to patch EventManager.qml from an already patched source\n' >&2
         return 1
     fi
-    awk '
+    awk -v port="$core_port" '
         $0 == "Item {" {
             print
             print ""
             print "    function c300xNotifyMediaClosed() {"
             print "        var request = new XMLHttpRequest()"
-            print "        request.open(\"GET\", \"http://127.0.0.1:8090/ui/media-closed\", true)"
+            print "        request.open(\"GET\", c300xRinger.uiBaseUrl + \"/ui/media-closed\", true)"
             print "        request.send()"
             print "    }"
             print ""
-            print "    C300XRingerControl {}"
+            print "    C300XRingerControl { id: c300xRinger; uiBaseUrl: \"http://127.0.0.1:" port "\" }"
             print "    property bool c300xCallActive: typeof intercomModel === \"undefined\" || intercomModel.isVideoCall || intercomModel.isIntercomCall || intercomModel.isSipIntercomCall"
             print "    property bool c300xRinging: false"
             print "    function c300xPreemptAlert() {"
@@ -1120,8 +1165,8 @@ patch_event_manager() {
         "$temp_file" \
         "EventManager.qml" \
         'function c300xNotifyMediaClosed()' \
-        'C300XRingerControl {}' \
-        'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
+        "C300XRingerControl { id: c300xRinger; uiBaseUrl: \"http://127.0.0.1:$core_port\" }" \
+        'request.open("GET", c300xRinger.uiBaseUrl + "/ui/media-closed", true)' \
         'c300xNotifyMediaClosed()' \
         'onCallEnded:'
     mv "$temp_file" "$event_manager"
@@ -1317,6 +1362,24 @@ apply_generated_patch_if_changed() {
     fi
 }
 
+station_ui_port() {
+    port=${C300X_QML_UI_PORT-}
+    if [ -z "$port" ]; then
+        # Direct installs are not children of the running agent. Ask the native
+        # config parser for its effective listener, never copy config into QML.
+        config="${AGENT_BIN%/*}/config.json"
+        if [ -f "$config" ]; then
+            diagnosis="$("$AGENT_BIN" --config "$config" --diagnose-startup)" || return 1
+            port="$(printf '%s\n' "$diagnosis" | sed -n 's/^    "ui_port": \([0-9][0-9]*\),$/\1/p')"
+        else
+            port=8090
+        fi
+    fi
+    case "$port" in ""|0*|*[!0-9]*) echo "Invalid station UI port" >&2; return 1 ;; esac
+    [ "${#port}" -le 5 ] && [ "$port" -le 65535 ] || return 1
+    printf '%s\n' "$port"
+}
+
 patch_main_app() {
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     main_app="$output_dir/MainApp.qml"
@@ -1329,7 +1392,8 @@ patch_main_app() {
     fi
     mkdir -p "$output_dir"
     cp -p "$source_main_app" "$main_app"
-    awk '
+    ui_port="$(station_ui_port)"
+    awk -v port="$ui_port" '
         $0 == "import QtQuick 1.1" {
             print
             print "import \"js/c300x_ha.js\" as C300XPreferencesApi"
@@ -1349,6 +1413,7 @@ patch_main_app() {
             print "    }"
             print "    Item {"
             print "        id: c300xDisplayPreferences"
+            print "        property string uiBaseUrl: \"http://127.0.0.1:" port "\""
             print "        property bool feedbackEnabled: true"
             print "        property bool ready: false"
             print "        property bool busy: false"
@@ -1493,6 +1558,7 @@ restore_file() {
 }
 
 restore_changed_count() {
+    check_settings_paths || return 1
     changed=0
     if [ -e "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" ]; then
         if ! cmp -s "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" "$GUI_DIR/Components/Settings/GeneralsChoice.qml"; then
@@ -1501,6 +1567,11 @@ restore_changed_count() {
     elif general_settings_partial_present; then
         printf 'No original backup available for Components/Settings/GeneralsChoice.qml; refusing to remove stock GUI file\n' >&2
         return 1
+    fi
+    if [ -f "$BACKUP_DIR/Settings.qml" ]; then
+        cmp -s "$BACKUP_DIR/Settings.qml" "$GUI_DIR/Settings.qml" || changed=$((changed + 1))
+    elif file_contains "$GUI_DIR/Settings.qml" c300xSettings; then
+        echo "Missing original Settings.qml backup" >&2; return 1
     fi
     for rel in MainApp.qml HomePage.qml MemoPage.qml; do
         restore_original="$BACKUP_DIR/$rel"
@@ -1570,6 +1641,7 @@ restore_feature_stock_file() {
 }
 
 restore_patch_files() {
+    if [ -f "$BACKUP_DIR/Settings.qml" ]; then restore_file Settings.qml; fi
     if [ -e "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" ] || general_settings_partial_present; then
         restore_file "Components/Settings/GeneralsChoice.qml"
     fi

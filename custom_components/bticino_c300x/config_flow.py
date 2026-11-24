@@ -55,6 +55,9 @@ from .config_flow_dashboard import (
     DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
 )
 from .config_flow_dashboard import (
+    dashboard_dynamic_homepage as _dashboard_dynamic_homepage,
+)
+from .config_flow_dashboard import (
     dashboard_entity_display_has_fields as _dashboard_entity_display_has_fields,
 )
 from .config_flow_dashboard import (
@@ -215,6 +218,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .discovery_move import async_follow_proven_move
 from .display_patch_sync import async_mark_display_setting
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
@@ -513,7 +517,10 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             connection,
             discovery_matches_entry=discovery_matches_entry,
         )
-        # mDNS identity and addresses are untrusted. Never redirect stored credentials.
+        # mDNS is untrusted: a known station is followed to a new address only
+        # after it proves the saved identity there (discovery_move).
+        if await async_follow_proven_move(self, discovered_unique_id, connection):
+            return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured()
         existing_entry_abort = (
             await self._async_abort_if_zeroconf_targets_existing_manual_entry(
@@ -857,7 +864,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         _DASHBOARD_PREVENT_RETURN_DEFAULT,
                     )
                 ),
-                default_dashboard_dynamic_homepage=bool(
+                default_dashboard_dynamic_homepage=_dashboard_dynamic_homepage(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
@@ -1322,7 +1329,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
                     )
                 ),
-                default_dashboard_dynamic_homepage=bool(
+                default_dashboard_dynamic_homepage=_dashboard_dynamic_homepage(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
@@ -1780,7 +1787,7 @@ class BticinoC300XOptionsFlow(
                         feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
                     )
                 ),
-                default_dashboard_dynamic_homepage=bool(
+                default_dashboard_dynamic_homepage=_dashboard_dynamic_homepage(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],

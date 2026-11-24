@@ -202,8 +202,9 @@ def test_shutdown_signal_before_poll_wakes_the_idle_loop(mqtt_lab, marker):
     lab, peer = mqtt_lab
     ready(lab, peer)
     (lab.root / marker).touch()
-    # One request wakes the old poll; the next poll receives the injected signal.
-    api_get(lab.port, "/api/v1/health")
+    # Wake the old poll via the established broker socket. The next poll can
+    # terminate the server before an HTTP wake-up request would get a reply.
+    peer.close()
     wait_until(lambda: not (lab.root / marker).exists())
     assert lab.process.wait(timeout=2) == 0
     assert "shutdown injected" in (lab.root / "agent.log").read_text()

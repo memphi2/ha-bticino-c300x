@@ -89,12 +89,16 @@ static int device_patch_path(char *buffer, size_t buffer_len, const char *direct
 
 static int device_patch_target_path(char *buffer, size_t buffer_len)
 {
-    return device_patch_path(buffer, buffer_len, C300X_DEVICE_PATCH_TARGET_DIR);
+    const char *directory = getenv("C300X_ROUTING_TARGET_DIR");
+    return device_patch_path(buffer, buffer_len,
+        directory != NULL && directory[0] != '\0' ? directory : C300X_DEVICE_PATCH_TARGET_DIR);
 }
 
 static int device_patch_backup_path(char *buffer, size_t buffer_len)
 {
-    return device_patch_path(buffer, buffer_len, C300X_DEVICE_PATCH_BACKUP_DIR);
+    const char *directory = getenv("C300X_ROUTING_BACKUP_DIR");
+    return device_patch_path(buffer, buffer_len,
+        directory != NULL && directory[0] != '\0' ? directory : C300X_DEVICE_PATCH_BACKUP_DIR);
 }
 
 static int device_patch_temp_path(char *buffer, size_t buffer_len, const char *path)
@@ -172,16 +176,24 @@ static const struct c300x_patch_write PATCH_8_WRITES[] = {
     {0, PATCH_8_WRITE_0, sizeof(PATCH_8_WRITE_0)},
 };
 
+/* Test builds may give the 1.7.19 ranges their own patched hashes, so a
+ * stand-in binary can carry the patch. */
+#ifdef C300X_DEVICE_PATCH_PATCHED_RANGE_SHA256_0
+#define PATCHED_RANGE_SHA256(index, sha256) C300X_DEVICE_PATCH_PATCHED_RANGE_SHA256_##index
+#else
+#define PATCHED_RANGE_SHA256(index, sha256) sha256
+#endif
+
 static const struct c300x_patch_range PATCHES[] = {
-    {"patch_range_0", 0x282f8, 12, "ed451a5b137b7b59ebfd3f4bb8ff6598a18abce58603b72eed97f50b8d6391b8", "59e44ff04f935f33e91e44d52771e6188e7a50c735c07b54f236087a818925d7", PATCH_0_WRITES, ARRAY_LEN(PATCH_0_WRITES)},
-    {"patch_range_1", 0xda04, 16, "cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b", "9bf52da965bdf744685e93b31353826af7bc74bc1fc3248d91f3b89f493444fe", PATCH_1_WRITES, ARRAY_LEN(PATCH_1_WRITES)},
-    {"patch_range_2", 0x35fe0, 4, "85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_2_WRITES, ARRAY_LEN(PATCH_2_WRITES)},
-    {"patch_range_3", 0x35ff4, 4, "4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_3_WRITES, ARRAY_LEN(PATCH_3_WRITES)},
-    {"patch_range_4", 0x36000, 16, "52c4701f0ebe03e78c0fed564727560fa0fc58e477656da7c254df341da5a55f", "801b48661d2b117e9d4c1065f5b27b8e68938ac8efaf47e5a1db1211d495f592", PATCH_4_WRITES, ARRAY_LEN(PATCH_4_WRITES)},
-    {"patch_range_5", 0x363d8, 4, "578b7e8e1392acf5b7a042f27140fdff16d967de87b359c4629374f363061deb", "588247adc40731e7dac725b7c418ce8dedc2a7318e61f12836086f31d5d41520", PATCH_5_WRITES, ARRAY_LEN(PATCH_5_WRITES)},
-    {"patch_range_6", 0x28420, 60, "4a113f9e80b59325c236497a1f60eb4c25ecfc818d846bc838d30d7a9d153d48", "16f1f5712d28c39b0e2ddf193b57ea53b9d8f498d42cee86625f2ff2792eef5c", PATCH_6_WRITES, ARRAY_LEN(PATCH_6_WRITES)},
-    {"patch_range_7", 0x285a0, 4, "c77ead30bd3f6cae55371b8695c71e4c28de7b2006d3f17cd0a2629cdc98a5df", "27d18ebd92839189526cb6345d7f2d5e043d7551446dd60407975ef0e46e5cc4", PATCH_7_WRITES, ARRAY_LEN(PATCH_7_WRITES)},
-    {"patch_range_8", 0x285ac, 4, "a883b9c4475398a5852aaf4ef0b4cbd8bd0557c4206c4d8bafd69832c8d56a47", "a828ca69c6e94a3592c35b9989123858720ac9b114514e040d53a604f87e1d6d", PATCH_8_WRITES, ARRAY_LEN(PATCH_8_WRITES)},
+    {"patch_range_0", 0x282f8, 12, "ed451a5b137b7b59ebfd3f4bb8ff6598a18abce58603b72eed97f50b8d6391b8", PATCHED_RANGE_SHA256(0, "59e44ff04f935f33e91e44d52771e6188e7a50c735c07b54f236087a818925d7"), PATCH_0_WRITES, ARRAY_LEN(PATCH_0_WRITES)},
+    {"patch_range_1", 0xda04, 16, "cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b", PATCHED_RANGE_SHA256(1, "9bf52da965bdf744685e93b31353826af7bc74bc1fc3248d91f3b89f493444fe"), PATCH_1_WRITES, ARRAY_LEN(PATCH_1_WRITES)},
+    {"patch_range_2", 0x35fe0, 4, "85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547", PATCHED_RANGE_SHA256(2, "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d"), PATCH_2_WRITES, ARRAY_LEN(PATCH_2_WRITES)},
+    {"patch_range_3", 0x35ff4, 4, "4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391", PATCHED_RANGE_SHA256(3, "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d"), PATCH_3_WRITES, ARRAY_LEN(PATCH_3_WRITES)},
+    {"patch_range_4", 0x36000, 16, "52c4701f0ebe03e78c0fed564727560fa0fc58e477656da7c254df341da5a55f", PATCHED_RANGE_SHA256(4, "801b48661d2b117e9d4c1065f5b27b8e68938ac8efaf47e5a1db1211d495f592"), PATCH_4_WRITES, ARRAY_LEN(PATCH_4_WRITES)},
+    {"patch_range_5", 0x363d8, 4, "578b7e8e1392acf5b7a042f27140fdff16d967de87b359c4629374f363061deb", PATCHED_RANGE_SHA256(5, "588247adc40731e7dac725b7c418ce8dedc2a7318e61f12836086f31d5d41520"), PATCH_5_WRITES, ARRAY_LEN(PATCH_5_WRITES)},
+    {"patch_range_6", 0x28420, 60, "4a113f9e80b59325c236497a1f60eb4c25ecfc818d846bc838d30d7a9d153d48", PATCHED_RANGE_SHA256(6, "16f1f5712d28c39b0e2ddf193b57ea53b9d8f498d42cee86625f2ff2792eef5c"), PATCH_6_WRITES, ARRAY_LEN(PATCH_6_WRITES)},
+    {"patch_range_7", 0x285a0, 4, "c77ead30bd3f6cae55371b8695c71e4c28de7b2006d3f17cd0a2629cdc98a5df", PATCHED_RANGE_SHA256(7, "27d18ebd92839189526cb6345d7f2d5e043d7551446dd60407975ef0e46e5cc4"), PATCH_7_WRITES, ARRAY_LEN(PATCH_7_WRITES)},
+    {"patch_range_8", 0x285ac, 4, "a883b9c4475398a5852aaf4ef0b4cbd8bd0557c4206c4d8bafd69832c8d56a47", PATCHED_RANGE_SHA256(8, "a828ca69c6e94a3592c35b9989123858720ac9b114514e040d53a604f87e1d6d"), PATCH_8_WRITES, ARRAY_LEN(PATCH_8_WRITES)},
 };
 
 /* Firmware 2.0.2: same writes as above, at the offsets of that build. Only
@@ -606,4 +618,45 @@ int c300x_device_routing_restore(
         return 0;
     }
     return 1;
+}
+
+/* Agent removal. A verified stock target needs no write. Without any backup
+ * entry the agent never patched this target, unless it carries the patch: then
+ * the backup is lost. Every other case must restore and verify the stock file
+ * before removal may delete the backup. */
+int c300x_device_routing_remove_patches(char *error, size_t error_len)
+{
+    struct c300x_device_routing_status status;
+    char backup_path[C300X_MAX_PATH_LEN];
+    char target_path[C300X_MAX_PATH_LEN];
+    char sha256[65];
+    char link;
+    unsigned char *data = NULL;
+    size_t len = 0;
+    int stock = 0, patched = 0;
+
+    if (!device_patch_target_path(target_path, sizeof(target_path))
+        || !device_patch_backup_path(backup_path, sizeof(backup_path))) {
+        set_error(error, error_len, "routing_path_failed");
+        return 0;
+    }
+    if (c300x_patch_read_file(target_path, &data, &len)) {
+        stock = routing_regular_file(target_path, len)
+            && c300x_sha256_bytes_hex(data, len, sha256, sizeof(sha256))
+            && variant_for_stock_sha(sha256) != NULL;
+        patched = variant_matching(data, len, 1) != NULL;
+        free(data);
+    }
+    if (stock) {
+        return 1;
+    }
+    if (access(backup_path, F_OK) != 0 && errno == ENOENT
+        && readlink(backup_path, &link, 1) < 0 && errno == ENOENT) {
+        if (!patched) {
+            return 1;
+        }
+        set_error(error, error_len, "routing_backup_missing");
+        return 0;
+    }
+    return c300x_device_routing_restore(&status, error, error_len);
 }

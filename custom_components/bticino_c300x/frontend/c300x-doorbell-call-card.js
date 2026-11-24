@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=a2bdcf6613188ecd";
+} from "./c300x-translations.js?v=0ec1ebcd886b1321";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,14 +15,14 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=a2bdcf6613188ecd";
+} from "./c300x-entity-resolver.js?v=0ec1ebcd886b1321";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=a2bdcf6613188ecd";
-import { C300XCardActions } from "./c300x-card-actions.js?v=a2bdcf6613188ecd";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=a2bdcf6613188ecd";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=a2bdcf6613188ecd";
+} from "./c300x-card-editor.js?v=0ec1ebcd886b1321";
+import { C300XCardActions } from "./c300x-card-actions.js?v=0ec1ebcd886b1321";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=0ec1ebcd886b1321";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=0ec1ebcd886b1321";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
@@ -30,13 +30,13 @@ import {
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=a2bdcf6613188ecd";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=a2bdcf6613188ecd";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=a2bdcf6613188ecd";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=a2bdcf6613188ecd";
-import { C300XCardMedia } from "./c300x-card-media.js?v=a2bdcf6613188ecd";
-import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=a2bdcf6613188ecd";
-import { mediaStamp } from "./c300x-media-translations.js?v=a2bdcf6613188ecd";
+} from "./c300x-state-model.js?v=0ec1ebcd886b1321";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=0ec1ebcd886b1321";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=0ec1ebcd886b1321";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=0ec1ebcd886b1321";
+import { C300XCardMedia } from "./c300x-card-media.js?v=0ec1ebcd886b1321";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=0ec1ebcd886b1321";
+import { mediaStamp } from "./c300x-media-translations.js?v=0ec1ebcd886b1321";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -311,6 +311,10 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._mediaEl = root.querySelector(".media");
     this._emptyEl = root.querySelector(".empty");
     this._snapshotEl = root.querySelector(".snapshot-preview");
+    this._snapshotEl.addEventListener("load", () => {
+      const { naturalWidth, naturalHeight } = this._snapshotEl;
+      if (naturalHeight && naturalWidth) this.style.setProperty("--snapshot-ratio", String(naturalWidth / naturalHeight));
+    });
     this._bodyEl = root.querySelector(".body");
     this._actionButtonEl = root.querySelector(".row-action");
     this._actionIconEl = root.querySelector(".action-icon");
@@ -390,6 +394,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       },
       mediaPrimaryAction: attributes.media_primary_action || "",
       mediaState: attributes.media_state || "",
+      pictureSession: this._cardMedia?.pictureSession(entity),
       micMuted: this._micMuted,
       mode: this._config?.mode || "",
       name: this._config?.name || "",
@@ -1093,6 +1098,12 @@ class C300XDoorbellCallCard extends HTMLElement {
       return;
     }
     this._cameraEntityState = data.new_state || null;
+    // Do not let revoke/regrant within one render frame preserve an open panel or pending reply.
+    const picture = this._cardMedia?.picture;
+    const session = this._cardMedia?.pictureSession(data.new_state);
+    if (picture && picture.session !== session) {
+      picture.configure?.(this._hass, this._entryId(), session);
+    }
     this._cancelUnavailableMediaStart(data.new_state);
     this._cancelEndedRingStart(data.new_state);
     this._scheduleUpdate();

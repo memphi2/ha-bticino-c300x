@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -197,10 +198,21 @@ def test_cli_reports_success_or_structural_failure_without_traceback(checker, tm
     quality = tmp_path / "custom_components/bticino_c300x/quality_scale.yaml"
     quality.parent.mkdir(parents=True)
     quality.write_text(checker.QUALITY_SCALE.read_text() if valid else "rules: [", encoding="utf-8")
-    docs = tmp_path / "docs/quality-scale.md"
-    docs.parent.mkdir()
+    docs = tmp_path / "docs/dev/quality-scale.md"
+    docs.parent.mkdir(parents=True)
     docs.write_text(checker.QUALITY_DOC.read_text(), encoding="utf-8")
     result = subprocess.run([sys.executable, str(scripts / SCRIPT.name)], capture_output=True, text=True, timeout=10)
     assert result.returncode == (0 if valid else 1), result.stdout + result.stderr
     assert "Traceback" not in result.stderr
     assert ("Quality scale validation passed" if valid else "Invalid quality_scale.yaml") in result.stdout + result.stderr
+
+
+def test_every_code_reference_in_the_audit_names_a_definition_in_that_file():
+    audit = (ROOT / "docs" / "dev" / "quality-scale.md").read_text(encoding="utf-8")
+    references = set(re.findall(r"`([a-z_/]+\.py):([A-Za-z_][A-Za-z0-9_]*)`", audit))
+    assert ("data.py", "BticinoC300XRuntimeData") in references
+    for filename, name in sorted(references):
+        folder = ROOT / ("tests" if filename.startswith("test_") else "custom_components/bticino_c300x")
+        source = (folder / filename).read_text(encoding="utf-8")
+        pattern = rf"^\s*(?:class|def|async def)\s+{name}\b|^{name}\s*[:=]"
+        assert re.search(pattern, source, re.MULTILINE), f"{filename}:{name}"

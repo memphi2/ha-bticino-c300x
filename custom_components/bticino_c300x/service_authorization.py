@@ -16,6 +16,7 @@ from .dashboard_config import configured_alarm_entity_id
 from .entity import entry_entity_unique_id
 
 _CAMERA_SERVICES = {
+    "camera_picture",
     "activate_doorbell_video",
     "stop_doorbell_video",
     "answer_doorbell_call",

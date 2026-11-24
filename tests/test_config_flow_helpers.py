@@ -884,7 +884,25 @@ def test_feature_input_keeps_selected_gui_features() -> None:
         }
     }
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
-    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
+    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
+
+
+@pytest.mark.parametrize(
+    ("choice", "stored"),
+    [("stock", True), ("side_by_side", False), (True, True), (False, False)],
+)
+@pytest.mark.parametrize("device_ui_enabled", [True, False])
+def test_feature_input_stores_the_picked_home_page_layout(
+    choice: object, stored: bool, device_ui_enabled: bool
+) -> None:
+    """The form's choice is stored as picked; no save forces the stock layout."""
+
+    data, errors = _feature_input(
+        {CONF_DEVICE_UI_ENABLED: device_ui_enabled, CONF_DASHBOARD_DYNAMIC_HOMEPAGE: choice}
+    )
+
+    assert errors == {}
+    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is stored
 
 
 def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:
@@ -1740,34 +1758,6 @@ def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
     ]
 
 
-def test_zeroconf_identity_cannot_redirect_an_existing_entry(monkeypatch):
-    flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
-    flow.context = {}
-
-    async def set_identity(*args, **kwargs):
-        pass
-
-    def abort_existing(**kwargs):
-        assert "updates" not in kwargs
-        raise RuntimeError("already configured")
-
-    flow.async_set_unique_id = set_identity
-    flow._abort_if_unique_id_configured = abort_existing
-    flow._async_current_entries = lambda: []
-
-    async def forbid_probe(*args, **kwargs):
-        pytest.fail("A rediscovered identity must not probe the announced endpoint")
-
-    monkeypatch.setattr(config_flow_module, "_async_probe_agent", forbid_probe)
-    with pytest.raises(RuntimeError, match="already configured"):
-        asyncio.run(flow.async_step_zeroconf(SimpleNamespace(
-            host="192.0.2.99", port=8091,
-            properties={"id": "c300x-aabbcc001122"},
-            name="BTicino C300X Agent._bticino-c300x-agent._tcp.local.",
-        )))
-
-
 def test_zeroconf_rediscovery_requests_runtime_event_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1929,6 +1919,7 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
         CONF_DEVICE_UI_ENABLED,
         CONF_DASHBOARD_PREVENT_RETURN,
         "dashboard_navigation",
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_ACTIONS_JSON,
     ]
     # Alarmo and the weather are set with the pages.
@@ -2922,7 +2913,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
         flow.async_step_reconfigure_dashboard(
             {
                 CONF_DEVICE_UI_ENABLED: True,
-                CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False,
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE: "side_by_side",
                 CONF_ACTIONS_JSON: "",
                 CONF_DASHBOARD_PREVENT_RETURN: True,
             }
@@ -2978,7 +2969,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert result["data_updates"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result["data_updates"][CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
     assert result["data_updates"][CONF_WEATHER_ENTITY_ID] == "weather.home"
-    assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
+    assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
     assert result["data_updates"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
         "select.forwarding": {
             "secondary": "last_changed",

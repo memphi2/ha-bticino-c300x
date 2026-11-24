@@ -11,9 +11,6 @@ from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
 from .config_flow_dashboard import (
-    DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
-)
-from .config_flow_dashboard import (
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
 )
 from .config_flow_dashboard import (
@@ -72,6 +69,7 @@ from .const import (
     DEVICE_ACTIVATION_MODE_AUTO,
     WEBRTC_ICE_POLICIES,
 )
+from .dashboard_config import configured_dashboard_prevent_return
 from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import normalize_dashboard_pages
 from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
@@ -295,13 +293,8 @@ def current_feature_options(
             )
         ),
         CONF_ACTIONS: _config_default(config_entry, CONF_ACTIONS, {}),
-        CONF_DASHBOARD_PREVENT_RETURN: bool(
-            _config_default(
-                config_entry,
-                CONF_DASHBOARD_PREVENT_RETURN,
-                _DASHBOARD_PREVENT_RETURN_DEFAULT,
-            )
-        ),
+        # An entry that never saved it shows what the display applies.
+        CONF_DASHBOARD_PREVENT_RETURN: configured_dashboard_prevent_return(config_entry),
         CONF_DEVICE_ACTIVATION_MODE: _config_default(
             config_entry,
             CONF_DEVICE_ACTIVATION_MODE,

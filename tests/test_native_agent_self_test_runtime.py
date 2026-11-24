@@ -68,6 +68,7 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
         encoding="utf-8",
     )
     binary = tmp_path / "self-test-user"
+    db = tmp_path / "dbfiles_ws.xml"
     subprocess.run(
         [
             "gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
@@ -76,6 +77,9 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
             *(f"-D{name}={json.dumps(str(path))}" for name, path in paths.items()),
             str(NATIVE / "test/self_test_user_test.c"),
             str(NATIVE / "src/self_test.c"),
+            f"-DC300X_FIRMWARE_INFO_XML={json.dumps(str(db))}",
+            str(NATIVE / "src/firmware_version.c"),
+            str(NATIVE / "src/file_io.c"),
             str(NATIVE / "src/device_user.c"),
             str(NATIVE / "src/string_util.c"),
             "-o", str(binary),
@@ -93,6 +97,16 @@ def test_native_self_test_evaluates_media_setup_not_literal_device_user(
 
     payload = json.loads(result.stdout)
     status = payload["self_test"]
+    assert status["firmware_family"] == "unknown"
+    if case == "no_device_user":
+        for value, override, expected in [
+            (" 1.7.19 ", "", "1.7.x"),
+            ("1.7.19", "2.0.2", "2.0.x"),
+            ("1.7.bad/value", "", "unknown"),
+        ]:
+            db.write_text(f"<ver_webserver>{value}</ver_webserver>", encoding="utf-8")
+            output = subprocess.check_output([str(binary), str(firewall), "1", override], text=True)
+            assert json.loads(output)["self_test"]["firmware_family"] == expected
     user = status["checks"]["homeassistant_user"]
     assert user["reason"] == user_reason
     assert user["ok"] is (user_reason == "homeassistant_user_ok")

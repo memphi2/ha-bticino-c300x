@@ -39,10 +39,16 @@ export async function checkSnapshotLayout(page, artifacts) {
           const bounds = () => {
             const outer = card.getBoundingClientRect();
             const media = card._mediaEl.getBoundingClientRect();
-            return { height: outer.height, width: outer.width, mediaHeight: media.height };
+            return { height: outer.height, width: outer.width, mediaWidth: media.width, mediaHeight: media.height };
           };
           await tick();
           const preview = bounds();
+          card._cardMedia.setExpanded(true);
+          await tick();
+          const expanded = card.shadowRoot.querySelector(".body").getBoundingClientRect();
+          const footerFits = expanded.bottom <= innerHeight + 1 && expanded.top >= 0;
+          card._cardMedia.setExpanded(false);
+          await tick();
           const accessible = card._snapshotEl.getAttribute("aria-label");
           const overlay = !!card.shadowRoot.querySelector(".snapshot-label");
           const stream = lab.source.captureStream(10);
@@ -58,7 +64,7 @@ export async function checkSnapshotLayout(page, artifacts) {
             card._videoEl.srcObject = null;
             card._updateState();
             await tick();
-            return { preview, live, stopped: bounds(), accessible, overlay,
+            return { preview, live, stopped: bounds(), accessible, overlay, footerFits,
               snapshotHidden, snapshotRestored: !card._snapshotEl.hidden,
               fit: getComputedStyle(card._snapshotEl).objectFit,
               overflow: document.documentElement.scrollWidth > innerWidth };
@@ -68,13 +74,13 @@ export async function checkSnapshotLayout(page, artifacts) {
           }
         }, { height, size });
         const label = `${width}px ${height} ${size.join("x")}`;
-        for (const state of [result.live, result.stopped]) {
-          for (const key of ["height", "width", "mediaHeight"]) {
-            assert.ok(Math.abs(state[key] - result.preview[key]) < 1,
-              `${label}: ${key} changed: ${JSON.stringify(result)}`);
-          }
+        for (const [state, ratio] of [[result.preview, size[0] / size[1]],
+          [result.live, 4 / 3], [result.stopped, size[0] / size[1]]]) {
+          assert.ok(Math.abs(state.mediaHeight - state.mediaWidth / ratio) < 1,
+            `${label}: wrong picture frame: ${JSON.stringify(state)}`);
         }
         assert.ok(result.preview.mediaHeight > 0, label);
+        assert.ok(result.footerFits, `${label}: expanded preview footer outside viewport`);
         assert.equal(result.overlay, false, `${label}: duplicate timestamp overlay`);
         assert.match(result.accessible, /Archived image \(not live\)/);
         assert.equal(result.fit, "contain");

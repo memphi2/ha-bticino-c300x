@@ -27,7 +27,7 @@
 #define C300X_MDNS_CLASS_FLUSH_IN 0x8001
 #define C300X_MDNS_FALLBACK_ID "c300x-agent"
 
-static int mdns_open_socket(void);
+static int mdns_open_socket(uint32_t *ipv4);
 static void mdns_send_response(
     struct c300x_mdns *mdns,
     const struct c300x_config *config,
@@ -35,6 +35,7 @@ static void mdns_send_response(
 );
 static int mdns_build_response(
     const struct c300x_config *config,
+    const char *instance_id,
     unsigned char *buffer,
     size_t buffer_len,
     uint32_t ttl
@@ -87,11 +88,30 @@ static int mdns_local_ipv6(struct in6_addr *result);
 static void mdns_set_fd_cloexec(int fd);
 static void mdns_set_fd_nonblocking(int fd);
 
+/* Milliseconds HA still counts as present, or 0 when the responder should
+ * announce again. Monotonic input: wall-clock steps cannot flap it. */
+long long c300x_mdns_home_assistant_present_ms(
+    int connected_this_run,
+    long long last_request_ms,
+    long long now_ms
+)
+{
+    long long left;
+
+    if (!connected_this_run || last_request_ms <= 0) {
+        return 0;
+    }
+    left = last_request_ms + C300X_MDNS_HOME_ASSISTANT_QUIET_MS - now_ms;
+    return left > 0 ? left : 0;
+}
+
 void c300x_mdns_init(struct c300x_mdns *mdns)
 {
     mdns->fd = -1;
     mdns->next_announce_at = 0;
     mdns->announced = 0;
+    mdns->wanted = 0;
+    mdns->instance_id[0] = '\0';
 }
 
 void c300x_mdns_close(struct c300x_mdns *mdns)
@@ -111,14 +131,15 @@ void c300x_mdns_open_if_needed(
     time_t now
 )
 {
-    if (!config->mdns_enabled || home_assistant_connected || !network_online) {
+    mdns->wanted = config->mdns_enabled && !home_assistant_connected && network_online;
+    if (!mdns->wanted) {
         c300x_mdns_close(mdns);
         return;
     }
     if (mdns->fd >= 0 || mdns->next_announce_at > now) {
         return;
     }
-    mdns->fd = mdns_open_socket();
+    mdns->fd = mdns_open_socket(&mdns->ipv4);
     if (mdns->fd < 0) {
         mdns->next_announce_at = now + C300X_MDNS_ANNOUNCE_SECONDS;
         return;
@@ -132,9 +153,16 @@ int c300x_mdns_fd(const struct c300x_mdns *mdns)
     return mdns->fd;
 }
 
-time_t c300x_mdns_next_announce_at(const struct c300x_mdns *mdns)
+/* Also wakes the loop to retry a socket that could not be (re)opened. */
+int c300x_mdns_poll_timeout_ms(const struct c300x_mdns *mdns, time_t now)
 {
-    return mdns->next_announce_at;
+    if (!mdns->wanted) {
+        return -1;
+    }
+    if (mdns->next_announce_at <= now) {
+        return 0;
+    }
+    return mdns->next_announce_at - now > 3600 ? 3600000 : (int)((mdns->next_announce_at - now) * 1000);
 }
 
 static int mdns_read_name(const unsigned char *packet, size_t size, size_t *offset,
@@ -230,12 +258,18 @@ void c300x_mdns_announce_if_due(
     if (mdns->fd < 0 || mdns->next_announce_at > now) {
         return;
     }
+    /* The socket stays bound to the interface address it was opened for. */
+    if (mdns_local_ipv4().s_addr != mdns->ipv4) {
+        c300x_mdns_close(mdns);
+        mdns->next_announce_at = now;
+        return;
+    }
     mdns_send_response(mdns, config, 120);
     mdns->announced = 1;
     mdns->next_announce_at = now + C300X_MDNS_ANNOUNCE_SECONDS;
 }
 
-static int mdns_open_socket(void)
+static int mdns_open_socket(uint32_t *ipv4)
 {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in bind_addr;
@@ -286,6 +320,7 @@ static int mdns_open_socket(void)
     (void)setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
     (void)setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
     mdns_set_fd_nonblocking(fd);
+    *ipv4 = local_address.s_addr;
     return fd;
 }
 
@@ -297,7 +332,7 @@ static void mdns_send_response(
 {
     unsigned char buffer[1024];
     struct sockaddr_in target;
-    int length = mdns_build_response(config, buffer, sizeof(buffer), ttl);
+    int length = mdns_build_response(config, mdns->instance_id, buffer, sizeof(buffer), ttl);
 
     if (mdns->fd < 0 || length <= 0) {
         return;
@@ -320,6 +355,7 @@ static void mdns_send_response(
 
 static int mdns_build_response(
     const struct c300x_config *config,
+    const char *instance_id,
     unsigned char *buffer,
     size_t buffer_len,
     uint32_t ttl
@@ -332,6 +368,7 @@ static int mdns_build_response(
     char txt_id[80];
     char txt_name[80];
     char txt_version[80];
+    char txt_instance[48];
     unsigned char rdata[512];
     struct in_addr address = mdns_local_ipv4();
     struct in6_addr ipv6_address;
@@ -340,6 +377,11 @@ static int mdns_build_response(
     size_t rdata_len = 0;
 
     c300x_mdns_device_id(device_id, sizeof(device_id));
+    /* A cached DNS-SD service needs a changed record to signal a restart. */
+    if (snprintf(txt_instance, sizeof(txt_instance), "instance=%s", instance_id)
+        >= (int)sizeof(txt_instance)) {
+        return 0;
+    }
     mdns_instance_name(config, device_id, instance_label, sizeof(instance_label));
     if (
         snprintf(
@@ -482,6 +524,7 @@ static int mdns_build_response(
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_id)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_name)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_version)
+        || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_instance)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, "model=C300X")
     ) {
         return 0;

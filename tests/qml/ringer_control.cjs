@@ -50,7 +50,7 @@ function runtime() {
         disableState(state) { assert.equal(state, 4); mute = false; operations.push("disable"); },
         isStateEnabled(state) { assert.equal(state, 4); return mute; },
     };
-    const context = vm.createContext({Ringer, stopped: false, XMLHttpRequest: Request,
+    const context = vm.createContext({Ringer, stopped: false, uiBaseUrl: "http://127.0.0.1:18090", XMLHttpRequest: Request,
         global: {audioState}, AudioState: {RingtoneMute: 4},
         reconnect: {start() { reconnects++; }, stop() { stops++; }}});
     Object.defineProperty(context, "pendingRequest", {
@@ -71,8 +71,7 @@ const r = runtime();
 r.context.waitForCommand();
 r.context.waitForCommand();
 assert.equal(r.requests.length, 1, "only one sleeping request");
-const config = JSON.parse(fs.readFileSync(path.join(root, "native_agent/config.example.json"), "utf8"));
-assert.equal(r.requests[0].url, "http://127.0.0.1:" + config.listen.uiPort + "/ui/ringer/next");
+assert.equal(r.requests[0].url, "http://127.0.0.1:18090/ui/ringer/next?picture=1");
 r.requests[0].reply(command(false));
 assert.equal(r.mute, false);
 assert.deepEqual(r.operations, ["disable"]);
@@ -125,6 +124,21 @@ assert.equal(second.mute, false);
 assert.equal(second.requests.length, 2);
 second.shutdown();
 const idle = runtime();
+const picture = runtime();
+const callObj = {callInProgress: true, brightness: 10, contrast: 20, color: 30};
+picture.context.videocallPage = {item: {callObj}};
+picture.context.waitForCommand();
+for (const [key, property] of [["brightness", "brightness"], ["contrast", "contrast"], ["saturation", "color"]]) {
+    picture.requests.at(-1).reply(command(undefined, {picture: key, value: 90}));
+    assert.equal(callObj[property], 90);
+    assert.ok(picture.requests.at(-1).url.includes(key+"=90"));
+}
+callObj.callInProgress = false;
+picture.requests.at(-1).reply(command(undefined, {picture: "brightness", value: 0}));
+assert.equal(callObj.brightness, 90);
+assert.ok(!picture.requests.at(-1).url.includes("brightness="));
+assert.deepEqual(picture.operations, []);
+picture.shutdown();
 idle.shutdown();
 assert.equal(idle.requests.length, 0);
 console.log("Ringer command semantics, Qt4 JS ownership and teardown passed");

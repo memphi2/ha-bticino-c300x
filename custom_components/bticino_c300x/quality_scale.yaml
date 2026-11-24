@@ -1,5 +1,5 @@
-# Local self-assessment, reviewed 2026-11-16; not an official HA tier.
-# Per-rule evidence and open work: docs/quality-scale.md.
+# Local self-assessment, reviewed 2026-11-23; not an official HA tier.
+# Per-rule evidence and open work: docs/dev/quality-scale.md.
 rules:
   action-setup: done
   appropriate-polling:
@@ -74,11 +74,11 @@ rules:
     comment: All entities inherit the configured C300X DeviceInfo for one display/agent pair.
   diagnostics: done
   discovery-update-info:
-    status: todo
-    comment: Zeroconf deliberately does not update an existing endpoint from untrusted mDNS, to avoid redirecting stored credentials. Only same-endpoint registration/identity adoption is allowed. A securely authenticated address-change workflow is not implemented; do not weaken that guard to satisfy the rule.
+    status: done
+    comment: An entry saved with an IPv4 address follows a newly announced IPv4 address only when the saved address no longer proves the identity and the new one does; a proof answers a fresh nonce, sent without credentials, with an HMAC-SHA256 keyed by the saved access token over the identity and the address it was reached on (discovery_move.py; tests/test_config_flow_discovery_move.py). Host names are never replaced.
   discovery:
     status: done
-    comment: The native agent can advertise a minimal mDNS service only until HA registers a subscription or display bridge.
+    comment: The native agent advertises a minimal mDNS service while HA is not using it, announces again once HA has made no authenticated API request for 15 minutes, and reopens its mDNS socket when its IPv4 address changes.
   docs-data-update: done
   docs-examples: done
   docs-known-limitations: done

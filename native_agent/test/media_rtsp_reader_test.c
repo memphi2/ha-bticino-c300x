@@ -1,8 +1,10 @@
 #include "../src/media_rtsp_reader.h"
+#include "../src/media_rtsp_io.h"
 #include "../src/time_util.h"
 
 #include <assert.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -25,7 +27,7 @@ static void init(reader_t *reader)
 {
     memset(reader, 0, sizeof(*reader));
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, reader->fds) == 0);
-    reader->buffer = (rtsp_read_buffer_t){reader->storage, sizeof(reader->storage), 0, 0, 0};
+    reader->buffer = (rtsp_read_buffer_t){.data = reader->storage, .cap = sizeof(reader->storage)};
 }
 
 static void finish(reader_t *reader)
@@ -145,11 +147,65 @@ static void deadlines_and_eof(void)
     }
 }
 
+struct pending_read {
+    reader_t *reader;
+    rtsp_read_result_t result;
+};
+
+static void *wait_for_input(void *arg)
+{
+    struct pending_read *wait = arg;
+    reader_t *r = wait->reader;
+    wait->result = c300x_media_rtsp_read(&r->buffer, r->fds[1], r->request, sizeof(r->request),
+        r->payload, sizeof(r->payload), &r->channel, &r->length, 30);
+    return NULL;
+}
+
+static void final_frame(int recover)
+{
+    reader_t r;
+    init(&r);
+    int size = 4096;
+    assert(setsockopt(r.fds[1], SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) == 0);
+    r.buffer.writer = c300x_rtsp_writer_create();
+    assert(r.buffer.writer);
+    /* Cover both a fragmented request and a completely idle connection. */
+    if (recover) put(&r, request, 1);
+    struct pending_read wait = {.reader = &r};
+    pthread_t handler;
+    assert(pthread_create(&handler, NULL, wait_for_input, &wait) == 0);
+    unsigned char payload[48000], wire[4 + sizeof(payload)];
+    for (size_t i = 0; i < sizeof(payload); ++i) payload[i] = (unsigned char)(i * 7);
+    assert(c300x_rtsp_send_interleaved(r.buffer.writer, r.fds[1], 2, payload, sizeof(payload)) == 0);
+    long long start = c300x_monotonic_ms();
+    if (recover) {
+        /* No new media or control message to drive the final write. */
+        assert(recv(r.fds[0], wire, sizeof(wire), MSG_WAITALL) == (ssize_t)sizeof(wire));
+        assert(memcmp(wire, (unsigned char[]){'$', 2, 0xbb, 0x80}, 4) == 0);
+        assert(memcmp(wire + 4, payload, sizeof(payload)) == 0);
+        put(&r, request + 1, sizeof(request) - 2);
+    }
+    assert(pthread_join(handler, NULL) == 0);
+    if (recover) {
+        assert(wait.result == RTSP_READ_REQUEST && memcmp(r.request, request, sizeof(request)) == 0);
+    } else {
+        long long elapsed = c300x_monotonic_ms() - start;
+        assert(wait.result == RTSP_READ_ERROR && elapsed >= 4500 && elapsed < 7000);
+        ssize_t prefix = recv(r.fds[0], wire, sizeof(wire), MSG_WAITALL);
+        assert(prefix > 0 && (size_t)prefix < sizeof(wire));
+        assert(recv(r.fds[0], wire, 1, MSG_DONTWAIT) == 0);
+    }
+    c300x_rtsp_writer_release(r.buffer.writer);
+    finish(&r);
+}
+
 int main(void)
 {
     mixed_frames();
     discarded_frames();
     limits();
     deadlines_and_eof();
+    final_frame(1);
+    final_frame(0);
     return 0;
 }

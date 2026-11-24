@@ -135,11 +135,12 @@ REQUIRED_PATHS = [
     "custom_components/bticino_c300x/webhook.py",
     "custom_components/bticino_c300x/diagnostics.py",
     "custom_components/bticino_c300x/repair_issues.py",
-    "docs/architecture.md",
-    "docs/audits/current-legal-provenance.md",
+    "docs/dev/architecture.md",
+    "docs/dev/audits/current-legal-provenance.md",
+    "docs/dev/native-agent.md",
+    "docs/dev/quality-scale.md",
+    "docs/dev/release-validation.md",
     "docs/legal.md",
-    "docs/native-agent.md",
-    "docs/quality-scale.md",
     "docs/user-guide.md",
     "scripts/check_quality_scale.py",
     "scripts/check_dependency_updates.py",
@@ -189,7 +190,9 @@ REQUIRED_PATHS = [
     "device_qml/C300XDetailControl.qml",
     "device_qml/C300XEnergyReadout.qml",
     "device_qml/C300XEnergySums.qml",
+    "device_qml/C300XSettings.qml",
     "device_qml/js/c300x_energy.js",
+    "device_qml/js/c300x_maintenance.js",
     "device_qml/js/c300x_ha.js",
     "device_qml/js/c300x_i18n.js",
     "device_qml/js/c300x_memos.js",
@@ -469,7 +472,7 @@ def check_legal_hygiene() -> list[str]:
 def check_current_audit_snapshot() -> list[str]:
     """Require one current audit snapshot instead of accumulating old reports."""
 
-    audit_dir = ROOT / "docs" / "audits"
+    audit_dir = ROOT / "docs" / "dev" / "audits"
     current = audit_dir / "current-legal-provenance.md"
     failures: list[str] = []
     if not current.is_file():
@@ -477,7 +480,7 @@ def check_current_audit_snapshot() -> list[str]:
     audit_files = sorted(path.name for path in audit_dir.glob("*.md"))
     if audit_files != ["current-legal-provenance.md"]:
         failures.append(
-            "docs/audits must contain only current-legal-provenance.md, got "
+            "docs/dev/audits must contain only current-legal-provenance.md, got "
             + ", ".join(audit_files)
         )
     return failures
@@ -927,10 +930,10 @@ def check_hacs_metadata() -> list[str]:
     ):
         if token not in release_assets_script:
             failures.append(f"write_release_assets.py must write {token} release evidence")
-    release_validation = (ROOT / "docs" / "release-validation.md").read_text(
+    release_validation = (ROOT / "docs" / "dev" / "release-validation.md").read_text(
         encoding="utf-8"
     )
-    native_agent_docs = (ROOT / "docs" / "native-agent.md").read_text(
+    native_agent_docs = (ROOT / "docs" / "dev" / "native-agent.md").read_text(
         encoding="utf-8"
     )
     from native_build_lock import INPUT_DIRS, INPUT_FILES
@@ -940,9 +943,9 @@ def check_hacs_metadata() -> list[str]:
         if path not in locked_inputs:
             failures.append(f"native build lock must gate agent reuse on {path}")
         if path not in release_validation:
-            failures.append(f"docs/release-validation.md must document agent reuse path {path}")
+            failures.append(f"docs/dev/release-validation.md must document agent reuse path {path}")
         if path not in native_agent_docs:
-            failures.append(f"docs/native-agent.md must document agent reuse path {path}")
+            failures.append(f"docs/dev/native-agent.md must document agent reuse path {path}")
     return failures
 
 

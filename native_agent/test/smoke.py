@@ -1814,6 +1814,11 @@ def run_smoke(
                 raise AssertionError("callback token was not forwarded")
             if callback_event["body"].get("data", {}).get("address") != "10":
                 raise AssertionError("stair light event address was not parsed cleanly")
+            # Checked now: the recent events are a bounded ring, and the voicemail
+            # writes below add a varying number of events that can push it out.
+            recent = api_get(api_port, "/api/v1/events/recent")
+            if not any(event.get("type") == "stair_light.activated" for event in recent["events"]):
+                raise AssertionError("recent events did not record stair light event")
             callback_seen = len(callback.requests)
             send_udp_event(udp_port, "*8*1#1#4#21*11##")
             doorbell_event = wait_for_callback_type(
@@ -1878,8 +1883,6 @@ def run_smoke(
             assert_json_field(voicemail, "unread", 0)
             assert_json_field(voicemail, "read", 1)
             recent = api_get(api_port, "/api/v1/events/recent")
-            if not any(event.get("type") == "stair_light.activated" for event in recent["events"]):
-                raise AssertionError("recent events did not record stair light event")
             if not any(
                 event.get("type") == "answering_machine.messages_changed"
                 for event in recent["events"]

@@ -1,4 +1,5 @@
 #include "http_service_commands.h"
+#include "http_service_dispatch.h"
 #include "http_util.h"
 #include "json_util.h"
 
@@ -10,7 +11,12 @@
 #define C300X_SSH_INIT_SCRIPT "/etc/init.d/dropbear"
 #endif
 #ifndef C300X_SSH_STATUS_COMMAND
-#define C300X_SSH_STATUS_COMMAND "pidof dropbear >/dev/null 2>&1"
+/* The stock init script stops the listener by pidfile. Established SSH
+ * sessions can keep their own dropbear processes after a successful stop. */
+#define C300X_SSH_STATUS_COMMAND \
+    "file=/var/run/dropbear.pid; [ -e \"$file\" ] || exit 1; " \
+    "read -r pid < \"$file\" || exit 2; case $pid in ''|*[!0-9]*) exit 2;; esac; " \
+    "[ /proc/\"$pid\"/exe -ef /usr/sbin/dropbear ]"
 #endif
 /* A hanging init script or status check must not hold the maintenance
  * slot, and with it every other maintenance request, for good. */
@@ -31,6 +37,8 @@ struct service_request {
     c300x_schedule_command_fn schedule;
     enum service_action action;
     enum service_phase phase;
+    int display;
+    int requested_ssh;
     c300x_reboot_reply_fn reply;
     void *reply_context;
     void (*destroy_reply)(void *);
@@ -56,6 +64,15 @@ static void ssh_status(int fd, int running)
     snprintf(body, sizeof(body), "{\"ok\":true,\"enabled\":%s,\"running\":%s}\n",
         running ? "true" : "false", running ? "true" : "false");
     c300x_http_send_json(fd, 200, "OK", body);
+}
+
+static void probe_failed(int fd, const struct service_request *state)
+{
+    if (state->display) {
+        command_failed(fd);
+    } else {
+        ssh_status(fd, 0);
+    }
 }
 
 static int start_command(struct c300x_http_maintenance *owner, const char *program, const char *action)
@@ -121,14 +138,22 @@ static int finish_service(struct c300x_http_maintenance *owner)
         return 1;
     }
     if (state->phase == STATUS_COMMAND) {
-        ssh_status(fd, !owner->job.failed);
+        int running = !owner->job.failed;
+        /* The probe returns 1 for no listener. A timeout or failed probe is unknown,
+         * not proof that a requested stop succeeded. */
+        if (state->display && ((owner->job.failed && owner->job.exit_status != 1)
+            || (state->action == SSH_SET && state->requested_ssh != running))) {
+            command_failed(fd);
+        } else {
+            ssh_status(fd, running);
+        }
     } else if (owner->job.failed) {
         command_failed(fd);
     } else if (state->action == SSH_SET) {
         if (start_status(owner, state)) {
             return 0;
         }
-        ssh_status(fd, 0);
+        probe_failed(fd, state);
     } else {
         c300x_http_send_json(fd, 200, "OK", state->action == SSH_START
             ? "{\"ok\":true,\"action\":\"ssh_start\",\"enabled\":true,\"running\":true}\n"
@@ -136,7 +161,6 @@ static int finish_service(struct c300x_http_maintenance *owner)
     }
     return 1;
 }
-
 static void hold_service(struct c300x_http_maintenance *owner, int fd, struct service_request *state)
 {
     owner->client_fd = fd;
@@ -168,17 +192,7 @@ void c300x_http_service_reboot(struct c300x_http_maintenance *owner, int fd,
     }
 }
 
-int c300x_http_service_commands_defer(const struct c300x_http_maintenance *owner,
-    const struct c300x_config *config, const struct request *request)
-{
-    return c300x_http_maintenance_busy(owner)
-        && strcmp(request->method, "GET") == 0
-        && strcmp(request->path, "/api/v1/maintenance/ssh") == 0
-        && api_request_authorized(config, request)
-        && maintenance_authorized(config, request) && config->maintenance_ssh_start_enabled;
-}
-
-int c300x_http_service_commands_route(struct c300x_http_maintenance *owner, int fd,
+int c300x_service_dispatch(int display, struct c300x_http_maintenance *owner, int fd,
     const struct c300x_config *config, const struct request *request,
     c300x_schedule_command_fn schedule)
 {
@@ -209,7 +223,7 @@ int c300x_http_service_commands_route(struct c300x_http_maintenance *owner, int 
     }
     supported = action == REBOOT ? config->maintenance_reboot_enabled
         : action == REMOVE ? config->maintenance_agent_remove_enabled : config->maintenance_ssh_start_enabled;
-    if (!maintenance_authorized(config, request)) {
+    if (!(display ? config->maintenance_enabled : maintenance_authorized(config, request))) {
         c300x_http_send_json(fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
         return 1;
     }
@@ -233,12 +247,17 @@ int c300x_http_service_commands_route(struct c300x_http_maintenance *owner, int 
     state->config = config;
     state->schedule = schedule;
     state->action = action;
+    state->display = display;
+    state->requested_ssh = enabled;
     int pending;
     if (action == SSH_STATUS) {
         pending = start_status(owner, state);
         if (!pending) {
-            ssh_status(fd, 0);
+            probe_failed(fd, state);
         }
+    } else if (display && action == REBOOT) {
+        schedule_action(fd, state);
+        pending = 0;
     } else if (action == REBOOT || action == REMOVE) {
         pending = begin_shutdown(owner, fd, state);
     } else {

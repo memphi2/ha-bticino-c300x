@@ -42,8 +42,7 @@ ALERT_DATA_SCHEMA = vol.Schema(
         vol.Optional("expires_in", default=3600): vol.All(
             _integer, vol.Range(min=1, max=604800)
         ),
-        # Where the message goes: on the display, spoken over the speaker, or both.
-        vol.Optional("mode", default="display"): vol.In({"display", "speech", "both"}),
+        vol.Optional("mode", default="display"): vol.In({"display", "speech", "both", "led"}),
         vol.Optional("tts_engine"): vol.All(str, vol.Length(min=1, max=255)),
         vol.Optional("language"): vol.All(str, vol.Length(min=1, max=35)),
     }
@@ -57,6 +56,14 @@ def alert_options(data: dict[str, Any] | None) -> dict[str, Any]:
         options = dict(ALERT_DATA_SCHEMA({} if data is None else data))
     except vol.Invalid as err:
         raise ServiceValidationError(f"Invalid C300X display notification: {err}") from err
+    if options["mode"] == "led" and data is not None and (
+        data.get("wake_duration") or data.get("sound_duration")
+        or "tts_engine" in data or "language" in data
+    ):
+        raise ServiceValidationError(
+            "Invalid C300X display notification: mode led does not wake, play sound "
+            "or speak; omit positive durations and TTS settings"
+        )
     if options["mode"] == "both" and options.get("sound_duration"):
         # The tone would hold the speaker the speech needs.
         raise ServiceValidationError(
@@ -76,7 +83,7 @@ async def async_send_display_alert(
 ) -> None:
     """Store the revision first, then request GUI delivery without retries."""
     try:
-        options = ALERT_DATA_SCHEMA({} if data is None else data)
+        options = alert_options(data)
         severity = options["severity"]
         notice = SHOW_SCHEMA({
             "notification_id": options.get("notification_id", uuid4().hex),
@@ -92,7 +99,14 @@ async def async_send_display_alert(
     if not entry_device_ui_enabled_or_patch_active(entry):
         raise ServiceValidationError("C300X display integration is disabled")
     runtime = entry.runtime_data
-    if runtime.capabilities.get("display_alerts") is not True:
+    if options["mode"] == "led":
+        if runtime.capabilities.get("memo_led") is not True:
+            raise ServiceValidationError(
+                "C300X mode led requires a device agent that reports memo LED support. "
+                "Update the agent and reload the integration, or choose another mode "
+                "if the device has no memo LED."
+            )
+    elif runtime.capabilities.get("display_alerts") is not True:
         raise ServiceValidationError(
             "C300X display alerts require an update of the device agent and "
             "Display patch. Update both and reload the integration before sending."
@@ -101,6 +115,8 @@ async def async_send_display_alert(
         show_notification(hass, entry, notice)
     except ValueError as err:
         raise ServiceValidationError(str(err)) from err
+    if options["mode"] == "led":
+        return
     stored = next(
         item for item in notification_payload(entry)
         if item["id"] == notice["notification_id"]

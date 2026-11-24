@@ -18,7 +18,7 @@ from check_reporting import report_failures
 
 ROOT = Path(__file__).resolve().parents[1]
 QUALITY_SCALE = ROOT / "custom_components" / "bticino_c300x" / "quality_scale.yaml"
-QUALITY_DOC = ROOT / "docs" / "quality-scale.md"
+QUALITY_DOC = ROOT / "docs" / "dev" / "quality-scale.md"
 
 OFFICIAL_RULES = (
     "action-setup",
@@ -175,7 +175,7 @@ def validate_audit(statuses: dict[str, str], docs: str) -> list[str]:
     failures: list[str] = []
     sections = re.split(r"(?m)^## Rule Audit\s*$", docs)
     if len(sections) != 2:
-        return ["docs/quality-scale.md must have one Rule Audit section"]
+        return ["docs/dev/quality-scale.md must have one Rule Audit section"]
     table = re.split(r"(?m)^## ", sections[1], maxsplit=1)[0]
     seen: set[str] = set()
     for line in table.splitlines():
@@ -203,7 +203,7 @@ def validate_audit(statuses: dict[str, str], docs: str) -> list[str]:
         if not evidence:
             failures.append(f"Audit evidence or remaining work missing for {rule}")
     for rule in sorted(set(statuses) - seen):
-        failures.append(f"docs/quality-scale.md missing audit rule: {rule}")
+        failures.append(f"docs/dev/quality-scale.md missing audit rule: {rule}")
     return failures
 
 
@@ -215,9 +215,9 @@ def validate_documentation(docs: str) -> list[str]:
             raise ValueError
         date.fromisoformat(reviewed[0])
     except ValueError:
-        failures.append("docs/quality-scale.md needs one valid Reviewed: YYYY-MM-DD date")
+        failures.append("docs/dev/quality-scale.md needs one valid Reviewed: YYYY-MM-DD date")
     if OFFICIAL_SOURCE not in docs:
-        failures.append("docs/quality-scale.md must link the official quality-scale source")
+        failures.append("docs/dev/quality-scale.md must link the official quality-scale source")
     return failures
 
 

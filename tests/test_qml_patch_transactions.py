@@ -15,12 +15,11 @@ from test_qml_patch_script import (
 )
 
 PATCH_FILES = [
-    "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
-    "Components/Settings/GeneralsChoice.qml",
+    "Settings.qml", "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
     *SOURCE_INSTALLED_FILES,
 ]
-STOCK_FILES = ["MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
-               "Components/Settings/CallBlockPopup.qml", "Components/Settings/GeneralsChoice.qml"]
+STOCK_FILES = ["Settings.qml", "MainApp.qml", "HomePage.qml", "MemoPage.qml", "EventManager.qml",
+               "Components/Settings/CallBlockPopup.qml"]
 
 
 def snapshot(root):
@@ -79,7 +78,7 @@ def test_restore_all_copy_failure_restores_patched_gui_and_modes(tmp_path, relat
     assert not list(gui.glob(".c300x-qml-transaction.*"))
 
 
-@pytest.mark.parametrize("relative", STOCK_FILES)
+@pytest.mark.parametrize("relative", [*STOCK_FILES, "Components/Settings/GeneralsChoice.qml"])
 def test_original_backup_copy_failure_is_not_published_and_retry_is_safe(tmp_path, relative):
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()

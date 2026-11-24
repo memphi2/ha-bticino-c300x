@@ -9,6 +9,7 @@ import { checkMatchingPictureLayout } from "./matching_picture_layout.mjs";
 import { checkMediaAvailability } from "./media_availability.mjs";
 import { checkPendingMicrophone } from "./pending_microphone.mjs";
 import { checkRingEndStart } from "./ring_end_start.mjs";
+import { checkPictureControls } from "./picture_controls.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontend = resolve(here, "../../custom_components/bticino_c300x/frontend");
@@ -54,6 +55,7 @@ try {
   await checkMediaAvailability(page, artifacts);
   await checkPendingMicrophone(page);
   await checkRingEndStart(page);
+  await checkPictureControls(page);
   await checkMatchingPictureLayout(page, artifacts);
   await checkSnapshotLayout(page, artifacts);
   const assertFooterLayout = async (label) => {

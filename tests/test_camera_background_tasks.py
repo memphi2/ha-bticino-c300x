@@ -61,6 +61,25 @@ def test_named_tasks_coalesce_only_until_the_previous_task_finishes():
     asyncio.run(run())
 
 
+def test_cancelled_named_task_no_longer_coalesces_new_work():
+    async def run():
+        owner = CameraBackgroundTasks()
+        hass = SimpleNamespace(async_create_task=asyncio.create_task)
+        owner.create(hass, asyncio.Event().wait(), key="scope")
+        (stale,) = owner._tasks
+        owner.cancel("scope")
+        fresh = asyncio.Event().wait()
+        owner.create(hass, fresh, key="scope")  # Same loop turn: stale is not done yet.
+        assert inspect.getcoroutinestate(fresh) != inspect.CORO_CLOSED
+        assert len(owner._tasks) == 2 and owner._named["scope"] is not stale
+        await asyncio.sleep(0)
+        assert stale.cancelled() and owner._named["scope"] in owner._tasks
+        owner.cancel("missing")
+        await owner.close()
+
+    asyncio.run(run())
+
+
 def test_failure_is_retrieved_logged_and_removed(caplog):
     async def run():
         owner = CameraBackgroundTasks()

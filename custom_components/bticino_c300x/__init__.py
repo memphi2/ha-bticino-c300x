@@ -10,7 +10,6 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_AGENT_HOST,
-    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_SHARED_SECRET,
@@ -76,7 +75,6 @@ async def async_migrate_entry(
     _ensure_generated_setup_secret(data, CONF_SHARED_SECRET, 32)
     _ensure_generated_setup_secret(data, CONF_EVENT_WEBHOOK_ID, 24)
     _ensure_generated_setup_secret(data, CONF_EVENT_WEBHOOK_TOKEN, 32)
-    _pin_dashboard_dynamic_homepage(data, options)
 
     if (
         data != original_data
@@ -91,30 +89,6 @@ async def async_migrate_entry(
             minor_version=3,
         )
     return True
-
-
-def _pin_dashboard_dynamic_homepage(
-    data: dict[str, Any],
-    options: dict[str, Any],
-) -> None:
-    """Record the home-page button mode an existing entry is really running.
-
-    The setting had two disagreeing defaults: the dashboard form offered it
-    ticked, while the Display patch apply read an absent key as off. So an
-    entry that never stored the key ran the fixed pair of buttons while the
-    form claimed the dynamic ones, and because the dashboard step always writes
-    the key, merely opening and saving that step switched the device's home
-    page without anyone choosing it.
-
-    Pinning the value the device is actually running makes the form tell the
-    truth and lets the apply read one shared default from here on. Entries that
-    stored the key, and every newly created entry, are untouched: the config
-    flow always writes it.
-    """
-
-    if CONF_DASHBOARD_DYNAMIC_HOMEPAGE in data or CONF_DASHBOARD_DYNAMIC_HOMEPAGE in options:
-        return
-    data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] = False
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
@@ -157,8 +131,10 @@ def _ensure_generated_setup_secret(
 async def async_unload_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
     """Unload a C300X config entry."""
 
+    from .discovery_move import async_cancel_move_recheck
     from .notify import async_unload_notify
 
+    async_cancel_move_recheck(hass, entry.entry_id)
     unload_ok = await C300XRuntimeManager(hass, entry).async_unload()
     if unload_ok:
         async_unload_notify(hass, entry)
@@ -173,10 +149,12 @@ async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
     open issue would outlive the removed entry in the issue registry.
     """
 
+    from .discovery_move import async_cancel_move_recheck
     from .notify_names import async_remove_name
     from .repair_issues import async_clear_entry_repair_issues
     from .visitor_journal import async_remove_journal
 
+    async_cancel_move_recheck(hass, entry.entry_id)
     cleanup_entry_runtime_resources(hass, entry)
     async_clear_entry_repair_issues(hass, entry.entry_id)
     errors: list[Exception] = []

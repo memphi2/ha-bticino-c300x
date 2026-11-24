@@ -26,6 +26,7 @@ static void finish(struct c300x_ringer_control *control)
     control->apply = NULL;
     control->apply_ctx = NULL;
     control->id[0] = '\0';
+    control->picture.field = PICTURE_NONE;
 }
 
 static int new_id(char *id)
@@ -54,6 +55,12 @@ void c300x_ringer_control_init(struct c300x_ringer_control *control)
     control->client_fd = -1;
 }
 
+int c300x_gui_supports_picture(const struct c300x_ringer_control *control)
+{
+    /* A dispatched command temporarily owns the slot instead of the sleeping GUI. */
+    return control->picture_supported && (control->gui_fd >= 0 || control->client_fd >= 0);
+}
+
 int c300x_ringer_control_timeout_ms(const struct c300x_ringer_control *control)
 {
     long long remaining;
@@ -73,7 +80,8 @@ void c300x_ringer_control_expire(struct c300x_ringer_control *control)
             finish(control);
             return;
         }
-        fail(control->client_fd, control->gui_confirmed ? 409 : 504,
+        if (control->picture.field) fail(control->client_fd, 504, "picture_gui_timeout");
+        else fail(control->client_fd, control->gui_confirmed ? 409 : 504,
              control->gui_confirmed ? "ringer_not_applied" : "ringer_gui_timeout");
         finish(control);
     }
@@ -98,6 +106,7 @@ int c300x_ringer_control_next(
 {
     char completed[64];
     char muted_text[16];
+    char picture_id[64], version[8];
     int muted = -1;
     query_param_value(query, "completed", completed, sizeof(completed));
     query_param_value(query, "muted", muted_text, sizeof(muted_text));
@@ -109,8 +118,17 @@ int c300x_ringer_control_next(
         return 1;
     }
     c300x_ringer_control_expire(control);
+    query_param_value(query, "picture_id", picture_id, sizeof(picture_id));
+    if (*picture_id) {
+        if (*completed || control->client_fd < 0 || !control->picture.field || strcmp(picture_id, control->id)) {
+            fail(fd, 409, "picture_stale_ack");
+            return 1;
+        }
+        picture_reply(control->client_fd, &control->picture, query);
+        finish(control);
+    }
     if (completed[0] != '\0') {
-        if (control->client_fd < 0 || control->gui_confirmed
+        if (control->client_fd < 0 || control->gui_confirmed || control->picture.field
             || strcmp(completed, control->id) != 0) {
             fail(fd, 409, "ringer_gui_stale_ack");
             return 1;
@@ -132,6 +150,8 @@ int c300x_ringer_control_next(
     }
     /* A single sleeping connection, without periodic expiry or device reads. */
     control->gui_fd = fd;
+    query_param_value(query, "picture", version, sizeof(version));
+    control->picture_supported = !strcmp(version, "1");
     return 0;
 }
 
@@ -140,7 +160,7 @@ int c300x_ringer_control_confirm(
 )
 {
     c300x_ringer_control_expire(control);
-    if (control->client_fd < 0) {
+    if (control->client_fd < 0 || control->picture.field) {
         return 0;
     }
     control->device_confirmed = muted == control->command.muted;
@@ -151,8 +171,9 @@ int c300x_ringer_control_confirm(
     return 1;
 }
 
-void c300x_ringer_control_request(
-    struct c300x_ringer_control *control, int fd, const struct c300x_ringer_command *command
+static void gui_request(
+    struct c300x_ringer_control *control, int fd, const struct c300x_ringer_command *command,
+    struct picture_command picture
 )
 {
     char body[192];
@@ -160,18 +181,22 @@ void c300x_ringer_control_request(
     int length;
     c300x_ringer_control_expire(control);
     if (control->client_fd >= 0) {
-        fail(fd, 409, "ringer_gui_busy");
+        fail(fd, 409, picture.field ? "picture_gui_busy" : "ringer_gui_busy");
         return;
     }
-    if (control->gui_fd < 0) {
-        fail(fd, 503, "ringer_gui_unavailable");
+    if (control->gui_fd < 0 || (picture.field && !control->picture_supported)) {
+        fail(fd, 503, picture.field ? "picture_gui_unavailable" : "ringer_gui_unavailable");
         return;
     }
     if (!new_id(control->id)) {
         fail(fd, 500, "ringer_gui_id_failed");
         return;
     }
-    snprintf(body, sizeof(body),
+    if (picture.field)
+        snprintf(body, sizeof(body), "{\"ok\":true,\"id\":\"%s\",\"picture\":\"%s\",\"value\":%d,\"expires\":%lld}\n",
+                 control->id, picture_name(picture.field), picture.value,
+                 ((long long)time(NULL) + C300X_RINGER_CONTROL_TIMEOUT_MS / 1000) * 1000);
+    else snprintf(body, sizeof(body),
              "{\"ok\":true,\"id\":\"%s\",\"muted\":%s,\"expires\":%lld}\n",
              control->id, command->muted ? "true" : "false",
              ((long long)time(NULL) + C300X_RINGER_CONTROL_TIMEOUT_MS / 1000) * 1000);
@@ -188,8 +213,20 @@ void c300x_ringer_control_request(
     close_agent_socket(control->gui_fd);
     control->gui_fd = -1;
     control->client_fd = fd;
-    control->command = *command;
+    if (command) control->command = *command;
+    control->picture = picture;
     control->deadline_ms = c300x_monotonic_ms() + C300X_RINGER_CONTROL_TIMEOUT_MS;
+}
+
+void c300x_ringer_control_request(struct c300x_ringer_control *control, int fd,
+                                  const struct c300x_ringer_command *command)
+{
+    gui_request(control, fd, command, (struct picture_command){0});
+}
+
+void c300x_gui_picture_request(struct c300x_ringer_control *control, int fd, struct picture_command command)
+{
+    gui_request(control, fd, NULL, command);
 }
 
 int c300x_ringer_control_pollfds(const struct c300x_ringer_control *control, struct pollfd *fds)

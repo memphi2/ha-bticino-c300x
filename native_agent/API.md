@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.8.2`
+- Current agent version: `2.9.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -42,7 +42,10 @@ The agent has two HTTP listeners:
   `listen.allowLan`.
 - UI listener: loopback display bridge listener on `127.0.0.1`, port
   `listen.uiPort` (reported as `ui_listen_host`/`ui_port`). It is intended for
-  QML pages running on the device.
+  QML pages running on the device. Keep the installer's `8090`: most display
+  pages call `127.0.0.1:8090` directly. Only these calls follow a changed port:
+  `/ui/maintenance` (station Settings tab), `/ui/ringer/next` (ringer and
+  picture controls), `/ui/preferences` and `/ui/media-closed`.
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).
@@ -59,8 +62,9 @@ Normal `/api/v1` endpoints require the configured device-agent API token unless
 Clients send the token in the HTTP `Authorization` header using the bearer
 scheme. Do not log or expose the header value.
 
-`GET /api/v1/health` is always unauthenticated. `GET /` and `GET /setup` are
-served only while `api.noAuth=true`.
+`GET /api/v1/health` and `POST /api/v1/identity/proof` are always
+unauthenticated; the proof route never returns the token. `GET /` and
+`GET /setup` are served only while `api.noAuth=true`.
 
 ### Maintenance Token
 
@@ -112,7 +116,7 @@ Common status codes:
 | `403 Forbidden` | Maintenance token is missing/invalid or maintenance is disabled, the endpoint requires loopback, or a required UI header is missing. |
 | `404 Not Found` | Setup disabled, media item missing, feature disabled, or maintenance module disabled (`maintenance_disabled`). |
 | `405 Method Not Allowed` | Wrong method on a loopback UI route. |
-| `409 Conflict` | Media action conflicts with the current device/media state. |
+| `409 Conflict` | The request conflicts with the current device, media or agent state, for example an agent update while `/` is already writable. |
 | `413 Payload Too Large` | HTTP body exceeded the static parser buffer. |
 | `429 Too Many Requests` | Snapshot requested less than two seconds after the previous one. |
 | `500 Internal Server Error` | Agent-side operation failed. |
@@ -170,6 +174,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/` | setup/noAuth | Serves setup page only while bootstrap is open. |
 | `GET` | `/setup` | setup/noAuth | Same as `/`. |
 | `GET` | `/api/v1/health` | none | None. |
+| `POST` | `/api/v1/identity/proof` | none | None. |
 | `GET` | `/api/v1/capabilities` | API | None. |
 | `GET` | `/api/v1/self-test` | API | None. |
 | `GET` | `/api/v1/state` | API | None. |
@@ -212,6 +217,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
+| `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the active video source. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
 | `POST` | `/api/v1/calls/doorbell/actions/answer` | API | Answers active ring-call media locally. |
@@ -275,6 +281,29 @@ Response:
 ```json
 {"ok": true, "agent": "native-c", "version": "2.4.0"}
 ```
+
+### `POST /api/v1/identity/proof`
+
+Authentication: none. Side effects: none.
+
+Home Assistant uses this before it follows the station to a new address. The
+station proves that it holds the API token without sending it:
+
+```json
+{"nonce": "<64 lowercase hex characters>"}
+```
+
+```json
+{"ok": true, "id": "c300x-...", "proof": "<64 lowercase hex characters>"}
+```
+
+`proof` is HMAC-SHA256 with the API token as key over
+`c300x-identity-v1\n<id>\n<local IPv4>:<local port>\n<nonce>`, where the
+address and port are the ones this connection arrived on. A relay that forwards
+the nonce to the real station therefore gets a proof for the station's address,
+not its own. Errors: `400 invalid_nonce`; `404 identity_proof_unavailable`
+when `api.noAuth=true`, the token is shorter than 32 characters, or the
+connection is not IPv4.
 
 ### `GET /api/v1/capabilities`
 
@@ -525,7 +554,18 @@ Request fields:
 {"topic": "display_bridge.state"}
 ```
 
-Response status: `202 Accepted` on success.
+For `display_bridge.state` and `notifications`, an optional boolean `unread`
+also synchronizes HA's memo LED claim, even without a display listener. The
+agent advertises `memo_led` only when it finds the LED and a usable, trusted
+volatile claim store at startup. An empty private directory on tmpfs records
+ownership across agent crashes, not device reboots. Releasing the claim
+respects the firmware LED trigger and any unread native memos. An accepted
+event is not a hardware delivery receipt.
+
+Response status: `202 Accepted` on success. `400 invalid_unread` when the body
+carries `unread` and the topic is another one, the value is not a boolean, or
+the body is not a valid JSON object; nothing is woken then. A body without
+`unread` is not checked for it.
 
 ### `POST /api/v1/display/alert`
 
@@ -950,6 +990,80 @@ Authentication: normal API token.
 
 Side effects: stops agent-owned on-demand doorbell media.
 
+### `GET`, `POST /api/v1/video/picture`
+
+Authentication: normal API token.
+
+Side effects: POST changes one picture control of the active video source.
+
+A connected GUI advertising `picture=1` provides the legacy ring-only path.
+An eligible C300X (firmware 1.7.19; 2.0.2 with a bound ADV7180 video decoder,
+HW rev 2/3, or TVP5150, HW rev 1/4; 3.0.6 with its bound TVP5150, as the 3.0.6
+package requires HW rev 4) can also report
+`bridge.picture_controls_scope: "ring_and_on_demand"` with
+`bridge.picture_controls_supported: true`. Model and firmware alone do not
+enable it: an authenticated status or capability request during owned media
+checks the capture source on the bounded media worker. The read result is
+cached for that media session; no source is opened while idle.
+`camera_picture.supported` reports whether either path is available.
+Missing or unknown scope does not extend GUI support beyond ring calls.
+
+`GET` returns brightness, contrast and saturation; POST accepts one `control`
+with a percentage `value` (0 through 100 in steps of 10). Direct success returns
+source readback; legacy success returns the GUI object's values. Neither
+measures the rendered picture.
+The source must be character device 81:0 bound to `mxc_v4l2_capture` with
+`VIDIOC_QUERYCAP` driver `mxc_v4l2` and video capture; any other device or
+driver is refused. The stock capture driver has no V4L2 control descriptors
+(`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts that only by its
+exact signature (version `0x10b`, capabilities `0x05000005`, `device_caps` 0,
+empty card and bus) and uses the stock firmware's fixed raw ranges
+(brightness 30-180, contrast 59-209, saturation 64-244, eleven steps). Any
+other `mxc_v4l2` device must expose integer descriptors that cover these
+ranges; raw control reads alone do not make it supported.
+The decoder is told by its bound I2C driver
+(`/sys/bus/i2c/drivers/adv7180/<bus>-<address>` or `.../tvp5150/...`). The
+stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
+raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
+contrast is a driver cache that stays 0 until the first write after boot.
+Such a 0, like any read off the eleven steps, fails the whole read: all three
+controls are unavailable, and the agent refuses direct control for the rest
+of that media session (a Ring Call falls back to the GUI path). Once a
+TVP5150 contrast write ioctl succeeds, its read-back always matches, because
+it comes from that cache and the driver ignores I2C write errors; a failed
+I2C contrast write cannot be detected. Only brightness and saturation have a
+genuine read-back there. A contrast write is still answered as not applied
+and rolled back when the write ioctl fails, when a re-read (in practice of
+brightness or saturation) fails, or when the 750 ms deadline passes during
+verification.
+The TVP5150 driver queues its I2C write and returns at once, so when the
+read-back differs the agent reads again up to five times, 10 ms apart,
+before it reports the setting as not applied.
+Changes last for the current media session; the station applies its own
+values again when the next session starts. 3.0.6 and the 2.0.2 path are
+checked offline only; 1.7.19 is tested on a device.
+Direct operations check media ownership and session identity during execution.
+A failed direct write returns an error; it is not retried through the GUI.
+When the write or its read-back fails, the agent writes the previous value
+back while the media session is still its own.
+No extra idle poll, recording, configuration write or media restart is needed.
+
+Errors:
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_picture_control` | A POST without a body, or a JSON object whose `control` is not `brightness`, `contrast` or `saturation`, or whose `value` is not an integer 0 through 100 in steps of 10. |
+| `400` | `invalid_json` | The body is not a JSON object. The agent's request parser answers this for every route before the route runs. |
+| `405` | `method_not_allowed` | The method is neither `GET` nor `POST`. |
+| `409` | `media_busy` | The media worker is busy with another job; nothing was changed. Unlike the media actions, this route answers `409`. |
+| `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media, or the GUI answered with missing or out-of-range values. |
+| `409` | `picture_not_applied` | Direct path: the write failed, a re-read failed, the value read back differs, or the 750 ms verification deadline passed; the previous value is written back while the agent still owns the media. Legacy path: the GUI read back a different value than the one sent. |
+| `409` | `picture_gui_busy` | The GUI is still handling an earlier ringer or picture command. |
+| `500` | `ringer_gui_id_failed` | The agent could not create a command id for the GUI (reading `/dev/urandom` failed). |
+| `503` | `picture_gui_unavailable` | No GUI listener for the legacy path. |
+| `503` | `ringer_gui_unavailable` | The command could not be handed to the GUI listener, or the agent shut down before the GUI answered. |
+| `504` | `picture_gui_timeout` | The GUI did not acknowledge within five seconds. |
+
 ### `GET /api/v1/calls/doorbell`
 
 Authentication: normal API token.
@@ -1167,7 +1281,7 @@ Validation examples:
 ## Maintenance Actions
 
 Execution is hybrid; **not every operation is off the HTTP loop yet** (see
-`docs/native-http-blocking-inventory.md`). QML status/patch, GUI reload, the read-only device-user
+[Remaining Blocking Work](../docs/dev/architecture.md#remaining-blocking-work)). QML status/patch, GUI reload, the read-only device-user
 status script, SSH probe/start/stop and SSH-before-reboot/removal share one
 asynchronous job slot. Connections stay open until the existing response
 boundary; no new job ID, queue or early-success response is introduced.
@@ -1207,8 +1321,8 @@ or advancing another phase, but cannot reach that cleanup during a synchronous
 label transaction. Existing QML-write job cancellation is unchanged, not newly
 certified as transaction-safe by the label-write fix.
 
-See [HTTP maintenance ownership](../docs/native-http-maintenance.md) and the
-[remaining blocking-path inventory](../docs/native-http-blocking-inventory.md).
+See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
+[remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).
 
 All endpoints in this section require maintenance authorization. Mutating
 endpoints require exact confirmation tokens so accidental browser/script calls
@@ -1329,6 +1443,21 @@ Allowed staged paths:
 Validates the staged manifest/hash, installs files, refreshes firewall state
 when needed, and returns update status.
 
+Errors:
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| `400` | `maintenance_confirmation_required` | The body does not carry `"confirm": "update_agent"`. |
+| `400` | `invalid_update_metadata` | `bundle_hash` is missing or does not start with `sha256:`. |
+| `400` | `update_manifest_missing` | The staged `device_agent/bundle.json` is missing, empty or only line breaks, unreadable or 8 KiB or larger. |
+| `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
+| `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
+| `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |
+| `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
+| `500` | `update_apply_failed` | Validation or installation failed. |
+| `500` | `out_of_memory` | The agent could not allocate the memory for the update. |
+| `500` | `invalid_agent_dir` | The staging path of the manifest cannot be built from the configured agent directory. |
+
 ### Config Normalize
 
 `POST /api/v1/maintenance/config/actions/normalize`
@@ -1431,6 +1560,9 @@ inserting rules.
 `GET /api/v1/maintenance/qml-patch`
 
 Reads both optional Display patch state and required core media-hook state.
+`home_buttons` names the home page button layout installed on the device:
+`"stock"` (like the original), `"side_by_side"` (the fixed pair), or `null`
+when the home page carries neither layout.
 
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 
@@ -1464,6 +1596,12 @@ HomePage unread memo/video-message badges, MemoPage external-delete refresh,
 the Settings > General HA feedback and touch-tone controls, the Alarmo, Home
 Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
 `C300XEnergy.qml`) and the local QML JavaScript bridge.
+
+`dynamic_homepage` chooses the home page button layout: `true` installs the
+Alarm and Home Assistant buttons like the original buttons (shown only when
+needed), `false` the fixed pair side by side. Without the field the layout
+on the device is kept; a device without the Display patch gets the `true`
+layout.
 
 `POST /api/v1/maintenance/qml-patch/actions/restore`
 
@@ -1597,7 +1735,7 @@ or `"audio_codec_restore_failed"`.
 ## Loopback UI API
 
 The UI listener is intended for local QML pages. Routes accept only GET, except
-the guarded POST routes `/ui/preferences` and `/ui/touch-tone/state`. Routes forwarding
+the guarded POST routes for preferences, touch-tone reports and station maintenance. Routes forwarding
 requests to Home Assistant require an active display bridge.
 
 | Method | Path | Purpose |
@@ -1611,6 +1749,10 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
+| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
+| `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
+| `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
 | `GET` | `/ui/state` | Display bridge state. |
@@ -1622,6 +1764,22 @@ requests to Home Assistant require an active display bridge.
 Home Assistant proxy endpoints use the display bridge and shared secret
 configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
+
+Station maintenance works without HA. It requires the local maintenance and
+per-action permissions, no browser Origin, the `X-C300X-UI: settings-v1`
+header, and a loopback client socket owned by the unique trusted station GUI.
+The socket must belong to UID 0. The GUI and wrapper must have root real,
+effective, saved and filesystem UIDs and GIDs. Stock SysV startup runs
+`bin/bt_daemon` from `/home/bticino`; its GUI entry in `stack_open.xml`
+starts `bin/BtClass_qws`, whose shell waits for its direct `bin/gui/BtClass`
+child. The alternate launch from `qml_patch.sh reload_gui` uses the absolute
+wrapper path and is accepted once init has adopted the wrapper. Both paths
+require the expected shell, working directory, complete wrapper argv and open
+script inode, with read-only firmware files. A standalone GUI process, an
+ambiguous instance or incomplete process evidence is denied, even with the
+header. This identifies a local privileged process, not a physical gesture,
+and does not protect against another root process. A scheduled reboot or removal returns 202:
+it does not certify that the reboot or the restoration has already completed.
 
 `GET /ui/alerts/next` requires loopback and `X-C300X-GUI: alerts-v1`, with no
 `Origin` or request body. The optional exact query `protected=1` reports a
@@ -1671,8 +1829,9 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.8.2` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` reflects `device.firmware` of the agent
-config and is `unknown` when that value is empty, which is what the installer
-writes. Of the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
+Agent `2.9.0` retains self-test contract `api_version: "1.1"` for firmware families
+`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` is derived from `device.firmware` of
+the agent config, or from the station's firmware info when that is empty, which
+is what the installer writes; it is `unknown` only when neither is readable. Of
+the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
 experimentally. The release notes list the agent changes of each version.

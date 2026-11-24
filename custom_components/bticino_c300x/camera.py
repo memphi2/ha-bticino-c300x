@@ -29,6 +29,7 @@ from .camera_media.ha_compat import (
     CameraEntityFeature,
     WebRTCError,
     WebRTCSendMessage,
+    camera_state_snapshot,
     native_camera_capabilities,
 )
 from .camera_media.ha_compat import (
@@ -96,6 +97,7 @@ from .camera_media.webrtc_session import (
 from .camera_media.webrtc_session import (
     webrtc_message_is_error as _webrtc_message_is_error,
 )
+from .camera_picture_scope import track_picture_scope
 from .const import (
     CONF_AGENT_HOST,
     CONF_NATIVE_TWO_WAY_AUDIO,
@@ -122,15 +124,11 @@ from .media_status import (
 )
 from .media_watchdog import AgentCpuWatchdog, handle_agent_cpu_metrics_changed
 from .snapshots import SIGNAL_SNAPSHOT_CHANGED, get_snapshots
-from .value_parsing import (
-    freeze_state_value as _freeze_state_value,
-)
 from .value_parsing import optional_mapping, optional_string
 from .video import (
     doorbell_camera_unique_id,
 )
 
-_CameraStateSnapshot = tuple[Any, Any, Any]
 PARALLEL_UPDATES = 0
 VIDEO_WINDOW_EVENTS = {"doorbell_pressed", "doorbell_view_requested"}
 VIDEO_WINDOW_CLOSED_EVENTS = {"doorbell_media_closed"}
@@ -178,16 +176,6 @@ def _capability_supported_if_known(entry: BticinoC300XConfigEntry, capability: s
     if not isinstance(capabilities, dict) or not capabilities:
         return True
     return supports_capability(entry, capability)
-
-
-def _camera_state_snapshot(camera: C300XDoorbellCamera) -> _CameraStateSnapshot:
-    """Return the HA-visible camera state surface used for write de-duplication."""
-
-    return (
-        getattr(camera, "_attr_is_streaming", False),
-        getattr(camera, "_attr_available", True),
-        _freeze_state_value(camera.extra_state_attributes),
-    )
 
 
 async def async_setup_entry(
@@ -255,7 +243,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._webrtc_sessions = CameraWebRTCSessions(self._background_tasks)
         self._closing_webrtc_sessions = 0
         self._reconcile_in_flight = False
-        self._last_state_snapshot: _CameraStateSnapshot | None = None
+        self._last_state_snapshot: tuple[Any, Any, Any] | None = None
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
         self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
@@ -278,6 +266,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose compact user-facing media state without bridge internals."""
 
+        picture_supported = self._bridge_status.get("picture_controls_supported") is True
+        shared_picture = self._bridge_status.get("picture_controls_scope") == "ring_and_on_demand"
         return {
             **snapshot_attributes(self.hass, self._entry),
             "media_state": self._last_media_state.value,
@@ -288,6 +278,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             "external_owner": self._external_owner,
             "last_video_block_reason": self._last_video_block_reason,
             "talkback_supported": self._talkback_supported(),
+            "picture_controls_supported": picture_supported,
+            "picture_controls_scope": ("ring_and_on_demand" if shared_picture else "ring") if picture_supported else None,
             # The configured doorstation gain (from HA's own config-flow option,
             # not the agent) so the card can apply it client-side in PCMU mode
             # where the agent stays at passthrough.
@@ -764,6 +756,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                     )
                     return
                 session.ready = True
+                self._async_write_ha_state_if_ready()
                 self._log_webrtc_debug(
                     "provider_session_ready",
                     session_id=session_id,
@@ -1653,7 +1646,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     def _async_write_ha_state_if_ready(self) -> None:
         if self._background_tasks.closing or not hasattr(self, "async_write_ha_state"):
             return
-        snapshot = _camera_state_snapshot(self)
+        snapshot = camera_state_snapshot(self)
         if snapshot == self._last_state_snapshot:
             return
         self._last_state_snapshot = snapshot
@@ -1692,6 +1685,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._last_media_state = self._last_media_decision.state
         if self._background_tasks.closing:
             return
+        track_picture_scope(self)
         publish_agent_media_facts(
             getattr(self, "hass", None), self._entry, self._bridge_status
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import select
+import shutil
 import signal
 import socket
 import socketserver
@@ -438,3 +439,43 @@ def test_a_configuration_write_admitted_by_the_admin_token_alone_waits_too(lab: 
     lab.health_ms()
     # The request on the bus sent one command, for the address it started with.
     assert [frame for frame in lab.bus.frames if frame.startswith("*8*21*")] == ["*8*21*10##"]
+
+
+STORES = {
+    "memos": {"enabled": True, "textRoot": "memos_text", "voiceRoot": "memos_voice", "watch": True},
+    "answeringMachine": {"messages": {"enabled": True, "root": "messages", "watch": True}},
+}
+DELETES = [
+    ("/api/v1/memos/actions/delete", "text/memo_1", "memos_text/memo_1", "*8*94#1#3##"),
+    ("/api/v1/answering-machine/messages/actions/delete", "message_1", "messages/message_1",
+     "*8*94#1#0##"),
+]
+
+
+@pytest.fixture
+def stores(tmp_path: Path) -> Path:
+    for entry in ("memos_text/memo_1", "memos_voice", "messages/message_1"):
+        (tmp_path / entry).mkdir(parents=True)
+    (tmp_path / "memos_text/memo_1/message.txt").write_text("memo\n")
+    (tmp_path / "messages/message_1/msg_info.ini").write_text("[Message Information]\nRead=0\n")
+    return tmp_path
+
+
+@pytest.mark.parametrize("lab", [STORES], indirect=True)
+@pytest.mark.parametrize(("path", "entry_id", "entry", "command"), DELETES)
+def test_a_delete_with_its_command_out_is_answered_for_that_command(
+    stores: Path, lab: Lab, path: str, entry_id: str, entry: str, command: str,
+) -> None:
+    lab.bus.hold(command)
+    delete = lab.start(path, body={"id": entry_id})
+    assert lab.bus.seen.wait(5)
+    # The device removes the entry while the command is out; a pass of the
+    # request meanwhile finds it no longer a directory it can open.
+    shutil.rmtree(stores / entry)
+    (stores / entry).write_text("")
+    lab.health_ms()
+    (stores / entry).unlink()
+
+    lab.bus.gate.set()
+    assert finish(delete)["deleted"] is True
+    assert lab.bus.frames.count(command) == 1

@@ -32,6 +32,8 @@ def finalize_binary(request, tmp_path_factory):
     "remount-prepare-rw", "remount-prepare-ro", "remount-install-rw", "remount-install-ro",
     "remount-finalize-rw", "remount-finalize-ro", "remount-rollback-rw", "remount-rollback-ro",
     "remount-no-root-change", "remount-link-rw", "remount-link-ro",
+    "remount-finalize-rw-ro", "remount-cleanup-ro",
+    "preflight-rw", "preflight-unknown",
 ])
 def test_finalization_cleanup_and_recovery_preserving_retry(finalize_binary, tmp_path, scenario):
     result = subprocess.run([str(finalize_binary), str(tmp_path), scenario],
@@ -39,6 +41,6 @@ def test_finalization_cleanup_and_recovery_preserving_retry(finalize_binary, tmp
     assert result.returncode == 0, result.stderr
     if scenario.startswith("remount-"):
         assert "root remount" in result.stderr
-    elif scenario != "control":
+    elif scenario != "control" and not scenario.startswith("preflight-"):
         assert "backup cleanup" in result.stderr
         assert "recovery files retained" in result.stderr

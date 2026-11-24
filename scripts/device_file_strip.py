@@ -50,13 +50,16 @@ DEVICE_SOURCE_FILES = (
     "C300XDetailControl.qml",
     "C300XEnergyReadout.qml",
     "C300XEnergySums.qml",
+    "C300XSettings.qml",
     "js/c300x_energy.js",
+    "js/c300x_maintenance.js",
     "C300XRingerControl.qml",
     "js/c300x_ringer.js",
     "js/c300x_ha.js",
     "js/c300x_i18n.js",
     "js/c300x_memos.js",
 )
+EMBEDDED_SETTINGS = ("C300XSettings.qml", "js/c300x_maintenance.js")
 STRIPPED_SUFFIXES = frozenset({".qml", ".js"})
 _ALLOWED_CONTROL_CHARACTERS = frozenset("\t\n\r")
 _LINE_SEPARATORS = frozenset("\u2028\u2029")

@@ -18,8 +18,10 @@ from pathlib import Path
 
 from device_file_strip import (
     DEVICE_SOURCE_FILES,
+    EMBEDDED_SETTINGS,
     DeviceFileStripError,
     strip_device_file,
+    strip_device_source,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -118,6 +120,8 @@ def stage_bundle(
     # Display files are written to the device as staged, so they are staged
     # without comments, blank lines and indentation; device_qml/ keeps them.
     for relative in DEVICE_SOURCE_FILES:
+        if relative in EMBEDDED_SETTINGS:
+            continue
         source = ROOT / "device_qml" / relative
         if not source.exists():
             raise BundleStageError(f"Missing native-agent bundle source: {source}")
@@ -131,6 +135,7 @@ def stage_bundle(
         ROOT / "native_agent" / "scripts" / "qml_patch.sh",
         component_dir / "device_agent/scripts/qml_patch.sh",
     )
+    _embed_settings(qml_patch_script)
     qml_files.append(qml_patch_script)
     script_files.append(qml_patch_script)
     remove_script = _copy(
@@ -208,6 +213,33 @@ def stage_bundle(
         encoding="utf-8",
     )
     manifest_path.chmod(0o600)
+
+
+def _embed_settings(script: Path) -> None:
+    """Carry the new GUI files inside the script accepted by earlier updaters."""
+    marker = "    # C300X_EMBEDDED_DISPLAY_FILES"
+    source = script.read_text(encoding="utf-8")
+    if source.count(marker) != 1:
+        raise BundleStageError("Missing unique settings payload marker")
+    lines = ['    case "$1" in']
+    for relative in EMBEDDED_SETTINGS:
+        try:
+            raw = (ROOT / "device_qml" / relative).read_text(encoding="utf-8")
+            payload = strip_device_source(raw, name=relative)
+        except (OSError, DeviceFileStripError) as err:
+            raise BundleStageError(f"Cannot embed settings payload: {relative}: {err}") from err
+        delimiter = "C300X_END_SETTINGS_FILE"
+        if delimiter in payload.splitlines():
+            raise BundleStageError("Embedded settings delimiter collision")
+        lines.extend([
+            f"        {relative})",
+            f"""            cat > "$PATCH_OUTPUT_DIR/$1" <<'{delimiter}' || return 1""",
+            payload.rstrip("\n"), delimiter,
+            '            chmod 644 "$PATCH_OUTPUT_DIR/$1"',
+            "            return ;;",
+        ])
+    lines.append("    esac")
+    script.write_text(source.replace(marker, "\n".join(lines)), encoding="utf-8")
 
 
 def _copy(source: Path, target: Path) -> Path:

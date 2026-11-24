@@ -558,7 +558,7 @@ def test_a_list_read_does_not_swallow_the_change_event(collection_lab):
             lab.write("voicemail", "item_2")
             client.sendall(
                 b"GET /api/v1/answering-machine/messages HTTP/1.1\r\nHost: 127.0.0.1\r\n"
-                b"Authorization: Bearer " + TOKEN.encode() + b"\r\nConnection: close\r\n\r\n")
+                b"Authorization: " + " ".join(("Bearer", TOKEN)).encode() + b"\r\nConnection: close\r\n\r\n")
         finally:
             os.kill(lab.process.pid, signal.SIGCONT)
         assert client.recv(64).startswith(b"HTTP/1.1 200")

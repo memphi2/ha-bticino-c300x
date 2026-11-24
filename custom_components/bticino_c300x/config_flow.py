@@ -227,7 +227,6 @@ from .display_support import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import login_model, ssh_login, uses_factory_login
-from .media_consent import asks_media_consent, entry_asks_media_consent
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -589,7 +588,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         if not self._setup_connection:
             return await self.async_step_user()
 
-        media = _SETUP_VIDEO_ENABLED_DEFAULT and not asks_media_consent(self._setup_agent_info)
+        media = _SETUP_VIDEO_ENABLED_DEFAULT
         errors: dict[str, str] = {}
         if user_input is not None:
             feature_data, errors = _feature_input(
@@ -829,8 +828,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         feature_data, errors = _feature_input(
             {**self._setup_feature_data, **self._setup_dashboard_input},
-            default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT
-            and not asks_media_consent(self._setup_agent_info),
+            default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
         )
         if errors:
             return await self._async_show_user_dashboard_form(
@@ -1018,9 +1016,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         feature_defaults = _current_feature_options(entry)
         errors: dict[str, str] = {}
         if user_input is not None:
-            feature_input = _feature_input_defaults(
-                user_input, feature_defaults, ask_media_consent=entry_asks_media_consent(entry)
-            )
+            feature_input = _feature_input_defaults(user_input, feature_defaults)
             feature_data, errors = _feature_input(feature_input)
             if errors:
                 return self.async_show_form(
@@ -1522,10 +1518,7 @@ class BticinoC300XOptionsFlow(
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
-            consent = entry_asks_media_consent(self._config_entry)
-            feature_input = _feature_input_defaults(
-                user_input, feature_defaults, ask_media_consent=consent
-            )
+            feature_input = _feature_input_defaults(user_input, feature_defaults)
             feature_data, errors = _feature_input(feature_input)
             if errors:
                 return self.async_show_form(
@@ -1536,7 +1529,7 @@ class BticinoC300XOptionsFlow(
                         create_homeassistant_user=bool(
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
-                                _CREATE_HOMEASSISTANT_USER_DEFAULT and not consent,
+                                _CREATE_HOMEASSISTANT_USER_DEFAULT,
                             )
                         ),
                         webrtc_ice_policy=_webrtc_ice_policy_or_default(

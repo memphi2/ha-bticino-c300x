@@ -77,7 +77,6 @@ from .dashboard_page_order import dashboard_navigation
 from .display_support import entry_display_supported
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
-from .media_consent import entry_asks_media_consent
 from .schema_compat import vol
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
@@ -193,7 +192,7 @@ def options_features_schema(
         _config_default(
             config_entry,
             CONF_CREATE_HOMEASSISTANT_USER,
-            CREATE_HOMEASSISTANT_USER_DEFAULT and not entry_asks_media_consent(config_entry),
+            CREATE_HOMEASSISTANT_USER_DEFAULT,
         )
         if create_homeassistant_user is None
         else create_homeassistant_user
@@ -340,7 +339,7 @@ def current_feature_options(
             _config_default(
                 config_entry,
                 CONF_CREATE_HOMEASSISTANT_USER,
-                CREATE_HOMEASSISTANT_USER_DEFAULT and not entry_asks_media_consent(config_entry),
+                CREATE_HOMEASSISTANT_USER_DEFAULT,
             )
         ),
         # An entry from before the setting has it as its device is.
@@ -415,8 +414,6 @@ def reconfigure_features_schema_from_current(
 def feature_input_defaults(
     user_input: dict[str, Any],
     defaults: dict[str, Any],
-    *,
-    ask_media_consent: bool = False,
 ) -> dict[str, Any]:
     """Return feature input with hidden display fields preserved when absent."""
 
@@ -431,7 +428,7 @@ def feature_input_defaults(
         media_enabled = bool(data.get(CONF_VIDEO_ENABLED, media_was_enabled))
         data[CONF_CREATE_HOMEASSISTANT_USER] = (
             CREATE_HOMEASSISTANT_USER_DEFAULT
-            if media_enabled and not media_was_enabled and not ask_media_consent
+            if media_enabled and not media_was_enabled
             else defaults.get(
                 CONF_CREATE_HOMEASSISTANT_USER,
                 CREATE_HOMEASSISTANT_USER_DEFAULT,

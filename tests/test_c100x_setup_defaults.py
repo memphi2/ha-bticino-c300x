@@ -1,10 +1,11 @@
-"""C100X first setup needs explicit consent before enabling media or SIP writes.
+"""A C100X has the same media and HA-user setup defaults as a C300X.
 
-A C300X keeps the 2.9.0 defaults: media and the HA user are on at setup, and
-enabling media later turns the HA user on.
+Owner decision: video/media and the HA SIP user are ticked by default on both
+models; the user can untick them, and a saved choice stays as it is.
 """
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -20,11 +21,12 @@ from custom_components.bticino_c300x.runtime_manager import _async_sync_device_u
 
 C100X_INFO = {"model": "C100X", "display_kind": "qt5_ondisk"}
 C300X_INFO = {"model": "C300X", "display_kind": "qt4_ondisk"}
+MODELS = pytest.mark.parametrize("info", [C100X_INFO, C300X_INFO], ids=["c100x", "c300x"])
 
 
-def setup_flow(monkeypatch, info=C100X_INFO):
+def setup_flow(monkeypatch, info):
     flow = BticinoC300XConfigFlow()
-    flow._setup_connection = {"agent_host": "c100x.invalid"}
+    flow._setup_connection = {"agent_host": "station.invalid"}
     flow._setup_agent_info = dict(info)
     monkeypatch.setattr(flow, "async_show_form", lambda **values: values)
     monkeypatch.setattr(flow, "async_step_user_device_activations", AsyncMock())
@@ -32,91 +34,9 @@ def setup_flow(monkeypatch, info=C100X_INFO):
     return flow
 
 
-def test_initial_form_defaults_do_not_enable_media(monkeypatch):
-    flow = setup_flow(monkeypatch)
-    form = asyncio.run(flow.async_step_user_features())
-    defaults = form["data_schema"]({})
-    assert defaults[CONF_VIDEO_ENABLED] is False
-    assert CONF_CREATE_HOMEASSISTANT_USER not in defaults
-
-
-@pytest.mark.parametrize("values", [{}, {CONF_VIDEO_ENABLED: False}])
-def test_default_setup_cannot_provision_device_user(monkeypatch, values):
-    flow = setup_flow(monkeypatch)
-    asyncio.run(flow.async_step_user_features(values))
-    assert flow._setup_feature_data[CONF_VIDEO_ENABLED] is False
-    assert flow._setup_feature_data[CONF_CREATE_HOMEASSISTANT_USER] is False
-    flow.async_step_user_device_activations.assert_awaited_once()
-    flow.async_step_user_visitor_snapshot.assert_not_awaited()
-
-    api = AsyncMock()
-    entry = SimpleNamespace(
-        data=flow._setup_feature_data,
-        options={},
-        runtime_data=SimpleNamespace(api=api),
-    )
-    asyncio.run(_async_sync_device_user(SimpleNamespace(), entry))
-    assert api.mock_calls == []
-
-
-@pytest.mark.parametrize("create_user", [None, False, True])
-def test_video_enable_does_not_implicitly_allow_sip_writes(monkeypatch, create_user):
-    flow = setup_flow(monkeypatch)
-    values = {CONF_VIDEO_ENABLED: True}
-    if create_user is not None:
-        values[CONF_CREATE_HOMEASSISTANT_USER] = create_user
-    asyncio.run(flow.async_step_user_features(values))
-    assert flow._setup_feature_data[CONF_VIDEO_ENABLED] is True
-    assert flow._setup_feature_data[CONF_CREATE_HOMEASSISTANT_USER] is (create_user is True)
-    flow.async_step_user_visitor_snapshot.assert_awaited_once()
-
-
-def test_error_form_keeps_media_user_opt_in(monkeypatch):
-    flow = setup_flow(monkeypatch)
-    form = asyncio.run(flow.async_step_user_features({
-        CONF_VIDEO_ENABLED: True,
-        "doorstation_audio_gain_db": "invalid",
-    }))
-    assert form["errors"]
-    assert form["data_schema"]({})[CONF_CREATE_HOMEASSISTANT_USER] is False
-
-
-@pytest.mark.parametrize("kind", ["options", "reconfigure"])
-@pytest.mark.parametrize("previous_consent", [None, False, True])
-def test_enabling_video_preserves_existing_consent(monkeypatch, kind, previous_consent):
-    data = {"agent_host": "c100x.invalid", CONF_VIDEO_ENABLED: False}
-    if previous_consent is not None:
-        data[CONF_CREATE_HOMEASSISTANT_USER] = previous_consent
-    entry = SimpleNamespace(data=data, options={}, runtime_data=SimpleNamespace(agent_info=C100X_INFO))
-    monkeypatch.setattr(config_flow, "_async_qml_patch_description_placeholders", AsyncMock(return_value={}))
-    if kind == "options":
-        flow = config_flow.BticinoC300XOptionsFlow(entry)
-        monkeypatch.setattr(flow, "_async_store_options", AsyncMock())
-        step = flow.async_step_features
-    else:
-        flow = BticinoC300XConfigFlow()
-        monkeypatch.setattr(flow, "_get_reconfigure_entry", lambda: entry)
-        monkeypatch.setattr(flow, "async_step_reconfigure_visitor_snapshot", AsyncMock())
-        step = flow.async_step_reconfigure_features
-    monkeypatch.setattr(flow, "async_show_form", lambda **values: values)
-    form = asyncio.run(step())
-    values = form["data_schema"]({CONF_VIDEO_ENABLED: True})
-    assert CONF_CREATE_HOMEASSISTANT_USER not in values
-    asyncio.run(step(values))
-    saved = (flow._async_store_options.await_args.args[0] if kind == "options"
-             else flow._reconfigure_feature_data)
-    assert saved[CONF_CREATE_HOMEASSISTANT_USER] is (previous_consent is True)
-    api = AsyncMock()
-    api.async_device_user_status.return_value = {"homeassistant_user_present": False}
-    api.async_ensure_homeassistant_user.return_value = {"homeassistant_user_present": False}
-    entry.options = saved
-    entry.runtime_data = SimpleNamespace(api=api, capabilities={"device_user": {"supported": True}})
-    asyncio.run(_async_sync_device_user(SimpleNamespace(), entry))
-    assert api.async_ensure_homeassistant_user.await_count == int(previous_consent is True)
-
-
-def test_c300x_setup_keeps_media_and_user_defaults(monkeypatch):
-    flow = setup_flow(monkeypatch, C300X_INFO)
+@MODELS
+def test_setup_presets_media_and_the_user(monkeypatch, info):
+    flow = setup_flow(monkeypatch, info)
     form = asyncio.run(flow.async_step_user_features())
     defaults = form["data_schema"]({})
     assert defaults[CONF_VIDEO_ENABLED] is True
@@ -127,13 +47,20 @@ def test_c300x_setup_keeps_media_and_user_defaults(monkeypatch):
     flow.async_step_user_visitor_snapshot.assert_awaited_once()
 
 
-@pytest.mark.parametrize("kind", ["options", "reconfigure"])
-def test_c300x_enabling_video_turns_the_user_on(monkeypatch, kind):
-    entry = SimpleNamespace(
-        data={"agent_host": "c300x.invalid", CONF_VIDEO_ENABLED: False, CONF_CREATE_HOMEASSISTANT_USER: False},
-        options={},
-        runtime_data=SimpleNamespace(agent_info=C300X_INFO),
-    )
+@MODELS
+def test_unticked_setup_provisions_nothing(monkeypatch, info):
+    flow = setup_flow(monkeypatch, info)
+    asyncio.run(flow.async_step_user_features(
+        {CONF_VIDEO_ENABLED: False, CONF_CREATE_HOMEASSISTANT_USER: False}))
+    assert flow._setup_feature_data[CONF_VIDEO_ENABLED] is False
+    assert flow._setup_feature_data[CONF_CREATE_HOMEASSISTANT_USER] is False
+    api = AsyncMock()
+    entry = SimpleNamespace(data=flow._setup_feature_data, options={}, runtime_data=SimpleNamespace(api=api))
+    asyncio.run(_async_sync_device_user(SimpleNamespace(), entry))
+    assert api.mock_calls == []
+
+
+def _feature_step(monkeypatch, kind, entry):
     monkeypatch.setattr(config_flow, "_async_qml_patch_description_placeholders", AsyncMock(return_value={}))
     if kind == "options":
         flow = config_flow.BticinoC300XOptionsFlow(entry)
@@ -145,16 +72,36 @@ def test_c300x_enabling_video_turns_the_user_on(monkeypatch, kind):
         monkeypatch.setattr(flow, "async_step_reconfigure_visitor_snapshot", AsyncMock())
         step = flow.async_step_reconfigure_features
     monkeypatch.setattr(flow, "async_show_form", lambda **values: values)
+
+    def saved():
+        return flow._async_store_options.await_args.args[0] if kind == "options" else flow._reconfigure_feature_data
+
+    return step, saved
+
+
+@MODELS
+@pytest.mark.parametrize("kind", ["options", "reconfigure"])
+def test_enabling_video_turns_the_user_on(monkeypatch, kind, info):
+    entry = SimpleNamespace(
+        data={"agent_host": "station.invalid", CONF_VIDEO_ENABLED: False, CONF_CREATE_HOMEASSISTANT_USER: False},
+        options={}, runtime_data=SimpleNamespace(agent_info=info))
+    step, saved = _feature_step(monkeypatch, kind, entry)
     asyncio.run(step({CONF_VIDEO_ENABLED: True}))
-    saved = (flow._async_store_options.await_args.args[0] if kind == "options"
-             else flow._reconfigure_feature_data)
-    assert saved[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert saved()[CONF_CREATE_HOMEASSISTANT_USER] is True
 
 
-def test_media_consent_follows_the_reported_model():
-    from custom_components.bticino_c300x.media_consent import asks_media_consent
+@MODELS
+@pytest.mark.parametrize("kind", ["options", "reconfigure"])
+def test_a_saved_user_choice_stays(monkeypatch, kind, info):
+    entry = SimpleNamespace(
+        data={"agent_host": "station.invalid", CONF_VIDEO_ENABLED: True, CONF_CREATE_HOMEASSISTANT_USER: False},
+        options={}, runtime_data=SimpleNamespace(agent_info=info))
+    step, saved = _feature_step(monkeypatch, kind, entry)
+    asyncio.run(step({CONF_VIDEO_ENABLED: True}))
+    assert saved()[CONF_CREATE_HOMEASSISTANT_USER] is False
 
-    assert asks_media_consent(C100X_INFO) is True
-    assert asks_media_consent({"device": {"model": "C100X"}}) is True
-    assert asks_media_consent(C300X_INFO) is False
-    assert asks_media_consent({}) is False
+
+def test_no_model_specific_media_consent_is_left():
+    root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
+    assert not (root / "media_consent.py").exists()
+    assert not any("media_consent" in path.read_text(encoding="utf-8") for path in root.glob("*.py"))

@@ -403,20 +403,19 @@ The C100X bootstrap must leave legacy MQTT/Companion migration untouched.
 A fresh C100X agent configuration has video on, as on a C300X. A reinstall
 preserves an explicit agent video setting. Bootstrap uses the merged agent
 configuration for both its persistent IPv4 block and its live rule additions;
-it does not remove previously open live ports. The HA feature form still asks
-on a C100X before Home Assistant uses media: video and automatic media-user
-creation start unticked there. Submitting the form unchanged does not provision
-SIP users; enabling video alone does not authorize automatic SIP-user creation.
-Options and reconfiguration preserve a previously saved choice; switching video
-on does not silently turn a saved refusal or an absent permission into approval.
+it does not remove previously open live ports. The HA feature form presets
+video/media and the HA media user exactly as on a C300X: both are ticked, and
+the user can untick them. Options and reconfiguration keep a saved media-user
+choice while video stays on; switching video on from off ticks the media user
+again, as on a C300X.
 
 1. Install the approved package on the isolated HA test instance; authorize only
    the agreed C100X host. Leave GUI/display installation disabled.
 2. After agent installation, pause at feature selection for the first inspection.
-   Turn video on and allow the media user; leave display installation disabled.
-   After confirming the host/model and unchanged vendor operation, finish setup;
-   do not invoke device actions or MQTT migration. If setup or a Repair demands
-   a routing/user change, stop instead of accepting it to complete the wizard.
+   Video/media and the HA media user are ticked by default, as on a C300X; keep
+   them ticked and leave display installation disabled. After confirming the
+   host/model and unchanged vendor operation, finish setup; do not invoke device
+   actions or MQTT migration. Afterwards record `GET /api/v1/device-user`.
 3. Check authenticated setup/status, C100X/1.5.8 identity, discovery and available
    capabilities. Display/mute/key-tone/GUI-restart capabilities must remain false
    until the display activation phase.

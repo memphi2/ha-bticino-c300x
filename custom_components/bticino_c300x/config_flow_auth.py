@@ -181,7 +181,7 @@ class AuthFlowSteps:
                     self._setup_connection = candidate
                 if not errors:
                     self._setup_connection = candidate
-                    # The model decides the C100X display and media consent defaults.
+                    # The model decides the C100X display defaults.
                     self._setup_agent_info.clear()
                     self._setup_agent_info.update(setup)
                     unique_id = stable_unique_id_from_setup_data(setup)

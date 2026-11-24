@@ -540,3 +540,20 @@ def test_without_flock_the_restart_fails_and_leaves_the_display_alone(station: S
     assert "needs flock" in result.stderr
     assert station.running() == old
     assert _kinds(station) == ["wrapper", "start"]
+
+
+def test_a_signal_bounds_the_restart_wait_of_a_write_to_5_seconds(overlay: OverlayStation) -> None:
+    """The agent's SIGTERM is followed by SIGKILL after 15 s: the rollback must end before."""
+
+    overlay.boot(C300X_TEST_TEARDOWN="8")
+    overlay.mark.write_text("boot-1\n")
+    process = subprocess.Popen([str(SCRIPT), "core-apply"], env=overlay.script_env(),
+                               start_new_session=True, text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert _wait_for(lambda: overlay.phase() == "stop", 60), overlay.phase()
+    signalled = time.monotonic()
+    os.killpg(process.pid, signal.SIGTERM)
+    process.communicate(timeout=60)
+    assert time.monotonic() - signalled < 9
+    assert process.returncode in (130, 131)
+    assert len(_settled(overlay)) == 1

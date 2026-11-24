@@ -616,19 +616,31 @@ gui_restart() {
         return 1
     fi
     mkdir -p "$GUI_RUN_DIR/requests" "$GUI_RUN_DIR/serving" "$GUI_RUN_DIR/done" || return 1
-    GUI_REQUESTS=$((GUI_REQUESTS + 1))
-    gui_id="$$.$GUI_REQUESTS"
-    rm -f "$GUI_RUN_DIR/done/$gui_id"
-    printf '%s\n' "$1" > "$GUI_RUN_DIR/requests/$gui_id.tmp" || return 1
-    mv -f "$GUI_RUN_DIR/requests/$gui_id.tmp" "$GUI_RUN_DIR/requests/$gui_id" || return 1
-    gui_until=$((SCRIPT_STARTED + GUI_BUDGET_SECONDS))
-    if [ "${FINISH_SIGNALLED:-0}" = "1" ]; then
-        gui_until=$(($(date +%s) + 5))
+    gui_id="${GUI_PENDING_ID:-}"
+    # A finishing step repeated after a signal waits for the request it filed.
+    if [ "${FINISH_STEP_REPEAT:-0}" != "1" ] || [ -z "$gui_id" ] \
+        || { [ ! -f "$GUI_RUN_DIR/requests/$gui_id" ] && [ ! -f "$GUI_RUN_DIR/serving/$gui_id" ] \
+            && [ ! -f "$GUI_RUN_DIR/done/$gui_id" ]; }; then
+        GUI_REQUESTS=$((GUI_REQUESTS + 1))
+        gui_id="$$.$GUI_REQUESTS"
+        rm -f "$GUI_RUN_DIR/done/$gui_id"
+        printf '%s\n' "$1" > "$GUI_RUN_DIR/requests/$gui_id.tmp" || return 1
+        mv -f "$GUI_RUN_DIR/requests/$gui_id.tmp" "$GUI_RUN_DIR/requests/$gui_id" || return 1
     fi
+    GUI_PENDING_ID="$gui_id"
+    gui_until=$((SCRIPT_STARTED + GUI_BUDGET_SECONDS))
     while :; do
+        # At most 5 s after the first signal, also across a repeated step.
+        if [ "${FINISH_SIGNALLED:-0}" = "1" ] && [ -z "${GUI_SIGNAL_UNTIL:-}" ]; then
+            GUI_SIGNAL_UNTIL=$(($(date +%s) + 5))
+        fi
+        if [ -n "${GUI_SIGNAL_UNTIL:-}" ] && [ "$GUI_SIGNAL_UNTIL" -lt "$gui_until" ]; then
+            gui_until="$GUI_SIGNAL_UNTIL"
+        fi
         gui_answer="$(cat "$GUI_RUN_DIR/done/$gui_id" 2>/dev/null || true)"
         if [ -n "$gui_answer" ]; then
             rm -f "$GUI_RUN_DIR/done/$gui_id"
+            GUI_PENDING_ID=
             [ "$gui_answer" = "0" ] && return 0
             return 1
         fi
@@ -926,7 +938,9 @@ finish_step() {
     if [ "$FINISH_STEP_SIGNALLED" = "1" ]; then
         FINISH_STEP_SIGNALLED=0
         finish_step_rc=0
+        FINISH_STEP_REPEAT=1
         "$@" || finish_step_rc=$?
+        FINISH_STEP_REPEAT=0
     fi
     return "$finish_step_rc"
 }
@@ -934,7 +948,8 @@ finish_step() {
 finish_write_action() {
     write_rc=$?
     trap - EXIT
-    FINISH_SIGNALLED=0
+    # A signal that ended the write bounds the restart wait like a later one.
+    FINISH_SIGNALLED="${WRITE_SIGNALLED:-0}"
     trap finish_signal HUP INT TERM
     if [ "$write_rc" != "0" ]; then
         cleanup_staging
@@ -981,6 +996,7 @@ exit_write_signal() {
 }
 
 abort_write_action() {
+    WRITE_SIGNALLED=1
     finish_write_action || true
     exit_write_signal
 }

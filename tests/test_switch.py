@@ -1663,3 +1663,13 @@ def test_an_agent_without_the_display_patch_gets_no_display_patch_switch() -> No
     assert len(switches({"supported": True, "qml_patch": True})) == 1
     # An agent that has not answered yet keeps the switch.
     assert len(switches({})) == 1
+
+
+def test_a_c100x_gets_no_answering_machine_switch() -> None:
+    from c100x_answering_capabilities import C100X, C300X
+
+    for capabilities, expected in ((C100X, False), (C300X, True)):
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities=dict(capabilities)))
+        entities: list[Any] = []
+        asyncio.run(async_setup_entry(None, entry, entities.extend))  # type: ignore[arg-type]
+        assert any(isinstance(entity, C300XAnsweringMachineSwitch) for entity in entities) is expected

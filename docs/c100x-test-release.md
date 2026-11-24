@@ -61,8 +61,9 @@ it does not authorize media activation during this test.
   unavailable until the separate [display activation](#display-activation-by-reboot-device-test)
   is confirmed in its trial boot. Explicit GUI-install requests must still fail
   before writing device files, not silently report a successful activation.
-- Notify sound, speech/TTS, voice memos and memo mutations are not part of this
-  test. No alternative sound script or forced capability flag is supported.
+- Notify sound, speech/TTS, the answering machine, voice memos and memo
+  deletion are not part of this test; the C100X has no answering machine (see
+  the [support matrix](c100x-experimental.md#support-matrix)). No alternative sound script or forced capability flag is supported.
   The [audio investigation](dev/c100x-audio-analysis.md) establishes concrete vendor
   playback/ownership hazards. Integrated safety guards block incompatible
   playback and startup cleanup; they do not add a local speaker/TTS backend.
@@ -505,8 +506,7 @@ so.
      and the HA state must agree.
    - Toggle on the device: the HA state follows. Reboot while muted: the icon is
      muted after the boot.
-   - An HA command during an answering-machine message or a call is refused and
-     causes no later change.
+   - An HA command during a call is refused and causes no later change.
    - Unmute from outside the GUI (vendor app): the GUI icon follows within a few
      seconds, and a following HA mute works.
 6. Afterwards the ini value, the GUI icon and HA agree.

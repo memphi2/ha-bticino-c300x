@@ -1,5 +1,6 @@
 #include "capabilities.h"
 
+#include "answering_scope.h"
 #include "json_util.h"
 #include "video_rtsp.h"
 
@@ -31,6 +32,7 @@ int c300x_capabilities_json(
     int maintenance_supported = context->maintenance_supported;
     const char *maintenance = maintenance_supported ? "true" : "false";
     int codec_apply_allowed = context->device_model == NULL || strcmp(context->device_model, "C100X") != 0;
+    char answering[640];
     int activations_count = context->activations_count;
     int written;
 
@@ -45,6 +47,7 @@ int c300x_capabilities_json(
     c300x_json_escape_string(config->lock_id, lock_id, sizeof(lock_id));
     c300x_json_escape_string(config->lock_name, lock_name, sizeof(lock_name));
     c300x_json_string(context->bundle_hash, bundle_hash_json, sizeof(bundle_hash_json));
+    if (!c300x_answering_capabilities_json(config, !codec_apply_allowed, answering, sizeof(answering))) return 0;
     written = snprintf(
         body,
         body_len,
@@ -69,8 +72,7 @@ int c300x_capabilities_json(
         "\"announcements\":{\"supported\":%s},"
         "\"ringer\":{\"supported\":true,\"mute\":%s,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"homeassistant\",\"blocked\"]},"
-        "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
-        "\"memos\":{\"supported\":%s,\"text\":true,\"voice\":true,\"media\":%s,\"source\":\"local_files\",\"watch\":%s,\"delete\":%s,\"write_text\":%s},"
+        "%s"
         "\"system_metrics\":{\"supported\":%s,\"cpu\":true,\"load\":true,\"memory\":true,\"temperature\":true,\"watch\":%s,\"sample_interval_seconds\":%d,\"heartbeat_seconds\":%d,\"change_percent\":%d},"
         "\"mqtt\":{\"supported\":true,\"enabled\":%s,\"configured\":%s},"
         "\"diagnostics\":{\"supported\":true,\"writes\":true,\"runtime\":true},"
@@ -116,15 +118,7 @@ int c300x_capabilities_json(
         context->ringer_min_volume,
         context->ringer_max_volume,
         context->ringer_volume_step,
-        config->answering_machine_messages_enabled ? "true" : "false",
-        (config->answering_machine_messages_enabled && config->answering_machine_messages_watch) ? "true" : "false",
-        config->answering_machine_messages_enabled ? "true" : "false",
-        config->answering_machine_messages_enabled ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
-        (config->memos_enabled && config->memos_watch) ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
+        answering,
         config->system_metrics_enabled ? "true" : "false",
         (config->system_metrics_enabled && config->system_metrics_watch) ? "true" : "false",
         config->system_metrics_sample_interval_seconds,

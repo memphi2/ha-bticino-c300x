@@ -25,6 +25,7 @@ from .capabilities import (
     entry_maintenance_action_is_advertised,
     locks_for_capabilities,
     memo_delete_supported,
+    voice_memos_supported,
 )
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
@@ -84,7 +85,8 @@ async def async_setup_entry(
             entities.append(C300XDeleteLatestVideoMessageButton(entry))
         if memo_delete_supported(capabilities):
             entities.append(C300XDeleteLatestTextMemoButton(entry))
-            entities.append(C300XDeleteLatestVoiceMemoButton(entry))
+            if voice_memos_supported(capabilities):
+                entities.append(C300XDeleteLatestVoiceMemoButton(entry))
     if entities:
         async_add_entities(entities)
 

@@ -276,6 +276,8 @@ the C300X and are not part of the card history. Use the **Answering machine**
 switch, the message and memo sensors and the `play_latest_video_message`,
 `play_latest_voice_memo`, `write_text_memo` and `delete_latest_*` actions;
 deleting needs the Display patch. See [Services](feature-reference.md#services).
+A Classe 100X has no answering machine (its hardware switches it off) and no
+voice memos: HA shows only its text memos and the text-memo action there.
 
 ## Recording Clips and Capture Modes
 

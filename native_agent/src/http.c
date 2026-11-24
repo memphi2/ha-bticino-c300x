@@ -35,6 +35,7 @@
 #include "json_util.h"
 #include "local_action_events.h"
 #include "audio_codec.h"
+#include "answering_scope.h"
 #include "memo_store.h"
 #include "memo_led.h"
 #include "media_bridge.h"
@@ -9113,6 +9114,7 @@ static void handle_api_request(
         handle_ringer_post(client_fd, config, runtime, request->body, 0);
         return;
     }
+    if (c300x_answering_route_refused(client_fd, request)) return;
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/answering-machine") == 0) {
         handle_answering_get(client_fd, config);
         return;

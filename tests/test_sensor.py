@@ -2615,3 +2615,21 @@ def test_stored_items_sensor_reads_again_after_a_failed_first_read() -> None:
         assert entity.native_value == 1
 
     asyncio.run(_run())
+
+
+@pytest.mark.parametrize("model", ["C100X", "C300X"])
+def test_a_c100x_gets_no_video_message_or_voice_memo_sensor(model: str) -> None:
+    from c100x_answering_capabilities import C100X, C300X
+
+    async def _run() -> list[Any]:
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities=dict(C100X if model == "C100X" else C300X)))
+        entities: list[Any] = []
+        await async_setup_sensor_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        return entities
+
+    entities = asyncio.run(_run())
+    c300x = model == "C300X"
+    assert any(isinstance(entity, C300XVoicemailMessagesSensor) for entity in entities) is c300x
+    assert any(isinstance(entity, C300XVoiceMemosSensor) for entity in entities) is c300x
+    # Text memos stay: the C100X display page shows them.
+    assert any(isinstance(entity, C300XTextMemosSensor) for entity in entities)

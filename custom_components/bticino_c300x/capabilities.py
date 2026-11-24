@@ -398,6 +398,33 @@ def memos_supported(capabilities: dict[str, Any]) -> bool:
     return capability_is_supported(capabilities, "memos")
 
 
+def voice_memos_supported(capabilities: dict[str, Any]) -> bool:
+    """Return true when the agent offers voice memos.
+
+    A C100X agent reports ``voice: false``; agents before the field always
+    offered them, so only an explicit false hides them.
+    """
+
+    if not memos_supported(capabilities):
+        return False
+    memos = capabilities.get("memos")
+    return not (isinstance(memos, dict) and memos.get("voice") is False)
+
+
+def stored_media_offered(capabilities: Any, kind: str) -> bool:
+    """Return false when the agent reports no video messages or voice memos.
+
+    Only a reported capability counts: capabilities that name neither keep
+    the earlier behaviour of asking the agent.
+    """
+
+    if not isinstance(capabilities, dict):
+        return True
+    if kind == "video":
+        return "answering_machine" not in capabilities or answering_machine_messages_supported(capabilities)
+    return "memos" not in capabilities or voice_memos_supported(capabilities)
+
+
 def diagnostics_supported(capabilities: dict[str, Any]) -> bool:
     """Return true when non-sensitive agent diagnostics are supported."""
 

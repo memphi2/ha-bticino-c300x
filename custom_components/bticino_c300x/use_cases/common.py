@@ -17,6 +17,7 @@ from ..capabilities import (
     entry_gui_function_patch_active,
     maintenance_action_is_supported,
     memo_text_write_supported,
+    stored_media_offered,
 )
 from ..const import CONF_MAINTENANCE_TOKEN, SIGNAL_CONNECTION_STATE_CHANGED
 from ..entity import entry_video_enabled
@@ -124,6 +125,14 @@ def ensure_text_memo_write_supported(entry: Any) -> None:
     capabilities = getattr(runtime_data, "capabilities", {})
     if not memo_text_write_supported(capabilities):
         raise service_validation_error("text_memo_write_not_supported")
+
+
+def ensure_stored_media_supported(entry: Any, kind: str) -> None:
+    """Reject video-message or voice-memo services on an agent without them (a C100X)."""
+
+    capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", {})
+    if not stored_media_offered(capabilities, kind):
+        raise service_validation_error("video_message_not_available" if kind == "video" else "voice_memo_not_available")
 
 
 async def async_ensure_gui_function_patch(entry: Any) -> None:

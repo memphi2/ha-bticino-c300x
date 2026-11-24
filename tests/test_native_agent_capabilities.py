@@ -14,6 +14,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
             "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
             str(root / "test" / "capabilities_test.c"),
             str(root / "src" / "capabilities.c"),
+            str(root / "src" / "answering_capabilities.c"),
             str(root / "src" / "json_util.c"),
             str(root / "src" / "json_parse.c"),
             "-o", str(binary),
@@ -74,6 +75,25 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         assert caps["touch_tone"] == {"supported": False, "requires_display_patch": True}
         assert caps["display_alerts"] is False
         assert caps["display_bridge"] == {"supported": False, "configurable": False, "configured": True}
+        # The C100X records nothing and has no voice memos: text memos only, no delete.
+        assert caps["answering_machine"] == {
+            "supported": False, "status": False, "greeting_message": False,
+            "messages": {"supported": False, "source": "local_files", "watch": False, "media": False, "delete": False},
+        }
+        assert caps["memos"] == {
+            "supported": True, "text": True, "voice": False, "media": False, "source": "local_files",
+            "watch": True, "delete": False, "write_text": True,
+        }
+    for document in c300_documents[:4]:
+        caps = document["capabilities"]
+        assert caps["answering_machine"] == {
+            "supported": True, "status": True, "greeting_message": True,
+            "messages": {"supported": True, "source": "local_files", "watch": True, "media": True, "delete": True},
+        }
+        assert caps["memos"] == {
+            "supported": True, "text": True, "voice": True, "media": True, "source": "local_files",
+            "watch": True, "delete": True, "write_text": True,
+        }
     for offset in (0, 2):
         speex = documents[offset]
         pcmu = documents[offset + 1]

@@ -2067,3 +2067,43 @@ def test_delete_button_reports_success_when_only_the_reread_fails() -> None:
         entry.runtime_data.resources.memos_refresh_task.cancel()
 
     asyncio.run(_run())
+
+
+@pytest.mark.parametrize("model", ["C100X", "C300X"])
+def test_a_c100x_gets_no_message_or_memo_delete_button(model: str) -> None:
+    from c100x_answering_capabilities import C100X, C300X
+
+    async def _run() -> list[Any]:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                capabilities=dict(C100X if model == "C100X" else C300X),
+                qml_patch_status={"available": True, "patched": True},
+            ),
+        )
+        entities: list[Any] = []
+        await async_setup_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        return entities
+
+    entities = asyncio.run(_run())
+    for kind in (C300XDeleteLatestVideoMessageButton, C300XDeleteLatestTextMemoButton,
+                 C300XDeleteLatestVoiceMemoButton):
+        assert any(isinstance(entity, kind) for entity in entities) is (model == "C300X")
+
+
+def test_an_agent_without_voice_memos_gets_no_voice_delete_button() -> None:
+    async def _run() -> list[Any]:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                capabilities={"memos": {"supported": True, "delete": True, "voice": False}},
+                qml_patch_status={"available": True, "patched": True},
+            ),
+        )
+        entities: list[Any] = []
+        await async_setup_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        return entities
+
+    entities = asyncio.run(_run())
+    assert any(isinstance(entity, C300XDeleteLatestTextMemoButton) for entity in entities)
+    assert not any(isinstance(entity, C300XDeleteLatestVoiceMemoButton) for entity in entities)

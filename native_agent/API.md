@@ -849,6 +849,14 @@ Authentication: normal API token.
 
 Side effects: reads answering-machine state.
 
+A C100X has no answering machine: its HAL reports none for the SHARK board and
+the vendor recorder forces it off. There, capabilities report
+`answering_machine.supported: false` and `memos` with `voice`, `media` and
+`delete` false (text memos keep reading and `write_text`). Every
+`/api/v1/answering-machine` route, `GET /api/v1/memos/voice/{id}/audio` and
+`POST /api/v1/memos/actions/delete` answer `409` with
+`answering_machine_unsupported_model` before any device I/O.
+
 ### `POST /api/v1/answering-machine`
 
 Authentication: normal API token.

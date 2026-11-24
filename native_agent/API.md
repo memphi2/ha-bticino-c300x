@@ -1934,6 +1934,15 @@ since the agent last exchanged a request with Home Assistant in this run, in
 either direction, or `null` if it has not yet. No token, secret or webhook id
 is part of the answer.
 
+`GET /homeassistant?domain=c300x&service=setting&entities=<key>&option=<value>`
+forwards `{"type":"display_setting","key":"<key>","value":"<value>"}` to Home
+Assistant and returns its answer. Key and value are at most 48 characters of
+letters, digits and `_.:-`; anything else is answered with HTTP 400
+`invalid_action_id` and not forwarded. Which keys and values exist is decided
+by Home Assistant alone, which accepts `dashboard_prevent_return` (`on`,
+`off`) and `dashboard_navigation` (`pager`, `tabs`) and rejects everything
+else with `invalid_display_setting`.
+
 Station maintenance works without HA. It requires the local maintenance and
 per-action permissions, no browser Origin, the `X-C300X-UI: settings-v1`
 header, and a loopback client socket owned by the unique trusted station GUI.

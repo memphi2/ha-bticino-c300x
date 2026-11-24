@@ -389,15 +389,16 @@ const qml = fs.readFileSync(root + '/device_qml/C300XSettings.qml', 'utf8');
 const texts = vm.createContext({});
 vm.runInContext(fs.readFileSync(root + '/device_qml/js/c300x_i18n.js', 'utf8').replace(/^\.pragma library\s*/, ''), texts);
 function tab(language) {
-    const calls = {status: [], details: []};
+    const calls = {status: [], details: [], setting: []};
     const preferences = {bridgeProblem: ''};
     const panel = vm.createContext({c300xDisplayPreferences: preferences, visible: true, pending: '', saving: false,
         answered: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
-        instanceName: '', status: '', Math,
+        instanceName: '', keepOpen: false, tabNavigation: false, status: '', Math,
         label(key) { return texts.text(language || 'de', key); },
         Bridge: {
             stationStatus(callback, owner) { calls.status.push({callback, owner}); },
             bridgeDetails(callback, owner) { calls.details.push({callback, owner}); },
+            displaySetting(key, value, callback, owner) { calls.setting.push({key, value, callback, owner}); },
         }});
     panel.panel = panel;
     Object.defineProperty(panel, 'problem', {get() { return preferences.bridgeProblem; }});
@@ -434,8 +435,8 @@ calls.status[0].callback({ok: true, version: '2.9.2', firmware: '1.7.19', regist
 calls.details[0].callback({ok: true, integration_version: '2.9.2', instance_name: 'Zuhause',
     preventReturnToHomepage: true, navigation: 'tabs'}, '');
 assert.deepEqual([panel.reachable, panel.address, panel.contact, panel.agentVersion, panel.firmwareVersion,
-    panel.integrationVersion, panel.instanceName],
-    [true, 'http://192.0.2.10:8123', 'vor 2 Min', '2.9.2', '1.7.19', '2.9.2', 'Zuhause']);
+    panel.integrationVersion, panel.instanceName, panel.keepOpen, panel.tabNavigation],
+    [true, 'http://192.0.2.10:8123', 'vor 2 Min', '2.9.2', '1.7.19', '2.9.2', 'Zuhause', true, true]);
 // Not reachable: the reason is kept for the home page symbol, the local facts stay.
 panel.readStatus();
 calls.status[1].callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
@@ -475,6 +476,78 @@ assert.match(qml, /text: panel\.problem \? panel\.label\(panel\.problem\) : ""/)
 assert.match(qml, /onVisibleChanged: if \(visible\) readStatus\(\); else hidden\(\)/);
 const sizes = [...qml.matchAll(/font\.pixelSize: (\d+)/g)].map(match => Number(match[1]));
 assert.ok(sizes.length >= 5 && Math.min(...sizes) >= 18, String(sizes));
+""")
+
+
+def test_integration_tab_changes_the_two_display_settings_through_home_assistant():
+    _run_tab_harness(r"""
+const {panel, calls, preferences} = tab('de');
+panel.setDisplay('dashboard_navigation', 'tabs');
+assert.equal(calls.setting.length, 0, 'nothing is sent, and nothing kept locally, while Home Assistant is not reachable');
+panel.answered = true;
+preferences.bridgeProblem = 'bridge_unreachable';
+panel.setDisplay('dashboard_navigation', 'tabs');
+assert.equal(calls.setting.length, 0);
+preferences.bridgeProblem = '';
+panel.setDisplay('dashboard_navigation', 'tabs');
+assert.deepEqual([calls.setting[0].key, calls.setting[0].value, panel.saving, panel.tabNavigation],
+    ['dashboard_navigation', 'tabs', true, false], 'the switch waits for the stored value');
+panel.setDisplay('dashboard_prevent_return', 'on');
+assert.equal(calls.setting.length, 1, 'one write at a time');
+// The answer is what Home Assistant stored, not what was asked for.
+calls.setting[0].callback({ok: true, preventReturnToHomepage: true, navigation: 'pager'});
+assert.deepEqual([panel.saving, panel.tabNavigation, panel.keepOpen, panel.status], [false, false, true, '']);
+panel.setDisplay('dashboard_prevent_return', 'off');
+calls.setting[1].callback(null);
+assert.deepEqual([panel.saving, panel.keepOpen, panel.status], [false, true, 'display_settings_error'],
+    'a failed write keeps the confirmed value and says so');
+panel.pending = 'reboot';
+panel.setDisplay('dashboard_prevent_return', 'off');
+assert.equal(calls.setting.length, 2, 'not while a confirmation is open');
+assert.match(qml, /panel\.setDisplay\("dashboard_prevent_return", checked \? "off" : "on"\)/);
+assert.match(qml, /panel\.setDisplay\("dashboard_navigation", checked \? "pager" : "tabs"\)/);
+assert.equal(qml.split('e: panel.reachable && !panel.saving').length - 1, 2, 'both switches rest while unreachable');
+assert.deepEqual(['setting_standby', 'setting_nav_tabs', 'setting_nav_pager', 'setting_nav'].map(key => texts.text('de', key)),
+    ['Seite im Standby offen lassen', 'Seitenwechsel: Favoritenleiste', 'Seitenwechsel: Pfeile', 'Seitenwechsel']);
+for (const key of ['setting_standby', 'setting_nav_tabs', 'setting_nav_pager', 'setting_nav']) {
+    for (const language of ['en', 'it', 'fr']) assert.notEqual(texts.text(language, key), key);
+}
+// The request helpers: a local read, the reason of a failed read, and one fixed command path.
+const requests = [];
+function Request() { this.readyState = 1; }
+Request.prototype.open = function(method, url) { this.method = method; this.url = url; };
+Request.prototype.send = function() { requests.push(this); };
+Request.prototype.finish = function(code, body) {
+    this.readyState = 4; this.status = code; this.responseText = JSON.stringify(body || {});
+    this.onreadystatechange();
+};
+const api = vm.createContext({XMLHttpRequest: Request});
+vm.runInContext(fs.readFileSync(root + '/device_qml/js/c300x_ha.js', 'utf8').replace(/^\.pragma library\s*/, ''), api);
+const owner = {visible: true, uiBaseUrl: 'http://127.0.0.1:18123'};
+const seen = [];
+api.stationStatus(data => seen.push(data), owner);
+assert.equal(requests[0].url, 'http://127.0.0.1:18123/ui/status');
+requests.shift().finish(200, {ok: true, version: '2.9.2'});
+api.stationStatus(data => seen.push(data), owner);
+requests.shift().finish(500);
+assert.equal(JSON.stringify(seen), JSON.stringify([{ok: true, version: '2.9.2'}, null]));
+const details = [];
+for (const [code, reason] of [[200, ''], [404, 'bridge_not_registered'], [502, 'bridge_unreachable'], [0, 'bridge_unreachable']]) {
+    api.bridgeDetails((data, why) => details.push([data === null, why]), owner);
+    assert.equal(requests[0].url, 'http://127.0.0.1:18123/ui/state');
+    requests.shift().finish(code, {ok: code === 200});
+    assert.deepEqual(details.at(-1), [code !== 200, reason]);
+}
+const stored = [];
+api.displaySetting('dashboard_navigation', 'tabs', data => stored.push(data), owner);
+assert.equal(requests[0].url,
+    'http://127.0.0.1:18123/homeassistant?domain=c300x&service=setting&entities=dashboard_navigation&option=tabs');
+requests.shift().finish(200, {ok: true, navigation: 'tabs'});
+api.displaySetting('dashboard_navigation', 'tabs', data => stored.push(data), owner);
+requests.shift().finish(200, {ok: false, error: 'invalid_display_setting'});
+api.displaySetting('dashboard_navigation', 'tabs', data => stored.push(data), owner);
+requests.shift().finish(400, {ok: false});
+assert.equal(JSON.stringify(stored), JSON.stringify([{ok: true, navigation: 'tabs'}, null, null]));
 """)
 
 

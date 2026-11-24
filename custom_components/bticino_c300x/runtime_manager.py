@@ -77,6 +77,7 @@ from .device_user import (
     homeassistant_account_label,
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
+from .display_settings import DISPLAY_SETTING_KEYS, display_settings
 from .display_unread import async_release_unread_claim, async_send_unread_event
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
@@ -532,16 +533,28 @@ def _entry_update_listener(
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
-        # The speech settings are read when a notification is spoken.
-        options = {key: value for key, value in current.options.items() if key not in SPEECH_OPTION_KEYS}
+        # The speech settings are read when a notification is spoken, and the
+        # two settings the station may change itself with every page it loads.
+        # A reload for those would drop the display registration the station
+        # is using to change them.
+        options = {
+            key: value for key, value in current.options.items()
+            if key not in SPEECH_OPTION_KEYS and key not in DISPLAY_SETTING_KEYS
+        }
         return data, options
 
     previous = settings(entry)
+    previous_display = display_settings(entry)
 
     async def listener(hass: HomeAssistant, updated: BticinoC300XConfigEntry) -> None:
-        nonlocal previous
+        nonlocal previous, previous_display
         current = settings(updated)
+        current_display = display_settings(updated)
+        display_changed = current_display != previous_display
+        previous_display = current_display
         if current == previous:
+            if display_changed:
+                await _async_refresh_display_after_setting(updated)
             return
         was_dynamic_homepage = _dynamic_homepage_setting(previous)
         previous = current
@@ -554,6 +567,18 @@ def _entry_update_listener(
         await _async_update_listener(hass, updated)
 
     return listener
+
+
+async def _async_refresh_display_after_setting(entry: BticinoC300XConfigEntry) -> None:
+    """Let an open display page read a changed display setting, without a reload."""
+
+    api = getattr(getattr(entry, "runtime_data", None), "api", None)
+    if api is None:
+        return
+    try:
+        await _async_notify_display_configuration(entry, api)
+    except C300XAgentApiError as err:
+        _LOGGER.debug("C300X display was not told about a changed display setting: %s", compact_error_text(err))
 
 
 def _dynamic_homepage_setting(settings: tuple[dict[str, Any], dict[str, Any]]) -> bool:

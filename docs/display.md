@@ -491,6 +491,8 @@ station, so they also show while Home Assistant cannot be reached.
 | Control | Effect |
 | --- | --- |
 | **Status messages** | Shows (default) or hides coloured action confirmations and routine messages on the Home Assistant and Alarm pages, such as "Page loaded", "Connected", "Sending" or "Ready to arm". Text at a control, errors, a required PIN, sensors that block arming, connection warnings and real alarm or entity states always stay visible; while a command runs, the Alarm page still names it in its state box. |
+| **Keep page open in standby** | The integration's Display option of the same name: whether the Home Assistant and Alarm pages stay open when the screen goes to standby. |
+| **Page change: favourites bar / arrows** | The integration's Display option **Page navigation**: on shows the favourites bar, off the arrows. The label names the current choice. |
 | **SSH** | Switches the station's SSH access. |
 | **Reboot station** | Restarts the station. |
 | **Remove agent** | Removes the device agent; see [Remove Agent](advanced-maintenance.md#remove-agent). |
@@ -498,7 +500,12 @@ station, so they also show while Home Assistant cannot be reached.
 Reboot and removal ask first, in the station's own confirmation window with
 **Yes** and **No**. Nothing is sent before **Yes**; the question closes by
 itself after ten seconds, and leaving the tab, a call or the screen going off
-cancels it. **Status messages** is a
+cancels it. **Keep page open in standby** and **Page change** are stored in Home
+Assistant: the switch shows the value Home Assistant confirmed, the
+integration's options show the same value, and a change made there reaches
+the station as well. Neither reloads the integration or touches the Display
+patch. While Home Assistant cannot be reached, both switches are greyed out.
+**Status messages** is a
 station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.

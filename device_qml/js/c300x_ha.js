@@ -562,6 +562,13 @@ function bridgeDetails(callback, owner) {
     }, owner)
 }
 
+function displaySetting(key, value, callback, owner) {
+    if (owner) useBaseUrl(owner.uiBaseUrl)
+    forwardRequest("/homeassistant?domain=c300x&service=setting&entities=" + key + "&option=" + value, function(data) {
+        callback(data && data.ok === true ? data : null)
+    }, function() { callback(null) }, null, null, owner)
+}
+
 function dashboardNextPage(statusItem, pageItem) {
     if (pageItem.pageCount <= 1) {
         return

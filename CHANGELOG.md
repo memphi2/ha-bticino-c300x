@@ -23,6 +23,11 @@ Station:
   the last contact, and the versions of integration, agent and firmware. Most
   of it also shows while Home Assistant cannot be reached. The tab is laid out
   like the station's own settings tabs, in a centred column.
+- Two Display options can now also be switched at the station, on the
+  **Integration** tab: **Keep page open in standby** and the page change
+  (favourites bar or arrows). The value is stored in Home Assistant and shows
+  the same in the integration's options; changing it on either side does not
+  reload the integration.
 - **Reboot station** and **Remove agent** on the **Integration** tab now ask
   in the station's own confirmation window with **Yes** and **No**, and say
   what happens, instead of showing a second button further down the tab.

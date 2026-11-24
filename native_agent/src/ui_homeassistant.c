@@ -10,6 +10,7 @@
 #define C300X_DASHBOARD_ACTION_MAX 288
 /* Up to 255 HA state characters, including four-byte UTF-8 code points. */
 #define C300X_DASHBOARD_OPTION_MAX 1024
+#define C300X_DISPLAY_SETTING_MAX 48
 
 static int validate_dashboard_action_id(const char *value)
 {
@@ -177,6 +178,25 @@ enum c300x_ui_homeassistant_payload_result c300x_ui_homeassistant_build_payload(
         } else {
             written = snprintf(payload, payload_len, "{\"type\":\"dashboard\"}");
         }
+        if (written < 0 || (size_t)written >= payload_len) {
+            return C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE;
+        }
+        return C300X_UI_HOMEASSISTANT_PAYLOAD_OK;
+    }
+
+    if (strcmp(domain, C300X_DASHBOARD_DOMAIN) == 0 && strcmp(service, "setting") == 0) {
+        /* Home Assistant decides which settings exist; only plain words pass. */
+        if (strlen(entities) > C300X_DISPLAY_SETTING_MAX || strlen(option) > C300X_DISPLAY_SETTING_MAX
+            || !validate_dashboard_action_id(entities) || !validate_dashboard_action_id(option)) {
+            return C300X_UI_HOMEASSISTANT_PAYLOAD_INVALID_ACTION_ID;
+        }
+        written = snprintf(
+            payload,
+            payload_len,
+            "{\"type\":\"display_setting\",\"key\":\"%s\",\"value\":\"%s\"}",
+            entities,
+            option
+        );
         if (written < 0 || (size_t)written >= payload_len) {
             return C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE;
         }

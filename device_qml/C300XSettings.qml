@@ -25,6 +25,9 @@ Item {
     property string firmwareVersion: ""
     property string integrationVersion: ""
     property string instanceName: ""
+    property bool keepOpen: false
+    property bool tabNavigation: false
+    property bool saving: false
     function label(key) { return I18n.text(trsl.language, key) + trsl.empty }
     function clearConfirmation() {
         var open = pending !== ""
@@ -72,6 +75,10 @@ Item {
         if (age < 172800) return label("contact_hours").replace("%1", Math.round(age / 3600))
         return label("contact_days").replace("%1", Math.floor(age / 86400))
     }
+    function applyDisplay(data) {
+        keepOpen = data.preventReturnToHomepage === true
+        tabNavigation = data.navigation === "tabs"
+    }
     function readStatus() {
         Bridge.stationStatus(function(data) {
             panel.address = data && /^https?:\/\/[^\/?#@\s]+$/.test(data.home_assistant) ? data.home_assistant : ""
@@ -85,6 +92,17 @@ Item {
             if (!data) return
             panel.integrationVersion = data.integration_version || ""
             panel.instanceName = data.instance_name || ""
+            panel.applyDisplay(data)
+        }, panel)
+    }
+    function setDisplay(key, value) {
+        if (saving || !reachable || pending) return
+        saving = true
+        status = ""
+        Bridge.displaySetting(key, value, function(data) {
+            panel.saving = false
+            if (data) panel.applyDisplay(data)
+            else panel.status = "display_settings_error"
         }, panel)
     }
     function aboutToShow() {
@@ -98,6 +116,7 @@ Item {
     function hidden() {
         clearConfirmation()
         Maintenance.cancel(panel, deadline)
+        saving = false
     }
     onVisibleChanged: if (visible) readStatus(); else hidden()
     Component.onDestruction: hidden()
@@ -168,6 +187,9 @@ Item {
                     {h: panel.label("section_display")},
                     {t: c300xDisplayPreferences.label, s: c300xDisplayPreferences.feedbackEnabled,
                      e: c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy, a: "feedback"},
+                    {t: panel.label("setting_standby"), s: panel.keepOpen, e: panel.reachable && !panel.saving, a: "standby"},
+                    {t: panel.label(!panel.reachable ? "setting_nav" : panel.tabNavigation ? "setting_nav_tabs" : "setting_nav_pager"), s: panel.tabNavigation,
+                     e: panel.reachable && !panel.saving, a: "navigation"},
                     {h: panel.label("section_station")},
                     {t: "SSH", s: panel.sshRunning, e: panel.sshKnown && !panel.busy, a: "ssh"}
                 ]
@@ -210,8 +232,12 @@ Item {
                         onMouseClicked: {
                             if (modelData.a === "ssh")
                                 Maintenance.request(panel, deadline, "/ssh", {enabled: !checked})
-                            else
+                            else if (modelData.a === "feedback")
                                 c300xDisplayPreferences.setFeedbackEnabled(!checked)
+                            else if (modelData.a === "standby")
+                                panel.setDisplay("dashboard_prevent_return", checked ? "off" : "on")
+                            else
+                                panel.setDisplay("dashboard_navigation", checked ? "pager" : "tabs")
                         }
                     }
                 }

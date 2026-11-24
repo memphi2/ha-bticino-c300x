@@ -328,7 +328,7 @@ PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
     "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
-    "C300XSettings.qml": "b6d12841cd78ac5a8d081f6e37df8b8e9da475c0e72af135fc4f8a87d3324861",
+    "C300XSettings.qml": "aa04b8381b5e8c9d6ac3977411b03c1c46897944980486f91b98a7164e5b040f",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
     "HomePage.qml": "706a0267a0171e1e7b667b74e44bee90cca4af60609bbba80e66dcc8db2257ad",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
@@ -352,8 +352,8 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "5e01a4bb350537a851cfcd9368550e42d6e35f4ac48caaeb2b8e229cd8d6f753",
-    "js/c300x_i18n.js": "2b54896a7be7359fa69b6fdcd9e8aa260fadf9c02cb4ddd560417a6ff0f8e0a6",
+    "js/c300x_ha.js": "0688a40a1d6e01d5061c06c33f7831eeb1e04f9d65e26aba8364291cabf330a3",
+    "js/c300x_i18n.js": "dec6b33e87e2e016a02f55cf2add5bb675fec9393c04285a6e62857d3420d71b",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
@@ -2197,6 +2197,9 @@ def test_only_idempotent_reads_share_a_display_round_trip() -> None:
     assert dashboard_js.count("getJsonShared(") == 5
     assert dashboard_js.count('getJsonShared("/ui/state"') == 3
     assert dashboard_js.count('getJsonShared("/ui/status"') == 1
+    # Changing a display setting is a command and keeps its own round trip.
+    setting = dashboard_js[dashboard_js.index("function displaySetting("):dashboard_js.index("function dashboardNextPage(")]
+    assert "forwardRequest(" in setting and "getJsonShared(" not in setting
     for command in ("/ui/alarm/command", "/ui/action"):
         assert f'getJsonShared("{command}' not in dashboard_js
 

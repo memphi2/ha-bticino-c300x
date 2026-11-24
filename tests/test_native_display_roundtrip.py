@@ -344,3 +344,21 @@ def test_local_status_shows_the_home_assistant_origin_and_last_contact(lab):
     status, body = request(lab.ui, "/ui/status")
     assert status == 200 and body["registered"] is False and body["home_assistant"] == ""
 
+
+def test_display_setting_is_forwarded_as_its_own_type(lab):
+    def setting(key, value):
+        return request(
+            lab.ui,
+            "/homeassistant?domain=c300x&service=setting&entities=" + quote(key, safe="") + "&option=" + quote(value, safe=""),
+        )
+
+    assert setting("dashboard_navigation", "tabs") == (
+        200, {"type": "display_setting", "key": "dashboard_navigation", "value": "tabs"}
+    )
+    count = len(lab.received)
+    for key, value in [
+        ("dashboard_navigation", ""), ("", "tabs"), ("dashboard_navigation", 'x","type":"action'),
+        ('a","b":"c', "on"), ("dashboard navigation", "tabs"), ("k" * 49, "on"), ("key", "v" * 49),
+    ]:
+        assert setting(key, value)[0] == 400, (key, value)
+    assert len(lab.received) == count

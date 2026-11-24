@@ -1756,6 +1756,62 @@ def _display_setting_call(hass: object, entry: object, payload: object, secret: 
     return response.status, json.loads(response.body)
 
 
+def test_display_bridge_stores_only_the_two_display_settings() -> None:
+    """The station's Integration tab may change two options and nothing else."""
+
+    updates: list[dict] = []
+    hass = _FakeHass()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_SHARED_SECRET: "shared-secret", "api_token": "keep", "dashboard_navigation": "tabs"},
+        options={"snapshot_width": 640},
+    )
+
+    def update_entry(target: object, *, options: dict) -> None:
+        assert target is entry
+        updates.append(dict(options))
+        entry.options = dict(options)
+
+    hass.config_entries = SimpleNamespace(async_update_entry=update_entry)
+
+    def call(key: object, value: object, **more: object) -> tuple[int, dict]:
+        return _display_setting_call(hass, entry, {"type": "display_setting", "key": key, "value": value, **more})
+
+    assert call("dashboard_navigation", "pager") == (
+        200, {"ok": True, "preventReturnToHomepage": True, "navigation": "pager"}
+    )
+    assert call("dashboard_prevent_return", "off") == (
+        200, {"ok": True, "preventReturnToHomepage": False, "navigation": "pager"}
+    )
+    assert call("dashboard_prevent_return", "on")[1]["preventReturnToHomepage"] is True
+    assert call("dashboard_navigation", "tabs")[1]["navigation"] == "tabs"
+    # The stored value is what the options form and the display read.
+    assert entry.options == {"snapshot_width": 640, "dashboard_navigation": "tabs", "dashboard_prevent_return": True}
+    assert len(updates) == 4
+    # A repeated value is confirmed without another write.
+    assert call("dashboard_navigation", "tabs")[0] == 200 and len(updates) == 4
+
+    before = (dict(entry.options), dict(entry.data))
+    for key, value in [
+        ("api_token", "x"), ("shared_secret", "x"), ("snapshot_width", "1"), ("actions", "{}"),
+        ("device_ui_enabled", "off"), ("status_page_enabled", "off"), ("dashboard_entities", "light.a"),
+        ("dashboard_navigation", "TABS"), ("dashboard_navigation", ""), ("dashboard_navigation", "on"),
+        ("dashboard_navigation", ["tabs"]), ("dashboard_prevent_return", True), ("dashboard_prevent_return", "1"),
+        ("dashboard_prevent_return", "pager"), ("dashboard_prevent_return", None), (None, "on"),
+        (["dashboard_navigation"], "tabs"), ("dashboard_navigation ", "tabs"), ("__class__", "on"),
+    ]:
+        assert call(key, value) == (400, {"ok": False, "error": "invalid_display_setting"}), (key, value)
+    # Extra fields ride along with an allowed pair but are never stored.
+    assert call("dashboard_navigation", "pager", options={"api_token": "x"}, api_token="x")[0] == 200
+    assert entry.options == {**before[0], "dashboard_navigation": "pager"} and entry.data == before[1]
+    writes = len(updates)
+    payload = {"type": "display_setting", "key": "dashboard_navigation", "value": "tabs"}
+    assert _display_setting_call(hass, entry, payload, secret="")[0] == 401
+    assert _display_setting_call(hass, entry, payload, secret="wrong")[0] == 401
+    assert len(updates) == writes and entry.options["dashboard_navigation"] == "pager"
+
+
 def test_display_status_carries_what_the_integration_tab_shows() -> None:
     hass = _FakeHass()
     hass.states = SimpleNamespace(get=lambda _entity_id: None)

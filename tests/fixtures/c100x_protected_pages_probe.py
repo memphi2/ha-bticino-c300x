@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from c100x_memory_reply import MemoryReply
+from c100x_probe_vendor import provide
 from PyQt5.QtCore import QObject, QUrl, pyqtProperty
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtNetwork import QNetworkAccessManager
@@ -55,6 +56,7 @@ errors = []
 engine.warnings.connect(lambda entries: errors.extend(error.toString() for error in entries
     if "Implicitly defined onFoo properties in Connections are deprecated" not in error.toString()))
 source = Path(sys.argv[1])
+vendor = provide(engine, source)
 document = Path(__file__).with_suffix(".qml").read_bytes().replace(
     b"@MAIN_HOOK@", (source / "hooks/main.inc").read_bytes().replace(b"@RELEASE@", b"."))
 component = QQmlComponent(engine)
@@ -112,6 +114,7 @@ assert not errors, errors
 evaluate('adapter.item.pageName = "unknown.qml"')
 assert evaluate("state().blocked && !state().notice"), "unknown page failed open"
 assert all("unknown.qml" in error for error in errors), errors
+evaluate('adapter.item.pageName = "HomeAssistant.qml"')
 errors.clear()
 evaluate("showHome(); mainStackView.currentItem = null")
 assert evaluate("state().blocked")

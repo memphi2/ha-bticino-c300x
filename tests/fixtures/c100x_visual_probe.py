@@ -19,6 +19,7 @@ from PyQt5.QtTest import QTest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
+from c100x_probe_vendor import provide  # noqa: E402
 from check_display_layout import HOST, fixtures, intersection, layout_issues  # noqa: E402
 from check_energy_layout import make_fixtures  # noqa: E402
 
@@ -57,13 +58,16 @@ class Host(QObject):
 
 app = QGuiApplication([])
 engine = QQmlEngine()
+vendor = provide(engine, Path(sys.argv[1]))
 factory = OfflineFactory()
 engine.setNetworkAccessManagerFactory(factory)
 host = Host()
 engine.rootContext().setContextProperty("c100xHost", host)
 warnings = []
+# Two notes of the host's newer Qt; the station's Qt 5.10 knows neither syntax.
+HOST_NOTES = ("Implicitly defined onFoo properties in Connections are deprecated", "restoreMode has not been set")
 engine.warnings.connect(lambda entries: warnings.extend(error.toString() for error in entries
-    if "Implicitly defined onFoo properties in Connections are deprecated" not in error.toString()))
+    if not any(note in error.toString() for note in HOST_NOTES)))
 source, output = map(Path, sys.argv[1:3])
 output.mkdir(parents=True, exist_ok=True)
 
@@ -131,8 +135,10 @@ for case in cases:
 FocusScope {{ id: frame; width: 800; height: 480; focus: true; {HOST}
     property var vendorKeys: []
     Keys.onPressed: {{ vendorKeys = vendorKeys.concat([event.key]); event.accepted = true }}
-    function actionCount() {{ var a=[]; page.actions(page,a); return a.length }}
-    function selectedIndex() {{ var a=[]; page.actions(page,a); return a.indexOf(page.selectedAction) }}
+    function actionCount() {{ return page.controls().actions.length }}
+    function settle() {{ page.settle() }}
+    function atExit() {{ return page.exitSelected }}
+    function selectedIndex() {{ return page.controls().actions.indexOf(page.selectedAction) }}
     C100XPage {{ id: page; anchors.fill: parent; focus: true; headerLabel: "{name}"
         Item {{ x: 26; y: 70; width: 748; height: 380; {target} }}
     }}
@@ -167,10 +173,15 @@ FocusScope {{ id: frame; width: 800; height: 480; focus: true; {HOST}
         issues.append({"kind": "blank_content"})
     total = evaluate(item, "actionCount()")
     # Actual key events, not just direct calls to the navigation helper.
-    reached = set()
-    for _ in range(total + 1):
+    # The page opens on its first control; Down walks to the last one and then to EXIT.
+    evaluate(item, "settle()")
+    reached = {evaluate(item, "selectedIndex()")}
+    for _ in range(total):
         QTest.keyClick(view, Qt.Key_Down)
         reached.add(evaluate(item, "selectedIndex()"))
+    if total and not evaluate(item, "atExit()"):
+        issues.append({"kind": "no_exit_after_last_action"})
+    reached.discard(-1)
     if reached != set(range(total)):
         issues.append({"kind": "unreachable_actions", "expected": total, "reached": sorted(reached)})
     if evaluate(item, "vendorKeys.length") != 0:

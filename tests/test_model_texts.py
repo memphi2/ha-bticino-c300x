@@ -394,3 +394,14 @@ def test_global_texts_name_no_model():
                 assert "C300X" not in field.replace("BTicino C300X", "") and "C100X" not in field, (lang, service)
     assert _load("en")["services"]["capture_doorbell_call"]["name"] == "Capture doorbell video"
     assert _load("de")["services"]["capture_doorbell_call"]["name"] == "Türvideo aufnehmen"
+
+
+def test_the_c100x_reads_how_its_pages_are_changed():
+    """The C100X has no favourites bar: its pages follow one another and end in EXIT."""
+
+    for lang in LANGUAGES:
+        data = _load(lang)
+        for area, step in (("config", "user_dashboard"), ("config", "reconfigure_dashboard"), ("options", "dashboard")):
+            twin = data[area]["step"][f"{step}_c100x"]["data_description"]["dashboard_navigation"]
+            original = data[area]["step"][step]["data_description"]["dashboard_navigation"]
+            assert "EXIT" in twin and "{model}" in twin and "EXIT" not in original, (lang, step)

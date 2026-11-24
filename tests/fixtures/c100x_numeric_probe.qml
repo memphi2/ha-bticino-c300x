@@ -42,11 +42,10 @@ Item {
         for (i = 0; i < 12; i++) slider.adjust(-1)
         require(detail.preview === 5, "lower limit must be reachable")
         slider.adjust(1)
+        require(submissions === 0, "a step must not submit")
         slider.activate()
-        require(slider.keyboardConfirming && !slider.keyboardApplySelected && submissions === 0, "confirmation must default to cancel")
-        slider.adjust(1)
-        slider.activate()
-        require(submissions === 1 && submittedValue === "8" && !host.interactionActive, "confirm must submit once")
+        require(slider.keyboardConfirming === undefined, "the Cancel/Apply prompt is gone")
+        require(submissions === 1 && submittedValue === "8" && !host.interactionActive, "Return must submit once")
 
         detail.control = {kind: "number", command: "temperature", min: 15, max: 30, step: 0.5, value: 21.5}
         slider.activate()

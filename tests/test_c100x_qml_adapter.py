@@ -42,10 +42,12 @@ def test_parity_inventory_is_complete_and_sources_are_separate(tmp_path):
 
 def test_physical_keys_leave_vendor_actions_untouched():
     page = (ROOT / "device_qml/c100x/C100XPage.qml").read_text()
-    for key in ("Key_Up", "Key_Down", "Key_Return", "Key_Back", "Key_Escape"):
+    for key in ("Key_Up", "Key_Down", "Key_Return"):
         assert key in page
-    for key in ("Key_Call", "Key_Hangup", "Key_1", "Key_6", "Key_7"):
+    # The station's keymap has no back key: pages leave through their EXIT entry.
+    for key in ("Key_Back", "Key_Escape", "Key_Call", "Key_Hangup", "Key_1", "Key_6", "Key_7"):
         assert key not in page
+    assert '"../images/Exit.svg"' in page and "backClicked()" in page
     assert "event.accepted = false" in page
     assert "if (c100xHost.blocked) return" in page
 

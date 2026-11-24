@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from c100x_memory_reply import MemoryReply
+from c100x_probe_vendor import provide
 from PyQt5.QtCore import QEvent, Qt, QUrl
 from PyQt5.QtGui import QGuiApplication, QKeyEvent
 from PyQt5.QtNetwork import QNetworkAccessManager
@@ -34,6 +35,7 @@ assert all(key in keys for key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Return))
 assert Qt.Key_Back not in keys and Qt.Key_Escape not in keys
 app = QGuiApplication([])
 engine = QQmlEngine()
+vendor = provide(engine, source)
 factory = OfflineFactory()
 engine.setNetworkAccessManagerFactory(factory)
 errors = []
@@ -73,85 +75,38 @@ press(Qt.Key_Return)
 press(Qt.Key_Down)
 assert evaluate("state().preview === 22 && state().editing && submissions === 0")
 repeat_return()
-assert evaluate("!state().confirming && submissions === 0")
-press(Qt.Key_Return)
-assert evaluate("state().confirming && !state().apply && state().preview === 22 && submissions === 0")
-press(Qt.Key_Return)
-assert evaluate("!state().editing && !state().confirming && state().preview === 21.5 && !state().interaction && submissions === 0")
-
-for language in ("en", "de", "fr", "it"):
-    evaluate(f"c100xHost.language = {json.dumps(language)}")
-    press(Qt.Key_Return)
-    press(Qt.Key_Down)
-    press(Qt.Key_Return)
-    assert evaluate("state().confirming && !state().apply")
-    press(Qt.Key_Down)
-    assert evaluate("state().apply && state().preview === 22")
-    press(Qt.Key_Up)
-    assert evaluate("!state().apply && state().preview === 22")
-    QTest.qWait(20)
-    labels = evaluate('''(function walk(item) {
-        var found = []
-        if (typeof item.text === "string")
-            found.push({text: item.text, width: item.width, height: item.height,
-                        contentWidth: item.contentWidth, contentHeight: item.contentHeight})
-        var children = item.children || []
-        for (var i = 0; i < children.length; i++) found = found.concat(walk(children[i]))
-        return found
-    })(slider)''')
-    assert len(labels) == 2, labels
-    assert all(label["text"] and label["contentWidth"] <= label["width"] + 1
-               and label["contentHeight"] <= label["height"] + 1 for label in labels), labels
-    capture = root.grabToImage()
-    QTest.qWait(100)
-    assert not capture.image().isNull()
-    assert capture.saveToFile(str(source.parent / f"numeric-confirm-{language}.png"))
-    press(Qt.Key_Return)
-    assert evaluate("submissions === 0 && state().preview === 21.5")
-
-press(Qt.Key_Return)
-press(Qt.Key_Down)
-press(Qt.Key_Return)
-press(Qt.Key_Down)
-repeat_return()
-assert evaluate("state().confirming && state().apply && submissions === 0")
+assert evaluate("state().editing && submissions === 0"), "a held Return must not commit"
 press(Qt.Key_Return)
 assert evaluate('submissions === 1 && submittedValue === "22" && !state().editing && !state().interaction')
+assert evaluate("slider.keyboardConfirming === undefined"), "the Cancel/Apply prompt is gone"
 
 press(Qt.Key_Return)
 press(Qt.Key_Up)
-press(Qt.Key_Return)
-assert evaluate("state().confirming && state().preview === 21")
+assert evaluate("state().editing && state().preview === 21 && submissions === 1")
 evaluate("pressedKeys = []; releasedKeys = []")
 reserved = [key for key in keys if key not in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Return)]
 for key in reserved:
     press(key)
 assert evaluate("pressedKeys") == reserved
 assert evaluate("releasedKeys") == reserved
-assert evaluate("submissions === 1 && state().confirming")
+assert evaluate("submissions === 1 && state().editing")
+# A call or a hidden page ends an edit without sending it.
 evaluate("c100xHost.blocked = true")
-assert evaluate("!state().editing && !state().confirming && state().preview === 21.5 && !state().interaction && submissions === 1")
+assert evaluate("!state().editing && state().preview === 21.5 && !state().interaction && submissions === 1")
 evaluate("c100xHost.blocked = false; selectSlider()")
 press(Qt.Key_Return)
-press(Qt.Key_Return)
+press(Qt.Key_Down)
 evaluate("page.visible = false")
-assert evaluate("!state().editing && !state().confirming && submissions === 1")
+assert evaluate("!state().editing && submissions === 1")
 evaluate('page.visible = true; detail.control = {kind:"number", command:"temperature", min:5, max:6, step:10, value:5}; selectSlider()')
 press(Qt.Key_Return)
 assert evaluate("state().editing && submissions === 1"), "single-step range bypassed editing"
 press(Qt.Key_Return)
-press(Qt.Key_Return)
-assert evaluate("!state().editing && submissions === 1"), "single-step cancel submitted"
-press(Qt.Key_Return)
-press(Qt.Key_Return)
-press(Qt.Key_Down)
-press(Qt.Key_Return)
-assert evaluate('submissions === 2 && submittedValue === "5"'), "single-step apply did not submit once"
-press(Qt.Key_Return)
+assert evaluate('submissions === 2 && submittedValue === "5"'), "single-step value was not sent once"
 press(Qt.Key_Return)
 press(Qt.Key_Down)
 evaluate("detail.enabled = false")
-assert evaluate("!state().editing && !state().confirming && !state().interaction && submissions === 2")
+assert evaluate("!state().editing && !state().interaction && submissions === 2")
 assert not errors, errors
-sys.stdout.write("stock-key cancel/apply, repeats, reserved keys, preemption and four-language rendering: passed\n")
+sys.stdout.write("stock-key edit and commit, repeats, reserved keys and preemption: passed\n")
 view.close()

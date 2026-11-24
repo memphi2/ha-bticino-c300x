@@ -29,6 +29,19 @@ TYPES = {
 }
 
 
+# The station's own pages use 20 px and more; our dense pages go down to this and no further.
+# The energy charts are the exception: their axis, legend and ten consumer rows have fixed places
+# that larger labels overflow (the layout check proves it), so they keep their own sizes.
+MINIMUM_FONT = 18
+
+
+def swap(source: str, old: str, new: str) -> str:
+    """Replace one known place of a shared page; a changed page must be reviewed."""
+    if source.count(old) != 1:
+        raise ValueError(f"Shared page changed; review the C100X adaptation of {old!r}")
+    return source.replace(old, new)
+
+
 def adapt_alerts(source: str) -> str:
     """Keep the shared expiry/ack controller; replace only verified vendor IO."""
     for anchor in (
@@ -106,7 +119,31 @@ def adapt_page(name: str, source: str) -> str:
     source = source.replace('objectName: "energyPowerTap"',
                             'objectName: "energyPowerTap"\n                keyboardSteps: root.powerBuckets')
     if name == "Alarm.qml":
-        source = source.replace("id: page\n", 'id: page\n    backgroundColor: "#123a69"\n', 1)
+        source = swap(source, "id: page\n", 'id: page\n    tint: "#99123a69"\n    icon: "C100XAlarm.svg"\n')
+        source = swap(source, 'headerLabel: uiText("alarm") + ""', 'headerLabel: "Alarmo"')
+    if name == "HomeAssistant.qml":
+        # The station has no touch and no back key: pages are a carousel with dots and a last EXIT
+        # entry, like its own menus. The tab bar, the More list and the pager are not shown.
+        source = swap(source, "id: page\n", """id: page
+    pages: detailOpen || notificationsOpen ? 1 : Math.max(1, pageCount)
+    pageIndex: currentPageIndex
+    view: notificationsOpen ? "n" : detailOpen ? "d" : ""
+    onPageRequested: Api.dashboardSelectPage(index, status, page)
+""")
+        source = swap(source, "anchors.bottomMargin: tabNavigation && pageCount > 1 ? 65 : 18", "anchors.bottomMargin: 8")
+        source = swap(source, "height: pageCount > 1 && !tabNavigation ? 38 : 0", "height: 0")
+        source = swap(source, "visible: pageCount > 1 && !tabNavigation", "visible: false")
+        source = swap(source, "visible: tabNavigation && pageCount > 1 && !detailOpen && !notificationsOpen", "visible: false")
+    if name == "C300XDetailControl.qml":
+        # A number is set like the station's own regulations: Return, Up/Down, Return. No +/- buttons.
+        source = swap(source, "model: [-1, 1]", "model: []")
+        source = swap(source, "anchors.leftMargin: 80; anchors.rightMargin: 80", "anchors.leftMargin: 0; anchors.rightMargin: 0")
+    # Opaque C300X panel fills become see-through panels on the station's own background.
+    for fill in ('"#1f2c36"', '"#041b3b"'):
+        source = source.replace(f"color: {fill}", 'color: "#40000000"')
+    smallest = 0 if name.startswith("C300XEnergy") else MINIMUM_FONT
+    source = re.sub(r"font\.pixelSize:[^;\n]*", lambda sizes: re.sub(
+        r"(?<=[?:] )\d+\b", lambda size: str(max(smallest, int(size[0]))), sizes[0]), source)
     if name == "C300XEnergyConsumers.qml":
         source = source.replace('objectName: "consumerTick"',
                                 'objectName: "consumerTick"\n                        fontSizeMode: Text.Fit\n'

@@ -1,4 +1,4 @@
-"""Numeric cancellation and confirmation use only the stock navigation keys."""
+"""A number is edited and sent with the stock navigation keys only; the keymap has no back key."""
 
 import importlib.util
 import json
@@ -12,7 +12,7 @@ from test_c100x_qml_adapter import ROOT, builder
 from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
 
 
-def test_numeric_confirmation_and_cancel_with_firmware_keymap(tmp_path):
+def test_numeric_edit_and_commit_with_firmware_keymap(tmp_path):
     if importlib.util.find_spec("PyQt5") is None:
         pytest.skip("Optional host PyQt5 absent; not a hardware acceptance test")
     original("c100x-1.5.8")

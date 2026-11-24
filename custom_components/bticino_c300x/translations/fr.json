@@ -146,7 +146,7 @@
           "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarmo restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
-          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+          "dashboard_navigation": "Non utilisé sur le {model} : les pages se suivent comme les menus propres du poste. Haut et Bas changent de page, Entrée l'ouvre et la dernière entrée est EXIT. L'ordre suit les positions des pages."
         }
       },
       "user_dashboard_entity_display": {
@@ -275,7 +275,7 @@
           "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarmo restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
-          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+          "dashboard_navigation": "Non utilisé sur le {model} : les pages se suivent comme les menus propres du poste. Haut et Bas changent de page, Entrée l'ouvre et la dernière entrée est EXIT. L'ordre suit les positions des pages."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -920,7 +920,7 @@
           "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarmo restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
-          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+          "dashboard_navigation": "Non utilisé sur le {model} : les pages se suivent comme les menus propres du poste. Haut et Bas changent de page, Entrée l'ouvre et la dernière entrée est EXIT. L'ordre suit les positions des pages."
         }
       },
       "dashboard_entity_display": {

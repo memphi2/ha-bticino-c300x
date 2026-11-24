@@ -29,19 +29,19 @@ FocusScope {
     }
     property var slider: null
     function selectSlider() {
-        for (var i = 0; i < 20; i++) {
-            page.move(1)
+        page.enter(false)
+        for (var i = 0; i < 20 && page.selectedAction; i++) {
             if (page.selectedAction.objectName === "c100xNumericSlider") {
                 slider = page.selectedAction
                 page.forceActiveFocus()
                 return
             }
+            page.move(1)
         }
         throw new Error("numeric slider is unreachable")
     }
     function state() {
-        return {editing: slider.keyboardEditing, confirming: slider.keyboardConfirming,
-                apply: slider.keyboardApplySelected, preview: detail.preview, submissions: submissions,
+        return {editing: slider.keyboardEditing, preview: detail.preview, submissions: submissions,
                 value: submittedValue, interaction: helper.interactionActive}
     }
 }

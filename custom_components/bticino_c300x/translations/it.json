@@ -146,7 +146,7 @@
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
-          "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
+          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri del posto interno. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
         }
       },
       "user_dashboard_entity_display": {
@@ -275,7 +275,7 @@
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
-          "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
+          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri del posto interno. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -920,7 +920,7 @@
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
-          "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
+          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri del posto interno. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
         }
       },
       "dashboard_entity_display": {

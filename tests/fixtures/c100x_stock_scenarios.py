@@ -245,6 +245,166 @@ def menu_entries_retry_without_polling(work, skin):
     assert not runtime.adapter_warnings(), runtime.adapter_warnings()
 
 
+FIND = ("(function find(item, name) { if (!item) return null; if (item.objectName === name) return item; "
+        "var kids = item.children || []; for (var i = 0; i < kids.length; i++) { var hit = find(kids[i], name); "
+        "if (hit) return hit } return null })")
+ACTIONS = "controls().actions"
+TOPS = ("(function() { var out = []; var list = controls().actions; for (var i = 0; i < list.length; i++) "
+        "out.push(list[i].mapToItem(page, 0, 0).y); return out })()")
+
+
+class Page:
+    """The adapter page on top of the vendor stack, addressed in its own QML context."""
+
+    def __init__(self, runtime):
+        self.runtime = runtime
+
+    def js(self, code):
+        return self.runtime.js(code, self.runtime.js("mainStackView.currentItem.item.pageItem"))
+
+    def shown(self, name):
+        """Whether any item of that name is on the screen."""
+        return self.js("(function any(item) { if (!item || !item.visible) return false; "
+                       "if (item.objectName === '%s') return true; var kids = item.children || []; "
+                       "for (var i = 0; i < kids.length; i++) if (any(kids[i])) return true; return false })(page)"
+                       .replace("%s", name))
+
+    def selected(self):
+        """Name, and position on the screen, of the control that carries the selection."""
+        return self.js(
+            "(function() { var item = selectedAction; if (!item) return null; var at = item.mapToItem(page, 0, 0); "
+            "return {name: item.objectName, top: at.y, bottom: at.y + item.height, left: at.x, "
+            "marked: item.keyboardSelected, switch: item.checked !== undefined, editing: item.keyboardEditing} })()")
+
+
+def page_warnings(runtime):
+    """Adapter warnings, without two notes of the host's newer Qt and the vendor context ending first on close."""
+    known = ("restoreMode has not been set", "Cannot read property 'screenState' of null")
+    return [entry for entry in runtime.adapter_warnings() if not any(note in entry for note in known)]
+
+
+def open_dashboard(work, skin, **data):
+    from c100x_dashboard_data import build
+    runtime = Runtime(work, skin, build(**data))
+    runtime.wait(300)
+    return runtime
+
+
+def dashboard_navigation(work, skin):
+    """Pages are a carousel with dots and a last EXIT; Return enters a page, focus moves and scrolls."""
+    runtime = open_dashboard(work, skin)
+    runtime.keys("D R", settle=2400)
+    page = Page(runtime)
+    assert page.js("headerLabel") == "Home Assistant" and page.js("pageCount") == 4
+    # No tab bar, no More list, no pager, no back box: the station has dots and EXIT.
+    assert page.js("count") == 5 and page.js("currentIndex") == 0 and page.shown("c100xDots")
+    assert not page.js("tabBar.visible") and not page.js("pagerRow.visible") and not page.js("morePagesOpen")
+    # The start page has nothing to operate: the page itself is selected.
+    assert not page.js("inside") and page.shown("c100xPageMark") and page.selected() is None
+    runtime.keys("D")
+    assert page.js("currentPageIndex") == 1 and page.js("currentIndex") == 1 and page.js("headerLabel") == "Rooms"
+    assert not page.js("inside") and page.shown("c100xPageMark")
+    runtime.keys("R")
+    first = page.selected()
+    assert page.js("inside") and first["marked"] and not page.shown("c100xPageMark"), first
+    count = page.js(ACTIONS + ".length")
+    tops = page.js(TOPS)
+    assert count >= 12 and first["top"] == min(tops), (count, first, tops)
+    assert max(tops) > 440, "the Rooms page must go below the fold for this check"
+    assert page.shown("c100xMoreBelow") and not page.shown("c100xMoreAbove")
+    assert not page.js("scroll.c100xAction === true"), "scrolling must not be a mode of its own"
+    for step in range(1, count):
+        runtime.keys("D", settle=250)
+        now = page.selected()
+        assert now and now["marked"] and now["top"] >= 56 and now["bottom"] <= 440, (step, now)
+    assert page.js("scroll.contentY") > 0 and page.shown("c100xMoreAbove") and not page.shown("c100xMoreBelow")
+    # Past the last control the selection goes back to the page; the next Down is the next page.
+    runtime.keys("D")
+    assert not page.js("inside") and page.selected() is None and page.js("currentPageIndex") == 1
+    runtime.keys("D")
+    assert page.js("headerLabel") == "Agenda" and page.js("currentIndex") == 2
+    # A page without controls scrolls with the same keys and shows where more is.
+    assert page.shown("c100xMoreBelow")
+    runtime.keys("R")
+    assert page.js("inside") and page.selected() is None
+    runtime.keys("2D", settle=250)
+    assert page.shown("c100xMoreAbove")
+    for _ in range(8):
+        runtime.keys("D", settle=250)
+        if not page.js("inside"):
+            break
+    assert not page.js("inside") and page.js("headerLabel") == "Agenda"
+    assert not page.shown("c100xMoreBelow") and page.shown("c100xMoreAbove")
+    # EXIT is the last entry, as in the station's own menus; no key is a back key.
+    runtime.keys("2D")
+    assert page.js("exitSelected") and page.js("currentIndex") == 4 and page.shown("c100xExit")
+    assert not page.shown("c100xBody")
+    runtime.keys("D")
+    assert page.js("currentPageIndex") == 0 and not page.js("exitSelected")
+    runtime.keys("U")
+    assert page.js("exitSelected")
+    runtime.keys("R", settle=2400)
+    assert runtime.js("mainStackView.depth") == 1, "EXIT did not leave"
+    assert runtime.stack(ORDER).split("|")[runtime.stack("currentIndex")] == "C100XHome.svg"
+    assert not page_warnings(runtime), page_warnings(runtime)
+
+
+def detail_controls(work, skin):
+    """A light opens on its switch; brightness is set like a vendor regulation: Return, Up/Down, Return."""
+    runtime = open_dashboard(work, skin)
+    runtime.keys("D R", settle=2400)
+    page = Page(runtime)
+    runtime.keys("D R")
+    tile = page.selected()
+    runtime.keys("R")
+    assert page.js("detailOpen") and page.js("view") == "d" and page.js("headerLabel").endswith("Kitchen light")
+    assert page.js("count") == 2 and page.js("currentIndex") == 0
+    first = page.selected()
+    assert first and first["switch"] and first["marked"], first
+    assert page.js(ACTIONS + ".length") == 2, "switch and slider only: no minus and plus stops"
+    runtime.keys("D")
+    slider = page.selected()
+    assert slider["name"] == "c100xNumericSlider" and not slider["editing"], slider
+    assert page.js("selectedAction.keyboardConfirming") is None, "no Cancel/Apply prompt any more"
+    runtime.keys("R")
+    assert page.selected()["editing"]
+    before = [url for method, url, body in runtime.requests if "brightness" in url]
+    runtime.keys("3D", settle=200)
+    assert page.selected()["editing"] and not [url for method, url, body in runtime.requests if "brightness" in url][len(before):]
+    runtime.keys("R")
+    sent = [url for method, url, body in runtime.requests if "brightness" in url][len(before):]
+    assert len(sent) == 1 and "light.kitchen%3Abrightness&option=74" in sent[0], sent
+    assert not page.selected()["editing"]
+    # Past the last control comes EXIT; it closes the detail and the tile is selected again.
+    runtime.keys("D")
+    assert page.js("exitSelected") and page.shown("c100xExit") and page.js("currentIndex") == 1
+    runtime.keys("U")
+    assert not page.js("exitSelected") and page.selected()["name"] == "c100xNumericSlider"
+    runtime.keys("D R")
+    assert not page.js("detailOpen") and page.js("view") == ""
+    runtime.wait(400)
+    again = page.selected()
+    assert again and again["marked"] and (again["top"], again["left"]) == (tile["top"], tile["left"]), (tile, again)
+    assert not page_warnings(runtime), page_warnings(runtime)
+
+
+def alarmo_page(work, skin):
+    """Alarmo opens on its first control, is called Alarmo, and leaves through EXIT."""
+    runtime = open_dashboard(work, skin, pin=True)
+    runtime.keys("2D R", settle=2400)
+    page = Page(runtime)
+    assert page.js("headerLabel") == "Alarmo" and page.js("icon") == "C100XAlarm.svg"
+    first = page.selected()
+    assert page.js("inside") and first and first["marked"], first
+    tops = page.js(TOPS)
+    assert first["top"] == min(tops) and min(tops) >= 56, "no back box in the header"
+    runtime.keys("U")
+    assert page.js("exitSelected") and page.shown("c100xExit")
+    runtime.keys("R", settle=2400)
+    assert runtime.js("mainStackView.depth") == 1
+    assert not page_warnings(runtime), page_warnings(runtime)
+
+
 if __name__ == "__main__":
     globals()[sys.argv[1]](Path(sys.argv[2]), Path(sys.argv[3]), *sys.argv[4:])
     sys.stdout.write(sys.argv[1] + ": passed\n")

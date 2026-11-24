@@ -13,10 +13,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: root.skin
-        color: root.source.indexOf("_p.svg") >= 0 ? "#31526b" : "#23323b"
-        border.width: 1
-        border.color: "#74818b"
-        radius: 4
+        color: root.source.indexOf("_p.svg") >= 0 ? "#66ffffff" : root.source.indexOf("act_btn") >= 0 ? "#14ffffff" : "#2effffff"
+        radius: 6
     }
     Image {
         id: picture

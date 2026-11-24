@@ -146,7 +146,7 @@
           "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
-          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
+          "dashboard_navigation": "Wird am {model} nicht verwendet: Die Seiten folgen aufeinander wie die eigenen Menüs der Station. Auf und Ab wechseln die Seite, die Eingabetaste öffnet sie, der letzte Eintrag ist EXIT. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
       "user_dashboard_entity_display": {
@@ -275,7 +275,7 @@
           "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
-          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
+          "dashboard_navigation": "Wird am {model} nicht verwendet: Die Seiten folgen aufeinander wie die eigenen Menüs der Station. Auf und Ab wechseln die Seite, die Eingabetaste öffnet sie, der letzte Eintrag ist EXIT. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -920,7 +920,7 @@
           "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
-          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
+          "dashboard_navigation": "Wird am {model} nicht verwendet: Die Seiten folgen aufeinander wie die eigenen Menüs der Station. Auf und Ab wechseln die Seite, die Eingabetaste öffnet sie, der letzte Eintrag ist EXIT. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
       "dashboard_entity_display": {

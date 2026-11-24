@@ -15,6 +15,7 @@ Item {
             property bool isRingtoneMute: false
             function enableState(state) { isRingtoneMute = true }
             function disableState(state) { isRingtoneMute = false }
+            function isStateEnabled(state) { return isRingtoneMute }
         }
         property QtObject screenState: QtObject {
             property int state: 0

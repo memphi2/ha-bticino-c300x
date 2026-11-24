@@ -2,18 +2,11 @@ import QtQuick 2.7
 
 Flickable {
     id: root
-    property bool c100xAction: contentHeight > height
-    property bool keyboardSelected: false
-    property bool keyboardEditing: false
-    function activate() { keyboardEditing = !keyboardEditing }
-    function cancel() { keyboardEditing = false }
-    function adjust(direction) { contentY = Math.max(0, Math.min(contentHeight - height, contentY + direction * 60)) }
-    Rectangle {
-        x: root.width - 4
-        y: root.contentY
-        width: 4
-        height: root.height
-        color: root.keyboardEditing ? "#ffbc42" : "#ffffff"
-        visible: root.keyboardSelected
+    property bool c100xScroll: true
+    C100XMore { x: (root.width - width) / 2; y: root.contentY; shown: root.contentY > root.originY + 1; up: true }
+    C100XMore {
+        x: (root.width - width) / 2
+        y: root.contentY + root.height - height
+        shown: root.contentY < root.originY + root.contentHeight - root.height - 1
     }
 }

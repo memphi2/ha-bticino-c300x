@@ -146,7 +146,7 @@
           "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarmo pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
-          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+          "dashboard_navigation": "Not used on the {model}: its pages follow one another like the station's own menus. Up and Down change the page, Return enters it, and the last entry is EXIT. The order follows the page positions."
         }
       },
       "user_dashboard_entity_display": {
@@ -275,7 +275,7 @@
           "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarmo pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
-          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+          "dashboard_navigation": "Not used on the {model}: its pages follow one another like the station's own menus. Up and Down change the page, Return enters it, and the last entry is EXIT. The order follows the page positions."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -920,7 +920,7 @@
           "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarmo pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
-          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+          "dashboard_navigation": "Not used on the {model}: its pages follow one another like the station's own menus. Up and Down change the page, Return enters it, and the last entry is EXIT. The order follows the page positions."
         }
       },
       "dashboard_entity_display": {

@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 
+from c100x_probe_vendor import provide
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QUrl, pyqtProperty, pyqtSlot
 from PyQt5.QtGui import QGuiApplication
@@ -88,6 +89,7 @@ errors = []
 engine.warnings.connect(lambda warnings: errors.extend(error.toString() for error in warnings
     if "Implicitly defined onFoo properties in Connections are deprecated" not in error.toString()))
 source = Path(sys.argv[1])
+vendor = provide(engine, source)
 
 
 def evaluate(item, script):
@@ -110,7 +112,7 @@ for name in sys.argv[2:]:
     item.setProperty("width", 800)
     item.setProperty("height", 480)
     if name in {"HomeAssistant.qml", "Alarm.qml"}:
-        for script in ("move(1)", "move(1)", "move(-1)", "resetInput()"):
+        for script in ("enter(false)", "move(1)", "move(-1)", "resetInput()"):
             evaluate(item, script)
     item.setProperty("visible", False)
     sip.delete(item)
@@ -143,7 +145,7 @@ C100XPage {
         onActionReleased: page.submitted++
     }
     function exercise() {
-        move(1)
+        enter(false)
         if (!selectedAction) throw new Error("no first action")
         for (var i = 0; i < 8 && selectedAction !== bottom; i++) move(1)
         if (selectedAction !== bottom || scroller.contentY < 550) throw new Error("unreachable clipped action")

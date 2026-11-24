@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from c100x_memory_reply import MemoryReply
+from c100x_probe_vendor import provide
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtNetwork import QNetworkAccessManager
@@ -44,6 +45,7 @@ class OfflineFactory(QQmlNetworkAccessManagerFactory):
 
 app = QGuiApplication([])
 engine = QQmlEngine()
+provide(engine, Path(sys.argv[1]))
 factory = OfflineFactory()
 engine.setNetworkAccessManagerFactory(factory)
 errors = []

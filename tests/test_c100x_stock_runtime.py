@@ -71,3 +71,8 @@ def test_identity_helper_knows_the_shipped_hooks():
     for name, variable in (("main.inc", "MAIN_HOOK_SHA"), ("menu.inc", "MENU_HOOK_SHA")):
         digest = hashlib.sha256((ROOT / "device_qml/c100x/hooks" / name).read_bytes()).hexdigest()
         assert f"\n{variable}={digest}\n" in identity
+
+
+@pytest.mark.parametrize("scenario", ["dashboard_navigation", "detail_controls", "alarmo_page"])
+def test_pages_are_operated_like_the_vendor_menus(tmp_path, scenario):
+    run_scenario(scenario, tmp_path)

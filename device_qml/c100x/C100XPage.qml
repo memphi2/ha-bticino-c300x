@@ -7,51 +7,153 @@ FocusScope {
     focus: true
     property string headerLabel: ""
     property bool showBackButton: true
-    property color backgroundColor: "#102b39"
-    property alias header: heading
+    property color tint: "#66000000"
+    property string icon: "C100XHome.svg"
+    property alias header: headAnchor
+    default property alias content: body.data
     property var selectedAction: null
-    property int count: 1
-    property int currentIndex: 0
+    property int selectedAt: 0
+    property int pages: 1
+    property int pageIndex: 0
+    property string view: ""
+    property string shownView: ""
+    property int homeAt: 0
+    property bool inside: false
+    property bool arriving: false
+    property int arrivals: 0
+    property bool exitSelected: false
+    readonly property int count: pages + 1
+    readonly property int currentIndex: exitSelected ? pages : Math.max(0, Math.min(pages - 1, pageIndex))
     property bool lifecycleReady: false
     property bool lifecycleActive: false
     signal backClicked()
     signal back()
     signal alarmRequested()
+    signal pageRequested(int index)
 
-    function actions(item, output) {
-        if (!item || !item.visible || !item.enabled || item.opacity === 0) return
-        if (item.c100xAction === true && item.width > 0 && item.height > 0) output.push(item)
+    function scan(item, seen) {
+        if (!item || !item.visible || !item.enabled || item.opacity === 0) return seen
+        if (item.c100xAction === true && item.width > 0 && item.height > 0) seen.actions.push(item)
+        if (item.c100xScroll === true && item.contentHeight > item.height + 1) seen.scrolls.push(item)
         var children = item.children || []
-        for (var i = 0; i < children.length; i++) actions(children[i], output)
+        for (var i = 0; i < children.length; i++) scan(children[i], seen)
+        return seen
     }
+    function controls() { return scan(body, {actions: [], scrolls: []}) }
+    function usable(item) { return !!item && item.visible && item.enabled && item.width > 0 && item.height > 0 }
     function reveal(item) {
         var parentItem = item.parent
         while (parentItem && parentItem !== root) {
-            if (parentItem.contentY !== undefined && parentItem.contentItem !== undefined) {
-                var point = item.mapToItem(parentItem.contentItem, 0, 0)
-                if (point.y < parentItem.contentY) parentItem.contentY = Math.max(0, point.y)
-                else if (point.y + item.height > parentItem.contentY + parentItem.height)
-                    parentItem.contentY = Math.max(0, Math.min(parentItem.contentHeight - parentItem.height, point.y + item.height - parentItem.height))
+            if (parentItem.c100xScroll === true) {
+                var top = item.mapToItem(parentItem.contentItem, 0, 0).y - parentItem.originY
+                var last = Math.max(0, parentItem.contentHeight - parentItem.height)
+                var at = parentItem.contentY - parentItem.originY
+                if (top < at) at = top - 8
+                else if (top + item.height > at + parentItem.height) at = top + item.height - parentItem.height + 8
+                at = Math.max(0, Math.min(last, at))
+                var edge = at < 24 ? 0 : last - at < 24 ? last : at
+                if (top >= edge && top + item.height <= edge + parentItem.height) at = edge
+                parentItem.contentY = parentItem.originY + at
             }
             parentItem = parentItem.parent
         }
     }
+    function select(item) {
+        if (selectedAction && selectedAction !== item) {
+            selectedAction.cancel()
+            selectedAction.keyboardSelected = false
+        }
+        selectedAction = item || null
+        if (item) { item.keyboardSelected = true; reveal(item) }
+    }
+    function enter(last, at) {
+        exitSelected = false
+        var seen = controls()
+        if (seen.actions.length) {
+            selectedAt = last ? seen.actions.length - 1 : Math.max(0, Math.min(seen.actions.length - 1, at || 0))
+            select(seen.actions[selectedAt])
+        } else {
+            select(null)
+        }
+        inside = seen.actions.length > 0 || seen.scrolls.length > 0
+        return inside
+    }
+    function leave() {
+        select(null)
+        inside = false
+        if (pages === 1) exitSelected = true
+    }
     function move(direction) {
-        var available = []
-        actions(root, available)
-        var at = available.indexOf(selectedAction)
-        if (selectedAction && at >= 0 && selectedAction.keyboardEditing) {
+        settle()
+        arriving = false
+        if (!inside) {
+            if (pages === 1 && exitSelected && enter(direction < 0)) return
+            var next = (currentIndex + direction + count) % count
+            exitSelected = next === pages
+            if (!exitSelected && next !== pageIndex) pageRequested(next)
+            return
+        }
+        var seen = controls()
+        var at = seen.actions.indexOf(selectedAction)
+        if (at >= 0 && selectedAction.keyboardEditing) {
             selectedAction.adjust(direction)
             return
         }
-        if (selectedAction) { selectedAction.cancel(); selectedAction.keyboardSelected = false }
-        var next = at < 0 ? (direction < 0 ? available.length - 1 : 0) : (at + direction + available.length) % available.length
-        selectedAction = available.length ? available[next] : null
-        if (selectedAction) { selectedAction.keyboardSelected = true; reveal(selectedAction) }
+        if (seen.actions.length) {
+            var to = at < 0 ? Math.max(0, Math.min(seen.actions.length - 1, selectedAt)) : at + direction
+            if (to < 0 || to >= seen.actions.length) { leave(); return }
+            selectedAt = to
+            select(seen.actions[to])
+        } else if (seen.scrolls.length) {
+            var list = seen.scrolls[0]
+            var last = list.originY + Math.max(0, list.contentHeight - list.height)
+            var y = Math.max(list.originY, Math.min(last, list.contentY + direction * Math.round(list.height * 0.6)))
+            if (y === list.contentY) leave()
+            else list.contentY = y
+        } else {
+            leave()
+        }
+    }
+    function confirm() {
+        settle()
+        arriving = false
+        if (exitSelected) backClicked()
+        else if (!inside) enter(false)
+        else if (usable(selectedAction)) selectedAction.activate()
+    }
+    function arrive() {
+        if (!lifecycleActive) return
+        shownView = view
+        select(null)
+        inside = false
+        exitSelected = false
+        arrivals = 0
+        arriving = true
+    }
+    function settle() {
+        if (arriving) arriving = !enter(false, view === "" ? homeAt : 0) && ++arrivals < 100
     }
     function resetInput() {
-        if (selectedAction) { selectedAction.cancel(); selectedAction.keyboardSelected = false }
-        selectedAction = null
+        select(null)
+        inside = false
+        arriving = false
+        exitSelected = false
+    }
+    onViewChanged: {
+        if (shownView === "") homeAt = selectedAt
+        arrive()
+    }
+    onPageIndexChanged: homeAt = 0
+    Timer {
+        interval: root.arriving ? 120 : 500
+        repeat: true
+        running: root.lifecycleActive && (root.arriving || root.inside)
+        onTriggered: {
+            if (root.arriving) { root.settle(); return }
+            if (root.exitSelected || root.usable(root.selectedAction)) return
+            if (root.selectedAction || root.controls().actions.length > 0)
+                root.enter(false, root.selectedAt)
+        }
     }
     Keys.onPressed: {
         event.accepted = false
@@ -60,14 +162,7 @@ FocusScope {
             move(event.key === Qt.Key_Up ? -1 : 1)
             event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            if (!event.isAutoRepeat) {
-                if (!selectedAction) move(1)
-                else if (selectedAction.visible && selectedAction.enabled) selectedAction.activate()
-            }
-            event.accepted = true
-        } else if (event.key === Qt.Key_Back || event.key === Qt.Key_Escape) {
-            if (selectedAction && selectedAction.keyboardEditing) selectedAction.cancel()
-            else backClicked()
+            if (!event.isAutoRepeat) confirm()
             event.accepted = true
         }
     }
@@ -79,6 +174,7 @@ FocusScope {
         resetInput()
         if (active && root.aboutToShow) root.aboutToShow()
         else if (!active && root.aboutToHide) root.aboutToHide()
+        if (active) arrive()
     }
     onVisibleChanged: syncLifecycle()
     Connections {
@@ -91,30 +187,55 @@ FocusScope {
         resetInput()
         if (lifecycleActive && root.aboutToHide) root.aboutToHide()
     }
-    Rectangle { anchors.fill: parent; z: -1; color: root.backgroundColor }
+    Rectangle { anchors.fill: parent; color: root.tint; visible: !root.exitSelected }
+    Image { x: 380; y: 8; width: 40; height: 40; sourceSize.width: 40; sourceSize.height: 40; source: root.icon }
+    C100XText {
+        id: title
+        x: 36; y: 0
+        width: Math.min(implicitWidth, 320)
+        height: 56
+        text: root.headerLabel
+        color: "white"
+        font.pixelSize: 24
+        elide: Text.ElideRight
+        verticalAlignment: Text.AlignVCenter
+    }
+    Rectangle {
+        objectName: "c100xPageMark"
+        x: 36; y: 49
+        width: title.width
+        height: 5
+        color: "white"
+        visible: !root.inside && !root.exitSelected && root.pages > 1
+    }
     Item {
-        id: heading
-        width: parent.width
-        height: 54
-        C100XAction {
-            id: backAction
-            width: 64
-            height: 46
-            x: 6; y: 4
-            visible: root.showBackButton
-            onClicked: root.backClicked()
-            C100XText { anchors.centerIn: parent; text: "<"; color: "white"; font.pixelSize: 28 }
-        }
-        C100XText {
-            anchors.left: backAction.right
-            anchors.right: parent.right
-            anchors.rightMargin: 250
-            height: parent.height
-            text: root.headerLabel
-            color: "white"
-            font.pixelSize: 22
-            elide: Text.ElideRight
-            verticalAlignment: Text.AlignVCenter
+        id: body
+        objectName: "c100xBody"
+        width: 800
+        height: 440
+        visible: !root.exitSelected
+        Item { id: headAnchor; width: 800; height: 56 }
+    }
+    Image {
+        objectName: "c100xExit"
+        anchors.centerIn: parent
+        source: root.exitSelected ? "../images/Exit.svg" : ""
+        visible: root.exitSelected
+    }
+    Row {
+        objectName: "c100xDots"
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 10
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 6
+        Repeater {
+            model: root.count
+            Rectangle {
+                width: 20; height: 20; radius: 10
+                color: index === root.currentIndex ? "white" : "transparent"
+                border.color: "white"
+                border.width: 1
+            }
         }
     }
 }

@@ -466,8 +466,10 @@ removes a notice.
 ## Station Settings Tab
 
 The Display patch adds an **Integration** tab (it **Integrazione**) to the
-station's **Settings** menu, below **Configuration**. These controls work without Home Assistant;
-only maintenance operations the agent has enabled are offered.
+station's **Settings** menu, below **Configuration**. **Status messages**,
+**SSH** and the maintenance operations work without Home Assistant; the two
+Display options need it and are greyed out while it cannot be reached. Only
+maintenance operations the agent has enabled are offered.
 
 <table>
   <tr>

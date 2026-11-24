@@ -1736,9 +1736,11 @@ Restores the core media hook.
 
 Applies the core hook plus the optional Display patch: MainApp navigation,
 HomePage unread memo/video-message badges, MemoPage external-delete refresh,
-the Settings > Integration tab with its Status messages switch, the Alarmo, Home
-Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
-`C300XEnergy.qml`) and the local QML JavaScript bridge.
+the Settings > Integration tab with its Status messages switch, the touch-tone
+control in Settings > General (`Components/Settings/GeneralsChoice.qml`, which
+reports the station's own setting to the agent), the Alarmo, Home Assistant
+and energy pages (`Alarm.qml`, `HomeAssistant.qml`, `C300XEnergy.qml`) and the
+local QML JavaScript bridge.
 
 `dynamic_homepage` chooses the home page button layout: `true` installs the
 Alarm and Home Assistant buttons among the station's own buttons (shown only when

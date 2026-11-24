@@ -662,6 +662,7 @@
       }
     },
     "abort": {
+      "c100x_package_only": "This test package is for the Classe 100X only, and this station is a Classe 300X. Install the regular release of the integration to set it up. Nothing was changed.",
       "model_mismatch": "This announcement is from a different station model than the configured entry with the same identity. Nothing was changed.",
       "already_configured": "BTicino C300X is already configured.",
       "reconfigure_successful": "BTicino C300X was reconfigured. Update the local device-agent or display-bridge config if you rotated credentials.",

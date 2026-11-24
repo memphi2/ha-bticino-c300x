@@ -174,6 +174,10 @@ class AuthFlowSteps:
                 candidate = {**self._setup_connection, **auth_data}
                 setup, errors = await async_validate_connection(self.hass, candidate)
                 self._note_setup_rejection(errors, candidate)
+                if not errors and setup.get("model") == "C300X":
+                    # This test package is C100X-only; a C300X entry could
+                    # never take an agent update from it.
+                    return cast(ConfigFlowResult, self.async_abort(reason="c100x_package_only"))
                 if not errors:
                     errors = self._setup_identity_error(setup)
                 if errors and self._setup_pending_features is not None and not self._setup_bootstrapped:

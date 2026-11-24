@@ -662,6 +662,7 @@
       }
     },
     "abort": {
+      "c100x_package_only": "Questo pacchetto di prova è solo per il Classe 100X e questa stazione è un Classe 300X. Installa la release normale dell'integrazione per configurarla. Non è stato modificato nulla.",
       "model_mismatch": "Questo annuncio proviene da un modello di postazione diverso dalla voce configurata con la stessa identità. Non è stato modificato nulla.",
       "already_configured": "BTicino C300X è già configurato.",
       "reconfigure_successful": "BTicino C300X è stato riconfigurato. Aggiorna la configurazione locale del device agent o del display bridge se hai ruotato le credenziali.",

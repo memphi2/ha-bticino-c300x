@@ -149,47 +149,50 @@ replace_firewall_file() {
     return "$restore_rc"
 }
 
-remove_managed_block() {
-    target="$1"
-    begin="$2"
-    end="$3"
-    tmp="$REMOVE_WORK/managed-block"
-
-    [ -f "$target" ] || return 0
-    if ! awk -v begin="$begin" -v end="$end" '
-        $0 == begin {skip = 1; next}
-        $0 == end {skip = 0; next}
+strip_managed_blocks() {
+    awk '
+        $0 == "# c300x-native-agent firewall begin" || $0 == "# c300x-native-agent ipv6 firewall begin" {
+            if (skip) exit 3
+            skip = 1
+            next
+        }
+        $0 == "# c300x-native-agent firewall end" || $0 == "# c300x-native-agent ipv6 firewall end" {
+            if (!skip) exit 3
+            skip = 0
+            next
+        }
         skip != 1 {print}
-    ' "$target" > "$tmp"; then
-        rm -f "$tmp"
-        return 1
-    fi
-    if ! replace_firewall_file "$tmp" "$target"; then
-        rm -f "$tmp"
-        return 1
-    fi
-    rm -f "$tmp"
+        END {if (skip) exit 3}
+    ' "$1" > "$2"
 }
 
-restore_file_or_remove_block() {
+restore_firewall() {
     target="$1"
     backup="$2"
-    begin="$3"
-    end="$4"
+    tmp="$REMOVE_WORK/managed-block"
 
     remount_root_rw || return 1
-    if [ -f "$backup" ]; then
-        if ! replace_firewall_file "$backup" "$target"; then
-            remount_root_ro
-            return 1
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        if ! strip_managed_blocks "$target" "$tmp"; then
+            printf 'Cannot remove the agent firewall block from %s\n' "$target" >&2
+            firewall_rc=1
+        elif replace_firewall_file "$tmp" "$target"; then
+            firewall_rc=0
+            if [ -f "$backup" ] && ! cmp -s "$backup" "$target"; then
+                printf 'Firewall backup for %s does not match the stock rules; kept the live rules without the agent block\n' "$target" >&2
+            fi
+        else
+            firewall_rc=1
         fi
+        rm -f "$tmp"
+    elif [ -f "$backup" ] && [ ! -L "$backup" ]; then
+        replace_firewall_file "$backup" "$target"
+        firewall_rc=$?
     else
-        if ! remove_managed_block "$target" "$begin" "$end"; then
-            remount_root_ro
-            return 1
-        fi
+        firewall_rc=0
     fi
-    remount_root_ro
+    remount_root_ro || firewall_rc=1
+    return "$firewall_rc"
 }
 
 startup_entry_matches() {
@@ -379,11 +382,11 @@ if ! stop_agent; then
     exit 1
 fi
 restore_qml
-if ! restore_file_or_remove_block "$IPTABLES6" "$IPTABLES6_BACKUP" "# c300x-native-agent ipv6 firewall begin" "# c300x-native-agent ipv6 firewall end"; then
+if ! restore_firewall "$IPTABLES6" "$IPTABLES6_BACKUP"; then
     printf 'Failed to restore IPv6 firewall patch; keeping agent files and backups in place\n' >&2
     exit 1
 fi
-if ! restore_file_or_remove_block "$IPTABLES" "$IPTABLES_BACKUP" "# c300x-native-agent firewall begin" "# c300x-native-agent firewall end"; then
+if ! restore_firewall "$IPTABLES" "$IPTABLES_BACKUP"; then
     printf 'Failed to restore IPv4 firewall patch; keeping agent files and backups in place\n' >&2
     exit 1
 fi

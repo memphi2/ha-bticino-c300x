@@ -359,6 +359,54 @@ def test_successful_firewall_restore_preserves_live_metadata(local_device, tmp_p
     assert not list(tmp_path.glob("*.c300x-restore.*"))
 
 
+@pytest.mark.parametrize("family", ["ipv4", "ipv6"])
+@pytest.mark.parametrize("backup_text", ["#!/bin/sh\n# Firmware ru", "", "#!/bin/sh\niptables -P INPUT ACCEPT\n"])
+def test_an_unverified_firewall_backup_never_replaces_the_live_rules(local_device, family, backup_text):
+    """A partial or stale backup (an interrupted old install) must not wipe the
+    stock rules: removal strips the agent block from the live file instead."""
+    env = local_device
+    target, backup, original = _firewall_fixture(env, family, True)
+    backup.write_text(backup_text)
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 0, result.stderr
+    assert target.read_text() == original
+    assert "does not match the stock rules" in result.stderr
+
+
+def test_removal_strips_both_agent_blocks_from_the_live_file(local_device):
+    env = local_device
+    target, _backup, original = _firewall_fixture(env, "ipv4", True)
+    target.write_text(original + "# c300x-native-agent ipv6 firewall begin\nip6tables -A INPUT\n"
+                      "# c300x-native-agent ipv6 firewall end\n" + target.read_text()[len(original):])
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 0, result.stderr
+    assert target.read_text() == original
+    assert "does not match" not in result.stderr
+
+
+@pytest.mark.parametrize("backed_up", [False, True])
+def test_an_unterminated_agent_block_keeps_everything(local_device, backed_up):
+    env = local_device
+    target, _backup, original = _firewall_fixture(env, "ipv4", backed_up)
+    damaged = original + "# c300x-native-agent firewall begin\n# Agent rules\niptables -A INPUT -p tcp --dport 22 -j ACCEPT\n"
+    target.write_text(damaged)
+
+    result = subprocess.run(["sh", str(REMOVE), "--run-from-tmp"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 1
+    assert target.read_text() == damaged
+    assert Path(env["C300X_AGENT_DIR"]).is_dir()
+    assert Path(env["C300X_BACKUP_ROOT"]).is_dir()
+    assert "reboot" not in Path(env["CALL_LOG"]).read_text().splitlines()
+
+
 @pytest.mark.parametrize("backed_up", [False, True])
 def test_missing_firewall_is_only_recreated_from_a_backup(local_device, backed_up):
     env = local_device

@@ -57,7 +57,6 @@ DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
 MEDIA_SETUP_REPAIR_REQUIRED_ISSUE = "media_setup_repair_required"
 MEDIA_WATCHDOG_TIMEOUT_ISSUE = "media_watchdog_timeout"
-MEDIA_USER_ONLY_ISSUE = "media_user_only"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
@@ -73,7 +72,6 @@ ALL_REPAIR_ISSUES = frozenset(
         DEVICE_USER_REQUIRED_ISSUE,
         MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         MEDIA_WATCHDOG_TIMEOUT_ISSUE,
-        MEDIA_USER_ONLY_ISSUE,
         C100X_DISPLAY_ROLLED_BACK_ISSUE,
         C100X_DISPLAY_BOOT_CHECK_ISSUE,
     }
@@ -104,7 +102,6 @@ def async_sync_entry_repair_issues(
     _sync_unsupported_callback_url_issue(hass, entry)
     _sync_device_core_qml_hook_issue(hass, entry)
     _sync_device_user_issue(hass, entry)
-    _sync_media_user_only_issue(hass, entry)
     _sync_media_setup_repair_issue(hass, entry)
 
 
@@ -495,16 +492,6 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         is_fixable=maintenance_action_is_advertised(capabilities, "device_user_ensure"),
         placeholders={"reason": reason},
     )
-
-
-def _sync_media_user_only_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
-    """Explain the reduced mode next to a foreign route.conf (not supported)."""
-
-    status = getattr(getattr(entry, "runtime_data", None), "device_user_status", None)
-    if _entry_media_enabled(entry) and isinstance(status, dict) and status.get("user_only") is True:
-        _create_issue(hass, entry, MEDIA_USER_ONLY_ISSUE, severity=ir.IssueSeverity.WARNING)
-    else:
-        async_delete_repair_issue(hass, entry.entry_id, MEDIA_USER_ONLY_ISSUE)
 
 
 def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:

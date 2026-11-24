@@ -3,7 +3,6 @@
 #include "camera_quality.h"
 #include "camera_running.h"
 #include "device_routing.h"
-#include "device_user.h"
 #include "display_touch.h"
 #include "https_client.h"
 #include "c100x_gui_response.h"
@@ -196,10 +195,6 @@ int main(int argc, char **argv)
     }
 
     if (restore_media_patches) {
-        if (!c300x_device_user_remove_added(error, sizeof(error))) {
-            fprintf(stderr, "Failed to remove the Home Assistant media user: %s\n", error);
-            return 1;
-        }
         if (!c300x_device_routing_remove_patches(error, sizeof(error))) {
             fprintf(stderr, "Failed to restore device routing: %s\n", error);
             return 1;

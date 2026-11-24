@@ -47,12 +47,6 @@
 #ifndef FLEXISIP_ROUTE_ACTIVE_FILE
 #define FLEXISIP_ROUTE_ACTIVE_FILE "/etc/flexisip/users/route.conf"
 #endif
-#ifndef C300X_DEVICE_USER_ADDED_DIR
-#define C300X_DEVICE_USER_ADDED_DIR "/home/bticino/cfg/extra/c300x-device-file-backups"
-#endif
-#ifndef C300X_DEVICE_USER_ADDED_FILE
-#define C300X_DEVICE_USER_ADDED_FILE C300X_DEVICE_USER_ADDED_DIR "/media-user-added"
-#endif
 #define DEVICE_USER_MAX_FILE_SIZE 8192
 #define DEVICE_USER_UUID_LEN 37
 
@@ -1133,15 +1127,12 @@ enum active_route_mode {
     ACTIVE_ROUTE_UNKNOWN,
     ACTIVE_ROUTE_MISSING,
     ACTIVE_ROUTE_INTERNAL,
-    ACTIVE_ROUTE_EXTERNAL,
-    ACTIVE_ROUTE_FOREIGN
+    ACTIVE_ROUTE_EXTERNAL
 };
 
 /* Only the vendor's two link modes have defined update semantics. A regular
- * route.conf belongs to another program; even identical contents do not
- * transfer ownership to this agent. Never replace it or infer a forwarding
- * mode. On a C100X such a file allows the user-only mode (FOREIGN); on a
- * C300X it stays unsupported. */
+ * route.conf may belong to Companion; even identical contents do not transfer
+ * ownership to this agent. Never replace it or infer a forwarding mode. */
 static enum active_route_mode active_route_mode(void)
 {
     char link[C300X_MAX_PATH_LEN];
@@ -1150,8 +1141,7 @@ static enum active_route_mode active_route_mode(void)
         return errno == ENOENT ? ACTIVE_ROUTE_MISSING : ACTIVE_ROUTE_UNKNOWN;
     }
     if (!S_ISLNK(st.st_mode)) {
-        return S_ISREG(st.st_mode) && c300x_device_model() == C300X_DEVICE_MODEL_C100X
-            ? ACTIVE_ROUTE_FOREIGN : ACTIVE_ROUTE_UNKNOWN;
+        return ACTIVE_ROUTE_UNKNOWN;
     }
     ssize_t len = readlink(FLEXISIP_ROUTE_ACTIVE_FILE, link, sizeof(link) - 1);
     if (len < 0 || (size_t)len >= sizeof(link) - 1) {
@@ -1185,7 +1175,6 @@ static int read_status_from_buffers(
     memset(status, 0, sizeof(*status));
     status->status_available = 1;
     status->supported = active_mode != ACTIVE_ROUTE_UNKNOWN;
-    status->user_only = active_mode == ACTIVE_ROUTE_FOREIGN;
     if (!status->supported) {
         c300x_copy_string(status->error, sizeof(status->error), "unsupported_active_route");
     }
@@ -1218,9 +1207,7 @@ static int read_status_from_buffers(
     status->media_identity_available = status->domain_present
         && status->homeassistant_user_present;
     status->routes_consistent = status->supported && (status->homeassistant_user_present
-        ? status->user_only
-        ? status->accounts_homeassistant_present || !accounts->exists
-        : (
+        ? (
             status->accounts_homeassistant_present
             && status->route_int_homeassistant_present
             && !status->route_ext_homeassistant_present
@@ -1355,204 +1342,6 @@ int c300x_device_user_media_identity(
     return ok;
 }
 
-/* Resolves the device domain and appends a new HA user line when none exists. */
-static int add_homeassistant_user(
-    struct file_buffer *users,
-    char *device_domain,
-    size_t device_domain_len,
-    char *ha_aor,
-    size_t ha_aor_len,
-    int ha_present,
-    int *changed,
-    char *error,
-    size_t error_len
-)
-{
-    char uuid[DEVICE_USER_UUID_LEN];
-    char digest[33];
-    char user_line[512];
-
-    if (
-        device_domain[0] == '\0'
-        && !first_users_file_domain(users->data, device_domain, device_domain_len)
-        && !read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, device_domain_len)
-        && !read_flexisip_config_domain(device_domain, device_domain_len)
-    ) {
-        set_error(error, error_len, "device_domain_missing");
-        return 0;
-    }
-    if (ha_present) {
-        return 1;
-    }
-    if (!random_uuid(uuid, sizeof(uuid)) || !random_hex(digest, sizeof(digest))) {
-        set_error(error, error_len, "secure_random_failed");
-        return 0;
-    }
-    if (
-        snprintf(ha_aor, ha_aor_len, C300X_DEVICE_USER_ACCOUNT "-%s@%s", uuid, device_domain)
-            >= (int)ha_aor_len
-        || snprintf(user_line, sizeof(user_line), "%s md5:%s ;\n", ha_aor, digest) >= (int)sizeof(user_line)
-    ) {
-        set_error(error, error_len, "homeassistant_user_too_long");
-        return 0;
-    }
-    if (!append_line(&users->data, &users->len, user_line, error, error_len)) {
-        return 0;
-    }
-    *changed = 1;
-    return 1;
-}
-
-static int line_is_homeassistant(const char *start, size_t len, int account_list)
-{
-    char line[512];
-    char token[256];
-    char user[128];
-    char host[128];
-    const char *sep;
-
-    while (len > 0 && (start[len - 1] == '\n' || start[len - 1] == '\r')) {
-        len--;
-    }
-    if (len >= sizeof(line)) {
-        return 0;
-    }
-    memcpy(line, start, len);
-    line[len] = '\0';
-    if (account_list) {
-        sep = strchr(line, '|');
-        return sep != NULL && strcmp(sep + 1, C300X_DEVICE_USER_ACCOUNT) == 0;
-    }
-    return first_token(line, token, sizeof(token)) && strchr(token, '@') != NULL
-        && split_sip_aor(token, user, sizeof(user), host, sizeof(host))
-        && user_is_homeassistant(user);
-}
-
-/* The record lists which files got a line from the user-only mode; it is
- * written before those files, so removal never misses a line. */
-static int record_added(int users, int accounts, char *error, size_t error_len)
-{
-    struct file_buffer record;
-    char content[32];
-    int ok;
-
-    if (!read_file_buffer(C300X_DEVICE_USER_ADDED_FILE, &record, error, error_len)) {
-        return 0;
-    }
-    users = users || (record.data != NULL && strstr(record.data, "users") != NULL);
-    accounts = accounts || (record.data != NULL && strstr(record.data, "accounts") != NULL);
-    free_file_buffer(&record);
-    snprintf(content, sizeof(content), "%s%s", users ? "users\n" : "", accounts ? "accounts\n" : "");
-    if (mkdir(C300X_DEVICE_USER_ADDED_DIR, 0700) != 0 && errno != EEXIST) {
-        set_error(error, error_len, "added_record_dir_failed");
-        return 0;
-    }
-    ok = write_file_atomic(C300X_DEVICE_USER_ADDED_FILE, content, strlen(content), 0600, error, error_len);
-    return ok;
-}
-
-/* Only users.db.txt and an existing accounts.txt; route files stay as they are. */
-static int ensure_user_only(
-    struct c300x_device_user_status *status,
-    const char *account_label,
-    char *error,
-    size_t error_len
-)
-{
-    struct file_buffer users;
-    struct file_buffer accounts;
-    char device_domain[128];
-    char ha_aor[256];
-    int ha_present = 0;
-    int users_changed = 0;
-    int accounts_changed = 0;
-    int account_added;
-    int ok = 0;
-
-    memset(&accounts, 0, sizeof(accounts));
-    if (
-        !read_file_buffer(FLEXISIP_USERS_FILE, &users, error, error_len)
-        || !read_file_buffer(FLEXISIP_ACCOUNTS_FILE, &accounts, error, error_len)
-    ) {
-        goto out;
-    }
-    if (!users.exists) {
-        set_error(error, error_len, "users_file_missing");
-        goto out;
-    }
-    parse_users_file(users.data, device_domain, sizeof(device_domain), ha_aor, sizeof(ha_aor), &ha_present);
-    account_added = accounts.exists && !accounts_has_homeassistant(accounts.data);
-    if (
-        !add_homeassistant_user(&users, device_domain, sizeof(device_domain), ha_aor, sizeof(ha_aor),
-            ha_present, &users_changed, error, error_len)
-        || (accounts.exists
-            && !ensure_account_line(&accounts, account_label, &accounts_changed, error, error_len))
-        || ((users_changed || account_added) && !record_added(users_changed, account_added, error, error_len))
-        || (users_changed && !write_file_atomic(FLEXISIP_USERS_FILE, users.data, users.len, users.mode, error, error_len))
-        || (accounts_changed
-            && !write_file_atomic(FLEXISIP_ACCOUNTS_FILE, accounts.data, accounts.len, accounts.mode, error, error_len))
-    ) {
-        goto out;
-    }
-    ok = 1;
-    if (status != NULL) {
-        (void)c300x_device_user_read_status(status);
-    }
-out:
-    free_file_buffer(&users);
-    free_file_buffer(&accounts);
-    return ok;
-}
-
-static int remove_homeassistant_lines(const char *path, int account_list, char *error, size_t error_len)
-{
-    struct file_buffer file;
-    size_t kept = 0;
-    int ok = 1;
-
-    if (!read_file_buffer(path, &file, error, error_len)) {
-        return 0;
-    }
-    for (const char *cursor = file.data != NULL ? file.data : ""; *cursor != '\0';) {
-        const char *line_end = strchr(cursor, '\n');
-        size_t len = line_end != NULL ? (size_t)(line_end - cursor) + 1 : strlen(cursor);
-        if (!line_is_homeassistant(cursor, len, account_list)) {
-            memmove(file.data + kept, cursor, len);
-            kept += len;
-        }
-        cursor += len;
-    }
-    if (file.exists && kept != file.len) {
-        ok = write_file_atomic(path, file.data, kept, file.mode, error, error_len);
-    }
-    free_file_buffer(&file);
-    return ok;
-}
-
-int c300x_device_user_route_foreign(void)
-{
-    return active_route_mode() == ACTIVE_ROUTE_FOREIGN;
-}
-
-int c300x_device_user_remove_added(char *error, size_t error_len)
-{
-    struct file_buffer record;
-    int ok = read_file_buffer(C300X_DEVICE_USER_ADDED_FILE, &record, error, error_len);
-
-    if (ok && record.exists) {
-        ok = (strstr(record.data, "users") == NULL
-                || remove_homeassistant_lines(FLEXISIP_USERS_FILE, 0, error, error_len))
-            && (strstr(record.data, "accounts") == NULL
-                || remove_homeassistant_lines(FLEXISIP_ACCOUNTS_FILE, 1, error, error_len));
-        if (ok && unlink(C300X_DEVICE_USER_ADDED_FILE) != 0 && errno != ENOENT) {
-            set_error(error, error_len, "added_record_remove_failed");
-            ok = 0;
-        }
-    }
-    free_file_buffer(&record);
-    return ok;
-}
-
 int c300x_device_user_ensure_homeassistant(
     struct c300x_device_user_status *status,
     const char *account_label,
@@ -1567,6 +1356,9 @@ int c300x_device_user_ensure_homeassistant(
     struct file_buffer route_conf;
     char device_domain[128];
     char ha_aor[256];
+    char uuid[DEVICE_USER_UUID_LEN];
+    char digest[33];
+    char user_line[512];
     int ha_present = 0;
     int users_changed = 0;
     int accounts_changed = 0;
@@ -1579,13 +1371,8 @@ int c300x_device_user_ensure_homeassistant(
     memset(&route_int, 0, sizeof(route_int));
     memset(&route_ext, 0, sizeof(route_ext));
     memset(&route_conf, 0, sizeof(route_conf));
-    enum active_route_mode mode = active_route_mode();
-    if (mode == ACTIVE_ROUTE_UNKNOWN) {
+    if (active_route_mode() == ACTIVE_ROUTE_UNKNOWN) {
         set_error(error, error_len, "unsupported_active_route");
-        goto cleanup;
-    }
-    if (mode == ACTIVE_ROUTE_FOREIGN) {
-        ok = ensure_user_only(status, account_label, error, error_len);
         goto cleanup;
     }
     if (
@@ -1615,9 +1402,38 @@ int c300x_device_user_ensure_homeassistant(
         sizeof(ha_aor),
         &ha_present
     );
-    if (!add_homeassistant_user(&users, device_domain, sizeof(device_domain), ha_aor, sizeof(ha_aor),
-            ha_present, &users_changed, error, error_len)) {
-        goto cleanup;
+    if (device_domain[0] == '\0') {
+        if (
+            !first_users_file_domain(users.data, device_domain, sizeof(device_domain))
+            && !read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, sizeof(device_domain))
+            && !read_flexisip_config_domain(device_domain, sizeof(device_domain))
+        ) {
+            set_error(error, error_len, "device_domain_missing");
+            goto cleanup;
+        }
+    }
+    if (!ha_present) {
+        if (!random_uuid(uuid, sizeof(uuid)) || !random_hex(digest, sizeof(digest))) {
+            set_error(error, error_len, "secure_random_failed");
+            goto cleanup;
+        }
+        if (
+            snprintf(
+                ha_aor,
+                sizeof(ha_aor),
+                C300X_DEVICE_USER_ACCOUNT "-%s@%s",
+                uuid,
+                device_domain
+            ) >= (int)sizeof(ha_aor)
+            || snprintf(user_line, sizeof(user_line), "%s md5:%s ;\n", ha_aor, digest) >= (int)sizeof(user_line)
+        ) {
+            set_error(error, error_len, "homeassistant_user_too_long");
+            goto cleanup;
+        }
+        if (!append_line(&users.data, &users.len, user_line, error, error_len)) {
+            goto cleanup;
+        }
+        users_changed = 1;
     }
     if (
         !ensure_account_line(&accounts, account_label, &accounts_changed, error, error_len)

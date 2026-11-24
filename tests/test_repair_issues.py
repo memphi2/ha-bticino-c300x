@@ -61,7 +61,6 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     FRONTEND_CARD_SETUP_HINT_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
     MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
-    MEDIA_USER_ONLY_ISSUE,
     MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
@@ -1621,41 +1620,3 @@ def test_unprovisioned_forwarding_is_not_offered_as_a_fixable_repair() -> None:
     async_sync_entry_repair_issues(FakeHass(), entry)
 
     assert CREATED_ISSUES == {}
-
-
-def _user_only_entry(user_only: bool) -> FakeEntry:
-    return FakeEntry(
-        title="C100X",
-        data={CONF_VIDEO_ENABLED: True},
-        runtime_data=FakeRuntimeData(
-            capabilities={
-                "doorbell_video": {"supported": True},
-                "maintenance": {"supported": True, "device_user_ensure": True},
-            },
-            device_user_status={
-                "supported": True,
-                "user_only": user_only,
-                "homeassistant_user_present": True,
-                "media_identity_available": True,
-                "routes_consistent": True,
-                "device_routing_applied": False,
-            },
-        ),
-    )
-
-
-def test_user_only_media_user_is_a_warning_not_a_routing_repair() -> None:
-    entry = _user_only_entry(True)
-    async_sync_entry_repair_issues(FakeHass(), entry)
-    issue = CREATED_ISSUES[repair_issue_id(MEDIA_USER_ONLY_ISSUE, entry.entry_id)]
-    assert issue["severity"] == "warning" and issue["is_fixable"] is False
-    assert MEDIA_USER_ONLY_ISSUE in ALL_REPAIR_ISSUES
-    # The routing program stays stock on purpose: no device-user repair.
-    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
-
-    setup_function()
-    entry = _user_only_entry(False)
-    async_sync_entry_repair_issues(FakeHass(), entry)
-    assert repair_issue_id(MEDIA_USER_ONLY_ISSUE, entry.entry_id) in DELETED_ISSUES
-    assert CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)][
-        "translation_placeholders"]["reason"] == "device_routing_missing"

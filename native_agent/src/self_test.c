@@ -322,10 +322,7 @@ int c300x_self_test_json(
         if (user_status.status_available) {
             routing_read_ok = c300x_device_routing_read_status(&routing_status);
         }
-        if (user_status.status_available && user_status.homeassistant_user_present
-            && user_status.user_only) {
-            device_routing_reason = "not_used_user_only";
-        } else if (user_status.status_available && user_status.homeassistant_user_present) {
+        if (user_status.status_available && user_status.homeassistant_user_present) {
             device_routing_ok = routing_read_ok
                 && routing_status.patched;
             if (!routing_read_ok) {

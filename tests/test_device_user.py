@@ -97,30 +97,3 @@ def test_device_user_status_helpers_keep_single_truth() -> None:
     assert device_user_bootstrap_satisfied(unavailable) is False
     assert device_user_bootstrap_needed(unavailable) is False
     assert device_user_repair_reason(unavailable) is None
-
-
-def test_user_only_mode_needs_no_routing_program_patch() -> None:
-    user_only = {
-        "user_only": True,
-        "homeassistant_user_present": True,
-        "media_identity_available": True,
-        "routes_consistent": True,
-        "device_routing_applied": False,
-    }
-    assert device_user_ready(user_only) is True
-    assert device_user_bootstrap_satisfied(user_only) is True
-    assert device_user_bootstrap_needed(user_only) is False
-    assert device_user_repair_reason(user_only) is None
-    full = {**user_only, "user_only": False}
-    assert device_user_ready(full) is False
-    assert device_user_repair_reason(full) == "device_routing_missing"
-
-
-def test_api_normalizes_the_user_only_field() -> None:
-    from custom_components.bticino_c300x._api_normalize import (
-        normalize_device_user_status,
-    )
-
-    status = normalize_device_user_status({"ok": True, "status_available": True, "user_only": True})
-    assert status["user_only"] is True and status["raw"]["user_only"] is True
-    assert normalize_device_user_status({"ok": True, "status_available": True})["user_only"] is None

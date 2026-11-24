@@ -26,12 +26,6 @@ def device_user_status_available(status: Mapping[str, Any]) -> bool:
     return status.get("available") is not False and status.get("status_available") is not False
 
 
-def _routing_required(status: Mapping[str, Any]) -> bool:
-    """User-only mode (C100X, foreign route.conf) keeps the routing program stock."""
-
-    return status.get("user_only") is not True
-
-
 def device_user_bootstrap_needed(status: Mapping[str, Any]) -> bool:
     """Return true for a hard missing media-user/routing status."""
 
@@ -45,7 +39,6 @@ def device_user_bootstrap_needed(status: Mapping[str, Any]) -> bool:
         return True
     return (
         status.get("homeassistant_user_present") is True
-        and _routing_required(status)
         and "device_routing_applied" in status
         and status.get("device_routing_applied") is False
     )
@@ -60,7 +53,7 @@ def device_user_bootstrap_satisfied(status: Mapping[str, Any]) -> bool:
         status.get("homeassistant_user_present") is True
         and status.get("media_identity_available") is not False
         and status.get("routes_consistent") is not False
-        and (status.get("device_routing_applied") is not False or not _routing_required(status))
+        and status.get("device_routing_applied") is not False
     )
 
 
@@ -72,7 +65,7 @@ def device_user_ready(status: Mapping[str, Any]) -> bool | None:
     present = status.get("homeassistant_user_present")
     media_identity = status.get("media_identity_available")
     routes = status.get("routes_consistent")
-    routing = status.get("device_routing_applied") if _routing_required(status) else True
+    routing = status.get("device_routing_applied")
     if (
         present is None
         and media_identity is None
@@ -101,7 +94,6 @@ def device_user_repair_reason(status: Mapping[str, Any]) -> str | None:
         return "media_identity_missing"
     if (
         status.get("homeassistant_user_present") is True
-        and _routing_required(status)
         and "device_routing_applied" in status
         and status.get("device_routing_applied") is False
     ):

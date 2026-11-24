@@ -11,7 +11,6 @@
 #include "http_maintenance.h"
 #include "http_identity.h"
 #include "http_device_user.h"
-#include "device_user.h"
 #include "http_service_commands.h"
 #include "http_setup_page.h"
 #include "http_audio_codec.h"
@@ -6238,10 +6237,6 @@ static void handle_smartphone_post(
     command = c300x_smartphone_command_from_mode(mode);
     if (command == NULL) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_smartphone_forwarding_mode\"}\n");
-        return;
-    }
-    if (c300x_device_user_route_foreign()) {
-        send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"foreign_active_route\"}\n");
         return;
     }
     if (!runtime->forwarding_state.known) {

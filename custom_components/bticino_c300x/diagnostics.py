@@ -167,7 +167,6 @@ _DEVICE_USER_DIAGNOSTIC_KEYS = (
     "writable_files_present",
     "media_identity_available",
     "routes_consistent",
-    "user_only",
     "device_routing_supported",
     "device_routing_applied",
     "device_routing_state",

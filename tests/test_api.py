@@ -2581,7 +2581,6 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
         "writable_files_present": True,
         "media_identity_available": True,
         "routes_consistent": True,
-        "user_only": None,
         "device_routing_supported": True,
         "device_routing_applied": True,
         "device_routing_state": "patched",

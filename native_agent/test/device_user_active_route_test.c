@@ -8,29 +8,19 @@ static char route_ext_path[4096];
 #define FLEXISIP_ROUTE_ACTIVE_FILE "users/route.conf"
 #define FLEXISIP_CONFIG_FILE "flexisip.conf"
 #define FLEXISIP_DOMAIN_FILE "domain-registration.conf"
-#define C300X_DEVICE_USER_ADDED_DIR "backups"
 #include "../src/device_user.c"
 #include "../src/http_device_user.h"
 #include "../src/device_routing.h"
 #include <assert.h>
 
 const char *c300x_device_sip_user(void) { return "c100x"; }
-enum c300x_device_model c300x_device_model(void)
-{
-    const char *model = getenv("TEST_MODEL");
-    return model != NULL && strcmp(model, "c100x") == 0 ? C300X_DEVICE_MODEL_C100X : C300X_DEVICE_MODEL_C300X;
-}
 int c300x_device_display_files_patchable(void) { return 0; }
 
 static int responses;
 void c300x_http_send_json(int fd, int status, const char *reason, const char *body)
 {
     (void)fd; (void)reason;
-    if (getenv("TEST_EXPECT_OK") != NULL) {
-        assert(status == 200 && strstr(body, "\"user_only\":true") != NULL);
-    } else {
-        assert(status >= 400 && strstr(body, "device_user_update_failed") != NULL);
-    }
+    assert(status >= 400 && strstr(body, "device_user_update_failed") != NULL);
     responses++;
 }
 
@@ -39,13 +29,13 @@ void close_agent_socket(int fd) { (void)fd; }
 static void record_write(void *context, const char *kind, const char *reason)
 {
     (void)context; (void)kind; (void)reason;
-    assert(getenv("TEST_EXPECT_OK") != NULL && "Read-only rejection must not record writes");
+    assert(!"Read-only rejection must not record writes");
 }
 
 int c300x_device_routing_read_status(struct c300x_device_routing_status *status)
 {
-    assert(getenv("TEST_EXPECT_OK") != NULL && "Rejected preflight must not start routing status job");
-    memset(status, 0, sizeof(*status));
+    (void)status;
+    assert(!"Rejected preflight must not start routing status job");
     return 0;
 }
 
@@ -91,16 +81,12 @@ int main(int argc, char **argv)
     }
     if (strcmp(argv[2], "ensure") == 0) {
         ok = c300x_device_user_ensure_homeassistant(&status, "Home Assistant", error, sizeof(error));
-    } else if (strcmp(argv[2], "remove") == 0) {
-        ok = c300x_device_user_remove_added(error, sizeof(error));
-        printf("remove ok=%d error=%s\n", ok, error);
-        return ok ? 0 : 1;
     } else {
         assert(strcmp(argv[2], "status") == 0);
         ok = c300x_device_user_read_status(&status);
     }
-    printf("ok=%d supported=%d consistent=%d active_ha=%d symlink=%d user_only=%d error=%s status_error=%s\n",
+    printf("ok=%d supported=%d consistent=%d active_ha=%d symlink=%d error=%s status_error=%s\n",
         ok, status.supported, status.routes_consistent, status.route_conf_homeassistant_present,
-        status.route_conf_is_symlink, status.user_only, error, status.error);
+        status.route_conf_is_symlink, error, status.error);
     return ok ? 0 : 1;
 }

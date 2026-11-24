@@ -1489,10 +1489,6 @@
     }
   },
   "issues": {
-    "media_user_only": {
-      "title": "Un altro programma gestisce l'instradamento delle chiamate della postazione",
-      "description": "{entry_title}: l'instradamento attivo delle chiamate di questa postazione (route.conf) è un file normale che appartiene a un altro programma, per esempio Companion. L'uso di questa integrazione insieme a Companion o a un altro gestore di instradamento di terze parti non è supportato. Per non rompere nulla, Home Assistant ha aggiunto solo il proprio utente multimediale: il video su richiesta e il relativo parlato possono funzionare, ma le chiamate di suoneria non vengono inoltrate a Home Assistant, l'inoltro non si può cambiare da Home Assistant e il file di instradamento non viene mai modificato. Rimuovendo l'agente del dispositivo l'utente multimediale viene tolto di nuovo. Per il funzionamento completo rimuovi prima il gestore di terze parti, poi esegui la riparazione dell'utente multimediale."
-    },
     "c100x_display_boot_check_failed": {
       "title": "Controllo del display C100X non riuscito all'avvio della postazione",
       "description": "{entry_title}: all'avvio della postazione l'agente del dispositivo non ha potuto controllare l'attivazione del display in sospeso (il pacchetto del display mancava o il controllo non è riuscito, per esempio dopo un aggiornamento del firmware). L'agente è stato avviato comunque. L'attivazione del display resta disattivata e le copie delle pagine originali vengono conservate. Premi Ripristina display originale per tornarci; se non riesce, aggiorna prima l'agente del dispositivo con la sua riparazione. Se succede di nuovo, segnalalo con la diagnostica dell'agente."

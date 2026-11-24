@@ -162,6 +162,21 @@ def test_stay_open_option_names_the_screen_standby_it_acts_on() -> None:
             assert alarm_page in help_text, (path.name, step, help_text)
 
 
+def test_the_home_page_buttons_name_the_home_page_like_the_rest_of_german() -> None:
+    """The German texts call the station's home page "Startseite" everywhere."""
+
+    data = _load_json(TRANSLATIONS / "de.json")
+    for area, step in (
+        ("config", "user_dashboard"), ("config", "reconfigure_dashboard"),
+        ("options", "dashboard"),
+    ):
+        form = data[area]["step"][step]
+        for text in (form["data"]["dashboard_dynamic_homepage"],
+                     form["data_description"]["dashboard_dynamic_homepage"]):
+            assert "Startseite" in text, (step, text)
+            assert "Hauptseite" not in text, (step, text)
+
+
 def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
     for path in (
         INTEGRATION / "strings.json",

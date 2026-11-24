@@ -3,32 +3,32 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Saisissez d'abord l'adresse du C300X. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les clés et les options.",
+        "description": "Saisissez d'abord l'adresse du {model}. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les clés et les options.",
         "data": {
           "name": "Nom",
-          "agent_host": "Adresse du C300X",
+          "agent_host": "Adresse du {model}",
           "agent_port": "Port",
-          "callback_base_url": "Adresse de Home Assistant pour le C300X (optionnel)"
+          "callback_base_url": "Adresse de Home Assistant pour le {model} (optionnel)"
         },
         "data_description": {
-          "agent_host": "Adresse IP ou nom d'hôte de votre C300X.",
-          "agent_port": "Port sur lequel le C300X répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
-          "callback_base_url": "Le C300X signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le C300X. Passer de http à https ou inversement redémarre le service du C300X dès qu'aucun appel ni flux n'est en cours."
+          "agent_host": "Adresse IP ou nom d'hôte de votre {model}.",
+          "agent_port": "Port sur lequel le {model} répond à Home Assistant. Laissez 8091 sauf si vous l'avez changé à l'installation.",
+          "callback_base_url": "Le {model} signale les appels et autres événements à cette adresse. Laissez vide pour utiliser l'adresse que Home Assistant connaît pour lui-même. Une adresse https chiffre la connexion ; elle nécessite un certificat valide et charge davantage le {model}. Passer de http à https ou inversement redémarre le service du {model} dès qu'aucun appel ni flux n'est en cours."
         }
       },
       "agent_missing": {
         "title": "Agent natif introuvable",
-        "description": "Home Assistant n'a pas pu joindre l'agent natif C300X a l'adresse configurée. Vous pouvez installer maintenant l'agent inclus ou continuer pour configurer manuellement un agent déjà installe.",
+        "description": "Home Assistant n'a pas pu joindre l'agent natif {model} a l'adresse configurée. Vous pouvez installer maintenant l'agent inclus ou continuer pour configurer manuellement un agent déjà installe.",
         "data": {
-          "bootstrap_install_agent": "Installer l'agent natif sur le C300X"
+          "bootstrap_install_agent": "Installer l'agent natif sur le {model}"
         }
       },
       "bootstrap_install": {
-        "title": "Installer l'agent C300X natif",
-        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du C300X. Saisissez l'utilisateur et le mot de passe SSH seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape écrit l'agent natif, une configuration avec des clés générées, le script de démarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
+        "title": "Installer l'agent {model} natif",
+        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du {model}. Saisissez l'utilisateur et le mot de passe SSH seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape écrit l'agent natif, une configuration avec des clés générées, le script de démarrage et les fichiers de support display sur le {model} via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
         "data": {
-          "bootstrap_ssh_username": "Utilisateur SSH C300X",
-          "bootstrap_ssh_password": "Mot de passe SSH C300X"
+          "bootstrap_ssh_username": "Utilisateur SSH {model}",
+          "bootstrap_ssh_password": "Mot de passe SSH {model}"
         }
       },
       "agent_auth": {
@@ -39,16 +39,16 @@
           "maintenance_token": "Clé de maintenance"
         },
         "data_description": {
-          "agent_token": "Clé avec laquelle Home Assistant se connecte au C300X. Elle a été créée à l'installation.",
+          "agent_token": "Clé avec laquelle Home Assistant se connecte au {model}. Elle a été créée à l'installation.",
           "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages."
         }
       },
       "user_features": {
-        "title": "Fonctions BTicino C300X",
-        "description": "Sélectionnez les fonctions média Home Assistant exposées par cette installation C300X.",
+        "title": "Fonctions BTicino {model}",
+        "description": "Sélectionnez les fonctions média Home Assistant exposées par cette installation {model}.",
         "data": {
           "video_enabled": "Vidéo et son du poste de porte",
-          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le C300X",
+          "create_homeassistant_user": "Créer l'accès vidéo et audio sur le {model}",
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
@@ -56,11 +56,11 @@
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
-          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le C300X. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
+          "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
         }
       },
       "user_visitor_snapshot": {
@@ -252,13 +252,13 @@
       },
       "user_dashboard_alarm": {
         "title": "Alarme (Alarmo)",
-        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du C300X. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du {model}. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
         "data": {
           "alarm_entity_id": "Centrale d'alarme Alarmo",
           "alarm_page_entity_id": "Action rapide"
         },
         "data_description": {
-          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le C300X et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
           "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
@@ -653,7 +653,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "Mettre à jour les clés C300X",
+        "title": "Mettre à jour les clés {model}",
         "description": "Saisissez les clés actuelles pour {name}. Laissez un champ vide pour conserver la clé enregistrée.",
         "data": {
           "agent_token": "Clé d'accès",
@@ -678,11 +678,11 @@
       "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec la clé d'accès générée.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
-      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le C300X, ou laisser vide.",
-      "invalid_device_host": "Saisissez l'adresse du C300X.",
+      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}, ou laisser vide.",
+      "invalid_device_host": "Saisissez l'adresse du {model}.",
       "installer_dependency_missing": "Home Assistant n’a pas pu installer ou charger le paquet SSH facultatif (asyncssh==2.24.1). Il ne s’agit pas d’un échec de connexion SSH. Home Assistant mémorise l’échec d’installation d’un paquet jusqu’à la prochaine vérification de la configuration ou au redémarrage, même si le paquet est arrivé ensuite : vérifiez la configuration dans Outils de développement > YAML (ou redémarrez Home Assistant), puis réessayez. En cas de nouvel échec, les journaux dans Paramètres > Système indiquent la cause et la version d’asyncssh installée.",
-      "invalid_ssh_password": "Saisissez le mot de passe SSH du C300X.",
-      "invalid_ssh_username": "Saisissez l'utilisateur SSH du C300X.",
+      "invalid_ssh_password": "Saisissez le mot de passe SSH du {model}.",
+      "invalid_ssh_username": "Saisissez l'utilisateur SSH du {model}.",
       "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
@@ -700,11 +700,11 @@
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
       "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes, 1-365 jours, largeur 64-800 et hauteur 64-480. L'image est lue sur l'écran 800×480.",
-      "invalid_auth": "Le C300X a refusé la clé d'accès. Saisissez la clé actuelle.",
-      "wrong_device": "Cette adresse appartient à un autre C300X. L'appareil existant n'a pas été modifié.",
-      "invalid_maintenance_auth": "Le C300X a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
-      "cannot_connect": "Le C300X n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
-      "ssh_login_refused": "Le C300X a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
+      "invalid_auth": "Le {model} a refusé la clé d'accès. Saisissez la clé actuelle.",
+      "wrong_device": "Cette adresse appartient à un autre {model}. L'appareil existant n'a pas été modifié.",
+      "invalid_maintenance_auth": "Le {model} a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
+      "cannot_connect": "Le {model} n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
+      "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
       "installer_firewall_hook_unsupported": "Impossible de vérifier le script de pare-feu en toute sécurité. Installation arrêtée avant toute modification. Vérifiez le type et les permissions du fichier, sans créer de script de substitution.",
       "device_model_incompatible": "Ce paquet ne prend pas en charge ce modele. Les paquets de test C100X ne peuvent pas mettre a jour un C300X. Installez le paquet correspondant avant de mettre a jour ou de reinstaller l'agent. Aucun fichier de l'appareil n'a ete remplace."
     }

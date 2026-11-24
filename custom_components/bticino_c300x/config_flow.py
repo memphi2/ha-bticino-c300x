@@ -229,6 +229,7 @@ from .display_support import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import login_model, ssh_login, uses_factory_login
+from .model_names import ModelTextConfigFlow
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -256,7 +257,7 @@ _SETUP_VIDEO_ENABLED_DEFAULT = True
 _CREATE_HOMEASSISTANT_USER_DEFAULT = True
 
 
-class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
+class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 1
@@ -496,6 +497,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         discovered_unique_id = discovery_unique_id(properties)
         model = discovery_model(getattr(discovery_info, "type", ""), getattr(discovery_info, "name", ""))
+        self._model_hint = model
         # A known entry of the other model is never matched, renewed or moved.
         if discovered_unique_id is not None and any(
             discovery_matches_entry(discovered_unique_id, entry.unique_id)
@@ -515,14 +517,11 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         if await async_follow_proven_move(self, discovered_unique_id, connection, model=model):
             return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured()
-        existing_entry_abort = (
-            await self._async_abort_if_zeroconf_targets_existing_manual_entry(
-                discovered_unique_id,
-                connection,
-                discovery_matches_entry=discovery_matches_entry,
-                model=model,
-            )
-        )
+        # A later mDNS identity merges into an existing manual setup entry.
+        existing_entry_abort = cast(FlowResult | None, await _async_existing_manual_discovery(
+            self, discovered_unique_id, connection,
+            discovery_matches_entry, _async_agent_setup_data, model=model,
+        ))
         if existing_entry_abort is not None:
             return existing_entry_abort
         display_name = discovery_display_name(
@@ -542,21 +541,6 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         if probe == "missing":
             return self.async_abort(reason="cannot_connect")
         return await self.async_step_agent_auth()
-
-    async def _async_abort_if_zeroconf_targets_existing_manual_entry(
-        self,
-        discovered_unique_id: str | None,
-        connection: dict[str, Any],
-        *,
-        discovery_matches_entry: Any,
-        model: str = "",
-    ) -> FlowResult | None:
-        """Merge a later mDNS identity into an existing manual setup entry."""
-
-        return cast(FlowResult | None, await _async_existing_manual_discovery(
-            self, discovered_unique_id, connection,
-            discovery_matches_entry, _async_agent_setup_data, model=model,
-        ))
 
     @callback
     def _async_request_existing_entry_event_registration(

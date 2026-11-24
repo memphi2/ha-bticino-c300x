@@ -92,6 +92,8 @@ def service_name(hass, entry):
 
 @pytest.mark.parametrize("title,expected", [
     ("BTicino C300X", "bticino_c300x"),
+    # A new C100X entry's default title keeps the default action id.
+    ("BTicino C100X", "bticino_c300x"),
     ("", "bticino_c300x"),
     ("   ", "bticino_c300x"),
     ("Front door", "bticino_c300x_front_door"),

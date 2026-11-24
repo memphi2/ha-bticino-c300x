@@ -147,6 +147,21 @@ def test_apply_packs_the_changed_files_in_qt5_form_and_preloads_them(device: Dev
     assert os.access(device.wrapper, os.X_OK)
 
 
+def test_both_home_page_layouts_are_packed_and_reported(device: Device) -> None:
+    stock_count = b"+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2"
+    for request, layout, marker, absent in (
+        ("0", "side_by_side", b"id: displayBridgeButtonRow", stock_count),
+        ("1", "stock", stock_count, b"id: displayBridgeButtonRow"),
+    ):
+        status = device.ok("apply", C300X_QML_DYNAMIC_HOME_PAGE=request)
+        assert (status["state"], status["home_buttons"], status["qt5_overlay"]) == ("patched", layout, "active")
+        assert device.ok("status")["home_buttons"] == layout
+        packed = device.packed("HomePage.qml") or b""
+        assert marker in packed and absent not in packed
+        assert packed.startswith(b"import QtQuick 2.7\n")
+    assert device.ok("restore-all")["home_buttons"] is None
+
+
 def test_the_media_user_label_joins_the_packed_files(device: Device) -> None:
     device.ok("apply")
     device.ok("media-user-label-apply")

@@ -50,6 +50,16 @@ VENDOR_FILES = (
     "Components/Settings/CallBlockPopup.qml",
 )
 AGENT_PORT = 8090
+HOME_BUTTONS = {"stock": "1", "side_by_side": "0"}
+STATION_BUTTONS = ("answerButton", "intercomButton", "cameraButton", "activationsButton", "memoButton",
+                   "settingsButton")
+STATIONS = {
+    "all-buttons": ("", ("alarmButton", "haButton", *STATION_BUTTONS)),
+    "quick-actions": ('harness.find(page, "mediaModel").count = 1', ("alarmButton", "haButton", *STATION_BUTTONS)),
+    "memo-settings": ("harness.emptyModels(page); intercomPageModel.count = 0; cameraPageModel.count = 0; "
+                      "actuatorPageModel.count = 0; global.guiSettings.answeringMachineVisible = false",
+                      ("alarmButton", "haButton", "memoButton", "settingsButton")),
+}
 _IGNORED = (
     "Implicitly defined onFoo properties in Connections are deprecated",
     "@@@@ don't make scan",
@@ -175,10 +185,8 @@ def agent() -> Iterator[list[str]]:
         thread.join()
 
 
-@pytest.fixture(scope="module")
-def skin(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def _patched_skin(root: Path, home_buttons: str) -> Path:
     vendor = Path(os.environ["C300X_QT5_SKIN"])
-    root = tmp_path_factory.mktemp("qt5-runtime")
     gui, backup, import_dir = root / "gui", root / "backup", root / "import"
     shutil.copytree(vendor, gui)
     for rel in VENDOR_FILES:
@@ -187,7 +195,11 @@ def skin(tmp_path_factory: pytest.TempPathFactory) -> Path:
         (gui / rel).unlink()
     assert _run_qml_patch(root, gui, backup, "qt5-import", extra_args=[str(import_dir)])["ok"] is True
     _run_qml_patch(root, gui, backup, "core-apply")
-    _run_qml_patch(root, gui, backup, "apply")
+    layout = {"C300X_QML_DYNAMIC_HOME_PAGE": HOME_BUTTONS[home_buttons]}
+    applied = _run_qml_patch(root, gui, backup, "apply", env_overrides=layout)
+    status = _run_qml_patch(root, gui, backup, "status")
+    assert (applied["patched"], applied["home_buttons"]) == (True, home_buttons)
+    assert (status["state"], status["patched"], status["home_buttons"]) == ("patched", True, home_buttons)
     for path in gui.rglob("*.qml"):
         text = path.read_text()
         if text.startswith("import QtQuick 1.1\n"):
@@ -196,6 +208,16 @@ def skin(tmp_path_factory: pytest.TempPathFactory) -> Path:
     shutil.copyfile(vendor / "Components/Settings/GeneralsChoice.qml",
                     gui / "Components/Settings/GeneralsChoiceVendor.qml")
     return gui
+
+
+@pytest.fixture(scope="module")
+def skin(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return _patched_skin(tmp_path_factory.mktemp("qt5-runtime"), "stock")
+
+
+@pytest.fixture(scope="module")
+def side_by_side_skin(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return _patched_skin(tmp_path_factory.mktemp("qt5-runtime-side-by-side"), "side_by_side")
 
 
 def _run(skin: Path, qml: str, name: str) -> list[str]:
@@ -267,22 +289,46 @@ def test_the_alarm_page_reads_the_state_and_offers_the_modes(skin: Path, agent: 
     assert "/ui/state" in agent
 
 
-def test_the_home_page_adds_both_buttons_and_the_agents_message_counts(skin: Path, agent: list[str]) -> None:
-    steps = """
-        if (n === 2) {
+@pytest.mark.parametrize("station", sorted(STATIONS))
+@pytest.mark.parametrize("home_buttons", sorted(HOME_BUTTONS))
+def test_the_home_page_adds_both_buttons_and_the_agents_message_counts(
+    request: pytest.FixtureRequest, agent: list[str], home_buttons: str, station: str,
+) -> None:
+    skin = request.getfixturevalue("skin" if home_buttons == "stock" else "side_by_side_skin")
+    names = json.dumps(["alarmButton", "haButton", *STATION_BUTTONS])
+    setup, expected = STATIONS[station]
+    quick = f"        if (n === 0) {{ {setup} }}\n" if setup else ""
+    name = f"home-{home_buttons}-{station}"
+    steps = quick + f"""
+        if (n === 2) {{
             console.log("CHECK buttons " + harness.onScreen(harness.find(page, "alarmButton")) + " " + harness.onScreen(harness.find(page, "haButton")))
             console.log("CHECK unread " + page.unreadMessagesCount() + " " + page.unreadMemosCount())
-            shot("home")
-        }
-        if (n === 3) {
+            var shown = [], off = [], overlaps = [], names = {names};
+            names.forEach(function(name) {{
+                var item = harness.find(page, name)
+                if (!item || !item.visible) return
+                if (!harness.onScreen(item)) off.push(name)
+                var p = item.mapToItem(harness, 0, 0)
+                shown.forEach(function(other) {{
+                    if (p.x < other.x + other.w && other.x < p.x + item.width && p.y < other.y + other.h && other.y < p.y + item.height)
+                        overlaps.push(other.name + "/" + name)
+                }})
+                shown.push({{name: name, x: p.x, y: p.y, w: item.width, h: item.height}})
+            }})
+            console.log("CHECK layout shown " + shown.map(function(b) {{ return b.name }}).join(",") + " off [" + off.join(",") + "] overlaps [" + overlaps.join(",") + "]")
+            shot("{name}")
+        }}
+        if (n === 3) {{
             harness.find(page, "alarmButton").touched()
             harness.find(page, "haButton").touched()
-        }
+        }}
         return n < 4
 """
-    checks, patched = _split(_page(skin, "HomePage.qml", "run-home", steps))
-    assert checks == ["loaded true", "buttons true true", "unread 1 2", "activated alarmPage", "activated haPage"]
-    _, vendor = _split(_page(skin, "HomePageVendor.qml", "run-home-vendor", "        return n < 4"))
+    checks, patched = _split(_page(skin, "HomePage.qml", f"run-{name}", steps))
+    assert checks[:3] == ["loaded true", "buttons true true", "unread 1 2"]
+    assert checks[3] == f"layout shown {','.join(expected)} off [] overlaps []"
+    assert checks[4:] == ["activated alarmPage", "activated haPage"]
+    _, vendor = _split(_page(skin, "HomePageVendor.qml", f"run-{name}-vendor", quick + "        return n < 4"))
     assert _new_warnings(patched, vendor, "HomePageVendor.qml", "HomePage.qml") == []
 
 

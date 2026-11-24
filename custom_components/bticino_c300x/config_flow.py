@@ -422,6 +422,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                     # The core display step failed on the Qt 5 display: the
                     # new entry records it for the core Repair.
                     self._setup_connection[CONF_DISPLAY_FOLLOWUP_PENDING] = False
+                else:
+                    # A later install in this flow did what an earlier one owed.
+                    self._setup_connection.pop(CONF_DISPLAY_FOLLOWUP_PENDING, None)
                 self._setup_connection[CONF_AGENT_TOKEN] = api_token
                 self._setup_connection[CONF_MAINTENANCE_TOKEN] = maintenance_token
                 self._setup_bootstrapped = True

@@ -2,6 +2,7 @@
  * rename and never chmods the path by name afterwards: /etc/init.d is
  * group-writable by bticino, so the name can be a symlink by then. */
 #include <assert.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -43,11 +44,12 @@ static const char *in_dir(char *out, size_t len, const char *name)
 
 static void put(const char *path, const char *content, mode_t mode)
 {
-    FILE *file = fopen(path, "wb");
-    assert(file != NULL);
-    assert(fputs(content, file) >= 0);
-    assert(fclose(file) == 0);
-    assert(chmod(path, mode) == 0);
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0600);
+    size_t len = strlen(content);
+    assert(fd >= 0);
+    assert(write(fd, content, len) == (ssize_t)len);
+    assert(fchmod(fd, mode) == 0);
+    assert(close(fd) == 0);
 }
 
 static int same_text(const char *path, const char *want)

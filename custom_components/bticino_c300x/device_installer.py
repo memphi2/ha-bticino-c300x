@@ -225,8 +225,9 @@ def _install_device_agent_sync(
         _verify_startup_sync(client)
 
         actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
+        display_is_qt5 = _device_display_is_qt5(client)
         for action in actions:
-            if not _apply_qml_patch_sync(client, request.remote_dir, action):
+            if not _apply_display_step_sync(client, request.remote_dir, action, qt5=display_is_qt5):
                 break
         # Capabilities reads this file on every request. Publish it only after
         # activation succeeds so an interrupted install still needs repair.
@@ -942,6 +943,27 @@ def _apply_qt5_low_res_video_default(
         "(video.av.highResolution=false)"
     )
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _apply_display_step_sync(
+    client: _DeviceSshClient, remote_dir: str, action: str, *, qt5: bool
+) -> bool:
+    """Run one display step; on the Qt 5 display a failed step does not fail the install.
+
+    The agent is installed either way. HA then reports the display state
+    (core Repair, Display patch switch) and the core Repair retries the step.
+    """
+
+    try:
+        return _apply_qml_patch_sync(client, remote_dir, action)
+    except C300XDeviceInstallError as err:
+        if not qt5:
+            raise
+        _LOGGER.warning(
+            "C300X: the display step %s failed on the Qt 5 display (%s); the agent is "
+            "installed and the core Repair retries the display pages", action, err.reason,
+        )
+        return False
 
 
 def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> bool:

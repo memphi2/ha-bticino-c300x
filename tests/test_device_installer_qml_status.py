@@ -21,15 +21,20 @@ def _success(action: str) -> str:
 
 class FakeClient:
     def __init__(self) -> None:
-        self.responses = {action: _success(action) for action in ("core-apply", "apply")}
+        self.responses: dict[str, str | None] = {action: _success(action) for action in ("core-apply", "apply")}
         self.actions: list[str] = []
         self.closed = False
+        self.qt5 = False
 
     def run(self, command: str) -> str:
         if "qml_patch.sh " in command:
             action = command.rsplit(" ", 1)[1]
             self.actions.append(action)
+            if self.responses[action] is None:
+                raise installer.C300XDeviceInstallError("device_install_failed")
             return self.responses[action]
+        if installer._QT5_DISPLAY_MARKER in command:
+            return "yes\n" if self.qt5 else "no\n"
         if command == f"readlink {installer.REMOTE_INIT_LINK}":
             return installer.REMOTE_INIT_SCRIPT
         return ""
@@ -134,3 +139,24 @@ def test_only_a_reported_unknown_display_skips_the_display_steps(client: FakeCli
     client.responses["core-apply"] = response
     with pytest.raises(installer.C300XDeviceInstallError, match="device_install_verify_failed"):
         _install()
+
+
+@pytest.mark.parametrize("action", ["core-apply", "apply"])
+@pytest.mark.parametrize("response", [
+    None,
+    json.dumps({"ok": False, "state": "reload_failed", "core_patched": None, "gui_running": False}),
+    json.dumps({"ok": True, "core_patched": True, "gui_running": True, "patched": True,
+                "qt5_overlay": "failed"}),
+])
+def test_a_failed_display_step_on_qt5_does_not_fail_the_install(
+    client: FakeClient, action: str, response: str | None
+) -> None:
+    """The agent is installed; HA reports the display state and the core Repair retries it."""
+
+    client.qt5 = True
+    for name in client.responses:
+        client.responses[name] = json.dumps({**json.loads(_success(name)), "qt5_overlay": "active"})
+    client.responses[action] = response
+    assert _install() == ()
+    assert client.closed
+    assert client.actions == (["core-apply"] if action == "core-apply" else ["core-apply", "apply"])

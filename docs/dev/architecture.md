@@ -500,7 +500,7 @@ explicit user actions:
 - forwarding, ringer, answering-machine and memo/message commands,
 - Display patch and GUI reload,
 - firewall, MQTT, audio codec, camera quality, SSH and reboot maintenance,
-- the display's local HA feedback preference,
+- the display's local Status messages preference,
 - configured device activation synchronization.
 
 ## Test Boundaries

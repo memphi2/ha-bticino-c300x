@@ -164,7 +164,8 @@ function page(name, values) {
     assert.equal(p.statusText(), "stale_state", "fetch failures remain visible");
     const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
     assert.match(qml.slice(qml.lastIndexOf("id: status")), /text: statusText\(\)/);
-    assert.match(qml, /text: selectedItem \? feedbackText\(selectedItem\) : status.text/);
+    assert.match(qml, /text: selectedItem \? feedbackText\(selectedItem\) : statusText\(\)/,
+        "the line under the notification list follows the switch like the header");
     for (const name of ["HomeAssistant.qml", "Alarm.qml"]) {
         assert.doesNotMatch(fs.readFileSync(path.join(root, "device_qml", name), "utf8"),
             /status\.(?:text|color)\s*=/, "all status writes reset the optional marker");
@@ -253,6 +254,59 @@ for (const data of [{ok: true}, {ok: true, id: "../bad", enabled: true, expires:
     assert.equal(p.feedbackColor(), "#ff6b6b", "real alarm state must not be hidden");
     p.feedbackColorsEnabled = true;
     assert.equal(p.modeFeedbackVisible("arm_home"), true);
+}
+{
+    // The switch "Status messages" off: the Alarm page hides what only confirms
+    // that things work and keeps what the user has to act on. The state box
+    // above the line still names a running command and the alarm state.
+    const {api} = runtime();
+    const noop = () => {};
+    const p = page("Alarm.qml", {Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
+        feedbackColorsEnabled: false, status: {}, alarmState: {}, activeSince: {},
+        alarmOnline: true, alarmConfigured: true, alarmRawState: "disarmed", alarmCommands: ["arm_home"],
+        alarmCommandDetails: [], selectedCommand: "arm_home", commandPending: false, commandInFlight: false,
+        commandAwaitedState: "", commandFeedback: "", commandFeedbackColor: "", activeFeedbackCommand: "",
+        runtimeGeneration: 0, statusGeneration: 0, pinCode: "", bypassOffered: false,
+        modeFeedbackTimer: {restart: noop}, delayedStatusRefresh: {restart: noop, stop: noop}});
+    p.page = p;
+    const reads = [];
+    api.getJsonShared = (url, success, failure) => reads.push({success, failure});
+    for (const key of ["checking", "sending", "ready_to_arm"]) {
+        p.setCommandFeedback(key, "arm_home", "#58d68d");
+        assert.notEqual(p.status.text, "", key);
+        assert.equal(p.statusText(), "", key + " is routine and hidden with the switch off");
+        p.feedbackColorsEnabled = true;
+        assert.equal(p.statusText(), p.status.text, key + " shows again with the switch on");
+        p.feedbackColorsEnabled = false;
+    }
+    for (const key of ["not_ready_to_arm", "pin_required", "invalid_code", "alarm_command_error", "bypass_open_sensors"]) {
+        p.setCommandFeedback(key, "arm_home", "#ff6b6b");
+        assert.equal(p.statusText(), p.status.text, key + " stays visible");
+        assert.notEqual(p.statusText(), "");
+    }
+    for (const pending of [false, true]) {
+        p.commandPending = p.commandInFlight = pending;
+        api.status(p.status, p, p.alarmState, p.activeSince);
+        reads.pop().success({alarm: {state: "disarmed", commands: ["arm_home"]}});
+        assert.notEqual(p.status.text, "");
+        assert.equal(p.statusText(), "", "a plain connected or sending line is routine");
+        if (pending) assert.equal(p.feedbackTitle(), "sending", "the state box keeps naming the running command");
+    }
+    p.commandPending = p.commandInFlight = false;
+    api.status(p.status, p, p.alarmState, p.activeSince);
+    reads.pop().failure("API error: 503");
+    assert.equal(p.statusText(), "status_error (503)", "a failed read stays visible");
+    p.alarmOnline = true;
+    p.alarmConfigured = false;
+    p.alarmCommands = ["arm_home"];
+    p.executeCommand("arm_home", false);
+    assert.equal(p.statusText(), "alarm_not_configured");
+    const source = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");
+    assert.match(source.slice(source.lastIndexOf("id: status")), /text: statusText\(\)/);
+    const texts = vm.createContext({});
+    vm.runInContext(fs.readFileSync(path.join(jsRoot, "c300x_i18n.js"), "utf8").replace(/^\.pragma library\s*/, ""), texts);
+    assert.deepEqual(["de", "en", "it", "fr"].map(language => texts.text(language, "ha_feedback_colors")),
+        ["Statusmeldungen", "Status messages", "Messaggi di stato", "Messages d'etat"]);
 }
 {
     const qml = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");

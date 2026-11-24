@@ -7,6 +7,12 @@ Station:
 - The tab the Display patch adds to the station's **Settings** is called
   **Integration** (it **Integrazione**) instead of **Home Assistant**. The
   **Home Assistant** button on the home page keeps its name.
+- The switch **HA feedback** on that tab is called **Status messages** (de
+  **Statusmeldungen**) and now also covers the Alarm page: switched off, the
+  routine lines there ("Connected", "Checking", "Sending", "Ready to arm",
+  "Action sent") are hidden like on the Home Assistant page, and so is the
+  routine line under the notification list. Errors, a required PIN, sensors
+  that block arming, connection warnings and the alarm state stay visible.
 
 ## v2.9.1 - 2026-11-24
 

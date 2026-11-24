@@ -468,20 +468,20 @@ only maintenance operations the agent has enabled are offered.
 
 <table>
   <tr>
-    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab with SSH, HA feedback, Reboot station and Remove agent" width="360"></td>
+    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab with SSH, Status messages, Reboot station and Remove agent" width="360"></td>
     <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch" width="360"></td>
   </tr>
 </table>
 
 | Control | Effect |
 | --- | --- |
-| **HA feedback** | Shows (default) or hides coloured action confirmations and routine messages such as "Page loaded" in the upper right of the Home Assistant page. Text at a control, errors, pending actions, connection warnings and real alarm or entity states always stay visible. |
+| **Status messages** | Shows (default) or hides coloured action confirmations and routine messages on the Home Assistant and Alarm pages, such as "Page loaded", "Connected", "Sending" or "Ready to arm". Text at a control, errors, a required PIN, sensors that block arming, connection warnings and real alarm or entity states always stay visible; while a command runs, the Alarm page still names it in its state box. |
 | **SSH** | Switches the station's SSH access. |
 | **Reboot station** | Restarts the station. |
 | **Remove agent** | Removes the device agent; see [Remove Agent](advanced-maintenance.md#remove-agent). |
 
 Reboot and removal need a second, explicit confirmation within ten seconds;
-leaving the tab or the screen going off cancels it. **HA feedback** is a
+leaving the tab or the screen going off cancels it. **Status messages** is a
 station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.

@@ -1736,7 +1736,7 @@ Restores the core media hook.
 
 Applies the core hook plus the optional Display patch: MainApp navigation,
 HomePage unread memo/video-message badges, MemoPage external-delete refresh,
-the Settings > General HA feedback and touch-tone controls, the Alarmo, Home
+the Settings > Integration tab with its Status messages switch, the Alarmo, Home
 Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
 `C300XEnergy.qml`) and the local QML JavaScript bridge.
 

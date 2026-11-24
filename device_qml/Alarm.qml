@@ -156,7 +156,7 @@ Page {
         }
         commandFeedbackColor = color
         flashCommandButton(command, color)
-        Api.setStatus(status, commandFeedback, color)
+        Api.setStatus(status, commandFeedback, color, key === "checking" || key === "sending" || key === "ready_to_arm")
     }
 
     function flashCommandButton(command, color) {
@@ -325,6 +325,10 @@ Page {
 
     function modeReadyIndicatorVisible(command) {
         return alarmOnline && isArmCommand(command) && commandTargetState(command) !== alarmRawState
+    }
+
+    function statusText() {
+        return feedbackColorsEnabled || !status.optionalFeedback ? status.text : ""
     }
 
     function modeFeedbackVisible(command) {
@@ -825,7 +829,7 @@ Page {
                     clip: true
                     UbuntuLightText {
                         anchors.fill: parent
-                        text: status.text
+                        text: statusText()
                         textFormat: Text.PlainText
                         color: feedbackColorsEnabled || !alarmOnline ? status.color : "#c7d0d9"
                         font.pixelSize: 16

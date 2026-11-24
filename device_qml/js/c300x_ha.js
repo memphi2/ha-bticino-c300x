@@ -195,7 +195,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
             pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         }
         setStatus(statusItem, uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected"),
-            pageItem.commandPending ? "#f1c40f" : "#58d68d", !pageItem.commandPending)
+            pageItem.commandPending ? "#f1c40f" : "#58d68d", true)
         if (data.alarm && data.alarm.state) {
             var previousState = pageItem.alarmRawState
             var previousCommand = pageItem.selectedCommand
@@ -754,7 +754,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
             if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("sending", command, "#f1c40f")
             } else {
-                setStatus(statusItem, uiText(pageItem, "sending"), "#f1c40f")
+                setStatus(statusItem, uiText(pageItem, "sending"), "#f1c40f", true)
             }
             pageItem.bypassOffered = false
             if (command === "disarm" && pageItem.setAlarmDelayRemaining) {
@@ -808,7 +808,7 @@ function alarmCheck(command, statusItem, pageItem) {
             } else if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("ready_to_arm", command, "#58d68d")
             } else {
-                setStatus(statusItem, uiText(pageItem, "ready_to_arm"), "#58d68d")
+                setStatus(statusItem, uiText(pageItem, "ready_to_arm"), "#58d68d", true)
             }
             return
         }

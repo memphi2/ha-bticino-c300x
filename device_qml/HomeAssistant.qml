@@ -1061,7 +1061,7 @@ Page {
         anchors.margins: 24
         anchors.bottomMargin: 12
         height: 36
-        text: selectedItem ? feedbackText(selectedItem) : status.text
+        text: selectedItem ? feedbackText(selectedItem) : statusText()
         textFormat: Text.PlainText
         color: selectedItem ? feedbackColor(selectedItem) : statusColor()
         font.pixelSize: 16

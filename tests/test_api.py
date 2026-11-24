@@ -2143,7 +2143,24 @@ def test_ensure_homeassistant_user_sends_maintenance_confirmation() -> None:
     assert session.requests[0]["kwargs"]["json"] == {
         "confirm": "ensure_homeassistant_user"
     }
-    assert session.requests[0]["kwargs"]["timeout"] == 20.0
+    assert session.requests[0]["kwargs"]["timeout"] == 50.0
+
+
+@pytest.mark.parametrize("method", [
+    "async_ensure_homeassistant_user", "async_restore_homeassistant_media_user_setup",
+])
+def test_media_user_label_writes_wait_like_a_display_write(method: str) -> None:
+    """The agent writes the label with qml_patch.sh, GUI restart included, before it answers."""
+
+    session = _FakeSession('{"ok": true, "supported": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+    asyncio.run(getattr(api, method)())
+    assert session.requests[0]["kwargs"]["timeout"] == 50.0
 
 
 def test_ensure_homeassistant_user_can_send_account_label() -> None:

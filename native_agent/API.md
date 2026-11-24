@@ -1211,6 +1211,12 @@ files. Applying the binary patch requires a complete known firmware hash, not
 only matching instruction ranges. These checks do not authorize replacing
 third-party routing files with stock configuration.
 
+When the media user cannot be set up after the routing binary was patched by
+this request, the routing is restored before the error is returned. Ensure and
+restore answer `"root_writable": true` when the routing write succeeded but `/`
+could not be made read-only again (the replaced binary is still running); a
+reboot makes it read-only.
+
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
 Authentication: maintenance.

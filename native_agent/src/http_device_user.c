@@ -98,6 +98,7 @@ static void device_user_status_body(
         "\"device_routing_state\":%s,"
         "\"device_routing_backup_present\":%s,"
         "\"device_routing_error\":%s,"
+        "\"root_writable\":%s,"
         "\"media_user_label_available\":%s,"
         "\"media_user_label_applied\":%s,"
         "\"media_user_label_state\":%s,"
@@ -123,6 +124,7 @@ static void device_user_status_body(
         routing_state_json,
         routing_status.backup_present ? "true" : "false",
         routing_error_json,
+        routing_status.root_writable ? "true" : "false",
         qml_available ? "true" : "false",
         qml_patched ? "true" : "false",
         qml_state_json,
@@ -155,9 +157,12 @@ static void send_error(int fd, const char *error, const char *detail)
 static int start_status(struct c300x_http_maintenance *owner, int fd,
     struct device_user_request *state)
 {
+    /* A write of this request that left / writable is reported with it. */
+    int root_writable = state->routing.root_writable;
     (void)c300x_device_user_read_status(&state->status);
     memset(&state->routing, 0, sizeof(state->routing));
     (void)c300x_device_routing_read_status(&state->routing);
+    state->routing.root_writable = root_writable;
     if (!c300x_device_display_is_qt5()
         && access(state->config->maintenance_qml_patch_script, X_OK) == 0
         && c300x_command_job_start_capture(&owner->job,
@@ -199,11 +204,19 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
         send_error(fd, "device_user_update_failed", state->status.error);
         return 0;
     }
+    struct c300x_device_routing_status before;
+    memset(&before, 0, sizeof(before));
+    (void)c300x_device_routing_read_status(&before);
     if (!c300x_device_routing_apply(&state->routing, error, sizeof(error))) {
         send_error(fd, "device_routing_failed", error);
         return 0;
     }
     if (!c300x_device_user_ensure_homeassistant(&state->status, account_label, error, sizeof(error))) {
+        /* No HA user: do not leave the vendor routing patched for it. */
+        if (!before.patched) {
+            char ignored[C300X_DEVICE_USER_ERROR_LEN];
+            (void)c300x_device_routing_restore(&before, ignored, sizeof(ignored));
+        }
         send_error(fd, "device_user_update_failed", error);
         return 0;
     }

@@ -35,8 +35,9 @@ def route_binary(request, tmp_path_factory):
     (operation, case)
     for operation in ("ensure", "restore")
     for case in ("unauthorized", "unconfirmed")
-] + [("ensure", case) for case in ("routing-failure", "user-failure", "invalid", "false")]
-  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5")])
+] + [("ensure", case) for case in ("routing-failure", "user-failure", "user-failure-patched", "invalid", "false")]
+  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5"),
+     ("ensure", "busy-root"), ("restore", "busy-root")])
 def test_route_state_machine(route_binary, tmp_path, operation, case):
     script = tmp_path / "job.sh"
     body = ('case "$1" in\n'

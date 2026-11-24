@@ -2246,7 +2246,9 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
         f'  : > "{tmp_path}/held"\n'
         '  while :; do sleep 0.02; done\n'
         'fi\n'
-        f'exec "{shutil.which(name) or "/bin/true"}" "$@"\n'
+        # Never the host's killall or pidof: they would reach display programs
+        # of other tests and worktrees.
+        f'exec "{"/bin/false" if name in ("killall", "pidof") else shutil.which(name) or "/bin/true"}" "$@"\n'
     )
     (commands / name).chmod(0o700)
     if failing_mv:
@@ -2256,7 +2258,7 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
         )
         (commands / "mv").chmod(0o700)
     return {
-        "PATH": str(commands) + os.pathsep + os.environ["PATH"],
+        "PATH": _without_host_display_tools(tmp_path, str(commands) + os.pathsep + os.environ["PATH"]),
         "C300X_QML_RELOAD_GUI": "1",
         "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
         "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
@@ -2467,6 +2469,25 @@ def test_a_reload_in_these_tests_leaves_host_display_programs_alone(tmp_path: Pa
             "C300X_QML_RELOAD_GUI": "1", "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
             "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
         })
+        assert other.poll() is None
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_a_terminated_write_leaves_host_display_programs_alone(tmp_path: Path) -> None:
+    """The held killall and the abort's restart never reach a BtClass outside the test."""
+
+    program = tmp_path / "BtClass"
+    program.write_text("#!/bin/sh\nwhile :; do sleep 0.2; done\n")
+    program.chmod(0o755)
+    other = subprocess.Popen([str(program)], start_new_session=True)
+    try:
+        gui, backup = tmp_path / "gui", tmp_path / "backup"
+        gui.mkdir()
+        _write_original_gui(gui)
+        result = _terminate_when_held(tmp_path, gui, backup, "apply", _blocking_commands(tmp_path, "killall"))
+        assert result.returncode == 130, result.stderr
         assert other.poll() is None
     finally:
         other.kill()

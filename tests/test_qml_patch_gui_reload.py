@@ -35,8 +35,12 @@ from tests.test_qml_patch_script import SCRIPT
 _FIND = f"""#!{sys.executable}
 import os, signal, sys
 marker = "C300X_TEST_STATION=" + os.environ.get("C300X_TEST_STATION", "")
+# The stand-in display runs under a name of its own: a host killall BtClass
+# (another test, another worktree) cannot reach it.
+ALIASES = {{"BtClass": "c300x-tdisp"}}
 
 def find(name):
+    name = ALIASES.get(name, name)
     found = []
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
@@ -101,7 +105,12 @@ done
 wait
 """
 
+# Started as bin/gui/BtClass like the vendor's; it goes on as c300x-tdisp
+# (the same PID), a process name no host killall BtClass reaches.
+DISPLAY_NAME = "c300x-tdisp"
+
 PROGRAM = """#!/bin/sh
+[ "${0##*/}" = BtClass ] && exec "${0%/*}/c300x-tdisp" "$@"
 echo "start $$ ${LD_PRELOAD:-plain}" >> "$C300X_TEST_LOG"
 if [ -n "${LD_PRELOAD:-}" ] && [ -f "$C300X_TEST_CRASHES" ]; then
     left=$(cat "$C300X_TEST_CRASHES")
@@ -157,6 +166,7 @@ class Station:
         self.program.parent.mkdir(parents=True, exist_ok=True)
         self.program.write_text(PROGRAM)
         self.program.chmod(0o755)
+        shutil.copy(self.program, self.program.with_name(DISPLAY_NAME))
         self.run_dir = root / "gui-restart"
         self.crashes = root / "crashes"
         self.env = {
@@ -702,3 +712,11 @@ def test_a_request_filed_as_the_worker_unlocks_is_served_before_it_exits(station
     assert answer.read_text() == "0\n"
     assert _kinds(station).count("wrapper") == 3
     assert len(_settled(station)) == 1
+
+
+def test_the_stand_in_displays_are_out_of_reach_of_a_host_killall(station: Station) -> None:
+    """Concurrent runs elsewhere call the real killall BtClass; it must not hit these."""
+
+    station.boot()
+    for pid in station.running():
+        assert Path(f"/proc/{pid}/comm").read_text().strip() == DISPLAY_NAME

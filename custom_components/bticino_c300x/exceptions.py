@@ -9,8 +9,8 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from .const import DOMAIN
 from .model_names import C100X, entry_model, model_placeholders
 
-# Their C300X wording names the Display patch; a C100X has its own text.
-_C100X_KEYS = frozenset({"display_disabled", "gui_function_patch_required"})
+# Their C300X wording names the Display patch or the agent; a C100X has its own text.
+_C100X_KEYS = frozenset({"display_disabled", "gui_function_patch_required", "text_memo_write_not_supported"})
 
 
 def _kwargs(translation_key: str, placeholders: dict[str, str] | None, entry: Any) -> dict[str, Any]:

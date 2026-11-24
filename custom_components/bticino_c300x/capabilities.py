@@ -181,10 +181,16 @@ def gate_capabilities(
     capabilities: dict[str, Any],
     *,
     doorbell_video_enabled: bool,
+    c100x: bool = False,
 ) -> dict[str, Any]:
     """Apply HA config gates to device-agent capabilities."""
 
     result = dict(capabilities) if isinstance(capabilities, dict) else {}
+    if c100x:
+        # The station has no page for text memos and records no voice memos:
+        # no memo sensor, no memo event and no memo service on a C100X.
+        memos = result.get("memos")
+        result["memos"] = {**memos, "supported": False} if isinstance(memos, dict) else False
     if not doorbell_video_enabled:
         for capability in ("doorbell_video", "home_call"):
             video = result.get(capability)

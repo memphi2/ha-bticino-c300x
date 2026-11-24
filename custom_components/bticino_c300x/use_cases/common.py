@@ -20,6 +20,7 @@ from ..capabilities import (
     stored_media_offered,
 )
 from ..const import CONF_MAINTENANCE_TOKEN, SIGNAL_CONNECTION_STATE_CHANGED
+from ..display_support import entry_is_c100x
 from ..entity import entry_video_enabled
 from ..entry_config import entry_config_value
 from ..exceptions import home_assistant_error, service_validation_error
@@ -127,7 +128,8 @@ def ensure_text_memo_write_supported(entry: Any) -> None:
 
     runtime_data = getattr(entry, "runtime_data", None)
     capabilities = getattr(runtime_data, "capabilities", {})
-    if not memo_text_write_supported(capabilities):
+    # A C100X is refused whatever its agent reports: the station cannot show a text memo.
+    if entry_is_c100x(entry) or not memo_text_write_supported(capabilities):
         raise service_validation_error("text_memo_write_not_supported", entry=entry)
 
 

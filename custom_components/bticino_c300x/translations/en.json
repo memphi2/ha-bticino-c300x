@@ -1578,6 +1578,9 @@
     "text_memo_write_not_supported": {
       "message": "Writing a text memo is not supported by the installed {model} device agent."
     },
+    "text_memo_write_not_supported_c100x": {
+      "message": "The {model} has no text memos: the station cannot show them."
+    },
     "unknown_action": {
       "message": "The action ID {action_id} is not configured."
     },

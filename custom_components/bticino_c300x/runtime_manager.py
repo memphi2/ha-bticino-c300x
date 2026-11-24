@@ -78,7 +78,11 @@ from .device_user import (
     homeassistant_account_label,
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
-from .display_support import entry_display_supported, remember_display_support
+from .display_support import (
+    entry_display_supported,
+    remember_display_support,
+    setup_is_c100x,
+)
 from .display_unread import async_release_unread_claim, async_send_unread_event
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
@@ -249,6 +253,7 @@ class C300XRuntimeManager:
             self.capabilities = gate_capabilities(
                 capabilities,
                 doorbell_video_enabled=_entry_video_enabled(self.entry),
+                c100x=setup_is_c100x(self.setup_data),
             )
             remember_display_support(self.hass, self.entry, self.setup_data)
 

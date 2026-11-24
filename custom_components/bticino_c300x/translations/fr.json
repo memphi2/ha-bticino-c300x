@@ -1578,6 +1578,9 @@
     "text_memo_write_not_supported": {
       "message": "L'écriture d'un mémo texte n'est pas prise en charge par l'agent {model} installé."
     },
+    "text_memo_write_not_supported_c100x": {
+      "message": "Le {model} n'a pas de mémos texte : le poste ne peut pas les afficher."
+    },
     "unknown_action": {
       "message": "L'ID d'action {action_id} n'est pas configure."
     },

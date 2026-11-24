@@ -64,6 +64,7 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .device_user import homeassistant_account_label
+from .display_support import setup_is_c100x
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
 from .factory_login import LOGIN_REFUSED, login_model, ssh_login, uses_factory_login
@@ -835,6 +836,7 @@ async def _async_apply_repaired_agent_setup(
     entry.runtime_data.capabilities = gate_capabilities(
         capabilities,
         doorbell_video_enabled=bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False)),
+        c100x=setup_is_c100x(setup_data),
     )
     entry.runtime_data.agent_update_state = compare_agent_bundle(
         setup_data,

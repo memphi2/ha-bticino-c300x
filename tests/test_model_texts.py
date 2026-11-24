@@ -247,6 +247,38 @@ def test_exceptions_name_the_model_of_their_entry():
     with pytest.raises(ServiceValidationError) as raised:
         ensure_text_memo_write_supported(entry)
     assert raised.value.translation_placeholders == {"model": "C100X"}
+    # A C100X is refused in its own words, whatever its agent reports.
+    assert raised.value.translation_key == "text_memo_write_not_supported_c100x"
+    entry.runtime_data.capabilities = {"memos": {"supported": True, "write_text": True}}
+    with pytest.raises(ServiceValidationError) as raised:
+        ensure_text_memo_write_supported(entry)
+    assert raised.value.translation_key == "text_memo_write_not_supported_c100x"
+    c300x = SimpleNamespace(**vars(C300X_ENTRY))
+    c300x.runtime_data = SimpleNamespace(agent_info={"model": "C300X"}, capabilities=entry.runtime_data.capabilities)
+    ensure_text_memo_write_supported(c300x)
+    for lang, word in (("en", "text memos"), ("de", "Text-Memos"), ("it", "memo testuali"), ("fr", "mémos texte")):
+        message = text(lang, "exceptions", "text_memo_write_not_supported_c100x", "message", model="C100X")
+        assert word in message and "C100X" in message and "agent" not in message.lower()
+    assert _load("en")["exceptions"]["text_memo_write_not_supported_c100x"] == json.loads(
+        LANGUAGES["base"].read_text())["exceptions"]["text_memo_write_not_supported_c100x"]
+
+
+def test_a_c100x_has_no_memo_capability_left():
+    from c100x_answering_capabilities import C100X, C300X
+
+    from custom_components.bticino_c300x.capabilities import (
+        events_for_capabilities,
+        gate_capabilities,
+        memo_text_write_supported,
+        memos_supported,
+    )
+
+    c100x = gate_capabilities(dict(C100X), doorbell_video_enabled=True, c100x=True)
+    assert not memos_supported(c100x) and not memo_text_write_supported(c100x)
+    assert "memos.changed" not in events_for_capabilities(c100x)
+    assert C100X["memos"]["supported"] is True, "the gate must not edit the agent's answer"
+    c300x = gate_capabilities(dict(C300X), doorbell_video_enabled=True, c100x=False)
+    assert c300x["memos"] == C300X["memos"] and "memos.changed" in events_for_capabilities(c300x)
 
     assert text("en", "exceptions", "text_memo_write_not_supported", "message", model="C100X") == (
         "Writing a text memo is not supported by the installed C100X device agent."

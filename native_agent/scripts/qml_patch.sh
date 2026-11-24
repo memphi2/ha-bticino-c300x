@@ -1991,6 +1991,21 @@ qt5_wrapper_text() {
     ' "${1:-$QT5_WRAPPER_BACKUP}"
 }
 
+# The start script without our block, of this or any earlier version: the
+# lines from our comment to the first "fi" right before the vendor's start.
+qt5_wrapper_strip() {
+    awk '
+        skip && $0 == "fi" { skip = 0; ended = 1; next }
+        skip { next }
+        !seen && $0 == "# c300x-qrc-overlay: display pages of the Home Assistant integration" {
+            seen = 1; skip = 1; next
+        }
+        ended == 1 { ended = 2; if ($0 != "./bin/gui/BtClass &") bad = 1 }
+        { print }
+        END { if (!seen || ended != 2 || bad) exit 1 }
+    ' "$1"
+}
+
 qt5_original_wrapper_valid() {
     [ -x "$1" ] || return 1
     qt5_wrapper_result="$("$AGENT_BIN" --display-qt5 wrapper-check "$1" 2>/dev/null)" || return 1
@@ -2033,8 +2048,8 @@ qt5_wrapper_restore() {
         return 1
     fi
     if [ -e "$GUI_WRAPPER" ]; then
-        if ! qt5_wrapper_text "$QT5_WRAPPER_BACKUP" > "$GUI_WRAPPER.c300x.tmp" \
-            || ! cmp -s "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"; then
+        if ! qt5_wrapper_strip "$GUI_WRAPPER" > "$GUI_WRAPPER.c300x.tmp" \
+            || ! cmp -s "$GUI_WRAPPER.c300x.tmp" "$QT5_WRAPPER_BACKUP"; then
             rm -f "$GUI_WRAPPER.c300x.tmp"
             printf 'Display start script is not the one installed here, left unchanged: %s\n' "$GUI_WRAPPER" >&2
             qt5_unsupported display_wrapper_unknown

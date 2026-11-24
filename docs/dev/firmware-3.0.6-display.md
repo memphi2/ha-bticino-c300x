@@ -274,8 +274,10 @@ lacks a file the patch edits), `display_file_unsupported` (an edited file is
 not in the expected form) and `display_wrapper_unknown`. The reason is kept in
 `display-qt5/unsupported`; `status` reports it as `qt5_unsupported` until an
 apply finds a known display again. Full removal (`restore-all`) only puts the
-pinned original back over the exact start script it installed itself. After a
-vendor update, or any other change to that file, it removes the overlay files,
+pinned original back over a start script that is this original plus one block
+of the integration, of this or an earlier beta (from the `# c300x-qrc-overlay`
+comment to the `fi` before `./bin/gui/BtClass &`). After a vendor update, or
+any other change to the vendor's lines, it removes the overlay files,
 leaves the start script as it is and records `display_wrapper_unknown`. Read and write errors (for example
 `display_program_unreadable`) are not a reason: those steps still fail as
 before. The check runs in a separate `qml_patch.sh qt5-prepare` process, so

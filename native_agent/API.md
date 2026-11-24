@@ -1670,7 +1670,8 @@ start script is not one the agent knows (`display_program_unknown`,
 `200` with `"ok":false,"error":"display_unsupported"` and the status fields; the
 agent runs without the display pages. The field stays until an apply finds a
 known display again. Full removal also records `display_wrapper_unknown` when
-the start script is no longer the exact one it installed, for example after a
+the start script is no longer the original with a block of this or an earlier
+beta in it, for example after a
 vendor update; it then removes the overlay files and leaves that script as it
 is.
 

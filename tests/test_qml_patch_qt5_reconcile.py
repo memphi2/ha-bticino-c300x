@@ -120,14 +120,15 @@ def test_unchanged_partial_restore_repairs_the_remaining_overlay(device, action)
     assert snapshot(device) == expected
 
 
-@pytest.mark.parametrize("case", ["vendor-update", "edited-overlay"])
+@pytest.mark.parametrize("case", ["vendor-update", "edited-vendor-lines"])
 def test_restore_all_leaves_a_start_script_that_is_not_ours_alone(device, case):
     device.ok("apply")
     if case == "vendor-update":
         # A firmware update ships its own start script in place of ours.
         script = overlay.WRAPPER.replace("./bin/gui/BtClass &", "export QT_NEW=1\n./bin/gui/BtClass &")
     else:
-        script = device.wrapper.read_text().replace("-lt 60", "-lt 90")
+        # Our block, but the vendor's lines around it are no longer the original.
+        script = device.wrapper.read_text().replace("export QT_QPA_PLATFORM=eglfs", "export QT_QPA_PLATFORM=linuxfb")
     device.wrapper.write_text(script)
     device.wrapper.chmod(0o750)
     result = device.run("restore-all")
@@ -138,6 +139,53 @@ def test_restore_all_leaves_a_start_script_that_is_not_ours_alone(device, case):
     status = json.loads(result.stdout.strip().splitlines()[-1])
     assert status["qt5_unsupported"] == "display_wrapper_unknown"
     assert not device.rcc.exists() and not device.lib.exists()
+
+
+# The blocks earlier betas inserted: 2.9.0b1/b2 (sticky mark) and 3876e2b4
+# (boot id, retry after a 3 s pause; shortened to its shape), as their
+# qt5_wrapper_text wrote them.
+OLD_BLOCKS = {
+    "2.9.0b2": (
+        "# c300x-qrc-overlay: display pages of the Home Assistant integration\n"
+        "if [ -f '{lib}' ] && [ -f '{rcc}' ] && [ ! -e '{rcc}.failed' ]; then\n"
+        "    c300x_start=$(date +%s)\n"
+        "    rm -f '{log}.rc'\n"
+        "    {{ {{ LD_PRELOAD='{lib}' C300X_QRC_OVERLAY='{rcc}' QML_DISABLE_DISK_CACHE=1 ./bin/gui/BtClass 2>&1 1>&3 3>&-; "
+        "echo $? > '{log}.rc'; }} | {{ head -c 65536 > '{log}'; cat > /dev/null; }}; }} 3>&1 &\n"
+        "    wait $!\n"
+        "    c300x_rc=$(cat '{log}.rc' 2>/dev/null || echo 0)\n"
+        "    case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac\n"
+        "    [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc\n"
+        "    : > '{rcc}.failed'\n"
+        "fi\n"
+    ),
+    "3876e2b4": (
+        "# c300x-qrc-overlay: display pages of the Home Assistant integration\n"
+        "c300x_boot=$(cat '{boot}' 2>/dev/null)\n"
+        "if [ -f '{lib}' ] && [ -f '{rcc}' ] && {{ [ ! -e '{rcc}.failed' ] || [ \"$(cat '{rcc}.failed' 2>/dev/null)\" != \"$c300x_boot\" ]; }}; then\n"
+        "    for c300x_try in 1 ${{C300X_GUI_RELOAD:+2}}; do\n"
+        "        [ $c300x_try = 1 ] || sleep 3\n"
+        "        c300x_start=$(date +%s)\n"
+        "        wait $!\n"
+        "        case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac\n"
+        "    done\n"
+        "    printf '%s\\n' \"$c300x_boot\" > '{rcc}.failed'\n"
+        "fi\n"
+    ),
+}
+
+
+@pytest.mark.parametrize("version", sorted(OLD_BLOCKS))
+def test_restore_all_removes_the_start_script_of_an_earlier_beta(device, version):
+    """An update that was not followed by an apply leaves the earlier block in place."""
+
+    device.ok("apply")
+    block = OLD_BLOCKS[version].format(lib=device.lib, rcc=device.rcc, log=device.root / "display-qt5.log",
+                                       boot=device.boot_id)
+    device.wrapper.write_text(overlay.WRAPPER.replace("./bin/gui/BtClass &", block + "./bin/gui/BtClass &"))
+    status = device.ok("restore-all")
+    assert device.wrapper.read_text() == overlay.WRAPPER
+    assert "qt5_unsupported" not in status and status["qt5_overlay"] == "off"
 
 
 def test_restore_all_can_recover_a_missing_stock_wrapper(device):

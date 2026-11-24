@@ -1418,6 +1418,18 @@
     "gui_function_patch_required": {
       "message": "Diese Aktion benötigt den C300X-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
     },
+    "display_disabled": {
+      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem C300X-Display. Schalte sie zuerst in den Integrationsoptionen ein."
+    },
+    "unknown_notification_action": {
+      "message": "Eine Schaltfläche der Benachrichtigung nutzt eine Aktions-ID, die bei den C300X-Aktionen nicht eingerichtet ist."
+    },
+    "display_notification_queue_full": {
+      "message": "Das C300X-Display hat bereits die Höchstzahl an Benachrichtigungen mit gleicher oder höherer Priorität. Schließe eine oder warte, bis eine abläuft."
+    },
+    "display_notifications_unloaded": {
+      "message": "Die C300X-Display-Benachrichtigungen werden gerade neu geladen. Versuche es gleich noch einmal."
+    },
     "doorbell_video_not_available": {
       "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstützt."
     },

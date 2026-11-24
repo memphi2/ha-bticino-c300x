@@ -1418,6 +1418,18 @@
     "gui_function_patch_required": {
       "message": "Cette action nécessite le patch display C300X. Activez et appliquez d'abord le patch display dans les options de l'intégration."
     },
+    "display_disabled": {
+      "message": "Les notifications de l'écran nécessitent les pages Home Assistant sur l'écran C300X. Activez-les d'abord dans les options de l'intégration."
+    },
+    "unknown_notification_action": {
+      "message": "Un bouton de la notification utilise un ID d'action qui n'est pas configuré dans les actions C300X."
+    },
+    "display_notification_queue_full": {
+      "message": "L'écran C300X contient déjà le nombre maximal de notifications de priorité égale ou supérieure. Fermez-en une ou attendez qu'une expire."
+    },
+    "display_notifications_unloaded": {
+      "message": "Les notifications de l'écran C300X sont en cours de rechargement. Réessayez dans un instant."
+    },
     "doorbell_video_not_available": {
       "message": "La vidéo de sonnette n'est pas activée ou n'est pas prise en charge par l'agent C300X installé."
     },

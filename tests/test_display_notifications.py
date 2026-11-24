@@ -326,19 +326,45 @@ def test_registered_service_handlers_show_dismiss_and_reject_unknown_actions(
             SimpleNamespace(data={"notification_id": "notice"})
         )
         assert notification_payload(entry) == []
-        with pytest.raises(ServiceValidationError, match="unknown_notification_action"):
+        with pytest.raises(ServiceValidationError) as err:
             await handlers.async_show_display_notification(
                 SimpleNamespace(
                     data=data(actions=[{"action_id": "missing", "label": "X"}])
                 )
             )
+        assert err.value.translation_key == "unknown_notification_action"
+        for index in range(MAX_NOTIFICATIONS):
+            await handlers.async_show_display_notification(
+                SimpleNamespace(data=data(str(index), priority="urgent"))
+            )
+        with pytest.raises(ServiceValidationError) as err:
+            await handlers.async_show_display_notification(SimpleNamespace(data=data()))
+        assert err.value.translation_key == "display_notification_queue_full"
+        entry.runtime_data.display_notifications.close()
+        with pytest.raises(ServiceValidationError) as err:
+            await handlers.async_show_display_notification(SimpleNamespace(data=data()))
+        assert err.value.translation_key == "display_notifications_unloaded"
         entry.options["device_ui_enabled"] = False
-        with pytest.raises(ServiceValidationError, match="display_disabled"):
+        with pytest.raises(ServiceValidationError) as err:
             await handlers.async_dismiss_display_notification(
                 SimpleNamespace(data={"notification_id": "notice"})
             )
+        assert err.value.translation_key == "display_disabled"
 
     asyncio.run(run())
+
+
+def test_notify_display_alert_reports_a_refusal_as_a_translated_error(context):
+    from homeassistant.exceptions import ServiceValidationError
+
+    from custom_components.bticino_c300x.display_alerts import async_send_display_alert
+
+    hass, entry, _ = context
+    entry.runtime_data.capabilities = {"display_alerts": True, "memo_led": True}
+    notifications_for_entry(hass, entry).close()
+    with pytest.raises(ServiceValidationError) as err:
+        asyncio.run(async_send_display_alert(hass, entry, "Door open"))
+    assert err.value.translation_key == "display_notifications_unloaded"
 
 
 def test_concurrent_action_is_single_flight(context):

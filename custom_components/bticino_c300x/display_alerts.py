@@ -13,6 +13,7 @@ from .api_errors import C300XAgentApiError
 from .capabilities import entry_device_ui_enabled_or_patch_active
 from .display_notifications import (
     SHOW_SCHEMA,
+    display_notification_service_error,
     notification_id,
     notification_payload,
     show_notification,
@@ -179,7 +180,7 @@ async def async_send_display_alert(
     try:
         show_notification(hass, entry, notice, led=options["led"])
     except ValueError as err:
-        raise ServiceValidationError(str(err)) from err
+        raise display_notification_service_error(err) from err
     if not options["display"]:
         return
     stored = next(

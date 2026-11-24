@@ -1418,6 +1418,18 @@
     "gui_function_patch_required": {
       "message": "This action requires the C300X Display patch. Enable and apply the Display patch in the integration options first."
     },
+    "display_disabled": {
+      "message": "Display notifications need the Home Assistant pages on the C300X display. Turn them on in the integration options first."
+    },
+    "unknown_notification_action": {
+      "message": "A notification button uses an action ID that is not configured in the C300X actions."
+    },
+    "display_notification_queue_full": {
+      "message": "The C300X display already holds the maximum number of notifications with the same or a higher priority. Dismiss one or wait until one expires."
+    },
+    "display_notifications_unloaded": {
+      "message": "The C300X display notifications are being reloaded. Try again in a moment."
+    },
     "doorbell_video_not_available": {
       "message": "Doorbell video is not enabled or is not supported by the installed C300X device agent."
     },

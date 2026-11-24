@@ -7,7 +7,6 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
@@ -50,6 +49,7 @@ from .const import (
 from .display_notifications import (
     DISMISS_SCHEMA,
     SHOW_SCHEMA,
+    display_notification_service_error,
     notifications_for_entry,
     show_notification,
 )
@@ -252,14 +252,14 @@ class _C300XServiceHandlers:
         try:
             show_notification(self._hass, entry, dict(call.data))
         except ValueError as err:
-            raise ServiceValidationError(str(err)) from err
+            raise display_notification_service_error(err) from err
 
     async def async_dismiss_display_notification(self, call: ServiceCall) -> None:
         entry = _entry_for_call(self._hass, call)
         try:
             notifications_for_entry(self._hass, entry).dismiss(call.data["notification_id"])
         except ValueError as err:
-            raise ServiceValidationError(str(err)) from err
+            raise display_notification_service_error(err) from err
 
     async def async_run_action(self, call: ServiceCall) -> None:
         """Run one allowlisted Home Assistant action."""

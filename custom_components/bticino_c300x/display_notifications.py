@@ -10,10 +10,12 @@ from typing import Any
 from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 
 from .capabilities import entry_device_ui_enabled_or_patch_active
 from .dashboard_config import configured_actions
 from .entry_types import BticinoC300XConfigEntry
+from .exceptions import service_validation_error
 from .schema_compat import vol
 
 MAX_NOTIFICATIONS = 8
@@ -192,6 +194,24 @@ class DisplayNotifications:
         self._expiry = None
         self._purge()
         self._schedule()
+
+
+# The ValueError keys show and dismiss raise; each is a translated exception.
+_SERVICE_ERROR_KEYS = frozenset({
+    "display_disabled",
+    "display_notification_queue_full",
+    "display_notifications_unloaded",
+    "unknown_notification_action",
+})
+
+
+def display_notification_service_error(err: ValueError) -> ServiceValidationError:
+    """Return the translated service error for a show or dismiss refusal."""
+
+    key = str(err)
+    if key in _SERVICE_ERROR_KEYS:
+        return service_validation_error(key)
+    return ServiceValidationError(key)
 
 
 def notifications_for_entry(

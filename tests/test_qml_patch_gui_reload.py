@@ -141,6 +141,9 @@ stop() {
     exit 143
 }
 trap stop TERM
+if [ -z "${LD_PRELOAD:-}" ] && [ -f "$C300X_TEST_CRASHES.silent" ]; then
+    while :; do sleep 0.2; done
+fi
 while :; do
     : > "$C300X_TEST_ALIVE"
     sleep 0.2
@@ -720,3 +723,20 @@ def test_the_stand_in_displays_are_out_of_reach_of_a_host_killall(station: Stati
     station.boot()
     for pid in station.running():
         assert Path(f"/proc/{pid}/comm").read_text().strip() == DISPLAY_NAME
+
+
+def test_the_shipped_display_after_a_failed_overlay_needs_a_watchdog_write_of_its_own(
+    overlay: OverlayStation,
+) -> None:
+    """The overlay wrote the file, then crashed; the shipped display that the start script
+    starts then is ready only on its own write, not on the overlay's."""
+
+    overlay.boot()
+    Path(f"{overlay.crashes}.late").write_text("1\n")
+    Path(f"{overlay.crashes}.silent").write_text("")
+    result = subprocess.run([str(SCRIPT), "reload"], capture_output=True, text=True, timeout=120,
+                            env=overlay.script_env(C300X_QML_QT5_STABLE_SECONDS="6",
+                                                   C300X_QML_QT5_START_SECONDS="3"), check=False)
+    assert result.returncode != 0, overlay.events()
+    assert "No display program could be started" in result.stderr
+    assert _starts(overlay)[:3] == ["overlay", "overlay", "plain"]

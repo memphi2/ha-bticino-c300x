@@ -485,7 +485,14 @@ gui_verify() {
     gui_had_mark=
     gui_waited=0
     gui_alive_at=
-    gui_alive_pid=
+    gui_seen_pid=
+    gui_stamp="$GUI_RUN_DIR/started"
+    # Verified again without a new start (the shipped display after a failed
+    # overlay): writes of the program before do not count.
+    if [ "${1:-}" = "again" ]; then
+        gui_stamp="$GUI_RUN_DIR/seen"
+        : > "$gui_stamp"
+    fi
     while :; do
         # A mark set while a write changes the files is the write's own.
         "$GUI_FLOCK" 8
@@ -514,12 +521,17 @@ gui_verify() {
                 gui_result=failed
                 return 0
             fi
-        elif [ "$gui_running" != "$gui_alive_pid" ]; then
-            gui_alive_at=
-            if [ "$QT5_ALIVE_FILE" -nt "$GUI_RUN_DIR/started" ]; then
-                gui_alive_at="$gui_waited"
-                gui_alive_pid="$gui_running"
+        elif [ "$gui_running" != "$gui_seen_pid" ]; then
+            # Another program than the one seen before: only its own writes count.
+            if [ -n "$gui_seen_pid" ]; then
+                gui_stamp="$GUI_RUN_DIR/seen"
+                : > "$gui_stamp"
             fi
+            gui_seen_pid="$gui_running"
+            gui_alive_at=
+        fi
+        if [ -n "$gui_running" ] && [ -z "$gui_alive_at" ] && [ "$QT5_ALIVE_FILE" -nt "$gui_stamp" ]; then
+            gui_alive_at="$gui_waited"
         fi
         if [ -n "$gui_alive_at" ] && [ $((gui_waited - gui_alive_at)) -ge "$QT5_STABLE_SECONDS" ]; then
             gui_result=ready
@@ -567,7 +579,7 @@ gui_cycle() {
         gui_verify
     fi
     if [ "$gui_result" = "overlay_failed" ]; then
-        gui_verify
+        gui_verify again
     fi
     if [ "$gui_result" = "failed" ] && grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null \
         && qt5_original_wrapper_valid "$QT5_WRAPPER_BACKUP"; then

@@ -1453,6 +1453,7 @@ Errors:
 | `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
 | `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
 | `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |
+| `409` | `qt5_recovery_required` | Firmware 3.0.x: the staged agent has no Qt 5 display recovery while overlay files, a quarantine or an unverified display start script remain. The installed agent and its recovery stay untouched. |
 | `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
 | `500` | `update_apply_failed` | Validation or installation failed. |
 | `500` | `out_of_memory` | The agent could not allocate the memory for the update. |

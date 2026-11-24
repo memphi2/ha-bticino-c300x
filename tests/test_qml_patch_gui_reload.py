@@ -501,3 +501,12 @@ def test_an_answer_is_read_only_once_it_is_complete(station: Station) -> None:
     _, stderr = process.communicate(timeout=60)
     assert process.returncode == 0, stderr
     assert "No display program could be started" not in stderr
+
+
+def test_a_requester_that_stopped_waiting_leaves_no_answer_behind(station: Station) -> None:
+    station.boot(C300X_TEST_TEARDOWN="1")
+    result = station.reload(C300X_QML_GUI_BUDGET_SECONDS="0")
+    assert result.returncode == 0, result.stderr
+    assert len(_settled(station)) == 1
+    assert _kinds(station).count("wrapper") == 2
+    assert list((station.run_dir / "done").iterdir()) == []

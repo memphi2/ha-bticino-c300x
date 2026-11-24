@@ -557,10 +557,20 @@ gui_worker() {
         fi
         for gui_request in "$GUI_RUN_DIR"/serving/*; do
             [ -f "$gui_request" ] || continue
-            # Whole or not at all: the requester reads the answer as it appears.
-            printf '%s\n' "$gui_answer" > "$GUI_RUN_DIR/done/${gui_request##*/}.tmp" \
-                && mv -f "$GUI_RUN_DIR/done/${gui_request##*/}.tmp" "$GUI_RUN_DIR/done/${gui_request##*/}"
-            rm -f "$gui_request"
+            gui_request="${gui_request##*/}"
+            # Only for a requester still waiting; whole or not at all, as it
+            # reads the answer as soon as it appears.
+            if kill -0 "${gui_request%%.*}" 2>/dev/null; then
+                printf '%s\n' "$gui_answer" > "$GUI_RUN_DIR/done/$gui_request.tmp" \
+                    && mv -f "$GUI_RUN_DIR/done/$gui_request.tmp" "$GUI_RUN_DIR/done/$gui_request"
+            fi
+            rm -f "$GUI_RUN_DIR/serving/$gui_request"
+        done
+        # Answers of requesters that stopped waiting are never read.
+        for gui_request in "$GUI_RUN_DIR"/done/*; do
+            [ -f "$gui_request" ] || continue
+            gui_request="${gui_request##*/}"
+            kill -0 "${gui_request%%.*}" 2>/dev/null || rm -f "$GUI_RUN_DIR/done/$gui_request"
         done
     done
 }

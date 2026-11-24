@@ -20,7 +20,12 @@ a safe audio backend continues separately; no unsupported audio path is enabled.
 The first authorized device test should establish agent startup, authenticated
 status/setup reads, model/firmware reporting, discovery, and continued vendor
 operation, plus one on-demand video stream and one ring call (video is on after
-bootstrap, as on a C300X). It is not a display, routing migration or audio trial.
+bootstrap, as on a C300X). As on a C300X, the first HA start after setup creates
+the HA media user in Flexisip and patches the routing binary
+`bt_answering_machine`; [step 2](#first-authorized-installation-and-checks)
+lists what changes. Display pages have their own
+[activation phase](#display-activation-by-reboot-device-test). It is not an
+audio trial.
 
 **Test baseline:** use C100X firmware 1.5.8 in its normal manufacturer
 configuration, with at most the changes needed to obtain root/SSH access.
@@ -34,8 +39,8 @@ light** once and verify that the intended light switches on. For **Door
 unlock**, have an authorized person at the intended door; press the
 corresponding button once and verify the physical release. If the target is
 unknown, skip the action. Report each result separately; an accepted HA
-service call is not proof that the output operated. Neither test requires
-opening the camera, enabling video, creating a SIP user or changing routes.
+service call is not proof that the output operated. Neither action uses the
+camera, the HA media user or the routing change.
 
 The C100X firmware codec is stock Speex/8000; HA and the browser still get
 PCMU through the agent's transcode. Firmware PCMU is unsupported on the
@@ -56,7 +61,8 @@ it does not authorize media activation during this test.
   Routing restoration checks complete known firmware identity; GUI-free restore
   and uninstall recovery guards have temporary-copy regression tests.
 - Additional display pages, physical-key navigation, silent/wake Notify and
-  read-only text memos exist as offline implementations. **They are not activated.**
+  read-only text memos exist as offline implementations. **They stay inactive
+  until the display activation below.**
 - GUI restart remains unavailable. Display pages, ringer mute and key tone stay
   unavailable until the separate [display activation](#display-activation-by-reboot-device-test)
   is confirmed in its trial boot. Explicit GUI-install requests must still fail
@@ -67,13 +73,16 @@ it does not authorize media activation during this test.
   The [audio investigation](dev/c100x-audio-analysis.md) establishes concrete vendor
   playback/ownership hazards. Integrated safety guards block incompatible
   playback and startup cleanup; they do not add a local speaker/TTS backend.
-- Starting the agent is not permission to create a media user, patch routing,
-  migrate Companion/MQTT, activate streams, change codecs or operate a door.
+- With video on, HA creates its media user and patches routing on its first
+  start, as on a C300X; that is part of this test. MQTT/Companion migration,
+  codec changes and door or light actions outside the agreed checks are not.
 
 The issue #51 field report describes Companion installed and non-stock SIP
 routes. SIP users come from manufacturer app provisioning; Companion's presence
-does not establish that it created those users. Preserve accounts, credentials,
-routes and existing Companion configuration. The four reported tool/service/hash
+does not establish that it created those users. The media-user setup only adds
+its own lines and keeps every existing account and credential. It refuses a
+`route.conf` that is a regular file or links anywhere but `route_int.conf` or
+`route_ext.conf` (`unsupported_active_route`) and then writes nothing. The four reported tool/service/hash
 questions are cleared offline and are **not** outstanding prerequisites. Exact
 GUI activation/readiness/recovery on the device remains unproven. See the
 [field-report evidence](dev/c100x-field-report.md).
@@ -169,9 +178,12 @@ symlink targets. Do not dereference links while recording their identity.
 | Agent runtime | Restarts only the native agent, writes/removes its PID file in its directory; completing HA setup can save callback configuration there. |
 | Staging | Uploads use `.new`; init uses `.c300x-native-agent-init.new` and `/etc/init.d/c300x-native-agent.new`. Firewall staging uses unique sibling files and `/tmp/c300x-firewall*` files. Inspect unexpected leftovers; never wildcard-delete them. |
 
-IPv6 firewall, vendor GUI, routing binaries, SIP accounts and Companion are not
-intended first-test writes. Their snapshots are comparison/recovery evidence, not
-permission to overwrite them during rollback. The original C100X 1.5.8 firewall
+The bootstrap does not write the IPv6 firewall, the vendor GUI, the routing
+binary, SIP accounts or Companion. The first HA start afterwards, not the
+bootstrap, adds the HA media user and patches the routing binary
+([step 2](#first-authorized-installation-and-checks)). The snapshots are
+comparison/recovery evidence, not permission to overwrite them during rollback.
+The original C100X 1.5.8 firewall
 paths above and `/etc/network/if-pre-up.d/iptables6` are regular files with mode
 0100 in the extracted image; preserve the actual device's recorded metadata,
 not a guessed 0755 mode.
@@ -320,8 +332,9 @@ accounts unchanged; their presence is not permission to migrate them.
    Use a trusted isolated network: the legacy bootstrap SSH client currently does
    not pin host keys (`known_hosts=None`). The manual backup SSH connection above
    must still verify its host key; model/package guards are not host authentication.
-6. Follow the first-test restrictions below. Do not enable display, MQTT migration,
-   media-user setup or media features just to clear a Repair or populate a card.
+6. Follow the first-test steps below. Video and the HA media user stay at their
+   ticked defaults. Do not enable display or MQTT migration just to clear a
+   Repair or populate a card.
 
 ## Lovelace Card Setup
 
@@ -334,9 +347,8 @@ For a dashboard with just the first two actions, use Home Assistant's built-in
 Entities card and select the stair-light and door-unlock buttons from this
 C100X. Do not substitute a similarly named button from another entry.
 
-On the test dashboard select **Edit dashboard > Add card**. For the initial
-setup phase, confirm registration but do not enable media merely to obtain
-a camera entity. A missing/unavailable camera must leave media start buttons
+On the test dashboard select **Edit dashboard > Add card**. Video is on after
+setup, so the C100X camera entity exists. A missing/unavailable camera must leave media start buttons
 disabled and must not request the microphone. GUI restart, Notify sound and TTS
 are not card features to enable in this test; device ringer mute and key tone only
 after the display activation below.
@@ -420,7 +432,24 @@ again, as on a C300X.
    Video/media and the HA media user are ticked by default, as on a C300X; keep
    them ticked and leave display installation disabled. After confirming the
    host/model and unchanged vendor operation, finish setup; do not invoke device
-   actions or MQTT migration. Afterwards record `GET /api/v1/device-user`.
+   actions or MQTT migration. The first HA start then sets up the media user,
+   as on a C300X. Expect exactly these device changes:
+   - `/home/bticino/bin/bt_answering_machine` changes from the stock 1.5.8 hash
+     `cc53dd834361e8a76268b108ce2562b8447d597798dd2f136ce4707142485e12` to the
+     patched `86caa9773895063b44e680e2508c7a9fb5579b89e2a484180d4c6a3536afa6b3`
+     (computed offline from the stock file). The stock copy is kept under
+     `/home/bticino/cfg/extra/c300x-device-file-backups/original/home/bticino/bin/`.
+   - In the Flexisip `users/` directory, `users.db.txt` gains one
+     `homeassistant-…` line, `accounts.txt` its label line, and the
+     `alluser` route in `route_int.conf` gains that user as one more target
+     (`route_ext.conf` never has it). Every existing account and target stays.
+
+   Afterwards record `GET /api/v1/device-user`: `homeassistant_user_present`,
+   `routes_consistent` and `device_routing_applied` true,
+   `device_routing_state` `patched`, `device_routing_backup_present` true, no
+   `error`. The **Home Assistant media user** switch is on. `unsupported_active_route`
+   means a non-stock `route.conf` (for example Companion's): nothing was
+   written and video/calls cannot be tested on that station; report it.
 3. Check authenticated setup/status, C100X/1.5.8 identity, discovery and available
    capabilities. Display/mute/key-tone/GUI-restart capabilities must remain false
    until the display activation phase.
@@ -428,7 +457,12 @@ again, as on a C300X.
    to try it. No-auth access must remain disabled.
 4. Compare GUI/routing/provisioned-account identities with
    the pre-test record. Check normal physical keys and vendor app operation.
-   A changed binary hash or missing account is a stop condition.
+   Stop on any of these: a GUI file (`BtClass100`, `BtClass100_qws`, the QML
+   files) changed; `bt_answering_machine` has neither of the two hashes from
+   step 2, or its stock copy is missing; a provisioned account from the
+   pre-test record is missing or changed, or a route lost a target it had;
+   any Flexisip change beyond those in step 2; the vendor app no longer
+   rings or connects; a physical key stopped working.
 5. Observe agent uptime and errors while idle. Record the actual observation
    duration, not a generic stability claim. Reboot persistence,
    ring/media/audio and update/remove tests need separately agreed phases.
@@ -545,10 +579,13 @@ substitute for its pre-test backup.
 
 ### Concrete First-Test Rollback
 
-This procedure restores only the paths changed by the agent-only installer. It
-does not recover an unknown GUI restart, media/routing migration, app provisioning
-change, power loss or inaccessible SSH. Stop and request assistance for those cases;
-do not substitute stock firmware files for the device's own pre-test files.
+This procedure restores only the paths changed by the agent-only installer. Undo
+the media-user setup first, while the agent still runs: turning the **Home
+Assistant media user** switch off restores the stock routing binary from its
+backup; the Flexisip user lines stay. The procedure does not recover an unknown
+GUI restart, app provisioning change, power loss or inaccessible SSH. Stop and
+request assistance for those cases; do not substitute stock firmware files for
+the device's own pre-test files.
 
 1. Disable the C100X entry on the separate HA test instance and close its cards.
    Retain the failed installation's redacted logs and the private backup. Verify
@@ -597,8 +634,8 @@ do not substitute stock firmware files for the device's own pre-test files.
 | `/etc/network/if-pre-up.d/iptables` | Restore archived content, owner and mode. | Remove only the test-created file. |
 
    The IPv6 firewall snapshot is for comparison, not routine restoration: this
-   bootstrap does not write it. Any unexpected IPv6, GUI, Flexisip or Companion
-   change leaves this rollback's scope and requires investigation. Preserve all
+   bootstrap does not write it. Any IPv6, GUI or Companion change, or a Flexisip
+   change beyond the media user from step 2, leaves this rollback's scope and requires investigation. Preserve all
    managed backup-root material for the maintainer; do not merge an archived
    backup tree over new recovery data or delete it merely because it was absent
    before the test.
@@ -644,8 +681,8 @@ Report the attachment filename, SHA256, source commit, HA version, agent version
 reported model/firmware, observation duration and exact step that failed. Include
 the integration's **Download diagnostics** output only after reviewing/redacting
 identifiers, addresses and any sensitive fields. Add short redacted HA log excerpts,
-capability flags, whether the agent is stopped/running/unknown, and whether GUI/
-routing hashes stayed unchanged. For card problems include browser/version,
+capability flags, whether the agent is stopped/running/unknown, whether the GUI
+hashes stayed unchanged and which of the two step-2 hashes the routing binary has. For card problems include browser/version,
 resource URL/hash, screenshot and console error with private details removed.
 Never upload the private tar archive, config files, tokens, passwords, SIP accounts
 or complete routing configuration. Do not retry or force unsupported controls.

@@ -123,12 +123,14 @@ All requests stay in a memory-only transport. Sound-bearing commands are
 rejected: the stock queued beep lacks a verified call-safe cancellation contract.
 This proves neither device wake behavior nor enabled Notify delivery.
 
-This build is not yet an installed or advertised display adapter. The disk
-trial/readiness/recovery transaction below is implemented; supervised GUI
-restart and integration into the production activation route remain incomplete.
-Notify's silent/wake UI is implemented offline; production activation and sound
-remain unavailable. Disk apply/restore report `runtime_verified: false`;
-successful disk installation alone must not enable a capability.
+The display adapter is installed and advertised only through the
+[activation by reboot](#activation-by-reboot): the disk trial below switches
+the files, the next boot runs them and the agent confirms them in that trial
+boot. A supervised GUI restart does not exist and is not needed for it.
+Notify's silent/wake alerts follow the confirmed adapter; sound stays
+unavailable. Disk apply/restore report `runtime_verified: false`; successful
+disk installation alone must not enable a capability, only the trial-boot
+confirmation does.
 
 `C100XMemos.qml` now provides a separate read-only text list/detail page through
 the existing loopback `/ui/memos` endpoint. It bounds responses/entries, cancels

@@ -405,8 +405,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 else:
                     await self._async_adopt_agent_unique_id(api_token=api_token)
                     try:
-                        # C100X trials must preserve Companion; unknown identity
-                        # is not permission to migrate another service either.
+                        # Legacy MQTT is migrated on a C300X only; a C100X or
+                        # an unknown model is no permission to stop a service.
                         if login_model(self._setup_agent_info) == "C300X":
                             await async_migrate_legacy_mqtt_for_connection(
                                 self.hass,

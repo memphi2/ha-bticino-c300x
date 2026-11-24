@@ -26,6 +26,10 @@ def _fake_tool(path: Path, name: str) -> None:
         "if name == 'sshpass' and sys.argv[-1].endswith(\"qml_patch.sh' apply\"):\n"
         "    print(os.environ['QML_RESULT'])\n"
         "    sys.exit(int(os.environ['QML_EXIT']))\n"
+        "if name == 'sshpass' and sys.argv[-1].endswith(\"qml_patch.sh' status\"):\n"
+        "    answers = json.loads(os.environ.get('QML_STATUS', '[]'))\n"
+        "    seen = sum(1 for line in open(os.environ['COMMAND_LOG']) if \"qml_patch.sh' status\" in line)\n"
+        "    print(json.dumps(answers[min(seen, len(answers)) - 1]))\n"
         "if name == 'sshpass' and 'ssh' in sys.argv "
         "and \"mv -f '\" in sys.argv[-1] and '.bundle.json.new' in sys.argv[-1]:\n"
         "    if os.environ.get('FAIL_MANIFEST') == '1': sys.exit(1)\n"
@@ -46,7 +50,7 @@ def _run_install(
     tmp_path: Path, *, fail_target: str = "", fail_startup: bool = False,
     remote_dir: str = "/synthetic/agent", apply_qml: bool = False,
     qml_result: str = "", qml_exit: int = 0, upload_agent: bool = True,
-    fail_manifest: bool = False, fail_cleanup: bool = False,
+    fail_manifest: bool = False, fail_cleanup: bool = False, qml_status: list | None = None,
 ):
     tree = tmp_path / "checkout"
     scripts = tree / "scripts"
@@ -76,6 +80,8 @@ def _run_install(
             "FAIL_STARTUP": "1" if fail_startup else "0",
             "QML_RESULT": qml_result,
             "QML_EXIT": str(qml_exit),
+            "QML_STATUS": json.dumps(qml_status or []),
+            "C300X_DISPLAY_RESTART_POLL_SECONDS": "0",
             "REMOTE_MANIFEST": str(manifest),
             "REMOTE_OBSOLETE_SOURCE": str(obsolete),
             "FAIL_MANIFEST": "1" if fail_manifest else "0",
@@ -338,3 +344,30 @@ def test_startup_refuses_unsafe_symlink_targets(startup_tree, target):
         assert victim.read_text() == "do not change"
     else:
         assert not list(victim.iterdir())
+
+
+def test_a_display_restart_still_running_is_waited_for(tmp_path):
+    """The apply answer says the restart is still in flight: the status settles it."""
+
+    pending = {**QML_SUCCESS, "gui_running": False, "qt5_overlay": "off", "gui_restart": "pending"}
+    settled = {"ok": True, "patched": True, "core_patched": True, "gui_running": True,
+               "qt5_overlay": "active", "gui_restart": "idle"}
+    result, calls = _run_install(
+        tmp_path, apply_qml=True, qml_result=json.dumps(pending),
+        qml_status=[{**pending}, settled],
+    )
+    assert result.returncode == 0, result.stderr
+    assert sum("qml_patch.sh' status" in call[-1] for call in calls) == 2
+    assert (tmp_path / "remote-bundle.json").read_text() == "new manifest\n"
+
+
+def test_a_display_restart_that_ends_failed_still_fails_the_install(tmp_path):
+    pending = {**QML_SUCCESS, "gui_running": False, "qt5_overlay": "off", "gui_restart": "pending"}
+    failed = {"ok": True, "patched": True, "core_patched": True, "gui_running": True,
+              "qt5_overlay": "failed", "gui_restart": "idle"}
+    result, _calls = _run_install(
+        tmp_path, apply_qml=True, qml_result=json.dumps(pending), qml_status=[failed],
+    )
+    assert result.returncode != 0
+    assert "QML patch verification failed" in result.stderr
+    assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"

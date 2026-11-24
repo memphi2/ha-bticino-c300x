@@ -211,6 +211,25 @@ fi
 
 if [[ "$APPLY_QML" == "1" ]]; then
     qml_result="$(ssh_cmd "C300X_AGENT_DIR='$REMOTE_DIR' C300X_QML_SOURCE_DIR='$REMOTE_DIR/qml' '$REMOTE_DIR/qml_patch.sh' apply")"
+    # A display restart still running on the station is not a failure: wait for it.
+    restart_wait="${C300X_DISPLAY_RESTART_WAIT_SECONDS:-180}"
+    while (( restart_wait > 0 )) && python3 -c '
+import json, sys
+try:
+    result = json.load(sys.stdin)
+except (ValueError, UnicodeError):
+    sys.exit(1)
+sys.exit(0 if isinstance(result, dict) and result.get("gui_restart") == "pending" else 1)
+' <<<"$qml_result"; do
+        sleep "${C300X_DISPLAY_RESTART_POLL_SECONDS:-2}"
+        restart_wait=$(( restart_wait - ${C300X_DISPLAY_RESTART_POLL_SECONDS:-2} ))
+        qml_status="$(ssh_cmd "C300X_AGENT_DIR='$REMOTE_DIR' '$REMOTE_DIR/qml_patch.sh' status")"
+        qml_result="$(python3 -c '
+import json, sys
+result, status = json.loads(sys.argv[1]), json.loads(sys.argv[2])
+print(json.dumps({**result, **status}) if isinstance(status, dict) else sys.argv[1])
+' "$qml_result" "$qml_status" 2>/dev/null || printf '%s' "$qml_result")"
+    done
     # The device can exit zero while reporting a failed GUI reload in JSON.
     python3 -c '
 import json

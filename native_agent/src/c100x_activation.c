@@ -1,4 +1,5 @@
 #include "c100x_activation.h"
+#include "c100x_payload.h"
 #include "device_detect.h"
 #include "json_util.h"
 
@@ -6,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 /* The display's lease must hold this long in the trial boot before a check. */
@@ -122,10 +122,7 @@ static int start(struct c100x_activation *activation, enum c100x_display_action 
 {
     char *argv[] = {"/bin/sh", "-c", "exec /bin/sh \"$0\" \"$1\" 2>&1", activation->bundle,
         (char *)action_names[action], NULL};
-    struct stat info;
-
-    /* The same checks as the start script: a regular, single-link payload. */
-    if (lstat(activation->bundle, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1) {
+    if (!c100x_payload_usable(activation->bundle)) {
         set_error(activation, action, "payload unavailable");
         if (action == C100X_ACTION_STATUS) {
             activation->known = 0;

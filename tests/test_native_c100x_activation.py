@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
-SOURCES = ("c100x_activation.c", "command_job.c", "time_util.c", "json_util.c", "json_parse.c",
+SOURCES = ("c100x_activation.c", "c100x_payload.c", "command_job.c", "time_util.c", "json_util.c", "json_parse.c",
            "device_detect.c", "string_util.c")
 
 

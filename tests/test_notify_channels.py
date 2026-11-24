@@ -145,17 +145,42 @@ def test_invalid_switches_are_refused_before_anything_happens(tmp_path, monkeypa
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("data", [
-    {"led": True, "wake_duration": 0, "sound_duration": 0, "severity": "error"},
-    {"tts": True, "wake_duration": 0, "tts_engine": "tts.piper"},
-    {"tts": True, "led": True, "notification_id": "door", "expires_in": 60},
-])
-def test_fields_of_a_channel_that_is_off_may_be_zero_or_apply_elsewhere(tmp_path, monkeypatch, data):
+SPOKEN = "media-source://tts/{}?message=Test message&language=None"
+
+
+@pytest.mark.parametrize("data,notice,engine", [
+    ({"led": True, "wake_duration": 0, "sound_duration": 0, "severity": "error"},
+     {"id": None, "priority": "urgent", "expires_in": 3600}, None),
+    ({"tts": True, "wake_duration": 0, "tts_engine": "tts.piper"}, None, "tts.piper"),
+    ({"tts": True, "led": True, "notification_id": "door", "expires_in": 60},
+     {"id": "door", "priority": "normal", "expires_in": 60}, "default"),
+], ids=["led", "tts", "tts+led"])
+def test_fields_of_a_channel_that_is_off_may_be_zero_or_apply_elsewhere(
+    tmp_path, monkeypatch, data, notice, engine,
+):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             entry.runtime_data.capabilities["memo_led"] = True
+            before = hass.loop.time()
             await send(hass, entry, data=data)
+            after = hass.loop.time()
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+            assert [call["media_content_id"] for call in spoken] == (
+                [SPOKEN.format(engine)] if engine else [])
+            store = entry.runtime_data.display_notifications
+            if notice is None:
+                # Speech alone stores nothing, so nothing counts for the LED.
+                assert store is None or not store._items
+                return
+            [item] = store._items.values()
+            if notice["id"] is None:
+                assert len(item["id"]) == 32  # generated uuid4 hex
+            else:
+                assert item["id"] == notice["id"]
+            assert (item["title"], item["message"], item["priority"], item["led"]) == (
+                "Home Assistant", "Test message", notice["priority"], True)
+            assert before + notice["expires_in"] <= item["deadline"] <= after + notice["expires_in"]
+            assert store.has_unread() is True
     asyncio.run(run())
 
 

@@ -710,6 +710,11 @@ If the readback differs, the endpoint returns `409 Conflict` with
 `mode`. A rejected or invalid write response, an invalid readback, or a transport
 failure returns `502 Bad Gateway`. An ACK alone never confirms a mode change.
 
+In user-only mode (C100X with a regular `route.conf` of another program) the
+endpoint sends nothing and returns `409 Conflict` with
+`error: "foreign_active_route"`: a vendor mode change may relink `route.conf`
+and so replace the other program's file.
+
 ### `GET /api/v1/ringer`
 
 Authentication: normal API token.
@@ -1171,6 +1176,7 @@ Returns non-sensitive Flexisip device-user and routing status. Important fields:
 - `writable_files_present`
 - `media_identity_available`
 - `routes_consistent`
+- `user_only`
 - `routing_state`
 - `routing_error`
 
@@ -1178,10 +1184,16 @@ The endpoint must derive the local SIP/domain state from device files. It must
 not hardcode device-specific SIP domains or account ids.
 
 An active route must use the recognized internal or external route symlink.
-An unrecognized link or regular active-route file reports `supported: false`,
-`routes_consistent: false` and `unsupported_active_route`. Internal readiness
-requires the HA destination in the active route; external forwarding deliberately
-excludes it.
+An unrecognized link reports `supported: false`, `routes_consistent: false` and
+`unsupported_active_route`; so does a regular active-route file on a C300X.
+Internal readiness requires the HA destination in the active route; external
+forwarding deliberately excludes it.
+
+On a C100X a regular `route.conf` belongs to another program (for example
+Companion). Running next to such a route owner is not supported; the agent only
+avoids breaking it. It reports `supported: true` and `user_only: true`, and
+`routes_consistent` then only needs the HA account line when `accounts.txt`
+exists. `user_only` is `false` in every other case.
 
 ### `POST /api/v1/maintenance/device-user/actions/ensure-homeassistant`
 
@@ -1205,6 +1217,16 @@ Unrecognized active routing is rejected before modifying routing binaries or SIP
 files. Applying the binary patch requires a complete known firmware hash, not
 only matching instruction ranges. These checks do not authorize replacing
 third-party routing files with stock configuration.
+
+In user-only mode (C100X, regular `route.conf`) the action writes only
+`users.db.txt` (one `homeassistant-<uuid>` line) and, when the file exists,
+`accounts.txt` (one `<label>|homeassistant` line). It does not patch the
+routing program and never reads or writes `route.conf`, `route_int.conf` or
+`route_ext.conf`. Before writing, it records which of the two files got a line
+in `/home/bticino/cfg/extra/c300x-device-file-backups/media-user-added`.
+On-demand video and its talkback can use the user; ring calls are not forwarded
+to Home Assistant. Agent removal (`--restore-media-patches`) takes exactly those
+lines out again and deletes the record; without a record it changes nothing.
 
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 

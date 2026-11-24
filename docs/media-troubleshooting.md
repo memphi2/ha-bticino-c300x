@@ -146,6 +146,15 @@ file is not one of the known manufacturer links, and the media-user setup
 leaves it untouched. Keep any third-party configuration and report the redacted
 error; do not replace the route with a stock file or run the setup repeatedly.
 
+On a C100X whose active routing file is a regular file of another program (for
+example Companion), the Repair **Another program owns the station's call
+routing** appears instead. Running next to Companion or any other third-party
+route owner is not supported. Home Assistant then only adds its own media user,
+so that nothing breaks: on-demand video and its talkback can work, ring calls
+are not forwarded to Home Assistant, the **Forwarding** setting cannot be
+changed from Home Assistant, and the routing file is never changed. Removing the
+device agent takes the media user out again.
+
 ## Preview Starts but Answer Fails
 
 1. Keep only one answer attempt active.

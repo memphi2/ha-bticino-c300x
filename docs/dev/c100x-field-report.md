@@ -52,9 +52,13 @@ The station used WLAN and root2 SSH; HA was Container 2026.11.2 with Python
   destination, while `#1` gave 640x480. That agrees with the enforced Qt5
   low selector, not proof of an agent RTSP stream, capture, or talkback.
 - The active SIP route is a regular file on this installation. Do not convert
-  it to a symlink or replace it to pass the media-user check.
-  The expected self-test result is `unsupported_active_route`; the text-only
-  fixture below does not grant permission to edit the live file.
+  it to a symlink or replace it to pass the media-user check. Running next to
+  Companion is not supported. On a C100X the agent now uses the user-only mode
+  for such a file (#51 finding 4): it adds only its media user to
+  `users.db.txt`/`accounts.txt`, never touches `route.conf`, refuses Forwarding
+  changes with `foreign_active_route`, and HA shows the user-only Repair.
+  Agent removal takes the added lines out. The text-only fixture below does not
+  grant permission to edit the live file.
 - The reporter restored the recorded baseline **manually**. Neither reboot
   survival nor the packaged removal script was tested on hardware.
   An earlier post-boot sweep reportedly stopped **Companion** started at S45.

@@ -1489,6 +1489,10 @@
     }
   },
   "issues": {
+    "media_user_only": {
+      "title": "Another program owns the station's call routing",
+      "description": "{entry_title}: the active call route of this station (route.conf) is a regular file that belongs to another program, for example Companion. Running this integration next to Companion or any other third-party route owner is not supported. To avoid breaking anything, Home Assistant only added its own media user: on-demand video and its talkback can work, but ring calls are not forwarded to Home Assistant, the Forwarding setting cannot be changed from Home Assistant, and the route file is never changed. Removing the device agent takes the media user out again. For full operation, remove the third-party route owner first, then run the media-user repair."
+    },
     "c100x_display_boot_check_failed": {
       "title": "C100X display check failed at the station start",
       "description": "{entry_title}: when the station started, the device agent could not check the pending display activation (its display package was missing or the check failed, for example after a firmware update). The agent started anyway. Display activation stays off and the backups of the original pages are kept. Press Restore original display to go back to it; if that fails, update the device agent with its repair first. If it happens again, report it with the agent diagnostics."

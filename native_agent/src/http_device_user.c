@@ -94,6 +94,7 @@ static void device_user_status_body(
         "\"writable_files_present\":%s,"
         "\"media_identity_available\":%s,"
         "\"routes_consistent\":%s,"
+        "\"user_only\":%s,"
         "\"device_routing_supported\":%s,"
         "\"device_routing_applied\":%s,"
         "\"device_routing_state\":%s,"
@@ -119,6 +120,7 @@ static void device_user_status_body(
         status->writable_files_present ? "true" : "false",
         status->media_identity_available ? "true" : "false",
         status->routes_consistent ? "true" : "false",
+        status->user_only ? "true" : "false",
         routing_status.supported ? "true" : "false",
         routing_status.patched ? "true" : "false",
         routing_state_json,
@@ -200,7 +202,8 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
         send_error(fd, "device_user_update_failed", state->status.error);
         return 0;
     }
-    if (!c300x_device_routing_apply(&state->routing, error, sizeof(error))) {
+    /* User-only mode: no forwarding, so the routing program stays stock. */
+    if (!state->status.user_only && !c300x_device_routing_apply(&state->routing, error, sizeof(error))) {
         send_error(fd, "device_routing_failed", error);
         return 0;
     }

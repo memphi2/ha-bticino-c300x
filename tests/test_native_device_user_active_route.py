@@ -1,4 +1,8 @@
-"""Known forwarding modes versus foreign/Companion active routes, without devices."""
+"""Known forwarding modes versus foreign active routes, without devices.
+
+A C300X refuses a regular route.conf. A C100X adds only its media user and
+never touches the file (user-only mode); agent removal takes the lines out.
+"""
 
 import subprocess
 from pathlib import Path
@@ -27,8 +31,9 @@ def active_route_binary(request, tmp_path_factory):
     return binary
 
 
-def run(binary, path, action):
-    return subprocess.run([str(binary), str(path), action], capture_output=True, text=True, timeout=10)
+def run(binary, path, action, **env):
+    return subprocess.run([str(binary), str(path), action], capture_output=True, text=True, timeout=10,
+                          env={"PATH": "/usr/bin:/bin", **env})
 
 
 def snapshot(path):
@@ -101,3 +106,59 @@ def test_active_route_modes(active_route_binary, tmp_path, mode, existing):
     ensured = snapshot(users)
     assert run(active_route_binary, tmp_path, "ensure").returncode == 0
     assert snapshot(users) == ensured
+
+
+@pytest.mark.parametrize("mode", ["regular", "regular_ha"])
+@pytest.mark.parametrize("accounts", [True, False])
+def test_c100x_foreign_route_adds_only_the_user_and_removal_takes_it_out(
+        active_route_binary, tmp_path, mode, accounts):
+    users = tmp_path / "users"
+    users.mkdir()
+    (users / "users.db.txt").write_text(
+        "version:1\nc100x@plant.example md5:synthetic ;\ncompanion@plant.example md5:synthetic ;\n")
+    if accounts:
+        (users / "accounts.txt").write_text("App|app\nCompanion|companion\n")
+    (users / "route_int.conf").write_text(OFFICIAL)
+    (users / "route_ext.conf").write_text(OFFICIAL)
+    (users / "route.conf").write_text(
+        OFFICIAL + (f"<sip:other@plant.example> <sip:{HA}>\n" if mode == "regular_ha" else ""))
+    before = snapshot(users)
+    status = run(active_route_binary, tmp_path, "status", TEST_MODEL="c100x")
+    assert "supported=1 consistent=1" in status.stdout and "user_only=1" in status.stdout
+    assert status.stdout.rstrip().endswith("status_error=")
+    assert snapshot(users) == before
+    result = run(active_route_binary, tmp_path, "ensure", TEST_MODEL="c100x")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "supported=1 consistent=1" in result.stdout and "user_only=1" in result.stdout
+    after = snapshot(users)
+    for name in ("route.conf", "route_int.conf", "route_ext.conf"):
+        assert after[name] == before[name]  # byte-identical, still a regular file
+    added = (users / "users.db.txt").read_text().removeprefix(before["users.db.txt"][0].decode())
+    assert added.startswith("homeassistant-") and added.count("\n") == 1
+    if accounts:
+        assert (users / "accounts.txt").read_text() == "App|app\nCompanion|companion\nHome Assistant|homeassistant\n"
+    else:
+        assert not (users / "accounts.txt").exists()
+    record = tmp_path / "backups" / "media-user-added"
+    assert record.read_text() == "users\n" + ("accounts\n" if accounts else "")
+    assert run(active_route_binary, tmp_path, "ensure", TEST_MODEL="c100x").returncode == 0
+    assert snapshot(users) == after
+    removed = run(active_route_binary, tmp_path, "remove", TEST_MODEL="c100x")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert snapshot(users) == before and not record.exists()
+    assert run(active_route_binary, tmp_path, "remove").returncode == 0
+    assert snapshot(users) == before
+    response = run(active_route_binary, tmp_path, "http", TEST_MODEL="c100x", TEST_EXPECT_OK="1")
+    assert response.returncode == 0, response.stdout + response.stderr
+    assert snapshot(users)["route.conf"] == before["route.conf"]
+
+
+def test_c100x_unknown_link_and_c300x_regular_route_stay_refused(active_route_binary, tmp_path):
+    users = tmp_path / "users"
+    users.mkdir()
+    (users / "users.db.txt").write_text("version:1\nc100x@plant.example md5:synthetic ;\n")
+    (users / "route.conf").symlink_to("companion.conf")
+    before = snapshot(users)
+    result = run(active_route_binary, tmp_path, "ensure", TEST_MODEL="c100x")
+    assert result.returncode == 1 and "error=unsupported_active_route" in result.stdout
+    assert snapshot(users) == before and not (tmp_path / "backups").exists()

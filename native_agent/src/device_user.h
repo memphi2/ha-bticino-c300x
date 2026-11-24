@@ -24,6 +24,7 @@ struct c300x_device_user_status {
     int writable_files_present;
     int media_identity_available;
     int routes_consistent;
+    int user_only;
     char account_label[C300X_DEVICE_USER_LABEL_LEN];
     char error[C300X_DEVICE_USER_ERROR_LEN];
 };
@@ -46,5 +47,10 @@ int c300x_device_user_ensure_homeassistant(
     char *error,
     size_t error_len
 );
+/* C100X only: route.conf is a regular file another program owns. The agent
+ * then adds its media user without forwarding and never touches route.conf. */
+int c300x_device_user_route_foreign(void);
+/* Removes the media-user lines the user-only mode added; no record, no change. */
+int c300x_device_user_remove_added(char *error, size_t error_len);
 
 #endif

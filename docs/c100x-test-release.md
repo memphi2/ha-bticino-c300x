@@ -436,6 +436,20 @@ on does not silently turn a saved refusal or an absent permission into approval.
 6. **Video.** Video is on after bootstrap. Start one on-demand stream from the HA
    card and check picture and sound; then ring from the outdoor station and
    answer the call in HA. Report both separately, with the agent diagnostics.
+7. **Foreign route file (safety check only).** Only on a station whose
+   `/etc/flexisip/users/route.conf` already is a regular file of another
+   program; never create one for the test. Running next to such a program is
+   not supported; this only checks that HA breaks nothing. Before setup record
+   `ls -l` and `sha256sum` of `route.conf`, `route_int.conf`, `route_ext.conf`,
+   `users.db.txt` and `accounts.txt` in that directory. After setup with the
+   media user allowed: `GET /api/v1/device-user` shows `user_only: true`;
+   HA shows the Repair "Another program owns the station's call routing";
+   `route.conf`, `route_int.conf` and `route_ext.conf` are byte-identical and
+   `route.conf` is still a regular file; `users.db.txt` has exactly one added
+   `homeassistant-` line and `accounts.txt` one added `|homeassistant` line.
+   A Forwarding change in HA is refused (`foreign_active_route`) and changes no
+   file. Ring calls are not forwarded to HA there, so step 6's ring call does
+   not apply. After agent removal all five files match the recorded hashes again.
 
 ## Display Activation by Reboot (device test)
 

@@ -178,7 +178,8 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
         return (
             self._status.get("homeassistant_user_present") is True
             and self._status.get("routes_consistent") is True
-            and self._status.get("device_routing_applied") is True
+            and (self._status.get("device_routing_applied") is True
+                 or self._status.get("user_only") is True)
             and (
                 self._status.get("media_user_label_applied") is True
                 # The label is written into the Display patch files. An agent

@@ -374,6 +374,7 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
         "writable_files_present": status_bool("writable_files_present"),
         "media_identity_available": status_bool("media_identity_available"),
         "routes_consistent": status_bool("routes_consistent"),
+        "user_only": status_bool("user_only"),
         "device_routing_supported": status_bool("device_routing_supported"),
         "device_routing_applied": status_bool("device_routing_applied"),
         "device_routing_state": _optional_string(
@@ -410,6 +411,7 @@ _SAFE_DEVICE_USER_RAW_KEYS = frozenset(
         "writable_files_present",
         "media_identity_available",
         "routes_consistent",
+        "user_only",
         "device_routing_supported",
         "device_routing_applied",
         "device_routing_state",

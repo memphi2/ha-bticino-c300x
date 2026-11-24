@@ -1489,6 +1489,10 @@
     }
   },
   "issues": {
+    "media_user_only": {
+      "title": "Un autre programme gère le routage des appels du poste",
+      "description": "{entry_title} : le routage actif des appels de ce poste (route.conf) est un fichier normal qui appartient à un autre programme, par exemple Companion. L'utilisation de cette intégration à côté de Companion ou d'un autre gestionnaire de routage tiers n'est pas prise en charge. Pour ne rien casser, Home Assistant a seulement ajouté son propre utilisateur média : la vidéo à la demande et son interphonie peuvent fonctionner, mais les appels de sonnerie ne sont pas transférés à Home Assistant, le transfert ne peut pas être modifié depuis Home Assistant et le fichier de routage n'est jamais modifié. La suppression de l'agent de l'appareil retire à nouveau l'utilisateur média. Pour un fonctionnement complet, supprimez d'abord le gestionnaire tiers, puis lancez la réparation de l'utilisateur média."
+    },
     "c100x_display_boot_check_failed": {
       "title": "Échec du contrôle de l’écran C100X au démarrage du poste",
       "description": "{entry_title} : au démarrage du poste, l’agent de l’appareil n’a pas pu contrôler l’activation de l’écran en attente (le paquet de l’écran manquait ou le contrôle a échoué, par exemple après une mise à jour du micrologiciel). L’agent a quand même démarré. L’activation de l’écran reste désactivée et les sauvegardes des pages d’origine sont conservées. Appuyez sur Restaurer l'écran d'origine pour y revenir ; en cas d’échec, mettez d’abord à jour l’agent de l’appareil avec sa réparation. Si cela se reproduit, signalez-le avec les diagnostics de l’agent."

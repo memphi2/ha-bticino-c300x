@@ -124,13 +124,6 @@ void c300x_read_voicemail_info(
     fclose(file);
 }
 
-static int memo_path_is_directory(const char *path)
-{
-    C300X_MEMO_STAT_STRUCT st;
-
-    return memo_stat_path(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
 static int valid_utf8_text(const unsigned char *data, size_t len)
 {
     size_t index = 0;
@@ -228,71 +221,83 @@ int c300x_text_memo_normalize(unsigned char *text, size_t *text_len)
     return len > 0 && text_memo_has_visible_content(text, len) && valid_utf8_text(text, len);
 }
 
-/* The GUI writes message.txt into the records directory and bt_answering_machine
- * moves it into the new memo. The directory is open to every user: a name
- * found there is removed, never followed, and the file is made anew. */
-int c300x_text_memo_stage(const char *records_dir, const char *owner_path,
-                          const unsigned char *text, size_t text_len, char *error, size_t error_len)
-{
-    char path[C300X_MAX_PATH_LEN];
-    C300X_MEMO_STAT_STRUCT owner;
-    int have_owner = memo_stat_path(owner_path, &owner) == 0;
-    int fd;
-    size_t written = 0;
+#define C300X_STAGED_MEMO "message.txt"
+#define C300X_RECORDS_DIR_FLAGS (O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
 
-    if (!memo_path_is_directory(records_dir)) {
-        if (mkdir(records_dir, 0777) != 0 && errno != EEXIST) {
-            set_error(error, error_len, "memo_records_dir_missing");
-            return 0;
-        }
-        if (chmod(records_dir, 0777) != 0 || (have_owner && chown(records_dir, owner.st_uid, owner.st_gid) != 0)) {
-            set_error(error, error_len, "memo_records_dir_missing");
-            return 0;
-        }
+/* The records directory sits in the world-writable /var/tmp: it is opened
+ * without following a symlink, and mode and owner go through the descriptor,
+ * never by name. Only a directory made here gets the vendor's 0777 and owner. */
+static int open_records_dir(const char *records_dir, const C300X_MEMO_STAT_STRUCT *owner)
+{
+    int fd = open(records_dir, C300X_RECORDS_DIR_FLAGS);
+
+    if (fd >= 0 || errno != ENOENT || mkdir(records_dir, 0777) != 0) {
+        return fd;
     }
-    if (!c300x_join_path(path, sizeof(path), records_dir, "message.txt")) {
-        set_error(error, error_len, "invalid_memo_path");
-        return 0;
+    fd = open(records_dir, C300X_RECORDS_DIR_FLAGS);
+    if (fd >= 0 && (fchmod(fd, 0777) != 0 || (owner != NULL && fchown(fd, owner->st_uid, owner->st_gid) != 0))) {
+        (void)close(fd);
+        return -1;
     }
-    if (unlink(path) != 0 && errno != ENOENT) {
-        set_error(error, error_len, "memo_create_failed");
-        return 0;
-    }
-    fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
+    return fd;
+}
+
+static int write_staged_memo(int dir_fd, const C300X_MEMO_STAT_STRUCT *owner,
+                             const unsigned char *text, size_t text_len)
+{
+    size_t written = 0;
+    int fd = openat(dir_fd, C300X_STAGED_MEMO, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
+
     if (fd < 0) {
-        set_error(error, error_len, "memo_create_failed");
         return 0;
     }
     while (written < text_len) {
         ssize_t result = write(fd, text + written, text_len - written);
         if (result <= 0) {
             (void)close(fd);
-            (void)unlink(path);
-            set_error(error, error_len, "memo_create_failed");
             return 0;
         }
         written += (size_t)result;
     }
-    if (fchmod(fd, 0644) != 0 || (have_owner && fchown(fd, owner.st_uid, owner.st_gid) != 0)) {
+    if (fchmod(fd, 0644) != 0 || (owner != NULL && fchown(fd, owner->st_uid, owner->st_gid) != 0)) {
         (void)close(fd);
-        (void)unlink(path);
-        set_error(error, error_len, "memo_create_failed");
         return 0;
     }
-    if (close(fd) != 0) {
-        (void)unlink(path);
-        set_error(error, error_len, "memo_create_failed");
+    return close(fd) == 0;
+}
+
+/* The GUI writes message.txt into the records directory and bt_answering_machine
+ * moves it into the new memo. A name found there is removed, never followed,
+ * and the file is made anew. */
+int c300x_text_memo_stage(const char *records_dir, const char *owner_path,
+                          const unsigned char *text, size_t text_len, char *error, size_t error_len)
+{
+    C300X_MEMO_STAT_STRUCT status;
+    const C300X_MEMO_STAT_STRUCT *owner = memo_stat_path(owner_path, &status) == 0 ? &status : NULL;
+    int dir_fd = open_records_dir(records_dir, owner);
+    int ok;
+
+    if (dir_fd < 0) {
+        set_error(error, error_len, "memo_records_dir_missing");
         return 0;
     }
-    return 1;
+    ok = (unlinkat(dir_fd, C300X_STAGED_MEMO, 0) == 0 || errno == ENOENT)
+        && write_staged_memo(dir_fd, owner, text, text_len);
+    if (!ok) {
+        (void)unlinkat(dir_fd, C300X_STAGED_MEMO, 0);
+        set_error(error, error_len, "memo_create_failed");
+    }
+    (void)close(dir_fd);
+    return ok;
 }
 
 void c300x_text_memo_unstage(const char *records_dir)
 {
-    char path[C300X_MAX_PATH_LEN];
+    int dir_fd = open(records_dir, C300X_RECORDS_DIR_FLAGS);
 
-    if (c300x_join_path(path, sizeof(path), records_dir, "message.txt")) {
-        (void)unlink(path);
+    if (dir_fd >= 0) {
+        (void)unlinkat(dir_fd, C300X_STAGED_MEMO, 0);
+        (void)close(dir_fd);
     }
 }
 

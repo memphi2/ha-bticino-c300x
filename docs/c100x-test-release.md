@@ -2,7 +2,7 @@
 
 Status: local preparation, not a published beta or authorization to install.
 Target: **C100X, original firmware 1.5.8**, branch `c100x_1.5.8`.
-No release number has been selected. The current `2.9.0` metadata is inherited
+No release number has been selected. The current `2.9.1` metadata is inherited
 development metadata, not a C100X release designation. Do not distribute an old
 local ZIP merely because it has that version.
 

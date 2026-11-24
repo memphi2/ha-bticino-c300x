@@ -1,6 +1,6 @@
 # C100X 1.5.8: Experimental Branch
 
-This document applies only to `c100x_1.5.8`, not the separate stable 2.9.0 or
+This document applies only to `c100x_1.5.8`, not the separate stable 2.9.1 or
 3.0.6 beta worktrees/packages. C100X 1.5.8 has been inspected and tested
 offline against extracted firmware and synthetic fixtures. No C100X device
 or Home Assistant installation was accessed for this work. ABI compatibility

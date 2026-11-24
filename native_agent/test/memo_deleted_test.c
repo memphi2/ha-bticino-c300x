@@ -1,9 +1,30 @@
 /* /ui/memos lists the memos deleted through the agent. */
 #include <assert.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../src/memo_deleted.h"
+
+/* Appends or stops the test: no length comes from an unchecked snprintf. */
+__attribute__((format(printf, 4, 5)))
+static void test_append(char *out, size_t size, size_t *used, const char *format, ...)
+{
+    va_list args;
+    int written;
+
+    if (*used >= size) {
+        abort();
+    }
+    va_start(args, format);
+    written = vsnprintf(out + *used, size - *used, format, args);
+    va_end(args);
+    if (written < 0 || (size_t)written >= size - *used) {
+        abort();
+    }
+    *used += (size_t)written;
+}
 
 static const char *finish(void)
 {
@@ -34,12 +55,12 @@ int main(void)
         snprintf(name, sizeof(name), "memo_%d", index);
         c300x_memo_deleted_add("text", name);
     }
-    assert(snprintf(expected, sizeof(expected), "],\"deleted\":[") > 0);
-    used = strlen(expected);
+    used = 0;
+    test_append(expected, sizeof(expected), &used, "],\"deleted\":[");
     for (int index = 8; index < 40; index++) {
-        used += (size_t)snprintf(expected + used, sizeof(expected) - used, "%s\"text/memo_%d\"", index > 8 ? "," : "", index);
+        test_append(expected, sizeof(expected), &used, "%s\"text/memo_%d\"", index > 8 ? "," : "", index);
     }
-    snprintf(expected + used, sizeof(expected) - used, "]}\n");
+    test_append(expected, sizeof(expected), &used, "]}\n");
     assert(strcmp(finish(), expected) == 0);
     /* A body without room fails instead of cutting the JSON. */
     char small[40];

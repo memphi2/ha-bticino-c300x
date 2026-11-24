@@ -363,13 +363,16 @@ binaries on its own and does not check for updates when idle.
 
 These checks run in the installed agent: an update does not change the updater
 that installs it. Rollback covers reported apply errors, not power loss or
-storage failure during rollback. Backups left by an interrupted update are never
-overwritten. If an update is refused after an interrupted one, look for
-`<file>.update-backup` files next to the agent files, the init script and the
-init link; each is a hard link to the file before the update. When the installed
-file works, delete the backup; when it is missing or broken, move the backup over
-it first. The agent never rewrites system files on its own at start-up, and this
-path cannot be tested without a power cut on a device.
+storage failure during rollback. An update cut off midway (power cut, kill), or
+one committed whose cleanup failed, leaves `<file>.update-backup` hard links
+next to the agent files, the init script, the init link and the retired display
+source. The next update clears them before it prepares its own transaction
+(`update_recover_interrupted()` in `agent_update.c`): when every installed file
+matches the installed `bundle.json`, the earlier update was committed and the
+leftovers are removed; otherwise its rollback is finished and each backup is
+moved back. Both go through the normal finish path with its rw/ro remount. The
+agent never rewrites system files on its own at start-up; only an update does
+this, and the power-cut case cannot be tested without a power cut on a device.
 
 ## Release Agent Reuse
 

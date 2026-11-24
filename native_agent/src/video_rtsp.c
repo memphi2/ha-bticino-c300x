@@ -18,11 +18,14 @@
 #define C300X_VIDEO_MAX_PENDING_EVENTS 8
 #define C300X_VIDEO_EVENT_TYPE_LEN 64
 #define C300X_VIDEO_EVENT_DATA_LEN 512
-#define C300X_EXTERNAL_MEDIA_GUARD_DEFAULT_SECONDS 30
+/* A display call ends with a bus end frame. bt_vct sends it itself when its
+ * conversation timer TCONV (60 s, fixed in 1.7.19, 2.0.2 and 3.0.6) runs
+ * out; the guard lasts a little longer in case that frame is lost. */
+#define C300X_DISPLAY_CALL_GUARD_SECONDS 65
 #define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 120
 #define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500
 #define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000
-#define C300X_STATION_BUSY_GUARD_MS 30000
+#define C300X_STATION_BUSY_GUARD_MS (C300X_DISPLAY_CALL_GUARD_SECONDS * 1000LL)
 #define C300X_LAST_RTP_AT_UPDATE_MS 1000
 
 struct c300x_video;
@@ -96,8 +99,9 @@ static int external_media_active_locked(struct c300x_video *video)
 
 static int external_media_guard_ttl_seconds(int ttl_seconds)
 {
-    if (ttl_seconds <= 0) {
-        return C300X_EXTERNAL_MEDIA_GUARD_DEFAULT_SECONDS;
+    /* The bus event's own TTL (30 s) is shorter than the call it starts. */
+    if (ttl_seconds < C300X_DISPLAY_CALL_GUARD_SECONDS) {
+        return C300X_DISPLAY_CALL_GUARD_SECONDS;
     }
     if (ttl_seconds > C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS) {
         return C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS;

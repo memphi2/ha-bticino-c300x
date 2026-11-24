@@ -18,7 +18,7 @@ WRAPPED = (
     "dlopen", "dlsym", "dlclose", "bind", "c300x_mqtt_publish_event",
 )
 CASES = {
-    "display_answer": 0, "unanswered": 0, "ha_answer": 0,
+    "display_answer": 0, "display_answer_end_lost": 1, "unanswered": 0, "ha_answer": 0,
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
 }
 

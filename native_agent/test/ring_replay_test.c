@@ -334,9 +334,20 @@ static void ring_starts(int *preview) {
     assert(rtsp_play(*preview, "/doorbell-video") == 200);
 }
 
+/* A Stream press: activate plus one go2rtc PLAY, both refused. */
+static void stream_press_refused(const char *reason) {
+    struct c300x_video_status current;
+    assert(!c300x_video_activate(runtime->video, 1));
+    status(&current);
+    assert(strcmp(current.last_error, reason) == 0);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 503);
+    close(fd);
+}
+
 /* (a) Capture 13:37:27-13:38:35: the display answers, flexisip cancels the
  * agent's leg, the display call stays up until its 60 s limit. */
-static void display_answer(void) {
+static void display_answer(bool end_frame_lost) {
     char data[4096];
     int preview;
     ring_starts(&preview);
@@ -372,7 +383,34 @@ static void display_answer(void) {
     status(&current);
     assert(current.external_media_active);
 
+    /* bt_vct holds a display call for up to 60 s (TCONV): a press at
+     * second 45 still meets the display call, not the station. */
+    atomic_store(&clock_offset, 45000);
+    stream_press_refused("external_session_active");
+    status(&current);
+    assert(current.external_media_active);
+    assert(strcmp(current.media_owner, "external_media") == 0);
+    assert(atomic_load(&ondemand_invites) == 0);
+
+    if (end_frame_lost) {
+        /* No end frame reached the agent: the guard runs out at 65 s and
+         * the (free) station takes the next start. */
+        atomic_store(&clock_offset, 66000);
+        status(&current);
+        assert(!current.external_media_active);
+        assert(strcmp(current.media_owner, "idle") == 0);
+        atomic_store(&station_busy, 0);
+        assert(c300x_video_activate(runtime->video, 1));
+        int fd = rtsp_open();
+        assert(rtsp_play(fd, "/doorbell") == 200);
+        assert(atomic_load(&ondemand_invites) == 1);
+        close(fd);
+        assert(count_events("doorbell.media.closed") == 1);
+        return;
+    }
+
     /* The display call ends at its 60 s limit. */
+    atomic_store(&clock_offset, 60000);
     bus("*8*3#1#4*411##");
     wait_event("doorbell.media.closed", 2, data, sizeof(data));
     assert(!payload_external(data));
@@ -450,12 +488,16 @@ static void station_busy_case(bool freed_by_bus) {
     assert(strcmp(current.last_error, "station_busy") == 0);
     assert(!current.external_media_active && strcmp(current.media_owner, "idle") == 0);
     assert(atomic_load(&ondemand_invites) == 1);
+    /* Still inside the longest display call the 486 may stand for. */
+    atomic_store(&clock_offset, 45000);
+    stream_press_refused("station_busy");
+    assert(atomic_load(&ondemand_invites) == 1);
 
     atomic_store(&station_busy, 0);
     if (freed_by_bus) {
         bus("*8*3#1#4*411##");
     } else {
-        atomic_store(&clock_offset, 31000);
+        atomic_store(&clock_offset, 66000);
     }
     assert(c300x_video_activate(runtime->video, 1));
     fd = rtsp_open();
@@ -519,7 +561,8 @@ int main(int argc, char **argv) {
     pthread_t loop;
     assert(pthread_create(&loop, NULL, agent_loop, NULL) == 0);
 
-    if (strcmp(argv[1], "display_answer") == 0) display_answer();
+    if (strcmp(argv[1], "display_answer") == 0) display_answer(false);
+    else if (strcmp(argv[1], "display_answer_end_lost") == 0) display_answer(true);
     else if (strcmp(argv[1], "unanswered") == 0) unanswered();
     else if (strcmp(argv[1], "ha_answer") == 0) ha_answer();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);

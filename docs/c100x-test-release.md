@@ -8,8 +8,10 @@ local ZIP merely because it has that version.
 
 The download is a **complete HA integration ZIP**, including the freshly built
 ARM agent, generated device bundle, all Lovelace card modules and documentation.
-The functional test scope is agent setup plus the two HA buttons below.
-Unfinished GUI activation remains disabled even though adapter assets are included.
+The functional test scope is agent setup, the two HA buttons below and the
+[display activation by reboot](#display-activation-by-reboot-device-test).
+The display pages become active only through that supervised activation; no
+other GUI install path is enabled.
 The selected test-package scope excludes local speaker/TTS. Investigation of
 a safe audio backend continues separately; no unsupported audio path is enabled.
 
@@ -113,7 +115,7 @@ Attachment: ha-bticino-c100x-issue51-local.zip
 SHA256: <all 64 hexadecimal digits of the final ZIP>
 C100X full gate: <result, date, command and retained log reference>
 Browser/package/build-lock checks: <results for this candidate>
-Scope: otherwise stock C100X 1.5.8, agent + stair light + door unlock; no GUI/media trial
+Scope: otherwise stock C100X 1.5.8, agent + stair light + door unlock + display activation by reboot; no other GUI change, no media trial
 ```
 
 Redact private paths from public log excerpts. Any later source or archive change

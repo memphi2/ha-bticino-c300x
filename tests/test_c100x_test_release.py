@@ -116,6 +116,19 @@ def test_publication_blocked_before_any_external_command(monkeypatch):
         publisher.publish("owner/repo", "v2.8.2", ROOT / ".release")
 
 
+def test_policy_covers_the_display_activation_and_keeps_publication_blocked():
+    policy = json.loads((ROOT / "c100x-test-policy.json").read_text())
+    assert policy == {
+        "schema": 1,
+        "target_model": "C100X",
+        "target_firmware": "1.5.8",
+        "scope": "agent-stair-light-door-unlock-display-reboot-activation",
+        "publication": "blocked-pending-channel-decision",
+    }
+    guide = (ROOT / "docs/c100x-test-release.md").read_text()
+    assert "Scope: otherwise stock C100X 1.5.8, agent + stair light + door unlock + display activation by reboot" in guide
+
+
 def test_builder_rejects_stable_asset_name_before_build(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     builder = importlib.import_module("build_hacs_release")

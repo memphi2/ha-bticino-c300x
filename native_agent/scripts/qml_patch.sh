@@ -833,6 +833,7 @@ recover_transactions() {
         TRANSACTION_STATE=
         recover_ro=1
         remount_rw || true
+        qt5_drop_recovery_copies
         for recover_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
             leftover_transaction "$recover_dir" || continue
             if settle_transaction "$recover_dir"; then
@@ -2089,6 +2090,20 @@ qt5_require_regular() {
         printf 'Unsupported display activation file: %s\n' "$qt5_target" >&2
         return 1
     fi
+}
+
+# A recovery copy beside an activation file whose writer was killed (SIGKILL
+# after the job's grace period) is never used again: the rollback makes its own.
+qt5_drop_recovery_copies() {
+    [ "$QT5_DISPLAY" = "1" ] || return 0
+    for qt5_artifact in rcc wrapper library original failed; do
+        qt5_artifact_path "$qt5_artifact"
+        for qt5_copy in "$qt5_target".c300x-recovery.*; do
+            [ -f "$qt5_copy" ] && [ ! -L "$qt5_copy" ] || continue
+            transaction_owner_running "${qt5_copy##*.}" && continue
+            rm -f "$qt5_copy" || true
+        done
+    done
 }
 
 qt5_restore_artifact() {

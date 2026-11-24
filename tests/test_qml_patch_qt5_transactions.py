@@ -203,3 +203,37 @@ def test_a_sigterm_during_the_activation_rollback_repeats_it_and_exits_130(devic
     assert snapshot(device) == before
     assert not list(device.gui.glob(".c300x-qml-transaction.*"))
     assert not list(device.root.rglob("*.c300x-recovery.*"))
+
+
+def test_a_sigkill_during_the_activation_rollback_leaves_no_recovery_copy_after_recover(device):
+    """The agent's SIGKILL after the grace period cuts the copy of the start
+    script; the next run rolls back again and drops the orphaned copy."""
+
+    device.ok("apply")
+    before = snapshot(device)
+    source = overlay.SCRIPT.read_text()
+    start, end = source.index("reload_gui() {"), source.index("\nremount_rw() {")
+    script = device.root / "reload-failure.sh"
+    script.write_text(source[:start] + "reload_gui() { return 1; }\n" + source[end:])
+    script.chmod(0o700)
+    held = device.root / "held"
+    env = command_failure(
+        device, "cp",
+        f'case "$*" in *"/.qt5/wrapper {device.wrapper}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
+        effect=f': > "{held}"; while :; do sleep 0.02; done',
+    )
+    process = subprocess.Popen([str(script), "media-user-label-apply"], env=device.environment(**env),
+                               text=True, start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    deadline = time.monotonic() + 20
+    while not held.exists():
+        assert process.poll() is None and time.monotonic() < deadline, process.communicate()
+        time.sleep(0.01)
+    os.killpg(process.pid, signal.SIGKILL)
+    process.communicate(timeout=20)
+    assert list(device.root.rglob("*.c300x-recovery.*"))
+    status = device.ok("recover")
+    assert status.get("transaction") == "recovered"
+    assert snapshot(device) == before
+    assert not list(device.gui.glob(".c300x-qml-transaction.*"))
+    assert not list(device.root.rglob("*.c300x-recovery.*"))

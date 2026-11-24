@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .camera_media.state_machine import MediaState
+
 
 def _restart_count(camera: Any) -> int:
     diagnostics = getattr(camera._runtime_data, "diagnostics", None)
@@ -33,7 +35,13 @@ def reconcile_due(camera: Any, entry_id: str) -> bool:
     camera._agent_restart_due = _restart_count(camera)
     # Asked first: the first heartbeat sets the baseline, sessions or not.
     pending = agent_restart_pending(camera)
-    return pending or bool(camera._webrtc_sessions.active)
+    # RTSP_BUSY comes from client counts alone: no agent event ends it, so a
+    # count read mid-start would hold it after the last session is gone.
+    return (
+        pending
+        or bool(camera._webrtc_sessions.active)
+        or camera._last_media_state is MediaState.RTSP_BUSY
+    )
 
 
 def note_status_reconciled(camera: Any, status: Any) -> None:

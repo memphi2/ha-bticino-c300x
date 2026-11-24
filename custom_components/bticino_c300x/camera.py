@@ -938,6 +938,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._async_close_webrtc_session,
             drain=self._async_wait_for_provider_rtsp_clients_to_drain,
         )
+        # The cached counts may be from a start the agent gave up since.
+        await self._async_refresh_video_status_or_none()
+        self._async_write_ha_state_if_ready()
 
     async def async_prepare_home_call_stop(self) -> None:
         """Close HA-owned Home Call media before an explicit agent stop."""

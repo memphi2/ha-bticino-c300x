@@ -1573,7 +1573,10 @@ Reads the persistent IPv4 firewall patch state.
 
 The IPv4 firewall endpoints manage one explicit block in
 `/etc/network/if-pre-up.d/iptables`. They do not accept arbitrary iptables rules
-or shell commands.
+or shell commands. The script keeps the vendor's mode and is synced to disk
+with its backup; when iptables refuses the new rules at once, apply answers
+`runtime_apply_failed` and puts the previous script back (IPv4 and IPv6
+alike).
 
 ### IPv6 Firewall
 

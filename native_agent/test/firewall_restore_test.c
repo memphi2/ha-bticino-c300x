@@ -21,7 +21,7 @@ static void expect(const char *path, const char *content)
 {
     static char data[C300X_FIREWALL_BUFFER_SIZE];
     int exists = 0;
-    assert(firewall_read_file(path, data, sizeof(data), &exists) && exists);
+    assert(c300x_firewall_read_file(path, data, sizeof(data), &exists) && exists);
     if (strcmp(data, content) != 0) {
         fprintf(stderr, "got [%s] want [%s]\n", data, content);
         assert(0);
@@ -43,6 +43,37 @@ static void restore(struct c300x_config *config, int ipv6, const char *current, 
     assert(ipv6 ? ipv6_firewall_restore(config, &exists, &changed, state, sizeof(state))
                 : firewall_restore(config, &exists, &changed, state, sizeof(state)));
     expect(target, want);
+}
+
+/* The vendor's mode stays (it was chmod 0755); a script whose rules
+ * iptables refuses at once is not left behind for the next boot. */
+static void apply_tests(struct c300x_config *config, const char *vendor)
+{
+    char tools[600], tool[640], state[64];
+    struct stat info;
+    int exists = 0, changed = 0;
+
+    put(config->maintenance_firewall_path, vendor);
+    assert(chmod(config->maintenance_firewall_path, 0500) == 0);
+    unlink(config->maintenance_firewall_backup_path);
+    path_in(tools, sizeof(tools), "tools");
+    assert(mkdir(tools, 0700) == 0);
+    assert(snprintf(tool, sizeof(tool), "%s/iptables", tools) < (int)sizeof(tool));
+    put(tool, "#!/bin/sh\nexit 0\n");
+    assert(chmod(tool, 0700) == 0);
+    assert(setenv("C300X_FIREWALL_RUNTIME_PATH", tools, 1) == 0);
+    assert(firewall_apply(config, &exists, &changed, state, sizeof(state)) && changed == 2);
+    assert(stat(config->maintenance_firewall_path, &info) == 0 && (info.st_mode & 07777) == 0500);
+    expect(config->maintenance_firewall_backup_path, vendor);
+    assert(firewall_restore(config, &exists, &changed, state, sizeof(state)));
+    expect(config->maintenance_firewall_path, vendor);
+    assert(stat(config->maintenance_firewall_path, &info) == 0 && (info.st_mode & 07777) == 0500);
+
+    put(tool, "#!/bin/sh\nexit 1\n");
+    assert(!firewall_apply(config, &exists, &changed, state, sizeof(state)));
+    assert(strcmp(state, "runtime_apply_failed") == 0);
+    expect(config->maintenance_firewall_path, vendor);
+    assert(stat(config->maintenance_firewall_path, &info) == 0 && (info.st_mode & 07777) == 0500);
 }
 
 int main(int argc, char **argv)
@@ -75,5 +106,6 @@ int main(int argc, char **argv)
     assert(firewall_build_ipv6_managed_content(&config, vendor, inserted6, sizeof(inserted6)));
     restore(&config, 1, inserted6, vendor, vendor);
     restore(&config, 1, inserted6, "#!/bin/sh\nold\n", "#!/bin/sh\niptables -P INPUT DROP\n");
+    apply_tests(&config, vendor);
     return 0;
 }

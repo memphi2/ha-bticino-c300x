@@ -55,8 +55,8 @@
 #include "video_audio_settings.h"
 #include "video_rtsp.h"
 #include "video_snapshot.h"
-#include "root_mount.h"
 #include "memo_deleted.h"
+#include "firewall_file.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -3392,8 +3392,8 @@ static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const
     return 1;
 }
 
-static void firewall_remount_rw_if_needed(const char *path);
-static void firewall_remount_ro_if_needed(const char *path);
+#define firewall_remount_rw_if_needed(path) ((void)c300x_firewall_remount(path, "rw"))
+#define firewall_remount_ro_if_needed(path) ((void)c300x_firewall_remount(path, "ro"))
 static int run_detached_command(const char *program, const char *argument, int delay_ms);
 static void close_extra_fds_for_exec(void);
 
@@ -7326,134 +7326,6 @@ static int maintenance_ipv6_firewall_supported(const struct c300x_config *config
     );
 }
 
-static int firewall_path_requires_remount(const char *path)
-{
-    return path != NULL && strncmp(path, "/etc/", 5) == 0;
-}
-
-static void firewall_remount_rw_if_needed(const char *path)
-{
-    if (firewall_path_requires_remount(path)) {
-        (void)c300x_root_remount("rw");
-    }
-}
-
-static void firewall_remount_ro_if_needed(const char *path)
-{
-    if (firewall_path_requires_remount(path)) {
-        (void)c300x_root_remount("ro");
-    }
-}
-
-static int firewall_read_file(
-    const char *path,
-    char *buffer,
-    size_t buffer_len,
-    int *exists
-)
-{
-    FILE *file;
-    size_t read_len;
-
-    if (exists != NULL) {
-        *exists = 0;
-    }
-    if (buffer_len == 0) {
-        return 0;
-    }
-    buffer[0] = '\0';
-    file = fopen(path, "rb");
-    if (file == NULL) {
-        return errno == ENOENT;
-    }
-    if (exists != NULL) {
-        *exists = 1;
-    }
-    read_len = fread(buffer, 1, buffer_len - 1, file);
-    if (ferror(file)) {
-        fclose(file);
-        return 0;
-    }
-    buffer[read_len] = '\0';
-    if (read_len == buffer_len - 1 && fgetc(file) != EOF) {
-        fclose(file);
-        return 0;
-    }
-    fclose(file);
-    return 1;
-}
-
-static int firewall_write_file(
-    const char *path,
-    const char *content,
-    mode_t mode
-)
-{
-    char temporary_path[C300X_MAX_PATH_LEN + 8];
-    FILE *file;
-    int fd;
-
-    if (!mkdir_parent(path, 0755)) {
-        return 0;
-    }
-    if (snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", path) >= (int)sizeof(temporary_path)) {
-        return 0;
-    }
-    file = fopen(temporary_path, "w");
-    if (file == NULL) {
-        return 0;
-    }
-    if (fputs(content, file) == EOF) {
-        (void)fclose(file);
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    fd = fileno(file);
-    if (fd >= 0) {
-        (void)fchmod(fd, mode);
-    }
-    if (fclose(file) != 0) {
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    if (rename(temporary_path, path) != 0) {
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    return 1;
-}
-
-static int firewall_backup_available(const char *backup_path)
-{
-    return path_exists(backup_path);
-}
-
-static size_t length_without_final_newlines(const char *text)
-{
-    size_t len = strlen(text);
-    while (len > 0 && text[len - 1] == '\n') {
-        len--;
-    }
-    return len;
-}
-
-/* The block goes in with or without a blank line before it, so cutting it out
- * cannot tell the vendor's trailing blank lines from ours. A backup that
- * differs only in those is the original file, byte for byte. */
-static void firewall_use_matching_backup(const char *backup_path, char *desired, size_t desired_len)
-{
-    char *backup = calloc(1, desired_len);
-    int backup_exists = 0;
-    size_t len = length_without_final_newlines(desired);
-
-    if (backup != NULL && desired[0] != '\0' && firewall_backup_available(backup_path)
-        && firewall_read_file(backup_path, backup, desired_len, &backup_exists) && backup_exists
-        && length_without_final_newlines(backup) == len && memcmp(backup, desired, len) == 0) {
-        c300x_copy_string(desired, desired_len, backup);
-    }
-    free(backup);
-}
-
 static int firewall_block_bounds_for(
     const char *content,
     const char *begin_marker,
@@ -7883,7 +7755,7 @@ static void send_firewall_status_body(
         strcmp(state, "patched") == 0 ? "true" : strcmp(state, "partial") == 0 ? "null" : "false",
         family_json,
         exists ? "true" : "false",
-        firewall_backup_available(backup_path) ? "true" : "false",
+        c300x_firewall_backup_available(backup_path) ? "true" : "false",
         config->api_port,
         config->video_rtsp_port,
         C300X_TALKBACK_RTP_PORT,
@@ -7917,7 +7789,7 @@ static void handle_firewall_status(
         free(current);
         return;
     }
-    if (!firewall_read_file(config->maintenance_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"firewall_status_failed\"}\n");
         free(current);
         return;
@@ -7933,27 +7805,6 @@ static void handle_firewall_status(
     free(current);
 }
 
-static int firewall_backup_original_if_needed(
-    const char *backup_path,
-    const char *backup_content,
-    int *backup_written
-)
-{
-    if (backup_written != NULL) {
-        *backup_written = 0;
-    }
-    if (firewall_backup_available(backup_path)) {
-        return 1;
-    }
-    if (!firewall_write_file(backup_path, backup_content, 0600)) {
-        return 0;
-    }
-    if (backup_written != NULL) {
-        *backup_written = 1;
-    }
-    return 1;
-}
-
 static int firewall_apply(
     const struct c300x_config *config,
     int *exists,
@@ -7965,12 +7816,11 @@ static int firewall_apply(
     struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int backup_written = 0;
-    int target_written = 0;
 
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -7996,7 +7846,7 @@ static int firewall_apply(
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) == 0 && firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    if (strcmp(workspace->current, workspace->desired) == 0 && c300x_firewall_backup_available(config->maintenance_firewall_backup_path)) {
         if (exists != NULL) {
             *exists = current_exists;
         }
@@ -8012,28 +7862,23 @@ static int firewall_apply(
         free(workspace);
         return 1;
     }
-    firewall_remount_rw_if_needed(config->maintenance_firewall_path);
-    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_firewall_backup_path, workspace->original_backup, &backup_written)) {
-        firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+    if (!c300x_firewall_install(config->maintenance_firewall_path, config->maintenance_firewall_backup_path, workspace->original_backup,
+            workspace->current, workspace->desired, &backup_written)) {
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) != 0) {
-        if (!firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
-            firewall_remount_ro_if_needed(config->maintenance_firewall_path);
-            free(workspace);
-            return 0;
-        }
-        target_written = 1;
-    }
-    firewall_remount_ro_if_needed(config->maintenance_firewall_path);
     if (exists != NULL) {
         *exists = 1;
     }
     if (changed_files != NULL) {
-        *changed_files = backup_written + target_written;
+        *changed_files = backup_written;
     }
     if (!firewall_apply_runtime_rules(config)) {
+        /* No boot script with rules iptables just refused. */
+        if (strcmp(workspace->current, workspace->desired) != 0 && c300x_firewall_remount(config->maintenance_firewall_path, "rw")) {
+            (void)c300x_firewall_write_file(config->maintenance_firewall_path, workspace->current, 0755);
+            firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+        }
         snprintf(state, state_len, "%s", "runtime_apply_failed");
         free(workspace);
         return 0;
@@ -8058,7 +7903,7 @@ static int firewall_restore(
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -8071,10 +7916,10 @@ static int firewall_restore(
         free(workspace);
         return 0;
     }
-    firewall_use_matching_backup(config->maintenance_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
-    if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    c300x_firewall_use_matching_backup(config->maintenance_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
+    if (workspace->desired[0] == '\0' && c300x_firewall_backup_available(config->maintenance_firewall_backup_path)) {
         int backup_exists = 0;
-        if (!firewall_read_file(
+        if (!c300x_firewall_read_file(
             config->maintenance_firewall_backup_path,
             workspace->desired,
             sizeof(workspace->desired),
@@ -8096,13 +7941,13 @@ static int firewall_restore(
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_firewall_path);
-    if (workspace->desired[0] == '\0' && !firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && !c300x_firewall_backup_available(config->maintenance_firewall_backup_path)) {
         if (unlink(config->maintenance_firewall_path) != 0 && errno != ENOENT) {
             firewall_remount_ro_if_needed(config->maintenance_firewall_path);
             free(workspace);
             return 0;
         }
-    } else if (!firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
+    } else if (!c300x_firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
         firewall_remount_ro_if_needed(config->maintenance_firewall_path);
         free(workspace);
         return 0;
@@ -8110,7 +7955,7 @@ static int firewall_restore(
     target_written = 1;
     firewall_remount_ro_if_needed(config->maintenance_firewall_path);
     if (exists != NULL) {
-        *exists = workspace->desired[0] != '\0' || firewall_backup_available(config->maintenance_firewall_backup_path);
+        *exists = workspace->desired[0] != '\0' || c300x_firewall_backup_available(config->maintenance_firewall_backup_path);
     }
     if (changed_files != NULL) {
         *changed_files = target_written;
@@ -8152,7 +7997,7 @@ static void handle_ipv6_firewall_status(
         free(current);
         return;
     }
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_ipv6_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"firewall_status_failed\"}\n");
         free(current);
         return;
@@ -8179,12 +8024,11 @@ static int ipv6_firewall_apply(
     struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int backup_written = 0;
-    int target_written = 0;
 
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -8216,7 +8060,7 @@ static int ipv6_firewall_apply(
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) == 0 && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    if (strcmp(workspace->current, workspace->desired) == 0 && c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         if (exists != NULL) {
             *exists = current_exists;
         }
@@ -8232,28 +8076,23 @@ static int ipv6_firewall_apply(
         free(workspace);
         return 1;
     }
-    firewall_remount_rw_if_needed(config->maintenance_ipv6_firewall_path);
-    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_ipv6_firewall_backup_path, workspace->original_backup, &backup_written)) {
-        firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+    if (!c300x_firewall_install(config->maintenance_ipv6_firewall_path, config->maintenance_ipv6_firewall_backup_path, workspace->original_backup,
+            workspace->current, workspace->desired, &backup_written)) {
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) != 0) {
-        if (!firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
-            firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
-            free(workspace);
-            return 0;
-        }
-        target_written = 1;
-    }
-    firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
     if (exists != NULL) {
         *exists = 1;
     }
     if (changed_files != NULL) {
-        *changed_files = backup_written + target_written;
+        *changed_files = backup_written;
     }
     if (!ipv6_firewall_apply_runtime_rules(config)) {
+        /* No boot script with rules iptables just refused. */
+        if (strcmp(workspace->current, workspace->desired) != 0 && c300x_firewall_remount(config->maintenance_ipv6_firewall_path, "rw")) {
+            (void)c300x_firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->current, 0755);
+            firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+        }
         snprintf(state, state_len, "%s", "runtime_apply_failed");
         free(workspace);
         return 0;
@@ -8278,7 +8117,7 @@ static int ipv6_firewall_restore(
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -8297,10 +8136,10 @@ static int ipv6_firewall_restore(
         free(workspace);
         return 0;
     }
-    firewall_use_matching_backup(config->maintenance_ipv6_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
-    if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    c300x_firewall_use_matching_backup(config->maintenance_ipv6_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
+    if (workspace->desired[0] == '\0' && c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         int backup_exists = 0;
-        if (!firewall_read_file(
+        if (!c300x_firewall_read_file(
             config->maintenance_ipv6_firewall_backup_path,
             workspace->desired,
             sizeof(workspace->desired),
@@ -8322,13 +8161,13 @@ static int ipv6_firewall_restore(
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_ipv6_firewall_path);
-    if (workspace->desired[0] == '\0' && !firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && !c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         if (unlink(config->maintenance_ipv6_firewall_path) != 0 && errno != ENOENT) {
             firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
             free(workspace);
             return 0;
         }
-    } else if (!firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
+    } else if (!c300x_firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
         firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
         free(workspace);
         return 0;
@@ -8336,7 +8175,7 @@ static int ipv6_firewall_restore(
     target_written = 1;
     firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
     if (exists != NULL) {
-        *exists = workspace->desired[0] != '\0' || firewall_backup_available(config->maintenance_ipv6_firewall_backup_path);
+        *exists = workspace->desired[0] != '\0' || c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path);
     }
     if (changed_files != NULL) {
         *changed_files = target_written;
@@ -8359,7 +8198,7 @@ static int firewall_patch_currently_active(
     if (current == NULL) {
         return 0;
     }
-    if (firewall_read_file(path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
+    if (c300x_firewall_read_file(path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         state = state_for_content(current, exists);
         active = strcmp(state, "patched") == 0;
     }

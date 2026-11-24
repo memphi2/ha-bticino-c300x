@@ -47,6 +47,7 @@ export async function checkSnapshotLayout(page, artifacts) {
           await tick();
           const expanded = card.shadowRoot.querySelector(".body").getBoundingClientRect();
           const footerFits = expanded.bottom <= innerHeight + 1 && expanded.top >= 0;
+          const enlarged = bounds();
           card._cardMedia.setExpanded(false);
           await tick();
           const accessible = card._snapshotEl.getAttribute("aria-label");
@@ -64,7 +65,7 @@ export async function checkSnapshotLayout(page, artifacts) {
             card._videoEl.srcObject = null;
             card._updateState();
             await tick();
-            return { preview, live, stopped: bounds(), accessible, overlay, footerFits,
+            return { preview, enlarged, live, stopped: bounds(), accessible, overlay, footerFits,
               snapshotHidden, snapshotRestored: !card._snapshotEl.hidden,
               fit: getComputedStyle(card._snapshotEl).objectFit,
               overflow: document.documentElement.scrollWidth > innerWidth };
@@ -74,10 +75,16 @@ export async function checkSnapshotLayout(page, artifacts) {
           }
         }, { height, size });
         const label = `${width}px ${height} ${size.join("x")}`;
-        for (const [state, ratio] of [[result.preview, size[0] / size[1]],
-          [result.live, 4 / 3], [result.stopped, size[0] / size[1]]]) {
+        // In the card the snapshot sits in the camera's frame, whatever its own
+        // shape; only the enlarged preview takes the shape of the snapshot.
+        for (const [state, ratio] of [[result.preview, 4 / 3], [result.enlarged, size[0] / size[1]],
+          [result.live, 4 / 3], [result.stopped, 4 / 3]]) {
           assert.ok(Math.abs(state.mediaHeight - state.mediaWidth / ratio) < 1,
             `${label}: wrong picture frame: ${JSON.stringify(state)}`);
+        }
+        for (const key of ["height", "width", "mediaHeight"]) {
+          assert.ok(Math.abs(result.live[key] - result.preview[key]) < 1 && Math.abs(result.stopped[key] - result.preview[key]) < 1,
+            `${label}: ${key} changed: ${JSON.stringify(result)}`);
         }
         assert.ok(result.preview.mediaHeight > 0, label);
         assert.ok(result.footerFits, `${label}: expanded preview footer outside viewport`);
@@ -90,6 +97,33 @@ export async function checkSnapshotLayout(page, artifacts) {
       await page.screenshot({ path: resolve(artifacts, `snapshot-layout-${width}-${height}.png`) });
     }
   }
+  // A camera that has not played in this browser has no shape yet: until its
+  // first stream the frame takes the shape of the snapshot.
+  const unknown = await page.evaluate(async () => {
+    document.querySelector("#mount").style.height = "auto";
+    const shape = localStorage.getItem(`c300x-picture-ratio:${lab.camera}`);
+    localStorage.removeItem(`c300x-picture-ratio:${lab.camera}`);
+    const card = lab.mount();
+    const canvas = document.createElement("canvas");
+    [canvas.width, canvas.height] = [688, 480];
+    canvas.getContext("2d").fillRect(0, 0, 688, 480);
+    const url = URL.createObjectURL(await new Promise((done) => canvas.toBlob(done, "image/jpeg")));
+    try {
+      card._snapshots.showPreview(url, 1800000000);
+      await card._snapshotEl.decode();
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const media = card._mediaEl.getBoundingClientRect();
+      return { width: media.width, height: media.height, visible: !card._snapshotEl.hidden };
+    } finally {
+      card._snapshots.showPreview("", 0);
+      URL.revokeObjectURL(url);
+      localStorage.setItem(`c300x-picture-ratio:${lab.camera}`, shape);
+      lab.card = lab.mount();
+    }
+  });
+  assert.equal(unknown.visible, true);
+  assert.ok(Math.abs(unknown.height - unknown.width / (688 / 480)) < 1, `snapshot frame without a known camera shape: ${JSON.stringify(unknown)}`);
   await page.evaluate(() => {
     document.querySelector("#mount").style.height = "";
     lab.card._snapshots.showPreview("", 0);

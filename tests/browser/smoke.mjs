@@ -15,6 +15,7 @@ import { checkReadinessKeyboard } from "./readiness_keyboard.mjs";
 import { checkBlockedSound } from "./blocked_sound.mjs";
 import { checkPictureControls } from "./picture_controls.mjs";
 import { checkSteadyStreamStart } from "./steady_stream_start.mjs";
+import { checkPictureShapeStart } from "./picture_shape_start.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontend = resolve(here, "../../custom_components/bticino_c300x/frontend");
@@ -66,6 +67,7 @@ try {
   await checkBlockedSound(origin);
   await checkPictureControls(page);
   const steadyStarts = await checkSteadyStreamStart(page);
+  const pictureShapes = await checkPictureShapeStart(page);
   await checkMatchingPictureLayout(page, artifacts);
   await checkSnapshotLayout(page, artifacts);
   const assertFooterLayout = async (label) => {
@@ -292,6 +294,7 @@ try {
   assert.equal(await page.evaluate(() => lab.oldTracks.every((track) => track.readyState === "ended")), true);
   assert.deepEqual(errors, []);
   console.log(`Steady stream start (snapshot -> starting -> playing, microphone notice): ${steadyStarts.join(", ")}`);
+  console.log(`Picture frame at 468 px, first stream in the browser and the next:\n  ${pictureShapes.join("\n  ")}`);
   console.log("Browser smoke passed: matching 5:3 snapshot/live at 4 widths inline/expanded with rendered edge pixels, 16 wrapped-text layouts, 8 button layouts, actions, RTC cycles, microphone, reconfigure and detach cleanup");
 } finally {
   await browser?.close();

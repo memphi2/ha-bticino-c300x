@@ -6,11 +6,18 @@ in the [Reference](feature-reference.md); the station display pages are in
 [Station Display Pages](display.md). When something does not work, start with
 [Media Readiness](media-troubleshooting.md#media-readiness).
 
+Everything here applies to the Classe 300X (C300X) and the Classe 100X (C100X)
+unless a section names a model. On the C100X 1.5.8 every feature is still
+**in test** in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51);
+what each model offers is in
+[Models and Features](feature-reference.md#models-and-features).
+
 ## Doorbell Card
 
 The **C300X Doorbell Call Card** shows live video, Ring Calls, Home Calls, saved
-images and clips in one window. [Add the card](quickstart.md#add-the-card) and
-select the C300X camera entity.
+images and clips in one window, for a C300X and a C100X alike.
+[Add the card](quickstart.md#add-the-card) and select the station's camera
+entity.
 
 <img src="images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card with a saved visitor snapshot, the history arrow, play and call buttons on the left and door and light buttons on the right" width="420">
 
@@ -75,7 +82,10 @@ Repair never changes it.
 **Ringer mute** and **Ringer volume** (C300X scale `0..10`, `0` is mute) set
 the ringtone. Mute stays in step with the display's own audio setting through
 the agent's core GUI hook (see [Device Agent](advanced-maintenance.md#device-agent)),
-without the optional display pages.
+without the optional display pages. On a C100X, **Ringer mute** appears only
+after the [display activation](display.md#classe-100x-activation-by-reboot):
+the confirmed display pages carry its connection to the station's audio
+setting. **Ringer volume** works without it.
 
 ### Talkback
 
@@ -119,9 +129,9 @@ controls under it; they return when the panel closes.
   setting and succeeds only after reading the exact value back; otherwise the
   old value is put back. On a TVP5150 board contrast reads back from the
   driver's own copy, so a contrast write the decoder missed goes unnoticed.
-  Tested on 1.7.19; 2.0.2, 3.0.6 and the Classe 100X are checked offline
-  only. Changes last until the video ends; the station starts each video with
-  its own values.
+  Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only, and the Classe
+  100X is in test in issue #51. Changes last until the video ends; the station
+  starts each video with its own values.
 - **Classe 100X:** the percentages are the station's own day settings. In the
   dark the station switches to its night values, and its own menu has steps
   between the 10 % marks; the sliders then show the nearest 10 % step.
@@ -145,15 +155,17 @@ choose a time without a call or recording, then open a new stream.
 | --- | --- | --- | --- | --- |
 | 1.7.x, 2.0.2 | High | 688x480 (factory cut-out), 704x576 (full height), optional 960x576 | 300-3000 kbit/s (factory 800) | 5-24 fps (factory 15) |
 | 3.0.6 | Low | 352x288 to 720x576 (factory 400x288) | 100-2000 kbit/s (factory 180) | 5-25 fps (factory 10) |
+| Classe 100X 1.5.8 | Low | 352x288 to 720x576 (factory 640x480) | 100-2000 kbit/s (factory 800) | 5-25 fps (factory 12) |
 
-On 3.0.6 only the factory size is tested on a device. High video stops at
+On 3.0.6 only the factory size is tested on a device; on the Classe 100X the
+camera quality is in test. High video stops at
 **24 fps**: at 25 the older firmware turns its frame-rate control off and sends
 only about 8 fps. A higher bit rate reduces compression artifacts; lower it
 again if your network shows stalls or grey blocks.
 
 The **Camera resolution** select picks the high (688x480 from the factory,
-default) or low (400x288) stream from the next stream on. Firmware 3.0.x always
-uses the low stream and has no such select.
+default) or low (400x288) stream from the next stream on. Firmware 3.0.x and
+the Classe 100X always use the low stream and have no such select.
 
 ### 960x576
 
@@ -164,7 +176,8 @@ detail.
 
 - Offered only for the exact, verified media program of firmware **1.7.19** or
   **2.0.2**; the version number alone is not enough. The live picture is tested
-  on 1.7.19; 2.0.2 is checked offline only. Firmware 3.0.x is not changed.
+  on 1.7.19; 2.0.2 is checked offline only. Firmware 3.0.x and the Classe 100X
+  are not changed.
 - Applying it patches the media program after keeping a verified backup of the
   original on the station; choosing 688x480 or 704x576 restores the original.
   A missing or invalid backup blocks restoring: do not delete recovery backups
@@ -188,6 +201,11 @@ PCMU; that gives clearer audio and leaves the device more room. Switching
 restarts the C300X once. It writes the same codec settings that BTicino ships
 on firmware 3.0.6, which already runs PCMU from the factory (1.7.19 and 2.0.2
 ship with Speex).
+
+The Classe 100X has no **Audio codec** select. Its firmware keeps Speex: the
+station runs its audio at 16 kHz, and the firmware's PCMU path works only at
+8 kHz. Home Assistant and the browser still get PCMU there, converted by the
+agent.
 
 ### Audio Levels
 
@@ -279,8 +297,13 @@ the C300X and are not part of the card history. Use the **Answering machine**
 switch, the message and memo sensors and the `play_latest_video_message`,
 `play_latest_voice_memo`, `write_text_memo` and `delete_latest_*` actions;
 deleting needs the Display patch. See [Services](feature-reference.md#services).
-A Classe 100X has no answering machine (its hardware switches it off) and no
-voice memos: HA shows only its text memos and the text-memo action there.
+
+A Classe 100X has no answering machine (its firmware switches it off for this
+hardware) and no voice memos: HA shows only its text memos and the
+`write_text_memo` action there. A new text memo is saved through the station,
+as on a C300X, and appears on the station's read-only memo page once the
+[display pages](display.md#classe-100x-activation-by-reboot) are active.
+Deleting memos is not offered on a C100X.
 
 ## Recording Clips and Capture Modes
 
@@ -347,8 +370,10 @@ cleanup.
 
 ## Speaker Announcements and TTS
 
-The **Speaker** media player is the station's own loudspeaker. Use it like any
-other speaker in Home Assistant:
+The **Speaker** media player is the station's own loudspeaker. It exists on the
+Classe 300X only: on the Classe 100X no safe way to play sound on the station
+is known, so the agent offers no speaker and Home Assistant creates none. Use
+it like any other speaker in Home Assistant:
 
 ```yaml
 action: tts.speak
@@ -402,6 +427,12 @@ uses `notify.bticino_c300x`; an entry named **Front door** gets
 ID shown in HA's action editor; it survives restarts and renames. If HA cannot
 read its saved name reservations, it registers no action under another
 device's name; fix the HA storage or restore it from a working HA backup.
+
+On a Classe 100X the action exists once the
+[display activation](display.md#classe-100x-activation-by-reboot) is
+confirmed, and only `display` works there: the notice wakes the screen without
+a tone, a positive `sound_duration` is refused, and `tts` and `led` are refused
+because the station has no speaker backend and no message LED.
 
 ```yaml
 action: notify.bticino_c300x

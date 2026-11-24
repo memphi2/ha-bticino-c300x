@@ -3,12 +3,17 @@
 The Display patch adds Home Assistant pages to the C300X's own blue interface:
 tiles for your entities, an energy page, an agenda, departure checks, an Alarmo
 page and notices from automations. They are native station pages, not the
-Lovelace card or an embedded Home Assistant dashboard. Display pages need
-firmware 1.7.x or 2.0.2; on firmware 3.0.6 (experimental) the station's Qt 5
-interface has no display files to patch, so the Display patch is skipped and
-these pages are not available. On the C100X test branch the pages come as a
-separate Qt 5 adapter that a reboot activates; see the
-[C100X support matrix](c100x-experimental.md).
+Lovelace card or an embedded Home Assistant dashboard.
+
+| Model and firmware | Display pages |
+| --- | --- |
+| Classe 300X, 1.7.x or 2.0.2 | Yes, through the Display patch below. |
+| Classe 300X, 3.0.6 (experimental) | No: its Qt 5 interface has no display files to patch, so the Display patch is skipped. |
+| Classe 100X, 1.5.8 (in test, [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51)) | Yes, as a separate adapter that a reboot activates, operated with the station's keys; see [Classe 100X: Activation by Reboot](#classe-100x-activation-by-reboot). |
+
+The pages, tiles and settings below are the same on both models. Sections that
+name the Display patch apply to the Classe 300X; the Classe 100X differences
+are listed in [its own section](#classe-100x-activation-by-reboot).
 
 <table>
   <tr>
@@ -24,6 +29,9 @@ selected for the display can be operated from it, and Home Assistant checks
 every command against the current selection and the entity's capabilities.
 
 ## Enable the Display Pages
+
+These steps are for a Classe 300X. On a Classe 100X use
+[Activation by Reboot](#classe-100x-activation-by-reboot) instead.
 
 1. Install or update the device agent
    ([Quick Start](quickstart.md#install-the-device-agent)).
@@ -104,6 +112,54 @@ The optional `dashboard` object changes that tile:
 
 After an integration update, the agent-update Repair installs the matching
 agent and display files together.
+
+## Classe 100X: Activation by Reboot
+
+On a Classe 100X (firmware 1.5.8, in test in
+[issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51)) the pages
+come as a separate adapter for the station's own Qt 5 interface. Its display
+program cannot be restarted, so the pages take effect with one reboot, and the
+agent confirms them in that boot. The Display patch, its switch, the home page
+buttons and **Reload device display** do not exist there.
+
+Until the pages are confirmed, Home Assistant hides the display settings and
+keeps ringer mute, the touch tone and display notifications off. Saved display
+settings stay; **Alarm (Alarmo)** stays available.
+
+1. Install the device agent and finish the first tests
+   ([Quick Start](quickstart.md#first-media-tests)). The agent needs its
+   maintenance reboot, which the installation turns on.
+2. Press **Activate display pages** on the device page. The agent prepares the
+   pages and reboots the station once it has been idle for about two minutes;
+   a call meanwhile postpones the reboot and is never interrupted.
+3. After the reboot the agent checks the new display. Once it is confirmed,
+   Home Assistant reloads, turns **Home Assistant pages on the display** on
+   and offers **Display pages** and **Display tiles** like on a Classe 300X.
+
+**Restore original display**, or turning **Home Assistant pages on the
+display** off, brings back the original display with one reboot.
+
+If the new display does not start in its first boot, for example after a power
+loss, the station goes back to its original display at the following start and
+Repairs shows **C100X display pages were rolled back**; press **Activate
+display pages** to try again. If the agent cannot check a pending activation
+when the station starts, Repairs shows **C100X display check failed at the
+station start**; see
+[Troubleshooting](media-troubleshooting.md#classe-100x-display-pages).
+
+What differs on the Classe 100X:
+
+- The pages are operated with the station's keys: Up and Down move and scroll,
+  Return opens or confirms, Back returns. The call, hang-up and numbered keys
+  keep their station functions.
+- Display notifications wake the screen without a tone; a notification with a
+  positive `sound_duration` is refused.
+- Text memos are shown read-only on their own page.
+- There is no message LED and no speech; see
+  [Models and Features](feature-reference.md#models-and-features).
+
+Every step is in test on a Classe 100X; the tester guide is
+[Classe 100X test package](c100x-test-release.md#display-activation-by-reboot-device-test).
 
 ## Pages and Positions
 
@@ -452,7 +508,8 @@ removes a notice.
   conditions that still apply. Nothing is written to the station or the
   recorder.
 - Where the agent reports message LED support, a notice also lights the
-  station's message LED until it is dismissed or expires.
+  station's message LED until it is dismissed or expires. The Classe 100X has
+  none.
 - An action never runs because a notice arrives, only when tapped. **Mark
   read** only dismisses the notice; it neither fixes the condition nor runs an
   action. Commands for a notice that has since changed are rejected.

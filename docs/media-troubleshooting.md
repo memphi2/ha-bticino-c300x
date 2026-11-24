@@ -1,7 +1,9 @@
 # Troubleshooting
 
 Start here when the card, camera, Ring Call, Home Call or talkback does not
-behave as expected. Check **Media readiness** first.
+behave as expected. Check **Media readiness** first. The entries apply to the
+Classe 300X and the Classe 100X; [Classe 100X](#classe-100x) collects what
+only happens there.
 
 ## Media Readiness
 
@@ -182,6 +184,8 @@ For clearer sound use the PCMU codec. See
 
 ## Device Reboots After PCMU On-demand Video
 
+This applies to the Classe 300X; the Classe 100X has no PCMU switch.
+
 The current agent fixes the reboots reported in [issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55).
 If a PCMU stream still reboots the station, stop testing, set **Audio codec**
 back to **Speex** (this reboots the station once) and report it with versions
@@ -280,6 +284,33 @@ A DHCP reservation for the station avoids address changes.
 Do not delete recovery files or force the operation past the error. Follow
 [Recovery](advanced-maintenance.md#recovery).
 
+## Classe 100X
+
+The Classe 100X on firmware 1.5.8 is in test in
+[issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). Report
+what you see there, with the details in [What to Attach](#what-to-attach) and
+the [tester guide](c100x-test-release.md#diagnostics-for-issue-51).
+
+### Setup or Update Names the Wrong Model
+
+| Message | Meaning |
+| --- | --- |
+| **This test package is for the Classe 100X only** (setup ends) | The station is a Classe 300X. Install the regular release; nothing was changed. |
+| **C300X device agent: use the regular package** (Repairs) | A Classe 300X entry met the C100X test package. Install the regular release; nothing on the device was changed. |
+| **This package does not support this device model** | The package and the station are different models. Install the matching package; no device files were replaced. |
+| `unsupported_active_route` | The station's active SIP route is not one of the stock route files, for example after BTicino Companion. Nothing was written; video and calls cannot be set up on that station. |
+
+### Classe 100X Display Pages
+
+| Symptom | What to do |
+| --- | --- |
+| No display settings, **Ringer mute** or **Touch tone** | Expected until the [display activation](display.md#classe-100x-activation-by-reboot) is confirmed. Press **Activate display pages**. |
+| The activation waits and does not reboot | The agent reboots only with its maintenance reboot on, once the station has been idle for about two minutes and no call, stream or announcement runs. A call postpones it. |
+| Repairs: **C100X display pages were rolled back** | The pages did not start in the boot after the activation, so the station went back to its original display at the next start. Nothing else changed. Press **Activate display pages** again; if it rolls back again, report it with the agent diagnostics. |
+| Repairs: **C100X display check failed at the station start** | The agent could not check a pending activation when the station started, for example after a firmware update or with a missing display package. The agent runs; the activation stays off and the original pages' backups stay. Press **Restore original display**; if that fails, update the agent with its Repair first. |
+| A notification with `sound_duration`, `tts` or `led` is refused | The C100X display plays no tone, and the station has no speaker backend or message LED. Send `display` without `sound_duration`. |
+| No **Reload device display** button | Expected: the C100X display program cannot be restarted. |
+
 ## Reporting an Issue
 
 ### Log Clues
@@ -298,7 +329,8 @@ Do not delete recovery files or force the operation past the error. Follow
 Open an issue at <https://github.com/memphi2/ha-bticino-c300x/issues> with:
 
 - Home Assistant version and integration version,
-- C300X firmware family and the agent version from diagnostics,
+- station model (C300X or C100X), firmware and the agent version from
+  diagnostics,
 - Media readiness state and attributes,
 - the **Forwarding** setting (Smartphone, Home Assistant or Blocked),
 - a diagnostics download of the integration,

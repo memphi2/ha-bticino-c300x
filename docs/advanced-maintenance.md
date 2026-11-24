@@ -1,20 +1,28 @@
 # Maintenance and Removal
 
 Every device-changing action is explicit; Home Assistant startup never
-patches, reboots or removes anything on the C300X. Keep real keys, device
+patches, reboots or removes anything on the station. This page applies to the
+Classe 300X (C300X) and the Classe 100X (C100X); model differences are named
+where they occur. Keep real keys, device
 configs, logs and captures out of issues and commits.
 
 ## Device Agent
 
 The native device agent runs on the C300X and serves the authenticated
 `/api/v1` API that Home Assistant uses. The setup flow and Repairs install it
-on a rooted, SSH-enabled C300X, update it ([Update](quickstart.md#update)),
+on a rooted, SSH-enabled station, update it ([Update](quickstart.md#update)),
 recreate its startup link after a device reboot and remove it
 ([Remove Agent](#remove-agent)).
 
 Updating only the integration does not change the device. The agent-update
 Repair installs the agent and its display files together through the agent API
 and the saved maintenance key.
+
+Each package names the model it is for. The C100X test package updates only a
+C100X agent, and a C300X package never updates a C100X agent. Home Assistant
+refuses the other model before any upload and the Repair then asks for the
+matching package; a C100X agent's own updater also refuses a package not made
+for a C100X.
 
 When the station gets a new IPv4 address, the agent announces itself again and
 Home Assistant follows it once the station has proved that it holds the access
@@ -33,13 +41,17 @@ Separate from the optional display pages, the core GUI hook tracks media
 session state and keeps ringer mute/unmute in step with the GUI's saved audio
 state. Repairs applies it when required; reload the C300X GUI afterwards.
 Without a responding GUI, ringer commands fail instead of changing only the LED.
+The C100X has no core GUI hook: its ringer mute and touch tone come with the
+[display activation](display.md#classe-100x-activation-by-reboot).
 
 ### Display Patch
 
 The optional Display patch writes the files for the
 [station display pages](display.md#enable-the-display-pages) and reloads the
 device UI, which can take about a minute. Use Repairs instead of editing device
-files.
+files. The Display patch is for the C300X; the C100X display pages use the
+[activation by reboot](display.md#classe-100x-activation-by-reboot), with the
+**Activate display pages** and **Restore original display** buttons.
 
 ### Home Assistant Media User
 
@@ -48,6 +60,13 @@ user that setup or Repair creates. Run the Repair when Readiness reports
 `homeassistant_user`, `device_routing`, or media-user label or route
 inconsistencies. To remove the user, use the C300X display's user management,
 then run setup or Repair again if media features are still enabled.
+
+On a C100X the media user is set up the same way, in test. Setup refuses a
+station whose active SIP route is not one of the stock route files, for
+example one changed by BTicino Companion (`unsupported_active_route`), and
+writes nothing then. Turning the **Home Assistant media user** switch off
+restores the stock routing program from its backup; the added user lines
+stay.
 
 ## Tokens and Access
 
@@ -80,8 +99,12 @@ address.
 
 SSH is used only for the first installation and explicit recovery; normal agent
 updates use the authenticated agent API. The installer first tries the
-built-in C300X factory root login (not secret: the same on every device) and
-asks for an SSH user and password only when the device refuses it. SSH
+built-in factory root login (not secret: the same on every device of a model)
+and asks for an SSH user and password only when the device refuses it. While
+the model is unknown it tries the C300X login and then, only after the station
+refused it, the C100X login. The C100X factory login was checked against the
+original 1.5.8 firmware, not on a device; a changed password needs your own
+login. SSH
 credentials are not stored. Home Assistant installs the AsyncSSH client on
 demand; its host needs no SSH tools or add-on. The device still requires
 legacy SSH algorithms, an accepted risk documented as
@@ -151,6 +174,9 @@ step is complete.
 - **Camera size back from 960x576 reports missing or invalid backup data:** keep
   the recovery files and resolve the error before retrying; never guess the
   original file.
+- **C100X display pages rolled back or boot check failed (Repairs):** see
+  [Classe 100X Display Pages](media-troubleshooting.md#classe-100x-display-pages).
+  The backups of the original display stay on the station in both cases.
 
 When agent removal fails:
 
@@ -271,5 +297,11 @@ promise that every earlier step was rolled back. Only a display library without 
 not stop it: the library keeps the wider tap tolerance. It is not a factory reset and does not erase HA media or
 HA backups. Review any remaining device users/settings separately; never assume
 all device credentials or unrelated firmware configuration were reset.
+
+On a C100X, removal first checks that the display files are the original ones,
+or restores them from their verified backups and checks the result, and
+restores the stock routing program; unknown changes or damaged backups stop
+the removal before anything is deleted and without a reboot. Removal on a
+C100X is in test.
 
 Source: [`native_agent/scripts/remove_agent.sh`](../native_agent/scripts/remove_agent.sh).

@@ -36,6 +36,33 @@ class OpenWebNetServer(socketserver.ThreadingTCPServer):
         self.delete_paths: dict[str, Path] = {}
         self.smartphone_forwarding_code = 2
         self.ringer_volume_code = 20
+        self.text_memos_root: Path | None = None
+        self.records_dir: Path | None = None
+
+    def text_memo_numbers(self) -> list[int]:
+        if self.text_memos_root is None:
+            return []
+        names = (entry.name for entry in self.text_memos_root.iterdir())
+        return sorted(int(name[5:]) for name in names if name.startswith("memo_"))
+
+    def save_text_memo(self) -> str:
+        # As bt_answering_machine: it numbers the memo and moves message.txt in.
+        if self.records_dir is None or self.text_memos_root is None:
+            return "*#*0##"
+        staged = self.records_dir / "message.txt"
+        if not staged.is_file():
+            return "*#*0##"
+        used = self.text_memo_numbers()
+        number = next(n for n in range(1, len(used) + 2) if n not in used)
+        entry = self.text_memos_root / f"memo_{number}"
+        entry.mkdir()
+        (entry / "msg_info.ini").write_text(
+            "[Message Information]\nDate=Tue, 24 Nov 2026 14:35:51 +0100\nMediaType=3\n"
+            "EuAddr=memo\ncause=2\nStatus=0\nUnixTime=1795527351\nRead=0\nDuration=00\n",
+            encoding="utf-8",
+        )
+        shutil.move(staged, entry / "message.txt")
+        return "*#*1##"
 
 
 class OpenWebNetHandler(socketserver.BaseRequestHandler):
@@ -47,7 +74,12 @@ class OpenWebNetHandler(socketserver.BaseRequestHandler):
             return
         self.request.sendall(b"*#*1##")
         while True:
-            frame = read_frame(self.request)
+            try:
+                frame = read_frame(self.request)
+            except ConnectionResetError:
+                # The agent closes after the first reply frame; a list reply
+                # is followed by an ACK it does not read.
+                return
             if not frame:
                 return
             server.frames.append(frame)
@@ -519,6 +551,10 @@ def run_smoke(
         config_path = temp_path / "config.json"
         text_memos_root.mkdir()
         voice_memos_root.mkdir()
+        records_dir = temp_path / "records"
+        records_dir.mkdir()
+        openwebnet.text_memos_root = text_memos_root
+        openwebnet.records_dir = records_dir
         activation_root.mkdir()
         firewall_runtime_bin.mkdir()
         for tool_name in ("iptables", "ip6tables"):
@@ -705,6 +741,7 @@ def run_smoke(
                         "enabled": True,
                         "textRoot": str(text_memos_root),
                         "voiceRoot": str(voice_memos_root),
+                        "recordsDir": str(records_dir),
                         "watch": True,
                         "maxMemos": 64,
                     },
@@ -2183,6 +2220,13 @@ def assert_runtime_bridge_binds_ui_when_disabled(
 
 
 def reply_for_openwebnet_frame(server: OpenWebNetServer, frame: str) -> str:
+    if frame == "*#8**100#3##":
+        numbers = server.text_memo_numbers()
+        if not numbers:
+            return "*#*0##"
+        return "*#8**100#3" + "".join(f"*{n}" for n in numbers) + "##*#*1##"
+    if frame == "*8*87#4*##":
+        return server.save_text_memo()
     if frame == "*#8**33##":
         return "*#8**33*1##"
     if frame == "*#8**41##":

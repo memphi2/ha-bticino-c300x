@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import DOMAIN
 
@@ -22,3 +22,18 @@ def service_validation_error(
     if placeholders:
         kwargs["translation_placeholders"] = placeholders
     return ServiceValidationError(**kwargs)
+
+
+def home_assistant_error(
+    translation_key: str,
+    placeholders: dict[str, str] | None = None,
+) -> HomeAssistantError:
+    """Create a translated error for a device that failed or could not be reached."""
+
+    kwargs: dict[str, Any] = {
+        "translation_domain": DOMAIN,
+        "translation_key": translation_key,
+    }
+    if placeholders:
+        kwargs["translation_placeholders"] = placeholders
+    return HomeAssistantError(**kwargs)

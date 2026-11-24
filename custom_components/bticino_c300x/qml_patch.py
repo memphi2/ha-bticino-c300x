@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from asyncio import Lock
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -24,6 +25,8 @@ from .entry_config import entry_config_value
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 
+_LOGGER = logging.getLogger(__name__)
+
 
 def _qml_patch_lock(entry: BticinoC300XConfigEntry) -> Lock:
     """Return the per-entry lock serializing all Display-patch mutations."""
@@ -44,6 +47,13 @@ async def async_refresh_qml_patch_status(
         async_retry_update_maintenance_busy(read) if wait_busy else read()
     )
     _store_qml_patch_status(entry, status)
+    # A real device answer ends an earlier failed read, which raises the core
+    # hook Repairs issue on its own.
+    diagnostics = getattr(
+        getattr(entry.runtime_data, "diagnostics", None), "qml_patch_diagnostics", None
+    )
+    if diagnostics is not None:
+        diagnostics.mark_success(datetime.now(UTC))
     return status
 
 
@@ -149,22 +159,16 @@ async def async_apply_qml_core_patch_and_confirm(
     async with _qml_patch_lock(entry):
         previous_status = _qml_patch_status(entry)
         _store_transient_qml_core_patch_status(entry, "core_patching")
-        _notify_status_changed(status_changed)
-        try:
-            action_status = await entry.runtime_data.api.async_apply_qml_core_patch()
-        except Exception:
-            _store_qml_patch_status(entry, previous_status)
-            _notify_status_changed(status_changed)
-            raise
-        if action_status.get("core_patched") is not True or not display_activation_confirmed(action_status):
-            _store_qml_patch_status(entry, action_status)
-            _notify_status_changed(status_changed)
-            require_display_activation(action_status)
-            return action_status
-        status = await async_refresh_qml_patch_status(entry)
-        _notify_status_changed(status_changed)
-        require_display_activation(status)
-        return status
+        return await _async_settle_qml_patch_action(
+            entry,
+            status_changed=status_changed,
+            previous_status=previous_status,
+            confirmed=lambda status: status.get("core_patched") is True
+            and display_activation_confirmed(status),
+            activation_required=True,
+            action=entry.runtime_data.api.async_apply_qml_core_patch,
+            refresh=async_refresh_qml_patch_status,
+        )
 
 
 async def async_restore_qml_patch_and_confirm(
@@ -217,23 +221,72 @@ async def _async_run_qml_patch_action_unlocked(
 
     previous_status = _qml_patch_status(entry)
     _store_transient_qml_patch_status(entry, transient_state)
+    return await _async_settle_qml_patch_action(
+        entry,
+        status_changed=status_changed,
+        previous_status=previous_status,
+        confirmed=lambda status: status.get("patched") is expected_patched
+        and display_activation_confirmed(status, required=expected_patched),
+        activation_required=expected_patched,
+        action=action,
+        refresh=refresh,
+    )
+
+
+async def _async_settle_qml_patch_action(
+    entry: BticinoC300XConfigEntry,
+    *,
+    status_changed: _StatusChanged | None,
+    previous_status: dict[str, Any],
+    confirmed: Callable[[dict[str, Any]], bool],
+    activation_required: bool,
+    action: Callable[[], Awaitable[dict[str, Any]]],
+    refresh: Callable[[BticinoC300XConfigEntry], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Run a write whose transient status is stored; never leave that status.
+
+    A failed write (a 504 timeout included, whether it was rolled back or not)
+    is followed by a fresh status read, since the device may have changed; the
+    status from before the write comes back only when that read fails too, or
+    when the task is cancelled. A write that succeeded keeps its own answer
+    when the confirming read fails.
+    """
+
     _notify_status_changed(status_changed)
     try:
         action_status = await action()
     except Exception:
+        try:
+            await refresh(entry)
+        except BaseException as read_err:
+            _store_qml_patch_status(entry, previous_status)
+            if not isinstance(read_err, Exception):
+                # Cancelled during that read: the cancellation wins.
+                _notify_status_changed(status_changed)
+                raise
+        _notify_status_changed(status_changed)
+        raise
+    except BaseException:
         _store_qml_patch_status(entry, previous_status)
         _notify_status_changed(status_changed)
         raise
-    if action_status.get("patched") is not expected_patched or not display_activation_confirmed(
-        action_status, required=expected_patched,
-    ):
+    if not confirmed(action_status):
         _store_qml_patch_status(entry, action_status)
         _notify_status_changed(status_changed)
-        require_display_activation(action_status, required=expected_patched)
+        require_display_activation(action_status, required=activation_required)
         return action_status
-    status = await refresh(entry)
+    try:
+        status = await refresh(entry)
+    except Exception as err:
+        _LOGGER.warning("C300X Display patch status read after a write failed: %s", err)
+        status = action_status
+        _store_qml_patch_status(entry, status)
+    except BaseException:
+        _store_qml_patch_status(entry, action_status)
+        _notify_status_changed(status_changed)
+        raise
     _notify_status_changed(status_changed)
-    require_display_activation(status, required=expected_patched)
+    require_display_activation(status, required=activation_required)
     return status
 
 
@@ -250,6 +303,8 @@ def _store_transient_qml_patch_status(entry: BticinoC300XConfigEntry, state: str
             "backup_available": current.get("backup_available"),
             "core_backup_available": current.get("core_backup_available"),
             "gui_running": current.get("gui_running"),
+            # A leftover the device could not finish stays during the write.
+            "transaction": current.get("transaction"),
         },
     )
 
@@ -267,6 +322,8 @@ def _store_transient_qml_core_patch_status(entry: BticinoC300XConfigEntry, state
             "backup_available": current.get("backup_available"),
             "core_backup_available": current.get("core_backup_available"),
             "gui_running": current.get("gui_running"),
+            # A leftover the device could not finish stays during the write.
+            "transaction": current.get("transaction"),
         },
     )
 
@@ -282,5 +339,10 @@ def _notify_status_changed(status_changed: _StatusChanged | None) -> None:
 
 
 def _store_qml_patch_status(entry: BticinoC300XConfigEntry, status: dict[str, Any]) -> None:
+    if status.get("transaction") == "stuck" and _qml_patch_status(entry).get("transaction") != "stuck":
+        _LOGGER.warning(
+            "C300X Display patch: an interrupted display write could not be "
+            "finished on the device; see the Repairs issue"
+        )
     entry.runtime_data.qml_patch_status = status
     entry.runtime_data.qml_patch_status_updated_at = datetime.now(UTC)

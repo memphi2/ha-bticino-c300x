@@ -21,6 +21,35 @@ AGENT_PID="$AGENT_DIR/c300x-agent-native.pid"
 
 [ -f /etc/init.d/functions ] && . /etc/init.d/functions
 
+pause() {
+    usleep 100000 >/dev/null 2>&1 || sleep 1
+}
+
+pidfile_pid() {
+    pid="$(cat "$AGENT_PID" 2>/dev/null)"
+    case "$pid" in
+        ""|*[!0-9]*) return 1 ;;
+    esac
+    printf '%s\n' "$pid"
+}
+
+is_agent() {
+    exe="$(readlink "/proc/$1/exe" 2>/dev/null)" || return 1
+    exe="${exe% (deleted)}"
+    [ -n "$exe" ] || return 1
+    [ "$exe" = "$AGENT_BIN" ] || [ "$exe" = "$(readlink -f "$AGENT_BIN" 2>/dev/null)" ]
+}
+
+wait_gone() {
+    tries="$2"
+    while kill -0 "$1" >/dev/null 2>&1 && is_agent "$1"; do
+        [ "$tries" -gt 0 ] || return 1
+        tries=$((tries - 1))
+        pause
+    done
+    return 0
+}
+
 case "$1" in
     start)
         if [ ! -x "$AGENT_BIN" ] || [ ! -f "$AGENT_CONFIG" ]; then
@@ -32,20 +61,29 @@ case "$1" in
         exit $?
         ;;
     stop)
+        pid="$(pidfile_pid)" || pid=""
         start-stop-daemon --stop --quiet --oknodo \
-            --pidfile "$AGENT_PID" --retry=TERM/3/KILL/2 || exit $?
+            --pidfile "$AGENT_PID" --exec "$AGENT_BIN" || exit $?
+        if [ -n "$pid" ] && ! wait_gone "$pid" 50; then
+            is_agent "$pid" && kill -KILL "$pid" >/dev/null 2>&1
+            wait_gone "$pid" 20 || exit 1
+        fi
         rm -f "$AGENT_PID" || exit $?
         ;;
     restart)
         "$0" stop || exit $?
-        usleep 150000 >/dev/null 2>&1 || sleep 1
-        "$0" start
-        exit $?
+        "$0" start || exit $?
+        pause
+        tries=20
+        while [ "$tries" -gt 0 ]; do
+            "$0" status || exit 1
+            tries=$((tries - 1))
+            pause
+        done
+        exit 0
         ;;
     status)
-        if [ -f "$AGENT_PID" ] && kill -0 "$(cat "$AGENT_PID")" >/dev/null 2>&1; then
-            exit 0
-        fi
+        pid="$(pidfile_pid)" && kill -0 "$pid" >/dev/null 2>&1 && is_agent "$pid" && exit 0
         exit 3
         ;;
     *)

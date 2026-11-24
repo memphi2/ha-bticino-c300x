@@ -7,6 +7,7 @@ from enum import IntFlag
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 if TYPE_CHECKING:
     from homeassistant.components.alarm_control_panel.const import (
@@ -242,7 +243,7 @@ def _alarmo_context(
     alarmo_data = hass_data.get("alarmo")
     if not isinstance(alarmo_data, dict):
         return None
-    entity = _alarmo_entity_for_entity_id(alarmo_data, entity_id)
+    entity = _alarmo_entity_for_entity_id(hass, alarmo_data, entity_id)
     if entity is None:
         return None
     return alarmo_data, entity
@@ -655,7 +656,7 @@ def _alarmo_code_policy(
     alarmo_data = hass_data.get("alarmo")
     if not isinstance(alarmo_data, dict):
         return None
-    entity = _alarmo_entity_for_entity_id(alarmo_data, entity_id)
+    entity = _alarmo_entity_for_entity_id(hass, alarmo_data, entity_id)
     if entity is None:
         return None
     config = getattr(entity, "_config", None)
@@ -676,7 +677,7 @@ def _alarmo_code_policy(
 
 
 def _alarmo_entity_for_entity_id(
-    alarmo_data: dict[str, Any], entity_id: str
+    hass: HomeAssistant, alarmo_data: dict[str, Any], entity_id: str
 ) -> Any | None:
     """Return the Alarmo runtime entity matching a Home Assistant entity id."""
 
@@ -687,11 +688,19 @@ def _alarmo_entity_for_entity_id(
     for candidate in candidates:
         if getattr(candidate, "entity_id", None) == entity_id:
             return candidate
-    if isinstance(areas, dict) and len(areas) == 1:
+    if isinstance(areas, dict) and len(areas) == 1 and _is_alarmo_entity(hass, entity_id):
         # Some Alarmo setups expose the single area through a user-renamed entity
-        # id while hass.data still keeps the original runtime entity id.
+        # id while hass.data still keeps the original runtime entity id. Any
+        # other alarm panel never borrows Alarmo's area state or code policy.
         return next(iter(areas.values()))
     return None
+
+
+def _is_alarmo_entity(hass: HomeAssistant, entity_id: str) -> bool:
+    """Return whether the entity registry lists the entity under the Alarmo platform."""
+
+    entry = er.async_get(hass).async_get(entity_id)
+    return entry is not None and entry.platform == "alarmo"
 
 
 def _bool_config(config: dict[str, Any], key: str, fallback: bool) -> bool:

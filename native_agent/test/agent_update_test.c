@@ -170,17 +170,27 @@ static void rollback_test(const struct c300x_config *config, const char *manifes
     assert(read_bounded_text_file(path, installed, sizeof(installed), NULL));
     assert(strcmp(manifest, installed) == 0);
 
-    /* Even an otherwise unchanged target cannot hide interrupted recovery data. */
+    /* Recovery links of an interrupted update no longer block every later
+     * update: one of an unchanged target is simply dropped. */
     assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[1].path, path, sizeof(path)));
-    char backup[C300X_MAX_PATH_LEN + 24];
+    char backup[C300X_MAX_PATH_LEN + 24], content[64];
     assert(snprintf(backup, sizeof(backup), "%s.update-backup", path) < (int)sizeof(backup));
     assert(link(path, backup) == 0);
-    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
-    assert(summary.changed_files == 0);
-    /* Successful removal also proves that the rejected update kept the backup. */
-    assert(unlink(backup) == 0);
     assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
     assert(summary.changed_files == 0);
+    assert(access(backup, F_OK) != 0 && errno == ENOENT);
+    /* A target it had already replaced gets its previous file back first:
+     * a failing update then returns to that, not to the half-done state. */
+    assert(write_binary_chunk(path, (const unsigned char *)"half-updated", 12, 0, 0600));
+    assert(write_binary_chunk(backup, (const unsigned char *)"previous", 8, 0, 0600));
+    assert(agent_bundle_manifest_path(config, fail_target, sizeof(fail_target)));
+    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    fail_target[0] = '\0';
+    assert(read_bounded_text_file(path, content, sizeof(content), NULL));
+    assert(strcmp(content, "previous") == 0);
+    assert(access(backup, F_OK) != 0 && errno == ENOENT);
+    assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    assert(summary.changed_files == 1);
 }
 
 static void regular_boot_entry_test(const struct c300x_config *config, const char *manifest)
@@ -239,12 +249,17 @@ static void obsolete_source_safety_test(const struct c300x_config *config, const
     assert(stat(obsolete_source, &info) == 0 && (info.st_mode & 0777) == 0640);
     assert(access(backup, F_OK) != 0 && errno == ENOENT);
     assert(summary.changed_files == 0);
+    /* The committed update that retired it could not clean up: the
+     * installed bundle verifies, so its leftover is dropped. */
     assert(rename(obsolete_source, backup) == 0);
-    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
-    assert(read_bounded_text_file(backup, content, sizeof(content), NULL));
-    assert(strcmp(content, "old-distribution") == 0);
-    assert(rename(backup, obsolete_source) == 0);
     assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
+    assert(summary.changed_files == 0);
+    assert(access(obsolete_source, F_OK) != 0 && errno == ENOENT);
+    assert(access(backup, F_OK) != 0 && errno == ENOENT);
+    /* Not verified (installed bundle unknown): it died midway, so its
+     * rollback brings the file back and this update retires it again. */
+    assert(write_binary_chunk(backup, (const unsigned char *)"old-distribution", 16, 0, 0640));
+    assert(apply_agent_update_files(config, manifest, "{}", &summary, NULL));
     assert(summary.changed_files == 1 && summary.qml_patch_changed);
     assert(access(obsolete_source, F_OK) != 0 && errno == ENOENT);
     assert(access(backup, F_OK) != 0 && errno == ENOENT);

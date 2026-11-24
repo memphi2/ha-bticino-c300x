@@ -399,12 +399,13 @@ def test_update_retries_only_busy_rejections(monkeypatch, failure) -> None:
         assert raised.value is error
         if failure in {"busy_always", "apply_busy"}:
             waited = prepare if failure == "busy_always" else apply
-            assert waited.await_count == 13  # twelve one-second pauses and a last try
-            assert sum(sleeps) == agent_update.MAINTENANCE_BUSY_WAIT_SECONDS == 12
+            pauses = int(agent_update.MAINTENANCE_BUSY_WAIT_SECONDS)
+            assert waited.await_count == pauses + 1  # one-second pauses and a last try
+            assert sum(sleeps) == agent_update.MAINTENANCE_BUSY_WAIT_SECONDS == 47
         else:
             assert prepare.await_count == 1
             assert sleeps == []
-        assert apply.await_count == (13 if failure == "apply_busy" else 0)
+        assert apply.await_count == (48 if failure == "apply_busy" else 0)
         assert upload.await_count == (1 if failure in {"apply_busy", "upload_busy"} else 0)
 
 
@@ -484,7 +485,7 @@ def test_busy_budget_does_not_admit_retry_after_slow_busy_response(monkeypatch) 
     async def action():
         calls.append(clock[0])
         if len(calls) == 2:
-            clock[0] += 20.0
+            clock[0] += agent_update.MAINTENANCE_BUSY_WAIT_SECONDS + 8.0
         raise busy
 
     monkeypatch.setattr(agent_update, "monotonic", lambda: clock[0])

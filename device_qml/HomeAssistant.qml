@@ -88,6 +88,11 @@ Page {
     property variant notifications: []
     property bool notificationsOpen: false
 
+    Connections {
+        target: global.screenState
+        onStateChangedInt: page.screenStateChanged(new_state)
+    }
+
     function notificationAction(item, actionId) {
         var command = {revision: item.revision, action_id: actionId === undefined ? null : actionId}
         Api.dashboardControl({entity_id: "notification." + item.id}, {command: ""}, JSON.stringify(command), status, page)
@@ -131,6 +136,10 @@ Page {
     function handleScreenOff() {
         aboutToHide()
         return preventReturnToHomepage
+    }
+
+    function screenStateChanged(state) {
+        if (state !== ScreenState.ScreenOff && page.visible && !pageActive) aboutToShow()
     }
 
     function startWatch() {

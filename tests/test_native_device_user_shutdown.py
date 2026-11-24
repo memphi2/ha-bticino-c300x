@@ -83,7 +83,7 @@ def test_label_shutdown_finishes_commit_or_rollback(route_binary, tmp_path, oper
         assert result["status"] == (0 if outcome == "success" else 500)
         if outcome == "rollback":
             assert snapshot(gui) == before
-            assert snapshot(observations / "2") == before
+            assert snapshot(observations / "2", gui_only=True) == before
         else:
             assert snapshot(gui) != before
         assert not list(gui.glob(".c300x-qml-transaction.*"))

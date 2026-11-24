@@ -10,6 +10,7 @@ function setStatus(statusItem, text, color, optionalFeedback) {
 var displayPreferenceRequest = null
 
 function loadDisplayPreferences(owner) {
+    useBaseUrl(owner.uiBaseUrl)
     if (!owner.ready) requestDisplayPreferences(owner, null)
 }
 
@@ -123,7 +124,7 @@ function watchTouchTone(owner, completed) {
     }
     try {
         var revision = nextTouchToneRevision()
-        request.open("GET", "http://127.0.0.1:8090/ui/touch-tone/next?enabled="
+        request.open("GET", owner.uiBaseUrl + "/ui/touch-tone/next?enabled="
             + (owner.touchToneEnabled ? "1" : "0") + "&session=" + touchToneSession
             + "&revision=" + revision + (completed ? "&completed=" + completed : ""), true)
         request.setRequestHeader("X-C300X-UI", "1")
@@ -148,7 +149,7 @@ function reportTouchTone(owner) {
         else if (owner.touchToneReportAgain) reportTouchTone(owner)
     }
     try {
-        request.open("POST", "http://127.0.0.1:8090/ui/touch-tone/state", true)
+        request.open("POST", owner.uiBaseUrl + "/ui/touch-tone/state", true)
         request.setRequestHeader("X-C300X-UI", "1")
         request.setRequestHeader("Content-Type", "application/json")
         owner.touchToneReportDeadline.restart()
@@ -160,6 +161,14 @@ function reportTouchTone(owner) {
 var BASE_URL = "http://127.0.0.1:8090"
 var connections = []
 var dashboardRevision = ""
+
+function useBaseUrl(url) {
+    if (typeof url === "string" && /^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(url)) BASE_URL = url
+}
+
+function baseUrl() {
+    return BASE_URL
+}
 var eventRevision = 0
 var eventRequest = null
 var eventWatching = false
@@ -521,6 +530,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
 }
 
 function homeButtons(callback, owner) {
+    if (owner) useBaseUrl(owner.uiBaseUrl)
     getJsonShared("/ui/state", function(data) {
         if (callback) {
             callback(

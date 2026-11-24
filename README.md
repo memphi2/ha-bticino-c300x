@@ -112,12 +112,21 @@ Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkbac
 <table>
   <tr>
     <td align="center"><strong>Doorbell card</strong><br><img src="docs/images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card in Home Assistant dark mode with a saved visitor snapshot, play, call, door and light buttons" width="360"></td>
-    <td align="center"><strong>Station display pages</strong><br><img src="docs/images/readme/display-start-en.webp" alt="Home Assistant start page on the C300X with weather, status and the favourites bar" width="360"></td>
+    <td align="center"><strong>Station home page</strong><br><img src="docs/images/readme/display-home-stock-en.webp" alt="C300X home page with the station's own buttons and the added Alarm and Home Assistant buttons in two rows" width="360"></td>
+  </tr>
+</table>
+<table>
+  <tr>
+    <td align="center"><strong>Energy</strong><br><img src="docs/images/readme/display-energy-flow-en.webp" alt="Energy page on the station: current flow between grid, solar, battery and home" width="240"></td>
+    <td align="center"><strong>Alarm (Alarmo)</strong><br><img src="docs/images/readme/display-alarmo-en.webp" alt="Alarm page on the station with arming modes and PIN keypad" width="240"></td>
+    <td align="center"><strong>Camera</strong><br><img src="docs/images/readme/display-camera-en.webp" alt="Camera page on the station with two picture tiles side by side" width="240"></td>
   </tr>
 </table>
 
-Both screenshots come from a C300X and its Home Assistant; the card shows an
-earlier visitor image. Entities and pages depend on the enabled options.
+All screenshots come from a C300X and its Home Assistant; camera pictures and
+some values are examples, see [legal notes](docs/legal.md#no-firmware-or-apk-payloads).
+The card shows an earlier visitor image. Entities and pages depend on the
+enabled options.
 
 ## Documentation
 

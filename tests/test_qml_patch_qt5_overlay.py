@@ -38,7 +38,9 @@ def _vendor_files(tmp_path: Path, *, main_app_extra: str = "") -> dict[str, byte
     plain.mkdir(parents=True, exist_ok=True)
     _write_original_gui(plain)
     files = {rel: _qt5_form((plain / rel).read_text()).encode() for rel in VENDOR_FILES}
-    files["MainApp.qml"] += main_app_extra.encode()
+    # After the import line: a stock file still ends with its closing brace.
+    head, rest = files["MainApp.qml"].split(b"\n", 1)
+    files["MainApp.qml"] = head + b"\n" + main_app_extra.encode() + rest
     return files
 
 
@@ -222,8 +224,8 @@ def test_another_firmware_build_starts_from_its_own_files(device: Device) -> Non
     device.ok("apply")
     device.program = device.programs["second"]
     assert device.ok("apply")["state"] == "patched"
-    assert (device.backup / "MainApp.qml").read_text().endswith("// another build\n")
-    assert (device.qt5_root / "vendor/MainApp.qml").read_text().endswith("// another build\n")
+    assert "\n// another build\n" in (device.backup / "MainApp.qml").read_text()
+    assert "\n// another build\n" in (device.qt5_root / "vendor/MainApp.qml").read_text()
 
 
 @pytest.mark.parametrize("action", ["apply", "core-apply", "media-user-label-apply"])

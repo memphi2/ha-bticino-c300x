@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
+
 import custom_components.bticino_c300x.dashboard as dashboard_module
 from custom_components.bticino_c300x.config_flow_dashboard import (
     dashboard_entity_display_overrides_from_fields,
@@ -1139,6 +1141,42 @@ def test_async_execute_alarm_command_returns_alarmo_blockers_before_service_call
     assert hass.services.calls == []
 
 
+@pytest.mark.parametrize("platform", [None, "template"])
+def test_non_alarmo_panel_never_borrows_the_single_alarmo_area(monkeypatch, platform) -> None:  # noqa: ANN001
+    """Another alarm panel next to a one-area Alarmo is armed through its own service."""
+
+    if platform is not None:
+        _registry_platforms(monkeypatch, {"alarm_control_panel.other": platform})
+    else:
+        _registry_platforms(monkeypatch, {})
+    alarmo_entity = types.SimpleNamespace(
+        entity_id="alarm_control_panel.alarmo_home",
+        area_id="area-1",
+        _config={"code_arm_required": True},
+        _ready_to_arm_modes=[],
+        open_sensors=None,
+    )
+    # Alarmo's own area is not ready: its front door is open.
+    sensor_handler = FakeAlarmoSensorHandler(
+        responses={("area-1", "armed_away"): {"binary_sensor.front_door": "open"}},
+        _config={"binary_sensor.front_door": {"type": "door"}},
+    )
+    hass = FakeHass(
+        states=FakeStates({
+            "alarm_control_panel.other": FakeState("disarmed"),
+            "binary_sensor.front_door": FakeState("on"),
+        }),
+        data={"alarmo": {"master": None, "areas": {"area-1": alarmo_entity},
+                         "sensor_handler": sensor_handler}},
+    )
+    entry = FakeEntry(data={CONF_ALARM_ENTITY_ID: "alarm_control_panel.other"})
+
+    result = run(async_execute_alarm_command(hass, entry, "arm_away", None))
+
+    assert result["ok"] is True and result["state"] == "armed_away"
+    assert [call[:2] for call in hass.services.calls] == [("alarm_control_panel", "alarm_arm_away")]
+
+
 def test_async_execute_alarm_command_returns_invalid_code_error() -> None:
     hass = FakeHass(
         states=FakeStates({"alarm_control_panel.home": FakeState("armed_away")})
@@ -1816,7 +1854,19 @@ def test_async_status_keeps_alarmo_ready_modes_without_sensor_handler() -> None:
     assert commands["arm_away"]["blocking_sensors"] == []
 
 
-def test_async_status_matches_single_alarmo_area_after_entity_rename() -> None:
+def _registry_platforms(monkeypatch, platforms: dict[str, str]) -> None:  # noqa: ANN001
+    from homeassistant.helpers import entity_registry
+
+    registry = types.SimpleNamespace(
+        async_get=lambda entity_id: (
+            types.SimpleNamespace(platform=platforms[entity_id]) if entity_id in platforms else None
+        )
+    )
+    monkeypatch.setattr(entity_registry, "async_get", lambda _hass: registry)
+
+
+def test_async_status_matches_single_alarmo_area_after_entity_rename(monkeypatch) -> None:  # noqa: ANN001
+    _registry_platforms(monkeypatch, {"alarm_control_panel.alarmo": "alarmo"})
     alarmo_entity = types.SimpleNamespace(
         entity_id="alarm_control_panel.original_name",
         area_id="area-1",

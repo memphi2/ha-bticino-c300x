@@ -219,7 +219,8 @@ class _C300XApiCore:
                 maintenance=code == "maintenance_unauthorized"
                 or path.startswith("/api/v1/maintenance/")
             )
-        if status == 404:
+        if status in (404, 501):
+            # 501 is the agent's answer for an /api/v1 route it does not have.
             if (
                 path == "/api/v1/display-bridge/events"
                 and _agent_error_field(text, "error") == "display_bridge_disabled"

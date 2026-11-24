@@ -19,7 +19,9 @@ from .const import DOMAIN
 COMPONENT_DIR = Path(__file__).resolve().parent
 BUNDLE_MANIFEST = COMPONENT_DIR / "device_agent" / "bundle.json"
 UPLOAD_CHUNK_SIZE = 2048
-MAINTENANCE_BUSY_WAIT_SECONDS = 12.0  # Native job deadline (10s) plus reap margin.
+# The longest maintenance job: a QML write or the agent's start-up recovery,
+# 30 s deadline plus 15 s for the rollback after SIGTERM, plus reap margin.
+MAINTENANCE_BUSY_WAIT_SECONDS = 47.0
 # A user action also holds its entity platform while it waits; this covers a
 # status read that Home Assistant started itself, not a long device job.
 MAINTENANCE_BUSY_ACTION_WAIT_SECONDS = 3.0

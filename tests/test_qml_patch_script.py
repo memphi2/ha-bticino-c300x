@@ -5,7 +5,9 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 from textwrap import dedent
 
@@ -327,15 +329,15 @@ PATCH_OUTPUT_SHA256 = {
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "8ca34ccda6fab0a954ad3edaa86beb67b6b92d709fd603aaed952a64e4587f38",
-    "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
+    "HomePage.qml": "de706cdb68db1dd0d255c60cd56676904173c81ca50170a8591d9663d722b34d",
+    "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
-    "Alarm.qml": "c16297063a5a4c3d5f13c4f6415b663cf0084400757193cd9e9de0a2592a6abc",
-    "HomeAssistant.qml": "6b0d2c9dc68a15bfbec12edbc732d8476dae803d5fdd2e4cfbc8fcb4dcebb781",
+    "Alarm.qml": "c0884022afda5ab4c0894fa3824bc835fef009d12f0b1edf886bee2f98675e17",
+    "HomeAssistant.qml": "d2db286d2b6f82c6c58b72bec7d5bd376da1d18001d4ac3d7f1f8cb60c462a57",
     "C300XEnergy.qml": "087d7b251d583684897f07d8aa83a6632cda709bce567bf0cbfc44580208a0c1",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
     "C300XAgenda.qml": "487eed57021d45cbf78e79b844bd86513351e9c005c59b2e8d3ff4988f04b51e",
-    "C300XAlerts.qml": "d1bd1c10ebbe330ba76bb667a0a9b64f6ef6f76e190ec5033fcc7eb3ecad8837",
+    "C300XAlerts.qml": "fef6dccf89f5087c29e149677476722e2ff15ad93ed5fe4dd5b02bfa22ab34ae",
     "C300XDetailControl.qml": "07b3e761c43480d763bf0c943cfe1bb8d19de794fd095bd5478609ca3ec9c42f",
     "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
     "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
@@ -349,12 +351,12 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "c02a63e305455c8b9f340c86fbccf05c5a1fa69a7431615a48b990c247bf0481",
+    "js/c300x_ha.js": "0fcc223b5cfbec06c28cc2c3a38ddf17833f21e35fd0400d667c8ecb0b0e35c2",
     "js/c300x_i18n.js": "c61b2534a23d93aaa893b993e1a5322ceace10119b97850a7ffd08f52ca40c35",
-    "js/c300x_memos.js": "c64084cdc8d44b90150488082aed7338876f756220fac763490fdf0809bf5998",
+    "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "01ff29f347eb77c961dbd8810530138cb854084027a10e33ffddf981bbb30ee9"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "e5c13b1398716d78cebe6bf1751b736d7555506a16c5aabfb413dfaeccb8ef83"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -1941,6 +1943,8 @@ def _assert_complete_gui_patch(
     assert "function stopMessageNotificationWatch()" in home_page
     assert "MemoSync.syncHomeNotifications(page)" in home_page
     assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in home_page
+    # The .pragma libraries cannot see MainApp ids; the pages hand them the port.
+    assert "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl\n" in home_page
     assert 'event.topic === "memos"' in home_page
     assert 'event.topic === "answering_machine.messages"' in home_page
     # A fresh device without a layout setting gets the stock layout.
@@ -1973,6 +1977,7 @@ def _assert_complete_gui_patch(
     assert 'import "js/c300x_memos.js" as MemoSync' in memo_page
     assert "function aboutToShow()" in memo_page
     assert "MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)" in memo_page
+    assert "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl\n" in memo_page
 
     event_manager = (gui_dir / "EventManager.qml").read_text()
     assert "function c300xNotifyMediaClosed()" in event_manager
@@ -2205,3 +2210,224 @@ def test_only_idempotent_reads_share_a_display_round_trip() -> None:
     assert deliver.index("xhr.waiters = []") < deliver.index("waiters[i].callback(")
     assert 'xhr.sharedPath = ""' in deliver
     assert deliver.count("try {") == 3
+
+
+def _gui_files(root: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> dict[str, str]:
+    """``name`` holds its first call until the test signals the script."""
+
+    commands = tmp_path / "blocking-commands"
+    commands.mkdir()
+    (commands / name).write_text(
+        '#!/bin/sh\n'
+        f'if [ ! -e "{tmp_path}/held" ]; then\n'
+        f'  : > "{tmp_path}/held"\n'
+        '  while :; do sleep 0.02; done\n'
+        'fi\n'
+        f'exec "{shutil.which(name) or "/bin/true"}" "$@"\n'
+    )
+    (commands / name).chmod(0o700)
+    if failing_mv:
+        (commands / "mv").write_text(
+            '#!/bin/sh\ncase "$2" in\n  */.c300x-qml-transaction.*/MainApp.qml) exit 1;;\nesac\n'
+            f'exec "{shutil.which("mv")}" "$@"\n'
+        )
+        (commands / "mv").chmod(0o700)
+    return {
+        "PATH": str(commands) + os.pathsep + os.environ["PATH"],
+        "C300X_QML_RELOAD_GUI": "1",
+        "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
+        "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
+    }
+
+
+def _terminate_when_held(tmp_path: Path, gui: Path, backup: Path, action: str,
+                         env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    env = {
+        **os.environ,
+        "C300X_QML_GUI_DIR": str(gui),
+        "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
+        "C300X_QML_BACKUP_DIR": str(backup),
+        "C300X_QML_NO_REMOUNT": "1",
+        "C300X_QML_GUI_ROOT": str(tmp_path),
+        **env_overrides,
+    }
+    process = subprocess.Popen([str(SCRIPT), action], env=env, text=True, start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    deadline = time.monotonic() + 20
+    while not (tmp_path / "held").exists():
+        assert process.poll() is None and time.monotonic() < deadline, process.communicate()
+        time.sleep(0.01)
+    # The agent signals the job's whole process group at its deadline.
+    os.killpg(process.pid, signal.SIGTERM)
+    stdout, stderr = process.communicate(timeout=20)
+    return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+
+
+@pytest.mark.parametrize("held", ["killall", "mktemp"])
+def test_a_terminated_write_rolls_back_and_exits_130(tmp_path: Path, held: str) -> None:
+    """SIGTERM inside the transaction (the GUI restart) or before it (the
+    original backup during staging): the GUI files are as before and exit
+    status 130 tells the agent that the rollback is complete."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    before = _gui_files(gui)
+    result = _terminate_when_held(tmp_path, gui, backup, "apply", _blocking_commands(tmp_path, held))
+    assert result.returncode == 130, result.stderr
+    assert result.stdout == ""
+    assert _gui_files(gui) == before
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+
+
+def test_a_terminated_write_whose_rollback_fails_does_not_exit_130(tmp_path: Path) -> None:
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    result = _terminate_when_held(tmp_path, gui, backup, "apply",
+                                  _blocking_commands(tmp_path, "killall", failing_mv=True))
+    assert result.returncode == 131, result.stderr
+    assert "recovery files retained" in result.stderr
+
+
+def _dead_pid() -> int:
+    process = subprocess.Popen(["true"])
+    process.wait()
+    return process.pid
+
+
+def _killed_apply(tmp_path: Path) -> tuple[Path, Path, dict[str, bytes]]:
+    """A write cut off for good (power loss, SIGKILL) in the middle of it."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    before = _gui_files(gui)
+    env = {
+        **os.environ,
+        "C300X_QML_GUI_DIR": str(gui),
+        "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
+        "C300X_QML_BACKUP_DIR": str(backup),
+        "C300X_QML_NO_REMOUNT": "1",
+        "C300X_QML_GUI_ROOT": str(tmp_path),
+        **_blocking_commands(tmp_path, "killall"),
+    }
+    process = subprocess.Popen([str(SCRIPT), "apply"], env=env, start_new_session=True,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.monotonic() + 20
+    while not (tmp_path / "held").exists():
+        assert process.poll() is None and time.monotonic() < deadline
+        time.sleep(0.01)
+    os.killpg(process.pid, signal.SIGKILL)
+    process.wait(timeout=10)
+    assert _gui_files(gui) != before
+    assert len(list(gui.glob(".c300x-qml-transaction.*"))) == 1
+    return gui, backup, before
+
+
+@pytest.mark.parametrize("cut_rollback", [False, True])
+def test_status_reports_a_leftover_and_recover_rolls_it_back(
+    tmp_path: Path, cut_rollback: bool,
+) -> None:
+    gui, backup, before = _killed_apply(tmp_path)
+    if cut_rollback:
+        # A rollback cut off after it had moved one file back already.
+        leftover = next(gui.glob(".c300x-qml-transaction.*"))
+        (leftover / "MainApp.qml").replace(gui / "MainApp.qml")
+    during = _gui_files(gui)
+    status = _run_qml_patch_raw(tmp_path, gui, backup, "status")
+    assert status.returncode == 0, status.stderr
+    assert json.loads(status.stdout)["transaction"] == "pending"
+    assert _gui_files(gui) == during
+    recovered = _run_qml_patch_raw(tmp_path, gui, backup, "recover")
+    assert recovered.returncode == 0, recovered.stderr
+    result = json.loads(recovered.stdout)
+    assert result["transaction"] == "recovered"
+    assert result["state"] == "original" and result["core_state"] == "original"
+    assert _gui_files(gui) == before
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+    again = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)
+    assert "transaction" not in again
+
+
+def test_a_write_rolls_a_leftover_transaction_back_before_it_writes(tmp_path: Path) -> None:
+    gui, backup, _before = _killed_apply(tmp_path)
+    result = _run_qml_patch_raw(tmp_path, gui, backup, "apply")
+    assert result.returncode == 0, result.stderr
+    applied = json.loads(result.stdout)
+    assert applied["transaction"] == "recovered" and applied["patched"] is True
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+    restored = _run_qml_patch_raw(tmp_path, gui, backup, "restore-all")
+    assert restored.returncode == 0, restored.stderr
+    assert _gui_files(gui) == _before
+
+
+def test_a_leftover_cut_off_before_its_file_list_leaves_the_gui_alone(tmp_path: Path) -> None:
+    """Cut off while it copied the files aside: the format marker is there,
+    the file list is not, so no GUI file was changed yet. The PID of a running
+    process that is not this script counts as gone."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    before = _gui_files(gui)
+    for pid in (_dead_pid(), os.getpid()):
+        leftover = gui / f".c300x-qml-transaction.{pid}"
+        leftover.mkdir()
+        (leftover / ".c300x-v2").write_text("")
+        (leftover / "MainApp.qml").write_text("partial")
+    result = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "recover").stdout)
+    assert result["transaction"] == "recovered"
+    assert _gui_files(gui) == before
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+
+
+def test_a_transaction_of_a_running_write_is_never_touched(tmp_path: Path) -> None:
+    gui, backup, _before = _killed_apply(tmp_path)
+    leftover = next(gui.glob(".c300x-qml-transaction.*"))
+    owner = subprocess.Popen(["sh", "-c", "sleep 30; :", "qml_patch.sh"])
+    try:
+        running = leftover.rename(gui / f".c300x-qml-transaction.{owner.pid}")
+        during = _gui_files(gui)
+        status = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)
+        assert "transaction" not in status
+        recovered = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "recover").stdout)
+        assert "transaction" not in recovered
+        write = _run_qml_patch_raw(tmp_path, gui, backup, "apply")
+        assert write.returncode != 0 and write.stdout == ""
+        assert "An unfinished GUI write is still in place" in write.stderr
+        assert _gui_files(gui) == during and running.is_dir()
+    finally:
+        owner.kill()
+        owner.wait()
+
+
+def test_a_leftover_that_cannot_be_rolled_back_is_reported_and_blocks_writes(
+    tmp_path: Path,
+) -> None:
+    gui, backup, _before = _killed_apply(tmp_path)
+    during = _gui_files(gui)
+    commands = tmp_path / "failing-mv"
+    commands.mkdir()
+    (commands / "mv").write_text(
+        '#!/bin/sh\ncase "$2" in\n  */.c300x-qml-transaction.*/MainApp.qml) exit 1;;\nesac\n'
+        f'exec "{shutil.which("mv")}" "$@"\n'
+    )
+    (commands / "mv").chmod(0o700)
+    env = {"PATH": str(commands) + os.pathsep + os.environ["PATH"]}
+    recovered = _run_qml_patch_raw(tmp_path, gui, backup, "recover", env_overrides=env)
+    assert recovered.returncode == 0, recovered.stderr
+    assert json.loads(recovered.stdout)["transaction"] == "stuck"
+    status = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)
+    assert status["transaction"] == "stuck"
+    leftover = next(gui.glob(".c300x-qml-transaction.*"))
+    assert (leftover / "MainApp.qml").read_bytes() == _before["MainApp.qml"]
+    write = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides=env)
+    assert write.returncode != 0 and write.stdout == ""
+    assert "An unfinished GUI write is still in place" in write.stderr
+    assert (leftover / "MainApp.qml").read_bytes() == _before["MainApp.qml"]
+    assert _gui_files(gui)["MainApp.qml"] == during["MainApp.qml"]

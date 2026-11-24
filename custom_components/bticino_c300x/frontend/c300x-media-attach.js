@@ -17,13 +17,17 @@ function gainDbToLinear(gainDb) {
 }
 
 export class C300XMediaAttachment {
-  constructor(mediaElement, stream, { getGainDb = null, getPlayback = null, onGainChanged = null } = {}) {
+  constructor(mediaElement, stream, {
+    getGainDb = null, getPlayback = null, onGainChanged = null, onPlaybackBlocked = null,
+  } = {}) {
     this._mediaElement = mediaElement;
     this._stream = stream;
     this._attached = false;
     this._getGainDb = getGainDb;
     this._getPlayback = getPlayback;
     this._onGainChanged = onGainChanged;
+    this._onPlaybackBlocked = onPlaybackBlocked;
+    this._playbackBlocked = false;
     this._gainEngaged = false;
     this._outputNode = null;
     this._audioContext = null;
@@ -51,8 +55,37 @@ export class C300XMediaAttachment {
     this.attach();
     this._mediaElement.autoplay = true;
     this.refreshPlayback();
-    this._mediaElement.play?.().catch?.(() => {});
+    this._startElement();
     return this.refreshGain();
+  }
+
+  get playbackBlocked() { return this._playbackBlocked; }
+
+  // Without a user gesture (iOS Safari, a notification answer) the browser
+  // refuses sound: play muted so the picture runs, and let the owner ask for
+  // a tap, which calls resumePlayback.
+  _startElement() {
+    const element = this._mediaElement;
+    element?.play?.()?.catch?.((error) => {
+      if (error?.name !== "NotAllowedError" || element !== this._mediaElement) return;
+      this._setPlaybackBlocked(true);
+      element.play?.()?.catch?.(() => {});
+    });
+  }
+
+  // Call from a user gesture.
+  resumePlayback() {
+    if (!this._playbackBlocked || !this._mediaElement) return undefined;
+    this._setPlaybackBlocked(false);
+    this._startElement();
+    return this.refreshGain();
+  }
+
+  _setPlaybackBlocked(blocked) {
+    if (this._playbackBlocked === blocked) return;
+    this._playbackBlocked = blocked;
+    this.refreshPlayback();
+    this._onPlaybackBlocked?.(blocked);
   }
 
   // Re-evaluate the client-side gain. gain == 0 dB means passthrough: the
@@ -112,7 +145,7 @@ export class C300XMediaAttachment {
     if (this._outputNode) this._outputNode.gain.value = muted ? 0 : volume;
     if (this._mediaElement) {
       this._mediaElement.volume = volume;
-      this._mediaElement.muted = this._gainEngaged || muted;
+      this._mediaElement.muted = this._playbackBlocked || this._gainEngaged || muted;
     }
   }
 
@@ -133,9 +166,11 @@ export class C300XMediaAttachment {
     // the hand-off never leaves a window where it plays the stream directly
     // while the graph also outputs it (audible double). refreshGain then
     // reconciles (and falls back to passthrough if the context can't run).
-    if (this._gainNode && this._currentGainDb() !== GAIN_NEUTRAL_DB) {
+    if (this._playbackBlocked || (this._gainNode && this._currentGainDb() !== GAIN_NEUTRAL_DB)) {
       mediaElement.muted = true;
     }
+    // The element that takes over starts on its own, without a gesture too.
+    if (this._attached) this._startElement();
     return this.refreshGain();
   }
 

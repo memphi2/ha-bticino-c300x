@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 import pytest
 from aiohttp import ClientError
@@ -284,6 +285,54 @@ def test_byte_request_reports_unsupported_endpoint() -> None:
 
     with pytest.raises(C300XAgentApiUnsupportedError, match="missing"):
         asyncio.run(api.async_memo_audio("voice/memo_1"))
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda api: api.async_home_call_status(),
+        lambda api: api.async_memo_audio("voice/memo_1"),
+        lambda api: api.async_firewall_status(),
+    ],
+    ids=["json", "bytes", "maintenance"],
+)
+def test_unknown_agent_route_501_reports_unsupported_endpoint(call: Any) -> None:
+    """The agent answers unknown /api/v1 routes with 501 not_implemented."""
+
+    session = _FakeSession(
+        '{"ok": false, "error": "not_implemented"}',
+        response_status=501,
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiUnsupportedError, match="not_implemented"):
+        asyncio.run(call(api))
+
+
+def test_smartphone_forwarding_falls_back_to_state_on_501() -> None:
+    session = _QueuedSession(
+        [
+            (501, '{"ok": false, "error": "not_implemented"}'),
+            (200, '{"state": {}}'),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    status = asyncio.run(api.async_smartphone_forwarding_status())
+
+    assert status.state == "unknown"
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/smartphone-forwarding"),
+        ("GET", "http://agent.local:8080/api/v1/state"),
+    ]
 
 
 def test_byte_request_reports_http_error() -> None:
@@ -1464,11 +1513,12 @@ def _busy_clock(monkeypatch) -> list[float]:
 
 def test_a_busy_agent_is_given_up_on_after_the_wait(monkeypatch) -> None:
     pauses = _busy_clock(monkeypatch)
-    session = _QueuedSession([_BUSY] * 40)
+    session = _QueuedSession([_BUSY] * 60)
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(_maintenance_api(session).async_device_user_status())
-    # A read waits as long as a job may take, with a pause before every new try.
-    assert sum(pauses) == 12.0 and len(pauses) == 12 and len(session.requests) == 13
+    # A read waits as long as a job may take (a QML write with its rollback),
+    # with a pause before every new try.
+    assert sum(pauses) == 47.0 and len(pauses) == 47 and len(session.requests) == 48
 
     pauses.clear()
     session = _QueuedSession([_BUSY] * 40)
@@ -1483,12 +1533,12 @@ def test_a_caller_that_waits_itself_is_not_made_to_wait_twice(monkeypatch) -> No
     from custom_components.bticino_c300x import agent_update
 
     pauses = _busy_clock(monkeypatch)
-    session = _QueuedSession([_BUSY] * 40)
+    session = _QueuedSession([_BUSY] * 60)
     api = _maintenance_api(session)
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(agent_update.async_retry_update_maintenance_busy(
             lambda: api.async_set_ssh_enabled(True)))
-    assert sum(pauses) == 12.0 and len(session.requests) == 13
+    assert sum(pauses) == 47.0 and len(session.requests) == 48
 
 
 def test_other_refusals_are_not_repeated() -> None:
@@ -1689,7 +1739,7 @@ def test_reload_gui_waits_as_long_as_a_display_patch_write() -> None:
     api._request_json = request_json  # type: ignore[method-assign]
     asyncio.run(api.async_reload_gui())
     asyncio.run(api.async_apply_qml_core_patch())
-    assert calls[0]["request_timeout"] == calls[1]["request_timeout"] == 35.0
+    assert calls[0]["request_timeout"] == calls[1]["request_timeout"] == 50.0
 
 
 def test_firewall_status_uses_maintenance_endpoint() -> None:
@@ -2500,12 +2550,17 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "qt5_overlay": None,
         "qt5_unsupported": None,
         "home_buttons": None,
+        "transaction": None,
         "raw": {"patched": True},
     }
     assert normalize_qml_patch_status({"patched": True, "qt5_overlay": "failed"})["qt5_overlay"] == "failed"
     assert normalize_qml_patch_status(
         {"ok": False, "qt5_overlay": "off", "qt5_unsupported": "display_program_unknown"}
     )["qt5_unsupported"] == "display_program_unknown"
+    for transaction in ("pending", "recovered", "stuck"):
+        assert normalize_qml_patch_status({"transaction": transaction})["transaction"] == transaction
+    for malformed in ("other", 1, None, []):
+        assert normalize_qml_patch_status({"transaction": malformed})["transaction"] is None
     assert normalize_qml_patch_status({"state": "original"})["patched"] is False
     assert normalize_qml_patch_status({"state": "applied"})["patched"] is True
     assert normalize_qml_patch_status({"state": "restored"})["patched"] is False
@@ -3948,7 +4003,7 @@ def test_script_backed_maintenance_requests_outlast_the_agent_script(
     ("async_apply_qml_core_patch", {}, "apply-core"),
     ("async_restore_qml_patch", {}, "restore"),
 ])
-@pytest.mark.parametrize(("configured", "expected"), [(5.0, 35.0), (30.0, 35.0), (60.0, 60.0)])
+@pytest.mark.parametrize(("configured", "expected"), [(5.0, 50.0), (45.0, 50.0), (60.0, 60.0)])
 def test_qml_write_requests_outlast_native_rollback_deadline(method, kwargs, path, configured, expected):
     session = _FakeSession('{"ok": true, "patched": true, "state": "patched"}')
     api = C300XAgentApi(

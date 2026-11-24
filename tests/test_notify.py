@@ -794,12 +794,14 @@ def test_both_mode_shows_the_message_without_tone_and_speaks_it(tmp_path, monkey
             assert (alert["message"], alert["sound_duration"], alert["wake_duration"]) == ("Test message", 0, 30)
             assert [item["media_content_id"] for item in spoken] == [
                 "media-source://tts/default?message=Test message&language=None"]
-            # The tone would hold the speaker the speech needs.
-            with pytest.raises(ServiceValidationError, match="leave out sound_duration"):
-                await send(hass, entry, data={"mode": "both", "sound_duration": 5})
-            assert entry.runtime_data.api.async_send_display_alert.await_count == 1
+            # The tone would hold the speaker the speech needs: the speech wins.
+            await send(hass, entry, data={"mode": "both", "sound_duration": 5, "wake_duration": 20})
+            alert = entry.runtime_data.api.async_send_display_alert.call_args.args[0]
+            assert (alert["sound_duration"], alert["wake_duration"]) == (0, 20)
+            assert len(spoken) == 2
             await send(hass, entry, data={"mode": "both", "sound_duration": 0})
             assert entry.runtime_data.api.async_send_display_alert.call_args.args[0]["sound_duration"] == 0
+            assert entry.runtime_data.api.async_send_display_alert.await_count == 3
     asyncio.run(run())
 
 

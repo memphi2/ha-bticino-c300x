@@ -8,7 +8,12 @@ firmware 1.7.x and 2.0.2; on firmware 3.0.6 they are a beta: the home page
 buttons were checked on a station, the other pages offline only
 ([Display Patch on Firmware 3.0.6](#display-patch-on-firmware-306)).
 
-<p align="center"><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="480"></p>
+<table>
+  <tr>
+    <td align="center"><strong>Home page buttons: Stock</strong><br><img src="images/readme/display-home-stock-en.webp" alt="C300X home page in the Stock layout: the Alarm and Home Assistant buttons among the station's own buttons, wrapped into two rows" width="360"></td>
+    <td align="center"><strong>Home page buttons: Fixed side by side</strong><br><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home page with the Alarm and Home Assistant buttons in fixed places next to each other after Settings" width="360"></td>
+  </tr>
+</table>
 
 Page and tile settings are stored in Home Assistant, and the display asks for
 them, so changing them writes nothing to the station. Entity changes reach the
@@ -43,7 +48,7 @@ settings stay.
 | **Home Assistant pages on the display** | On applies the Display patch, off restores the original display. |
 | **Keep the page open on screen standby** | Off (default): the Home Assistant and Alarm pages return to the station's home page when the screen goes to standby. On: they stay open. |
 | **Page navigation** | **Favourites bar** (default) or **Arrows (previous / next)**; see [Page navigation](#page-navigation). |
-| **Home page buttons** | Where the **Alarm** and **Home Assistant** buttons sit on the station's home page. **Like the original (when needed, also stacked)** (default): each button appears only while it has something to open and takes its place among the station's own buttons, which wrap into a second row like they always do. **Fixed side by side**: both keep two fixed places next to each other after **Settings**; a button with nothing to open leaves its place empty, so the other buttons never move. While the station shows its **Quick actions** panel, the buttons fill up to two rows of four from left to right, so all of them fit beside the panel. A change applies the Display patch again and restarts the display once. |
+| **Home page buttons** | Where the **Alarm** and **Home Assistant** buttons sit on the station's home page. **Stock (when needed, also stacked)** (default): each button appears only while it has something to open and takes its place among the station's own buttons, which wrap into a second row like they always do. **Fixed side by side**: both keep two fixed places next to each other after **Settings**; a button with nothing to open leaves its place empty, so the other buttons never move. While the station shows its **Quick actions** panel, the buttons fill up to two rows of four from left to right, so all of them fit beside the panel. A change applies the Display patch again and restarts the display once. |
 | **Allowed actions (for experts)** | Actions the display and its notices may run. Leave empty if you use none. |
 
 The Alarm button has something to open while an alarm panel is configured, the
@@ -503,6 +508,8 @@ removes a notice.
   reloading the integration clears them, so automations should resend
   conditions that still apply. Nothing is written to the station or the
   recorder.
+- Where the agent reports message LED support, a notice also lights the
+  station's message LED until it is dismissed or expires.
 - An action never runs because a notice arrives, only when tapped. **Mark
   read** only dismisses the notice; it neither fixes the condition nor runs an
   action. Commands for a notice that has since changed are rejected.

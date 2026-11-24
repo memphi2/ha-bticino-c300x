@@ -1,22 +1,24 @@
 #include "mqtt_bridge.h"
+#include "mqtt_packet.h"
 #include "string_util.h"
 #include "http_util.h"
 #include "time_util.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
-#include <netdb.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
 #define MQTT_CONNECT_TIMEOUT_MS 1500
+#ifndef MQTT_RESOLVE_CONNECT_TIMEOUT_MS
+#define MQTT_RESOLVE_CONNECT_TIMEOUT_MS 15000
+#endif
 #define MQTT_PACKET_CONNECT 0x10
 #define MQTT_PACKET_CONNACK 0x20
 #define MQTT_PACKET_PUBLISH 0x30
@@ -58,10 +60,13 @@ void c300x_mqtt_close(struct c300x_mqtt *mqtt)
     if (mqtt->fd >= 0) {
         close(mqtt->fd);
     }
+    c300x_mqtt_connect_cancel(mqtt->connecting);
+    mqtt->connecting = NULL;
     mqtt->fd = -1;
     mqtt->connected = 0;
     mqtt->subscribed = 0;
     mqtt->rx_len = 0;
+    mqtt->rx_skip = 0;
     memset(&mqtt->output, 0, sizeof(mqtt->output));
     mqtt->phase = MQTT_CLOSED;
     mqtt->connack_used = 0;
@@ -84,24 +89,6 @@ static void mqtt_disconnect(struct c300x_mqtt *mqtt, const struct c300x_config *
     }
     c300x_mqtt_close(mqtt);
     mqtt_schedule_reconnect(mqtt, config, now);
-}
-
-static int set_nonblocking(int fd)
-{
-    int enabled = 1;
-    return ioctl(fd, FIONBIO, &enabled) == 0;
-}
-
-static size_t write_utf8(unsigned char *out, size_t out_len, const char *value)
-{
-    size_t len = strlen(value);
-    if (len > 65535 || out_len < len + 2) {
-        return 0;
-    }
-    out[0] = (unsigned char)((len >> 8) & 0xff);
-    out[1] = (unsigned char)(len & 0xff);
-    memcpy(out + 2, value, len);
-    return len + 2;
 }
 
 static int mqtt_send_packet(struct c300x_mqtt *mqtt, unsigned char packet_type,
@@ -129,156 +116,21 @@ static int mqtt_flush_output(struct c300x_mqtt *mqtt, const struct c300x_config 
     return 1;
 }
 
-static int socket_connect_timeout(const char *host, uint16_t port)
-{
-    char port_text[16];
-    struct addrinfo hints;
-    struct addrinfo *result = NULL;
-    struct addrinfo *item;
-    int fd = -1;
-
-    snprintf(port_text, sizeof(port_text), "%u", port);
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    if (getaddrinfo(host, port_text, &hints, &result) != 0) {
-        return -1;
-    }
-    for (item = result; item != NULL; item = item->ai_next) {
-        int err = 0;
-        socklen_t err_len = sizeof(err);
-        struct pollfd pfd;
-        fd = socket(item->ai_family, item->ai_socktype, item->ai_protocol);
-        if (fd < 0) {
-            continue;
-        }
-        set_fd_cloexec(fd);
-        if (!set_nonblocking(fd)) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
-            break;
-        }
-        if (errno != EINPROGRESS) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        pfd.fd = fd;
-        pfd.events = POLLOUT;
-        pfd.revents = 0;
-        if (poll(&pfd, 1, MQTT_CONNECT_TIMEOUT_MS) <= 0) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &err_len) != 0 || err != 0) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        break;
-    }
-    freeaddrinfo(result);
-    return fd;
-}
-
 static int mqtt_send_connect(struct c300x_mqtt *mqtt, const struct c300x_config *config)
 {
     unsigned char payload[1024];
-    size_t used = 0;
-    unsigned char flags = 0x02;
-    unsigned char keepalive_hi;
-    unsigned char keepalive_lo;
-
-    if (config->mqtt_username[0] != '\0') {
-        flags |= 0x80;
-    }
-    if (config->mqtt_password[0] != '\0') {
-        flags |= 0x40;
-    }
-    if (config->mqtt_availability_topic[0] != '\0') {
-        flags |= 0x04;
-        flags |= 0x20;
-    }
-    {
-        size_t written = write_utf8(payload + used, sizeof(payload) - used, "MQTT");
-        if (written == 0) {
-            return 0;
-        }
-        used += written;
-    }
-    if (used + 4 >= sizeof(payload)) {
-        return 0;
-    }
-    payload[used++] = 4;
-    payload[used++] = flags;
-    keepalive_hi = (unsigned char)(((unsigned int)config->mqtt_keepalive_seconds >> 8) & 0xff);
-    keepalive_lo = (unsigned char)((unsigned int)config->mqtt_keepalive_seconds & 0xff);
-    payload[used++] = keepalive_hi;
-    payload[used++] = keepalive_lo;
-    {
-        size_t written = write_utf8(payload + used, sizeof(payload) - used, config->mqtt_client_id);
-        if (written == 0) {
-            return 0;
-        }
-        used += written;
-    }
-    if (config->mqtt_availability_topic[0] != '\0') {
-        size_t written = write_utf8(payload + used, sizeof(payload) - used, config->mqtt_availability_topic);
-        if (written == 0) {
-            return 0;
-        }
-        used += written;
-        written = write_utf8(payload + used, sizeof(payload) - used, "offline");
-        if (written == 0) {
-            return 0;
-        }
-        used += written;
-    }
-    if (config->mqtt_username[0] != '\0') {
-        size_t written = write_utf8(payload + used, sizeof(payload) - used, config->mqtt_username);
-        if (written == 0) {
-            return 0;
-        }
-        used += written;
-    }
-    if (config->mqtt_password[0] != '\0') {
-        size_t written = write_utf8(payload + used, sizeof(payload) - used, config->mqtt_password);
-        if (written == 0) {
-            return 0;
-        }
-        used += written;
-    }
-    if (used == 0 || used >= sizeof(payload)) {
-        return 0;
-    }
-    return mqtt_send_packet(mqtt, MQTT_PACKET_CONNECT, payload, used);
+    size_t used = c300x_mqtt_connect_payload(config, payload, sizeof(payload));
+    return used > 0 && mqtt_send_packet(mqtt, MQTT_PACKET_CONNECT, payload, used);
 }
 
 static int mqtt_send_subscribe(struct c300x_mqtt *mqtt, const struct c300x_config *config)
 {
     unsigned char payload[256];
-    size_t used = 0;
     if (config->mqtt_command_topic[0] == '\0') {
         return 1;
     }
-    payload[used++] = 0;
-    payload[used++] = 1;
-    {
-        size_t written = write_utf8(payload + used, sizeof(payload) - used, config->mqtt_command_topic);
-        if (written == 0) {
-            return 0;
-        }
-        used += written;
-    }
-    if (used + 1 >= sizeof(payload)) {
-        return 0;
-    }
-    payload[used++] = (unsigned char)config->mqtt_qos;
-    return mqtt_send_packet(mqtt, MQTT_PACKET_SUBSCRIBE, payload, used);
+    size_t used = c300x_mqtt_subscribe_payload(config, payload, sizeof(payload));
+    return used > 0 && mqtt_send_packet(mqtt, MQTT_PACKET_SUBSCRIBE, payload, used);
 }
 
 static int mqtt_publish(
@@ -299,7 +151,7 @@ static int mqtt_publish(
     if (mqtt->fd < 0 || !mqtt->connected || topic[0] == '\0') {
         return 0;
     }
-    topic_len = write_utf8(buffer, sizeof(buffer), topic);
+    topic_len = c300x_mqtt_write_utf8(buffer, sizeof(buffer), topic);
     if (topic_len == 0) {
         return 0;
     }
@@ -317,43 +169,6 @@ static int mqtt_publish(
         return 0;
     }
     return mqtt_flush_output(mqtt, config, now);
-}
-
-static int json_raw_field(const char *data_json, char *out, size_t out_len)
-{
-    const char *key = strstr(data_json, "\"raw\"");
-    const char *ptr;
-    size_t used = 0;
-    if (key == NULL || out_len == 0) {
-        return 0;
-    }
-    ptr = strchr(key, ':');
-    if (ptr == NULL) {
-        return 0;
-    }
-    ptr++;
-    while (*ptr == ' ' || *ptr == '\t') {
-        ptr++;
-    }
-    if (*ptr != '"') {
-        return 0;
-    }
-    ptr++;
-    while (*ptr != '\0' && *ptr != '"') {
-        char ch = *ptr++;
-        if (ch == '\\' && *ptr != '\0') {
-            ch = *ptr++;
-        }
-        if (used + 1 >= out_len) {
-            return 0;
-        }
-        out[used++] = ch;
-    }
-    if (*ptr != '"') {
-        return 0;
-    }
-    out[used] = '\0';
-    return used > 0;
 }
 
 static void mqtt_format_start_date(time_t now, char *payload, size_t payload_len)
@@ -378,15 +193,17 @@ static void mqtt_output_completed(struct c300x_mqtt *mqtt, const struct c300x_co
         mqtt->phase = MQTT_CONNACK;
         mqtt->connack_deadline_ms = c300x_monotonic_ms() + MQTT_CONNECT_TIMEOUT_MS;
     } else if (mqtt->phase == MQTT_SUBSCRIBE_OUTPUT) {
-        time_t started = mqtt->connect_started_at;
+        /* Timers run on the monotonic clock; the retained date is the
+         * wall time of the attempt. */
+        time_t started = time(NULL) - (c300x_monotonic_seconds() - mqtt->connect_started_at);
         mqtt->phase = MQTT_READY;
         mqtt->connected = 1;
         mqtt->subscribed = 1;
-        (void)mqtt_publish(mqtt, config, config->mqtt_availability_topic, "online", 1, started);
+        (void)mqtt_publish(mqtt, config, config->mqtt_availability_topic, "online", 1, mqtt->connect_started_at);
         if (config->mqtt_status_topic[0] != '\0') {
             char payload[32];
             mqtt_format_start_date(started, payload, sizeof(payload));
-            (void)mqtt_publish(mqtt, config, config->mqtt_status_topic, payload, 1, started);
+            (void)mqtt_publish(mqtt, config, config->mqtt_status_topic, payload, 1, mqtt->connect_started_at);
         }
     }
 }
@@ -413,6 +230,8 @@ static void mqtt_receive_connack(struct c300x_mqtt *mqtt, const struct c300x_con
         return;
     }
     mqtt->connack_deadline_ms = 0;
+    mqtt->last_rx_ms = c300x_monotonic_ms();
+    mqtt->rx_limit_ms = config->mqtt_keepalive_seconds > 0 ? config->mqtt_keepalive_seconds * 1500LL : 0;
     mqtt->reconnect_delay_seconds = config->mqtt_reconnect_initial_seconds;
     mqtt->next_ping_at = mqtt->connect_started_at + config->mqtt_keepalive_seconds;
     mqtt->phase = MQTT_SUBSCRIBE_OUTPUT;
@@ -430,12 +249,11 @@ void c300x_mqtt_open_if_needed(
     time_t now
 )
 {
-    int fd;
     if (!config->mqtt_enabled || !network_online) {
         c300x_mqtt_close(mqtt);
         return;
     }
-    if (mqtt->fd >= 0) {
+    if (mqtt->fd >= 0 || mqtt->connecting != NULL) {
         return;
     }
     if (mqtt->next_connect_at > now) {
@@ -445,13 +263,30 @@ void c300x_mqtt_open_if_needed(
         mqtt_schedule_reconnect(mqtt, config, now);
         return;
     }
-    fd = socket_connect_timeout(config->mqtt_host, config->mqtt_port);
+    /* DNS and connect run beside the loop; the wake fd stands in for the
+     * socket until the attempt is over. */
+    mqtt->connecting = c300x_mqtt_connect_start(config->mqtt_host, config->mqtt_port);
+    if (mqtt->connecting == NULL) {
+        mqtt_schedule_reconnect(mqtt, config, now);
+        return;
+    }
+    mqtt->connect_started_at = now;
+    mqtt->connect_deadline_ms = c300x_monotonic_ms() + MQTT_RESOLVE_CONNECT_TIMEOUT_MS;
+}
+
+static void mqtt_connect_finished(struct c300x_mqtt *mqtt, const struct c300x_config *config)
+{
+    time_t now = mqtt->connect_started_at;
+    int fd = c300x_mqtt_connect_finish(mqtt->connecting);
+    if (fd == -2) {
+        return;
+    }
+    mqtt->connecting = NULL;
     if (fd < 0) {
         mqtt_schedule_reconnect(mqtt, config, now);
         return;
     }
     mqtt->fd = fd;
-    mqtt->connect_started_at = now;
     mqtt->phase = MQTT_CONNECT_OUTPUT;
     if (!mqtt_send_connect(mqtt, config)) {
         mqtt_disconnect(mqtt, config, now);
@@ -462,13 +297,13 @@ void c300x_mqtt_open_if_needed(
 
 int c300x_mqtt_fd(const struct c300x_mqtt *mqtt)
 {
-    return mqtt->fd;
+    return mqtt->fd >= 0 ? mqtt->fd : c300x_mqtt_connect_wake_fd(mqtt->connecting);
 }
 
 short c300x_mqtt_poll_events(const struct c300x_mqtt *mqtt)
 {
     if (mqtt->fd < 0) {
-        return 0;
+        return mqtt->connecting != NULL ? POLLIN : 0;
     }
     short events = POLLRDHUP;
     if (mqtt->phase == MQTT_CONNACK || mqtt->phase == MQTT_READY) {
@@ -504,9 +339,20 @@ int c300x_mqtt_poll_timeout_ms(const struct c300x_mqtt *mqtt, time_t now)
 {
     int timeout = mqtt_timer_timeout(mqtt, now);
     long long mono = c300x_monotonic_ms();
+    if (mqtt->connecting != NULL) {
+        long long left = mqtt->connect_deadline_ms - mono;
+        return left > 0 ? (int)left : 0;
+    }
     int output_timeout = c300x_mqtt_output_timeout(&mqtt->output, mono);
     if (output_timeout >= 0 && (timeout < 0 || output_timeout < timeout)) {
         timeout = output_timeout;
+    }
+    if (mqtt->phase == MQTT_READY && mqtt->rx_limit_ms > 0) {
+        long long left = mqtt->last_rx_ms + mqtt->rx_limit_ms - mono;
+        int rx_timeout = left > 0 ? (left > 3600000 ? 3600000 : (int)left) : 0;
+        if (timeout < 0 || rx_timeout < timeout) {
+            timeout = rx_timeout;
+        }
     }
     if (mqtt->phase == MQTT_CONNACK) {
         long long remaining = mqtt->connack_deadline_ms - mono;
@@ -562,7 +408,17 @@ static void mqtt_handle_publish(struct c300x_mqtt *mqtt, const unsigned char *pa
 static void mqtt_process_rx(struct c300x_mqtt *mqtt)
 {
     size_t offset = 0;
-    while (!mqtt->has_pending_command && offset + 2 <= mqtt->rx_len) {
+    while (!mqtt->has_pending_command && offset < mqtt->rx_len) {
+        if (mqtt->rx_skip > 0) {
+            size_t drop = mqtt->rx_len - offset;
+            drop = drop < mqtt->rx_skip ? drop : mqtt->rx_skip;
+            offset += drop;
+            mqtt->rx_skip -= drop;
+            continue;
+        }
+        if (offset + 2 > mqtt->rx_len) {
+            break;
+        }
         size_t header_len = 0;
         size_t remaining = mqtt_remaining_length(mqtt->rx_buffer + offset, mqtt->rx_len - offset, &header_len);
         size_t packet_len;
@@ -571,6 +427,12 @@ static void mqtt_process_rx(struct c300x_mqtt *mqtt)
             break;
         }
         packet_len = header_len + remaining;
+        /* Never fits (a huge retained command): drop it as it arrives. A
+         * reconnect would only get the same retained message again. */
+        if (packet_len > sizeof(mqtt->rx_buffer)) {
+            mqtt->rx_skip = packet_len;
+            continue;
+        }
         if (offset + packet_len > mqtt->rx_len) {
             break;
         }
@@ -594,6 +456,9 @@ void c300x_mqtt_handle_poll(
 )
 {
     if (mqtt->fd < 0) {
+        if (mqtt->connecting != NULL && (revents & POLLIN) != 0) {
+            mqtt_connect_finished(mqtt, config);
+        }
         return;
     }
     if ((revents & C300X_SOCKET_CLOSED_REVENTS) != 0) {
@@ -641,6 +506,7 @@ void c300x_mqtt_handle_poll(
                 return;
             }
             mqtt->rx_len += (size_t)received;
+            mqtt->last_rx_ms = c300x_monotonic_ms();
             mqtt_process_rx(mqtt);
             if (mqtt->has_pending_command) {
                 break;
@@ -655,12 +521,21 @@ void c300x_mqtt_tick(
     time_t now
 )
 {
+    long long mono = c300x_monotonic_ms();
+    if (mqtt->connecting != NULL && mqtt->connect_deadline_ms <= mono) {
+        now = mqtt->connect_started_at;
+        c300x_mqtt_close(mqtt);
+        mqtt_schedule_reconnect(mqtt, config, now);
+        return;
+    }
     if (mqtt->fd < 0) {
         return;
     }
-    long long mono = c300x_monotonic_ms();
+    /* No PINGRESP (nor anything else) for 1.5 keepalives: a half-open
+     * connection the kernel has not noticed yet. */
     if (c300x_mqtt_output_timeout(&mqtt->output, mono) == 0
-        || (mqtt->phase == MQTT_CONNACK && mqtt->connack_deadline_ms <= mono)) {
+        || (mqtt->phase == MQTT_CONNACK && mqtt->connack_deadline_ms <= mono)
+        || (mqtt->phase == MQTT_READY && mqtt->rx_limit_ms > 0 && mono - mqtt->last_rx_ms >= mqtt->rx_limit_ms)) {
         mqtt_disconnect(mqtt, config, now);
         return;
     }
@@ -689,10 +564,10 @@ void c300x_mqtt_publish_event(
         return;
     }
     if (config->mqtt_json_event_topic[0] != '\0') {
-        (void)mqtt_publish(mqtt, config, config->mqtt_json_event_topic, event_json, 0, time(NULL));
+        (void)mqtt_publish(mqtt, config, config->mqtt_json_event_topic, event_json, 0, c300x_monotonic_seconds());
     }
-    if (config->mqtt_event_topic[0] != '\0' && json_raw_field(data_json, raw, sizeof(raw))) {
-        (void)mqtt_publish(mqtt, config, config->mqtt_event_topic, raw, 0, time(NULL));
+    if (config->mqtt_event_topic[0] != '\0' && c300x_mqtt_json_raw_field(data_json, raw, sizeof(raw))) {
+        (void)mqtt_publish(mqtt, config, config->mqtt_event_topic, raw, 0, c300x_monotonic_seconds());
     }
 }
 

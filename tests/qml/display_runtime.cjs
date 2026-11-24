@@ -293,6 +293,44 @@ for (const destination of ["homePage", "videocallPage"]) {
 }
 console.log("Dashboard stock hidden lifecycle passed");
 
+// Screen standby on a page that keeps itself (preventReturnToHomepage): the
+// stock EventManager only calls handleScreenOff(). The page must resume itself
+// through its own screenState connection when the screen wakes again.
+for (const [name, qml] of [["Alarm", alarmQml], ["HomeAssistant", dashboardQml]]) {
+    const handler = qml.match(/^    Connections \{\n        target: global\.screenState\n        onStateChangedInt: (.+)\n    \}/m);
+    assert.ok(handler, name + " watches the stock screen state");
+    const r = runtime();
+    const p = name === "Alarm" ? alarm(r) : methods(dashboardQml, {Api: r.Api, Date: r.clock,
+        I18n: {text: (_, key) => key}, uiLanguage: "en", status: {}, runtimeGeneration: 0,
+        commandGeneration: 0, pendingEntity: "", controlFeedback: [], dashboardOnline: true,
+        dashboardLoading: false, dashboardRefreshAgain: false, listScrolling: false,
+        pageActive: false, armedCommand: "", interactionActive: false});
+    Object.assign(p, {ScreenState: {ScreenOff: 0, Normal: 2, ForcedNormal: 3}, visible: true,
+        preventReturnToHomepage: true, clearCommandFeedback() {}});
+    const stateChanged = state => { p.new_state = state; vm.runInContext(handler[1], p); };
+    p.aboutToShow();
+    assert.equal(r.Api.eventWatching, true);
+    stateChanged(0);
+    assert.equal(p.handleScreenOff(), true, name + " stays on screen off");
+    assert.equal(p.pageActive, false);
+    assert.equal(r.Api.eventWatching, false, name + " pauses while the screen is off");
+    stateChanged(0);
+    assert.equal(p.pageActive, false);
+    const before = r.sent.length;
+    stateChanged(2);
+    assert.equal(p.pageActive, true, name + " resumes on wake");
+    assert.equal(r.Api.eventWatching, true);
+    assert.ok(r.sent.length > before, name + " reads its state again");
+    const after = r.sent.length;
+    stateChanged(3);
+    assert.equal(r.sent.length, after, "an active page does not restart");
+    p.pageActive = false;
+    p.visible = false;
+    stateChanged(2);
+    assert.equal(p.pageActive, false, "a hidden page stays paused");
+}
+console.log("Alarm and dashboard resume after screen standby passed");
+
 // Emulate QML property notifications: rendered feedback is cached until a
 // property changes. Merely advancing Date.now() cannot refresh that binding.
 {
@@ -442,8 +480,8 @@ function memoPage(r) {
     r.Api.syncHomeNotifications(p);
     oldMessages.finish(200, {unread: 99});
     oldMemos.finish(200, {unread: 99});
-    assert.equal(p.externalUnreadMessages, 1);
-    assert.equal(p.externalUnreadMemos, 2);
+    assert.equal(p.externalUnreadMessages, -1, "outage: stock count until a current read");
+    assert.equal(p.externalUnreadMemos, -1);
     assert.equal(r.Api.eventRecovering, true, "superseded results cannot finish recovery");
     r.request("/ui/answering-machine/messages").finish(200, {unread: 8});
     r.request("/ui/memos").finish(200, {unread: 9});
@@ -473,8 +511,8 @@ function memoPage(r) {
     r.Api.stopEventWatch();
     r.request("/ui/answering-machine/messages").finish(200, {unread: 99});
     r.request("/ui/memos").finish(200, {unread: 99});
-    assert.equal(p.externalUnreadMessages, 1);
-    assert.equal(p.externalUnreadMemos, 2);
+    assert.equal(p.externalUnreadMessages, -1);
+    assert.equal(p.externalUnreadMemos, -1);
     assert.equal(r.timers[0].running, false);
     assert.equal(r.Api.connections.length, 0);
 }

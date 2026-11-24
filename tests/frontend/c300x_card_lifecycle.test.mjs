@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { C300XCardLifecycleState } from "../../custom_components/bticino_c300x/frontend/c300x-card-lifecycle.js";
+import {
+  C300XCardLifecycleState,
+  c300xAnsweredRingKey,
+} from "../../custom_components/bticino_c300x/frontend/c300x-card-lifecycle.js";
 
 test("lifecycle resets preview suppression only for a new ring", () => {
   const lifecycle = new C300XCardLifecycleState();
@@ -134,4 +137,52 @@ test("lifecycle keeps the passive preview away from a card that is answering", (
   lifecycle.answeringDoorbell = false;
   assert.equal(lifecycle.shouldStartPassiveAnsweredPreview({ ...args, answerLaunch: true }), false);
   assert.equal(lifecycle.shouldStartPassiveAnsweredPreview(args), true);
+});
+
+const ring = (media_state, last_changed) => ({ last_changed, attributes: { media_state } });
+
+test("the answered ring key is the same for state objects and state events", () => {
+  const event = c300xAnsweredRingKey("camera.door", ring("ring_active", "2026-11-24T10:00:00.123456+00:00"));
+  const state = c300xAnsweredRingKey("camera.door", ring("ring_active", "2026-11-24T10:00:00.123Z"));
+  assert.equal(event, state);
+  assert.notEqual(event, c300xAnsweredRingKey("camera.door", ring("ring_active", "2026-11-24T10:05:00Z")));
+  assert.equal(c300xAnsweredRingKey("camera.door", ring("idle", "2026-11-24T10:00:00Z")), "");
+  assert.equal(c300xAnsweredRingKey("", ring("ring_active", "2026-11-24T10:00:00Z")), "");
+});
+
+test("an answered ring outlives its peer until the ring ends", () => {
+  const lifecycle = new C300XCardLifecycleState();
+  assert.equal(lifecycle.rememberAnsweredRing("camera.door@1"), true);
+  lifecycle.doorbellAnswered = true;
+  lifecycle.clearPeer(false);
+  lifecycle.clearPeer(true);
+  assert.equal(lifecycle.doorbellAnswered, false);
+  assert.equal(lifecycle.followAnsweredRing("camera.door@1"), true);
+  assert.equal(lifecycle.canReconnectAnsweredRing(), true);
+  lifecycle.answeredRingReconnected = true;
+  assert.equal(lifecycle.canReconnectAnsweredRing(), false);
+  lifecycle.answeredRingReconnected = false;
+  lifecycle.answeredRingHangup = true;
+  assert.equal(lifecycle.canReconnectAnsweredRing(), false);
+  lifecycle.forgetAnsweredRing();
+  assert.equal(lifecycle.followAnsweredRing("camera.door@1"), false);
+});
+
+test("a changed ring key is followed only while the card watched the ring", () => {
+  const lifecycle = new C300XCardLifecycleState();
+  lifecycle.rememberAnsweredRing("camera.door@1");
+  assert.equal(lifecycle.followAnsweredRing("camera.door@2"), true);
+  assert.equal(lifecycle.answeredRingKey, "camera.door@2");
+  lifecycle.answeredRingWatched = false;
+  assert.equal(lifecycle.followAnsweredRing("camera.door@3"), false);
+  assert.equal(lifecycle.followAnsweredRing("camera.door@2"), true);
+  assert.equal(lifecycle.answeredRingWatched, true);
+});
+
+test("the receive-only preview is not started for a ring this browser answered", () => {
+  const lifecycle = new C300XCardLifecycleState();
+  lifecycle.ringPreviewStarted = true;
+  const request = { mediaState: "ring_active", webrtcRunning: false, transitionActive: false, answerLaunch: false };
+  assert.equal(lifecycle.shouldStartPassiveAnsweredPreview(request), true);
+  assert.equal(lifecycle.shouldStartPassiveAnsweredPreview({ ...request, answeredHere: true }), false);
 });

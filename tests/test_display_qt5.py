@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
-SOURCES = ("test/display_qt5_test.c", "src/display_qt5.c", "src/device_patch_io.c", "src/sha256.c", "src/string_util.c")
+SOURCES = ("test/display_qt5_test.c", "src/display_qt5.c", "src/device_patch_io.c", "src/root_mount.c", "src/sha256.c", "src/string_util.c")
 FLAGS = ["-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L"]
 VENDOR = {
     "MainApp.qml": b"import QtQuick 2.7\nItem { id: mainApp }\n",

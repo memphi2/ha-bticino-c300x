@@ -72,6 +72,13 @@ static int finish_script(struct c300x_http_maintenance *owner)
         end--;
     }
     *end = '\0';
+    if (owner->job.failed && owner->records_write && owner->job.timed_out) {
+        /* The script exits 130 only once its rollback is complete. */
+        c300x_http_send_json(client_fd, 504, "Gateway Timeout", owner->job.exit_status == 130
+            ? "{\"ok\":false,\"available\":true,\"error\":\"qml_patch_timeout\",\"rolled_back\":true}\n"
+            : "{\"ok\":false,\"available\":true,\"error\":\"qml_patch_timeout\",\"rolled_back\":false}\n");
+        return 1;
+    }
     if (owner->job.failed) {
         c300x_http_send_json(client_fd, 502, "Bad Gateway", owner->gui_reload
             ? "{\"ok\":false,\"error\":\"reload_failed\"}\n"
@@ -116,13 +123,14 @@ static void start_script(struct c300x_http_maintenance *owner, int client_fd,
     }
     /* QML writes may need both a failed start and a restored-GUI restart; a
      * GUI restart waits for the old display program to end first. */
-    int timeout_ms = gui_reload || records_write ? 30000 : 10000;
+    int timeout_ms = gui_reload || records_write ? C300X_QML_WRITE_TIMEOUT_MS : 10000;
     if (!c300x_command_job_start(&owner->job, program, action, dynamic_homepage, timeout_ms)) {
         c300x_http_send_json(client_fd, 502, "Bad Gateway", gui_reload
             ? "{\"ok\":false,\"error\":\"reload_failed\"}\n"
             : "{\"ok\":false,\"available\":false,\"state\":\"script_failed\"}\n");
         return;
     }
+    owner->job.term_grace_ms = records_write ? C300X_QML_WRITE_TERM_GRACE_MS : 0;
     owner->client_fd = client_fd;
     owner->gui_reload = gui_reload;
     owner->records_write = records_write;

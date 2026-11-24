@@ -45,6 +45,9 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     BACKUP_DIR="${C300X_QML_BACKUP_DIR:-$QT5_BACKUP_ROOT/original/qt5/skins/default}"
 fi
 OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
+TRANSACTION_STATE=
+TRANSACTION_FORMAT=.c300x-v2
+ROOT_RW_MARK="${TMPDIR:-/tmp}/c300x-qml-root-rw"
 
 json_status() {
     changed_files="${1:-}"
@@ -108,10 +111,14 @@ json_status() {
     if [ "$QT5_DISPLAY" = "1" ] && [ "$qt5_overlay" != "active" ]; then
         home_buttons=null
     fi
+    transaction_field=
+    if [ -n "$TRANSACTION_STATE" ]; then
+        transaction_field=",\"transaction\":\"$TRANSACTION_STATE\""
+    fi
     if [ -n "$changed_files" ]; then
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"home_buttons":%s,"changed_files":%s%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$home_buttons" "$changed_files" "$qt5_fields"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"home_buttons":%s,"changed_files":%s%s%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$home_buttons" "$changed_files" "$qt5_fields" "$transaction_field"
     else
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"home_buttons":%s%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$home_buttons" "$qt5_fields"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"media_user_label_state":"%s","media_user_label_patched":%s,"backup_available":%s,"core_backup_available":%s,"media_user_label_backup_available":%s,"gui_running":%s,"home_buttons":%s%s%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$media_user_label_state" "$media_user_label_patched" "$backup_available" "$core_backup_available" "$media_user_label_backup_available" "$gui_running" "$home_buttons" "$qt5_fields" "$transaction_field"
     fi
 }
 
@@ -138,7 +145,11 @@ json_reload_failed() {
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         gui_running=true
     fi
-    printf '{"ok":false,"available":true,"state":"reload_failed","patched":null,"core_state":"unknown","core_patched":null,"backup_available":%s,"core_backup_available":%s,"gui_running":%s}\n' "$backup_available" "$core_backup_available" "$gui_running"
+    transaction_field=
+    if [ -n "$TRANSACTION_STATE" ]; then
+        transaction_field=",\"transaction\":\"$TRANSACTION_STATE\""
+    fi
+    printf '{"ok":false,"available":true,"state":"reload_failed","patched":null,"core_state":"unknown","core_patched":null,"backup_available":%s,"core_backup_available":%s,"gui_running":%s%s}\n' "$backup_available" "$core_backup_available" "$gui_running" "$transaction_field"
 }
 
 file_contains() {
@@ -405,6 +416,8 @@ start_gui() {
     if [ ! -f "$GUI_WRAPPER" ]; then
         return 0
     fi
+    # A session of its own: the agent kills this script's process group
+    # when a job passes its time limit, and the GUI must outlive that.
     gui_session=
     if command -v setsid >/dev/null 2>&1; then
         gui_session=setsid
@@ -436,6 +449,20 @@ qt5_watch_start() {
     done
 }
 
+abort_touch_phase() {
+    trap - HUP INT TERM
+    if [ "$RELOAD_GUI" = "1" ] && { touch_display_stale || ! pidof BtClass >/dev/null 2>&1; }; then
+        reload_gui || true
+    fi
+    touch_root_read_only || true
+    exit 131
+}
+
+run_touch_phase() {
+    trap abort_touch_phase HUP INT TERM
+    touch_patch "$1"
+}
+
 reload_gui() {
     if [ "$RELOAD_GUI" != "1" ]; then
         return 0
@@ -461,6 +488,7 @@ remount_rw() {
     if [ "$NO_REMOUNT" = "1" ]; then
         return 0
     fi
+    printf '%s %s\n' "$$" "$GUI_DIR" > "$ROOT_RW_MARK" 2>/dev/null || true
     mount -o remount,rw / >/dev/null 2>&1
 }
 
@@ -468,7 +496,204 @@ remount_ro() {
     if [ "$NO_REMOUNT" = "1" ]; then
         return 0
     fi
-    mount -o remount,ro / >/dev/null 2>&1
+    mount -o remount,ro / >/dev/null 2>&1 || return 1
+    rm -f "$ROOT_RW_MARK"
+}
+
+root_left_writable() {
+    [ "$NO_REMOUNT" != "1" ] && [ -f "$ROOT_RW_MARK" ] || return 1
+    read -r mark_pid mark_gui < "$ROOT_RW_MARK" || return 1
+    [ "$mark_gui" = "$GUI_DIR" ] && ! transaction_owner_running "$mark_pid"
+}
+
+rollback_transaction() {
+    [ -f "$1/.c300x-files" ] || return 1
+    rollback_ok=1
+    while read -r rollback_entry; do
+        rollback_rel="${rollback_entry#?}"
+        rollback_target="$GUI_DIR/$rollback_rel"
+        case "$rollback_entry" in
+            -*)
+                if [ -e "$rollback_target" ] || [ -L "$rollback_target" ]; then
+                    if ! : > "$1/.c300x-reload" || ! rm -f "$rollback_target"; then
+                        rollback_ok=0
+                    fi
+                fi
+                ;;
+            *)
+                if [ -f "$1/$rollback_rel" ]; then
+                    if ! cmp -s "$1/$rollback_rel" "$rollback_target" && ! : > "$1/.c300x-reload"; then
+                        rollback_ok=0
+                    elif ! mkdir -p "$(dirname "$rollback_target")" \
+                        || ! mv -f "$1/$rollback_rel" "$rollback_target"; then
+                        rollback_ok=0
+                    fi
+                fi
+                ;;
+        esac
+    done < "$1/.c300x-files"
+    qt5_transaction_restore "$1" || rollback_ok=0
+    [ "$rollback_ok" = "1" ]
+}
+
+remove_transaction() {
+    rm -f "$1/.c300x-reload" "$1/.c300x-files" "$1/.c300x-files.tmp" || return 1
+    rm -rf "$1/.qt5" || return 1
+    for remove_entry in "$1"/*; do
+        rm -rf "$remove_entry" || return 1
+    done
+    rm -f "$1/.c300x-stuck" || return 1
+    rm -f "$1/$TRANSACTION_FORMAT" && rm -rf "$1"
+}
+
+transaction_owner_running() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    kill -0 "$1" 2>/dev/null || return 1
+    [ -r "$PROC_DIR/$1/cmdline" ] || return 0
+    tr '\000' ' ' < "$PROC_DIR/$1/cmdline" | grep -q -F "${0##*/}"
+}
+
+leftover_transaction() {
+    leftover_pid="${1##*.}"
+    case "$leftover_pid" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    if [ ! -d "$1" ] || [ -L "$1" ] || [ "$leftover_pid" = "$$" ]; then
+        return 1
+    fi
+    if transaction_owner_running "$leftover_pid"; then
+        TRANSACTION_LIVE=1
+        return 1
+    fi
+}
+
+legacy_copy_verified() {
+    find "$1" | while read -r legacy_path; do
+        if [ -d "$legacy_path" ] && [ ! -L "$legacy_path" ]; then
+            continue
+        fi
+        legacy_rel="${legacy_path#"$1"/}"
+        [ "$legacy_rel" != ".c300x-reload" ] || continue
+        case "$legacy_rel" in
+            .qt5/*) continue ;;
+        esac
+        [ -f "$legacy_path" ] && [ ! -L "$legacy_path" ] || exit 1
+        case " $OBSOLETE_GUI_FILES " in
+            *" $legacy_rel "*) continue ;;
+        esac
+        case " $PATCH_FILES $MEDIA_USER_LABEL_FILES " in
+            *" $legacy_rel "*) ;;
+            *) exit 1 ;;
+        esac
+        cmp -s "$legacy_path" "$GUI_DIR/$legacy_rel" && continue
+        if [ -f "$BACKUP_DIR/$legacy_rel" ] && cmp -s "$legacy_path" "$BACKUP_DIR/$legacy_rel"; then
+            continue
+        fi
+        if is_generated_patch_file "$legacy_rel" && cmp -s "$legacy_path" "$SOURCE_DIR/$legacy_rel"; then
+            continue
+        fi
+        exit 1
+    done
+}
+
+legacy_copy_superseded() {
+    [ ! -e "$1/.c300x-reload" ] || return 1
+    for legacy_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES; do
+        [ ! "$GUI_DIR/$legacy_rel" -nt "$1" ] || return 0
+    done
+    return 1
+}
+
+restore_legacy_transaction() {
+    [ ! -e "$1/.c300x-stuck" ] && legacy_copy_verified "$1" || return 1
+    ! legacy_copy_superseded "$1" || return 0
+    qt5_legacy_unchanged "$1" || return 1
+    for legacy_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES; do
+        if [ ! -f "$1/$legacy_rel" ] || cmp -s "$1/$legacy_rel" "$GUI_DIR/$legacy_rel"; then
+            continue
+        fi
+        if ! : > "$1/.c300x-reload" \
+            || ! mkdir -p "$(dirname "$GUI_DIR/$legacy_rel")" \
+            || ! mv -f "$1/$legacy_rel" "$GUI_DIR/$legacy_rel"; then
+            return 1
+        fi
+    done
+}
+
+settle_transaction() {
+    if [ ! -f "$1/$TRANSACTION_FORMAT" ]; then
+        restore_legacy_transaction "$1"
+    elif [ -f "$1/.c300x-files" ]; then
+        rollback_transaction "$1"
+    fi
+}
+
+transaction_report() {
+    TRANSACTION_LIVE=0
+    for report_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
+        leftover_transaction "$report_dir" || continue
+        if [ -e "$report_dir/.c300x-stuck" ]; then
+            TRANSACTION_STATE=stuck
+        elif [ "$TRANSACTION_STATE" != "stuck" ]; then
+            TRANSACTION_STATE=pending
+        fi
+    done
+}
+
+recover_transactions() {
+    transaction_report
+    [ "$TRANSACTION_LIVE" = "0" ] || return 1
+    recover_ro=0
+    if root_left_writable; then
+        recover_ro=1
+    fi
+    recover_stuck=
+    recover_blocked=0
+    recover_reload=0
+    if [ -n "$TRANSACTION_STATE" ]; then
+        TRANSACTION_STATE=
+        recover_ro=1
+        remount_rw || true
+        for recover_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
+            leftover_transaction "$recover_dir" || continue
+            if settle_transaction "$recover_dir"; then
+                rm -f "$recover_dir/.c300x-stuck"
+                if [ -e "$recover_dir/.c300x-reload" ]; then
+                    recover_reload=1
+                fi
+            else
+                : > "$recover_dir/.c300x-stuck" 2>/dev/null || true
+                recover_stuck="$recover_stuck ${recover_dir##*.} "
+                if [ -f "$recover_dir/$TRANSACTION_FORMAT" ]; then
+                    recover_blocked=1
+                fi
+            fi
+        done
+        if [ "$recover_reload" = "1" ]; then
+            reload_gui || true
+        fi
+        for recover_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
+            leftover_transaction "$recover_dir" || continue
+            case "$recover_stuck" in
+                *" ${recover_dir##*.} "*)
+                    TRANSACTION_STATE=stuck
+                    continue
+                    ;;
+            esac
+            if ! remove_transaction "$recover_dir"; then
+                TRANSACTION_STATE=stuck
+                recover_blocked=1
+            elif [ "$TRANSACTION_STATE" != "stuck" ]; then
+                TRANSACTION_STATE=recovered
+            fi
+        done
+    fi
+    if [ "$recover_ro" = "1" ]; then
+        remount_ro || true
+    fi
+    [ "$recover_blocked" = "0" ]
 }
 
 finish_write_action() {
@@ -481,23 +706,16 @@ finish_write_action() {
     restart_previous=0
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         restart_previous="${WRITE_RELOAD_ATTEMPTED:-0}"
-        for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
-            if [ -f "$WRITE_TRANSACTION/$transaction_rel" ]; then
-                if ! mkdir -p "$(dirname "$GUI_DIR/$transaction_rel")" \
-                    || ! mv -f "$WRITE_TRANSACTION/$transaction_rel" "$GUI_DIR/$transaction_rel"; then
-                    recovery_ok=0
-                fi
-            else
-                rm -f "$GUI_DIR/$transaction_rel" || recovery_ok=0
-            fi
-        done
-        if [ "${QT5_PUBLISHED:-0}" = "1" ]; then
-            qt5_transaction_restore
+        rollback_transaction "$WRITE_TRANSACTION" || recovery_ok=0
+    fi
+    if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
+        if ! reload_gui; then
+            printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
         fi
     fi
     if [ "$recovery_ok" = "1" ]; then
         if [ -n "${WRITE_TRANSACTION:-}" ]; then
-            rm -rf "$WRITE_TRANSACTION" || write_rc=1
+            remove_transaction "$WRITE_TRANSACTION" || write_rc=1
         fi
     else
         printf 'GUI rollback failed; recovery files retained in %s\n' "$WRITE_TRANSACTION" >&2
@@ -506,18 +724,20 @@ finish_write_action() {
     if [ "${WRITE_TRANSACTION_COMMITTED:-0}" = "1" ] && [ "${REMOVE_EMPTY_JS:-0}" = "1" ]; then
         rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
     fi
-    remount_ro || write_rc=1
-    if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
-        if ! reload_gui; then
-            printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
-        fi
+    write_root_ro=1
+    if ! remount_ro; then
+        write_rc=1
+        write_root_ro=0
     fi
     return "$write_rc"
 }
 
 abort_write_action() {
     finish_write_action || true
-    exit 130
+    if [ "$recovery_ok" = "1" ] && [ "$write_root_ro" = "1" ]; then
+        exit 130
+    fi
+    exit 131
 }
 
 run_write_action() {
@@ -537,7 +757,6 @@ run_write_action() {
     WRITE_TRANSACTION_COMMITTED=0
     WRITE_RELOAD_ATTEMPTED=0
     REMOVE_EMPTY_JS=0
-    QT5_PUBLISHED=0
     trap finish_write_action EXIT
     trap abort_write_action HUP INT TERM
     remount_rw
@@ -548,18 +767,26 @@ run_write_action() {
     transaction_dir="$GUI_DIR/.c300x-qml-transaction.$$"
     (umask 077; mkdir "$transaction_dir")
     WRITE_TRANSACTION="$transaction_dir"
+    : > "$WRITE_TRANSACTION/$TRANSACTION_FORMAT"
+    sync
     for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
         transaction_source="$GUI_DIR/$transaction_rel"
         if [ -L "$transaction_source" ] || { [ -e "$transaction_source" ] && [ ! -f "$transaction_source" ]; }; then
             printf 'Unsupported GUI file type: %s\n' "$transaction_source" >&2
             return 1
         fi
+        transaction_mark=-
         if [ -f "$transaction_source" ]; then
             mkdir -p "$(dirname "$WRITE_TRANSACTION/$transaction_rel")"
             cp -p "$transaction_source" "$WRITE_TRANSACTION/$transaction_rel"
+            transaction_mark=+
         fi
+        printf '%s%s\n' "$transaction_mark" "$transaction_rel" >> "$WRITE_TRANSACTION/.c300x-files.tmp"
     done
     qt5_transaction_save
+    sync
+    mv -f "$WRITE_TRANSACTION/.c300x-files.tmp" "$WRITE_TRANSACTION/.c300x-files"
+    sync
     WRITE_TRANSACTION_READY=1
     "$@"
     qt5_publish
@@ -592,53 +819,81 @@ json_write_status() {
     fi
 }
 
-backup_file() {
-    backup_rel="$1"
-    backup_src="$GUI_DIR/$backup_rel"
-    backup_dest="$BACKUP_DIR/$backup_rel"
-    if [ -e "$backup_dest" ]; then
-        return 0
+stock_file_valid() {
+    stock_file="$1"
+    stock_rel="$2"
+    if [ ! -f "$stock_file" ] || [ -L "$stock_file" ] || [ ! -s "$stock_file" ]; then
+        printf 'Incomplete stock file: %s\n' "$stock_file" >&2
+        return 1
     fi
-    if [ ! -f "$backup_src" ]; then
-        return 0
+    stock_file_unpatched "$stock_file" "$stock_rel" || return 1
+    if ! grep -q '^import QtQuick' "$stock_file" \
+        || ! awk 'NF { last = $0 } END { exit !(last ~ /^}[[:space:]]*$/) }' "$stock_file"; then
+        printf 'Incomplete stock file: %s\n' "$stock_file" >&2
+        return 1
     fi
-    case "$backup_rel" in
+}
+
+stock_file_unpatched() {
+    stock_file="$1"
+    stock_rel="$2"
+    case "$stock_rel" in
         HomePage.qml|MemoPage.qml)
-            require_clean_original_page "$backup_src" "$backup_rel"
+            require_clean_original_page "$stock_file" "$stock_rel"
             ;;
         Components/Settings/CallBlockPopup.qml)
-            require_clean_call_block_popup "$backup_src"
+            require_clean_call_block_popup "$stock_file"
             ;;
         Components/Settings/GeneralsChoice.qml)
-            require_clean_general_settings "$backup_src"
+            require_clean_general_settings "$stock_file"
             ;;
         Settings.qml)
-            ! file_contains "$backup_src" c300xSettings || { echo "Missing original Settings.qml backup" >&2; return 1; }
-            render_settings "$backup_src" >/dev/null || return 1
+            ! file_contains "$stock_file" c300xSettings || { echo "Missing original Settings.qml backup" >&2; return 1; }
+            render_settings "$stock_file" >/dev/null || return 1
             ;;
         EventManager.qml)
-            if grep -F -q 'function c300xNotifyMediaClosed()' "$backup_src"; then
+            if grep -F -q 'function c300xNotifyMediaClosed()' "$stock_file"; then
                 printf 'Refusing to back up an already patched EventManager.qml\n' >&2
                 return 1
             fi
             ;;
         MainApp.qml)
-            if grep -F -q 'sourceUrl: "Alarm.qml"' "$backup_src" \
-                || grep -F -q 'sourceUrl: "HomeAssistant.qml"' "$backup_src" \
-                || grep -F -q 'c300xDisplayPreferences' "$backup_src"; then
+            if grep -F -q 'sourceUrl: "Alarm.qml"' "$stock_file" \
+                || grep -F -q 'sourceUrl: "HomeAssistant.qml"' "$stock_file" \
+                || grep -F -q 'c300xDisplayPreferences' "$stock_file"; then
                 printf 'Refusing to back up an already patched MainApp.qml\n' >&2
                 return 1
             fi
             ;;
     esac
+}
+
+stock_backup_valid() {
+    stock_file_valid "$BACKUP_DIR/$1" "$1"
+}
+
+backup_file() {
+    backup_rel="$1"
+    backup_src="$GUI_DIR/$backup_rel"
+    backup_dest="$BACKUP_DIR/$backup_rel"
+    if [ -e "$backup_dest" ]; then
+        stock_backup_valid "$backup_rel"
+        return
+    fi
+    if [ ! -f "$backup_src" ]; then
+        return 0
+    fi
+    stock_file_valid "$backup_src" "$backup_rel"
     mkdir -p "$(dirname "$backup_dest")"
     backup_temp_dir="$(mktemp -d "$backup_dest.tmp.XXXXXX")" || return 1
     if ! cp -p "$backup_src" "$backup_temp_dir/original" \
+        || ! sync \
         || ! mv -f "$backup_temp_dir/original" "$backup_dest"; then
         rm -rf "$backup_temp_dir"
         return 1
     fi
     rmdir "$backup_temp_dir"
+    sync
 }
 
 install_file() {
@@ -840,6 +1095,7 @@ patch_home_page() {
             print ""
             print "    property int externalUnreadMessages: -1"
             print "    property int externalUnreadMemos: -1"
+            print "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl"
             print "    property alias memoEventRetryTimer: memoRetryTimer"
             print ""
             print "    Timer {"
@@ -1099,6 +1355,7 @@ patch_home_page() {
             'import "js/c300x_ha.js" as HAConfig' \
             'function refreshMessageNotifications()' \
             'property alias memoEventRetryTimer: memoRetryTimer' \
+            'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
             '+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2' \
@@ -1115,6 +1372,7 @@ patch_home_page() {
             'import "js/c300x_ha.js" as HAConfig' \
             'function refreshMessageNotifications()' \
             'property alias memoEventRetryTimer: memoRetryTimer' \
+            'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
             'id: displayBridgeButtonRow' \
@@ -1161,6 +1419,7 @@ patch_memo_page() {
             next
         }
         $0 == "    topMargin: 86" {
+            print "    property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl"
             print "    function aboutToShow() {"
             print "        MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)"
             print "    }"
@@ -1175,7 +1434,8 @@ patch_memo_page() {
         "MemoPage.qml" \
         'import "js/c300x_memos.js" as MemoSync' \
         'function aboutToShow()' \
-        'MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)'
+        'MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)' \
+        'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl'
     mv "$temp_file" "$memo_page"
 }
 
@@ -1616,8 +1876,8 @@ qt5_require_regular() {
 }
 
 qt5_restore_artifact() {
-    qt5_artifact_path "$1"
-    qt5_saved="$WRITE_TRANSACTION/.qt5/$1"
+    qt5_artifact_path "$2"
+    qt5_saved="$1/.qt5/$2"
     if [ -f "$qt5_saved" ]; then
         # The wrapper may live on another filesystem. Keep the recovery copy
         # until every artifact is restored; rename only beside the destination.
@@ -1632,15 +1892,40 @@ qt5_restore_artifact() {
     fi
 }
 
+# Copies are kept until the transaction is removed, so a recovery cut off at
+# any point can run again. Only a write that began to publish changed them.
 qt5_transaction_restore() {
-    # A restart during recovery must not load a mixture of old and new files.
-    qt5_mark_failed || recovery_ok=0
-    for qt5_artifact in rcc library original wrapper; do
-        qt5_restore_artifact "$qt5_artifact" || recovery_ok=0
+    [ -f "$1/.qt5/.published" ] || return 0
+    for qt5_artifact in rcc library wrapper; do
+        qt5_artifact_path "$qt5_artifact"
+        if [ -f "$1/.qt5/$qt5_artifact" ]; then
+            cmp -s "$1/.qt5/$qt5_artifact" "$qt5_target" && continue
+        elif [ ! -e "$qt5_target" ] && [ ! -L "$qt5_target" ]; then
+            continue
+        fi
+        : > "$1/.c300x-reload" || return 1
     done
-    if [ "$recovery_ok" = "1" ]; then
-        qt5_restore_artifact failed || recovery_ok=0
-    fi
+    # A restart during recovery must not load a mixture of old and new files.
+    qt5_mark_failed || return 1
+    qt5_restore_ok=1
+    for qt5_artifact in rcc library original wrapper; do
+        qt5_restore_artifact "$1" "$qt5_artifact" || qt5_restore_ok=0
+    done
+    [ "$qt5_restore_ok" = "1" ] && qt5_restore_artifact "$1" failed
+}
+
+# A write of agent 2.9.0 or older kept no publish mark: its activation copies
+# count only while every one equals the file in place.
+qt5_legacy_unchanged() {
+    [ -d "$1/.qt5" ] || return 0
+    for qt5_artifact in rcc library wrapper original; do
+        qt5_artifact_path "$qt5_artifact"
+        if [ -f "$1/.qt5/$qt5_artifact" ]; then
+            cmp -s "$1/.qt5/$qt5_artifact" "$qt5_target" || return 1
+        elif [ -e "$qt5_target" ] || [ -L "$qt5_target" ]; then
+            return 1
+        fi
+    done
 }
 
 # Every file that differs from the firmware's, back in Qt 5 form, into the
@@ -1729,7 +2014,8 @@ qt5_check_activation() {
 
 qt5_publish() {
     [ "$QT5_DISPLAY" = "1" ] || return 0
-    QT5_PUBLISHED=1
+    : > "$WRITE_TRANSACTION/.qt5/.published"
+    sync
     qt5_mark_failed
     qt5_files=
     # Full removal must also work when the disposable vendor cache or packer
@@ -2074,6 +2360,7 @@ restore_file() {
     restore_original="$BACKUP_DIR/$restore_rel"
     restore_dest="$GUI_DIR/$restore_rel"
     if [ -e "$restore_original" ]; then
+        stock_backup_valid "$restore_rel" || return 1
         if [ -f "$restore_dest" ] && cmp -s "$restore_original" "$restore_dest"; then
             return 0
         fi
@@ -2089,6 +2376,11 @@ restore_file() {
 
 restore_changed_count() {
     check_settings_paths || return 1
+    for rel in Settings.qml Components/Settings/GeneralsChoice.qml MainApp.qml HomePage.qml MemoPage.qml; do
+        if [ -e "$BACKUP_DIR/$rel" ]; then
+            stock_backup_valid "$rel" || return 1
+        fi
+    done
     changed=0
     if [ -e "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" ]; then
         if ! cmp -s "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" "$GUI_DIR/Components/Settings/GeneralsChoice.qml"; then
@@ -2142,6 +2434,7 @@ restore_core_changed_count() {
         printf '0\n'
         return 0
     fi
+    stock_backup_valid EventManager.qml || return 1
     if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
         changed=$((changed + 1))
     fi
@@ -2196,6 +2489,7 @@ restore_media_user_label_changed_count() {
         printf '0\n'
         return 0
     fi
+    stock_backup_valid Components/Settings/CallBlockPopup.qml || return 1
     if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
         printf '1\n'
     else
@@ -2233,12 +2527,28 @@ restore_all_patch_files() {
 
 case "$ACTION" in
     status)
+        transaction_report
+        ;;
+    recover)
+        recover_transactions || true
+        ;;
+    apply|core-apply|media-user-label-apply|restore|core-restore|media-user-label-restore|restore-all)
+        if ! recover_transactions; then
+            printf 'An unfinished GUI write is still in place\n' >&2
+            exit 1
+        fi
+        trap 'exit 130' HUP INT TERM
+        ;;
+esac
+
+case "$ACTION" in
+    status|recover)
         json_status
         ;;
     apply)
         qt5_prepare_or_report
         apply_patch_files
-        touch_patch apply
+        run_touch_phase apply
         json_write_status
         ;;
     core-apply)
@@ -2255,7 +2565,7 @@ case "$ACTION" in
         changed_count="$(restore_changed_count)"
         apply_generated_patch_if_changed "$changed_count" restore_patch_files
         cleanup_staging
-        touch_patch restore
+        run_touch_phase restore
         json_write_status
         ;;
     core-restore)
@@ -2276,7 +2586,7 @@ case "$ACTION" in
             && { [ "$(qt5_overlay_state)" != "off" ] || [ -e "$QT5_RCC.failed" ]; }; }; then
             run_write_action restore_all_patch_files
         fi
-        touch_patch restore
+        run_touch_phase restore
         json_write_status
         ;;
     reload)

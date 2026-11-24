@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 import yaml
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.exceptions import HomeAssistantError
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
@@ -88,6 +90,7 @@ class _FakeEntry:
     options: dict[str, Any] = field(
         default_factory=lambda: {CONF_DEVICE_UI_ENABLED: True}
     )
+    state: ConfigEntryState = ConfigEntryState.LOADED
 
 
 class _FakeConfigEntries:
@@ -96,6 +99,12 @@ class _FakeConfigEntries:
 
     def async_entries(self, domain: str) -> list[_FakeEntry]:
         return self.entries if domain == DOMAIN else []
+
+    def async_loaded_entries(self, domain: str) -> list[_FakeEntry]:
+        return [
+            entry for entry in self.async_entries(domain)
+            if getattr(entry, "state", ConfigEntryState.LOADED) is ConfigEntryState.LOADED
+        ]
 
 
 class _FakeServices:
@@ -709,6 +718,36 @@ def test_service_entry_lookup_accepts_explicit_entry_id() -> None:
 
         assert api_one.activation_calls == []
         assert api_two.activation_calls == ["scene_1"]
+
+    asyncio.run(_run())
+
+
+@pytest.mark.parametrize(
+    "state", [ConfigEntryState.NOT_LOADED, ConfigEntryState.SETUP_RETRY, ConfigEntryState.SETUP_ERROR]
+)
+def test_service_entry_lookup_ignores_entries_that_are_not_loaded(state: ConfigEntryState) -> None:
+    """Ignored, disabled or failed entries do not make the call ambiguous."""
+
+    async def _run() -> None:
+        api = _FakeApi()
+        loaded = _FakeEntry(_FakeRuntimeData(api=api), entry_id="loaded")
+        other = _FakeEntry(None, entry_id="other", state=state)  # type: ignore[arg-type]
+        hass = _FakeHass([other, loaded])
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION)]
+
+        await handler(types.SimpleNamespace(data={"activation_id": "scene_1"}))
+        assert api.activation_calls == ["scene_1"]
+
+        with pytest.raises(SERVICE_VALIDATION_ERROR) as err:
+            await handler(types.SimpleNamespace(data={"entry_id": "other", "activation_id": "scene_1"}))
+        assert err.value.translation_key == "entry_not_loaded"
+
+        hass.config_entries.entries.remove(loaded)
+        with pytest.raises(SERVICE_VALIDATION_ERROR) as err:
+            await handler(types.SimpleNamespace(data={"activation_id": "scene_1"}))
+        assert err.value.translation_key == "entry_not_loaded"
+        assert api.activation_calls == ["scene_1"]
 
     asyncio.run(_run())
 
@@ -1806,7 +1845,8 @@ def test_capture_doorbell_call_service_translates_status_failures(monkeypatch) -
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("status failure was not translated")
@@ -2252,7 +2292,8 @@ def test_capture_doorbell_call_service_does_not_hang_up_unconfirmed_call(
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("answer wait failure was not translated")
@@ -2382,7 +2423,8 @@ def test_capture_doorbell_call_translates_hangup_failure_after_successful_captur
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("hangup failure was not translated")
@@ -2610,7 +2652,9 @@ def test_common_agent_command_failures_are_translated() -> None:
     async def _run() -> None:
         try:
             await common_use_cases.raise_agent_command_failed(_failing_command(), entry=_FakeEntry(_FakeRuntimeData()))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            # A device-side failure, not invalid input.
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("agent failure was not translated")
@@ -2649,7 +2693,8 @@ def test_common_gui_patch_refresh_failures_are_translated(monkeypatch) -> None: 
 
         try:
             await common_use_cases.async_ensure_gui_function_patch(entry)
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("failed GUI patch refresh was not translated")
@@ -2739,7 +2784,8 @@ def test_common_latest_item_id_translates_refresh_and_empty_results() -> None:
                 latest=lambda payload: payload.get("latest"),
                 unavailable_error="missing_item",
             )
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("refresh failure was not translated")

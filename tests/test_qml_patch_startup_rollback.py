@@ -29,6 +29,8 @@ def startup_env(tmp_path, *, succeeds_on=2):
         "pidof": '#!/bin/sh\n'
         '[ -f "$C300X_TEST_OBSERVATIONS/count" ] && '
         '[ "$(cat "$C300X_TEST_OBSERVATIONS/count")" = "$C300X_TEST_SUCCEEDS_ON" ]\n',
+        # A host sync flushes every test's files and can take seconds.
+        "sync": "#!/bin/sh\nexit 0\n",
     }
     for name, content in scripts.items():
         path = commands / name
@@ -67,7 +69,7 @@ def test_failed_start_restores_previous_files_before_retry(tmp_path, action, rec
     assert status["ok"] is False and status["state"] == "reload_failed"
     assert status["gui_running"] is recovery_starts
     assert snapshot(gui) == before
-    assert snapshot(observations / "2") == before
+    assert snapshot(observations / "2", gui_only=True) == before
     assert observations.joinpath("count").read_text() == "2"
     assert list((observations / "1").glob(".c300x-qml-transaction.*"))
     assert not list(gui.glob(".c300x-qml-transaction.*"))
@@ -87,7 +89,7 @@ def test_upgrade_start_failure_restores_previous_patch_not_stock(tmp_path):
     result = _run_qml_patch_raw(tmp_path, gui, backup, "apply", source_dir=source, env_overrides=env)
     result.check_returncode()
     assert json.loads(result.stdout)["state"] == "reload_failed"
-    assert snapshot(gui) == snapshot(observations / "2") == before
+    assert snapshot(gui) == snapshot(observations / "2", gui_only=True) == before
     assert (observations / "1/C300XAlerts.qml").read_bytes() == alert.read_bytes()
 
 

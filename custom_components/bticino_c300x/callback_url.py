@@ -217,13 +217,14 @@ def _select_non_link_local_source_ip(agent_host: str, agent_port: int) -> str | 
         agent_host,
         agent_port,
     ):
-        with socket.socket(family, socktype, proto) as sock:
-            sock.settimeout(_SOURCE_CONNECT_TIMEOUT_SECONDS)
-            try:
+        # Inside the try: a host without IPv6 cannot even create the socket.
+        try:
+            with socket.socket(family, socktype, proto) as sock:
+                sock.settimeout(_SOURCE_CONNECT_TIMEOUT_SECONDS)
                 sock.connect(sockaddr)
                 source = str(sock.getsockname()[0])
-            except OSError:
-                continue
+        except OSError:
+            continue
         source = source.split("%", 1)[0]
         if not _source_ip_is_usable(source):
             continue

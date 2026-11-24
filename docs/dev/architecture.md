@@ -356,8 +356,10 @@ Handler rules:
 Stops from elsewhere (CPU watchdog, a departing RTSP client) bypass the worker
 and can run beside an operation. Status routes take the media mutexes only
 briefly; lifecycle waits happen under `media_lifecycle_mutex` or without a
-lock, never under the bridge mutex. `/ui/media-closed` updates event state
-instead of stopping the session.
+lock, never under the bridge mutex. `/ui/media-closed` (the display's
+`onCallEnded` hook) only wakes the display pages: it also fires when Home
+Assistant answers a ring, so `doorbell.media.closed` comes only from the bus,
+SIP and stream stops.
 
 ## MQTT Output
 

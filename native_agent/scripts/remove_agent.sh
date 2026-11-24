@@ -28,6 +28,7 @@ STARTUP_ACTIVE=0
 STARTUP_RO_FAILED=0
 MEDIA_REBOOT_REQUIRED=0
 FINAL_DELETE_STARTED=0
+AGENT_STOPPED=0
 cleanup_workspace() {
     cleanup_status=$?
     cleanup_failed=0
@@ -67,6 +68,14 @@ cleanup_workspace() {
     if [ "$cleanup_status" = 0 ]; then
         cleanup_status=$cleanup_failed
     fi
+    if [ "$cleanup_status" != 0 ] && [ "$AGENT_STOPPED" = 1 ] && [ "$keep_workspace" = 0 ] \
+        && [ -x "$INIT_SCRIPT" ] && [ -x "$AGENT_DIR/c300x-agent-native" ]; then
+        if "$INIT_SCRIPT" restart >/dev/null 2>&1 && "$INIT_SCRIPT" status >/dev/null 2>&1; then
+            printf 'Agent started again so the removal can be retried\n' >&2
+        else
+            printf 'Agent could not be started again; start it with %s restart\n' "$INIT_SCRIPT" >&2
+        fi
+    fi
     exit "$cleanup_status"
 }
 trap cleanup_workspace EXIT
@@ -104,7 +113,8 @@ restore_qml() {
     fi
     if [ -x "$QML_PATCH" ]; then
         status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" status 2>/dev/null || true)"
-        if printf '%s' "$status" | grep -F -q '"state":"original"' \
+        if ! printf '%s' "$status" | grep -F -q '"transaction":' \
+            && printf '%s' "$status" | grep -F -q '"state":"original"' \
             && printf '%s' "$status" | grep -F -q '"core_state":"original"' \
             && printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
             return 0
@@ -113,6 +123,7 @@ restore_qml() {
         # not keep the display files from being removed (see below).
         if ! status="$(C300X_QML_SOURCE_DIR="$AGENT_DIR/qml" "$QML_PATCH" restore-all 2>/dev/null)" \
             || ! printf '%s' "$status" | grep -F -q -e '"ok":true' -e 'display_library_restore_failed' \
+            || printf '%s' "$status" | grep -F -q '"transaction":"stuck"' \
             || ! printf '%s' "$status" | grep -F -q '"state":"original"' \
             || ! printf '%s' "$status" | grep -F -q '"core_state":"original"' \
             || ! printf '%s' "$status" | grep -F -q '"media_user_label_state":"original"'; then
@@ -149,47 +160,50 @@ replace_firewall_file() {
     return "$restore_rc"
 }
 
-remove_managed_block() {
-    target="$1"
-    begin="$2"
-    end="$3"
-    tmp="$REMOVE_WORK/managed-block"
-
-    [ -f "$target" ] || return 0
-    if ! awk -v begin="$begin" -v end="$end" '
-        $0 == begin {skip = 1; next}
-        $0 == end {skip = 0; next}
+strip_managed_blocks() {
+    awk '
+        $0 == "# c300x-native-agent firewall begin" || $0 == "# c300x-native-agent ipv6 firewall begin" {
+            if (skip) exit 3
+            skip = 1
+            next
+        }
+        $0 == "# c300x-native-agent firewall end" || $0 == "# c300x-native-agent ipv6 firewall end" {
+            if (!skip) exit 3
+            skip = 0
+            next
+        }
         skip != 1 {print}
-    ' "$target" > "$tmp"; then
-        rm -f "$tmp"
-        return 1
-    fi
-    if ! replace_firewall_file "$tmp" "$target"; then
-        rm -f "$tmp"
-        return 1
-    fi
-    rm -f "$tmp"
+        END {if (skip) exit 3}
+    ' "$1" > "$2"
 }
 
-restore_file_or_remove_block() {
+restore_firewall() {
     target="$1"
     backup="$2"
-    begin="$3"
-    end="$4"
+    tmp="$REMOVE_WORK/managed-block"
 
     remount_root_rw || return 1
-    if [ -f "$backup" ]; then
-        if ! replace_firewall_file "$backup" "$target"; then
-            remount_root_ro
-            return 1
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        if ! strip_managed_blocks "$target" "$tmp"; then
+            printf 'Cannot remove the agent firewall block from %s\n' "$target" >&2
+            firewall_rc=1
+        elif replace_firewall_file "$tmp" "$target"; then
+            firewall_rc=0
+            if [ -f "$backup" ] && ! cmp -s "$backup" "$target"; then
+                printf 'Firewall backup for %s does not match the stock rules; kept the live rules without the agent block\n' "$target" >&2
+            fi
+        else
+            firewall_rc=1
         fi
+        rm -f "$tmp"
+    elif [ -f "$backup" ] && [ ! -L "$backup" ]; then
+        replace_firewall_file "$backup" "$target"
+        firewall_rc=$?
     else
-        if ! remove_managed_block "$target" "$begin" "$end"; then
-            remount_root_ro
-            return 1
-        fi
+        firewall_rc=0
     fi
-    remount_root_ro
+    remount_root_ro || firewall_rc=1
+    return "$firewall_rc"
 }
 
 startup_entry_matches() {
@@ -282,6 +296,7 @@ stop_agent() {
     case $? in 0) return 0 ;; 1) ;; *) return 1 ;; esac
     # Match the process name, not a possibly stale PID file. TERM lets active
     # native transactions finish; never proceed on signal delivery alone.
+    AGENT_STOPPED=1
     if ! killall c300x-agent-native >/dev/null 2>&1; then
         agent_stopped
         return $?
@@ -379,11 +394,11 @@ if ! stop_agent; then
     exit 1
 fi
 restore_qml
-if ! restore_file_or_remove_block "$IPTABLES6" "$IPTABLES6_BACKUP" "# c300x-native-agent ipv6 firewall begin" "# c300x-native-agent ipv6 firewall end"; then
+if ! restore_firewall "$IPTABLES6" "$IPTABLES6_BACKUP"; then
     printf 'Failed to restore IPv6 firewall patch; keeping agent files and backups in place\n' >&2
     exit 1
 fi
-if ! restore_file_or_remove_block "$IPTABLES" "$IPTABLES_BACKUP" "# c300x-native-agent firewall begin" "# c300x-native-agent firewall end"; then
+if ! restore_firewall "$IPTABLES" "$IPTABLES_BACKUP"; then
     printf 'Failed to restore IPv4 firewall patch; keeping agent files and backups in place\n' >&2
     exit 1
 fi

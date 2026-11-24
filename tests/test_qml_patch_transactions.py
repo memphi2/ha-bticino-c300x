@@ -22,9 +22,11 @@ STOCK_FILES = ["Settings.qml", "MainApp.qml", "HomePage.qml", "MemoPage.qml", "E
                "Components/Settings/CallBlockPopup.qml"]
 
 
-def snapshot(root):
+def snapshot(root, *, gui_only=False):
+    """``gui_only`` leaves out a write transaction kept next to the GUI files."""
     return {str(p.relative_to(root)): (p.read_bytes(), stat.S_IMODE(p.stat().st_mode))
-            for p in root.rglob("*") if p.is_file()}
+            for p in root.rglob("*") if p.is_file()
+            and not (gui_only and p.relative_to(root).parts[0].startswith(".c300x-qml-transaction."))}
 
 
 def failing_copy(tmp_path, destination, *, prefix=False):

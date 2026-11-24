@@ -130,7 +130,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Come l'originale: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Come l'originale: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -783,7 +783,7 @@
       },
       "speech": {
         "title": "Sintesi vocale",
-        "description": "Le notifiche parlate (azione Notify con mode speech o both) usano questo motore e questa lingua. Con un motore locale come Piper nulla lascia la tua rete. Senza una scelta Home Assistant usa il suo motore predefinito, quello cloud se è configurato Home Assistant Cloud. tts_engine e language in una notifica hanno la precedenza su queste impostazioni.",
+        "description": "Le notifiche parlate (azione Notify con tts: true o con il vecchio mode speech o both) usano questo motore e questa lingua. Con un motore locale come Piper nulla lascia la tua rete. Senza una scelta Home Assistant usa il suo motore predefinito, quello cloud se è configurato Home Assistant Cloud. tts_engine e language in una notifica hanno la precedenza su queste impostazioni.",
         "data": {
           "tts_engine": "Motore di sintesi vocale",
           "tts_language": "Lingua"
@@ -842,7 +842,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Come l'originale: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "dashboard_entity_display": {
@@ -1313,7 +1313,7 @@
         "name": "Diagnostica agente dispositivo",
         "state": {
           "unknown": "Diagnostica non caricata",
-          "agent_offline": "Agent offline",
+          "agent_offline": "Agente non in linea",
           "agent_reconnecting": "Riconnessione",
           "repair_required": "Riparazione richiesta",
           "subscription_missing": "Sottoscrizione mancante",
@@ -1386,7 +1386,7 @@
         "name": "Rilevamento mDNS agent"
       },
       "gui_function_patch": {
-        "name": "Display patch"
+        "name": "Patch display"
       },
       "firewall_patch": {
         "name": "Firewall API"
@@ -1417,6 +1417,18 @@
     },
     "gui_function_patch_required": {
       "message": "Questa azione richiede la patch display C300X. Abilita e applica prima il patch display nelle opzioni dell'integrazione."
+    },
+    "display_disabled": {
+      "message": "Le notifiche sul display richiedono le pagine Home Assistant sul display C300X. Attivale prima nelle opzioni dell'integrazione."
+    },
+    "unknown_notification_action": {
+      "message": "Un pulsante della notifica usa un ID azione che non è configurato tra le azioni C300X."
+    },
+    "display_notification_queue_full": {
+      "message": "Il display C300X contiene già il numero massimo di notifiche con priorità uguale o superiore. Chiudine una o attendi che una scada."
+    },
+    "display_notifications_unloaded": {
+      "message": "Le notifiche del display C300X sono in fase di ricaricamento. Riprova tra un momento."
     },
     "doorbell_video_not_available": {
       "message": "Il video del campanello non è abilitato o non è supportato dal device agent C300X installato."
@@ -1459,6 +1471,9 @@
     },
     "unknown_entry": {
       "message": "La voce BTicino C300X selezionata non esiste."
+    },
+    "entry_not_loaded": {
+      "message": "La voce BTicino C300X non è caricata. Attivala o attendi che sia avviata."
     },
     "voice_memo_not_available": {
       "message": "Non e disponibile alcun memo vocale C300X."
@@ -1547,6 +1562,10 @@
           "display_unsupported": "L'agente del dispositivo non conosce il display di questa postazione; funziona senza le pagine del display e non c'è alcun hook media core da applicare."
         }
       }
+    },
+    "device_qml_transaction_stuck": {
+      "title": "Scrittura del display C300X non completata",
+      "description": "Una scrittura della patch del display su {entry_title} è stata interrotta (mancanza di corrente, crash o arresto forzato) e l'agente del dispositivo non è riuscito a completarla da solo. I file del display sono rimasti come sono; non si perde nulla: i file precedenti a quella scrittura sono conservati sul dispositivo in una cartella nascosta `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nCosa fare: controlla il display del C300X. Se funziona, applica di nuovo la patch del display dall'integrazione (disattivala e riattivala): tutti i file del display vengono ricostruiti dai backup originali. Se l'avviso resta, riavvia il C300X perché l'agente riprovi all'avvio. Un residuo dell'agente 2.9.0 o precedente non viene mai ripristinato automaticamente: quando il display funziona, rimuovi quella cartella via SSH (vedi Manutenzione avanzata, Ripristino, nella documentazione)."
     },
     "device_user_required": {
       "title": "Configurazione utente media C300X richiesta",
@@ -1726,7 +1745,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "Come l'originale (se servono, anche uno sotto l'altro)",
+        "stock": "Di fabbrica (se servono, anche uno sotto l'altro)",
         "side_by_side": "Fissi affiancati"
       }
     },

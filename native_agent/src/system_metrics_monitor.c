@@ -64,8 +64,11 @@ int c300x_system_metrics_monitor_tick(
     monitor->next_sample_ms = now_ms + config->system_metrics_sample_interval_seconds * 1000LL;
     c300x_system_metrics_read_sample(&sample, &monitor->last);
     monitor->last = sample;
+    /* Monotonic seconds (+1 keeps them nonzero): a wall-clock step must not
+     * count as five minutes of high CPU and hang up a call. */
+    (void)now;
     c300x_system_metrics_cpu_watchdog_apply(
-        video, sample.has_cpu_usage, sample.cpu_usage_percent, now,
+        video, sample.has_cpu_usage, sample.cpu_usage_percent, (time_t)(now_ms / 1000) + 1,
         &monitor->high_cpu_since, &monitor->watchdog_tripped_at
     );
     return !monitor->delivered_initialized || monitor->delivery_pending

@@ -426,6 +426,13 @@ def test_safe_c300x_path_accepts_static_config_www_root_without_config() -> None
     ) == Path("/config/www/c300x/clip.mp4")
 
 
+def test_safe_c300x_path_reports_a_nul_byte_as_an_invalid_path() -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    with pytest.raises(HomeAssistantError, match="Invalid C300X output path"):
+        _safe_c300x_path(types.SimpleNamespace(), Path("/config/c300x/a\x00.mp4"), "output")
+
+
 def test_resolve_root_returns_original_path_on_os_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1711,3 +1718,33 @@ def test_a_finished_capture_keeps_its_workspace(
 
     workspaces = _capture_workspaces(tmp_path)
     assert [path.name for path in workspaces] == [metadata["capture_id"]]
+
+
+def _on_event_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+def test_capture_resolves_its_paths_off_the_event_loop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: dict[str, bool] = {}
+
+    def output_path(_hass: Any, _output_path: str | None) -> Path:
+        seen["output"] = _on_event_loop()
+        return tmp_path / "clip.mp4"
+
+    def work_dir(_hass: Any, _wav_output_dir: str | None = None) -> Path:
+        seen["work_dir"] = _on_event_loop()
+        raise RuntimeError("stop after the path checks")
+
+    monkeypatch.setattr(ring_capture_module, "_capture_output_path", output_path)
+    monkeypatch.setattr(ring_capture_module, "_capture_work_dir", work_dir)
+    entry = types.SimpleNamespace(runtime_data=types.SimpleNamespace())
+
+    with pytest.raises(RuntimeError, match="stop after the path checks"):
+        asyncio.run(async_capture_doorbell_ring_call(types.SimpleNamespace(), entry))
+    assert seen == {"output": False, "work_dir": False}

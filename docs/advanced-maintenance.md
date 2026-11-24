@@ -137,6 +137,20 @@ step is complete.
   and the init link; each is the file as it was before the update. If the installed
   file next to it works, delete the backup; if it is missing or broken, move
   the backup over it first.
+- **Display patch write interrupted (power loss, crash, forced stop):** the
+  agent finishes it itself, at its next start and before the next Display
+  patch write: the display files from before the write are put back, `/` goes
+  read-only again and the display restarts. Diagnostics show the Display patch
+  status `transaction`: `pending` until then, `recovered` after it.
+  If it reports `stuck` (Repairs shows "C300X display write left unfinished"),
+  the display files were left as they are and the files from before the write
+  stay in the hidden folder `.c300x-qml-transaction.<number>` in
+  `/home/bticino/bin/gui/skins/default`. Check the display, then apply the
+  Display patch again, which rebuilds every display file from the stock
+  backups; if the warning stays, reboot the device so that the agent tries
+  again. A leftover of agent 2.9.0 or older is restored only when every file
+  in it is proven complete, otherwise never: once the display works, delete
+  that folder over SSH.
 - **Camera size back from 960x576 reports missing or invalid backup data:** keep
   the recovery files and resolve the error before retrying; never guess the
   original file.

@@ -748,11 +748,7 @@ function alarmPageItem(source) {
 function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activeSinceItem, force) {
     if (pageItem.commandPending || pageItem.alarmOnline === false) return
     if (!force && !alarmCommandReady(pageItem.alarmCommandDetails, command)) {
-        if (pageItem.setCommandFeedback) {
-            pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-        } else {
-            setStatus(statusItem, alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem), "#ff6b6b")
-        }
+        pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
         return
     }
     var generation = pageItem.runtimeGeneration
@@ -779,11 +775,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
             var targetState = pageItem.commandTargetState ? pageItem.commandTargetState(command) : ""
             var alreadySatisfied = targetState && sentState === targetState && data.state === targetState
             if (pageItem.alarmRawState === sentState && !alreadySatisfied) pageItem.commandAwaitedState = sentState
-            if (pageItem.setCommandFeedback) {
-                pageItem.setCommandFeedback("sending", command, "#f1c40f")
-            } else {
-                setStatus(statusItem, uiText(pageItem, "sending"), "#f1c40f", true)
-            }
+            pageItem.setCommandFeedback("sending", command, "#f1c40f")
             pageItem.bypassOffered = false
             if (command === "disarm" && pageItem.setAlarmDelayRemaining) {
                 pageItem.setAlarmDelayRemaining(0)
@@ -827,17 +819,8 @@ function alarmCheck(command, statusItem, pageItem) {
             if (pageItem.refreshCommandReadiness) {
                 pageItem.refreshCommandReadiness()
             }
-            if (data.ready === false) {
-                if (pageItem.setCommandFeedback) {
-                    pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-                } else {
-                    setStatus(statusItem, uiText(pageItem, "not_ready_to_arm"), "#ff6b6b")
-                }
-            } else if (pageItem.setCommandFeedback) {
-                pageItem.setCommandFeedback("ready_to_arm", command, "#58d68d")
-            } else {
-                setStatus(statusItem, uiText(pageItem, "ready_to_arm"), "#58d68d", true)
-            }
+            pageItem.setCommandFeedback(data.ready === false ? "not_ready_to_arm" : "ready_to_arm", command,
+                data.ready === false ? "#ff6b6b" : "#58d68d")
             return
         }
         setErrorFeedback(command, statusItem, pageItem)
@@ -872,11 +855,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
         return true
     }
     if (data.error === "invalid_code") {
-        if (pageItem.setCommandFeedback) {
-            pageItem.setCommandFeedback("invalid_code", command, "#ff6b6b")
-        } else {
-            setStatus(statusItem, uiText(pageItem, "invalid_code"), "#ff6b6b")
-        }
+        pageItem.setCommandFeedback("invalid_code", command, "#ff6b6b")
         return true
     }
     if (data.error === "alarm_state_unchanged" || data.error === "alarm_command_rejected") {
@@ -887,11 +866,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
 }
 
 function setErrorFeedback(command, statusItem, pageItem) {
-    if (pageItem.setCommandFeedback) {
-        pageItem.setCommandFeedback("alarm_command_error", command, "#ff6b6b")
-        return
-    }
-    setStatus(statusItem, uiText(pageItem, "alarm_command_error"), "#ff6b6b")
+    pageItem.setCommandFeedback("alarm_command_error", command, "#ff6b6b")
 }
 
 function mergeAlarmCommandDetail(pageItem, command, update) {

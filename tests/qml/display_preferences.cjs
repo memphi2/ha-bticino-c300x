@@ -416,4 +416,60 @@ function alarmPage(api, values) {
     assert.match(qml, /uiText\("stale_state"\), "#f1c40f", false, true\)/, "a lost event stream is a read result too");
     assert.match(qml, /function aboutToShow\(\) \{[^}]*status\.heldUntil = 0/);
 }
+
+{
+    // The quick action on the Alarm page with "Status messages" off: a
+    // success is routine and hidden, a failure stays visible.
+    const {api} = runtime();
+    const p = alarmPage(api);
+    const sent = [], reads = [];
+    api.getJson = (url, success, failure) => sent.push({url, success, failure});
+    api.getJsonShared = (url, success, failure) => reads.push({success, failure});
+    const item = {entity_id: "switch.gate", domain: "switch", kind: "switch"};
+    api.dashboardAction(item, p.status, p, false);
+    assert.match(sent[0].url, /^\/homeassistant\?domain=switch&service=toggle&entities=switch\.gate$/);
+    assert.equal(p.quickActionPending, true);
+    api.dashboardAction(item, p.status, p, false);
+    assert.equal(sent.length, 1, "one quick action at a time");
+    sent.shift().success({ok: true});
+    assert.equal(p.status.text, "action_sent");
+    assert.equal(p.statusText(), "", "ok is hidden with the switch off");
+    assert.equal(reads.length, 1, "and the alarm status is read again");
+    p.feedbackColorsEnabled = true;
+    assert.equal(p.statusText(), "action_sent", "and shown with the switch on");
+    p.feedbackColorsEnabled = false;
+    api.dashboardAction(item, p.status, p, false);
+    sent.shift().success({ok: false});
+    assert.equal(p.statusText(), "action_error", "a refused action is visible");
+    assert.equal(reads.length, 1, "without another status read");
+    api.dashboardAction(item, p.status, p, false);
+    sent.shift().failure("API error: 503");
+    assert.equal(p.statusText(), "status_error (503)", "a failed request is visible");
+    assert.equal(p.quickActionPending, false);
+    api.dashboardAction({domain: "switch"}, p.status, p, false);
+    assert.equal(p.statusText(), "invalid_action");
+    assert.equal(sent.length, 0);
+}
+
+{
+    // Alarm commands report through the page, which always has
+    // setCommandFeedback; there is no second way to write the line.
+    const source = fs.readFileSync(path.join(jsRoot, "c300x_ha.js"), "utf8");
+    assert.doesNotMatch(source, /if \(pageItem\.setCommandFeedback\) \{/);
+    const {api} = runtime();
+    const p = alarmPage(api, {alarmCommandDetails: [{command: "arm_home", ready: false, blocking_sensor_count: 1}]});
+    const sent = [];
+    api.getJson = (url, success, failure) => sent.push({url, success, failure});
+    api.alarmCommand("arm_home", "", p.status, p, p.alarmState, p.activeSince, false);
+    assert.equal(sent.length, 0, "a blocked mode is not sent");
+    assert.match(p.statusText(), /^not_ready_to_arm/);
+    p.alarmCommandDetails = [{command: "arm_home", ready: true}];
+    api.alarmCheck("arm_home", p.status, p);
+    sent.shift().success({ok: true, ready: true});
+    assert.match(p.status.text, /^ready_to_arm/);
+    assert.equal(p.statusText(), "", "ready is routine");
+    api.alarmCheck("arm_home", p.status, p);
+    sent.shift().success({ok: true, ready: false, blocking_sensor_count: 1});
+    assert.match(p.statusText(), /^not_ready_to_arm/);
+}
 console.log("display preferences: persistence protocol, lifecycle and feedback isolation passed");

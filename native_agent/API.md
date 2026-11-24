@@ -1651,6 +1651,12 @@ The IPv6 firewall block allows `ipv6-icmp` and the configured API TCP port as
 destination and source port, using idempotent `ip6tables -C` checks before
 inserting rules.
 
+The capability `ipv6_firewall_hook` says whether the configured IPv6 firewall
+start script exists on the station. Firmware 3.0.x has none
+(`/etc/network/if-pre-up.d/iptables6`), so it reports `false` there and Home
+Assistant does not offer the IPv6 firewall switch; apply would answer
+`missing`.
+
 ### QML Patch
 
 `GET /api/v1/maintenance/qml-patch`

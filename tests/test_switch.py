@@ -1108,6 +1108,23 @@ def test_ipv6_firewall_patch_switch_exists_before_endpoint_is_enabled() -> None:
     assert entity.is_on is True
 
 
+@pytest.mark.parametrize("hook", [None, True, False])
+def test_ipv6_firewall_patch_switch_only_where_the_station_has_the_hook(hook: bool | None) -> None:
+    """Firmware 3.0.x has no IPv6 firewall start script: no switch to offer there."""
+
+    capabilities: dict[str, Any] = {"auth": {"supported": True, "configurable": True}}
+    if hook is not None:
+        capabilities["ipv6_firewall_hook"] = hook
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities=capabilities))
+    entities: list[Any] = []
+
+    asyncio.run(async_setup_entry(None, entry, entities.extend))  # type: ignore[arg-type]
+
+    offered = [item for item in entities if isinstance(item, C300XIpv6FirewallPatchSwitch)]
+    assert len(offered) == (0 if hook is False else 1)
+    assert any(isinstance(item, C300XFirewallPatchSwitch) for item in entities)
+
+
 def test_ipv6_firewall_patch_switch_recovers_when_maintenance_is_disabled() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(

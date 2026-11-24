@@ -277,6 +277,8 @@ def _store_transient_qml_patch_status(entry: BticinoC300XConfigEntry, state: str
             "backup_available": current.get("backup_available"),
             "core_backup_available": current.get("core_backup_available"),
             "gui_running": current.get("gui_running"),
+            # A leftover the device could not finish stays during the write.
+            "transaction": current.get("transaction"),
         },
     )
 
@@ -294,6 +296,8 @@ def _store_transient_qml_core_patch_status(entry: BticinoC300XConfigEntry, state
             "backup_available": current.get("backup_available"),
             "core_backup_available": current.get("core_backup_available"),
             "gui_running": current.get("gui_running"),
+            # A leftover the device could not finish stays during the write.
+            "transaction": current.get("transaction"),
         },
     )
 

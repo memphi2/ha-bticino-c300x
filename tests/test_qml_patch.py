@@ -494,6 +494,37 @@ def test_a_cancel_during_the_read_after_a_failed_write_restores_the_status(
 
 
 @pytest.mark.parametrize("core", [False, True])
+def test_a_stuck_leftover_stays_reported_during_a_write(
+    core: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A write's transient status keeps the stuck leftover: the Repairs issue
+    is not dropped mid-write and the warning is not logged again."""
+
+    stuck = {"available": True, "patched": True, "core_patched": True, "transaction": "stuck"}
+    seen: list[Any] = []
+
+    class _Api(_FakeApi):
+        async def async_apply_qml_patch(self, **kwargs: Any) -> dict[str, Any]:
+            seen.append(entry.runtime_data.qml_patch_status.get("transaction"))
+            return await super().async_apply_qml_patch(**kwargs)
+
+        async def async_apply_qml_core_patch(self) -> dict[str, Any]:
+            seen.append(entry.runtime_data.qml_patch_status.get("transaction"))
+            return await super().async_apply_qml_core_patch()
+
+    api = _Api(status=stuck, apply_status=stuck, core_apply_status=stuck)
+    entry = _entry(api, dict(stuck))
+    action = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+
+    with caplog.at_level("WARNING"):
+        asyncio.run(action(entry))
+
+    assert seen == ["stuck"]
+    assert entry.runtime_data.qml_patch_status["transaction"] == "stuck"
+    assert "could not be finished" not in caplog.text
+
+
+@pytest.mark.parametrize("core", [False, True])
 def test_a_failed_confirming_read_keeps_the_writes_own_answer(core: bool) -> None:
     """A busy or timed-out read right after a successful write must not leave
     the "patching" status behind until a reload."""

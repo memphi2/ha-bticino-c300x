@@ -232,33 +232,47 @@ Item {
         }
     }
 
-    Rectangle {
+    Item {
         id: panel
         visible: !!root.notice && !root.blocked
         anchors.centerIn: parent
-        width: Math.max(0, parent.width - 24)
-        height: Math.max(0, Math.min(parent.height - 24, 370))
-        color: "#176196"
-        border.color: root.accent
-        border.width: 2
-        radius: 4
+        width: Math.max(0, Math.min(parent.width - 24, 560))
+        height: Math.max(0, Math.min(parent.height - 24, 330))
         clip: true
         MouseArea { anchors.fill: parent; onPressed: root.userInteraction() }
+        Rectangle { anchors.fill: parent; color: "black"; opacity: 0.9 }
+        Rectangle {
+            id: sheet
+            width: parent.width
+            height: Math.max(0, acknowledgeButton.y - 10)
+            color: "white"
+            opacity: 0.5
+        }
+        Rectangle {
+            id: severityMark
+            x: 16; y: 14; width: 6; height: 22
+            color: root.accent
+        }
         Text {
             id: severityLabel
-            x: 16; y: 10; width: parent.width - 32; height: 30
+            x: 30; y: 10; width: parent.width - 46; height: 30
             text: root.severityText()
             textFormat: Text.PlainText
-            font.pixelSize: 20
-            color: root.accent
+            font.family: "Ubuntu"
+            font.weight: Font.Light
+            font.pixelSize: 18
+            color: "white"
+            verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
         }
         Text {
             id: titleLabel
-            x: 16; y: 44; width: parent.width - 32; height: 58
+            x: 16; y: 44; width: parent.width - 32; height: 54
             text: root.notice ? root.notice.title : ""
             textFormat: Text.PlainText
-            font.pixelSize: 22
+            font.family: "Ubuntu"
+            font.weight: Font.Light
+            font.pixelSize: 20
             color: "white"
             wrapMode: Text.Wrap
             elide: Text.ElideRight
@@ -266,8 +280,8 @@ Item {
         }
         Flickable {
             id: messageScroll
-            x: 16; y: 108; width: parent.width - 32
-            height: Math.max(0, acknowledgeButton.y - y - 12)
+            x: 16; y: 104; width: parent.width - 32
+            height: Math.max(0, sheet.height - y - 12)
             contentWidth: width; contentHeight: messageLabel.height
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -277,22 +291,34 @@ Item {
                 width: messageScroll.width
                 text: root.notice ? root.notice.message : ""
                 textFormat: Text.PlainText
-                font.pixelSize: 20
+                font.family: "Ubuntu"
+                font.weight: Font.Light
+                font.pixelSize: 18
                 color: "white"
                 wrapMode: Text.Wrap
             }
             MouseArea { anchors.fill: parent; onPressed: root.userInteraction() }
         }
         Rectangle {
+            x: messageScroll.x + messageScroll.width + 6
+            y: messageScroll.y + messageScroll.visibleArea.yPosition * messageScroll.height
+            width: 3
+            height: messageScroll.visibleArea.heightRatio * messageScroll.height
+            visible: messageScroll.contentHeight > messageScroll.height
+            color: "white"
+            opacity: 0.6
+        }
+        Item {
             id: acknowledgeButton
-            x: 16; y: parent.height - 64; width: parent.width - 32; height: 48
-            color: acknowledgeMouse.pressed ? "#124974" : "#207cb6"
-            border.color: "white"; radius: 4
+            y: parent.height - 44; width: parent.width; height: 44
+            Rectangle { anchors.fill: parent; color: "white"; opacity: acknowledgeMouse.pressed ? 0.75 : 0.5 }
             Text {
                 anchors.fill: parent; anchors.margins: 8
                 text: root.acknowledging ? root.uiText("sending") : root.ackFailed ? root.uiText("alert_ack_retry") : root.acknowledgeLabel
                 textFormat: Text.PlainText
-                font.pixelSize: root.ackFailed ? 18 : 22; color: root.ackFailed ? "#ffd166" : "white"
+                font.family: "Ubuntu"
+                font.weight: Font.Light
+                font.pixelSize: 18; color: "white"
                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }

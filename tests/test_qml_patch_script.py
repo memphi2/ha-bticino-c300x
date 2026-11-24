@@ -338,7 +338,7 @@ PATCH_OUTPUT_SHA256 = {
     "C300XEnergy.qml": "6f106d8637158fdf789c2d3339e9bae6fcf2c557c30dbbe5734fcd1b2acb73a2",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
     "C300XAgenda.qml": "487eed57021d45cbf78e79b844bd86513351e9c005c59b2e8d3ff4988f04b51e",
-    "C300XAlerts.qml": "fef6dccf89f5087c29e149677476722e2ff15ad93ed5fe4dd5b02bfa22ab34ae",
+    "C300XAlerts.qml": "c87ed986ae53cb24594fd65d8b1c375f6494bb2147f2488fe08881d1db89c43a",
     "C300XDetailControl.qml": "07b3e761c43480d763bf0c943cfe1bb8d19de794fd095bd5478609ca3ec9c42f",
     "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
     "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",

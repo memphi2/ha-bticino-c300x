@@ -28,6 +28,9 @@ Station:
   (favourites bar or arrows). The value is stored in Home Assistant and shows
   the same in the integration's options; changing it on either side does not
   reload the integration.
+- A display notification now looks like the station's own popups: a grey
+  panel on black with the station font and a grey button. The severity shows
+  as a small coloured marker instead of colouring the whole box.
 - The **Alarm** and **Home Assistant** buttons on the home page draw their
   icons at the size of the station's own button icons, and the label
   "Home Assistant" is shown in full instead of "Home Assist…".

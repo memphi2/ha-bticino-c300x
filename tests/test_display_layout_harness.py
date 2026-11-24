@@ -347,7 +347,7 @@ def test_alerts_mock_transport_pixels_and_interactions(tmp_path, fault):
     component = "C300XAlerts"
     source = (SCRIPT.parents[1] / "device_qml" / (component + ".qml")).read_text()
     replacements = {
-        "wrong_palette": ('color: "#176196"', 'color: "#a00000"'),
+        "wrong_palette": ('color: root.accent', 'color: "#a00000"'),
         "click_through": ('onClicked: root.acknowledge()',
                           'propagateComposedEvents: true; onClicked: { root.acknowledge(); mouse.accepted = false }'),
         "broken_scroll": ('id: messageScroll', 'id: messageScroll; interactive: false'),
@@ -366,7 +366,7 @@ def test_alerts_mock_transport_pixels_and_interactions(tmp_path, fault):
     assert result.returncode == int(fault != "none"), result.stdout + result.stderr
     kinds = {issue["kind"] for case in report["cases"] for issue in case["issues"]}
     failed = {check["name"] for case in report["cases"] for check in case["checks"] if not check["passed"]}
-    expected = {"wrong_palette": "native blue panel", "click_through": "ack touch never clicks underlying",
+    expected = {"wrong_palette": "severity marker pixels", "click_through": "ack touch never clicks underlying",
                 "broken_scroll": "long message drag moves", "ignore_blocked": "callActive-True aborts poll"}
     if fault in expected:
         assert expected[fault] in failed

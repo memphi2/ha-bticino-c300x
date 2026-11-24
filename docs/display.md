@@ -484,7 +484,7 @@ The tab starts with a short status block:
 | --- | --- |
 | **Home Assistant** | **reachable** with the name of the Home Assistant instance, or **not reachable** with the reason underneath (see [Home Assistant not reachable](#home-assistant-not-reachable)). |
 | Second line | The address the station calls Home Assistant at: `http` or `https`, host and port, on a line of its own so that long names fit. Nothing else of the address is shown. |
-| **Last contact** | How long ago the agent and Home Assistant last exchanged a request, or **never since start**. Read when the tab opens. |
+| **Last contact** | How long ago the agent and Home Assistant last exchanged a request, or **never since start**. Read when the tab opens, and once more after Home Assistant has answered. |
 | **Integration**, **Agent** | The version of the integration, and of the agent with the station firmware. The integration version is known only while Home Assistant answers. |
 
 Address, last contact, agent and firmware version come from the agent on the

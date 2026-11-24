@@ -105,14 +105,18 @@ Item {
         keepOpen = data.preventReturnToHomepage === true
         tabNavigation = data.navigation === "tabs"
     }
-    function readStatus() {
+    function readLocal() {
         Bridge.stationStatus(function(data) {
             panel.address = data && /^https?:\/\/[^\/?#@\s]+$/.test(data.home_assistant) ? data.home_assistant : ""
             panel.contact = data ? panel.contactText(data.last_contact_age) : ""
             panel.agentVersion = data && data.version ? data.version : ""
             panel.firmwareVersion = data && data.firmware ? data.firmware : ""
         }, panel)
+    }
+    function readStatus() {
+        readLocal()
         Bridge.bridgeDetails(function(data, reason) {
+            panel.readLocal()
             panel.answered = true
             c300xDisplayPreferences.bridgeProblem = reason
             if (!data) return

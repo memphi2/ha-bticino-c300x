@@ -437,11 +437,18 @@ calls.details[0].callback({ok: true, integration_version: '2.9.2', instance_name
 assert.deepEqual([panel.reachable, panel.address, panel.contact, panel.agentVersion, panel.firmwareVersion,
     panel.integrationVersion, panel.instanceName, panel.keepOpen, panel.tabNavigation],
     [true, 'http://192.0.2.10:8123', 'vor 2 Min', '2.9.2', '1.7.19', '2.9.2', 'Zuhause', true, true]);
+// The bridge answer is itself a contact, so the age is read again after it.
+assert.equal(calls.status.length, 2, 'the local status is read again after the bridge answer');
+calls.status[1].callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
+    home_assistant: 'http://192.0.2.10:8123', last_contact_age: 0});
+assert.equal(panel.contact, 'gerade eben');
 // Not reachable: the reason is kept for the home page symbol, the local facts stay.
 panel.readStatus();
-calls.status[1].callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
+calls.status.at(-1).callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
     home_assistant: 'https://ha.example.org', last_contact_age: 10800});
 calls.details[1].callback(null, 'bridge_unreachable');
+calls.status.at(-1).callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
+    home_assistant: 'https://ha.example.org', last_contact_age: 10800});
 assert.deepEqual([panel.reachable, preferences.bridgeProblem, panel.address, panel.contact],
     [false, 'bridge_unreachable', 'https://ha.example.org', 'vor 3 Std']);
 panel.readStatus();

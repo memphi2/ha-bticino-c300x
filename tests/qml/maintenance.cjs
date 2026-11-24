@@ -70,7 +70,7 @@ for (const action of ["reboot", "remove"]) {
 }
 assert.match(qml, /onTriggered: panel.clearConfirmation\(\)/);
 assert.match(qml, /function hidden\(\) \{\s*clearConfirmation\(\)/);
-assert.match(qml, /onVisibleChanged: if \(!visible\) hidden\(\)/);
+assert.match(qml, /onVisibleChanged: if \(visible\) checkBridge\(\); else hidden\(\)/);
 const translations = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(dir, "js/c300x_i18n.js"), "utf8")
     .replace(/^\.pragma library/, ""), translations);

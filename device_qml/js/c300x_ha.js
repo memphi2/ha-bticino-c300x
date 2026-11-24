@@ -536,12 +536,14 @@ function homeButtons(callback, owner) {
             callback(
                 data && data.alarm_configured === true,
                 data && data.dashboard_available === true,
-                true
+                true,
+                "",
+                !data || data.device_ui_enabled !== false
             )
         }
-    }, function() {
+    }, function(error) {
         if (callback) {
-            callback(false, false, false)
+            callback(false, false, false, error === "API error: 404" ? "bridge_not_registered" : "bridge_unreachable", true)
         }
     }, owner)
 }

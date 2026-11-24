@@ -13,6 +13,11 @@ Station:
   "Action sent") are hidden like on the Home Assistant page, and so is the
   routine line under the notification list. Errors, a required PIN, sensors
   that block arming, connection warnings and the alarm state stay visible.
+- A house symbol beside the power button of the home page shows the
+  connection to Home Assistant. It gets a yellow exclamation mark when the
+  station cannot reach Home Assistant; a tap opens **Settings > Integration**,
+  which names the reason. The page then keeps asking every five minutes, so
+  the **Alarm** and **Home Assistant** buttons come back by themselves.
 
 ## v2.9.1 - 2026-11-24
 

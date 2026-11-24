@@ -317,6 +317,7 @@ Item {
 ORIGINAL_SETTINGS = """import QtQuick 1.1
 Page {
     function handleScreenOff() {
+    function aboutToShow() {
         spacing: 6
     ExclusiveGroup {
                 configurationChoice
@@ -324,12 +325,12 @@ Page {
 }
 """
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "f9febf12716dd3785951d941d158dea0c4d03c278c560d405f7fda6a15c318a9",
-    "Settings.qml": "30c1cdcaec8437471a5a796729067fce550b6d951ab44ebc70824faf4b0aed41",
+    "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
+    "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
-    "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
+    "C300XSettings.qml": "c67bfc5be901c999c97e6f37f3e9f3bec41a676bc6b4d1da2c735ac980e39e47",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "de706cdb68db1dd0d255c60cd56676904173c81ca50170a8591d9663d722b34d",
+    "HomePage.qml": "706a0267a0171e1e7b667b74e44bee90cca4af60609bbba80e66dcc8db2257ad",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "4c10ae76d9dfc24af2d8456976c23acea86711b178fb9f5d2aff302df81c8d30",
@@ -351,12 +352,12 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "67b0e3a99196c3741e853b138b26ce9e70669d9904a2f10eeb824d1022871291",
-    "js/c300x_i18n.js": "b9c1330bf3e416218c7efc80f073dbe8a142e73fed1d54c48840c42fce2fab76",
+    "js/c300x_ha.js": "5f9958d2d2eb02bbfb3f38e5d2d51d355c9de08c53388b0404c3df1e65d998e1",
+    "js/c300x_i18n.js": "6135748ec8bd64dd1dfe1dff6596bae9524d9e9f00fc47de3f8c6c14eac9c2b7",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "e5c13b1398716d78cebe6bf1751b736d7555506a16c5aabfb413dfaeccb8ef83"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "4bab55b313e308266241d1389706ed514074db6fad77cd7ef30cfa2464bb7f98"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:

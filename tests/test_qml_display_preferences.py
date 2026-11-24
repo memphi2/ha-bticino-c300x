@@ -71,6 +71,7 @@ for (const previous of [false, true]) {
     const buttonRetryTimer = {stop() {}, restart() { assert.fail('obsolete read scheduled retry'); }};
     let unreadRefreshes = 0;
     const home = vm.createContext({page, buttonRetryTimer, HAConfig: api,
+        c300xDisplayPreferences: {bridgeProblem: '', bridgeShown: true},
         MemoSync: {syncHomeNotifications(owner) {
             assert.equal(owner, page);
             unreadRefreshes++;
@@ -152,8 +153,10 @@ def test_home_buttons_qt4_retry_without_navigation(tmp_path, layout):
                                             "function homeButtons(cb) { requests++; reply = cb }\n"
                                             "function invalidateSharedRead(path) {}\n")
         qml.write_text('import QtQuick 1.1\nimport "mock.js" as HAConfig\nItem { id: page\n'
+                       '    QtObject { id: c300xDisplayPreferences; property string bridgeProblem: ""; property bool bridgeShown: true }\n'
                        + controls + "\n" + visibility + "\n" + event_handler + """
-    function respond(a, b, valid) { HAConfig.reply(a, b, valid) }
+    function respond(a, b, valid) { HAConfig.reply(a, b, valid, valid ? "" : "bridge_unreachable") }
+    property string problem: c300xDisplayPreferences.bridgeProblem
     property int starts: 0
     function startMessageNotificationWatch() { starts++ }
     function stopMessageNotificationWatch() {}
@@ -180,21 +183,25 @@ def test_home_buttons_qt4_retry_without_navigation(tmp_path, layout):
         refreshDisplayBridgeButtons()
         for (var i = 0; i < 6; i++) {
             respond(false, false, false)
-            check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000 * Math.pow(2, i))
+            check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000 * Math.pow(2, i) && problem === "")
             buttonRetryTimer.triggered()
         }
         respond(false, false, false)
-        check(!buttonRetryTimer.running)
-        // No timer remains: registration at minute five is the next input.
+        // The quick retries are used up: the mark shows and one slow
+        // one-shot keeps asking while the page is visible.
+        check(buttonRetryTimer.running && buttonRetryTimer.interval === 300000 && problem === "bridge_unreachable")
+        buttonRetryTimer.triggered()
+        respond(false, false, false)
+        check(buttonRetryTimer.running && buttonRetryTimer.interval === 300000 && problem === "bridge_unreachable")
         var beforeRegistration = HAConfig.requests
         handleMessageNotificationEvent({topic: "display_bridge.state"})
         check(HAConfig.requests === beforeRegistration + 1)
         respond(false, false, false)
-        check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000)
+        check(buttonRetryTimer.running && buttonRetryTimer.interval === 1000 && problem === "bridge_unreachable")
         buttonRetryTimer.triggered()
         check(HAConfig.requests === beforeRegistration + 2)
         respond(true, true, true)
-        check(haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running)
+        check(haButtonVisible && alarmButtonVisible && !buttonRetryTimer.running && problem === "")
         refreshDisplayBridgeButtons()
         respond(false, false, true)
         visible = false
@@ -241,6 +248,176 @@ def test_disabling_optional_display_restores_settings_but_keeps_media_hooks(tmp_
     assert result["patched"] is False
     assert result["core_patched"] is True
     assert (gui / SETTINGS).read_text() == ORIGINAL_SETTINGS
+
+
+HINT_HARNESS = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const homeSource = fs.readFileSync(path.join(process.argv[1], 'HomePage.qml'), 'utf8');
+const apiSource = fs.readFileSync(path.join(process.argv[1], 'js/c300x_ha.js'), 'utf8')
+    .replace(/^\.pragma library\s*/, '');
+for (const [status, reason] of [[404, 'bridge_not_registered'], [502, 'bridge_unreachable'], [0, 'bridge_unreachable']]) {
+    const requests = [];
+    function Request() { this.readyState = 1; }
+    Request.prototype.open = function(method, url) { this.url = url; };
+    Request.prototype.send = function() { requests.push(this); };
+    Request.prototype.finish = function(code, body) {
+        this.readyState = 4; this.status = code; this.responseText = JSON.stringify(body || {});
+        this.onreadystatechange();
+    };
+    const api = vm.createContext({XMLHttpRequest: Request});
+    vm.runInContext(apiSource, api);
+    const page = {visible: true, buttonReadGeneration: 0, buttonRetries: 0,
+                  alarmButtonVisible: false, haButtonVisible: false, uiBaseUrl: 'http://127.0.0.1:18123'};
+    const preferences = {bridgeProblem: '', bridgeShown: true};
+    const timer = {interval: 0, starts: [], stop() {}, restart() { this.starts.push(this.interval); }};
+    const home = vm.createContext({page, buttonRetryTimer: timer, HAConfig: api,
+        c300xDisplayPreferences: preferences, Math});
+    const body = homeSource.match(/^    function refreshDisplayBridgeButtons\([^)]*\) \{[\s\S]*?^    \}/m);
+    vm.runInContext(body[0], home);
+    for (let attempt = 0; attempt < 6; attempt++) {
+        home.refreshDisplayBridgeButtons();
+        requests.pop().finish(status);
+        assert.equal(preferences.bridgeProblem, '', 'no mark during the quick retries of a normal start');
+    }
+    assert.deepEqual(timer.starts, [1000, 2000, 4000, 8000, 16000, 32000]);
+    for (let slow = 0; slow < 2; slow++) {
+        home.refreshDisplayBridgeButtons();
+        requests.pop().finish(status);
+        assert.equal(preferences.bridgeProblem, reason);
+        assert.equal(timer.starts.at(-1), 300000, 'slow retry while the mark shows');
+    }
+    page.visible = false;
+    home.refreshDisplayBridgeButtons();
+    assert.equal(requests.length, 0, 'a hidden home page does not ask');
+    page.visible = true;
+    const before = timer.starts.length;
+    home.refreshDisplayBridgeButtons();
+    requests.pop().finish(200, {alarm_configured: true, dashboard_available: true});
+    assert.equal(preferences.bridgeProblem, '', 'the next valid read removes the mark');
+    assert.equal(page.alarmButtonVisible && page.haButtonVisible, true);
+    assert.equal(page.buttonRetries, 0);
+    assert.equal(timer.starts.length, before, 'no polling once Home Assistant answers');
+    assert.equal(preferences.bridgeShown, true, 'the plain house stays while Home Assistant answers');
+    home.refreshDisplayBridgeButtons();
+    requests.pop().finish(200, {device_ui_enabled: false});
+    assert.equal(preferences.bridgeShown, false, 'no symbol while the display pages are switched off');
+    home.refreshDisplayBridgeButtons();
+    requests.pop().finish(200, {device_ui_enabled: true});
+    assert.equal(preferences.bridgeShown, true);
+    const seen = [];
+    api.homeButtons(function() { seen.push(Array.prototype.slice.call(arguments)); }, page);
+    requests.pop().finish(200, {});
+    api.homeButtons(function() { seen.push(Array.prototype.slice.call(arguments)); }, page);
+    requests.pop().finish(status);
+    assert.deepEqual(seen, [[false, false, true, '', true], [false, false, false, reason, true]],
+        'three-argument callers keep their contract; reason and page switch are appended');
+}
+"""
+
+
+@pytest.mark.parametrize("layout", ["1", "0"], ids=["stock", "side_by_side"])
+def test_home_page_shows_the_home_assistant_connection(tmp_path, layout):
+    """Issue #119: the home page gave up silently and the buttons stayed hidden.
+
+    A house symbol beside the power button shows the connection. After the
+    six quick retries it gets an amber mark, the page keeps asking every five
+    minutes while it is visible, and the next valid read removes the mark. A
+    tap opens the Integration settings tab, which names the reason.
+    """
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    env = {"C300X_QML_DYNAMIC_HOME_PAGE": layout}
+    _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides=env)
+    home = (gui / "HomePage.qml").read_text()
+    start = home.index("    Image {\n        id: c300xBridgeHint")
+    hint = home[start:home.index("\n    }\n", start)]
+    # One element carries the symbol: the vendor's own house icon, always
+    # shown; only the amber mark depends on the state.
+    assert (
+        "        visible: c300xDisplayPreferences.bridgeShown\n"
+        '        source: "images/call/icon_call-home.svg"\n'
+        "        anchors.verticalCenter: header.verticalCenter\n"
+        # Beside the power button, or beside the vendor's own warning when that shows.
+        "        x: (datecert.visible ? datecert.x + datecert.width : off.x + off.width) + page.width / 100 * 2\n"
+        "        Rectangle {\n"
+        '            visible: c300xDisplayPreferences.bridgeProblem !== ""\n'
+    ) in hint
+    assert hint.count("source:") == 1 and "data:" not in home
+    # The tap area stays clear of the power button (16 px away at 800 px).
+    assert "            anchors.fill: parent\n            anchors.margins: -6\n" in hint
+    assert (
+        "            onPressed: {\n"
+        "                c300xDisplayPreferences.openIntegration = true\n"
+        "                tabView.activateTab(settingsPage)\n"
+    ) in hint
+    assert "repeat: true" not in home[home.index("id: buttonRetryTimer"):home.index("function refreshDisplayBridgeButtons")]
+    main_app = (gui / "MainApp.qml").read_text()
+    assert '        property string bridgeProblem: ""\n        property bool bridgeShown: true\n' in main_app
+    assert "        property bool openIntegration: false\n" in main_app
+    settings = (gui / SETTINGS).read_text()
+    assert (
+        "    function aboutToShow() {\n"
+        '        if (typeof c300xDisplayPreferences !== "undefined" && c300xDisplayPreferences.openIntegration) {\n'
+        "            c300xDisplayPreferences.openIntegration = false\n"
+        "            c300xIntegrationButton.checked = true\n"
+        "        }\n"
+    ) in settings
+    assert "        id: c300xIntegrationButton\n        property Item tab: c300xSettings\n" in settings
+    result = subprocess.run([node, "-e", HINT_HARNESS, str(gui)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    broken = home.replace("id: c300xBridgeHint", "id: otherHint")
+    (gui / "HomePage.qml").write_text(broken)
+    assert _run_qml_patch(tmp_path, gui, backup, "status", env_overrides=env)["state"] == "partial"
+    assert _run_qml_patch(tmp_path, gui, backup, "apply", env_overrides=env)["state"] == "patched"
+    assert (gui / "HomePage.qml").read_text() == home
+
+
+def test_integration_tab_names_the_reason_while_the_problem_lasts():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    result = subprocess.run([node, "-e", r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const root = process.argv[1];
+const qml = fs.readFileSync(root + '/device_qml/C300XSettings.qml', 'utf8');
+const calls = [];
+const preferences = {bridgeProblem: ''};
+const panel = vm.createContext({c300xDisplayPreferences: preferences,
+    Bridge: {homeButtons(callback, owner) { calls.push({callback, owner}); }}});
+panel.panel = panel;
+vm.runInContext(qml.match(/^    function checkBridge\(\) \{[\s\S]*?^    \}/m)[0], panel);
+panel.checkBridge();
+assert.equal(calls.length, 0, 'no extra read while Home Assistant works');
+preferences.bridgeProblem = 'bridge_unreachable';
+panel.checkBridge();
+assert.equal(calls.length, 1);
+assert.equal(typeof calls[0].owner.checkBridge, 'function', 'the panel is the owner, so a hidden tab drops the read');
+calls[0].callback(false, false, false, 'bridge_not_registered');
+assert.equal(preferences.bridgeProblem, 'bridge_not_registered', 'the reason follows the latest answer');
+calls[0].callback(true, true, true, '');
+assert.equal(preferences.bridgeProblem, '', 'a valid read removes the line');
+assert.match(qml, /onVisibleChanged: if \(visible\) checkBridge\(\); else hidden\(\)/);
+assert.match(qml, /text: c300xDisplayPreferences\.bridgeProblem \? panel\.label\(c300xDisplayPreferences\.bridgeProblem\) : ""/);
+const texts = vm.createContext({});
+vm.runInContext(fs.readFileSync(root + '/device_qml/js/c300x_i18n.js', 'utf8').replace(/^\.pragma library\s*/, ''), texts);
+for (const key of ['bridge_unreachable', 'bridge_not_registered']) {
+    const seen = new Set(['de', 'en', 'it', 'fr'].map(language => texts.text(language, key)));
+    assert.equal(seen.size, 4, key);
+    for (const text of seen) assert.ok(text.length > 20 && text.length <= 130, text);
+}
+assert.match(texts.text('en', 'bridge_unreachable'), /http, or https with a trusted certificate/);
+""", str(ROOT)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_station_settings_tab_is_named_integration(tmp_path):

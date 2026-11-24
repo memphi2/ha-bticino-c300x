@@ -93,6 +93,9 @@ The optional `dashboard` object changes that tile:
   **Home page buttons**.
 - An **Integration** tab in the Settings menu
   ([Station Settings Tab](#station-settings-tab)).
+- A house symbol beside the power button of the home page for the connection
+  to Home Assistant, with a yellow exclamation mark while the station cannot
+  reach it ([Home Assistant not reachable](#home-assistant-not-reachable)).
 - The swipe threshold of the touch screen rises from 4 to 16 pixels, so a tap
   that moves a little is no longer taken for a swipe.
 - Every original file it changes is backed up first. Turning the patch off or
@@ -485,6 +488,28 @@ leaving the tab or the screen going off cancels it. **Status messages** is a
 station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.
+
+### Home Assistant not reachable
+
+A house symbol beside the power button of the home page stands for the
+connection to Home Assistant; tapping it opens the **Integration** tab. The
+home page asks Home Assistant which of its two buttons to show. If that fails
+seven times in a row (about a minute), the symbol gets a yellow exclamation
+mark and the page keeps asking every five minutes while it is visible. The
+next answer removes the mark. The symbol follows what the home page last
+read: when it is shown, on a message from Home Assistant, and on those
+retries. It is hidden while the display pages are switched off in the
+integration. The **Integration** tab names the reason for as long as the
+problem lasts:
+
+- **Home Assistant has not registered since the agent started.** The agent is
+  running, but Home Assistant has not connected to it yet, for example
+  shortly after a station restart or while the integration is not loaded.
+- **Home Assistant does not answer.** The station cannot reach Home Assistant
+  at the address the integration gave it. Check the address of Home Assistant
+  for the C300X in the integration's connection settings: it must be
+  reachable from the station over http, or over https with a trusted
+  certificate.
 
 **Settings > Generals > Tone buttons** stays the station's own touch-sound
 control. With the Display patch active, the device page in Home Assistant

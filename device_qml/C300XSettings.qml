@@ -3,6 +3,7 @@ import "js/c300x_i18n.js" as I18n
 import Components 1.0
 import Components.Styles 1.0
 import "js/c300x_maintenance.js" as Maintenance
+import "js/c300x_ha.js" as Bridge
 
 Item {
     id: panel
@@ -47,7 +48,13 @@ Item {
         clearConfirmation()
         Maintenance.cancel(panel, deadline)
     }
-    onVisibleChanged: if (!visible) hidden()
+    function checkBridge() {
+        if (!c300xDisplayPreferences.bridgeProblem) return
+        Bridge.homeButtons(function(alarm, dashboard, valid, reason) {
+            c300xDisplayPreferences.bridgeProblem = valid ? "" : reason
+        }, panel)
+    }
+    onVisibleChanged: if (visible) checkBridge(); else hidden()
     Component.onDestruction: hidden()
     Timer {
         id: deadline
@@ -64,6 +71,15 @@ Item {
         anchors.topMargin: 10
         spacing: 6
         width: parent.width - 64
+        UbuntuLightText {
+            objectName: "bridgeReason"
+            visible: text !== ""
+            width: parent.width
+            color: "#f1c40f"
+            font.pixelSize: 16
+            wrapMode: Text.WordWrap
+            text: c300xDisplayPreferences.bridgeProblem ? panel.label(c300xDisplayPreferences.bridgeProblem) : ""
+        }
         Repeater {
             model: 2
             Item {

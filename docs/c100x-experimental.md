@@ -40,9 +40,9 @@ C100X; everything else is in the main documentation:
 | Audio | The firmware codec stays Speex/8000: the station's audio runs at 16 kHz, the firmware's PCMU path accepts only 8 kHz, and the audio chip clocks every profile at 16 kHz. The agent therefore refuses a firmware PCMU switch, and Home Assistant offers no **Audio codec** select. HA and the browser still get PCMU through the agent ([audio analysis](dev/c100x-audio-analysis.md)). |
 | Speaker and TTS | Not offered. The station's own sound paths have no safe owner or cancellation for a door call, so the agent blocks the C300X playback path on a C100X. |
 | Answering machine | Not offered: the vendor library switches it off for this board, so nothing is recorded. The agent refuses the answering-machine, voice-memo and memo-delete requests; HA creates no such entities. |
-| Text memos | Read and created as on a C300X: a new memo is saved through the station (`*8*87`); a save the station refuses fails with `memo_create_refused`. The display shows them on a read-only page. |
+| Text memos | Not offered: HA creates no memo entities, `write_text_memo` is refused with a translated message, and the display has no memo page. |
 | Message LED | Not driven; the agent reports none, and HA refuses Notify `led`. |
-| Display | A separate Qt 5 adapter activated by one reboot, confirmed in its first boot and otherwise rolled back; operated with the station's keys. No Display patch, no home page buttons, no display reload ([details](dev/c100x-display-parity.md#activation-by-reboot)). |
+| Display | A separate Qt 5 adapter activated by one reboot, confirmed in its first boot and otherwise rolled back; entered through the items **Home Assistant** and **Alarmo** of the station's main menu and operated like the station's own menus (Up/Down, Return, EXIT as the last entry). No Display patch, no home page buttons, no display reload ([details](dev/c100x-display-parity.md#activation-by-reboot)). |
 | Ringer mute, touch tone, display notifications | Only after the display activation; notifications without a tone. **Ringer volume** works without it. |
 
 ## Package Protection

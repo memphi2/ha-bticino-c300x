@@ -9,20 +9,20 @@ contract. No device/HA access is authorized by this offline work.
 
 | Existing source | Required C100X parity | Physical input |
 | --- | --- | --- |
-| `HomeAssistant.qml` | Status, badges, weather/forecast, images, configured pages and navigation | Up/Down focus and scroll, Return activate, explicit Back |
+| `HomeAssistant.qml` | Status, badges, weather/forecast, images, configured pages and navigation | Carousel of pages with dots and a last EXIT; Return enters a page, Up/Down move the selection and scroll it into view |
 | `C300XDetailControl.qml` | All supplied light, cover, climate, fan, media, sensor and other entity controls | Discrete actions, choices and numeric adjustment; no drag-only controls |
 | `C300XPageNavigation.qml` | Same page enable/order, favourites and More | Every enabled page reachable |
 | `C300XEnergy.qml` | Now, Today, Power, Consumers, Balance; only enabled views | Tabs and exact supplied history buckets selectable with keys |
 | `C300XEnergyConsumers.qml` | All configured consumer readings, independent column scaling | Read-only, no new polling |
-| `C300XEnergyReadout.qml`, `C300XEnergySums.qml` | Exact selected interval and sums, dismissal | Return/dismiss and back |
+| `C300XEnergyReadout.qml`, `C300XEnergySums.qml` | Exact selected interval and sums, dismissal | Return/dismiss |
 | `Alarm.qml` | Blue Alarmo page, conditional PIN, modes, readiness, blockers, bypass, configured quick action | Full keypad and actions reachable; PIN cleared on exit/preemption |
 | `C300XAgenda.qml` | All supplied events and error/empty states | Scroll every event |
 | `C300XLeaveHome.qml` | Contacts, lights, Alarmo link and allowlisted actions with confirmation | Confirm/cancel within existing deadline |
 | `C300XSituations.qml`, `C300XChecks.qml` | Configured situations, contacts, tasks and states | Scroll all rows |
 | `C300XAlerts.qml` | Notify display, bounded wake/sound, acknowledge | Call/protected-page preemption, no deferred effects |
 | `C300XRingerControl.qml` | Confirmed mute/unmute through stock AudioState | Core hook independent of dashboard visibility |
-| Patched General settings | Vendor beep setting plus HA feedback preference | Keep stock InstallerPage beep control; additional settings keyed |
-| Patched MemoPage and `c300x_memos.js` | Separate text-memo list/detail, bounded refresh and scroll implemented offline | C100X has no stock MemoPage; text display is read-only. Recording, playback, edit/delete/read-state mutation remain unverified and are not exposed |
+| Patched General settings | Vendor beep setting plus HA feedback preference | Stock beep control untouched; one on/off item **Status messages** in the stock Settings carousel before its EXIT |
+| Patched MemoPage and `c300x_memos.js` | None: text memos are not offered on a C100X | No page, no menu entry, no list request; HA creates no memo entities and refuses `write_text_memo` |
 
 Shared JS retains the existing HA snapshot, allowlisted command, confirmation,
 timeout and sleeping-event-request contracts. No display refresh polling is
@@ -115,7 +115,7 @@ because a running GUI may still reference them; removal does not signal it.
 The Notify overlay now has a separate Qt5/key adapter using the unchanged shared
 expiry/acknowledgement controller. Original `libbtobjects.so` exports the
 ScreenState simulateClick/disableState/stateChangedInt API; runtime shape checks
-guard access. Up/Down scroll, Return/Back acknowledge, and C/H/1-8 propagate to
+guard access. The notice covers the screen; Up/Down scroll, Return acknowledges, and C/H/1-8 propagate to
 EventManager. Focus returns after dismissal, but never overrides call focus.
 Host Qt5 tests cover wake ownership/expiry, user interaction, call preemption,
 failed acknowledgement/retry, real intercepted XHR and a nonblank screenshot.
@@ -132,17 +132,22 @@ unavailable. Disk apply/restore report `runtime_verified: false`; successful
 disk installation alone must not enable a capability, only the trial-boot
 confirmation does.
 
-`C100XMemos.qml` now provides a separate read-only text list/detail page through
-the existing loopback `/ui/memos` endpoint. It bounds responses/entries, cancels
-on call/hide, times out after eight seconds and performs no polling or writes.
-The original answering-machine binary names `memos_text`, `message.txt`,
-`msg_info.ini`, `Message Information`, `Read`, `Date`, `UnixTime` and `MediaType`;
-original `libbtobjects.so` exports AnsweringMachine getMemos/addTextMemo and
-voice-record/play methods. These establish static storage/API evidence, not
-successful C100X recording/playback or write acknowledgement. Consequently no
-voice controls or store mutations are exposed. Host tests cover all 64 text
-entries, long plain-text detail scrolling, refresh/error/cancellation, reserved
-keys and a rendered screenshot; original Qt compiles the component.
+The text memo page (`C100XMemos.qml`) is removed: text memos are not offered on
+a C100X. The adapter makes no `/ui/memos` request, the bundle carries no memo
+script, Home Assistant creates no memo entities for a C100X and refuses
+`write_text_memo` there.
+
+Entry and operation follow the station's own pattern. The menu hook keeps a
+mirror list beside the vendor's menu list and never inserts into the vendor
+list, so the vendor's fixed-index helpers keep their positions; **Home
+Assistant** and **Alarmo** appear after the ringtone item only while the bridge
+reports something to open (a failed read hides them and is retried at most six
+times with doubling delays, a good read is not repeated). Every page is a
+carousel with dots and a last EXIT, because the firmware keymap has no back
+key. Our pages draw that chrome themselves in full-screen mode, on the
+station's background picture, with a 40 px header icon instead of the stock
+80 px header to keep the height for content. Text is at least 18 px except in
+the energy charts, whose fixed rows keep their sizes.
 
 The bridge now holds a generation-bound sleeping connection to the native
 C100X-only loopback presence endpoint. It reports the vendor guard, cancels on

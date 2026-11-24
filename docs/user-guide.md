@@ -299,11 +299,9 @@ switch, the message and memo sensors and the `play_latest_video_message`,
 deleting needs the Display patch. See [Services](feature-reference.md#services).
 
 A Classe 100X has no answering machine (its firmware switches it off for this
-hardware) and no voice memos: HA shows only its text memos and the
-`write_text_memo` action there. A new text memo is saved through the station,
-as on a C300X, and appears on the station's read-only memo page once the
-[display pages](display.md#classe-100x-activation-by-reboot) are active.
-Deleting memos is not offered on a C100X.
+hardware), no voice memos and no text memos in Home Assistant: HA creates no
+message or memo entities for it and refuses `write_text_memo` with a message
+that says so.
 
 ## Recording Clips and Capture Modes
 

@@ -130,7 +130,7 @@ offer creates no entity.
 | `sensor` | Doorbell state | Doorbell and media state from the station's events. |
 | `sensor` | Device CPU, Device temperature | Enabled by default when supported. |
 | `sensor` | Device load, Device memory | Disabled by default. |
-| `sensor` | Video messages, Text memos, Voice memos | Counters and latest metadata of the station's own messages and memos. The C100X has Text memos only. |
+| `sensor` | Video messages, Text memos, Voice memos | Counters and latest metadata of the station's own messages and memos. Not on the C100X. |
 | `binary_sensor` | Home call active | On while a Home Call runs. |
 | `select` | Forwarding | Smartphone, Home Assistant or Blocked; automations use `enabled`, `homeassistant`, `blocked`. Answering a Ring Call in HA needs Home Assistant. |
 | `select` | Camera resolution | High (688x480 from the factory) or low (400x288) stream from the next stream on; high by default. Not on firmware 3.0.x or the C100X. |

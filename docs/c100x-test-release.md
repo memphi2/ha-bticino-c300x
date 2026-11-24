@@ -32,9 +32,33 @@ detailed checks. Stop at the first failure and follow the
 | 4 | Start the live stream on the card | Picture and sound; the stream ends cleanly |
 | 5 | Ring at the outdoor station and answer in HA | Picture, two-way audio, hang-up works |
 | 6 | Move brightness, contrast and saturation on the card | The picture changes; a new stream shows the station's own values again |
-| 7 | Enable Maintenance with reboot, press **Activate display pages** ([details](#display-activation-by-reboot-device-test)) | One reboot after two minutes idle, then the extra pages are in the menu |
+| 7 | Enable Maintenance with reboot, press **Activate display pages** ([details](#display-activation-by-reboot-device-test)) | One reboot after two minutes idle, then **Home Assistant** and **Alarmo** follow the ringtone item in the station's main menu ([what to check](#display-pages-what-to-check)) |
 | 8 | Press **Restore original display** | One reboot, stock display back |
 | 9 | Optional: repeat step 7 and pull the power within 60 s after the reboot | Stock display back, repair message in HA, no further reboot |
+
+### Display pages: what to check
+
+After step 7, with the station's keys only (Up, Down, Return):
+
+1. Main menu: Ringtone, then **Home Assistant**, then **Alarmo**, then the
+   station's own items in their usual order. Without a dashboard or without
+   Alarmo the matching item is missing.
+2. **Home Assistant** opens the dashboard. Up and Down change the page, the
+   dots follow, the last entry is **EXIT**; Return on EXIT returns to the menu.
+3. Return on a page with controls selects its first control (white bar). Down
+   walks through all of them and the page scrolls along; arrows show more
+   content above or below. Past the last control the page title is marked again.
+4. A light tile opens its detail page on the switch. Select the brightness,
+   press Return, change it with Up or Down, press Return: the light follows.
+5. **Alarmo** opens the Alarmo page (blue, titled Alarmo). With a PIN the keypad
+   follows the modes.
+6. Send a display notification without sound: it covers the whole screen and
+   Return marks it read.
+7. Settings: **Status messages** stands before EXIT; Return switches it on and
+   off, and the routine confirmations on our pages follow.
+8. A door call during any of these pages shows the call as usual.
+
+Report what differs, with a photo of the screen.
 
 Stop on an unexpected reboot, if a vendor call, the BTicino app or a physical
 key stops working, or if setup fails. Report **pass / fail / not tested** per
@@ -85,8 +109,8 @@ The agent's PCMU transcode for HA is separate from the firmware codec setting.
 - The C100X-aware agent, installer and update guards are implemented offline.
   Routing restoration checks complete known firmware identity; GUI-free restore
   and uninstall recovery guards have temporary-copy regression tests.
-- Additional display pages, physical-key navigation, silent/wake Notify and
-  read-only text memos exist as offline implementations. **They stay inactive
+- Additional display pages, physical-key navigation and silent/wake Notify
+  exist as offline implementations; text memos are not offered on a C100X. **They stay inactive
   until the display activation below.**
 - GUI restart remains unavailable; HA shows no Display reload button. Display
   pages, ringer mute and key tone stay unavailable until the separate

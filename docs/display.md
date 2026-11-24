@@ -149,12 +149,24 @@ station start**; see
 
 What differs on the Classe 100X:
 
-- The pages are operated with the station's keys: Up and Down move and scroll,
-  Return opens or confirms, Back returns. The call, hang-up and numbered keys
-  keep their station functions.
+- The station's main menu gets two items of its own directly after the ringtone
+  item: **Home Assistant** opens the dashboard and **Alarmo** the Alarmo page.
+  Each one is there only while it has something to open (a dashboard with
+  pages, a configured Alarmo panel); the station's other items stay as they are.
+- The pages work like the station's own menus, which have no back key: the
+  pages of a view follow one another with Up and Down, dots show the position
+  and the last entry is **EXIT**. Return enters a page; Up and Down then move
+  the selection, which is scrolled into view, and walking past the first or
+  last control leaves the page again. Arrows mark content above or below.
+  A number such as a brightness is set with Return, Up or Down, Return.
+  The call, hang-up and numbered keys keep their station functions.
+- The station's Settings menu gets the item **Status messages** (on/off) before
+  its EXIT: it shows or hides the routine confirmations on our pages. The
+  station's own key tone setting stays where the station has it.
 - Display notifications wake the screen without a tone; a notification with a
   positive `sound_duration` is refused.
-- Text memos are shown read-only on their own page.
+- Text memos are not offered on a Classe 100X, neither on the display nor in
+  Home Assistant.
 - There is no message LED and no speech; see
   [Models and Features](feature-reference.md#models-and-features).
 

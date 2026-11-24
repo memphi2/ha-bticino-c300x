@@ -25,6 +25,7 @@ Item {
     property alias presenceRetry: presenceTimer
     property string language: Qt.locale().name
     property var preferences: bridge
+    readonly property string uiBaseUrl: "http://127.0.0.1:8090"
     readonly property bool vendorReady: !!vendor && !!events && muteState >= 0 && commissionedState >= 0
         && !!vendor.audioState && typeof vendor.audioState.isRingtoneMute === "boolean"
         && typeof vendor.audioState.isStateEnabled === "function"

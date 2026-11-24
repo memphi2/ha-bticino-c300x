@@ -2,7 +2,22 @@
 static const char *target_dir, *backup_dir;
 #define C300X_DEVICE_PATCH_TARGET_DIR target_dir
 #define C300X_DEVICE_PATCH_BACKUP_DIR backup_dir
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+/* C300X_TEST_FSYNC_FAIL: the patched copy cannot be synced to disk. */
+static int test_fsync(int fd)
+{
+    if (getenv("C300X_TEST_FSYNC_FAIL") != NULL) {
+        errno = EIO;
+        return -1;
+    }
+    return fsync(fd);
+}
+#define fsync test_fsync
+#undef _POSIX_C_SOURCE
 #include "../src/device_routing.c"
+#undef fsync
 #include <assert.h>
 
 int main(int argc, char **argv)

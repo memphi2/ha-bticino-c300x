@@ -540,8 +540,9 @@ int c300x_device_routing_apply(
         set_error(error, error_len, "routing_target_replace_failed");
         return 0;
     }
-    (void)fsync(fd);
-    if (fclose(fp) != 0 || rename(target_tmp_path, target_path) != 0) {
+    /* fclose would close fd: flush and sync before it, then check both. */
+    int synced = fflush(fp) == 0 && fsync(fd) == 0;
+    if (fclose(fp) != 0 || !synced || rename(target_tmp_path, target_path) != 0) {
         unlink(target_tmp_path);
         (void)c300x_patch_remount_root("ro");
         set_error(error, error_len, "routing_target_replace_failed");

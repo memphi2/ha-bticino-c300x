@@ -26,10 +26,34 @@ def apply_identity_binary(tmp_path_factory):
     return binary
 
 
-def run(binary, target, backup, action):
+def run(binary, target, backup, action, **env):
     return subprocess.run([str(binary), str(target.parent), str(backup.parent), action],
-                          env={**os.environ, "C300X_DEVICE_PATCH_NO_REMOUNT": "1"},
+                          env={**os.environ, "C300X_DEVICE_PATCH_NO_REMOUNT": "1", **env},
                           capture_output=True, text=True, timeout=10)
+
+
+def stock_copy(tmp_path, firmware="1.7.19"):
+    original = FIRMWARE_ROOT / f"rootfs-{firmware}/home/bticino/bin/bt_answering_machine"
+    if not original.is_file():
+        pytest.skip(f"Extracted firmware unavailable: {original}")
+    target = tmp_path / "bin/bt_answering_machine"
+    backup = tmp_path / "backup/bt_answering_machine"
+    target.parent.mkdir()
+    backup.parent.mkdir()
+    shutil.copy2(original, target)
+    return target, backup
+
+
+def test_failed_sync_leaves_the_stock_binary(apply_identity_binary, tmp_path):
+    """A patched copy that fsync could not write out must not replace the vendor binary."""
+    target, backup = stock_copy(tmp_path)
+    stock = target.read_bytes()
+    result = run(apply_identity_binary, target, backup, "apply", C300X_TEST_FSYNC_FAIL="1")
+    assert result.returncode != 0, result.stdout
+    assert "error=routing_target_replace_failed" in result.stdout
+    assert target.read_bytes() == stock
+    assert not list(target.parent.glob("*.tmp"))
+    assert run(apply_identity_binary, target, backup, "apply").returncode == 0
 
 
 def test_c100x_remains_unsupported(apply_identity_binary, tmp_path):

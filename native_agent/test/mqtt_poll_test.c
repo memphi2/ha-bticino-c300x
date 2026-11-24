@@ -116,6 +116,31 @@ static void oversized_retained_command(struct c300x_config *config)
     close(peer);
 }
 
+/* A broker that stops answering (no PINGRESP) is dropped after 1.5
+ * keepalives without receiving anything. */
+static void silent_broker(struct c300x_config *config)
+{
+    struct c300x_mqtt mqtt;
+    int peer;
+    const unsigned char pingresp[] = {0xD0, 0};
+    setup(&mqtt, &peer);
+    mqtt.phase = MQTT_CONNACK;
+    ack(&mqtt, config, peer);
+    assert(mqtt.phase == MQTT_READY);
+    clock_ms += 44000;
+    c300x_mqtt_tick(&mqtt, config, 100);
+    assert(mqtt.fd >= 0 && c300x_mqtt_poll_timeout_ms(&mqtt, 100) == 1000);
+    assert(write(peer, pingresp, sizeof(pingresp)) == sizeof(pingresp));
+    c300x_mqtt_handle_poll(&mqtt, config, POLLIN, 100);
+    clock_ms += 44000;
+    c300x_mqtt_tick(&mqtt, config, 100);
+    assert(mqtt.fd >= 0);
+    clock_ms += 1000;
+    c300x_mqtt_tick(&mqtt, config, 100);
+    assert(mqtt.fd == -1 && !mqtt.connected);
+    close(peer);
+}
+
 int main(void)
 {
     struct c300x_config *config = calloc(1, sizeof(*config));
@@ -324,6 +349,7 @@ int main(void)
     assert(c300x_mqtt_poll_timeout_ms(&mqtt, 200) == -1);
     c300x_mqtt_close(&mqtt);
     oversized_retained_command(config);
+    silent_broker(config);
     free(config);
     return 0;
 }

@@ -24,6 +24,7 @@ struct c300x_mqtt {
     size_t connack_used;
     long long connack_deadline_ms;
     size_t ping_remaining; /* Remaining bytes through the queued PINGREQ. */
+    long long last_rx_ms, rx_limit_ms; /* silent past the limit: gone */
     unsigned char rx_buffer[4096];
     size_t rx_len;
     size_t rx_skip; /* Bytes left of a packet larger than rx_buffer. */

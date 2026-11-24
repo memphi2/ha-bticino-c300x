@@ -228,6 +228,8 @@ static void mqtt_receive_connack(struct c300x_mqtt *mqtt, const struct c300x_con
         return;
     }
     mqtt->connack_deadline_ms = 0;
+    mqtt->last_rx_ms = c300x_monotonic_ms();
+    mqtt->rx_limit_ms = config->mqtt_keepalive_seconds > 0 ? config->mqtt_keepalive_seconds * 1500LL : 0;
     mqtt->reconnect_delay_seconds = config->mqtt_reconnect_initial_seconds;
     mqtt->next_ping_at = mqtt->connect_started_at + config->mqtt_keepalive_seconds;
     mqtt->phase = MQTT_SUBSCRIBE_OUTPUT;
@@ -342,6 +344,13 @@ int c300x_mqtt_poll_timeout_ms(const struct c300x_mqtt *mqtt, time_t now)
     int output_timeout = c300x_mqtt_output_timeout(&mqtt->output, mono);
     if (output_timeout >= 0 && (timeout < 0 || output_timeout < timeout)) {
         timeout = output_timeout;
+    }
+    if (mqtt->phase == MQTT_READY && mqtt->rx_limit_ms > 0) {
+        long long left = mqtt->last_rx_ms + mqtt->rx_limit_ms - mono;
+        int rx_timeout = left > 0 ? (left > 3600000 ? 3600000 : (int)left) : 0;
+        if (timeout < 0 || rx_timeout < timeout) {
+            timeout = rx_timeout;
+        }
     }
     if (mqtt->phase == MQTT_CONNACK) {
         long long remaining = mqtt->connack_deadline_ms - mono;
@@ -495,6 +504,7 @@ void c300x_mqtt_handle_poll(
                 return;
             }
             mqtt->rx_len += (size_t)received;
+            mqtt->last_rx_ms = c300x_monotonic_ms();
             mqtt_process_rx(mqtt);
             if (mqtt->has_pending_command) {
                 break;
@@ -519,8 +529,11 @@ void c300x_mqtt_tick(
     if (mqtt->fd < 0) {
         return;
     }
+    /* No PINGRESP (nor anything else) for 1.5 keepalives: a half-open
+     * connection the kernel has not noticed yet. */
     if (c300x_mqtt_output_timeout(&mqtt->output, mono) == 0
-        || (mqtt->phase == MQTT_CONNACK && mqtt->connack_deadline_ms <= mono)) {
+        || (mqtt->phase == MQTT_CONNACK && mqtt->connack_deadline_ms <= mono)
+        || (mqtt->phase == MQTT_READY && mqtt->rx_limit_ms > 0 && mono - mqtt->last_rx_ms >= mqtt->rx_limit_ms)) {
         mqtt_disconnect(mqtt, config, now);
         return;
     }

@@ -1296,7 +1296,28 @@ SSH requests are not deferred. Retrying a busy request must wait for completion.
 QML status and standalone GUI reload retain a 10-second script deadline; QML
 writes retain 30 seconds for a failed start, rollback and restart of the previous
 GUI. Their failed execution, timeout and overflowing 4096-byte output retain
-the existing `502` responses. Device-user status alone also has a 10-second
+the existing `502` responses, with one exception: a QML write (apply,
+apply-core, restore-core, restore) past its 30 seconds gets `SIGTERM` for its
+process group first, not `SIGKILL`. The script's trap then restores the GUI
+files it changed, remounts `/` read-only and restarts the previous GUI. The agent
+gives it 15 seconds for that, the trap's worst case on the device (two 2-second
+GUI restart waits, the remount and the file moves) with margin, and sends
+`SIGKILL` only after them. The request stays open until the script has really
+ended and is then answered with `504`:
+
+```json
+{"ok": false, "available": true, "error": "qml_patch_timeout", "rolled_back": true}
+```
+
+`rolled_back` is `true` only when the script exited with status 130: it
+stopped on the signal with every GUI file it changed back in place and `/`
+read-only again, or before it changed any. `false` means the rollback failed or
+the script had to be killed; `GET /api/v1/maintenance/qml-patch` then says
+what the device has.
+Graceful agent shutdown during a QML write also sends `SIGTERM` once and waits
+up to the same 15 seconds before `SIGKILL`; that request is closed without an
+answer. The init script's own stop sends `SIGKILL` to the agent after 3 seconds;
+the script, in a process group of its own, still finishes its rollback. Device-user status alone also has a 10-second
 deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is

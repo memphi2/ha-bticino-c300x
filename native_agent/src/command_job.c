@@ -194,13 +194,26 @@ void c300x_command_job_tick(struct c300x_command_job *job)
             break;
         }
     }
-    if (!job->complete && (job->failed
-        || (job->deadline_ms > 0 && c300x_monotonic_ms() >= job->deadline_ms))) {
+    int alive = reaped == 0 || (reaped < 0 && wait_error != ECHILD);
+    long long now = c300x_monotonic_ms();
+    if (!job->complete && (job->failed || (job->deadline_ms > 0 && now >= job->deadline_ms))) {
+        job->timed_out = !job->failed;
         job->failed = 1;
         job->complete = 1;
-        if (reaped == 0 || (reaped < 0 && wait_error != ECHILD)) {
-            (void)kill(-job->pid, SIGKILL);
+        if (alive && job->term_grace_ms > 0) {
+            /* A script with a rollback trap gets to run it; its output stays
+             * open so that the trap cannot die of SIGPIPE. */
+            (void)kill(-job->pid, SIGTERM);
+            job->kill_ms = now + job->term_grace_ms;
+        } else {
+            if (alive) {
+                (void)kill(-job->pid, SIGKILL);
+            }
+            close_output(job);
         }
+    } else if (alive && job->kill_ms > 0 && now >= job->kill_ms) {
+        (void)kill(-job->pid, SIGKILL);
+        job->kill_ms = -1;
         close_output(job);
     }
     if (reaped == job->pid || (reaped < 0 && wait_error == ECHILD)) {
@@ -214,6 +227,21 @@ void c300x_command_job_tick(struct c300x_command_job *job)
 
 void c300x_command_job_close(struct c300x_command_job *job)
 {
+    /* Agent shutdown: a job with a grace period ends as at its deadline,
+     * with one SIGTERM only, since a second one would cut its trap short. */
+    if (job->pid > 0 && job->term_grace_ms > 0 && job->kill_ms >= 0) {
+        if (job->kill_ms == 0) {
+            (void)kill(-job->pid, SIGTERM);
+            job->kill_ms = c300x_monotonic_ms() + job->term_grace_ms;
+        }
+        pid_t reaped;
+        while ((reaped = waitpid(job->pid, NULL, WNOHANG)) == 0 && c300x_monotonic_ms() < job->kill_ms) {
+            (void)usleep(10000);
+        }
+        if (reaped != 0) {
+            job->pid = 0;
+        }
+    }
     if (job->pid > 0) {
         (void)kill(-job->pid, SIGKILL);
         (void)waitpid(job->pid, NULL, WNOHANG);

@@ -396,7 +396,11 @@ finish_write_action() {
     if [ "${WRITE_TRANSACTION_COMMITTED:-0}" = "1" ] && [ "${REMOVE_EMPTY_JS:-0}" = "1" ]; then
         rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
     fi
-    remount_ro || write_rc=1
+    write_root_ro=1
+    if ! remount_ro; then
+        write_rc=1
+        write_root_ro=0
+    fi
     if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
         if ! reload_gui; then
             printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
@@ -407,7 +411,10 @@ finish_write_action() {
 
 abort_write_action() {
     finish_write_action || true
-    exit 130
+    if [ "$recovery_ok" = "1" ] && [ "$write_root_ro" = "1" ]; then
+        exit 130
+    fi
+    exit 131
 }
 
 run_write_action() {
@@ -1700,6 +1707,12 @@ restore_all_patch_files() {
     restore_core_patch_files
     restore_media_user_label_files
 }
+
+case "$ACTION" in
+    apply|core-apply|media-user-label-apply|restore|core-restore|media-user-label-restore|restore-all)
+        trap 'exit 130' HUP INT TERM
+        ;;
+esac
 
 case "$ACTION" in
     status)

@@ -3920,7 +3920,7 @@ def test_script_backed_maintenance_requests_outlast_the_agent_script(
     ("async_apply_qml_core_patch", {}, "apply-core"),
     ("async_restore_qml_patch", {}, "restore"),
 ])
-@pytest.mark.parametrize(("configured", "expected"), [(5.0, 35.0), (30.0, 35.0), (60.0, 60.0)])
+@pytest.mark.parametrize(("configured", "expected"), [(5.0, 50.0), (45.0, 50.0), (60.0, 60.0)])
 def test_qml_write_requests_outlast_native_rollback_deadline(method, kwargs, path, configured, expected):
     session = _FakeSession('{"ok": true, "patched": true, "state": "patched"}')
     api = C300XAgentApi(

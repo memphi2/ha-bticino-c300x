@@ -5,7 +5,9 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 from textwrap import dedent
 
@@ -2201,3 +2203,85 @@ def test_only_idempotent_reads_share_a_display_round_trip() -> None:
     assert deliver.index("xhr.waiters = []") < deliver.index("waiters[i].callback(")
     assert 'xhr.sharedPath = ""' in deliver
     assert deliver.count("try {") == 3
+
+
+def _gui_files(root: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> dict[str, str]:
+    """``name`` holds its first call until the test signals the script."""
+
+    commands = tmp_path / "blocking-commands"
+    commands.mkdir()
+    (commands / name).write_text(
+        '#!/bin/sh\n'
+        f'if [ ! -e "{tmp_path}/held" ]; then\n'
+        f'  : > "{tmp_path}/held"\n'
+        '  while :; do sleep 0.02; done\n'
+        'fi\n'
+        f'exec "{shutil.which(name) or "/bin/true"}" "$@"\n'
+    )
+    (commands / name).chmod(0o700)
+    if failing_mv:
+        (commands / "mv").write_text(
+            '#!/bin/sh\ncase "$2" in\n  */.c300x-qml-transaction.*/MainApp.qml) exit 1;;\nesac\n'
+            f'exec "{shutil.which("mv")}" "$@"\n'
+        )
+        (commands / "mv").chmod(0o700)
+    return {
+        "PATH": str(commands) + os.pathsep + os.environ["PATH"],
+        "C300X_QML_RELOAD_GUI": "1",
+        "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
+        "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
+    }
+
+
+def _terminate_when_held(tmp_path: Path, gui: Path, backup: Path, action: str,
+                         env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    env = {
+        **os.environ,
+        "C300X_QML_GUI_DIR": str(gui),
+        "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
+        "C300X_QML_BACKUP_DIR": str(backup),
+        "C300X_QML_NO_REMOUNT": "1",
+        "C300X_QML_GUI_ROOT": str(tmp_path),
+        **env_overrides,
+    }
+    process = subprocess.Popen([str(SCRIPT), action], env=env, text=True, start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    deadline = time.monotonic() + 20
+    while not (tmp_path / "held").exists():
+        assert process.poll() is None and time.monotonic() < deadline, process.communicate()
+        time.sleep(0.01)
+    # The agent signals the job's whole process group at its deadline.
+    os.killpg(process.pid, signal.SIGTERM)
+    stdout, stderr = process.communicate(timeout=20)
+    return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+
+
+@pytest.mark.parametrize("held", ["killall", "mktemp"])
+def test_a_terminated_write_rolls_back_and_exits_130(tmp_path: Path, held: str) -> None:
+    """SIGTERM inside the transaction (the GUI restart) or before it (the
+    original backup during staging): the GUI files are as before and exit
+    status 130 tells the agent that the rollback is complete."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    before = _gui_files(gui)
+    result = _terminate_when_held(tmp_path, gui, backup, "apply", _blocking_commands(tmp_path, held))
+    assert result.returncode == 130, result.stderr
+    assert result.stdout == ""
+    assert _gui_files(gui) == before
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+
+
+def test_a_terminated_write_whose_rollback_fails_does_not_exit_130(tmp_path: Path) -> None:
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    result = _terminate_when_held(tmp_path, gui, backup, "apply",
+                                  _blocking_commands(tmp_path, "killall", failing_mv=True))
+    assert result.returncode == 131, result.stderr
+    assert "recovery files retained" in result.stderr

@@ -21,6 +21,7 @@ static int checked_rename(const char *, const char *);
 #undef rename
 
 static int failure, last_fd;
+static mode_t renamed_mode;
 static size_t checked_write(const void *data, size_t size, size_t count, FILE *fp) {
     struct stat st;
     assert(fstat(fileno(fp), &st) == 0 && (st.st_mode & 0777) == 0600);
@@ -38,8 +39,14 @@ static int checked_sync(int fd) {
     return fsync(fd);
 }
 static int checked_rename(const char *from, const char *to) {
+    struct stat st;
     if (failure == 4) { errno = EIO; return -1; }
-    return rename(from, to);
+    assert(stat(from, &st) == 0);
+    renamed_mode = st.st_mode & 07777;
+    if (failure != 5) return rename(from, to);
+    /* Another process swaps the new name for a symlink right after the rename. */
+    assert(rename(from, to) == 0 && unlink(to) == 0 && symlink("victim", to) == 0);
+    return 0;
 }
 static void check_file(const char *path, const char *expected, mode_t mode) {
     char data[1024] = {0};
@@ -76,6 +83,18 @@ int main(int argc, char **argv) {
     check_file("codec", "new", 0640);
     assert(c300x_device_file_copy("codec", "backup"));
     check_file("backup", "new", 0640);
+    /* The copy has the source's mode before the rename, also over a file
+     * with another mode, and nothing is chmodded through the name after it. */
+    assert(renamed_mode == 0640);
+    assert(chmod("backup", 0600) == 0);
+    assert(c300x_device_file_copy("codec", "backup") && renamed_mode == 0640);
+    check_file("backup", "new", 0640);
+    assert(c300x_device_file_write("victim", "keep", 4));
+    failure = 5;
+    assert(c300x_device_file_copy("codec", "swapped") && renamed_mode == 0640);
+    failure = 0;
+    check_file("victim", "keep", 0600);
+    assert(unlink("swapped") == 0);
     /* Exercise actual apply/restore with synthetic config and remount disabled. */
     const char *stack = "<media>\n<enable_speex>1</enable_speex>\n"
         "<audio_compression>1</audio_compression>\n</media>\n";

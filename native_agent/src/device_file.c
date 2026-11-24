@@ -9,7 +9,6 @@
 
 #include "c300x_agent.h"
 
-#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,8 +86,9 @@ int c300x_device_file_read(const char *path, char **data, size_t *len, mode_t *m
  * full partition, power loss) therefore leaves the ORIGINAL file intact instead
  * of a truncated/corrupt live config. When the target already exists we copy its
  * owner+mode onto the temp first (the rename gives a new inode); a new target
- * gets new_mode on the temp, so nothing is chmodded by name after the rename. */
-int c300x_device_file_write_mode(const char *path, const char *data, size_t len, mode_t new_mode) {
+ * gets new_mode on the temp. final_mode, when given, is then set on the temp
+ * as well, so nothing is chmodded by name after the rename. */
+static int write_file(const char *path, const char *data, size_t len, mode_t new_mode, const mode_t *final_mode) {
     C300X_DEVICE_FILE_STAT st;
     int have_meta = stat_path(path, &st) == 0 && S_ISREG(st.st_mode);
     char tmp[C300X_MAX_PATH_LEN];
@@ -124,6 +124,9 @@ int c300x_device_file_write_mode(const char *path, const char *data, size_t len,
                          : fchmod(fd, new_mode) != 0)) {
         ok = 0;
     }
+    if (ok && final_mode != NULL) {
+        (void)fchmod(fd, *final_mode);
+    }
     if (ok && fsync(fd) != 0) {
         ok = 0;
     }
@@ -137,46 +140,23 @@ int c300x_device_file_write_mode(const char *path, const char *data, size_t len,
     return 0;
 }
 
-int c300x_device_file_write(const char *path, const char *data, size_t len) {
-    return c300x_device_file_write_mode(path, data, len, 0600);
+int c300x_device_file_write_mode(const char *path, const char *data, size_t len, mode_t new_mode) {
+    return write_file(path, data, len, new_mode, NULL);
 }
 
-/* Copy source to dest preserving source mode; used for one-time backup and for
- * restore. Never overwrites an existing backup. */
+int c300x_device_file_write(const char *path, const char *data, size_t len) {
+    return write_file(path, data, len, 0600, NULL);
+}
+
+/* Copy source to dest with the source's mode, set before the rename; used
+ * for the one-time backup and for restore. */
 int c300x_device_file_copy(const char *source, const char *dest) {
     char *data = NULL;
     size_t len = 0;
     mode_t mode = 0600;
-    int ok;
-    if (!c300x_device_file_read(source, &data, &len, &mode)) {
-        return 0;
-    }
-    ok = c300x_device_file_write(dest, data, len);
+    int ok = c300x_device_file_read(source, &data, &len, &mode) && write_file(dest, data, len, 0600, &mode);
     free(data);
-    if (ok) {
-        (void)chmod(dest, mode);
-    }
     return ok;
-}
-
-int c300x_device_file_mkdir_p(const char *path) {
-    char tmp[C300X_MAX_PATH_LEN];
-    size_t len = strlen(path);
-    char *p;
-    if (len == 0 || len >= sizeof(tmp)) {
-        return 0;
-    }
-    memcpy(tmp, path, len + 1);
-    for (p = tmp + 1; *p != '\0'; p++) {
-        if (*p == '/') {
-            *p = '\0';
-            if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
-                return 0;
-            }
-            *p = '/';
-        }
-    }
-    return mkdir(tmp, 0755) == 0 || errno == EEXIST;
 }
 
 int c300x_device_file_backup_once(const char *source, const char *dest) {

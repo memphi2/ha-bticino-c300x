@@ -121,6 +121,10 @@ void c300x_video_bridge_set_error(struct c300x_video *video, const char *message
 int c300x_video_should_dispatch_event(struct c300x_video *video, const char *event_type);
 void c300x_video_note_event(struct c300x_video *video, const char *event_type, int ttl_seconds);
 int c300x_video_consume_media_closed_event(struct c300x_video *video);
+/* Refuses (and reports why) an on-demand start the station cannot take now:
+ * external media, or a recent 486 Busy without a bus call end since. */
+int c300x_video_refuse_ondemand_start(struct c300x_video *video);
+void c300x_video_bridge_station_busy(struct c300x_video *video);
 int c300x_video_ignore_transient_media_closed(struct c300x_video *video);
 int c300x_video_ignore_transient_view_requested(struct c300x_video *video);
 

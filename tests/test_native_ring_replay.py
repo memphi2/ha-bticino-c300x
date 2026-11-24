@@ -17,7 +17,10 @@ WRAPPED = (
     "c300x_audio_codec_device_is_pcmu", "c300x_monotonic_ms",
     "dlopen", "dlsym", "dlclose", "bind", "c300x_mqtt_publish_event",
 )
-CASES = ["display_answer", "unanswered", "ha_answer"]
+CASES = {
+    "display_answer": 0, "unanswered": 0, "ha_answer": 0,
+    "station_busy_bus_end": 2, "station_busy_timeout": 2,
+}
 
 
 @pytest.fixture(scope="module", params=[False, True], ids=["host", "asan-ubsan"])
@@ -43,8 +46,8 @@ def replay_binary(request, tmp_path_factory):
     return binary
 
 
-@pytest.mark.parametrize("case", CASES)
-def test_ring_replay(replay_binary, case):
+@pytest.mark.parametrize(("case", "invites"), CASES.items())
+def test_ring_replay(replay_binary, case, invites):
     result = subprocess.run([str(replay_binary), case], capture_output=True, text=True, timeout=90)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "ondemand_invites=0" in result.stdout
+    assert f"ondemand_invites={invites}" in result.stdout

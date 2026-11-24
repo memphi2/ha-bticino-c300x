@@ -22,6 +22,7 @@
 #define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 120
 #define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500
 #define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000
+#define C300X_STATION_BUSY_GUARD_MS 30000
 #define C300X_LAST_RTP_AT_UPDATE_MS 1000
 
 struct c300x_video;
@@ -47,6 +48,7 @@ struct c300x_video {
     int external_event_active;
     long long external_event_expires_ms;
     char external_owner[32];
+    long long station_busy_until_ms;
     char last_block_reason[64];
     unsigned long long bt_media_start_attempts;
     unsigned long long bt_media_stop_attempts;
@@ -124,6 +126,31 @@ static void clear_external_media_active_locked(struct c300x_video *video)
     video->external_event_active = 0;
     video->external_event_expires_ms = 0;
     video->external_owner[0] = '\0';
+}
+
+/* Why an on-demand start must not call the station now, or NULL. */
+static const char *ondemand_start_block_locked(struct c300x_video *video)
+{
+    if (external_media_active_locked(video)) {
+        return "external_session_active";
+    }
+    if (video->station_busy_until_ms > c300x_monotonic_ms()) {
+        return "station_busy";
+    }
+    video->station_busy_until_ms = 0;
+    return NULL;
+}
+
+static int refuse_ondemand_start_locked(struct c300x_video *video)
+{
+    const char *reason = ondemand_start_block_locked(video);
+
+    if (reason == NULL) {
+        return 0;
+    }
+    snprintf(video->last_error, sizeof(video->last_error), "%s", reason);
+    snprintf(video->last_block_reason, sizeof(video->last_block_reason), "%s", reason);
+    return 1;
 }
 
 static int c300x_video_ensure_running(struct c300x_video *video)
@@ -275,9 +302,7 @@ int c300x_video_activate(struct c300x_video *video, int include_audio)
         return 1;
     }
     pthread_mutex_lock(&video->mutex);
-    if (external_media_active_locked(video)) {
-        snprintf(video->last_error, sizeof(video->last_error), "%s", "external_session_active");
-        snprintf(video->last_block_reason, sizeof(video->last_block_reason), "%s", "external_session_active");
+    if (refuse_ondemand_start_locked(video)) {
         pthread_mutex_unlock(&video->mutex);
         return 0;
     }
@@ -716,6 +741,29 @@ void c300x_video_note_event(struct c300x_video *video, const char *event_type, i
     pthread_mutex_unlock(&video->mutex);
 }
 
+int c300x_video_refuse_ondemand_start(struct c300x_video *video)
+{
+    int refused;
+
+    if (video == NULL) {
+        return 0;
+    }
+    pthread_mutex_lock(&video->mutex);
+    refused = refuse_ondemand_start_locked(video);
+    pthread_mutex_unlock(&video->mutex);
+    return refused;
+}
+
+void c300x_video_bridge_station_busy(struct c300x_video *video)
+{
+    if (video == NULL) {
+        return;
+    }
+    pthread_mutex_lock(&video->mutex);
+    video->station_busy_until_ms = c300x_monotonic_ms() + C300X_STATION_BUSY_GUARD_MS;
+    pthread_mutex_unlock(&video->mutex);
+}
+
 int c300x_video_consume_media_closed_event(struct c300x_video *video)
 {
     int armed;
@@ -724,6 +772,8 @@ int c300x_video_consume_media_closed_event(struct c300x_video *video)
         return 0;
     }
     pthread_mutex_lock(&video->mutex);
+    /* Every bus call end passes here: the station is free again. */
+    video->station_busy_until_ms = 0;
     armed = (
         video->media_closed_event_armed
         || video->call_active

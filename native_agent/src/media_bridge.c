@@ -4977,6 +4977,11 @@ static bool media_start_cancelled(media_bridge_t *bridge, unsigned long generati
 
 static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_lock(&media_lifecycle_mutex);
+    /* No SIP while the station is known busy: it answers 486 to each try. */
+    if (c300x_video_refuse_ondemand_start(bridge->video)) {
+        pthread_mutex_unlock(&media_lifecycle_mutex);
+        return false;
+    }
     pthread_mutex_lock(&bridge->mutex);
     if (
         bridge->stop_in_progress
@@ -5011,6 +5016,9 @@ static bool start_media_session(media_bridge_t *bridge) {
         snprintf(sip_error, sizeof(sip_error), "ondemand_sip_setup_failed:%s",
                  bridge->ondemand_sip_fail);
         c300x_video_bridge_set_error(bridge->video, sip_error);
+        if (strcmp(bridge->ondemand_sip_fail, "answer_486") == 0) {
+            c300x_video_bridge_station_busy(bridge->video);
+        }
         goto failed;
     }
     if (media_start_cancelled(bridge, generation)) goto failed;
@@ -5917,6 +5925,11 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 pthread_mutex_unlock(&g_bridge.mutex);
                 if (explicit_stop_guard) {
                     rtsp_note_play_failure(&g_bridge, "explicit_stop_guard");
+                    send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);
+                    break;
+                }
+                if (c300x_video_refuse_ondemand_start(g_bridge.video)) {
+                    rtsp_note_play_failure(&g_bridge, "ondemand_start_refused");
                     send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);
                     break;
                 }

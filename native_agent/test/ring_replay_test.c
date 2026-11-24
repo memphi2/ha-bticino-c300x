@@ -362,6 +362,15 @@ static void display_answer(void) {
     status(&current);
     assert(strcmp(current.last_error, "external_session_active") == 0);
     assert(atomic_load(&ondemand_invites) == 0);
+    /* go2rtc pulls the on-demand stream again and again (capture: ~80 tries). */
+    for (int i = 0; i < 5; i++) {
+        int fd = rtsp_open();
+        assert(rtsp_play(fd, "/doorbell") == 503);
+        close(fd);
+    }
+    assert(atomic_load(&ondemand_invites) == 0);
+    status(&current);
+    assert(current.external_media_active);
 
     /* The display call ends at its 60 s limit. */
     bus("*8*3#1#4*411##");
@@ -421,6 +430,42 @@ static void ha_answer(void) {
     assert(atomic_load(&ondemand_invites) == 0);
 }
 
+/* (d) The station answers 486 Busy with no external marker (here: no bus
+ * frame announced the call). One INVITE, then no SIP until it is free. */
+static void station_busy_case(bool freed_by_bus) {
+    struct c300x_video_status current;
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 500);
+    close(fd);
+    assert(atomic_load(&ondemand_invites) == 1);
+    status(&current);
+    assert(strcmp(current.last_error, "ondemand_sip_setup_failed:answer_486") == 0);
+    for (int i = 0; i < 5; i++) {
+        fd = rtsp_open();
+        assert(rtsp_play(fd, "/doorbell") == 503);
+        close(fd);
+    }
+    assert(!c300x_video_activate(runtime->video, 1));
+    status(&current);
+    assert(strcmp(current.last_error, "station_busy") == 0);
+    assert(!current.external_media_active && strcmp(current.media_owner, "idle") == 0);
+    assert(atomic_load(&ondemand_invites) == 1);
+
+    atomic_store(&station_busy, 0);
+    if (freed_by_bus) {
+        bus("*8*3#1#4*411##");
+    } else {
+        atomic_store(&clock_offset, 31000);
+    }
+    assert(c300x_video_activate(runtime->video, 1));
+    fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    assert(atomic_load(&ondemand_invites) == 2);
+    status(&current);
+    assert(strcmp(current.media_owner, "agent") == 0);
+    close(fd);
+}
+
 static uint16_t bound_port(int fd) {
     struct sockaddr_in address;
     socklen_t length = sizeof(address);
@@ -477,6 +522,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "display_answer") == 0) display_answer();
     else if (strcmp(argv[1], "unanswered") == 0) unanswered();
     else if (strcmp(argv[1], "ha_answer") == 0) ha_answer();
+    else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
+    else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);
     else assert(!"unknown case");
 
     printf("ondemand_invites=%d\n", atomic_load(&ondemand_invites));

@@ -21,8 +21,9 @@ def test_all_generated_code_is_stripped_before_hashing_without_source_changes(tm
     before = {path: path.read_bytes() for path in source.rglob("*") if path.is_file()}
     expected = {name: builder.adapt_page(name, (source / name).read_text()).encode()
                 for name in builder.PAGES}
-    for path in (source / "c100x").glob("*.qml"):
-        expected[path.name] = path.read_bytes()
+    for pattern in ("*.qml", "*.svg"):
+        for path in (source / "c100x").glob(pattern):
+            expected[path.name] = path.read_bytes()
     for directory, prefix in ((source / "js", "js"), (source / "c100x/js", "js"),
                               (source / "c100x/hooks", "hooks")):
         for path in directory.rglob("*"):

@@ -188,8 +188,8 @@ class Runtime:
         return value.toVariant() if hasattr(value, "toVariant") else value
 
     def stack(self, code):
-        """Evaluate in the context of the stack's current page (vendor ids resolve there)."""
-        return self.js(code, self.js("mainStackView.currentItem"))
+        """Evaluate inside the stack's current page: its first child lives in the page file's own context."""
+        return self.js(code, self.js("mainStackView.currentItem.children[0]"))
 
     def keys(self, text, settle=900):
         for token in text.split():

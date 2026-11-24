@@ -59,7 +59,7 @@ Item {
         require(bridge.blocked, "active call must block")
         events.callActive = false
         screen.openPage("C100XSettings.qml")
-        require(screen.pageItem && !screen.failed, "settings not loaded")
+        require(screen.pageName === "C100XMenu.qml", "loader accepted the removed settings page")
         var old = screen.pageName
         screen.openPage("../../main.qml")
         require(screen.pageName === old, "loader accepted foreign source")

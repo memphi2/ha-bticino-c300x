@@ -46,3 +46,8 @@ def test_bridge_requests_reach_the_agent_listener(tmp_path):
 
 def test_action_survives_a_click_that_unloads_it(tmp_path):
     run_scenario("action_destroyed_by_click", tmp_path, firmware=False)
+
+
+@pytest.mark.parametrize("scenario", ["settings_status_item", "settings_without_bridge"])
+def test_status_messages_item_in_the_vendor_settings_carousel(tmp_path, scenario):
+    run_scenario(scenario, tmp_path)

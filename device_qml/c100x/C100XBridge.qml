@@ -69,6 +69,12 @@ Item {
         onIsRingtoneMuteChanged: bridge.muteSignals++
     }
 
+    property QtObject feedbackToggle: QtObject {
+        property bool on: true
+        onOnChanged: if (on !== bridge.feedbackEnabled) bridge.setFeedbackEnabled(on)
+    }
+    onFeedbackEnabledChanged: feedbackToggle.on = feedbackEnabled
+    onBusyChanged: if (!busy) feedbackToggle.on = feedbackEnabled
     function load() { Api.loadDisplayPreferences(bridge) }
     function setFeedbackEnabled(value) { Api.saveDisplayPreferences(bridge, value) }
     function setTouchTone(value) {

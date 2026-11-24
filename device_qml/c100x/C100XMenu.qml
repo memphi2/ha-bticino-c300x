@@ -22,7 +22,7 @@ C100XPage {
     Column {
         x: 24; y: 70; width: parent.width - 48; spacing: 12
         Repeater {
-            model: ["HomeAssistant.qml", "Alarm.qml", "C100XSettings.qml", "C100XMemos.qml"]
+            model: ["HomeAssistant.qml", "Alarm.qml", "C100XMemos.qml"]
             Rectangle {
                 width: parent.width; height: 76
                 color: index === 1 ? "#123a69" : "#244a59"
@@ -31,7 +31,7 @@ C100XPage {
                 C100XText {
                     anchors.fill: parent; anchors.margins: 16
                     verticalAlignment: Text.AlignVCenter
-                    text: index === 0 ? "Home Assistant" : index === 1 ? "Alarmo" : Labels.label(c100xHost.language, index === 2 ? "settings" : "memos")
+                    text: index === 0 ? "Home Assistant" : index === 1 ? "Alarmo" : Labels.label(c100xHost.language, "memos")
                     color: "white"; font.pixelSize: 26; elide: Text.ElideRight
                 }
                 C100XAction { anchors.fill: parent; onClicked: menu.openPage(modelData) }

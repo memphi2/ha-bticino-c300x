@@ -120,8 +120,9 @@ def build(destination: Path, source: Path = ROOT / "device_qml") -> None:
     destination.mkdir(parents=True, exist_ok=True)
     for name in PAGES:
         (destination / name).write_text(adapt_page(name, (source / name).read_text()))
-    for path in (source / "c100x").glob("*.qml"):
-        shutil.copyfile(path, destination / path.name)
+    for pattern in ("*.qml", "*.svg"):
+        for path in (source / "c100x").glob(pattern):
+            shutil.copyfile(path, destination / path.name)
     shutil.copytree(source / "js", destination / "js", dirs_exist_ok=True)
     shutil.copytree(source / "c100x" / "js", destination / "js", dirs_exist_ok=True)
     shutil.copytree(source / "c100x" / "hooks", destination / "hooks", dirs_exist_ok=True)

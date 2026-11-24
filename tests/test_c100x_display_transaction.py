@@ -82,7 +82,7 @@ def rehash_source(source):
 
 
 @pytest.mark.parametrize("action", ["apply", "restore"])
-@pytest.mark.parametrize("recipe", ["original", "chrome", "presence", "alerts"])
+@pytest.mark.parametrize("recipe", ["original", "chrome", "presence", "alerts", "fullscreen"])
 def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree, action, recipe):
     source = tree[0] / "source"
     hook = source / "hooks/main.inc"
@@ -91,6 +91,9 @@ def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree,
     if recipe == "original":
         legacy = (ROOT / "tests/fixtures/c100x_main_hook_v1.inc").read_bytes()
         expected = "e69c0dc115759e4b1593fd324e8619ff516d66f5aa3fcc6e459417cc9bbdcd5b"
+    elif recipe == "fullscreen":
+        legacy = (ROOT / "tests/fixtures/c100x_main_hook_fullscreen.inc").read_bytes()
+        expected = "7c26f5c928906ef34c11dd357a7ea76c81de414b7f6ac0b7c2d8f509a65bc136"
     elif recipe == "alerts":
         legacy = previous
         expected = "7e4fbabb252eb1a404af4a5d48ed7bbc896bf7d6b2986962b8e994d91cb11a67"
@@ -110,13 +113,15 @@ def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree,
     hook.write_bytes(legacy)
     rehash_source(source)
     run(tree, "apply")
-    assert b"item.displayReady" not in (tree[1] / "main.qml").read_bytes()
+    assert (b"item.displayReady" in (tree[1] / "main.qml").read_bytes()) == (recipe == "fullscreen")
+    assert b"c100xSyncSettings" not in (tree[1] / "main.qml").read_bytes()
     hook.write_bytes(current)
     rehash_source(source)
     run(tree, action)
     if action == "apply":
         assert b"c100xFullScreen" in (tree[1] / "main.qml").read_bytes()
         assert b"item.generation" in (tree[1] / "main.qml").read_bytes()
+        assert b"c100xSyncSettings" in (tree[1] / "main.qml").read_bytes()
         run(tree, "restore")
     assert_original(tree)
 

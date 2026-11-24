@@ -49,6 +49,45 @@
         source: "@RELEASE@/C300XAlerts.qml"
         Keys.forwardTo: [eventManager]
     }
+    function c100xSyncSettings() {
+        var page = mainStackView.currentItem
+        var view = page && page.children && page.children.length > 0 ? page.children[0] : null
+        var model = view ? view.model : null
+        if (!model || typeof model.get !== "function" || typeof model.insert !== "function" || model.count < 4) return
+        var last = model.get(model.count - 1)
+        var second = model.get(1).payload
+        if (!second || second.pageName !== "wifiReset" || last.sourceImg !== "images/Exit.svg") return
+        var ready = !!c100xHost && c100xHost.running && c100xHost.vendorReady
+        if (ready) c100xHost.preferences.load()
+        var wanted = ready && c100xHost.preferences.ready
+        for (var i = 0; i < model.count; i++) {
+            var payload = model.get(i).payload
+            if (payload && payload.c100x === true) {
+                if (!wanted) model.remove(i)
+                return
+            }
+        }
+        if (wanted) model.insert(model.count - 1, {sourceImg: "@RELEASE@/C100XStatus.svg", component: c100xStatusItem,
+            payload: {c100x: true, obj: c100xHost.feedbackToggle, prop: "on"}})
+    }
+    Connections {
+        target: mainStackView
+        onCurrentItemChanged: window.c100xSyncSettings()
+    }
+    Connections {
+        target: c100xHost
+        ignoreUnknownSignals: true
+        onReadyChanged: window.c100xSyncSettings()
+        onRunningChanged: window.c100xSyncSettings()
+        onVendorReadyChanged: window.c100xSyncSettings()
+    }
+    Component {
+        id: c100xStatusItem
+        Loader {
+            source: "@RELEASE@/C100XStatusItem.qml"
+            function returnPressed() { if (item) item.returnPressed() }
+        }
+    }
     Component {
         id: c100xPage
         Loader {

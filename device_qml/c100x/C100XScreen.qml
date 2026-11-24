@@ -12,7 +12,7 @@ FocusScope {
     property alias pageItem: body.item
     signal exitRequested()
     function openPage(name) {
-        if (c100xHost.blocked || ["C100XMenu.qml", "HomeAssistant.qml", "Alarm.qml", "C100XSettings.qml", "C100XMemos.qml"].indexOf(name) < 0) return
+        if (c100xHost.blocked || ["C100XMenu.qml", "HomeAssistant.qml", "Alarm.qml", "C100XMemos.qml"].indexOf(name) < 0) return
         pageName = name
     }
     function goBack() {

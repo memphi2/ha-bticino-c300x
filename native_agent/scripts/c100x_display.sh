@@ -39,7 +39,7 @@ originals() { identity "$1/main.qml" "$MAIN_SHA" && identity "$1/MainPage.qml" "
 valid_manifest() {
     regular "$1" || return 1
     awk 'NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ ||
-         $2 !~ /^((js|hooks)\/)?[A-Za-z0-9_]+\.(qml|js|inc)$/ || seen[$2]++ {exit 1}
+         $2 !~ /^((js|hooks)\/)?[A-Za-z0-9_]+\.(qml|js|inc|svg)$/ || seen[$2]++ {exit 1}
          END {if (NR < 20) exit 1}' "$1"
 }
 verify_tree() {

@@ -110,6 +110,19 @@ if [ -n "${LD_PRELOAD:-}" ] && [ -f "$C300X_TEST_CRASHES" ]; then
         exit 134
     fi
 fi
+if [ -n "${LD_PRELOAD:-}" ] && [ -f "$C300X_TEST_CRASHES.late" ]; then
+    left=$(cat "$C300X_TEST_CRASHES.late")
+    if [ "$left" -gt 0 ]; then
+        echo $((left - 1)) > "$C300X_TEST_CRASHES.late"
+        : > "$C300X_TEST_ALIVE"
+        sleep 4
+        echo "crash $$" >> "$C300X_TEST_LOG"
+        exit 134
+    fi
+fi
+if [ -n "${LD_PRELOAD:-}" ] && [ -f "$C300X_TEST_CRASHES.hang" ]; then
+    while :; do sleep 1; done
+fi
 stop() {
     [ "${C300X_TEST_IGNORE_TERM:-0}" = 1 ] && return
     sleep "${C300X_TEST_TEARDOWN:-0}"
@@ -172,6 +185,7 @@ class Station:
             "C300X_QML_GUI_RUN_DIR": str(self.run_dir),
             "C300X_QML_RELOAD_GUI": "1",
             "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "1",
+            "C300X_QML_QT5_STABLE_SECONDS": "1",
             "C300X_QML_NO_REMOUNT": "1",
             **env,
         }
@@ -395,7 +409,7 @@ class OverlayStation(Station):
         own = {key: base[key] for key in (
             "PATH", "C300X_TEST_STATION", "C300X_TEST_LOG", "C300X_TEST_CALLS", "C300X_TEST_ALIVE",
             "C300X_TEST_CRASHES", "C300X_QML_GUI_ALIVE_FILE", "C300X_QML_GUI_RUN_DIR",
-            "C300X_QML_GUI_RELOAD_DELAY_SECONDS")}
+            "C300X_QML_GUI_RELOAD_DELAY_SECONDS", "C300X_QML_QT5_STABLE_SECONDS")}
         return self.device.environment(**{**own, "C300X_QML_GUI_ROOT": str(self.root),
                                           "C300X_QML_RELOAD_GUI": "1", **env})
 
@@ -557,3 +571,31 @@ def test_a_signal_bounds_the_restart_wait_of_a_write_to_5_seconds(overlay: Overl
     assert time.monotonic() - signalled < 9
     assert process.returncode in (130, 131)
     assert len(_settled(overlay)) == 1
+
+
+def test_a_display_that_ends_soon_after_its_first_watchdog_write_is_not_ready(
+    overlay: OverlayStation,
+) -> None:
+    """Ready needs the same program to keep running after its first write."""
+
+    overlay.boot()
+    overlay.mark.write_text("boot-1\n")
+    Path(f"{overlay.crashes}.late").write_text("1\n")
+    status = overlay.run("core-apply", C300X_QML_QT5_STABLE_SECONDS="6")
+    assert status["qt5_overlay"] == "active", status
+    assert len(_settled(overlay)) == 1
+    assert not overlay.mark.exists()
+    assert _starts(overlay) == ["overlay", "overlay", "plain", "overlay"]
+
+
+def test_a_display_that_writes_no_watchdog_file_falls_back_to_stock(overlay: OverlayStation) -> None:
+    """bt_daemon would reboot without the file: the start counts as failed."""
+
+    overlay.boot()
+    overlay.mark.write_text("boot-1\n")
+    Path(f"{overlay.crashes}.hang").write_text("")
+    status = overlay.run("core-apply", C300X_QML_QT5_START_SECONDS="3")
+    assert status["qt5_overlay"] == "failed", status
+    assert len(_settled(overlay)) == 1
+    assert overlay.mark.read_text() == "boot-1\n"
+    assert _starts(overlay)[-1] == "plain"

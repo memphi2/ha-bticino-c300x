@@ -38,7 +38,10 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     QT5_WRAPPER_BACKUP="${C300X_QML_QT5_WRAPPER_BACKUP:-$QT5_BACKUP_ROOT/original/bin/BtClass_qws}"
     QT5_LOG="${C300X_QML_QT5_LOG:-/tmp/c300x-display-qt5.log}"
     QT5_BOOT_ID="${C300X_QML_BOOT_ID:-/proc/sys/kernel/random/boot_id}"
-    QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-30}"
+    # bt_daemon checks the watchdog file at least every 32 s and reboots
+    # without it: a display that wrote none within 40 s is not starting.
+    QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-40}"
+    QT5_STABLE_SECONDS="${C300X_QML_QT5_STABLE_SECONDS:-8}"
     QT5_ALIVE_FILE="${C300X_QML_GUI_ALIVE_FILE:-/var/tmp/bticino/bt_wd/BtClass_qws}"
     # The Qt 5 restart: one worker in a session of its own serves the requests.
     GUI_RUN_DIR="${C300X_QML_GUI_RUN_DIR:-${TMPDIR:-/tmp}/c300x-gui-restart}"
@@ -465,8 +468,11 @@ gui_start() {
     )
 }
 
-# gui_result: ready, overlay_failed (the start script marked the overlay and
-# went on as shipped) or failed (no start script and no display program left).
+# gui_result: ready (the display program wrote its watchdog file after the
+# start and the same program kept running QT5_STABLE_SECONDS after that),
+# overlay_failed (the start script marked the overlay and went on as shipped)
+# or failed (no start script and no display program left, or no watchdog
+# write within QT5_START_SECONDS).
 gui_verify() {
     gui_phase verify
     gui_had_mark=0
@@ -474,7 +480,9 @@ gui_verify() {
         gui_had_mark=1
     fi
     gui_waited=0
-    while [ "$gui_waited" -lt "$QT5_START_SECONDS" ]; do
+    gui_alive_at=
+    gui_alive_pid=
+    while :; do
         sleep 1
         gui_waited=$((gui_waited + 1))
         if [ "$gui_had_mark" = "0" ] && qt5_failed_now; then
@@ -482,19 +490,28 @@ gui_verify() {
             return 0
         fi
         gui_running="$(gui_pids BtClass)"
-        if [ -n "$gui_running" ] && [ "$QT5_ALIVE_FILE" -nt "$GUI_RUN_DIR/started" ]; then
+        if [ -z "$gui_running" ]; then
+            gui_alive_at=
+            if [ -z "$(gui_pids "$GUI_WRAPPER_NAME")" ]; then
+                gui_result=failed
+                return 0
+            fi
+        elif [ "$gui_running" != "$gui_alive_pid" ]; then
+            gui_alive_at=
+            if [ "$QT5_ALIVE_FILE" -nt "$GUI_RUN_DIR/started" ]; then
+                gui_alive_at="$gui_waited"
+                gui_alive_pid="$gui_running"
+            fi
+        fi
+        if [ -n "$gui_alive_at" ] && [ $((gui_waited - gui_alive_at)) -ge "$QT5_STABLE_SECONDS" ]; then
             gui_result=ready
             return 0
         fi
-        if [ -z "$gui_running" ] && [ -z "$(gui_pids "$GUI_WRAPPER_NAME")" ]; then
+        if [ -z "$gui_alive_at" ] && [ "$gui_waited" -ge "$QT5_START_SECONDS" ]; then
             gui_result=failed
             return 0
         fi
     done
-    gui_result=failed
-    if [ -n "$(gui_pids BtClass)" ]; then
-        gui_result=ready
-    fi
 }
 
 gui_cycle() {

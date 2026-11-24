@@ -210,11 +210,18 @@ A request left by a worker that died is taken over by the next worker.
    the framebuffer.
 3. Start the installed start script once, executed directly, in its own
    session, without the worker's lock descriptor.
-4. Verify within `C300X_QML_QT5_START_SECONDS` (30): ready when `BtClass` runs
-   and has written its watchdog file after the start; failed when no start
-   script and no `BtClass` run any more; the overlay failed when the start
-   script wrote this boot's quarantine mark. A `BtClass` still running at the
-   end counts as started (there is no QML readiness handshake).
+4. Verify: ready when `BtClass` has written its watchdog file after the start
+   and the same `BtClass` still runs `C300X_QML_QT5_STABLE_SECONDS` (8) after
+   that first write, so a display that crashes right after its first write is
+   still seen; the overlay failed when the start script wrote this boot's
+   quarantine mark; failed when no start script and no `BtClass` run any
+   more, or when no watchdog write came within `C300X_QML_QT5_START_SECONDS`
+   (40). bt_daemon checks that file at least every 32 s and reboots the
+   station without it, so a display that wrote none in 40 s is hung or far
+   slower than the vendor tolerates; a slow but healthy cold start writes
+   within one watchdog period. A failed start of the overlay start script is
+   followed by the stock fallback (step 6). There is still no QML readiness
+   handshake: the watchdog write and a stable process are the evidence.
 5. Retry once: when the overlay failed in a cycle that should retry it (apply,
    core-apply, media-user-label-apply), stop again, settle, drop the mark and
    start again.

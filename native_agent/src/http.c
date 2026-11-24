@@ -204,6 +204,7 @@ struct agent_runtime {
     int display_client_fd;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
+    time_t home_assistant_last_seen_monotonic;
     long long home_assistant_request_ms;
     int display_bridge_registered;
     struct c300x_memo_led memo_led;
@@ -786,6 +787,7 @@ static void mark_home_assistant_callback_seen(struct agent_runtime *runtime, tim
     }
     runtime->home_assistant_connected_this_run = 1;
     runtime->home_assistant_last_seen_at = now;
+    runtime->home_assistant_last_seen_monotonic = c300x_monotonic_seconds();
 }
 
 static int address_is_valid(const char *value)
@@ -9215,8 +9217,8 @@ static int handle_ui_request(
         if (!client_is_loopback(client_fd)) {
             send_loopback_required(client_fd);
         } else if (c300x_ui_status_json(C300X_NATIVE_AGENT_VERSION, firmware, display_bridge_webhook_url(config, runtime),
-                runtime->home_assistant_connected_this_run, (long)runtime->home_assistant_last_seen_at,
-                (long)time(NULL), body, sizeof(body))) {
+                runtime->home_assistant_connected_this_run, (long)runtime->home_assistant_last_seen_monotonic,
+                (long)c300x_monotonic_seconds(), body, sizeof(body))) {
             send_json(client_fd, 200, "OK", body);
         } else {
             send_response_too_large(client_fd);

@@ -1932,9 +1932,15 @@ path holds the webhook id; a URL with user information or any character
 outside letters, digits and `.-:[]` in its host part gives an empty string, and
 so does a missing registration. `registered` is false until Home Assistant has
 registered since the agent started. `last_contact_age` is the number of seconds
-since the agent last exchanged a request with Home Assistant in this run, in
-either direction, or `null` if it has not yet. No token, secret or webhook id
-is part of the answer.
+since the last contact with Home Assistant in this run, or `null` if there was
+none yet. Four things count as a contact: Home Assistant registering its event
+subscription, Home Assistant posting a display event
+(`POST /api/v1/display-bridge/events`),
+an event callback that Home Assistant accepted, and a display bridge request
+that Home Assistant answered. Other authenticated API requests do not count.
+The age is measured on the monotonic clock, so a time sync or a changed date
+on the station does not move it. No token, secret or webhook id is part of the
+answer.
 
 `GET /homeassistant?domain=c300x&service=setting&entities=<key>&option=<value>`
 forwards `{"type":"display_setting","key":"<key>","value":"<value>"}` to Home

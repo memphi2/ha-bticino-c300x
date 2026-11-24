@@ -1571,6 +1571,15 @@ qt5_wrapper_restore() {
         printf 'No verified original of the display start script: %s\n' "$QT5_WRAPPER_BACKUP" >&2
         return 1
     fi
+    if [ -e "$GUI_WRAPPER" ]; then
+        if ! qt5_wrapper_text "$QT5_WRAPPER_BACKUP" > "$GUI_WRAPPER.c300x.tmp" \
+            || ! cmp -s "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"; then
+            rm -f "$GUI_WRAPPER.c300x.tmp"
+            printf 'Display start script is not the one installed here, left unchanged: %s\n' "$GUI_WRAPPER" >&2
+            qt5_unsupported display_wrapper_unknown
+            return 0
+        fi
+    fi
     cp -p "$QT5_WRAPPER_BACKUP" "$GUI_WRAPPER.c300x.tmp"
     qt5_original_wrapper_valid "$GUI_WRAPPER.c300x.tmp"
     mv -f "$GUI_WRAPPER.c300x.tmp" "$GUI_WRAPPER"

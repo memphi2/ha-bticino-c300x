@@ -1579,7 +1579,10 @@ start script is not one the agent knows (`display_program_unknown`,
 `display_wrapper_unknown`). The apply actions then change nothing and answer
 `200` with `"ok":false,"error":"display_unsupported"` and the status fields; the
 agent runs without the display pages. The field stays until an apply finds a
-known display again.
+known display again. Full removal also records `display_wrapper_unknown` when
+the start script is no longer the exact one it installed, for example after a
+vendor update; it then removes the overlay files and leaves that script as it
+is.
 
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 

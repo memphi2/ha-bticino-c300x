@@ -115,7 +115,8 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
 
 - **Turning it off:** switching the Display patch off removes the optional
   pages, but retains the core hooks. Removing the agent restores the vendor
-  start script and removes the complete overlay.
+  start script and removes the complete overlay. A start script that a
+  firmware update has already replaced stays as the update left it.
 - **When the display fails with the pages:** if the display ends with an error
   within a minute of a start with the pages, it is started again as shipped,
   and the Display patch status reads **applied, but the display started as

@@ -439,7 +439,10 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   the overlay failed (`display-qt5.rcc.failed`, status `qt5_overlay: failed`)
   and starts as shipped. Started with the overlay, the display's error output,
   where Qt reports QML errors, goes to `/tmp/c300x-display-qt5.log` (at most
-  64 KB). Full removal (`restore-all`) puts the vendor start script back. A
+  64 KB). Full removal (`restore-all`) puts the vendor start script back, but
+  only over the exact start script it installed. A start script that a firmware
+  update or anyone else replaced stays as it is, and `status` reports
+  `qt5_unsupported: display_wrapper_unknown`. A
   partial restore keeps the overlay for the remaining core hooks or user label.
   This path is a beta; user view:
   [Display Patch on Firmware 3.0.6](../display.md#display-patch-on-firmware-306).

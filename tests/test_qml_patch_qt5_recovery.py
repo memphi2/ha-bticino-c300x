@@ -134,8 +134,10 @@ def test_successful_but_corrupt_wrapper_copy_rolls_back(device, command):
     assert snapshot(device) == before
 
 
-def test_corrupt_current_wrapper_uses_verified_original(device):
-    original = device.wrapper_backup.read_bytes()
+def test_a_start_script_that_is_not_ours_is_left_alone_and_reported(device):
     device.wrapper.write_text("#!/bin/sh\nexit 0\n")
-    assert device.ok("restore-all")["qt5_overlay"] == "off"
-    assert device.wrapper.read_bytes() == original
+    status = device.ok("restore-all")
+    assert status["qt5_overlay"] == "off"
+    assert status["qt5_unsupported"] == "display_wrapper_unknown"
+    assert device.wrapper.read_text() == "#!/bin/sh\nexit 0\n"
+    assert not device.rcc.exists() and not device.lib.exists()

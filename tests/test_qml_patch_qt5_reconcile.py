@@ -1,5 +1,7 @@
 """Reconcile Qt 5 activation independently of changed QML, without device access."""
 
+import json
+
 import pytest
 
 from tests import test_qml_patch_qt5_overlay as overlay
@@ -116,6 +118,26 @@ def test_unchanged_partial_restore_repairs_the_remaining_overlay(device, action)
     assert status["changed_files"] == 0
     assert status["qt5_overlay"] == "active"
     assert snapshot(device) == expected
+
+
+@pytest.mark.parametrize("case", ["vendor-update", "edited-overlay"])
+def test_restore_all_leaves_a_start_script_that_is_not_ours_alone(device, case):
+    device.ok("apply")
+    if case == "vendor-update":
+        # A firmware update ships its own start script in place of ours.
+        script = overlay.WRAPPER.replace("./bin/gui/BtClass &", "export QT_NEW=1\n./bin/gui/BtClass &")
+    else:
+        script = device.wrapper.read_text().replace("sleep 3", "sleep 5")
+    device.wrapper.write_text(script)
+    device.wrapper.chmod(0o750)
+    result = device.run("restore-all")
+    assert result.returncode == 0, result.stderr
+    assert device.wrapper.read_text() == script
+    assert device.wrapper.stat().st_mode & 0o777 == 0o750
+    assert "Display start script is not the one installed here" in result.stderr
+    status = json.loads(result.stdout.strip().splitlines()[-1])
+    assert status["qt5_unsupported"] == "display_wrapper_unknown"
+    assert not device.rcc.exists() and not device.lib.exists()
 
 
 def test_restore_all_can_recover_a_missing_stock_wrapper(device):

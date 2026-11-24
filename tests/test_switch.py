@@ -84,6 +84,19 @@ def test_snapshot_switch_changes_manager_without_device_io(monkeypatch) -> None:
         asyncio.run(switch.async_turn_off())
 
 
+def test_snapshot_switch_names_why_the_last_visitor_image_failed(monkeypatch) -> None:
+    import custom_components.bticino_c300x.switch as module
+
+    switch = C300XSnapshotSwitch(_FakeEntry())
+    switch.hass = SimpleNamespace()
+    manager = SimpleNamespace(enabled=True, closed=False,
+                              capture=SimpleNamespace(last_failure="snapshot_unavailable"))
+    monkeypatch.setattr(module, "get_snapshots", lambda *_: manager)
+    assert switch.extra_state_attributes == {"last_failure": "snapshot_unavailable"}
+    manager.capture.last_failure = None
+    assert switch.extra_state_attributes == {"last_failure": None}
+
+
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 

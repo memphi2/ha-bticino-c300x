@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.9.0 - 2026-11-23
+## v2.9.0 - 2026-11-24
 
 Discovery:
 
@@ -34,9 +34,10 @@ Station:
 - New Display option **Home page buttons**. **Like the original** shows the
   Alarm and Home Assistant buttons only when they have something to open, as
   buttons among the station's own, which wrap like them. After the agent update
-  the home page uses this layout; choose **Fixed side by side** to keep the
-  pair used since 2.3.0. Based on a fix by Dave in PR #126. Needs the agent
-  update.
+  most stations use this layout; entries that still store the old setting as
+  off keep the fixed pair. The Display form shows which one an entry uses;
+  choose **Fixed side by side** to keep the pair used since 2.3.0. Based on a
+  fix by Dave in PR #126. Needs the agent update.
 
 Camera and card:
 

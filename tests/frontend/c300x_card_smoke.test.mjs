@@ -498,9 +498,11 @@ test("readiness warnings do not open Repairs while blockers do", async () => {
     "Ring Call requires Home Assistant forwarding",
   );
   assert.equal(readinessElement.attributes.has("role"), false);
+  assert.equal(readinessElement.attributes.has("tabindex"), false);
   // A narrow card cuts the readiness text; the tooltip carries it in full.
   assert.equal(readinessElement.title, "Ring Call requires Home Assistant forwarding");
   readinessElement.dispatch("click");
+  readinessElement.listeners.get("keydown")?.({ key: "Enter", preventDefault() {} });
   assert.deepEqual(paths, []);
 
   readiness.state = "blocked";
@@ -508,8 +510,15 @@ test("readiness warnings do not open Repairs while blockers do", async () => {
   card.hass = hass;
   assert.equal(card.shadowRoot.querySelector(".readiness-text").textContent, "Media blocked");
   assert.equal(readinessElement.attributes.get("role"), "button");
+  assert.equal(readinessElement.attributes.get("tabindex"), "0", "the Repairs control is not in the tab order");
   readinessElement.dispatch("click");
   assert.deepEqual(paths, ["/config/repairs"]);
+  const keys = [];
+  for (const key of ["Enter", " ", "a"]) {
+    readinessElement.listeners.get("keydown")?.({ key, preventDefault: () => keys.push(key) });
+  }
+  assert.deepEqual(paths, ["/config/repairs", "/config/repairs", "/config/repairs"]);
+  assert.deepEqual(keys, ["Enter", " "]);
 });
 
 test("footer device buttons follow HA state, localize and dispatch existing actions", async () => {

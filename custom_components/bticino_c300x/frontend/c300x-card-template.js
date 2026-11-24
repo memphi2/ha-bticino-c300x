@@ -320,6 +320,10 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
         .readiness.actionable {
           cursor: pointer;
         }
+        .readiness.actionable:focus-visible {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 2px;
+        }
         .readiness.hidden {
           display: none;
         }

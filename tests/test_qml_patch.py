@@ -660,3 +660,32 @@ def test_the_update_followup_waits_for_a_pending_restart(monkeypatch):
     api = _RestartingApi(status=_ACTIVE, apply_status=pending, core_apply_status=pending, pending_reads=1)
     status = asyncio.run(async_restore_qml_patches_after_update(_entry(api), apply_full_patch=True))
     assert status["gui_running"] is True
+
+
+def test_a_busy_agent_during_the_restart_wait_does_not_end_it(monkeypatch):
+    """Inside a busy wait further out, a 409 comes straight back; the wait goes on."""
+
+    from custom_components.bticino_c300x import qml_patch
+    from custom_components.bticino_c300x.agent_update import async_retry_update_maintenance_busy
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending"}
+
+    class _BusyOnce(_RestartingApi):
+        busy: int = 1
+
+        async def async_qml_patch_status(self) -> dict[str, Any]:
+            if self.busy:
+                self.busy -= 1
+                self.calls.append("busy")
+                raise C300XAgentApiConnectionError(
+                    "device agent returned HTTP 409: maintenance_busy", http_status=409)
+            return await super().async_qml_patch_status()
+
+    api = _BusyOnce(status=_ACTIVE, pending_reads=0)
+    entry = _entry(api)
+    status = asyncio.run(async_retry_update_maintenance_busy(
+        lambda: qml_patch.async_display_restart_settled(entry, pending)))
+    assert status["gui_restart"] == "idle" and status["gui_running"] is True
+    assert api.calls == ["busy", "qml_status"]

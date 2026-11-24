@@ -85,6 +85,10 @@ async def async_display_restart_settled(
         try:
             later: dict[str, Any] = await async_retry_update_maintenance_busy(read)
         except C300XAgentApiError as err:
+            # Inside a caller's own busy wait a busy agent answers 409 at
+            # once: that ends nothing, the next read comes after the poll.
+            if getattr(err, "http_status", None) == 409:
+                continue
             _LOGGER.warning("C300X: the display status could not be read during a restart: %s", err)
             break
         status = {**status, **later}

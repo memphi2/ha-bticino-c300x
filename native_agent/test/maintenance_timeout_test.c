@@ -1,4 +1,5 @@
 #include "../src/http_maintenance.h"
+#include "../src/qml_recovery.h"
 #include "../src/string_util.h"
 
 #include <assert.h>
@@ -85,6 +86,8 @@ static void run_for(struct c300x_http_maintenance *owner, int real_ms, int (*don
 }
 
 static int answered(void) { return responses > 0; }
+static struct c300x_http_maintenance *watched;
+static int idle(void) { return !c300x_http_maintenance_busy(watched); }
 static int started(void) { return access("started", F_OK) == 0; }
 
 int main(int argc, char **argv)
@@ -107,6 +110,26 @@ int main(int argc, char **argv)
         c300x_copy_string(request->body, sizeof(request->body), "{\"confirm\":\"apply_qml_patch\"}");
     }
     c300x_http_maintenance_init(&owner, record_write, NULL);
+    if (strcmp(mode, "recover") == 0) {
+        /* Agent start: a write-class job without a client holds the slot. */
+        c300x_qml_recovery_start(&owner, config);
+        pid_t child = owner.job.pid;
+        assert(child > 0 && c300x_http_maintenance_busy(&owner));
+        run_for(&owner, 5000, started);
+        assert(c300x_http_maintenance_route(&owner, 1234, config, request));
+        assert(responses == 1 && response_status == 409);
+        offset_ms += 30001;
+        run_for(&owner, 100, NULL);
+        assert(owner.job.pid == child && kill(child, 0) == 0 && c300x_http_maintenance_busy(&owner));
+        watched = &owner;
+        run_for(&owner, 5000, idle);
+        assert(access("rolled", F_OK) == 0 && !c300x_http_maintenance_busy(&owner));
+        assert(responses == 1 && writes == 0);
+        c300x_http_maintenance_close(&owner);
+        free(request);
+        free(config);
+        return 0;
+    }
     assert(c300x_http_maintenance_route(&owner, 1234, config, request));
     pid_t child = owner.job.pid;
     assert(child > 0 && responses == 0);

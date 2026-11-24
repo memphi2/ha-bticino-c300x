@@ -4,7 +4,7 @@
 #include "c300x_agent.h"
 #include "capabilities.h"
 #include "callback_queue.h"
-#include "http_maintenance.h"
+#include "qml_recovery.h"
 #include "http_identity.h"
 #include "http_device_user.h"
 #include "http_service_commands.h"
@@ -9726,6 +9726,7 @@ int c300x_run(struct c300x_config *config)
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
+    c300x_qml_recovery_start(&runtime->maintenance, config);
     c300x_announce_init(&runtime->announce);
     (void)c300x_openwebnet_async_init(&runtime->openwebnet, &runtime->request_queue);
     (void)c300x_video_control_init(&runtime->video_control, &runtime->request_queue);
@@ -10139,6 +10140,7 @@ cleanup:
         result = 0;
     }
     if (runtime != NULL) {
+        c300x_command_job_terminate(&runtime->maintenance.job);
         /* Before the API port is free: the next agent finds what this one leaves. */
         c300x_announce_close(&runtime->announce);
     }

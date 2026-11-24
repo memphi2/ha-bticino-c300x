@@ -226,15 +226,20 @@ void c300x_command_job_tick(struct c300x_command_job *job)
     }
 }
 
+void c300x_command_job_terminate(struct c300x_command_job *job)
+{
+    /* One SIGTERM only: a second one would cut the job's trap short. */
+    if (job->pid > 0 && job->term_grace_ms > 0 && job->kill_ms == 0) {
+        (void)kill(-job->pid, SIGTERM);
+        job->kill_ms = c300x_monotonic_ms() + job->term_grace_ms;
+    }
+}
+
 void c300x_command_job_close(struct c300x_command_job *job)
 {
-    /* Agent shutdown: a job with a grace period ends as at its deadline,
-     * with one SIGTERM only, since a second one would cut its trap short. */
-    if (job->pid > 0 && job->term_grace_ms > 0 && job->kill_ms >= 0) {
-        if (job->kill_ms == 0) {
-            (void)kill(-job->pid, SIGTERM);
-            job->kill_ms = c300x_monotonic_ms() + job->term_grace_ms;
-        }
+    /* Agent shutdown: a job with a grace period ends as at its deadline. */
+    c300x_command_job_terminate(job);
+    if (job->pid > 0 && job->term_grace_ms > 0 && job->kill_ms > 0) {
         pid_t reaped;
         while ((reaped = waitpid(job->pid, NULL, WNOHANG)) == 0 && c300x_monotonic_ms() < job->kill_ms) {
             (void)usleep(10000);

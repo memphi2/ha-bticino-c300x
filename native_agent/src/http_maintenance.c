@@ -7,11 +7,6 @@
 #include <string.h>
 #include <unistd.h>
 
-/* Past its deadline a QML write gets SIGTERM and this long for its rollback
- * trap: files back, remount read-only, restart of the previous GUI (two 2 s
- * waits); about 8 s on the device at worst, with margin. */
-#define QML_WRITE_TERM_GRACE_MS 15000
-
 void c300x_http_maintenance_init(struct c300x_http_maintenance *owner,
     c300x_maintenance_write_fn record_write, void *context)
 {
@@ -127,14 +122,14 @@ static void start_script(struct c300x_http_maintenance *owner, int client_fd,
         return;
     }
     /* QML writes may need both a failed start and a restored-GUI restart. */
-    int timeout_ms = !gui_reload && records_write ? 30000 : 10000;
+    int timeout_ms = !gui_reload && records_write ? C300X_QML_WRITE_TIMEOUT_MS : 10000;
     if (!c300x_command_job_start(&owner->job, program, action, dynamic_homepage, timeout_ms)) {
         c300x_http_send_json(client_fd, 502, "Bad Gateway", gui_reload
             ? "{\"ok\":false,\"error\":\"reload_failed\"}\n"
             : "{\"ok\":false,\"available\":false,\"state\":\"script_failed\"}\n");
         return;
     }
-    owner->job.term_grace_ms = records_write ? QML_WRITE_TERM_GRACE_MS : 0;
+    owner->job.term_grace_ms = records_write ? C300X_QML_WRITE_TERM_GRACE_MS : 0;
     owner->client_fd = client_fd;
     owner->gui_reload = gui_reload;
     owner->records_write = records_write;

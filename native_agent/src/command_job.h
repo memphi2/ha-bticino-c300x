@@ -43,6 +43,9 @@ int c300x_command_job_start_output(struct c300x_command_job *job, const char *pr
     char *const argv[], int timeout_ms);
 int c300x_command_job_prepare(const struct c300x_command_job *job, struct pollfd *fd);
 void c300x_command_job_tick(struct c300x_command_job *job);
+/* A job with a grace period gets its one SIGTERM now; the deadline or close
+ * sends SIGKILL once the grace period has passed. */
+void c300x_command_job_terminate(struct c300x_command_job *job);
 void c300x_command_job_close(struct c300x_command_job *job);
 
 #endif

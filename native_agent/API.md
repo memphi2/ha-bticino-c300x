@@ -123,7 +123,7 @@ Common status codes:
 | `501 Not Implemented` | Unknown endpoint. |
 | `502 Bad Gateway` | Home Assistant callback/display bridge is unavailable, or an OpenWebNet command failed or was not sent (`openwebnet_busy`, `client_gone`). |
 | `503 Service Unavailable` | Resource busy or inactive (transfer slots, system metrics, snapshot source, ringer GUI, display command), or a media action was not run (`media_busy`, `client_gone`). |
-| `504 Gateway Timeout` | The GUI did not acknowledge a ringer command within five seconds. |
+| `504 Gateway Timeout` | The GUI did not acknowledge a ringer command within five seconds, or a QML write passed its deadline (`qml_patch_timeout`). |
 
 Requests that send OpenWebNet commands and the media actions (activate, stop,
 answer, hangup, home call start and stop) run one at a time each, in the order
@@ -1298,7 +1298,10 @@ writes retain 30 seconds for a failed start, rollback and restart of the previou
 GUI. Their failed execution, timeout and overflowing 4096-byte output retain
 the existing `502` responses, with one exception: a QML write (apply,
 apply-core, restore-core, restore) past its 30 seconds gets `SIGTERM` for its
-process group first, not `SIGKILL`. The script's trap then restores the GUI
+process group first, not `SIGKILL`. A QML write whose output overflows gets the
+same `SIGTERM` and grace period, and is then answered `502` with
+`state: script_failed`. A write that ended by itself is answered with its own
+result even when the agent reaps it only on the deadline tick. The script's trap then restores the GUI
 files it changed, remounts `/` read-only and restarts the previous GUI. The agent
 gives it 15 seconds for that, the trap's worst case on the device (two 2-second
 GUI restart waits, the remount and the file moves) with margin, and sends
@@ -1319,10 +1322,19 @@ replaced library. `false` means such a 131, a failed rollback, or a script
 that had to be killed; `GET /api/v1/maintenance/qml-patch` then says
 what the device has and reports a transaction the write left behind; the next
 write finishes it (see QML Patch).
-Graceful agent shutdown during a QML write also sends `SIGTERM` once and waits
-up to the same 15 seconds before `SIGKILL`; that request is closed without an
-answer. The init script's own stop sends `SIGKILL` to the agent after 3 seconds;
-the script, in a process group of its own, still finishes its rollback. Device-user status alone also has a 10-second
+Graceful agent shutdown during a QML write sends that `SIGTERM` once, as the
+first step of its clean-up, and waits up to the same 15 seconds before
+`SIGKILL` at the end of it; that request is closed without an answer. The init
+script's own stop sends `SIGKILL` to the agent after 3 seconds; the script, in
+a process group of its own, has its signal by then and still finishes its
+rollback. A write cut off even so is finished at the next agent start.
+
+At start the agent runs `qml_patch.sh recover` once when QML maintenance is
+enabled and the script exists: a job without a client, with the QML write
+deadline and grace period. It finishes a transaction that a power loss, a
+crash or a killed write left behind (see QML Patch) and returns at once when
+there is none. Meanwhile other maintenance requests get `409
+maintenance_busy`, like during any other job. Device-user status alone also has a 10-second
 deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is
@@ -1344,8 +1356,9 @@ JSON `ok:true`; restore retains its exit-status-only interpretation. Native
 codec file mutation also remains synchronous; only its reboot tail uses jobs.
 Shutdown cancels an active asynchronous job without invoking its completion
 or advancing another phase, but cannot reach that cleanup during a synchronous
-label transaction. Existing QML-write job cancellation is unchanged, not newly
-certified as transaction-safe by the label-write fix.
+label transaction. A QML write job gets `SIGTERM` and its grace period at its
+deadline and at shutdown (see above); one that is killed even so, or loses
+power, leaves a transaction that the next write or agent start finishes.
 
 See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
 [remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).
@@ -1598,7 +1611,8 @@ on flash and before any GUI file changes. A write cut off for good (power loss,
 crash, `SIGKILL`) leaves that directory behind.
 
 Status only reads: it reports a leftover and never changes the device. The
-recovery runs before every write and in the script's `recover` action. It skips
+recovery runs before every write and once at agent start (the `recover`
+action, see the maintenance job deadlines above). It skips
 everything while a transaction of a running write exists and otherwise
 finishes each leftover whose process is gone, in an order that a later run
 can repeat from any point where it was cut off:
@@ -1622,7 +1636,8 @@ can repeat from any point where it was cut off:
 
 The answers carry one more field when a leftover exists:
 
-- `"transaction": "pending"` (status): a leftover waits for the next recovery.
+- `"transaction": "pending"` (status): a leftover waits for the next write or
+  agent start.
 - `"transaction": "recovered"` (write, recovery): this run finished a leftover.
 - `"transaction": "stuck"`: a leftover could not be finished; its directory
   stays. A leftover with the format marker is tried again at the next
@@ -1819,7 +1834,7 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/answering-machine/messages` | Video-message metadata for QML pages. |
 | `GET` | `/ui/events/status` | Long-poll state for QML event bridge. |
 | `GET` | `/ui/events/next` | Long-poll next QML event. |
-| `GET` | `/ui/media-closed` | Reports device media-close event. |
+| `GET` | `/ui/media-closed` | Display call-end hook: only wakes the display pages; does not publish `doorbell.media.closed` (the hook also fires when HA answers a ring). |
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |

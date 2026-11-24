@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
-SOURCES = ("http_maintenance.c", "http_auth.c", "command_job.c", "string_util.c",
+SOURCES = ("http_maintenance.c", "qml_recovery.c", "http_auth.c", "command_job.c", "string_util.c",
            "json_util.c", "json_parse.c")
 ROLLBACK = "trap 'echo t >> terms; sleep 1; : > rolled; exit 130' TERM\n"
 # The output pipe stays open after the deadline, so a trap that prints lives.
@@ -55,6 +55,8 @@ def timeout_binary(request, tmp_path_factory):
     ("exit131", "", AFTER_FINISH + "exit 131\n"),
     # An output overflow fails the write; it still gets SIGTERM and its grace.
     ("overflow", ROLLBACK, AFTER_FINISH + "head -c 5000 /dev/zero | tr '\\0' x\n" + LOOP),
+    # Agent start: the recovery job holds the slot, with the write deadline.
+    ("recover", ROLLBACK, LOOP),
 ])
 def test_qml_write_deadline_terminates_gently(timeout_binary, tmp_path, mode, trap, body):
     script = tmp_path / "job.sh"

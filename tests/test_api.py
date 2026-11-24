@@ -1513,11 +1513,12 @@ def _busy_clock(monkeypatch) -> list[float]:
 
 def test_a_busy_agent_is_given_up_on_after_the_wait(monkeypatch) -> None:
     pauses = _busy_clock(monkeypatch)
-    session = _QueuedSession([_BUSY] * 40)
+    session = _QueuedSession([_BUSY] * 60)
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(_maintenance_api(session).async_device_user_status())
-    # A read waits as long as a job may take, with a pause before every new try.
-    assert sum(pauses) == 12.0 and len(pauses) == 12 and len(session.requests) == 13
+    # A read waits as long as a job may take (a QML write with its rollback),
+    # with a pause before every new try.
+    assert sum(pauses) == 47.0 and len(pauses) == 47 and len(session.requests) == 48
 
     pauses.clear()
     session = _QueuedSession([_BUSY] * 40)
@@ -1532,12 +1533,12 @@ def test_a_caller_that_waits_itself_is_not_made_to_wait_twice(monkeypatch) -> No
     from custom_components.bticino_c300x import agent_update
 
     pauses = _busy_clock(monkeypatch)
-    session = _QueuedSession([_BUSY] * 40)
+    session = _QueuedSession([_BUSY] * 60)
     api = _maintenance_api(session)
     with pytest.raises(C300XAgentApiConnectionError, match="maintenance_busy"):
         asyncio.run(agent_update.async_retry_update_maintenance_busy(
             lambda: api.async_set_ssh_enabled(True)))
-    assert sum(pauses) == 12.0 and len(session.requests) == 13
+    assert sum(pauses) == 47.0 and len(session.requests) == 48
 
 
 def test_other_refusals_are_not_repeated() -> None:

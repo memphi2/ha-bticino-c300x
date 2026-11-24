@@ -631,3 +631,20 @@ def test_a_restart_still_running_is_reported_as_pending(overlay: OverlayStation)
     later = overlay.run("status")
     assert later["gui_restart"] == "idle" and later["gui_running"] is True
     assert later["qt5_overlay"] == "active"
+
+
+def test_a_request_of_a_worker_that_died_is_served_by_the_next_worker(station: Station) -> None:
+    """A worker killed mid-cycle leaves its request in serving/; the next worker serves it
+    in the same cycle as the new request."""
+
+    station.boot(C300X_TEST_TEARDOWN="1")
+    for name in ("requests", "serving", "done"):
+        (station.run_dir / name).mkdir(parents=True)
+    orphan = f"{os.getpid()}.1"
+    (station.run_dir / "serving" / orphan).write_text("keep\n")
+    result = station.reload()
+    assert result.returncode == 0, result.stderr
+    assert len(_settled(station)) == 1
+    assert (station.run_dir / "done" / orphan).read_text() == "0\n"
+    assert _kinds(station).count("wrapper") == 2
+    assert not list((station.run_dir / "serving").iterdir())

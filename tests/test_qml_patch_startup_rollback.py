@@ -28,6 +28,8 @@ def startup_env(tmp_path, *, succeeds_on=2):
         "pidof": '#!/bin/sh\n'
         '[ -f "$C300X_TEST_OBSERVATIONS/count" ] && '
         '[ "$(cat "$C300X_TEST_OBSERVATIONS/count")" = "$C300X_TEST_SUCCEEDS_ON" ]\n',
+        # A host sync flushes every test's files and can take seconds.
+        "sync": "#!/bin/sh\nexit 0\n",
     }
     for name, content in scripts.items():
         path = commands / name

@@ -73,6 +73,10 @@ CONF_WEBRTC_ICE_POLICY = "webrtc_ice_policy"
 # the Display patch apply all read an absent key with this default. const.py
 # has no heavy imports, so the runtime can read it without the config flow.
 DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE = True
+# The installed layout as the Display patch status reports it.
+HOME_BUTTONS_STOCK = "stock"
+HOME_BUTTONS_SIDE_BY_SIDE = "side_by_side"
+HOME_BUTTONS_LAYOUTS = frozenset({HOME_BUTTONS_STOCK, HOME_BUTTONS_SIDE_BY_SIDE})
 DEFAULT_AGENT_PORT = 8091
 DEFAULT_EVENT_RESET_SECONDS = 30
 DEFAULT_RECONNECT_GRACE_SECONDS = 15

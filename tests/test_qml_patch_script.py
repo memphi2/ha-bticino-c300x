@@ -635,6 +635,23 @@ def test_qml_patch_status_requires_home_button_recovery_in_both_layouts(
     assert (backup_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
 
 
+@pytest.mark.parametrize(("dynamic", "layout"), [("0", "side_by_side"), ("1", "stock")])
+def test_qml_patch_status_names_the_installed_home_page_layout(
+    tmp_path: Path, dynamic: str, layout: str
+) -> None:
+    """Both layouts are patched; Home Assistant tells them apart by this field."""
+
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    env = {"C300X_QML_DYNAMIC_HOME_PAGE": dynamic}
+
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides=env)["home_buttons"] == layout
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["home_buttons"] == layout
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore")["home_buttons"] is None
+
+
 @pytest.mark.parametrize("dynamic", ["0", "1"], ids=["side_by_side", "stock"])
 def test_qml_patch_refuses_either_patched_layout_as_the_original(
     tmp_path: Path, dynamic: str

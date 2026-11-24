@@ -2476,6 +2476,7 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "backup_available": None,
         "core_backup_available": None,
         "gui_running": None,
+        "home_buttons": None,
         "raw": {"patched": True},
     }
     assert normalize_qml_patch_status({"state": "original"})["patched"] is False
@@ -2499,6 +2500,9 @@ def test_normalize_qml_patch_status_derives_state() -> None:
     partial = normalize_qml_patch_status({"state": "partial", "patched": None})
     assert partial["state"] == "partial"
     assert partial["patched"] is None
+    for layout in ("stock", "side_by_side"):
+        assert normalize_qml_patch_status({"patched": True, "home_buttons": layout})["home_buttons"] == layout
+    assert normalize_qml_patch_status({"patched": True, "home_buttons": "other"})["home_buttons"] is None
 
 
 def test_normalize_firewall_status_derives_patched_state() -> None:

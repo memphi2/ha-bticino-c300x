@@ -1560,6 +1560,9 @@ inserting rules.
 `GET /api/v1/maintenance/qml-patch`
 
 Reads both optional Display patch state and required core media-hook state.
+`home_buttons` names the home page button layout installed on the device:
+`"stock"` (like the original), `"side_by_side"` (the fixed pair), or `null`
+when the home page carries neither layout.
 
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 

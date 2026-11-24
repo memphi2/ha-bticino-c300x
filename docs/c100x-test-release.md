@@ -445,6 +445,26 @@ again, as on a C300X.
    card and check picture and sound; then ring from the outdoor station and
    answer the call in HA. Report both separately, with the agent diagnostics.
 
+## Optional Read-Only Audio Probe
+
+Optional, and only after the base tests above. It prepares station-speaker
+announcements, which are **not in this build**. The commands only read; they
+change nothing on the station. Run them over SSH as root twice: once while the
+station is idle, and once while a ringtone preview plays from the station's own
+menu. Paste both outputs back in one block, each marked idle or preview.
+
+```sh
+grep Revision /proc/cpuinfo
+ls -l /var/tmp/ringtones/
+amixer cget name='Audio_State'
+ls -l /var/tmp/audlock 2>&1
+ls -l /proc/$(pidof bt_av_media)/fd 2>&1 | grep -i -e snd -e wav
+sha256sum /home/bticino/bin/bt_av_media /home/bticino/bin/bt_answering_machine /usr/local/bin/Audio_State.sh /home/bticino/lib/liblghal.so.0.0
+```
+
+`/var/tmp/audlock` exists only while the vendor audio switch runs, so "No such
+file or directory" is a normal result.
+
 ## Display Activation by Reboot (device test)
 
 Only after the agent-only test above passed, and only with Maintenance and its

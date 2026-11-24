@@ -143,6 +143,54 @@ def test_a_legacy_leftover_with_a_truncated_copy_is_kept_and_reported_stuck(tmp_
     assert _gui_files(gui) == patched and leftover.is_dir()
 
 
+def _age(path: Path, seconds: int) -> None:
+    then = time.time() - seconds
+    os.utime(path, (then, then))
+
+
+def test_a_legacy_leftover_older_than_a_later_write_is_dropped_not_restored(tmp_path: Path) -> None:
+    """2.9.0 never recovered another write's leftover: a later 2.9.0 write
+    that finished must not be undone by the copies from before the killed
+    one. 2.9.0 copied with cp -p, so the files the killed write itself put in
+    place carry times from before its directory; a later write's are newer."""
+
+    gui, backup, _before = _killed_apply(tmp_path)
+    leftover = _as_legacy(gui)
+    aside = tmp_path / "leftover-aside"
+    leftover.rename(aside)
+    later = _run_qml_patch_raw(tmp_path, gui, backup, "apply")
+    assert later.returncode == 0, later.stderr
+    patched = _gui_files(gui)
+    aside.rename(leftover)
+    _age(leftover, 600)
+    env = _commands(tmp_path)
+    result = _run(tmp_path, gui, backup, "recover", env)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["transaction"] == "recovered"
+    assert _gui_files(gui) == patched
+    assert _calls(tmp_path, "killall") == []
+
+
+def test_a_legacy_restore_cut_off_midway_is_finished_despite_newer_files(tmp_path: Path) -> None:
+    """Once a legacy restore started, the next recovery finishes it; the
+    time check decides only before the first file moves."""
+
+    gui, backup, before = _killed_apply(tmp_path)
+    leftover = _as_legacy(gui)
+    _kill_when_held(tmp_path, gui, backup, "recover",
+                    _commands(tmp_path, ("mv", "*/.c300x-qml-transaction.*/MainApp.qml *")))
+    assert (leftover / ".c300x-reload").exists()
+    _age(leftover, 600)
+    env = _commands(tmp_path)
+    result = _run(tmp_path, gui, backup, "recover", env)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["transaction"] == "recovered"
+    after = _gui_files(gui)
+    assert {rel: after[rel] for rel in before} == before
+    assert not leftover.exists()
+    assert _calls(tmp_path, "killall") == ["killall BtClass"]
+
+
 def test_a_leftover_without_a_file_list_needs_no_gui_restart(tmp_path: Path) -> None:
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()

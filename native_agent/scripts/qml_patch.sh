@@ -484,8 +484,17 @@ legacy_copy_verified() {
     done
 }
 
+legacy_copy_superseded() {
+    [ ! -e "$1/.c300x-reload" ] || return 1
+    for legacy_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES; do
+        [ ! "$GUI_DIR/$legacy_rel" -nt "$1" ] || return 0
+    done
+    return 1
+}
+
 restore_legacy_transaction() {
     [ ! -e "$1/.c300x-stuck" ] && legacy_copy_verified "$1" || return 1
+    ! legacy_copy_superseded "$1" || return 0
     for legacy_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES; do
         if [ ! -f "$1/$legacy_rel" ] || cmp -s "$1/$legacy_rel" "$GUI_DIR/$legacy_rel"; then
             continue

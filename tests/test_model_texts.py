@@ -12,7 +12,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from homeassistant import config_entries
+from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.bticino_c300x.config_flow import (
     BticinoC300XConfigFlow,
@@ -222,3 +224,32 @@ def test_repairs_name_the_model_of_their_entry(monkeypatch):
     assert text(
         "en", "issues", "device_user_required", "fix_flow", "error", "device_not_registered", model="C100X",
     ).startswith("The C100X has not been added in the BTicino Door Entry app yet.")
+
+
+def test_exceptions_name_the_model_of_their_entry():
+    from custom_components.bticino_c300x.exceptions import (
+        home_assistant_error,
+        service_validation_error,
+    )
+    from custom_components.bticino_c300x.use_cases.common import (
+        ensure_text_memo_write_supported,
+    )
+
+    assert_c300x_unchanged("exceptions")
+    for entry, model in ((C100X_ENTRY, "C100X"), (C300X_ENTRY, "C300X"), (None, "C300X")):
+        err = service_validation_error("ring_capture_busy", entry=entry)
+        assert err.translation_placeholders == {"model": model}
+        err = home_assistant_error("agent_command_failed", {"x": "1"}, entry=entry)
+        assert err.translation_placeholders == {"model": model, "x": "1"}
+    entry = SimpleNamespace(**vars(C100X_ENTRY))
+    entry.runtime_data = SimpleNamespace(agent_info={"model": "C100X"}, capabilities={})
+    with pytest.raises(ServiceValidationError) as raised:
+        ensure_text_memo_write_supported(entry)
+    assert raised.value.translation_placeholders == {"model": "C100X"}
+
+    assert text("en", "exceptions", "text_memo_write_not_supported", "message", model="C100X") == (
+        "Writing a text memo is not supported by the installed C100X device agent."
+    )
+    assert text("de", "exceptions", "agent_command_failed", "message", model="C100X").count("C100X") == 1
+    # The integration's own name stays.
+    assert text("en", "exceptions", "entry_not_loaded", "message", model="C100X").startswith("The BTicino C300X entry")

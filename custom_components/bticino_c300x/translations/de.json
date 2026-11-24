@@ -1427,31 +1427,31 @@
       "message": "Es ist keine Alarm-Control-Panel-Entität konfiguriert."
     },
     "agent_command_failed": {
-      "message": "Der C300X-Device-Agent-Befehl ist fehlgeschlagen oder wird vom installierten Agent nicht unterstützt."
+      "message": "Der {model}-Device-Agent-Befehl ist fehlgeschlagen oder wird vom installierten Agent nicht unterstützt."
     },
     "gui_function_patch_required": {
-      "message": "Diese Aktion benötigt den C300X-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
+      "message": "Diese Aktion benötigt den {model}-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
     },
     "display_disabled": {
-      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem C300X-Display. Schalte sie zuerst in den Integrationsoptionen ein."
+      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem {model}-Display. Schalte sie zuerst in den Integrationsoptionen ein."
     },
     "unknown_notification_action": {
-      "message": "Eine Schaltfläche der Benachrichtigung nutzt eine Aktions-ID, die bei den C300X-Aktionen nicht eingerichtet ist."
+      "message": "Eine Schaltfläche der Benachrichtigung nutzt eine Aktions-ID, die bei den {model}-Aktionen nicht eingerichtet ist."
     },
     "display_notification_queue_full": {
-      "message": "Das C300X-Display hat bereits die Höchstzahl an Benachrichtigungen mit gleicher oder höherer Priorität. Schließe eine oder warte, bis eine abläuft."
+      "message": "Das {model}-Display hat bereits die Höchstzahl an Benachrichtigungen mit gleicher oder höherer Priorität. Schließe eine oder warte, bis eine abläuft."
     },
     "display_notifications_unloaded": {
-      "message": "Die C300X-Display-Benachrichtigungen werden gerade neu geladen. Versuche es gleich noch einmal."
+      "message": "Die {model}-Display-Benachrichtigungen werden gerade neu geladen. Versuche es gleich noch einmal."
     },
     "doorbell_video_not_available": {
-      "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstützt."
+      "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten {model}-Device-Agent nicht unterstützt."
     },
     "home_call_not_available": {
-      "message": "Zuhause-Anruf ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstützt."
+      "message": "Zuhause-Anruf ist nicht aktiviert oder wird vom installierten {model}-Device-Agent nicht unterstützt."
     },
     "ring_capture_busy": {
-      "message": "Die C300X-Ring-Aufnahme ist belegt, weil bereits ein anderer Video-Client verbunden ist."
+      "message": "Die {model}-Ring-Aufnahme ist belegt, weil bereits ein anderer Video-Client verbunden ist."
     },
     "capture_announcement_requires_ring": {
       "message": "Ansagen sind nur im Aufnahmemodus Klingelruf verfügbar. Entferne announcement_path für eine Liveaufnahme ohne Klingeln."
@@ -1469,16 +1469,16 @@
       "message": "Der Alarmbefehl ist ungültig."
     },
     "maintenance_action_not_supported": {
-      "message": "Die C300X-Device-Agent-Maintenance-Aktion wird nicht unterstützt, ist nicht aktiviert oder es ist kein Maintenance-Token konfiguriert."
+      "message": "Die {model}-Device-Agent-Maintenance-Aktion wird nicht unterstützt, ist nicht aktiviert oder es ist kein Maintenance-Token konfiguriert."
     },
     "video_message_not_available": {
-      "message": "Es ist keine C300X-Video-Nachricht verfügbar."
+      "message": "Es ist keine {model}-Video-Nachricht verfügbar."
     },
     "text_memo_not_available": {
-      "message": "Es ist kein C300X-Text-Memo verfügbar."
+      "message": "Es ist kein {model}-Text-Memo verfügbar."
     },
     "text_memo_write_not_supported": {
-      "message": "Das Schreiben eines Text-Memos wird vom installierten C300X-Device-Agent nicht unterstützt."
+      "message": "Das Schreiben eines Text-Memos wird vom installierten {model}-Device-Agent nicht unterstützt."
     },
     "unknown_action": {
       "message": "Die Action-ID {action_id} ist nicht konfiguriert."
@@ -1490,7 +1490,7 @@
       "message": "Der BTicino-C300X-Eintrag ist nicht geladen. Aktiviere ihn oder warte, bis er gestartet ist."
     },
     "voice_memo_not_available": {
-      "message": "Es ist kein C300X-Sprach-Memo verfügbar."
+      "message": "Es ist kein {model}-Sprach-Memo verfügbar."
     },
     "alarm_not_ready": {
       "message": "Die Alarmanlage kann nicht scharfgeschaltet werden, weil mindestens ein Sensor dies verhindert."
@@ -1545,7 +1545,7 @@
           "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-{model}-Eintrag ist nicht geladen.",
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
           "device_model_incompatible": "Dieses Paket unterstuetzt dieses Geraetemodell nicht. C100X-Testpakete duerfen keine C300X-Geraete aktualisieren. Installiere vor dem Agent-Update oder der Neuinstallation das passende Paket. Es wurden keine Geraetedateien ersetzt."
         }
       },
@@ -1581,7 +1581,7 @@
           "core_patch_verify_failed": "Die Core-Media-Hook-Aktion wurde ausgeführt, aber der Agent hat den gepatchten Zustand nicht bestätigt."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-{model}-Eintrag ist nicht geladen.",
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
           "core_patch_unsupported": "Der installierte {model} Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht."
         }
       }
@@ -1604,7 +1604,7 @@
           "device_not_registered": "Die {model} wurde noch nicht in der BTicino-App Door Entry angemeldet. Flexisip auf dem Gerät bekommt SIP-User, Domain und Zertifikate nur über diese Anmeldung. Melde das Gerät einmal in der App an und versuche es dann erneut. Die Weiterleitung kann danach auf Smartphone bleiben."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-{model}-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
         }
       }
     },
@@ -1621,7 +1621,7 @@
           "media_setup_repair_failed": "Die Medien-Setup-Reparatur ist fehlgeschlagen. Prüfe den Maintenance-Zugriff und versuche es erneut."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-{model}-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
         }
       }
     },
@@ -1685,7 +1685,7 @@
           "invalid_callback_base_url": "Eine vom {model} erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-{model}-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
         }
       }
     }

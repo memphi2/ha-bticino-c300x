@@ -182,13 +182,13 @@ async def async_send_display_alert(
     silent = isinstance(c100x, dict) and c100x.get("alert_sound") is False
     if silent and options.get("sound_duration"):
         raise ServiceValidationError(
-            "Invalid C300X display notification: the C100X display plays no alert "
+            "Invalid C100X display notification: the C100X display plays no alert "
             "tone; leave out sound_duration"
         )
     try:
         show_notification(hass, entry, notice, led=options["led"])
     except ValueError as err:
-        raise display_notification_service_error(err) from err
+        raise display_notification_service_error(err, entry) from err
     if not options["display"]:
         return
     stored = next(

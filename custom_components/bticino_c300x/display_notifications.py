@@ -205,12 +205,12 @@ _SERVICE_ERROR_KEYS = frozenset({
 })
 
 
-def display_notification_service_error(err: ValueError) -> ServiceValidationError:
+def display_notification_service_error(err: ValueError, entry: Any = None) -> ServiceValidationError:
     """Return the translated service error for a show or dismiss refusal."""
 
     key = str(err)
     if key in _SERVICE_ERROR_KEYS:
-        return service_validation_error(key)
+        return service_validation_error(key, entry=entry)
     return ServiceValidationError(key)
 
 

@@ -1427,31 +1427,31 @@
       "message": "Nessuna entità pannello di allarme configurata."
     },
     "agent_command_failed": {
-      "message": "Il comando del device agent C300X non è riuscito o non è supportato dall'agente installato."
+      "message": "Il comando del device agent {model} non è riuscito o non è supportato dall'agente installato."
     },
     "gui_function_patch_required": {
-      "message": "Questa azione richiede la patch display C300X. Abilita e applica prima il patch display nelle opzioni dell'integrazione."
+      "message": "Questa azione richiede la patch display {model}. Abilita e applica prima il patch display nelle opzioni dell'integrazione."
     },
     "display_disabled": {
-      "message": "Le notifiche sul display richiedono le pagine Home Assistant sul display C300X. Attivale prima nelle opzioni dell'integrazione."
+      "message": "Le notifiche sul display richiedono le pagine Home Assistant sul display {model}. Attivale prima nelle opzioni dell'integrazione."
     },
     "unknown_notification_action": {
-      "message": "Un pulsante della notifica usa un ID azione che non è configurato tra le azioni C300X."
+      "message": "Un pulsante della notifica usa un ID azione che non è configurato tra le azioni {model}."
     },
     "display_notification_queue_full": {
-      "message": "Il display C300X contiene già il numero massimo di notifiche con priorità uguale o superiore. Chiudine una o attendi che una scada."
+      "message": "Il display {model} contiene già il numero massimo di notifiche con priorità uguale o superiore. Chiudine una o attendi che una scada."
     },
     "display_notifications_unloaded": {
-      "message": "Le notifiche del display C300X sono in fase di ricaricamento. Riprova tra un momento."
+      "message": "Le notifiche del display {model} sono in fase di ricaricamento. Riprova tra un momento."
     },
     "doorbell_video_not_available": {
-      "message": "Il video del campanello non è abilitato o non è supportato dal device agent C300X installato."
+      "message": "Il video del campanello non è abilitato o non è supportato dal device agent {model} installato."
     },
     "home_call_not_available": {
-      "message": "La chiamata casa non è abilitata o non è supportata dal device agent C300X installato."
+      "message": "La chiamata casa non è abilitata o non è supportata dal device agent {model} installato."
     },
     "ring_capture_busy": {
-      "message": "La registrazione della chiamata C300X è occupata perché un altro client video è già connesso."
+      "message": "La registrazione della chiamata {model} è occupata perché un altro client video è già connesso."
     },
     "capture_announcement_requires_ring": {
       "message": "Gli annunci sono disponibili solo nella modalità campanello. Rimuovi announcement_path per registrare senza suonare."
@@ -1469,16 +1469,16 @@
       "message": "Comando allarme non valido."
     },
     "maintenance_action_not_supported": {
-      "message": "L'azione di manutenzione del device agent C300X non è supportata, non è abilitata o non è configurato alcun token di manutenzione."
+      "message": "L'azione di manutenzione del device agent {model} non è supportata, non è abilitata o non è configurato alcun token di manutenzione."
     },
     "video_message_not_available": {
-      "message": "Nessun messaggio video C300X disponibile."
+      "message": "Nessun messaggio video {model} disponibile."
     },
     "text_memo_not_available": {
-      "message": "Nessun memo testuale C300X disponibile."
+      "message": "Nessun memo testuale {model} disponibile."
     },
     "text_memo_write_not_supported": {
-      "message": "La scrittura di un memo testuale non è supportata dal device agent C300X installato."
+      "message": "La scrittura di un memo testuale non è supportata dal device agent {model} installato."
     },
     "unknown_action": {
       "message": "L'ID azione {action_id} non è configurato."
@@ -1490,7 +1490,7 @@
       "message": "La voce BTicino C300X non è caricata. Attivala o attendi che sia avviata."
     },
     "voice_memo_not_available": {
-      "message": "Non e disponibile alcun memo vocale C300X."
+      "message": "Non e disponibile alcun memo vocale {model}."
     },
     "alarm_not_ready": {
       "message": "L'allarme non può essere inserito perché uno o più sensori lo impediscono."

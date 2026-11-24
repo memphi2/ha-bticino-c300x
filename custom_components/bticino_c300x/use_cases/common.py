@@ -47,7 +47,7 @@ async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) 
     except C300XAgentApiAuthError as err:
         ensure_current_runtime(entry, runtime)
         if runtime is None:
-            raise home_assistant_error("agent_command_failed") from err
+            raise home_assistant_error("agent_command_failed", entry=entry) from err
         failure = await async_classify_runtime_auth_error(runtime.api, err)
         ensure_current_runtime(entry, runtime)
         if isinstance(failure, C300XAgentApiAuthError) and failure.maintenance:
@@ -61,9 +61,9 @@ async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) 
                 unregister()
             async_request_reauth(hass, entry, runtime.connection_state, failure)
             async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
-        raise home_assistant_error("agent_command_failed") from failure
+        raise home_assistant_error("agent_command_failed", entry=entry) from failure
     except Exception as err:
-        raise home_assistant_error("agent_command_failed") from err
+        raise home_assistant_error("agent_command_failed", entry=entry) from err
 
 
 def ensure_current_runtime(entry: Any, runtime: Any) -> None:
@@ -71,7 +71,7 @@ def ensure_current_runtime(entry: Any, runtime: Any) -> None:
 
     if (getattr(entry, "runtime_data", None) is not runtime
             or getattr(getattr(runtime, "resources", None), "closed", False)):
-        raise service_validation_error("agent_command_failed")
+        raise service_validation_error("agent_command_failed", entry=entry)
 
 
 def ensure_maintenance_action(entry: Any, action: str) -> None:
@@ -83,7 +83,7 @@ def ensure_maintenance_action(entry: Any, action: str) -> None:
         action,
         entry_config_value(entry, CONF_MAINTENANCE_TOKEN, ""),
     ):
-        raise service_validation_error("maintenance_action_not_supported")
+        raise service_validation_error("maintenance_action_not_supported", entry=entry)
 
 
 def ensure_doorbell_video_supported(entry: Any) -> None:
@@ -95,7 +95,7 @@ def ensure_doorbell_video_supported(entry: Any) -> None:
         entry_video_enabled(entry)
         and capability_is_supported(capabilities, "doorbell_video")
     ):
-        raise service_validation_error("doorbell_video_not_available")
+        raise service_validation_error("doorbell_video_not_available", entry=entry)
 
 
 def ensure_doorbell_call_supported(entry: Any) -> None:
@@ -107,7 +107,7 @@ def ensure_doorbell_call_supported(entry: Any) -> None:
         entry_video_enabled(entry)
         and capability_is_supported(capabilities, "doorbell_call")
     ):
-        raise service_validation_error("doorbell_video_not_available")
+        raise service_validation_error("doorbell_video_not_available", entry=entry)
 
 
 def ensure_home_call_supported(entry: Any) -> None:
@@ -119,7 +119,7 @@ def ensure_home_call_supported(entry: Any) -> None:
         entry_video_enabled(entry)
         and capability_is_supported(capabilities, "home_call")
     ):
-        raise service_validation_error("home_call_not_available")
+        raise service_validation_error("home_call_not_available", entry=entry)
 
 
 def ensure_text_memo_write_supported(entry: Any) -> None:
@@ -128,7 +128,7 @@ def ensure_text_memo_write_supported(entry: Any) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     capabilities = getattr(runtime_data, "capabilities", {})
     if not memo_text_write_supported(capabilities):
-        raise service_validation_error("text_memo_write_not_supported")
+        raise service_validation_error("text_memo_write_not_supported", entry=entry)
 
 
 def ensure_stored_media_supported(entry: Any, kind: str) -> None:
@@ -136,7 +136,9 @@ def ensure_stored_media_supported(entry: Any, kind: str) -> None:
 
     capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", {})
     if not stored_media_offered(capabilities, kind):
-        raise service_validation_error("video_message_not_available" if kind == "video" else "voice_memo_not_available")
+        raise service_validation_error(
+            "video_message_not_available" if kind == "video" else "voice_memo_not_available", entry=entry
+        )
 
 
 async def async_ensure_gui_function_patch(entry: Any) -> None:
@@ -147,9 +149,9 @@ async def async_ensure_gui_function_patch(entry: Any) -> None:
     try:
         await async_refresh_qml_patch_status(entry)
     except Exception as err:
-        raise home_assistant_error("agent_command_failed") from err
+        raise home_assistant_error("agent_command_failed", entry=entry) from err
     if not entry_gui_function_patch_active(entry):
-        raise service_validation_error("gui_function_patch_required")
+        raise service_validation_error("gui_function_patch_required", entry=entry)
 
 
 async def latest_item_id_for_entry(
@@ -170,10 +172,10 @@ async def latest_item_id_for_entry(
     try:
         payload = await refresh()
     except Exception as err:
-        raise home_assistant_error("agent_command_failed") from err
+        raise home_assistant_error("agent_command_failed", entry=entry) from err
     item_id = latest(payload)
     if item_id is None:
-        raise service_validation_error(unavailable_error)
+        raise service_validation_error(unavailable_error, entry=entry)
     return item_id
 
 

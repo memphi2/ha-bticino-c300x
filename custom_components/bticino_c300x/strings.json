@@ -1427,31 +1427,31 @@
       "message": "No alarm control panel entity is configured."
     },
     "agent_command_failed": {
-      "message": "The C300X device-agent command failed or is not supported by the installed agent."
+      "message": "The {model} device-agent command failed or is not supported by the installed agent."
     },
     "gui_function_patch_required": {
-      "message": "This action requires the C300X Display patch. Enable and apply the Display patch in the integration options first."
+      "message": "This action requires the {model} Display patch. Enable and apply the Display patch in the integration options first."
     },
     "display_disabled": {
-      "message": "Display notifications need the Home Assistant pages on the C300X display. Turn them on in the integration options first."
+      "message": "Display notifications need the Home Assistant pages on the {model} display. Turn them on in the integration options first."
     },
     "unknown_notification_action": {
-      "message": "A notification button uses an action ID that is not configured in the C300X actions."
+      "message": "A notification button uses an action ID that is not configured in the {model} actions."
     },
     "display_notification_queue_full": {
-      "message": "The C300X display already holds the maximum number of notifications with the same or a higher priority. Dismiss one or wait until one expires."
+      "message": "The {model} display already holds the maximum number of notifications with the same or a higher priority. Dismiss one or wait until one expires."
     },
     "display_notifications_unloaded": {
-      "message": "The C300X display notifications are being reloaded. Try again in a moment."
+      "message": "The {model} display notifications are being reloaded. Try again in a moment."
     },
     "doorbell_video_not_available": {
-      "message": "Doorbell video is not enabled or is not supported by the installed C300X device agent."
+      "message": "Doorbell video is not enabled or is not supported by the installed {model} device agent."
     },
     "home_call_not_available": {
-      "message": "Home call is not enabled or is not supported by the installed C300X device agent."
+      "message": "Home call is not enabled or is not supported by the installed {model} device agent."
     },
     "ring_capture_busy": {
-      "message": "C300X ring capture is busy because another video client is already connected."
+      "message": "{model} ring capture is busy because another video client is already connected."
     },
     "capture_announcement_requires_ring": {
       "message": "Announcements are only available in ring capture mode. Remove announcement_path for an on-demand recording."
@@ -1469,16 +1469,16 @@
       "message": "The alarm command is invalid."
     },
     "maintenance_action_not_supported": {
-      "message": "The C300X device-agent maintenance action is not supported, not enabled, or no maintenance token is configured."
+      "message": "The {model} device-agent maintenance action is not supported, not enabled, or no maintenance token is configured."
     },
     "video_message_not_available": {
-      "message": "No C300X video message is available."
+      "message": "No {model} video message is available."
     },
     "text_memo_not_available": {
-      "message": "No C300X text memo is available."
+      "message": "No {model} text memo is available."
     },
     "text_memo_write_not_supported": {
-      "message": "Writing a text memo is not supported by the installed C300X device agent."
+      "message": "Writing a text memo is not supported by the installed {model} device agent."
     },
     "unknown_action": {
       "message": "The action ID {action_id} is not configured."
@@ -1490,7 +1490,7 @@
       "message": "The BTicino C300X entry is not loaded. Enable it or wait until it has started."
     },
     "voice_memo_not_available": {
-      "message": "No C300X voice memo is available."
+      "message": "No {model} voice memo is available."
     },
     "alarm_not_ready": {
       "message": "The alarm cannot be armed because one or more sensors are blocking it."
